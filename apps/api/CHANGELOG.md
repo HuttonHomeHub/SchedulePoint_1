@@ -1,5 +1,57 @@
 # @repo/api
 
+## 0.79.0
+
+### Minor Changes
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Share links now include where each bar is placed. `GET /api/v1/share/activities` gains
+  `visualEffectiveStart`/`visualEffectiveFinish` — the same placed span the member view has drawn
+  since ADR-0148 — so a guest's copy of the plan agrees with the planner's (ADR-0163). Four
+  neighbouring fields (`visualStart`, `visualConflict`/`Reason`, `visualDriftDays`,
+  `remainingFloat`) stay excluded from the guest scope.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Baseline variance now measures where bars are placed, on any baseline captured since
+  `api-v0.70.0`** (`docs/TECH_DEBT.md` [#359](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/359)). `GET …/plans/:planId/baselines/variance` reads
+  `meta.basis` to say which dates it compared: `PLACED` reads the frozen placed span against the
+  live placed span (the bars as drawn, ADR-0148) — a bar dragged after capture now reads as moved,
+  and removing a binding constraint and placing the bar exactly where the constraint held it no
+  longer reads as "ahead". `NETWORK` is the network-vs-network comparison every baseline gave
+  before this release, kept for any baseline captured before placement capture existed
+  (`placementSnapshotLevel: 'NONE'`) — the only honest comparison such a baseline can make.
+  `basis` is `null` only when there is no active baseline. Float variance stays total float on both
+  bases, unchanged.
+  
+  `GET …/baselines` and `GET …/baselines/:baselineId` gain `placementSnapshotLevel` on the
+  baseline and `placedStart`/`placedFinish`/`visualStart` on each activity snapshot, so a consumer
+  can tell which basis a variance read against a given baseline will use before making it.
+  
+  Additive in shape and behaviourally breaking on a `FULL` baseline: a consumer that assumed
+  `baselineStart`/`baselineFinish`/`currentStart`/`currentFinish` were always network dates should
+  read `meta.basis` and the two new fields.
+
+### Patch Changes
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - `/request-password-reset` no longer answers a known address more slowly than an unknown one. Better
+  Auth's mail sends (password reset, email verification) now dispatch off the request path instead of
+  being awaited, so the endpoint's identical response body is no longer paired with a clock a caller
+  could read to tell the two cases apart. A rejection that somehow escapes the mail adapter's own
+  catch is still logged, never surfaced to the caller.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Changing an activity's type into or out of WBS summary is now refused when it would break the
+  schedule's structure: a summary that still has children can no longer be turned into a plain
+  activity (leaving its children pointing at a non-summary parent), and an activity that still has a
+  dependency can no longer be turned into a summary (which is not allowed to carry logic). Both
+  refusals name how many children or dependencies stand in the way.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The DCMA metric-12 what-if (critical-path test) now levels both its control and perturbed
+  passes on a plan with `levelResources` set, through the same rule `recalculate` uses
+  (`docs/TECH_DEBT.md` [#248](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/248)). Previously it measured against the pure-network schedule even on a
+  levelled plan, which a recalculation no longer persists or displays — so the completion carrier
+  and its reported movement could be wrong on such a plan. Off `levelResources`, the route is
+  byte-identical to before.
+- Updated dependencies [[`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533)]:
+  - @repo/types@0.37.0
+
 ## 0.78.1
 
 ### Patch Changes

@@ -1,5 +1,45 @@
 # @repo/web
 
+## 0.153.0
+
+### Minor Changes
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Every baseline variance figure now says which dates it compares** (`docs/TECH_DEBT.md` [#359](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/359),
+  US-2). The activities panel's variance summary reads "vs. \<baseline\> (placed dates): …" on a
+  baseline that recorded where bars were placed, or "(earliest dates): …" plus a plain sentence
+  explaining that the baseline predates placement capture and naming the remedy (capture a new
+  one) on an older baseline. The Baselines panel gains a **Compares** column showing "Placed
+  dates" or "Earliest dates" per row, and the printed Gantt programme's legend names the basis
+  beside its Baseline swatch whenever the variance column is printed. The activities table's float
+  variance column is relabelled **Total float variance**, distinguishing it from the adjacent
+  **Float left** (remaining float) column it sits beside. No wording renders when an older API
+  image (mid rolling-update) omits the basis field — nothing is guessed.
+
+### Patch Changes
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Schedule CSV export now leads with `Start`/`Finish` columns carrying the dates each bar is
+  drawn from on the canvas and the Gantt — the placed dates, not the network's earliest ones. The
+  existing `Early start`/`Early finish` columns are unchanged and still read the network basis, for
+  the analyses (DCMA, float paths, baseline variance) that measure the plan as computed rather than
+  as placed.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A share link now draws each bar where the planner placed it, exactly as the member canvas does
+  (ADR-0163) — a guest's picture used to draw the CPM early dates instead, a schedule the planner
+  never chose. A screen-reader guest now hears the same dates and lane too: the listbox previously
+  announced every activity as "not yet scheduled".
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The printed programme's Predecessors column now shows links added since the last recalculation.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activities panel's column headings now stay pinned above the rows while you scroll, and the
+  panel scrolls as a single region — its horizontal scrollbar sits at the visible bottom edge instead
+  of after the last row. The bulk-assign bar, when it appears, now stays in view above the scrolling
+  rows instead of scrolling away with them.
+
+- [#721](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/721) [`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's toolbar no longer rebuilds on every render. The recalculate command kept a
+  fresh identity each render, which re-created the whole toolbar context and re-ran its layout.
+- Updated dependencies [[`4723936`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4723936d34acabb9e91214aa8a4c72c25f75e533)]:
+  - @repo/types@0.37.0
+
 ## 0.152.1
 
 ### Patch Changes
