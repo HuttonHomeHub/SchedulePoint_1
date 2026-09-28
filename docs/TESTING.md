@@ -343,8 +343,9 @@ It deliberately excludes the e2e half, which needs a database and a browser and 
 **The formatting check is one of the derived gates, `check:format`** (since 2026-09-28,
 `docs/specs/prepush-format-gate/`). Until then CI ran `pnpm format:check` and no local gate did: the
 lint-staged hook formats **staged** files only, so a file Prettier would reformat reached CI unseen,
-twice in one session on 2026-09-11. It runs with Prettier's content-keyed cache, so a repeat run
-re-reads only changed files; CI starts with no cache. Agent worktrees under `.claude/worktrees/` are in
+twice in one session on 2026-09-11. It runs with Prettier's content-keyed cache: measured on the session container, a
+repeat run takes about 18 s and a first run about two minutes
+(`docs/specs/prepush-format-gate/implementation-plan.md` §3). CI starts with no cache. Agent worktrees under `.claude/worktrees/` are in
 `.prettierignore`, because a local run otherwise walked every copy of the repository.
 
 **What it costs, measured 2026-08-25** (one file changed in `apps/web`, turbo warm elsewhere):
