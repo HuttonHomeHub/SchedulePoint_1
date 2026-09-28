@@ -14,6 +14,7 @@ import { bandMembers } from './band-members';
 function activity(over: Partial<ActivitySummary> & { id: string }): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     planId: 'p1',
     name: over.id,
     code: null,

@@ -2,7 +2,14 @@ import type { ScheduleHealthReport } from '@repo/types';
 
 import './HealthPrintDocument.css';
 
-import { buildHealthRows } from '../model/health-rows';
+import {
+  buildHealthRows,
+  HEALTH_ADVISORY_FOOTER,
+  healthAdvisoriesOf,
+  zeroDurationSummary,
+} from '../model/health-rows';
+
+import { HealthOffenderPrintSection } from './HealthOffenderPrintSection';
 
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
@@ -35,6 +42,7 @@ export function ScheduleHealthPrintDocument({
   printedAt?: Date;
 }): React.ReactElement {
   const rows = buildHealthRows(report);
+  const advisories = healthAdvisoriesOf(report);
   return (
     <div className="health-print">
       <header>
@@ -80,14 +88,46 @@ export function ScheduleHealthPrintDocument({
         </tbody>
       </table>
 
+      {/* ADR-0162 D1: after the fourteen rows and outside the table, because an advisory has no
+          ordinal and no verdict. Absent on an API that predates the field (spec E32). */}
+      {advisories === null || advisories.length === 0 ? null : (
+        <section>
+          <h2>Beyond the DCMA assessment</h2>
+          {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; Preflight drops the implicit roles. */}
+          <ul role="list">
+            {advisories.map((advisory) => (
+              // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
+              <li role="listitem" key={advisory.id}>
+                <strong>{advisory.name}:</strong> {zeroDurationSummary(advisory)}
+              </li>
+            ))}
+          </ul>
+          {advisories
+            .filter((advisory) => advisory.offenders.length > 0)
+            .map((advisory) => (
+              <HealthOffenderPrintSection
+                key={advisory.id}
+                name={advisory.name}
+                offenders={advisory.offenders}
+                offenderCount={advisory.offenderCount}
+                offendersTruncated={advisory.offendersTruncated}
+                offenderCap={report.offenderCap}
+              />
+            ))}
+          <p>{HEALTH_ADVISORY_FOOTER}</p>
+        </section>
+      )}
+
       {rows.some((row) => row.reasonSentence !== null) ? (
         <section>
           <h2>Not assessed, and why</h2>
-          <ul>
+          {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; Preflight drops the implicit roles. */}
+          <ul role="list">
             {rows
               .filter((row) => row.reasonSentence !== null)
               .map((row) => (
-                <li key={row.metric.id}>
+                // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
+                <li role="listitem" key={row.metric.id}>
                   <strong>{row.metric.name}:</strong> {row.reasonSentence}
                 </li>
               ))}
@@ -106,11 +146,13 @@ export function ScheduleHealthPrintDocument({
       {rows.some((row) => row.caveatSentence !== null) ? (
         <section>
           <h2>Scope notes</h2>
-          <ul>
+          {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; Preflight drops the implicit roles. */}
+          <ul role="list">
             {rows
               .filter((row) => row.caveatSentence !== null)
               .map((row) => (
-                <li key={row.metric.id}>
+                // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
+                <li role="listitem" key={row.metric.id}>
                   <strong>{row.metric.name}:</strong> {row.caveatSentence}
                 </li>
               ))}
@@ -121,26 +163,14 @@ export function ScheduleHealthPrintDocument({
       {rows
         .filter((row) => row.metric.offenders.length > 0)
         .map((row) => (
-          <section key={row.metric.id}>
-            <h2>
-              {row.metric.name} — {row.metric.offenderCount}{' '}
-              {row.metric.offenderCount === 1 ? 'finding' : 'findings'}
-            </h2>
-            {row.metric.offendersTruncated ? (
-              <p className="health-print-cap">
-                Showing the first {Math.min(report.offenderCap, row.metric.offenders.length)} of{' '}
-                {row.metric.offenderCount} — open the plan for the full list.
-              </p>
-            ) : null}
-            <ul>
-              {row.metric.offenders.map((offender) => (
-                <li key={`${offender.kind}-${offender.id}`}>
-                  {offender.code === null ? offender.name : `${offender.code} ${offender.name}`} —{' '}
-                  {offender.note}
-                </li>
-              ))}
-            </ul>
-          </section>
+          <HealthOffenderPrintSection
+            key={row.metric.id}
+            name={row.metric.name}
+            offenders={row.metric.offenders}
+            offenderCount={row.metric.offenderCount}
+            offendersTruncated={row.metric.offendersTruncated}
+            offenderCap={report.offenderCap}
+          />
         ))}
 
       <footer>

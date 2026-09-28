@@ -23,6 +23,8 @@ import {
   stripFences,
   tableRows,
 } from './doc-register.mjs';
+// A separate import, so the pre-existing list above passes through M0-T7 unedited.
+import { detailedRows, openDetailedRow } from './doc-register.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const traps = readRepoDoc(join(here, 'fixtures/traps.md'));
@@ -389,6 +391,62 @@ it('headerField takes the FIRST status line, not the last', () => {
     headerField(stripFences(headers), 'Status'),
     'Draft — awaiting approval before implementation',
   );
+});
+
+// ── detailedRows / openDetailedRow — the shared row lookup (zero-duration-task M0-T7) ─────────
+//
+// Extracted from `check-debt-status.mjs` because `check:engine-parity` limb 3 needs the same
+// lookup. The debt gate's `--report` output was byte-identical before and after the move, on the
+// real register and on a faulted copy; these cases pin the two exports themselves.
+
+const register = `## Principles for managing debt
+
+Prose.
+
+## Detailed items
+
+### 384. A zero-duration task
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (ADR-0155) ·
+**Size:** S
+
+## 118a. A drifted level-2 row
+
+**Status:** deferred · **Verified:** 2026-09-01
+
+### 219. A row that discusses the field
+
+It asks for a \`**Status:**\` line on every row.
+
+## Closed numbers
+`;
+
+it('detailedRows reads BOTH heading levels, in document order, with a row number on each', () => {
+  // Red against a level-2-only read: #384 is a `###` row and disappears.
+  const rows = detailedRows(register);
+  assert.deepEqual(
+    rows.map((r) => r.number),
+    ['384', '118a', '219'],
+  );
+  assert.ok(!rows.some((r) => r.heading === 'Detailed items'), 'NOT_ITEMS are structure, not rows');
+});
+
+it('openDetailedRow finds an open `###` row — #384 in its real form', () => {
+  // Red against `registerSections` narrowed to `sections(md, 2)`, which returns null here and would
+  // make check:engine-parity call its own declaration stale on the commit that added it.
+  assert.equal(openDetailedRow(register, 384)?.number, '384');
+  assert.equal(openDetailedRow(register, '384')?.number, '384', 'a string number reads the same');
+});
+
+it('openDetailedRow returns null for a row that is not `open`, absent, or has no status', () => {
+  // Red against a lookup that returns the row whatever its status.
+  assert.equal(openDetailedRow(register, '118a'), null, 'deferred is not open');
+  assert.equal(
+    openDetailedRow(register, 999),
+    null,
+    'absent — a closed row is deleted and ledgered',
+  );
+  assert.equal(openDetailedRow(register, 219), null, 'a row that only DISCUSSES the field');
 });
 
 process.stdout.write(

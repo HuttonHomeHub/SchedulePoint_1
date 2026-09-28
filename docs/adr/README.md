@@ -185,3 +185,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0159](0159-a-route-reads-the-text-it-is-drawn-beside.md)                                       | A route reads the text it is drawn beside, and a two-way track splits at its node | Accepted           |
 | [0160](0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)                                           | A gate CI runs is a gate prepush runs                                             | Accepted           |
 | [0161](0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)                                  | A cross-plan link is the same link in one plan                                    | Accepted           |
+| [0162](0162-a-zero-duration-task-keeps-its-date.md)                                             | A zero-duration task keeps its date, is reported, and converts without moving it  | Accepted           |

@@ -5,7 +5,16 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { drawnSpanDays } from '@repo/layout';
 
-import { layoutXerFile, onboard, openNewProject, validMspdiFile, validXerFile } from './support';
+import { revealToolbarCommand } from '../e2e-support/toolbar';
+
+import {
+  layoutXerFile,
+  onboard,
+  openNewProject,
+  validMspdiFile,
+  validXerFile,
+  zeroDurationXerFile,
+} from './support';
 
 /**
  * Flag-ON **schedule interchange (XER import)** journey (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1,
@@ -67,6 +76,53 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await confirmButton.click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
+
+/**
+ * **An imported zero-duration task is advised, not coerced** (ADR-0162, M5-T1).
+ *
+ * The file carries A1020 "Handover" as a task with no hours. The import keeps it as a task (the
+ * advisory is the only thing that says anything), the report's **Advisories** section names its code
+ * before anything is committed, and once committed the plan's health check lists the same activity
+ * in its own section. Two readers of one fact, from the one surface a planner sees both on.
+ */
+test('an imported zero-duration task is advised in the report and listed by the health check', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(zeroDurationXerFile());
+
+  const advisories = dialog.getByRole('region', { name: 'Advisories (1)' });
+  await expect(advisories).toBeVisible();
+  const items = advisories.getByRole('listitem');
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toContainText('A1020');
+  await expect(items.first()).toContainText('imported as a task with no duration');
+  // Advice is not a finding: the dropped/approximated sections do not gain a row for it.
+  await expect(dialog.getByText('A1020')).toHaveCount(1);
+
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  await revealToolbarCommand(page, 'analysis');
+  await page
+    .getByRole('toolbar', { name: 'Plan commands' })
+    .locator('[data-toolbar-item="analysis"]')
+    .click();
+  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  const panel = page.getByRole('region', { name: 'Health check' });
+  const advisory = panel.getByRole('region', { name: 'Beyond the DCMA assessment' });
+  const toggle = advisory.getByRole('button', { name: /Zero-duration tasks/ });
+  await expect(toggle).toHaveAccessibleDescription(
+    /^1 zero-duration task out of 3 activities; none has resource assignments$/,
+  );
+  await toggle.click();
+  await expect(advisory.getByRole('button', { name: /Handover/ })).toBeVisible();
 });
 
 /**

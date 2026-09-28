@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1373 web
+> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1392 web
 > source files with 46 Playwright suites beside the base journey, and
-> 161 ADRs.
+> 162 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5977,6 +5977,41 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the pending plans**, since ordering the pending set alone lets `A → B → C` with `B` settled put `C`
   before `A`. Rollback is a documented reverse, not a redeploy. **The CPM engine's arithmetic is
   unchanged** — moved, not edited, and `compute.spec.ts` passes unedited.
+
+- **ADR-0162** _(Accepted; M0–M6 landed 2026-09-28)_ — A
+  zero-duration task keeps its date, is reported, and converts without moving the schedule.
+  ADR-0155 dated a finish milestone by the day that **closes** at its instant and left a
+  zero-duration `TASK` on the day that **opens** there, so the two read Friday and Monday at one
+  instant. **The task's rule stays** (decision 1): the finish-milestone rule would date a task
+  reached only by start-type logic a day before the work it is tied to starts, and choosing a rule
+  per task from its driving link would read one engine output to label another. What is left is a
+  data-quality problem, and M0 **measured** its sharpest instance rather than reading it: changing a
+  placed or constrained zero-duration task's type to finish milestone in the editor moved its
+  successor from Monday 12 to **Tuesday 13 January**, because the stored SNET was read at the end of
+  its day after the type changed (`zero-duration-type-change.e2e-spec.ts`). So the server
+  **re-expresses the unsent stored dates one calendar day** on any type change across the
+  convention, for every `ActivityType`, before the N26 check — calendar days and never working days,
+  because a working-day shift keeps every instant and round-trips every working day, so only the
+  stored value and a round trip from a Sunday can tell them apart. Findings are a health-report
+  `advisories` section outside the 14 DCMA metrics and an optional import-report `advisories`
+  array, never a new finding kind (a fourth kind would be filed as a drop). The import report's
+  readers become tolerant of unknown keys at every level, closing #387. The conversion action is a
+  plain `PATCH {type}`, unaudited because a type edit is a content edit whose effect is bounded to
+  one activity's label and the plan's finish label. **ADR-0035 §22 never said "date-neutral"**:
+  ADR-0155 and #384 attributed a test docblock's sentence to it; §22 gains the rule as an amendment
+  and the docblock is corrected, comment only, under `check:engine-parity` — the gate's first real
+  run. A zero-duration task converts with **Make milestone…** on the selection bar, the Gantt row
+  menu and the activities table, from one gate object shared by identity; activity reads carry a
+  `resourceAssignmentCount` for zero-duration tasks only, because counting every row fell to a
+  sequential scan on its own measurement. **The journeys found two product defects no unit test
+  could see**: a click on the bar's icon-only button landed on its own name tooltip, which the shared
+  clamp had pushed back over a trigger on the screen's bottom edge (`placeTip` now opens above), and
+  the dialog was unmounted on close so focus fell to `<body>` (it now stays mounted and closes
+  natively). The M6 gate pass found nothing blocking in seven reviews; it filled an untested entry
+  point (the Gantt row menu's copy, never rendered with the action applying) and a public API
+  sentence still saying no importer produced the advisory, one milestone after both did.
+  `check:engine-parity` expires with #384 in the commit that closes it. **The CPM engine is not
+  modified and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

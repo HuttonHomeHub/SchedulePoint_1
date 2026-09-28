@@ -32,6 +32,10 @@ import {
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
+import {
+  MAKE_MILESTONE_LABEL,
+  deriveMakeMilestoneGate,
+} from '@/features/plan-actions/make-milestone-gate';
 import { ActivityResourcesDialog } from '@/features/resources';
 import { WbsBulkAssignBar } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
@@ -145,6 +149,7 @@ export function ActivitiesTable({
   onOpenEditor,
   onOpenLogic,
   onDuplicate,
+  onMakeMilestone,
   onDeleted,
   onDissolved,
   onOpenResources,
@@ -190,6 +195,12 @@ export function ActivitiesTable({
    * do nothing, which is the ADR-0064 §7 dead-end shape.
    */
   onDuplicate?: (activity: ActivitySummary) => void;
+  /**
+   * Open the Make milestone dialog for a zero-duration task (ADR-0162 decision 4). Host-owned like
+   * {@link onDuplicate}: the dialog is the workspace's, mounted once, so the table and the canvas
+   * convert through one path. Absent ⇒ the action is not offered.
+   */
+  onMakeMilestone?: (activity: ActivitySummary) => void;
   /**
    * Tell the host a row was deleted, so it can put the delete on the undo stack
    * (`docs/TECH_DEBT.md` #230). Host-owned like {@link onOpenLogic}: the history is workspace
@@ -497,6 +508,24 @@ export function ActivitiesTable({
           ...shut,
           onSelect: () => onDuplicate(activity),
         });
+      }
+      // Make milestone… — the SAME derivation the selection bar and the Gantt row menu run, from
+      // the SAME `general` gate object, by identity (ADR-0162 decision 4, spec D6). This roster is
+      // the one hand-kept list of the three surfaces, which is why the label is imported rather
+      // than spelled here and why `make-milestone-gate-identity.test.tsx` pins the gate.
+      //
+      // Needs the gate object to derive from, so the no-gating path omits it — the same rule the
+      // block above states for the write actions.
+      if (onMakeMilestone && gate !== null) {
+        const milestone = deriveMakeMilestoneGate(activity, gate);
+        if (milestone.applies) {
+          actions.push({
+            key: 'make-milestone',
+            label: MAKE_MILESTONE_LABEL,
+            ...(milestone.enabled ? {} : { disabledReason: milestone.reason }),
+            onSelect: () => onMakeMilestone(activity),
+          });
+        }
       }
       // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
       // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so

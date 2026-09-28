@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type {
+  HealthAdvisoryId,
+  HealthAdvisoryResult,
   HealthBaselineRef,
   HealthMeasured,
   HealthMetricId,
@@ -13,6 +15,7 @@ import type {
   ScheduleHealthReport,
 } from '@repo/types';
 import {
+  HEALTH_ADVISORY_IDS,
   HEALTH_METRIC_IDS,
   HEALTH_NOT_ASSESSABLE_REASONS,
   HEALTH_THRESHOLD_KINDS,
@@ -174,6 +177,49 @@ export class HealthMetricResultDto implements HealthMetricResult {
   }
 }
 
+export class HealthAdvisoryDetailDto {
+  @ApiProperty({
+    description:
+      'How many of the advisory’s offenders hold at least one live resource assignment (a live ' +
+      'assignment on a live resource). The zero-duration advisory states it so a planner knows how ' +
+      'many of the listed tasks the Make milestone action will shade rather than offer.',
+  })
+  resourced!: number;
+}
+
+/**
+ * A finding **beyond the DCMA assessment** (ADR-0162 decision 2). Not a metric: no ordinal, no
+ * verdict, no threshold, never counted in the summary. The `id` enum derives from
+ * `HEALTH_ADVISORY_IDS`, the tuple that also derives the union, so the two cannot disagree.
+ */
+export class HealthAdvisoryResultDto implements HealthAdvisoryResult {
+  @ApiProperty({ enum: HEALTH_ADVISORY_IDS })
+  id!: HealthAdvisoryId;
+
+  @ApiProperty({ description: 'The advisory’s display name, e.g. "Zero-duration tasks".' })
+  name!: string;
+
+  @ApiProperty({
+    type: HealthMeasuredDto,
+    description:
+      'Percent-shaped: count of the active non-summary activities (the metrics’ denominator). ' +
+      'Never null — an advisory is assessed from stored durations, calculated or not.',
+  })
+  measured!: HealthMeasured;
+
+  @ApiProperty({ description: 'The TRUE total of offenders, never the capped list length.' })
+  offenderCount!: number;
+
+  @ApiProperty({ description: 'True when offenders was truncated to the report’s offenderCap.' })
+  offendersTruncated!: boolean;
+
+  @ApiProperty({ type: [HealthOffenderDto], description: 'At most offenderCap rows.' })
+  offenders!: HealthOffender[];
+
+  @ApiProperty({ type: HealthAdvisoryDetailDto })
+  detail!: { resourced: number };
+}
+
 export class HealthBaselineRefDto implements HealthBaselineRef {
   @ApiProperty({ description: 'The active baseline’s id.' })
   id!: string;
@@ -250,6 +296,15 @@ export class ScheduleHealthReportDto implements ScheduleHealthReport {
       'is never omitted.',
   })
   metrics!: HealthMetricResult[];
+
+  @ApiProperty({
+    type: [HealthAdvisoryResultDto],
+    description:
+      'Findings beyond the DCMA assessment (ADR-0162): one entry per HealthAdvisoryId, always, in ' +
+      'that order. Never counted in summary, and never a fifteenth metric. Added 2026-09-26; a ' +
+      'client should read it defensively against an API released before it existed.',
+  })
+  advisories!: HealthAdvisoryResult[];
 
   static from(report: ScheduleHealthReport): ScheduleHealthReportDto {
     return Object.assign(new ScheduleHealthReportDto(), report);

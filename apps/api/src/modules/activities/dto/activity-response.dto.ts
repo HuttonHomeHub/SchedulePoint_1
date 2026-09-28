@@ -12,6 +12,7 @@ import type { ActivitySummary, VisualConflictReason } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import { minutesToDays, type WithDayFactor } from '../day-factor';
+import type { WithAssignmentCount } from '../resource-assignment-counts';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
 /**
@@ -187,6 +188,19 @@ export class ActivityResponseDto implements ActivitySummary {
       'cannot resolve it without one assignments request per row.',
   })
   drivingResourceCalendarId!: string | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    description:
+      'For a zero-duration TASK: how many LIVE resource assignments it holds, where an assignment ' +
+      'counts when neither it nor its resource is soft-deleted (the rule the health report uses, ' +
+      'ADR-0162). Null for every other activity, meaning "not counted for this row type": the only ' +
+      'reader is the Make milestone action, which applies to zero-duration tasks alone and is ' +
+      'offered only when this is 0, because a milestone does no work. Derived on read, never stored.',
+  })
+  resourceAssignmentCount!: number | null;
 
   @ApiProperty({
     format: 'uuid',
@@ -439,7 +453,10 @@ export class ActivityResponseDto implements ActivitySummary {
    * expense amounts are included ONLY when it is true, otherwise null (fail-closed, no cross-tenant
    * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
    */
-  static from(entity: WithDayFactor<Activity>, canReadCost: boolean): ActivityResponseDto {
+  static from(
+    entity: WithAssignmentCount<WithDayFactor<Activity>>,
+    canReadCost: boolean,
+  ): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -452,6 +469,7 @@ export class ActivityResponseDto implements ActivitySummary {
       // minutes so a sub-day value survives the round trip instead of reading back rounded.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
       drivingResourceCalendarId: entity.drivingResourceCalendarId,
+      resourceAssignmentCount: entity.resourceAssignmentCount,
       durationMinutes: entity.durationMinutes,
       durationType: entity.durationType,
       constraintType: entity.constraintType,

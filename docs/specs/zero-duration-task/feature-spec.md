@@ -1,6 +1,6 @@
 # Feature Spec: A zero-duration task keeps its date, is reported, and converts without moving the schedule
 
-- **Status:** Approved — agreement round complete 2026-09-26 (see agreement-round.md); product owner delegated the open questions
+- **Status:** Accepted — shipped (ADR-0162), M0–M6 landed 2026-09-28
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-26 (drafted); folded 2026-09-26 after the agreement round
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #384 (and #387, fixed inside this epic, D9)
@@ -300,7 +300,8 @@ was invisible because both read the same.
 >   plan's reported finish may read an earlier day: the finish instant is unchanged, but the date is
 >   now read the way a finish milestone's is.
 > - **Given** the task has live assignments **then** the action is shaded with "It has N resource
->   assignments. A milestone does no work; remove them in Resources first."
+>   assignments. A milestone does no work; remove them in Resources first." (one assignment: "It
+>   has 1 resource assignment. … remove it in Resources first.", M6 UX review)
 > - **Given** I do not hold the pen, or my role cannot edit **then** the action is shaded with the
 >   pen or role reason from the editor's definition gate (D6). If the task is also resourced, the pen
 >   or role reason is the one shown.

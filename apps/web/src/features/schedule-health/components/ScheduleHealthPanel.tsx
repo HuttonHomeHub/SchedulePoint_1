@@ -1,15 +1,25 @@
-import type { HealthMetricResult, HealthOffender, ScheduleHealthReport } from '@repo/types';
-import { ChevronDown, ChevronRight, CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import type {
+  HealthAdvisoryResult,
+  HealthMetricResult,
+  HealthOffender,
+  ScheduleHealthReport,
+} from '@repo/types';
+import { CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
+import { useEffect, useId, useRef } from 'react';
 
 import {
   buildHealthRows,
+  HEALTH_ADVISORY_FOOTER,
+  healthAdvisoriesOf,
   healthAnnouncement,
   mergeCriticalPathResult,
   REMEDY_ROLE_SENTENCES,
+  zeroDurationSummary,
   type HealthRowView,
 } from '../model/health-rows';
 import { printHealthReport } from '../print/HealthPrintDocument';
+
+import { HealthOffenderDisclosure } from './HealthOffenderDisclosure';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -250,7 +260,11 @@ export function ScheduleHealthPanel({
               </p>
             ) : null}
 
-            <ul className="space-y-1">
+            {/* Explicit roles (ADR-0122: Preflight's `list-style: none` drops them in WebKit), and a
+    name, because the panel holds a second list after this one — the advisory section — and a
+    count of "the list" must be able to say which (agreement-round A3). */}
+            {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above. */}
+            <ul role="list" aria-label="DCMA metrics" className="space-y-1">
               {rows.map((row) => (
                 <HealthMetricRow
                   key={row.metric.id}
@@ -270,6 +284,15 @@ export function ScheduleHealthPanel({
                 />
               ))}
             </ul>
+
+            <HealthAdvisorySection
+              advisories={healthAdvisoriesOf(effectiveReport)}
+              offenderCap={effectiveReport.offenderCap}
+              onActivateActivity={(offender) => {
+                onActivateActivity(offender.activityId);
+                announce(`${offender.name} selected in the plan.`);
+              }}
+            />
 
             <p className="text-muted-foreground border-border border-t pt-2 text-xs">
               This checks how the plan is built. It is separate from the issues a recalculation
@@ -299,11 +322,8 @@ function HealthMetricRow({
   criticalPathTest?: ScheduleHealthPanelProps['criticalPathTest'];
 }): React.ReactElement {
   const { metric } = row;
-  const [expanded, setExpanded] = useState(false);
-  const detailId = useId();
   const metaId = useId();
   const Icon = TONE_ICONS[row.tone];
-  const hasDisclosure = metric.offenders.length > 0;
   const hasMeta = row.measuredLabel !== null || row.thresholdLabel !== null;
   const remedyAction =
     row.remedy === 'RECALCULATE'
@@ -313,125 +333,166 @@ function HealthMetricRow({
         : undefined;
 
   return (
-    <li className="border-border rounded-md border px-2 py-1.5 text-sm">
-      <div className="flex min-w-0 items-center gap-2">
-        {hasDisclosure ? (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={detailId}
-            // The measured/threshold sentence below is the button's DESCRIPTION, not adjacency —
-            // a Tab-sweeping screen-reader user otherwise hears only "name, verdict" and never the
-            // two facts triage runs on (the spec's own §a11y requirement; ADR-0094 M5's rule that
-            // the numbers never ride only a visual sibling). The M5 accessibility review caught
-            // the unlinked form.
-            aria-describedby={hasMeta ? metaId : undefined}
-            onClick={() => setExpanded((v) => !v)}
-            className="hover:bg-accent focus-visible:ring-ring -mx-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {expanded ? (
-              <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
-            ) : (
-              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
-            )}
-            <span className="min-w-0 flex-1 truncate">{metric.name}</span>
-            <VerdictBadge row={row} />
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{metric.name}</span>
-            <VerdictBadge row={row} />
-          </div>
-        )}
-        <Icon aria-hidden="true" className={cn('size-4 shrink-0', TONE_CLASSES[row.tone])} />
-      </div>
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`.
+    <li role="listitem" className="border-border rounded-md border px-2 py-1.5 text-sm">
+      <HealthOffenderDisclosure
+        name={metric.name}
+        badge={<VerdictBadge row={row} />}
+        aside={
+          <Icon aria-hidden="true" className={cn('size-4 shrink-0', TONE_CLASSES[row.tone])} />
+        }
+        describedBy={hasMeta ? metaId : undefined}
+        offenders={metric.offenders}
+        offenderCount={metric.offenderCount}
+        offendersTruncated={metric.offendersTruncated}
+        offenderCap={offenderCap}
+        onActivate={onActivateActivity}
+      >
+        {hasMeta ? (
+          <p id={metaId} className="text-muted-foreground pl-5 text-xs">
+            {row.measuredLabel}
+            {row.measuredLabel !== null && row.thresholdLabel !== null
+              ? ' · judged against '
+              : null}
+            {row.thresholdLabel !== null && row.measuredLabel === null ? 'judged against ' : null}
+            {row.thresholdLabel}
+          </p>
+        ) : null}
 
-      {hasMeta ? (
-        <p id={metaId} className="text-muted-foreground pl-5 text-xs">
-          {row.measuredLabel}
-          {row.measuredLabel !== null && row.thresholdLabel !== null ? ' · judged against ' : null}
-          {row.thresholdLabel !== null && row.measuredLabel === null ? 'judged against ' : null}
-          {row.thresholdLabel}
-        </p>
-      ) : null}
+        {row.caveatSentence !== null ? (
+          <p className="text-muted-foreground pl-5 text-xs">{row.caveatSentence}</p>
+        ) : null}
 
-      {row.caveatSentence !== null ? (
-        <p className="text-muted-foreground pl-5 text-xs">{row.caveatSentence}</p>
-      ) : null}
-
-      {criticalPathTest !== undefined ? (
-        <div className="space-y-1 pl-5">
-          {/* Not native `disabled` while pending — a control that flips twice per press blurs to
+        {criticalPathTest !== undefined ? (
+          <div className="space-y-1 pl-5">
+            {/* Not native `disabled` while pending — a control that flips twice per press blurs to
               `<body>` and takes the accelerators with it (the ScopeSaveBar lesson); guard in the
               handler instead and say what is happening in the name. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            aria-disabled={criticalPathTest.isPending}
-            onClick={() => {
-              if (!criticalPathTest.isPending) criticalPathTest.run();
-            }}
-            className="h-6 px-2 text-xs"
-          >
-            {criticalPathTest.isPending ? 'Running…' : 'Run critical path test'}
-          </Button>
-          {criticalPathTest.isError ? (
-            <p className="text-muted-foreground text-xs">The test could not be run — try again.</p>
-          ) : null}
-        </div>
-      ) : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-disabled={criticalPathTest.isPending}
+              onClick={() => {
+                if (!criticalPathTest.isPending) criticalPathTest.run();
+              }}
+              className="h-6 px-2 text-xs aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            >
+              {criticalPathTest.isPending ? 'Running…' : 'Run critical path test'}
+            </Button>
+            {criticalPathTest.isError ? (
+              <p className="text-muted-foreground text-xs">
+                The test could not be run — try again.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-      {row.reasonSentence !== null ? (
-        <div className="space-y-1 pl-5">
-          <p className="text-muted-foreground text-xs">{row.reasonSentence}</p>
-          {/* A reader WITHOUT the remedy capability gets the route in words, never silence —
+        {row.reasonSentence !== null ? (
+          <div className="space-y-1 pl-5">
+            <p className="text-muted-foreground text-xs">{row.reasonSentence}</p>
+            {/* A reader WITHOUT the remedy capability gets the route in words, never silence —
               ADR-0082's discriminator: this state is shut by role, so it is explained, not
               omitted. Omission is reserved for a remedy that does not exist at all. The M5 ux
               review caught the silent branch: a Viewer could not tell "nobody captured a
               baseline" from "I am not allowed to fix this", and the two calls to action differ. */}
-          {remedyAction === undefined ? (
-            row.remedy === null ? null : (
-              <p className="text-muted-foreground text-xs">{REMEDY_ROLE_SENTENCES[row.remedy]}</p>
-            )
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={remedyAction}
-              className="h-6 px-2 text-xs"
-            >
-              {row.remedy === 'RECALCULATE' ? 'Recalculate' : 'Open baselines'}
-            </Button>
-          )}
-        </div>
-      ) : null}
+            {remedyAction === undefined ? (
+              row.remedy === null ? null : (
+                <p className="text-muted-foreground text-xs">{REMEDY_ROLE_SENTENCES[row.remedy]}</p>
+              )
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={remedyAction}
+                className="h-6 px-2 text-xs"
+              >
+                {row.remedy === 'RECALCULATE' ? 'Recalculate' : 'Open baselines'}
+              </Button>
+            )}
+          </div>
+        ) : null}
+      </HealthOffenderDisclosure>
+    </li>
+  );
+}
 
-      {hasDisclosure && expanded ? (
-        <div id={detailId} className="pt-1 pl-5">
-          {metric.offendersTruncated ? (
-            <p className="text-muted-foreground text-xs">
-              Showing {Math.min(offenderCap, metric.offenders.length)} of {metric.offenderCount}.
-            </p>
-          ) : null}
-          <ul className="space-y-0.5">
-            {metric.offenders.map((offender) => (
-              <li key={`${offender.kind}-${offender.id}`}>
-                <button
-                  type="button"
-                  onClick={() => onActivateActivity(offender)}
-                  className="hover:bg-accent focus-visible:ring-ring flex w-full min-w-0 items-baseline gap-2 rounded-md px-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {offender.code === null ? offender.name : `${offender.code} ${offender.name}`}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">{offender.note}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+/**
+ * **Beyond the DCMA assessment** (ADR-0162 D1) — a section of its own, after the metrics list and
+ * never an item in it, because an advisory has no ordinal, no verdict and no threshold, and is never
+ * counted in the summary (FC-4). Its one row renders through the same disclosure the metrics use, so
+ * an offender list reads and jumps one way on both.
+ *
+ * `null` advisories means an API that predates the field (spec E32): nothing renders, and nothing
+ * claims "none" — an absent answer is not an answer of zero.
+ */
+function HealthAdvisorySection({
+  advisories,
+  offenderCap,
+  onActivateActivity,
+}: {
+  advisories: readonly HealthAdvisoryResult[] | null;
+  offenderCap: number;
+  onActivateActivity: (offender: HealthOffender) => void;
+}): React.ReactElement | null {
+  const headingId = useId();
+  if (advisories === null || advisories.length === 0) return null;
+  return (
+    <section aria-labelledby={headingId} className="space-y-1">
+      <h3 id={headingId} className="text-sm font-medium">
+        Beyond the DCMA assessment
+      </h3>
+      {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`. */}
+      <ul role="list" aria-labelledby={headingId} className="space-y-1">
+        {advisories.map((advisory) => (
+          <HealthAdvisoryRow
+            key={advisory.id}
+            advisory={advisory}
+            offenderCap={offenderCap}
+            onActivateActivity={onActivateActivity}
+          />
+        ))}
+      </ul>
+      <p className="text-muted-foreground text-xs">{HEALTH_ADVISORY_FOOTER}</p>
+    </section>
+  );
+}
+
+function HealthAdvisoryRow({
+  advisory,
+  offenderCap,
+  onActivateActivity,
+}: {
+  advisory: HealthAdvisoryResult;
+  offenderCap: number;
+  onActivateActivity: (offender: HealthOffender) => void;
+}): React.ReactElement {
+  const summaryId = useId();
+  const count = advisory.offenderCount;
+  return (
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`.
+    <li role="listitem" className="border-border rounded-md border px-2 py-1.5 text-sm">
+      <HealthOffenderDisclosure
+        name={advisory.name}
+        // A count, not a verdict: an advisory judges nothing (ADR-0162 D1). "None" at zero, so the
+        // badge never reads as a bare "0" beside a name that sounds like a problem.
+        badge={
+          <span className="text-muted-foreground shrink-0 text-xs font-medium">
+            {count === 0 ? 'None' : String(count)}
+          </span>
+        }
+        describedBy={count === 0 ? undefined : summaryId}
+        offenders={advisory.offenders}
+        offenderCount={count}
+        offendersTruncated={advisory.offendersTruncated}
+        offenderCap={offenderCap}
+        onActivate={onActivateActivity}
+      >
+        {count === 0 ? null : (
+          <p id={summaryId} className="text-muted-foreground pl-5 text-xs">
+            {zeroDurationSummary(advisory)}
+          </p>
+        )}
+      </HealthOffenderDisclosure>
     </li>
   );
 }

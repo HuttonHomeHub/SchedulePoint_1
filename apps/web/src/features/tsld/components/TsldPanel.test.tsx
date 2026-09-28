@@ -18,6 +18,7 @@ vi.mock('../../../config/env', async (importOriginal) => {
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id: 'a1',
     planId: 'p1',
     code: 'A100',

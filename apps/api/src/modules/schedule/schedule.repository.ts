@@ -14,6 +14,7 @@ import {
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
+import { liveAssignmentWhere } from '../activities/live-assignment';
 
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
@@ -534,28 +535,34 @@ export class ScheduleRepository {
   }
 
   /**
-   * The ids of this plan's activities that hold at least one ACTIVE resource assignment — metric
-   * 10's whole read (assignment EXISTENCE only, spec §3.2's narrowing: no cost column is selected,
-   * so the report structurally cannot vary by `cost:read`). The `loadResourceAssignments` shape
-   * (`:295-309`) narrowed to the one column the metric needs; filters through the activity
-   * relation because `resource_assignments` carries no plan id, riding
-   * `idx_resource_assignments_activity_id_fk` (measured at M0-T2).
+   * How many LIVE resource assignments each of this plan's activities holds — metric 10's read
+   * (assignment EXISTENCE: `count > 0`) and the zero-duration advisory's offender note (the count
+   * itself), from **one** query (spec FC-7). No cost column is selected, so the report structurally
+   * cannot vary by `cost:read` (spec §3.2's narrowing). The `loadResourceAssignments` shape
+   * (`:295-309`) narrowed to the one column the reads need; filters through the activity relation
+   * because `resource_assignments` carries no plan id, riding
+   * `idx_resource_assignments_activity_id_fk` (measured at health M0-T2).
+   *
+   * It fetches one row per live assignment and counts them in memory, which is what it already did
+   * when it returned a `Set` — so the rename from `loadHealthAssignedActivityIds` changed what is
+   * kept, not what is read. "Live" is `liveAssignmentWhere` (FC-10), shared with every other reader.
+   * An activity with no live assignment is absent from the map.
    */
-  async loadHealthAssignedActivityIds(
+  async loadHealthAssignmentCounts(
     organizationId: string,
     planId: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<Set<string>> {
+  ): Promise<Map<string, number>> {
     const rows = await db.resourceAssignment.findMany({
       where: {
-        organizationId,
-        deletedAt: null,
+        ...liveAssignmentWhere(organizationId),
         activity: { planId, deletedAt: null },
-        resource: { deletedAt: null },
       },
       select: { activityId: true },
     });
-    return new Set(rows.map((r) => r.activityId));
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.activityId, (counts.get(r.activityId) ?? 0) + 1);
+    return counts;
   }
 
   /**

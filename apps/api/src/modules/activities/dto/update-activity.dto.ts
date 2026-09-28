@@ -62,7 +62,17 @@ export class UpdateActivityDto {
   @MaxLength(2000)
   description?: string;
 
-  @ApiPropertyOptional({ enum: ActivityType })
+  @ApiPropertyOptional({
+    enum: ActivityType,
+    description:
+      'The activity type. **Changing it can rewrite stored dates** (ADR-0162): when the stored ' +
+      'duration is 0 and the change crosses the finish-milestone convention (into or out of ' +
+      '`FINISH_MILESTONE`), each of `visualStart`, `constraintDate`, `secondaryConstraintDate`, ' +
+      '`externalEarlyStart` and `externalLateFinish` that is stored and NOT in this request moves one ' +
+      'calendar day (earlier into `FINISH_MILESTONE`, later out of it), so the activity keeps its ' +
+      "instant. A date sent in the same request, including `null`, is read in the new type's " +
+      'convention and is not moved. The external-date ordering check runs on the moved values.',
+  })
   @IsOptional()
   @IsEnum(ActivityType)
   type?: ActivityType;

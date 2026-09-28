@@ -1,7 +1,10 @@
 import type { ActivitySummary } from '@repo/types';
 
 import { leadingConflictKey } from './conflict-remedy';
+import { deriveMakeMilestoneGate } from './make-milestone-gate';
 import type { SelectionBarContext, SelectionCanvasContext } from './selection-actions';
+
+import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 
 /**
  * **One builder, two hosts.**
@@ -56,6 +59,16 @@ export interface SelectionContextInput {
   onProgress?: ((activity: ActivitySummary) => void) | undefined;
   onNotes?: ((activity: ActivitySummary) => void) | undefined;
   onClearVisualPlacement?: ((activity: ActivitySummary) => void) | undefined;
+  /**
+   * The workspace's `activityEditorGating.general`, **passed through untouched** (ADR-0162
+   * decision 4, spec D6). Make milestone… shades from this object, by identity, exactly as the
+   * activities table's row menu does; `make-milestone-gate-identity.test.tsx` pins both hosts.
+   * Absent in a host that offers no conversion (the guest view), which omits the action.
+   */
+  definitionGate?: ScopeGate | undefined;
+  /** Open the Make milestone dialog for the activity. Absent ⇒ the action is omitted, never lit
+   * and inert (the ADR-0064 §7 dead end). */
+  onMakeMilestone?: ((activity: ActivitySummary) => void) | undefined;
   /** `at` is the editor scope the remedy routes to — a closed union, not a free string
    * (`selection-actions.tsx:98`). Typed loosely here first, which the compiler rejected. */
   onOpenEditorAt?:
@@ -113,5 +126,13 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     },
     onClearVisualPlacement: () => input.onClearVisualPlacement?.(activity),
     onOpenEditorAt: (at) => input.onOpenEditorAt?.(activity, at),
+    definitionGate: input.definitionGate ?? null,
+    // Omitted unless the host both gates and handles it: a gate with no handler would be a lit
+    // control that does nothing, and a handler with no gate would have nothing to shade with.
+    makeMilestone:
+      input.definitionGate !== undefined && input.onMakeMilestone !== undefined
+        ? deriveMakeMilestoneGate(activity, input.definitionGate)
+        : { applies: false },
+    onMakeMilestone: () => input.onMakeMilestone?.(activity),
   };
 }

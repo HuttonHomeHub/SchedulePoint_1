@@ -691,6 +691,201 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     });
   });
 
+  // -------------------------------------------------------------------------------------------
+  // The zero-duration task (`docs/specs/zero-duration-task/` M0-T4). A third estate, separate from
+  // both above for the same reason they are separate from each other.
+  // -------------------------------------------------------------------------------------------
+
+  async function resource(actor: Actor, name: string): Promise<string> {
+    const res = await actor.agent
+      .post(`${org}/resources`)
+      .send({ name, kind: 'LABOUR' })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  async function assign(actor: Actor, activityId: string, resourceId: string): Promise<string> {
+    const res = await actor.agent
+      .post(`${org}/activities/${activityId}/assignments`)
+      .send({ resourceId, budgetedUnits: 1, isDriving: false })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  /**
+   * **The zero-duration estate.** One plan, and every row but the first two is a witness for one
+   * clause of the two queries — removing that clause moves a count.
+   *
+   * | Activity      | Shape                                                  | D-L | D-M |
+   * | ------------- | ------------------------------------------------------ | --- | --- |
+   * | Resourced     | zero TASK, one live assignment                         | yes | YES |
+   * | Double        | zero TASK, TWO live assignments                        | yes | YES |
+   * | Unassigned    | zero TASK, its only assignment unassigned              | yes | no  |
+   * | Gone resource | zero TASK, live assignment to a soft-deleted resource  | yes | no  |
+   * | Bare          | zero TASK, no assignment                               | yes | no  |
+   * | Long          | 5-day TASK, one live assignment                        | no  | no  |
+   * | Sign-off      | FINISH_MILESTONE, zero duration, one live assignment   | no  | no  |
+   * | Deleted       | zero TASK, deleted                                     | no  | no  |
+   *
+   * `Double` is the `DISTINCT` witness (two join rows, one task); `Unassigned` is `ra.deleted_at`'s;
+   * `Gone resource` is `r.deleted_at`'s — spec FC-10's fixture of one live, one soft-deleted and one
+   * dead-resource assignment; `Long` is the duration filter's; `Sign-off` is the type filter's (the
+   * API accepts an assignment on a milestone, spec E19); `Deleted` is `a.deleted_at`'s.
+   *
+   * **`Gone resource` is the one row not built through the public API, and it cannot be.** Deleting a
+   * resource still assigned to an active activity is refused (`RESOURCE_IN_USE`,
+   * `resources.service.ts`), so a live assignment to a dead resource is unreachable through the
+   * write path — which is why the product's own health read guards against it anyway. The resource
+   * is soft-deleted directly, leaving its assignment row live, which is exactly the shape a
+   * `r.deleted_at IS NULL` clause exists to exclude.
+   */
+  async function seedZeroDurationEstate(
+    actor: Actor,
+  ): Promise<{ planId: string; ids: Record<string, string> }> {
+    const allDay = await calendar(actor, 'Site (24h)', 24);
+    const planId = await planOn(actor, allDay, 'Zero duration');
+    const crew = await resource(actor, 'Crew');
+    const inspector = await resource(actor, 'Inspector');
+    const gone = await resource(actor, 'Retired crew');
+
+    const resourced = await activityOn(actor, planId, { name: 'Resourced', durationDays: 0 });
+    await assign(actor, resourced, crew);
+
+    const double = await activityOn(actor, planId, { name: 'Double', durationDays: 0 });
+    await assign(actor, double, crew);
+    await assign(actor, double, inspector);
+
+    const unassigned = await activityOn(actor, planId, { name: 'Unassigned', durationDays: 0 });
+    const stale = await assign(actor, unassigned, crew);
+    await actor.agent.delete(`${org}/assignments/${stale}`).expect(204);
+
+    const goneResource = await activityOn(actor, planId, {
+      name: 'Gone resource',
+      durationDays: 0,
+    });
+    await assign(actor, goneResource, gone);
+    await prisma.resource.update({ where: { id: gone }, data: { deletedAt: new Date() } });
+
+    const bare = await activityOn(actor, planId, { name: 'Bare', durationDays: 0 });
+
+    const long = await activityOn(actor, planId, { name: 'Long', durationDays: 5 });
+    await assign(actor, long, crew);
+
+    const signOff = await activityOn(actor, planId, {
+      name: 'Sign-off',
+      type: 'FINISH_MILESTONE',
+      durationDays: 0,
+    });
+    await assign(actor, signOff, inspector);
+
+    const deleted = await activityOn(actor, planId, { name: 'Deleted', durationDays: 0 });
+    await assign(actor, deleted, crew);
+    await actor.agent.delete(`${org}/activities/${deleted}`).expect(200);
+
+    return {
+      planId,
+      ids: { resourced, double, unassigned, goneResource, bare, long, signOff },
+    };
+  }
+
+  it('counts zero-duration tasks, and which of them hold a live assignment (zero-duration M0-T4)', async () => {
+    const actor = await adminWithOrg();
+    await seedZeroDurationEstate(actor);
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    // Six live TASKs (five zero, `Long`); the milestone and the deleted row are not tasks here.
+    expect(byId.get('zero-duration-tasks')).toMatchObject({
+      nature: 'prospective',
+      examined: 6,
+      affected: 5,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+
+    // Of the five, two hold a live assignment to a live resource — and `Double` counts once.
+    expect(byId.get('zero-duration-tasks-resourced')).toMatchObject({
+      nature: 'prospective',
+      examined: 5,
+      affected: 2,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+  });
+
+  it('agrees with the activity field and the health advisory on one fixture (FC-10)', async () => {
+    // **Three readers of "a live resource assignment", one answer** (spec FC-10, D8). The activity
+    // rows' `resourceAssignmentCount` and the health advisory spread `liveAssignmentWhere`; this
+    // diagnostic is raw SQL and states the same two `deleted_at IS NULL` conditions by hand. So
+    // agreement on `Unassigned` (a soft-deleted assignment) and `Gone resource` (a live assignment
+    // to a soft-deleted resource) is the property, and only a real database can show it.
+    //
+    // Verified red (M4-T1 record): dropping `resource: { deletedAt: null }` from
+    // `liveAssignmentWhere` moves `Gone resource` to 1 in the field and `resourced` to 3 in the
+    // advisory, while the diagnostic stays at 2 — the three disagree, and this case fails.
+    const actor = await adminWithOrg();
+    const { planId, ids } = await seedZeroDurationEstate(actor);
+    const staff = await signedInStaff();
+
+    // Reader 1 — the activity field, on the list route.
+    const list = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const rows = list.body.data as { id: string; resourceAssignmentCount: number | null }[];
+    const field = new Map(rows.map((r) => [r.id, r.resourceAssignmentCount]));
+    expect(Object.fromEntries(Object.entries(ids).map(([k, id]) => [k, field.get(id)]))).toEqual({
+      resourced: 1,
+      double: 2,
+      unassigned: 0,
+      goneResource: 0,
+      bare: 0,
+      // Not counted for this row type — null, never 0 (FC-9 remedy rung 1).
+      long: null,
+      signOff: null,
+    });
+    const fieldResourced = [...field.values()].filter((n) => n !== null && n > 0).length;
+
+    // Reader 2 — the health advisory.
+    const health = await actor.agent
+      .get(`${org}/plans/${planId}/schedule/health-check`)
+      .expect(200);
+    const advisory = (
+      health.body.data.advisories as {
+        id: string;
+        detail: { resourced: number };
+        offenderCount: number;
+      }[]
+    ).find((a) => a.id === 'ZERO_DURATION_TASKS');
+    expect(advisory?.offenderCount).toBe(5);
+
+    // Reader 3 — the staff diagnostic.
+    const byId = await readDiagnostics(staff);
+    const diagnostic = byId.get('zero-duration-tasks-resourced')?.affected;
+
+    expect({ field: fieldResourced, advisory: advisory?.detail.resourced, diagnostic }).toEqual({
+      field: 2,
+      advisory: 2,
+      diagnostic: 2,
+    });
+  });
+
+  it('carries the count on the get and PATCH routes too (M4-T1)', async () => {
+    const actor = await adminWithOrg();
+    const { ids } = await seedZeroDurationEstate(actor);
+
+    const got = await actor.agent.get(`${org}/activities/${ids.double}`).expect(200);
+    expect(got.body.data.resourceAssignmentCount).toBe(2);
+
+    const long = await actor.agent.get(`${org}/activities/${ids.long}`).expect(200);
+    expect(long.body.data.resourceAssignmentCount).toBeNull();
+
+    // A PATCH response is a fresh read: renaming the task keeps its count.
+    const patched = await actor.agent
+      .patch(`${org}/activities/${ids.resourced}`)
+      .send({ name: 'Resourced (renamed)', version: 1 })
+      .expect(200);
+    expect(patched.body.data.resourceAssignmentCount).toBe(1);
+  });
+
   it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {
     // TypeScript stops the field being DROPPED — it is non-optional on the DTO — and stops nothing
     // if a producer writes the wrong literal. Both entries are retrospective today, so this cannot
@@ -731,6 +926,8 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'snet-full-baseline-coverage',
       'visual-conflict-earlier-than-logic',
       'visual-conflict-later-than-bound',
+      'zero-duration-tasks',
+      'zero-duration-tasks-resourced',
     ]);
     for (const row of byId.values()) {
       expect(row).toMatchObject({ examined: 0, affected: 0, affectedPlans: 0 });

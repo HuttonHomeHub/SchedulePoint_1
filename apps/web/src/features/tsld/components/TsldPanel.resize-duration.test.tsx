@@ -37,6 +37,7 @@ const NO_DEPS: DependencySummary[] = [];
 function fourDayOverAWeekend(): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id: 'a1',
     planId: 'p1',
     code: 'A100',

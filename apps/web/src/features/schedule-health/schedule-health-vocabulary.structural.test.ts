@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { HEALTH_METRIC_IDS } from '@repo/types';
+import { HEALTH_ADVISORY_IDS, HEALTH_METRIC_IDS } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { CONFLICT_FLAGS } from '@/features/tsld/render/conflicts';
@@ -40,6 +40,17 @@ describe('G1 — disjoint vocabularies', () => {
     // by one side being nothing.
     expect(HEALTH_METRIC_IDS.length).toBe(14);
     expect(conflictKeys.size).toBeGreaterThan(0);
+  });
+
+  // The findings beyond the DCMA assessment (ADR-0162) are a THIRD vocabulary: not a conflict (it is
+  // structural, not what a recalculation hit) and not a metric (no ordinal, no verdict, never in the
+  // summary). Disjoint from both, with its own non-empty positive half.
+  it('no health advisory id is a conflict key or a metric id', () => {
+    const conflictKeys = new Set<string>(CONFLICT_FLAGS.map((f) => f.key));
+    const metricIds = new Set<string>(HEALTH_METRIC_IDS);
+    expect(HEALTH_ADVISORY_IDS.filter((id) => conflictKeys.has(id))).toEqual([]);
+    expect(HEALTH_ADVISORY_IDS.filter((id) => metricIds.has(id))).toEqual([]);
+    expect(HEALTH_ADVISORY_IDS.length).toBeGreaterThan(0);
   });
 });
 
@@ -112,6 +123,7 @@ describe('G3 — one source per number', () => {
         baseline: null,
         summary: { passed: 0, failed: 1, notAssessable: 13, informational: 0 },
         offenderCap: 50,
+        advisories: [],
         metrics: [
           {
             id: 'MISSING_LOGIC',

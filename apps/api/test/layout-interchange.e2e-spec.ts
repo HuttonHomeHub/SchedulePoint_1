@@ -391,9 +391,17 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
+    // ADR-0162 M5 added one thing to this report, and only additively: an `advisories` key naming
+    // the file's one zero-duration task. So the M0 baseline is not regenerated; the report WITHOUT
+    // that key must still hash to it, and the key must hold exactly that advisory. A digest of the
+    // whole report would hide which part moved.
+    const { advisories, ...withoutAdvisories } = parsed.report;
+    expect(advisories?.map((a) => [a.code, a.sourceRef])).toEqual([
+      ['ZERO_DURATION_TASK', 'A7550'],
+    ]);
     expect({
       tortureGraphDigest: digest(parsed.graph),
-      tortureReportDigest: digest(parsed.report),
+      tortureReportDigest: digest(withoutAdvisories),
     }).toEqual(BASELINE);
   });
 

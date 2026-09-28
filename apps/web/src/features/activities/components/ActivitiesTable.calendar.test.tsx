@@ -41,6 +41,7 @@ const CALENDARS: CalendarSummary[] = [
 
 const BASE: ActivitySummary = {
   drivingResourceCalendarId: null,
+  resourceAssignmentCount: null,
   id: 'a1',
   planId: 'pl1',
   code: 'A100',

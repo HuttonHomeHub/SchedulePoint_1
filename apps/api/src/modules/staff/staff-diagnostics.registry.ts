@@ -33,6 +33,8 @@ export const DIAGNOSTIC_IDS = [
   'snet-full-baseline-coverage',
   'visual-conflict-earlier-than-logic',
   'visual-conflict-later-than-bound',
+  'zero-duration-tasks',
+  'zero-duration-tasks-resourced',
 ] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
@@ -649,6 +651,111 @@ const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
   `,
 };
 
+/**
+ * **D-L, D-M — the zero-duration task, sized before anything changes it
+ * (`docs/specs/zero-duration-task/` M0-T4).**
+ *
+ * A `TASK` whose `duration_minutes` is zero reads its stored dates at the **start** of their day,
+ * while a `FINISH_MILESTONE` at the same point reads the **end** of it (ADR-0155), so one instant
+ * can be described by two different dates depending on a type the planner may never have thought
+ * about. The epic adds an advisory for these rows and a single-activity **Make milestone…** action
+ * offered only to an **unresourced** one. These two entries are the population each would reach,
+ * read on the deployed host rather than guessed from the seed catalogue.
+ *
+ * **Both are `prospective`**: nothing here has changed meaning yet, so a count sizes work the epic
+ * is about to offer, not stored numbers that went wrong. **Nor is a count a defect count.** A
+ * zero-duration task is legal and some are deliberate — a sign-off that has to hold a resource is
+ * exactly the shape the action refuses to convert. A non-zero D-L says "this many tasks the
+ * advisory will flag"; it does not say "this many are mistakes".
+ *
+ * **Only `TASK`, and deliberately.** A zero-duration `LEVEL_OF_EFFORT`, `WBS_SUMMARY` or `HAMMOCK`
+ * row takes its span from other activities, and the M0-T1 harness counted **zero**
+ * `RESOURCE_DEPENDENT` ones across the whole seed catalogue and every import fixture
+ * (`m0-measurement.md`). Widening the filter would fold rows the action does not offer to convert
+ * into the population it is meant to size.
+ *
+ * **D-L's denominator is every live `TASK`, not every activity**, so the rate reads "of the tasks";
+ * a denominator of all activities would fall whenever somebody added a milestone — the "17 of
+ * 1,284" failure this registry's shape exists to prevent, one denominator along (the D-J/D-K
+ * reasoning). **D-M's denominator is D-L's numerator**, so the two are read together: D-L sizes the
+ * advisory, and D-M sizes how much of it the action will shade rather than offer.
+ *
+ * **"Live assignment" is spec FC-10's predicate**: `ra.deleted_at IS NULL` and
+ * `r.deleted_at IS NULL`, on a live activity in a live plan — the two conditions
+ * `liveAssignmentWhere` (`activities/live-assignment.ts`) states for the health loader
+ * (`ScheduleRepository.loadHealthAssignmentCounts`) and, from M4, the activity field, so three
+ * readers cannot disagree about one activity. An unassigned row and an assignment to a soft-deleted
+ * resource both leave a task **unresourced**; the e2e fixture holds one of each and asserts neither
+ * is counted. `is_driving` is not consulted: any live assignment makes the task resourced, driving
+ * or not.
+ *
+ * **D-M counts `DISTINCT a.id` through a join, never `EXISTS`** — gate S-4 refuses the semi-join's
+ * `SELECT 1` (D-I's docblock), and the `DISTINCT` is load-bearing: a task holding two live
+ * assignments produces two join rows and must count once, which the e2e fixture also holds.
+ *
+ * **Measured cost**, 2026-09-26, on a 102,000-activity diluted estate that is **fully resourced**
+ * (103,020 assignment rows — ADR-0140's M0 found that the expensive shape for any query joining
+ * `resource_assignments`), built by `docs/specs/zero-duration-task/m0-dilute.sql` and read by
+ * `scripts/measure-zero-duration-diagnostics.mts`, which takes the SQL from this file. Median of
+ * five under `EXPLAIN (ANALYZE)`, against ADR-0140's ≤ 500 ms bar:
+ *
+ * | Statement        | median ms | max ms | plan                                                  |
+ * | ---------------- | --------: | -----: | ----------------------------------------------------- |
+ * | D-L denominator  |     35.68 |  37.66 | hash join, sequential scan of `activities`            |
+ * | D-L numerator    |     18.42 |  20.76 | the same                                              |
+ * | D-M denominator  |     17.89 |  20.76 | the same                                              |
+ * | D-M numerator    |     39.26 |  42.38 | hash joins, sequential scan of `resource_assignments` |
+ *
+ * Every statement scans `activities` sequentially, like every other entry here: there is no index
+ * on `type` or `duration_minutes`, and one is not proposed — the heaviest statement is a tenth of the
+ * bar and cheaper than `inherited-day-factor`'s measured 104 ms numerator on the same scale.
+ */
+const ZERO_DURATION_TASKS_DENOMINATOR = Prisma.sql`
+  SELECT count(*) AS examined
+  FROM activities a
+  JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+  WHERE a.deleted_at IS NULL AND a.type = 'TASK'
+`;
+
+const ZERO_DURATION_TASKS: DiagnosticEntry = {
+  id: 'zero-duration-tasks',
+  label: 'Zero-duration tasks (dated at the start of their day)',
+  nature: 'prospective',
+  unit: 'activity',
+  denominator: ZERO_DURATION_TASKS_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL AND a.type = 'TASK' AND a.duration_minutes = 0
+  `,
+};
+
+const ZERO_DURATION_TASKS_RESOURCED: DiagnosticEntry = {
+  id: 'zero-duration-tasks-resourced',
+  label: 'Zero-duration tasks holding a live resource assignment',
+  nature: 'prospective',
+  unit: 'activity',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL AND a.type = 'TASK' AND a.duration_minutes = 0
+  `,
+  numerator: Prisma.sql`
+    SELECT count(DISTINCT a.id) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p                 ON p.id = a.plan_id AND p.deleted_at IS NULL
+    JOIN resource_assignments ra ON ra.activity_id = a.id AND ra.deleted_at IS NULL
+    JOIN resources r             ON r.id = ra.resource_id AND r.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL AND a.type = 'TASK' AND a.duration_minutes = 0
+  `,
+};
+
 /** The registry, in the order the panel renders it. D-A first, per CQ-1. */
 export const DIAGNOSTICS = [
   DAY_FACTOR_DIVERGENCE,
@@ -662,4 +769,6 @@ export const DIAGNOSTICS = [
   SNET_FULL_BASELINE_COVERAGE,
   VISUAL_CONFLICT_EARLIER,
   VISUAL_CONFLICT_LATER,
+  ZERO_DURATION_TASKS,
+  ZERO_DURATION_TASKS_RESOURCED,
 ] as const;

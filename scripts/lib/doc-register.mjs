@@ -130,6 +130,77 @@ export function sections(md, level = 2) {
 }
 
 /**
+ * Section headings of `docs/TECH_DEBT.md` that are structure, not items.
+ *
+ * Moved here from `check-debt-status.mjs` (`docs/specs/zero-duration-task/` M0-T7) together with
+ * {@link rowNumber} and {@link registerSections}, because a second gate now needs the same lookup
+ * and a second copy is the defect this module exists to prevent.
+ */
+export const NOT_ITEMS = new Set([
+  'Principles for managing debt',
+  'Detailed items',
+  'Closed numbers',
+]);
+
+/** `## 219. Title` or `## #106 — Title`; returns the row number as a string, or null. */
+export function rowNumber(heading) {
+  const m = /^#?(\d+)([a-z]?)[.\s—-]/.exec(heading.trim());
+  return m ? `${m[1]}${m[2]}` : null;
+}
+
+/**
+ * Every level-2 **and** level-3 section of a register, in document order.
+ *
+ * **Both levels, and reading one was a shipped defect.** `docs/TECH_DEBT.md` states its own
+ * convention as `### <number>. <title>` with `##` as drift, and `check:debt-status`'s first version
+ * called `sections(md, 2)` alone — so it read only the drifted rows and reported green over 31 it
+ * could not see (`check-debt-status.mjs`, the Parse comment). A new gate that re-derived this lookup
+ * would most likely re-derive the one-level version: #384, the row `check:engine-parity` names, is
+ * a `###` row, so that version would call the declaration stale on the commit that introduced it.
+ */
+export function registerSections(md) {
+  return [...sections(md, 2), ...sections(md, 3)].sort((a, b) => a.line - b.line);
+}
+
+/**
+ * The register's numbered rows: {@link registerSections} minus {@link NOT_ITEMS}, each carrying
+ * its row `number` (a string — `"118a"` is a real row number), in document order.
+ */
+export function detailedRows(md) {
+  return registerSections(md)
+    .filter((s) => !NOT_ITEMS.has(s.heading.trim()) && rowNumber(s.heading) !== null)
+    .map((s) => ({ ...s, number: /** @type {string} */ (rowNumber(s.heading)) }));
+}
+
+/**
+ * The leading vocabulary token of a `**Status:**` value — `open · **Verified:** …` gives `open`.
+ *
+ * One reading of "the status", shared by `check:debt-status` A2 and {@link openDetailedRow}, so
+ * the gate that validates a status and the gate that depends on one cannot disagree about what it
+ * says.
+ */
+export function statusToken(value) {
+  return value
+    .split(/[\s·—|]/)[0]
+    .toLowerCase()
+    .replace(/[*_`.]/g, '');
+}
+
+/**
+ * The detailed row numbered `number` when its `**Status:**` reads `open`, else `null`.
+ *
+ * **Open means `open`.** A `deferred`, `standing` or `unverified` row returns `null`, as does a row
+ * that is absent (closed rows are deleted and ledgered, so absence is the closed state). Used by
+ * `check:engine-parity` limb 3 to tell whether the epic its declaration names is still in flight.
+ */
+export function openDetailedRow(md, number) {
+  const row = detailedRows(md).find((r) => r.number === String(number));
+  if (!row) return null;
+  const status = fieldValue(row.body, 'Status');
+  return status !== null && statusToken(status) === 'open' ? row : null;
+}
+
+/**
  * The value of a `**Field:**` line, or `null`.
  *
  * **Column 0, and the field must open the line — that anchor is the ONLY guard.** `#219` contains

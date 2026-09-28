@@ -978,7 +978,7 @@ describe('ScheduleService.getHealthCheck', () => {
     loadHealthActivities: ReturnType<typeof vi.fn>;
     loadEdges: ReturnType<typeof vi.fn>;
     loadActiveBaselineHealthSnapshot: ReturnType<typeof vi.fn>;
-    loadHealthAssignedActivityIds: ReturnType<typeof vi.fn>;
+    loadHealthAssignmentCounts: ReturnType<typeof vi.fn>;
     loadPlanCalendar: ReturnType<typeof vi.fn>;
   };
   let service: ScheduleService;
@@ -1014,7 +1014,7 @@ describe('ScheduleService.getHealthCheck', () => {
       ]),
       loadEdges: vi.fn().mockResolvedValue([]),
       loadActiveBaselineHealthSnapshot: vi.fn().mockResolvedValue(null),
-      loadHealthAssignedActivityIds: vi.fn().mockResolvedValue(new Set()),
+      loadHealthAssignmentCounts: vi.fn().mockResolvedValue(new Map()),
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
@@ -1058,7 +1058,48 @@ describe('ScheduleService.getHealthCheck', () => {
     expect(schedule.loadHealthActivities).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
     expect(schedule.loadEdges).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
     expect(schedule.loadActiveBaselineHealthSnapshot).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
-    expect(schedule.loadHealthAssignedActivityIds).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+    expect(schedule.loadHealthAssignmentCounts).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+  });
+
+  it('FC-7: the advisory adds no query — each loader runs exactly once, and nothing else is read', async () => {
+    // The repository stub holds only these five methods, so any other read the service reached
+    // would be undefined and throw: "each of these once" is the whole query budget, before the
+    // advisory and after it.
+    const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
+    expect(result.advisories.map((a) => a.id)).toEqual(['ZERO_DURATION_TASKS']);
+    expect(schedule.loadHealthActivities).toHaveBeenCalledTimes(1);
+    expect(schedule.loadEdges).toHaveBeenCalledTimes(1);
+    expect(schedule.loadActiveBaselineHealthSnapshot).toHaveBeenCalledTimes(1);
+    expect(schedule.loadHealthAssignmentCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('builds metric 10’s presence and the advisory’s count from one assignment count', async () => {
+    const load = schedule.loadHealthActivities as unknown as () => Promise<
+      Record<string, unknown>[]
+    >;
+    const base = await load();
+    schedule.loadHealthActivities.mockResolvedValue([
+      { ...base[0], id: 'zero-2', code: 'Z2', name: 'Two crews', durationMinutes: 0 },
+      { ...base[0], id: 'zero-0', code: 'Z0', name: 'Nobody', durationMinutes: 0 },
+      { ...base[0], id: 'work', code: 'W', name: 'Work', durationMinutes: 480 },
+    ]);
+    schedule.loadHealthAssignmentCounts.mockResolvedValue(
+      new Map([
+        ['zero-2', 2],
+        ['work', 1],
+      ]),
+    );
+    const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
+
+    const advisory = result.advisories[0]!;
+    expect(advisory.offenders.map((o) => [o.id, o.note])).toEqual([
+      ['zero-2', '2 resource assignments'],
+      ['zero-0', 'no resource assignment'],
+    ]);
+    expect(advisory.detail.resourced).toBe(1);
+    // The same count read as presence: `work` holds one assignment, so metric 10 lists nobody.
+    const resources = result.metrics.find((m) => m.id === 'RESOURCES')!;
+    expect(resources.offenders).toEqual([]);
   });
 
   it('getCriticalPathTest: a plan with no start is 422 PLAN_START_REQUIRED before any load (M6)', async () => {

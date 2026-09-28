@@ -58,6 +58,7 @@ const CALENDARS: CalendarSummary[] = [calendar(CREW_8H, 8), calendar(CRANE_24H, 
 
 const BASE: ActivitySummary = {
   drivingResourceCalendarId: null,
+  resourceAssignmentCount: null,
   id: 'a1',
   planId: 'pl1',
   code: 'A100',
@@ -184,6 +185,7 @@ describe('ActivitiesTable — Duration reads the scheduling frame (#86)', () => 
         name: 'Unassigned lift',
         type: 'RESOURCE_DEPENDENT',
         drivingResourceCalendarId: null,
+        resourceAssignmentCount: null,
       },
     ]);
     expect(durationCellOf('Unassigned lift')).toHaveTextContent('1d 2h');

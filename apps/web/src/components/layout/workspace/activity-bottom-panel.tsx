@@ -125,6 +125,9 @@ export function ActivityBottomPanel({
           onOpenLogic={model.onOpenLogic}
           onOpenResources={model.onResourcesActivity}
           onDuplicate={(a) => void model.onDuplicateActivity(a)}
+          // Make milestone… (ADR-0162 decision 4). No focus call here: the row menu's `Menu`
+          // restores focus to this row's trigger on close, before the dialog opens.
+          onMakeMilestone={model.onMakeMilestone}
           /*
            * **The same act must be undoable from both surfaces** (`docs/TECH_DEBT.md` #230). The
            * canvas has recorded its deletes through `ActivityCrudDialogs` since ADR-0048 M2; this

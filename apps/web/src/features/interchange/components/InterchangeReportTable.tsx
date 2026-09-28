@@ -1,4 +1,4 @@
-import type { InterchangeReport, ReportFinding } from '@repo/interchange';
+import type { InterchangeReport } from '@repo/interchange';
 import { useId } from 'react';
 
 /**
@@ -47,6 +47,12 @@ export function InterchangeReportTable({
         findings={report.repairs}
       />
       <FindingSection heading="Dropped" emptyLabel="Nothing was dropped." findings={report.drops} />
+      {/* Advisories (ADR-0162) are not a fourth finding kind: nothing was coerced, repaired or left
+          out, so there is no "nothing to advise" line either. The section renders only when the
+          report carries some, which keeps a report without the key exactly as it was. */}
+      {report.advisories === undefined || report.advisories.length === 0 ? null : (
+        <FindingSection heading="Advisories" emptyLabel="" findings={report.advisories} />
+      )}
     </div>
   );
 }
@@ -62,6 +68,17 @@ function Count({ label, value }: { label: string; value: number }): React.ReactE
 }
 
 /**
+ * The fields one report line needs. A finding and an advisory both carry them, so one section renders
+ * either; the finding's `kind` and the advisory's `code` are what the heading already says.
+ */
+interface ReportLine {
+  entity: string;
+  sourceRef: string | null;
+  detail: string;
+  reason?: string | undefined;
+}
+
+/**
  * A labelled region for one finding kind: a heading carrying the count (announced by name) and either an
  * empty-state line or a list of human-readable finding lines. Each `<li>` names the entity, its optional
  * source ref, the detail, and the reason — never encoding meaning in colour alone.
@@ -73,7 +90,7 @@ function FindingSection({
 }: {
   heading: string;
   emptyLabel: string;
-  findings: ReportFinding[];
+  findings: readonly ReportLine[];
 }): React.ReactElement {
   const headingId = useId();
   return (
@@ -84,9 +101,14 @@ function FindingSection({
       {findings.length === 0 ? (
         <p className="text-muted-foreground text-sm">{emptyLabel}</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        // Explicit roles (ADR-0122): Tailwind's Preflight sets `list-style: none`, which WebKit and
+        // VoiceOver read as "not a list", so the count in the heading would name a list nobody hears.
+        // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above.
+        <ul role="list" className="flex flex-col gap-1">
           {findings.map((finding, index) => (
+            // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the list above.
             <li
+              role="listitem"
               key={`${finding.entity}-${finding.sourceRef ?? 'n'}-${index}`}
               className="border-border bg-card text-card-foreground rounded-md border px-3 py-2 text-sm"
             >

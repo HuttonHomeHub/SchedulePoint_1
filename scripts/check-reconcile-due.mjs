@@ -108,6 +108,8 @@ function passSites(md, decisions) {
   const table = lastPassDate(md);
 
   // The newest dated heading in DECISIONS.md, at either level — that file uses both.
+  // Not `registerSections`/`detailedRows` from doc-register.mjs: those read NUMBERED register rows
+  // and drop NOT_ITEMS; this reads DATED headings in a different file and shares only the call.
   const decisionDates = [...sections(decisions, 2), ...sections(decisions, 3)]
     .map((s) => /^(\d{4}-\d{2}-\d{2})\b/.exec(s.heading)?.[1])
     .filter(Boolean)

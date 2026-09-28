@@ -21,6 +21,10 @@ import type { SelectionBarContext } from '@/features/plan-actions/selection-acti
 const context = (over: Partial<SelectionBarContext> = {}): SelectionBarContext => ({
   canvas: null,
   targetName: 'Foundations',
+  // Make milestone… does not apply to this fixture's activity (ADR-0162 decision 4).
+  definitionGate: null,
+  makeMilestone: { applies: false },
+  onMakeMilestone: vi.fn(),
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,
@@ -103,6 +107,36 @@ describe('the items', () => {
     const ctx = openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /^Progress/ }));
     expect(ctx.onProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Make milestone… on a zero-duration task and converts it (ADR-0162 decision 4)', () => {
+    // Every other fixture in this file sets `applies: false`, so this menu's copy of the item was
+    // never rendered or pressed by any test — the docked bar the journey drives is a different
+    // surface (M6 component gate). The mechanism is shared; this case proves the surface.
+    const ctx = openMenu(
+      context({
+        definitionGate: { readable: true, writable: true, reason: null },
+        makeMilestone: { applies: true, enabled: true, reason: null },
+      }),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Make milestone…/ }));
+    expect(ctx.onMakeMilestone).toHaveBeenCalledTimes(1);
+  });
+
+  it('shades Make milestone… with its reason rather than dropping it', () => {
+    openMenu(
+      context({
+        definitionGate: {
+          readable: true,
+          writable: false,
+          reason: 'Start editing to change this.',
+        },
+        makeMilestone: { applies: true, enabled: false, reason: 'Start editing to change this.' },
+      }),
+    );
+    const item = screen.getByRole('menuitem', { name: /^Make milestone…/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription('Start editing to change this.');
   });
 
   it('shades a shut item with a reason instead of dropping it', () => {

@@ -186,6 +186,7 @@ describe('ActivitiesService', () => {
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     activity: { findMany: ReturnType<typeof vi.fn> };
+    resourceAssignment: { groupBy: ReturnType<typeof vi.fn> };
   };
   // Driving-assignment access on the tx client (ADR-0040 activity-path recompute). Default: no
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
@@ -247,6 +248,8 @@ describe('ActivitiesService', () => {
     prisma = {
       // The post-transaction re-read of the rows a batch write moved.
       activity: { findMany: vi.fn().mockResolvedValue([]) },
+      // `resourceAssignmentCount` (ADR-0162 decision 6). Default: no live assignment anywhere.
+      resourceAssignment: { groupBy: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
@@ -539,6 +542,47 @@ describe('ActivitiesService', () => {
       const { items, meta } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 2 });
       expect(items).toHaveLength(2);
       expect(meta).toEqual({ nextCursor: 'b', hasMore: true });
+    });
+  });
+
+  /**
+   * FC-9 (d): an activity read issues at most ONE more query than before, never one per row
+   * (ADR-0162 decision 6, remedy rung 1). The count is asked only of zero-duration tasks, so a page
+   * without one costs nothing, and a page made entirely of them costs one grouped query.
+   */
+  describe('resourceAssignmentCount (FC-9 (d))', () => {
+    const zeroTasks = (n: number) =>
+      Array.from({ length: n }, (_, i) => activity({ id: `z${i}`, durationMinutes: 0 }));
+
+    it('a 100-row page of zero-duration tasks issues exactly one grouped query', async () => {
+      activities.findManyActiveByPlan.mockResolvedValue(zeroTasks(100));
+      prisma.resourceAssignment.groupBy.mockResolvedValue([
+        { activityId: 'z7', _count: { _all: 2 } },
+      ]);
+      const { items } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 100 });
+      expect(prisma.resourceAssignment.groupBy).toHaveBeenCalledTimes(1);
+      expect(items).toHaveLength(100);
+      expect(items.find((a) => a.id === 'z7')?.resourceAssignmentCount).toBe(2);
+      expect(items.find((a) => a.id === 'z8')?.resourceAssignmentCount).toBe(0);
+    });
+
+    it('a 100-row page with no zero-duration task issues none, and every row is null', async () => {
+      activities.findManyActiveByPlan.mockResolvedValue(
+        Array.from({ length: 100 }, (_, i) => activity({ id: `t${i}` })),
+      );
+      const { items } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 100 });
+      expect(prisma.resourceAssignment.groupBy).not.toHaveBeenCalled();
+      expect(items.every((a) => a.resourceAssignmentCount === null)).toBe(true);
+    });
+
+    it('a one-row get of a zero-duration task issues exactly one grouped query', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity({ durationMinutes: 0 }));
+      prisma.resourceAssignment.groupBy.mockResolvedValue([
+        { activityId: ACTIVITY_ID, _count: { _all: 1 } },
+      ]);
+      const { activity: got } = await service.get(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(prisma.resourceAssignment.groupBy).toHaveBeenCalledTimes(1);
+      expect(got.resourceAssignmentCount).toBe(1);
     });
   });
 

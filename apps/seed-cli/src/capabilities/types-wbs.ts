@@ -93,6 +93,12 @@ export function typesAndWbsPlan(): SeedSpec {
         durationMinutes: 7 * DAY,
         testTags: ['type_resource_dependent'],
       }),
+      // The zero-duration TASK the description has promised since this plan was written, and that
+      // the plan did not contain (zero-duration-task spec E16). It is RESOURCED on purpose: it is the
+      // catalogue's only zero-duration task with an assignment, and the witness for the conversion
+      // action being shaded on one (#384). No test tags: the capability key it would claim,
+      // `net_zero_duration_task`, is already reached by `capability-network-shape`'s N6.
+      activity('Z', { name: 'Pour sign-off (zero-duration task)', durationMinutes: 0 }),
     ],
     dependencies: [
       link('M_START', 'T1'),
@@ -104,10 +110,12 @@ export function typesAndWbsPlan(): SeedSpec {
       link('G2', 'M_FIN', { type: 'FF' }),
       link('M_START', 'T_TASK'),
       link('M_START', 'T_RES'),
+      link('T2', 'Z'),
     ],
     assignments: [
       assignment('T_TASK', 'TW_CREW'),
       assignment('T_RES', 'TW_RIG', { isDriving: true, unitsPerHour: 1 }),
+      assignment('Z', 'TW_CREW'),
     ],
   });
 }

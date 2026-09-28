@@ -16,6 +16,7 @@ import {
   useActivities,
   useCreatePlacedActivity,
   useUpdateActivity,
+  useUpdateActivityFields,
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,
@@ -67,6 +68,7 @@ import {
 } from '@/features/dependencies';
 import { useFloatPathsPanel } from '@/features/float-paths';
 import { useActivityNoteCounts } from '@/features/notes';
+import type { MilestoneChoice } from '@/features/plan-actions/make-milestone-gate';
 import { derivePlanGating, scheduleRefusal, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
@@ -90,6 +92,7 @@ import {
 } from '@/features/tsld';
 import { dayOf, laneSnapshotOf, resolveLaneDrop } from '@/features/tsld/model/auto-resolve';
 import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bulk-move';
+import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
   activityDefinitionInput,
   autoArrangeCommand,
@@ -106,6 +109,7 @@ import {
   durationResizeCommand,
   lagDragCommand,
   relaneCommand,
+  typeChangeCommand,
   updateCommand,
   visualResizeCommand,
   visualStartCommand,
@@ -1693,6 +1697,140 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce, beginLayoutEdit],
   );
 
+  /**
+   * **Make milestone…** (ADR-0162 decision 4, spec D4, M4-T3). The dialog is mounted once, by the
+   * workspace, and every surface opens it through {@link onMakeMilestone} — so the canvas bar, the
+   * Gantt row menu and the activities table convert through one path. The target resolves from the
+   * live query, so the dialog closes if its row is deleted under it.
+   *
+   * Each host moves focus to the activity BEFORE calling this (the canvas listbox, the Gantt row, the
+   * table's menu restore), because the control that opened the dialog is gone once the task is a
+   * milestone and the dialog's native restore returns focus to whatever held it at `showModal()`.
+   */
+  /**
+   * **The target outlives the open flag, so closing is `close()`, not an unmount.** A `<dialog>`
+   * returns focus to its `showModal()`-time owner only when `close()` runs on it (`dialog.tsx`);
+   * removing an open modal from the document returns focus nowhere, and the browser leaves it on
+   * `<body>`. The first version cleared the target on close, so the host unmounted the dialog and
+   * every Cancel and every successful conversion dropped focus to `<body>` (WCAG 2.4.3), found by
+   * the M4 journey. `opening` keys a fresh dialog per opening, so a pick or an error never carries
+   * over.
+   */
+  const [makeMilestone, setMakeMilestone] = useState<{
+    id: string;
+    opening: number;
+    open: boolean;
+  } | null>(null);
+  const makeMilestoneId = makeMilestone?.open ? makeMilestone.id : null;
+  const makeMilestoneOpen = makeMilestone?.open ?? false;
+  const makeMilestoneOpening = makeMilestone?.opening ?? 0;
+  const makeMilestoneActivity =
+    makeMilestone === null
+      ? null
+      : ((activities.data ?? []).find((a) => a.id === makeMilestone.id) ?? null);
+  const onMakeMilestone = useCallback((activity: ActivitySummary) => {
+    setMakeMilestone((prev) => ({
+      id: activity.id,
+      opening: (prev?.opening ?? 0) + 1,
+      open: true,
+    }));
+  }, []);
+  const closeMakeMilestone = useCallback(
+    () => setMakeMilestone((prev) => (prev === null ? null : { ...prev, open: false })),
+    [],
+  );
+  const patchActivityFields = useUpdateActivityFields(orgSlug, planId);
+  const patchActivityFieldsAsync = patchActivityFields.mutateAsync;
+  /**
+   * The announcement owed once the recalculation this conversion triggers has settled (spec D4 step
+   * 4, `use-focus-handoff.ts`'s order: focus, then announce). A ref, read by the effect below on
+   * each new settle, so the sentence is built from the RECALCULATED row — the date a finish
+   * milestone reads is the engine's, and the client does not preview it.
+   */
+  const makeMilestoneAnnouncementRef = useRef<{
+    activityId: string;
+    name: string;
+    type: MilestoneChoice;
+    afterSettle: number;
+  } | null>(null);
+  const settledRef = useRef(autoRecalc.settled);
+  useEffect(() => {
+    settledRef.current = autoRecalc.settled;
+    const owed = makeMilestoneAnnouncementRef.current;
+    if (owed === null || autoRecalc.settled <= owed.afterSettle) return;
+    makeMilestoneAnnouncementRef.current = null;
+    const row = (
+      queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+      activitiesRef.current ??
+      []
+    ).find((a) => a.id === owed.activityId);
+    announce(makeMilestoneSentence(owed.name, owed.type, row ?? null));
+  }, [autoRecalc.settled, queryClient, orgSlug, planId, announce]);
+  const confirmMakeMilestone = useCallback(
+    async (type: MilestoneChoice): Promise<void> => {
+      const activity = (activitiesRef.current ?? []).find((a) => a.id === makeMilestoneId);
+      if (!activity) throw new Error('This activity is no longer in the plan.');
+      // The glyph's drawn span changes with its type (spec E23), so the overlap rule snapshots it
+      // first (ADR-0153).
+      beginLayoutEdit([activity.id]);
+      let saved: ActivitySummary;
+      try {
+        // A plain `PATCH {version, type}` (decision 4): the server re-expresses the unsent stored
+        // dates across the convention (decision 3), which is what keeps the instant.
+        saved = await patchActivityFieldsAsync({
+          activityId: activity.id,
+          version: activity.version,
+          patch: { type },
+        });
+      } catch (err) {
+        // Unlike `clearVisualPlacement`, which returns silently and leaves the edit-lock banner to
+        // say it, this write runs from a modal `<dialog>`: the page behind it, banner included, is
+        // inert under the top layer, so a sighted reader would see a Confirm that did nothing.
+        // The dialog says it itself; an AT user may also hear the banner, accepted (M6 UX review).
+        if (onPenWriteRejected(err).kind === 'lock') {
+          throw new Error('The edit lock was taken, so nothing was changed.');
+        }
+        if (err instanceof ApiFetchError && err.status === 409) {
+          throw new Error(
+            'This activity changed since you opened it, so nothing was changed. Close and try again.',
+          );
+        }
+        throw err;
+      }
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          typeChangeCommand({
+            patch: patchActivityFieldsAsync,
+            activityId: activity.id,
+            before: activity.type,
+            after: type,
+            version: saved.version,
+            label: `Make “${activity.name}” a milestone`,
+          }),
+        );
+      }
+      makeMilestoneAnnouncementRef.current = {
+        activityId: activity.id,
+        name: activity.name,
+        type,
+        afterSettle: settledRef.current,
+      };
+      // Closing lets the dialog's native restore return focus to the activity the host focused
+      // before it opened; the announcement follows the recalculated row (above), never this call.
+      closeMakeMilestone();
+      notifyRecalc();
+    },
+    [
+      makeMilestoneId,
+      closeMakeMilestone,
+      beginLayoutEdit,
+      patchActivityFieldsAsync,
+      onPenWriteRejected,
+      editHistory,
+      notifyRecalc,
+    ],
+  );
+
   // Compose a **Level of Effort span** from two driver activities (Stage D, spec
   // `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the canvas endpoint-pick
   // tool's commit. It reuses the *shipped* LOE type + API (M5-epic, ADR-0035 §21): create a
@@ -2290,6 +2428,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Steps dialog target from the canvas selection bar (entry-route + earned-value/steps flags): the
     // opener + resolved row + close setter, mirroring the resources trio. Inert flag-off.
     onStepsActivity,
+    // Make milestone… (ADR-0162 decision 4): the opener every surface calls, the resolved target the
+    // one workspace-mounted dialog reads, and its confirm/close.
+    onMakeMilestone,
+    makeMilestoneActivity,
+    makeMilestoneOpen,
+    makeMilestoneOpening,
+    confirmMakeMilestone,
+    closeMakeMilestone,
     // Clear a hand-placed `visualStart` (toolbar quick-wins F5) — the null-visualStart PATCH + undo
     // inverse + auto-recalc; only the existing PATCH hook, so the parity gate is untouched.
     clearVisualPlacement,
@@ -2346,6 +2492,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
 }
 
 export type PlanWorkspaceModel = ReturnType<typeof usePlanWorkspaceModel>;
+
+/**
+ * What Make milestone… says once the recalculated row has arrived (spec US-3): the kind it now is
+ * and the date it now reads, taken from that row — `visualEffective*`, the dates every bar draws
+ * from, falling back to the early dates. Without a date (a plan with no computed schedule) it says
+ * the kind alone rather than inventing one.
+ */
+export function makeMilestoneSentence(
+  name: string,
+  type: MilestoneChoice,
+  row: Pick<
+    ActivitySummary,
+    'visualEffectiveStart' | 'visualEffectiveFinish' | 'earlyStart' | 'earlyFinish'
+  > | null,
+): string {
+  const kind = type === 'FINISH_MILESTONE' ? 'a finish milestone' : 'a start milestone';
+  const date =
+    row === null
+      ? null
+      : type === 'FINISH_MILESTONE'
+        ? (row.visualEffectiveFinish ?? row.earlyFinish)
+        : (row.visualEffectiveStart ?? row.earlyStart);
+  const dated = date === null ? '' : `, dated ${formatCanvasDate(date, { weekday: true })}`;
+  return `${name} is now ${kind}${dated}. Its successors and float are unchanged.`;
+}
 
 /** The plan detail, narrowed to loaded — the screen guards pending/error before rendering a layout. */
 export type LoadedPlan = NonNullable<PlanWorkspaceModel['plan']['data']>;

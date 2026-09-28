@@ -30,6 +30,7 @@ vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = {
   drivingResourceCalendarId: null,
+  resourceAssignmentCount: null,
   id: 'a1',
   planId: 'pl1',
   code: 'A100',

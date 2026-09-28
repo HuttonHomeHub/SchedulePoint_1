@@ -22,7 +22,16 @@
  * live in this very file's subject, since #219 quotes `**Status:**` while asking for this gate.
  */
 
-import { fieldValue, readRepoDoc, report, sections, stripFences } from './lib/doc-register.mjs';
+import {
+  detailedRows,
+  fieldValue,
+  NOT_ITEMS,
+  readRepoDoc,
+  registerSections,
+  report,
+  statusToken,
+  stripFences,
+} from './lib/doc-register.mjs';
 
 const DOC = 'docs/TECH_DEBT.md';
 
@@ -32,14 +41,8 @@ const VOCABULARY = ['open', 'deferred', 'standing', 'unverified'];
 /** Heading annotations the register's own opening rule forbids, in bold. */
 const FORBIDDEN_ANNOTATIONS = /\b(CLOSED|RESOLVED|ANSWERED)\b/;
 
-/** Section headings that are structure, not items. */
-const NOT_ITEMS = new Set(['Principles for managing debt', 'Detailed items', 'Closed numbers']);
-
-/** `## 219. Title` or `## #106 — Title`; returns the row number as a string, or null. */
-function rowNumber(heading) {
-  const m = /^#?(\d+)([a-z]?)[.\s—-]/.exec(heading.trim());
-  return m ? `${m[1]}${m[2]}` : null;
-}
+// `NOT_ITEMS` and the row-number parse live in `scripts/lib/doc-register.mjs` since
+// `docs/specs/zero-duration-task/` M0-T7, because `check:engine-parity` reads the same rows.
 
 function main(argv) {
   const md = readRepoDoc(DOC);
@@ -61,10 +64,8 @@ function main(argv) {
   // drifted rows**: 31 numbered rows invisible, 29 of them with no status, while the gate reported
   // "88 rows, all with a status" over a document where that was false. It survived a red run, a
   // repair and an arming, because A9's control counted the same level as the parser — see below.
-  const all = [...sections(md, 2), ...sections(md, 3)].sort((a, b) => a.line - b.line);
-  const items = all.filter(
-    (s) => !NOT_ITEMS.has(s.heading.trim()) && rowNumber(s.heading) !== null,
-  );
+  const all = registerSections(md);
+  const items = detailedRows(md);
   const structural = all.filter((s) => NOT_ITEMS.has(s.heading.trim()));
 
   // The compact table: `| N | … |` rows above `## Detailed items`.
@@ -208,10 +209,7 @@ function main(argv) {
   for (const s of items) {
     const v = fieldValue(s.body, 'Status');
     if (v === null) continue;
-    const token = v
-      .split(/[\s·—|]/)[0]
-      .toLowerCase()
-      .replace(/[*_`.]/g, '');
+    const token = statusToken(v);
     if (!VOCABULARY.includes(token)) {
       problems.push(
         `A2: ${DOC}:${s.line} status "${token}" is not one of ${VOCABULARY.join(' / ')}. ` +
@@ -238,7 +236,7 @@ function main(argv) {
   const seen = new Map();
   for (const e of [
     ...compact.map((c) => ({ n: c.number, line: c.line })),
-    ...items.map((s) => ({ n: rowNumber(s.heading), line: s.line })),
+    ...items.map((s) => ({ n: s.number, line: s.line })),
   ]) {
     if (seen.has(e.n)) {
       problems.push(

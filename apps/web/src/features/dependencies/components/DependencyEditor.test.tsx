@@ -9,6 +9,7 @@ import { DependencyEditor } from './DependencyEditor';
 
 const ACTIVITY: ActivitySummary = {
   drivingResourceCalendarId: null,
+  resourceAssignmentCount: null,
   id: 'b1',
   planId: 'pl1',
   code: 'B10',

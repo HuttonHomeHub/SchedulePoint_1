@@ -26,7 +26,7 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   // Not named after the feature: a plan called "Health plan" would make every
   // `getByRole(… /health/i)` ambiguous with its own row menu (the float-paths lesson).
   const planId = await createAndOpenPlan(page, 'Riverside programme');
-  const { danglerName } = await seedDefects(page, orgSlug, planId);
+  const { danglerName, zeroTaskName } = await seedDefects(page, orgSlug, planId);
   await page.reload();
 
   // ── 1 · The entry point, in the shipped layout ─────────────────────────────────────────────
@@ -42,7 +42,9 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   await expect(panel).toBeVisible();
   // The summary line settles once the report arrives.
   await expect(panel.getByText(/\d+ failed · \d+ passed/)).toBeVisible();
-  const rows = panel.getByRole('listitem');
+  // Scoped to the metrics list: the advisory section below it is a second list, and a count of
+  // "the list items" would read fifteen (ADR-0162 D1, agreement-round A3).
+  const rows = panel.getByRole('list', { name: 'DCMA metrics' }).getByRole('listitem');
   await expect(rows).toHaveCount(14);
 
   // Metric 2 (Leads): the seeded −1 d SS lead must read Fail with its count.
@@ -107,6 +109,18 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   // The canvas's parallel listbox is the a11y surface the selection must reach (ADR-0026 D7).
   const selected = canvasListbox(page).locator('[aria-selected="true"]');
   await expect(selected).toContainText(danglerName);
+
+  // ── 3b · Beyond the DCMA assessment (ADR-0162 D1): a section of its own, not a fifteenth row ──
+  const advisory = panel.getByRole('region', { name: 'Beyond the DCMA assessment' });
+  await expect(advisory).toContainText('Zero-duration tasks');
+  const advisoryToggle = advisory.getByRole('button', { name: /Zero-duration tasks/ });
+  await expect(advisoryToggle).toHaveAccessibleDescription(
+    /^1 zero-duration task out of \d+ activities; none has resource assignments$/,
+  );
+  await expect(advisory).toContainText('not part of the DCMA assessment above');
+  await advisoryToggle.click();
+  await advisory.getByRole('button', { name: new RegExp(zeroTaskName) }).click();
+  await expect(canvasListbox(page).locator('[aria-selected="true"]')).toContainText(zeroTaskName);
 
   // ── 4 · Close restores focus to the trigger, never `<body>` (WCAG 2.4.3) ───────────────────
   await panel.getByRole('button', { name: 'Close health check' }).click();

@@ -212,6 +212,42 @@ is read as the end of that day, and every date it reads back (`earlyStart`/`Fini
 Friday, a finish milestone reads Friday, and sending that Friday as its placement is not a conflict.
 Every other activity type, and every actual date, is unchanged.
 
+**A type change keeps a zero-duration activity's instant** (ADR-0162 decision 3). When an activity's
+**stored** duration is 0 and `PATCH …/activities/:activityId` changes its `type` into or out of
+`FINISH_MILESTONE`, each of `visualStart`, `constraintDate`, `secondaryConstraintDate`,
+`externalEarlyStart` and `externalLateFinish` that is stored **and not in the request** is moved one
+**calendar** day — earlier into `FINISH_MILESTONE`, later out of it — so the activity keeps its
+instant, its successors and its float. The response carries the moved values. So a request that
+sends only `type` can rewrite up to five stored dates; that is the point, and it is the only case
+in which it happens:
+
+- a date **sent** in the same request, including an explicit `null`, is read in the new type's
+  convention and is not moved (you typed it for the new type);
+- a type change that does not cross the convention (`TASK` ↔ `START_MILESTONE`, say), a non-zero
+  stored duration, or a stored `null` moves nothing;
+- the rule keys on the **stored** duration, so `{type: 'TASK', durationDays: 5}` on a finish
+  milestone still moves its dates, and the new task starts at the milestone's instant;
+- `expectedFinish` is never moved (inert at zero duration);
+- the external-date ordering check (422 `EXTERNAL_FINISH_BEFORE_START`) runs on the values that will
+  be persisted, moved ones included.
+
+It applies to every other type (`TASK`, `START_MILESTONE`, `HAMMOCK`, `LEVEL_OF_EFFORT`,
+`WBS_SUMMARY`, `RESOURCE_DEPENDENT`). The instant is guaranteed kept for the first three only: a level
+of effort takes its position from its span, a summary from its branch, and a resource-dependent
+activity from its driving resource's calendar, none of which a type change keeps.
+
+**`resourceAssignmentCount` is counted for zero-duration tasks only** (ADR-0162 decision 6). Every
+activity read, list and write response carries it. For a `TASK` whose stored duration is 0 it is the
+number of **live** resource assignments the activity holds — an assignment counts when neither it
+nor its resource is soft-deleted, the rule the health report and the staff diagnostics use. For every
+other activity it is `null`, and `null` means exactly "not counted for this row type", never "none".
+Its one reader is **Make milestone**, which applies to zero-duration tasks alone and is offered only
+at `0`, because a milestone does no work. It is derived on read from one grouped query per response
+(none when the page holds no zero-duration task) and is never stored, so a client re-reads the
+activities after it assigns or unassigns a resource. Counting every row failed its cost
+condition on a single-tenant plan (`docs/specs/zero-duration-task/m0-measurement.md`, "M4-T1"). The
+guest share DTO does not carry it.
+
 **Two engine-owned read fields carry what a placement costs:**
 
 | Field                  | On             | Meaning                                                                                                                                                                                      |
@@ -557,6 +593,17 @@ de-duplicated, cycle broken, duplicate code suffixed, units coerced — each nam
 is a user-safe **422** (`details.reason = UNPARSEABLE_FILE`); a missing `file` is **422**
 (`NO_FILE`). Anti-IDOR is uniform: a foreign or other-org project (or a caller who is not a member of the
 org) is an indistinguishable **404**; a malformed project id is **400**.
+
+**Read the report tolerantly** (ADR-0162 D9). The report gains fields over time, and the web and API
+images are recreated independently, so a client one release behind will meet keys it does not know. The
+shared `@repo/interchange` schema a reader uses, `interchangeReportSchema`, drops an unknown key at every
+level of the report and validates every known key strictly; `interchangeReportStrictSchema`, which refuses
+an unknown key, is for the producer's own tests. The report may carry an optional **`advisories`** array
+(`{ code: 'ZERO_DURATION_TASK', entity: 'activity', sourceRef, detail }`), **absent when there are none**:
+activities the import brought in faithfully that the planner probably wants to change, such as a task with
+no duration. An advisory never changes what is imported and is never filed as an approximation, repair or
+drop. Both importers produce one, XER and MSPDI alike, for each activity imported as a task with no
+duration (ADR-0162 M5).
 
 The **commit** endpoint is the second phase: it re-accepts the same multipart upload (stateless — `importXer`
 is pure + deterministic, so the graph committed equals the one reviewed) and, in **one transaction**, creates
@@ -1484,6 +1531,15 @@ controller's 30 / 60 s per handler.
   join — the counter is per route handler (`docs/TECH_DEBT.md` #315), so this
   route has its own 100 / 60 s. The decision it describes is unchanged; only
   the mechanism was wrong.
+  The response also carries **`advisories`** (ADR-0162 D1): an array **always
+  present**, one entry per `HealthAdvisoryId` (today only `ZERO_DURATION_TASKS`),
+  kept **outside** the fourteen metrics and **never counted in `summary`**, so the
+  DCMA contract above is unchanged. Each entry has the metric's own shape —
+  `id`, `name`, `measured`, `offenderCount`, `offendersTruncated`, `offenders` —
+  plus `detail.resourced`, the number of those activities that have live resource
+  assignments. It is found from stored durations whether or not the plan has been
+  calculated. A client must tolerate its absence: the web and API images are
+  recreated independently, so a new web bundle can meet an API that predates it.
 
 - `GET …/schedule/health-check/critical-path-test` runs **DCMA metric 12, the
   Critical Path Test, as a read-only what-if** (health M6, `schedule:read` —

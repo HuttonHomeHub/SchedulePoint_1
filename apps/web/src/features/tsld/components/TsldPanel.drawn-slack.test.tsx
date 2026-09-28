@@ -25,6 +25,7 @@ function activity(
 ): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id,
     planId: 'p1',
     code: null,

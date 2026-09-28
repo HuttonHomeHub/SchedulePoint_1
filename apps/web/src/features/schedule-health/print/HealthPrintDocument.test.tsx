@@ -1,4 +1,4 @@
-import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
+import type { HealthAdvisoryResult, HealthMetricResult, ScheduleHealthReport } from '@repo/types';
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -18,6 +18,26 @@ function metric(overrides: Partial<HealthMetricResult>): HealthMetricResult {
     offendersTruncated: false,
     offenders: [],
     ...overrides,
+  };
+}
+
+/** ADR-0162 D1's one advisory, with `count` offenders of whom `resourced` hold an assignment. */
+function zeroAdvisory(count: number, resourced = 0): HealthAdvisoryResult {
+  return {
+    id: 'ZERO_DURATION_TASKS',
+    name: 'Zero-duration tasks',
+    measured: { count, denominator: 10, percent: count * 10, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: Array.from({ length: count }, (_, i) => ({
+      kind: 'ACTIVITY' as const,
+      id: `z${i}`,
+      code: `Z${i}`,
+      name: `Handover ${i}`,
+      note: i < resourced ? '1 resource assignment' : 'no resource assignment',
+      activityId: `z${i}`,
+    })),
+    detail: { resourced },
   };
 }
 
@@ -49,6 +69,7 @@ function report(overrides: Partial<ScheduleHealthReport> = {}): ScheduleHealthRe
     baseline: null,
     summary: { passed: 12, failed: 1, notAssessable: 1, informational: 0 },
     offenderCap: 50,
+    advisories: [],
     metrics: METRIC_IDS.map((id, i) =>
       metric({ id, ordinal: i + 1, name: id.toLowerCase().replaceAll('_', ' ') }),
     ),
@@ -139,5 +160,87 @@ describe('ScheduleHealthPrintDocument (health M4)', () => {
     expect(text).toContain('baseline: none');
     expect(text).toContain('resource-assignment existence only');
     expect(text).toContain('separate from the issues a recalculation finds');
+  });
+
+  describe('Beyond the DCMA assessment (ADR-0162 D1)', () => {
+    it('prints after the fourteen rows, with its footer and offender list, outside the table', () => {
+      const { container } = render(
+        <ScheduleHealthPrintDocument report={report({ advisories: [zeroAdvisory(3, 1)] })} />,
+      );
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(14);
+      const text = container.textContent ?? '';
+      expect(text).toContain('Beyond the DCMA assessment');
+      expect(text).toContain(
+        'Zero-duration tasks: 3 zero-duration tasks out of 10 activities; 1 has resource assignments',
+      );
+      expect(text).toContain('Zero-duration tasks — 3 findings');
+      expect(text).toContain('Z0 Handover 0 — 1 resource assignment');
+      expect(text).toContain(
+        'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.',
+      );
+      const table = container.querySelector('table');
+      const heading = [...container.querySelectorAll('h2')].find(
+        (h) => h.textContent === 'Beyond the DCMA assessment',
+      );
+      expect(heading).toBeDefined();
+      expect(table?.contains(heading ?? null)).toBe(false);
+      expect(
+        table!.compareDocumentPosition(heading!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('states the cap on paper exactly as the metrics do (spec E33)', () => {
+      const a = { ...zeroAdvisory(50), offenderCount: 120, offendersTruncated: true };
+      const { container } = render(
+        <ScheduleHealthPrintDocument report={report({ advisories: [a] })} />,
+      );
+      expect(container.textContent).toContain(
+        'Showing the first 50 of 120 — open the plan for the full list.',
+      );
+    });
+
+    it('prints "None" at zero, and no section at all for an API that predates the field', () => {
+      const zero = render(
+        <ScheduleHealthPrintDocument report={report({ advisories: [zeroAdvisory(0)] })} />,
+      );
+      expect(zero.container.textContent).toContain('Zero-duration tasks: None');
+      zero.unmount();
+      const { advisories: _dropped, ...legacy } = report();
+      const { container } = render(
+        <ScheduleHealthPrintDocument report={legacy as unknown as ScheduleHealthReport} />,
+      );
+      expect(container.textContent).not.toContain('Beyond the DCMA assessment');
+    });
+
+    it("the print document's lists carry explicit roles (ADR-0122)", () => {
+      const r = report({ advisories: [zeroAdvisory(1)] });
+      r.metrics[13] = metric({
+        id: 'BEI',
+        ordinal: 14,
+        name: 'Baseline Execution Index',
+        verdict: 'NOT_ASSESSABLE',
+        reason: 'NO_ACTIVE_BASELINE',
+        measured: null,
+      });
+      // A scope note too, so every list the document can print is present (an absent list passes).
+      r.metrics[9] = metric({
+        id: 'RESOURCES',
+        ordinal: 10,
+        name: 'Resources',
+        verdict: 'INFORMATIONAL',
+        threshold: null,
+        detail: { narrowing: 'RESOURCE_ASSIGNMENT_ONLY' },
+      });
+      const { container } = render(<ScheduleHealthPrintDocument report={r} />);
+      expect(container.textContent).toContain('Scope notes');
+      expect(container.textContent).toContain('Not assessed, and why');
+      for (const ul of container.querySelectorAll('ul')) {
+        expect(ul.getAttribute('role')).toBe('list');
+        for (const li of ul.querySelectorAll(':scope > li')) {
+          expect(li.getAttribute('role')).toBe('listitem');
+        }
+      }
+      expect(container.querySelectorAll('ul').length).toBeGreaterThanOrEqual(4);
+    });
   });
 });

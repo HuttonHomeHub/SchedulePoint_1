@@ -6,9 +6,11 @@ import {
   createProject,
   ganttRow,
   onboard,
+  openPlanId,
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
 import { recalculate } from '../e2e-support/toolbar';
@@ -152,4 +154,72 @@ test('Fix this conflict is absent when the selected activity has none', async ({
   // that here rather than duplicating the fixture — and naming it as a gap in THIS view, which M4
   // closes when it puts conflicts on the chart.
   await expect(bar.getByRole('button', { name: 'Fix this conflict' })).toHaveCount(0);
+});
+
+test('Make milestone… converts from a Gantt selection and returns focus to its row', async ({
+  page,
+}) => {
+  // ADR-0162 decision 4, M4-T3's Gantt case. The canvas case lives in
+  // `e2e-workspace-chrome/zero-duration.spec.ts`; this is the same registry item reached from the
+  // Gantt's bar, whose restore target is the grid rather than the diagram's listbox — the part a
+  // canvas journey cannot show. A zero-duration task with no predecessor preselects Start (D5).
+  test.setTimeout(120_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  const id = await page.evaluate(
+    async ({ org, planId }: { org: string; planId: string }) => {
+      const res = await fetch(`/api/v1/organizations/${org}/plans/${planId}/activities`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Zero 0', code: 'Z0001', durationDays: 0 }),
+      });
+      if (!res.ok) throw new Error(`create ${String(res.status)} ${await res.text()}`);
+      return ((await res.json()) as { data: { id: string } }).data.id;
+    },
+    { org: orgSlug, planId: openPlanId(page) },
+  );
+  // The create went straight to the API, so tell the client (`syncClient`, TECH_DEBT #183);
+  // `recalculate()` presses nothing on a plan the client believes is current (ADR-0109 D3).
+  await syncClient(page);
+  await recalculate(page);
+  await showGantt(page);
+  await ganttRow(page, 'Zero 0').click();
+  const bar = page.getByRole('toolbar', { name: /Actions for/ });
+
+  await bar.getByRole('button', { name: 'Make milestone…' }).click();
+  const dialog = page.getByRole('dialog', { name: /milestone/ });
+  await expect(dialog.getByRole('radio', { name: 'Start milestone' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await dialog.getByRole('button', { name: 'Make milestone', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // Focus is on this activity's row, not on <body>: the bar button that opened the dialog is gone
+  // once the task is a milestone.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.activeElement?.closest('[role="row"]')?.getAttribute('data-activity-id') ?? null,
+      ),
+    )
+    .toBe(id);
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        async ({ org, activityId }: { org: string; activityId: string }) => {
+          const res = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
+            credentials: 'include',
+          });
+          return ((await res.json()) as { data: { type: string } }).data.type;
+        },
+        { org: orgSlug, activityId: id },
+      ),
+    )
+    .toBe('START_MILESTONE');
 });

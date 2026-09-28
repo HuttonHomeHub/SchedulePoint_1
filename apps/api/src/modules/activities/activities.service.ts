@@ -54,6 +54,15 @@ import type { UpdateActivityDto } from './dto/update-activity.dto';
 import type { UpdateParentsDto } from './dto/update-parents.dto';
 import type { UpdatePlacementsDto } from './dto/update-placements.dto';
 import type { UpdatePositionsDto } from './dto/update-positions.dto';
+import {
+  attachAssignmentCounts,
+  loadResourceAssignmentCounts,
+  type WithAssignmentCount,
+} from './resource-assignment-counts';
+import {
+  reexpressZeroDurationDates,
+  type ReexpressedDateField,
+} from './zero-duration-reexpression';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
@@ -98,6 +107,9 @@ function deriveStatus(
  * progress method (B2) so a Contributor can report progress without editing
  * logic. The CPM output columns are engine-owned and never set from input.
  */
+/** An activity as every response carries it: its day factor and its live assignment count. */
+export type DecoratedActivity = WithAssignmentCount<WithDayFactor<Activity>>;
+
 @Injectable()
 export class ActivitiesService {
   constructor(
@@ -119,8 +131,32 @@ export class ActivitiesService {
    * back in the same unit it was written in — without it, authoring "2 days" on an 08:00-17:00
    * calendar would store the right minutes and then read back as "1". One plan lookup (skipped when
    * every row already names its own calendar) plus one calendar lookup for the whole response.
+   *
+   * It also attaches each zero-duration task's live `resourceAssignmentCount` (ADR-0162 decision 6),
+   * from at most ONE grouped query for the whole response and none when the page holds no such task,
+   * run alongside the factor lookups (spec D8, FC-9 and its remedy rung 1); every other row carries
+   * `null`. This is the shared decoration every activity response passes through, which is why the
+   * count is here and not in each route.
    */
   private async withDayFactors<
+    T extends {
+      id: string;
+      organizationId: string;
+      calendarId: string | null;
+      planId: string;
+      type: ActivityType;
+      durationMinutes: number;
+    },
+  >(rows: readonly T[]): Promise<WithAssignmentCount<WithDayFactor<T>>[]> {
+    const [decorated, assignmentCounts] = await Promise.all([
+      this.withDayFactorsOnly(rows),
+      loadResourceAssignmentCounts(this.prisma, rows),
+    ]);
+    return attachAssignmentCounts(decorated, assignmentCounts);
+  }
+
+  /** The day-factor half of {@link withDayFactors}. */
+  private async withDayFactorsOnly<
     T extends {
       id: string;
       organizationId: string;
@@ -151,8 +187,9 @@ export class ActivitiesService {
       calendarId: string | null;
       planId: string;
       type: ActivityType;
+      durationMinutes: number;
     },
-  >(row: T): Promise<WithDayFactor<T>> {
+  >(row: T): Promise<WithAssignmentCount<WithDayFactor<T>>> {
     const [decorated] = await this.withDayFactors([row]);
     return decorated!;
   }
@@ -237,7 +274,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: WithDayFactor<Activity>[]; meta: PageMeta; canReadCost: boolean }> {
+  ): Promise<{ items: DecoratedActivity[]; meta: PageMeta; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
     // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (cross-tenant
@@ -262,7 +299,7 @@ export class ActivitiesService {
     principal: Principal,
     orgSlug: string,
     activityId: string,
-  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
+  ): Promise<{ activity: DecoratedActivity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:read', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -277,7 +314,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: CreateActivityDto,
-  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
+  ): Promise<{ activity: DecoratedActivity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -430,7 +467,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     dto: UpdateActivityDto,
-  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
+  ): Promise<{ activity: DecoratedActivity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -460,7 +497,16 @@ export class ActivitiesService {
       );
     }
 
+    // A type change across the finish-milestone date convention keeps a zero-duration activity's
+    // instant (ADR-0162 decision 3): each stored date the request did NOT send is re-expressed one
+    // calendar day. Computed here, before the N26 check below, so that check validates the values that
+    // will actually be persisted rather than the pre-rewrite pair (spec S1 / E26).
+    const reexpressed = reexpressZeroDurationDates(existing, dto);
+
     const patch: ActivityPatch = {};
+    for (const [field, value] of Object.entries(reexpressed)) {
+      patch[field as ReexpressedDateField] = parseCalendarDate(value);
+    }
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.code !== undefined) patch.code = dto.code === '' ? null : dto.code;
     if (dto.description !== undefined) {
@@ -495,18 +541,19 @@ export class ActivitiesService {
     // date sets the bound, null clears it. Enforce N26 on the RESOLVED effective pair (a provided value
     // overrides the stored one, null clears, omitted keeps) so a PATCH of one side is still validated
     // against the other's persisted value — mirrors how updateProgress resolves before its N06 check.
+    // An omitted side resolves to its RE-EXPRESSED value when a type change moved it (ADR-0162), so
+    // the pair checked is the pair persisted. The constraint pairs have no value-ordering check at the
+    // API (only the key-presence pairing above), so N26 is the only check this needs to precede.
     const effectiveExternalEarlyStart =
       dto.externalEarlyStart !== undefined
         ? dto.externalEarlyStart
-        : existing.externalEarlyStart
-          ? formatCalendarDate(existing.externalEarlyStart)
-          : null;
+        : (reexpressed.externalEarlyStart ??
+          (existing.externalEarlyStart ? formatCalendarDate(existing.externalEarlyStart) : null));
     const effectiveExternalLateFinish =
       dto.externalLateFinish !== undefined
         ? dto.externalLateFinish
-        : existing.externalLateFinish
-          ? formatCalendarDate(existing.externalLateFinish)
-          : null;
+        : (reexpressed.externalLateFinish ??
+          (existing.externalLateFinish ? formatCalendarDate(existing.externalLateFinish) : null));
     this.assertExternalDatesOrdered(effectiveExternalEarlyStart, effectiveExternalLateFinish);
     if (dto.externalEarlyStart !== undefined) {
       patch.externalEarlyStart =
@@ -731,7 +778,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdatePositionsDto,
-  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+  ): Promise<{ items: DecoratedActivity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -812,7 +859,7 @@ export class ActivitiesService {
     orgSlug: string,
     planId: string,
     dto: UpdatePlacementsDto,
-  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+  ): Promise<{ items: DecoratedActivity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -901,7 +948,7 @@ export class ActivitiesService {
     planId: string,
     dto: UpdateParentsDto,
     context?: RequestContext,
-  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+  ): Promise<{ items: DecoratedActivity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -1060,7 +1107,7 @@ export class ActivitiesService {
     activityId: string,
     dto: UpdateActivityProgressDto,
   ): Promise<{
-    activity: WithDayFactor<Activity>;
+    activity: DecoratedActivity;
     warnings: ProgressWarning[];
     canReadCost: boolean;
   }> {
@@ -1436,7 +1483,7 @@ export class ActivitiesService {
     planId: string,
     deleteBatchId: string,
     context?: RequestContext,
-  ): Promise<{ items: WithDayFactor<Activity>[]; canReadCost: boolean }> {
+  ): Promise<{ items: DecoratedActivity[]; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
@@ -1658,7 +1705,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     context?: RequestContext,
-  ): Promise<{ activity: WithDayFactor<Activity>; canReadCost: boolean }> {
+  ): Promise<{ activity: DecoratedActivity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:restore', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);

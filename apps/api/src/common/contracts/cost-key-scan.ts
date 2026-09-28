@@ -27,6 +27,11 @@ export const COST_SHAPED = /cost|budget|rate|expense/i;
  *
  * Four gates in this repository have gone red or green on their own docblocks; that is the most
  * recorded instrument failure here, so stripping is not an optimisation.
+ *
+ * **Its blind spot has two forms.** Neither expression knows what a string literal is, so a `//`
+ * inside a string or template literal removes the rest of that line, and a `/*` inside one removes
+ * everything up to the next `*\/`. `scripts/lib/strip-comments.mjs` is a port of this function for
+ * the root gates and carries the same two expressions, so the two fail the same way.
  */
 export function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

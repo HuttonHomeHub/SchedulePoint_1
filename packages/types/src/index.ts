@@ -512,6 +512,20 @@ export interface ActivitySummary {
    */
   drivingResourceCalendarId: string | null;
   /**
+   * For a **zero-duration task**: how many **live** resource assignments it holds (ADR-0162
+   * decision 6), where an assignment counts when neither it nor its resource is soft-deleted, the one
+   * predicate the health report and the staff diagnostics also use. Derived on read, never stored.
+   *
+   * `null` for every other activity, and that is its only meaning: **not counted for this row type**.
+   * The count's one reader is the Make milestone gate, which applies to zero-duration tasks alone;
+   * counting every row failed FC-9's plan-shape condition, and the spec's remedy is to ask only the
+   * rows that need the answer (`docs/specs/zero-duration-task/m0-measurement.md`, "M4-T1").
+   *
+   * On the row for the reason `drivingResourceCalendarId` is: the activities table's row loop and
+   * the Gantt row menu gate **Make milestone…** synchronously and cannot call a hook per row.
+   */
+  resourceAssignmentCount: number | null;
+  /**
    * WBS parent (ADR-0038, M5-epic §24): the `id` of the `WBS_SUMMARY` activity this one rolls up into,
    * or null for a top-level activity. The parent tree is an adjacency list, kept acyclic and same-plan by
    * the service; it is orthogonal to the dependency DAG (ADR-0021). A `WBS_SUMMARY` activity's dates roll
@@ -2821,6 +2835,46 @@ export interface HealthSummary {
  * payload for the same reason thresholds do (G3): a client hard-coding 50 to render
  * "showing 50 of 412" is a second source for a number the server owns.
  */
+/**
+ * **The findings beyond the DCMA assessment** (ADR-0162 decision 2, zero-duration-task M3-T1).
+ *
+ * A closed tuple of its own, deliberately **disjoint from {@link HEALTH_METRIC_IDS}** (G1/G2 in
+ * `schedule-health-vocabulary.structural.test.ts`): an advisory is not a sixteenth metric, has no
+ * ordinal, no verdict and no threshold, and is never counted in {@link HealthSummary}. The report is
+ * total over this tuple exactly as it is over the metrics — every advisory row is always present,
+ * reading a count of zero rather than disappearing (ADR-0116's "a report never omits a check").
+ */
+export const HEALTH_ADVISORY_IDS = ['ZERO_DURATION_TASKS'] as const;
+
+export type HealthAdvisoryId = (typeof HEALTH_ADVISORY_IDS)[number];
+
+/**
+ * One advisory row. `measured` is percent-shaped (`count` of `denominator`, the same active
+ * non-summary denominator the metrics use). `detail` carries the one extra fact the zero-duration
+ * advisory states: how many of its offenders hold a live resource assignment (`resourced`).
+ */
+export interface HealthAdvisoryResult {
+  id: HealthAdvisoryId;
+  name: string;
+  measured: HealthMeasured;
+  /** The TRUE total of offenders, never the capped length. */
+  offenderCount: number;
+  offendersTruncated: boolean;
+  offenders: HealthOffender[];
+  detail: { resourced: number };
+}
+
+/**
+ * **The one predicate for "a zero-duration task"** (ADR-0162): a `TASK` with no work. Shared by the
+ * health advisory, the import advisory and the Make milestone gate, so the three cannot disagree
+ * about which activities they mean. Only `TASK`: a zero-duration milestone is what a milestone is,
+ * and a zero-duration level of effort or summary stores 0 by definition (M0-T1 counted 37 and 242
+ * of them in the catalogue). `type` is a plain string because the health model reads it that way.
+ */
+export function isZeroDurationTask(type: string, durationMinutes: number): boolean {
+  return type === 'TASK' && durationMinutes === 0;
+}
+
 export interface ScheduleHealthReport {
   planId: string;
   planName: string;
@@ -2835,6 +2889,12 @@ export interface ScheduleHealthReport {
   summary: HealthSummary;
   offenderCap: number;
   metrics: HealthMetricResult[];
+  /**
+   * The findings beyond the DCMA assessment — one row per {@link HealthAdvisoryId}, always, in
+   * tuple order, never counted in `summary` (ADR-0162). A client should still read it defensively:
+   * a web bundle can meet an API released before the field existed (spec E32).
+   */
+  advisories: HealthAdvisoryResult[];
 }
 
 // ---------------------------------------------------------------------------

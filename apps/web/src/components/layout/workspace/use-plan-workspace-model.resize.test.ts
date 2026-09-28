@@ -96,6 +96,7 @@ vi.mock('@/features/schedule', () => ({
 // full-definition round-trip assertion below proves they are RESENT, not silently cleared.
 const ACTIVITY: ActivitySummary = {
   drivingResourceCalendarId: null,
+  resourceAssignmentCount: null,
   id: 'a1',
   planId: 'p1',
   code: 'A100',

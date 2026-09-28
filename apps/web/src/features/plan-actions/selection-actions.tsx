@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Copy,
   Crosshair,
+  Diamond,
   Eraser,
   Route,
   SquarePen,
@@ -14,9 +15,10 @@ import {
   Users,
   Waypoints,
 } from 'lucide-react';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { CONFLICT_REMEDIES } from './conflict-remedy';
+import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-gate';
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
@@ -40,6 +42,7 @@ import {
   TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
+import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
 import type { ConflictKey } from '@/features/tsld/render/conflicts';
 import type { LogicPathMode } from '@/features/tsld/render/logic-path';
@@ -127,6 +130,16 @@ export interface SelectionActionContext {
   /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Wired regardless of
    * the flag; the `progress` item that calls it is only registered when `VITE_ENTRY_ROUTES` is on. */
   onProgress: () => void;
+  /**
+   * The workspace's `activityEditorGating.general`, carried through unchanged so an identity test
+   * can assert this bar and the table shade Make milestone… from ONE object (ADR-0162 decision 4).
+   * `null` in a host that offers no conversion.
+   */
+  definitionGate: ScopeGate | null;
+  /** `deriveMakeMilestoneGate`'s verdict for the selected activity, computed once by the builder. */
+  makeMilestone: MakeMilestoneGate;
+  /** Open the Make milestone dialog for the selected activity. */
+  onMakeMilestone: () => void;
 }
 
 /**
@@ -465,7 +478,7 @@ function ConflictRemedyControl({
  * pattern applied to a control and not its neighbour, and its mirror is a pattern applied to a
  * neighbour it was never right for.
  *
- * Carries one: `conflict-remedy`, `duplicate`, `duplicate-band`, `dissolve`,
+ * Carries one: `conflict-remedy`, `duplicate`, `duplicate-band`, `dissolve`, `make-milestone`,
  * `clear-visual-placement`. Each names a condition of the selected activity or the plan, which is
  * what a reader needs to hear when it vanishes.
  *
@@ -717,6 +730,41 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
+    /**
+     * **Make milestone… — icon-only, and only for a zero-duration task** (ADR-0162 decision 4).
+     *
+     * `showLabel: 'never'`, against this bar's every-item-carries-its-name rule, on a measurement:
+     * M0-T5 found no labelled candidate that keeps the foot row on one line at 1646 (the shortest,
+     * `Milestone…`, needs 116 px against 70 px of room), and a wrap costs the diagram 36 px on the
+     * product owner's own screen, which ADR-0115 exists to prevent. The name still reaches everyone:
+     * `ToolbarButton` pins it to `aria-label` and shows it in an ADR-0117 `name-echo` tooltip on
+     * hover, focus and long-press. The two menus render the same {@link MAKE_MILESTONE_LABEL} as
+     * text. Recorded in `docs/specs/zero-duration-task/agreement-round.md`.
+     *
+     * Pen-gated, and its reason comes from the derivation, whose pen or role branch reads the
+     * editor's own `general` gate — so the sentence on this control and on the table's row action
+     * is one string.
+     */
+    {
+      id: 'make-milestone',
+      group: 'object',
+      tier: 1,
+      showLabel: 'never',
+      order: 4.7,
+      label: MAKE_MILESTONE_LABEL,
+      icon: <Diamond className="size-4" />,
+      penGated: true,
+      isVisible: (ctx) => ctx.makeMilestone.applies,
+      isEnabled: (ctx) => ctx.makeMilestone.applies && ctx.makeMilestone.enabled,
+      disabledReason: (ctx) =>
+        ctx.makeMilestone.applies && !ctx.makeMilestone.enabled
+          ? ctx.makeMilestone.reason
+          : undefined,
+      // True before and after: it leaves when a peer gives the task a duration, converts it, or
+      // changes its type — every one of which makes it no longer a task with no duration.
+      lostReason: 'This action applies only to a task with no duration.',
+      onActivate: (ctx) => ctx.onMakeMilestone(),
+    },
     // Dissolve — only for a summary selection, and only behind `VITE_WBS_IMPROVEMENTS`. Registered
     // BEFORE Delete for the same reason the table's row menu orders them that way: the two are
     // neighbours in intent ("get rid of this grouping") and opposites in effect, so the
@@ -1024,7 +1072,33 @@ export function SelectionActionsBar({
     [context, restoreFocus],
   );
 
-  if (!context) return null;
+  /**
+   * **Make milestone… hands focus to the bar's restore target BEFORE it opens its dialog** (spec D4,
+   * ADR-0149 D8). A native `<dialog>` restores focus on close to whatever held it at `showModal()`,
+   * and this button is gone once the task is a milestone, so without this a successful conversion
+   * would drop focus to `<body>` and silently switch off every workspace accelerator.
+   *
+   * The successor is `restoreFocus` itself — the canvas listbox from `TsldPanel`, the Gantt grid
+   * from the workspace — because that is already each host's answer to "where does focus go when
+   * this bar can no longer hold it". Done here, once, rather than by each host wrapping its handler:
+   * the canvas host could not, because its successor is a ref and the builder call it would pass
+   * through runs during render.
+   */
+  const actionContext = useMemo(
+    () =>
+      context === null
+        ? null
+        : {
+            ...context,
+            onMakeMilestone: () => {
+              restoreFocus?.();
+              context.onMakeMilestone();
+            },
+          },
+    [context, restoreFocus],
+  );
+
+  if (!actionContext) return null;
 
   return (
     <div
@@ -1096,10 +1170,10 @@ export function SelectionActionsBar({
           was written. */}
       <Toolbar
         items={selectionActionItems}
-        context={context}
-        label={`Actions for ${context.targetName}`}
+        context={actionContext}
+        label={`Actions for ${actionContext.targetName}`}
         groupLabels={{ object: 'Activity actions' }}
-        authoringEnabled={context.canEditSchedule}
+        authoringEnabled={actionContext.canEditSchedule}
       />
     </div>
   );

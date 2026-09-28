@@ -56,6 +56,8 @@ export async function createAndOpenPlan(page: Page, name: string): Promise<strin
 
 export interface SeededDefects {
   danglerName: string;
+  /** The one zero-duration TASK, for the ADR-0162 D1 advisory. */
+  zeroTaskName: string;
 }
 
 /**
@@ -101,6 +103,9 @@ export async function seedDefects(
       // selection alone reveals nothing in the Gantt).
       const phase = await act('Phase 2', 0, { type: 'WBS_SUMMARY' });
       await act('Loose end', 3, { parentId: phase.id });
+      // ADR-0162 D1: a zero-duration TASK — a milestone entered as a task — for the "Beyond the
+      // DCMA assessment" advisory. Unlinked, so it also joins Missing logic, which already fails.
+      await act('Handover sign-off', 0);
       const link = (predecessorId: string, successorId: string, extra: object = {}) =>
         post(`/plans/${planId}/dependencies`, { predecessorId, successorId, ...extra });
       await link(a.id, b.id);
@@ -113,7 +118,7 @@ export async function seedDefects(
     },
     { slug: orgSlug, planId },
   );
-  return { danglerName: 'Loose end' };
+  return { danglerName: 'Loose end', zeroTaskName: 'Handover sign-off' };
 }
 
 /** The canvas's parallel activity listbox — the a11y surface the offender jump has to reach. */

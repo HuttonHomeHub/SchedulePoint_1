@@ -391,11 +391,17 @@ export function useCreateAssignment(orgSlug: string, activityId: string, planId?
           queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
         }),
         // A new assignment adds demand to the resource histogram (M7 rung 5, ADR-0044 §3) — refresh
-        // every bucket size for the plan (prefix). Only when the plan is known (the dialog passes it).
+        // every bucket size for the plan (prefix) — and changes the activity's
+        // `resourceAssignmentCount` (ADR-0162), which gates Make milestone. The plan's activity list
+        // only, never `activityKeys.all`, which is organisation-wide. Only when the plan is known
+        // (every caller passes it).
         ...(planId
           ? [
               queryClient.invalidateQueries({
                 queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: activityKeys.listByPlan(orgSlug, planId),
               }),
             ]
           : []),
@@ -495,11 +501,16 @@ export function useDeleteAssignment(orgSlug: string, planId?: string) {
           queryKey: assignmentKeys.listByActivity(orgSlug, input.activityId),
         }),
         // Unassigning removes the resource's demand from the histogram (M7 rung 5, ADR-0044 §3) —
-        // refresh every bucket size for the plan (prefix). Only when the plan is known.
+        // refresh every bucket size for the plan (prefix) — and changes the activity's
+        // `resourceAssignmentCount` (ADR-0162): the plan's activity list, never `activityKeys.all`.
+        // Only when the plan is known.
         ...(planId
           ? [
               queryClient.invalidateQueries({
                 queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: activityKeys.listByPlan(orgSlug, planId),
               }),
             ]
           : []),
