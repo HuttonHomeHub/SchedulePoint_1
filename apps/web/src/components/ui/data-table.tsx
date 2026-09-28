@@ -209,6 +209,7 @@ export function DataTable<T>({
   loadingLabel,
   errorLabel = 'Couldn’t load this list. Please try again.',
   describedById,
+  scroll = 'page',
 }: {
   caption: string;
   columns: Column<T>[];
@@ -241,6 +242,37 @@ export function DataTable<T>({
    * reachable only by reading serially is the wrong contract.
    */
   describedById?: string | undefined;
+  /**
+   * Who scrolls: the PAGE (default) or this REGION (`docs/specs/activities-panel-scale/`,
+   * TECH_DEBT #334).
+   *
+   * - **`'page'`** — today's DOM, byte for byte (SC-4). The region stays `overflow-x-auto` alone;
+   *   nothing bounds its height, so `overflow-y` computes to `auto` per CSS Overflow 3 §3 but the
+   *   region never actually scrolls vertically because an ancestor already does. The header is not
+   *   pinned — `position: sticky` sticks within its nearest **scrollport**, and this region is not
+   *   one on that axis, so a sticky header here would be **inert**: it would type-check, pass every
+   *   jsdom suite, and change nothing a planner can see (the ADR-0064 §7 dead-end shape).
+   * - **`'contained'`** — this table owns BOTH axes. The region fills its parent (`min-h-0 flex-1`),
+   *   the header pins to the region's top with the page background, and the region carries
+   *   `scroll-padding-top` so a Shift+Tabbed control scrolls in **below** the header rather than
+   *   entirely behind it (WCAG 2.2 §2.4.11). Use this only inside a HEIGHT-CAPPED pane —
+   *   `ActivitiesTable` is the one call site that needs it; the other 23 sit in ordinary page flow,
+   *   where a bounded scroller would be exactly as inert as an unpinned header in a bounded one.
+   *
+   * **One prop rather than a separate `stickyHeader` boolean**, deliberately: a sticky header with
+   * no bounded scroll to pin against is the inert combination above, and a second boolean would make
+   * it representable. Binding the two removes the dead-end rather than documenting around it.
+   *
+   * **The border rule moves from the row to the cell in `'contained'` mode, and that is a real-browser
+   * question this change could not answer — no Playwright run backs it (owed; see
+   * `docs/specs/activities-panel-scale/m1-premise.md`).** Tailwind's Preflight sets
+   * `border-collapse: collapse` on every `<table>`; whether a collapsed-model row border survives a
+   * `sticky` cell is engine-dependent. So `'contained'` switches to `border-separate
+   * border-spacing-0` and draws the header rule on each `<th>` and each row's rule on its `<td>`s —
+   * the spec's stated safe default when the three-engine check has not been run, composed with the
+   * caller's `headClassName`/`cellClassName` the way `width` already composes.
+   */
+  scroll?: 'page' | 'contained';
 }): React.ReactElement {
   if (query.isPending) {
     // **A skeleton, not a spinner** (`docs/TECH_DEBT.md` #161(b),
@@ -332,27 +364,48 @@ export function DataTable<T>({
     );
   }
 
+  const contained = scroll === 'contained';
+
   return (
     // Focusable + labelled so a keyboard-only user can scroll a wide table
     // (WCAG 2.1.1); the caption names the region. A scroll container with a
     // `region` role is the recommended pattern here — the lint rule doesn't model it.
+    //
+    // `contained`'s classes are a LITERAL ternary rather than routed through `cn()`: the `'page'`
+    // branch must stay the exact string it always was (SC-4), never a functionally-equivalent
+    // reordering `cn()` could produce.
     <div
-      className="overflow-x-auto"
+      className={contained ? 'min-h-0 flex-1 scroll-pt-12 overflow-auto' : 'overflow-x-auto'}
       role="region"
       aria-label={caption}
       {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
     >
-      <table className="w-full text-sm">
+      <table
+        className={contained ? 'w-full border-separate border-spacing-0 text-sm' : 'w-full text-sm'}
+      >
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-border text-muted-foreground border-b text-left">
+          <tr
+            className={
+              contained
+                ? 'text-muted-foreground text-left'
+                : 'border-border text-muted-foreground border-b text-left'
+            }
+          >
             {columns.map((column) => (
               <th
                 key={column.header}
                 scope="col"
-                className={headClassesOf(column)}
+                className={
+                  contained
+                    ? cn(
+                        headClassesOf(column),
+                        'bg-background border-border sticky top-0 z-20 border-b',
+                      )
+                    : headClassesOf(column)
+                }
                 data-col-width={column.width ?? 'undeclared'}
               >
                 {column.headerCell ? (
@@ -371,11 +424,15 @@ export function DataTable<T>({
             const detail = renderDetail?.(row);
             return (
               <Fragment key={getRowKey(row)}>
-                <tr className="border-border border-b">
+                <tr className={contained ? '' : 'border-border border-b'}>
                   {columns.map((column) => (
                     <td
                       key={column.header}
-                      className={cellClassesOf(column)}
+                      className={
+                        contained
+                          ? cn(cellClassesOf(column), 'border-border border-b')
+                          : cellClassesOf(column)
+                      }
                       data-col-width={column.width ?? 'undeclared'}
                     >
                       {column.cell(row)}
@@ -391,10 +448,17 @@ export function DataTable<T>({
                     Deliberately not a `treegrid`: that pattern buys roving tabindex and per-cell
                     navigation, which a detail panel with no per-cell actions does not need and
                     would have to hand-roll. A disclosure over a plain table is the APG pattern that
-                    fits, and it needs no grid roles at all. */}
+                    fits, and it needs no grid roles at all.
+
+                    `contained` moves this row's own border onto its cell too — `border-separate`
+                    does not render a `<tr>`'s border in any engine this table targets, so leaving
+                    it here would silently drop the rule the moment `scroll="contained"` is set. */}
                 {detail === undefined || detail === null ? null : (
-                  <tr className="border-border border-b">
-                    <td colSpan={columns.length} className="p-0">
+                  <tr className={contained ? '' : 'border-border border-b'}>
+                    <td
+                      colSpan={columns.length}
+                      className={contained ? cn('p-0', 'border-border border-b') : 'p-0'}
+                    >
                       {detail}
                     </td>
                   </tr>

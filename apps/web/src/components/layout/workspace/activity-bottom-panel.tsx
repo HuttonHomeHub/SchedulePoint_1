@@ -115,7 +115,17 @@ export function ActivityBottomPanel({
           ) : null}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      {/* No `overflow-y-auto` here any more (activities-panel-scale M1) — `ActivitiesTable`'s own
+          region is now the panel's ONE scroller (`scroll="contained"`, `data-table.tsx`), so this
+          div only needs to pass its height through as a flex column. A second scroller here would
+          have reproduced the exact defect the milestone exists to remove: two nested overflow
+          containers where only the outer one actually scrolled vertically.
+
+          `data-testid` rather than a class-string or copy locator (the standing rule after
+          `docs/TECH_DEBT.md` #124/#133's journeys broke on exactly that): SC-5's own journey needs
+          to assert THIS div's `scrollHeight === clientHeight` and it has no accessible name of its
+          own to query by. */}
+      <div data-testid="activities-panel-body" className="flex min-h-0 flex-1 flex-col px-4 pb-4">
         <ActivitiesTable
           orgSlug={model.orgSlug}
           planId={model.planId}

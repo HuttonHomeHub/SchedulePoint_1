@@ -739,12 +739,30 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   `aria-describedby`-linked to prose qualifying what the rows mean. Responsive: horizontal scroll in
   a bordered container; never break the page layout.
 
+  **`scroll: 'page' | 'contained'` decides who owns the scroll, and the two are not a stylistic
+  choice between them** (`docs/specs/activities-panel-scale/`, TECH_DEBT #334). `'page'` (the
+  default, and every call site but one) leaves the region `overflow-x-auto` with nothing bounding
+  its height, so an ancestor scrolls vertically and a sticky header here would be **inert** — it
+  sticks to its nearest scrollport, and this region is not one on that axis. `'contained'` is for the
+  one call site inside a height-capped pane (`ActivitiesTable`): the region becomes the table's only
+  scroller on both axes, the header pins to its top, and the region carries `scroll-padding-top` so a
+  Shift+Tabbed control is never hidden entirely behind the pinned row (WCAG 2.2 §2.4.11). It also
+  switches the table to `border-separate` and moves the row-border rule onto each `<th>`/`<td>`,
+  because Tailwind's Preflight `border-collapse: collapse` and a sticky cell do not have an
+  engine-independent answer for whose border wins. Do not reach for `'contained'` outside a bounded
+  pane: for every other consumer it is exactly as inert as an unpinned header is here.
+
   > **This entry claimed five features the component does not have** — sortable headers, pagination,
   > row selection, a sticky header and per-column alignment — and was corrected by reading
   > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
   > themselves today. That is not a to-do list: a shared primitive earns each of those when a second
   > consumer needs it, and writing them down as though they exist is how a reader plans around a
   > capability that isn't there. Loading is a **spinner**, not skeleton rows.
+  >
+  > **A sticky header is no longer on that list — one consumer earned it** (`scroll="contained"`,
+  > above), and the note is left rather than deleted because the other four claims are still true
+  > today and the pattern this ADR-0058 correction warns about is trusting a stale sentence, not
+  > having written one that later became stale.
 
   **Column width is a property of the COLUMN, declared on it** (ADR-0146 D3). `Column.width` takes
   `'fit' | 'bounded' | 'auto'` and the three names are a vocabulary, not three sizes:
