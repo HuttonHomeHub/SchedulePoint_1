@@ -6265,6 +6265,10 @@ A lighter-weight running log of smaller decisions is in
   about half the bars on screen at the 60 px pitch — **still under §9's 30 fps
   floor there**, in two sittings, while every Dell sitting since 2026-09-10
   meets it. Whether that fires #75's trigger is the product owner's call.
+  **An eighth sitting on 2026-09-28 (#75 item 10, the Dell, `web` 0.152.0) is the first on the
+  painter ADR-0157/0158/0159 shipped**: Week 60.0 fps and 0.00 pp at 500 and 2,000, and Fit/2,000
+  **45.9 fps with 864 bars** against item 8's 34.6 fps with 1,658. The revision overlay's Fit delta
+  there is +0.19 pp, inside a 1.11 pp spread, and Fit is still ungraded by policy.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
