@@ -602,7 +602,8 @@ an unknown key, is for the producer's own tests. The report may carry an optiona
 (`{ code: 'ZERO_DURATION_TASK', entity: 'activity', sourceRef, detail }`), **absent when there are none**:
 activities the import brought in faithfully that the planner probably wants to change, such as a task with
 no duration. An advisory never changes what is imported and is never filed as an approximation, repair or
-drop. No importer produces one yet; the reader ships first.
+drop. Both importers produce one, XER and MSPDI alike, for each activity imported as a task with no
+duration (ADR-0162 M5).
 
 The **commit** endpoint is the second phase: it re-accepts the same multipart upload (stateless — `importXer`
 is pure + deterministic, so the graph committed equals the one reviewed) and, in **one transaction**, creates

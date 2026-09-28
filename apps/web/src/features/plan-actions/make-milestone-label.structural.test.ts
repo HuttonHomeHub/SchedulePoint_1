@@ -35,7 +35,9 @@ describe('Make milestone… is spelled once', () => {
     expect(source).toContain('MAKE_MILESTONE_LABEL');
     // Pinned positive case: the check finds the literal when it is there, so a pass below means
     // absence rather than a scan that cannot see.
-    expect(`label: '${MAKE_MILESTONE_LABEL}'`).toContain(`'${MAKE_MILESTONE_LABEL}'`);
+    expect(code(`const item = { label: '${MAKE_MILESTONE_LABEL}' };`)).toContain(
+      `'${MAKE_MILESTONE_LABEL}'`,
+    );
     for (const quote of ["'", '"', '`']) {
       expect(source).not.toContain(`${quote}${MAKE_MILESTONE_LABEL}${quote}`);
     }

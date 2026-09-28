@@ -18,8 +18,9 @@ function db(groups: { activityId: string; _count: { _all: number } }[] = []) {
 /**
  * The loader's contract, with the database mocked (ADR-0162 decision 6, FC-9 remedy rung 1). What
  * "live" means against real rows — a soft-deleted assignment, an assignment to a soft-deleted
- * resource — is FC-10's agreement e2e (`zero-duration-assignment-count.e2e-spec.ts`), because a mocked
- * `groupBy` returns whatever it is told and cannot say which rows a `where` would have matched.
+ * resource — is FC-10's agreement e2e (`test/staff-diagnostics.e2e-spec.ts`, "agrees with the
+ * activity field and the health advisory on one fixture"), because a mocked `groupBy` returns
+ * whatever it is told and cannot say which rows a `where` would have matched.
  */
 describe('loadResourceAssignmentCounts', () => {
   it('issues NO query when the rows hold no zero-duration task', async () => {
