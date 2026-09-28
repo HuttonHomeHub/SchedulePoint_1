@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
 
-import { archivedFilterWhere, type ArchivedFilter } from '../../common/query/library-filters';
+import {
+  archivedFilterWhere,
+  escapeLikePattern,
+  type ArchivedFilter,
+} from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -14,15 +18,19 @@ import { PrismaService } from '../../prisma/prisma.service';
  * `organization_id` in the org composite confines the recheck to ONE tenant's rows in cursor
  * order. The documented, measure-first escalation is a `pg_trgm` GIN index (docs/TECH_DEBT.md).
  *
+ * `%`/`_`/`\` in `search` are escaped first (`docs/TECH_DEBT.md` #337) so a resource literally
+ * named or coded e.g. `50%` is matched by that search rather than treated as a wildcard.
+ *
  * Nested under `AND` rather than spread at the top level so it composes with any other `OR` a
  * caller adds without either clobbering the other.
  */
 function resourceSearchWhere(search: string | undefined): Prisma.ResourceWhereInput {
   if (search === undefined) return {};
+  const pattern = escapeLikePattern(search);
   return {
     OR: [
-      { name: { contains: search, mode: 'insensitive' } },
-      { code: { contains: search, mode: 'insensitive' } },
+      { name: { contains: pattern, mode: 'insensitive' } },
+      { code: { contains: pattern, mode: 'insensitive' } },
     ],
   };
 }

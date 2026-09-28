@@ -212,6 +212,37 @@ describe.skipIf(!hasDatabase)('Library search / filter (e2e)', () => {
     ]);
   });
 
+  /**
+   * `docs/TECH_DEBT.md` #337, closed 2026-09-28: `contains` compiles to `column ILIKE
+   * '%' || term || '%'` with `%`/`_` in the term itself read as wildcards, so a search for the
+   * literal `50%` also matched `Winter 5000` / `Rate 5000` (`%` = "any run of characters") and a
+   * search for the literal `a_b` also matched `aXb` (`_` = "exactly one character"). Verified red
+   * against the unescaped code before the fix landed.
+   */
+  it('matches a literal % and _ in ?q=, rather than treating them as wildcards', async () => {
+    const { actor } = await adminWithOrg();
+    await createCalendar(actor, 'Winter 50%');
+    await createCalendar(actor, 'Winter 5000');
+    await createResource(actor, { name: 'Rate 50%', kind: 'MATERIAL' });
+    await createResource(actor, { name: 'Rate 5000', kind: 'MATERIAL' });
+    await createResource(actor, { name: 'a_b', kind: 'MATERIAL' });
+    await createResource(actor, { name: 'aXb', kind: 'MATERIAL' });
+
+    const calPercent = await actor.agent
+      .get(`${calendarsUrl}?q=${encodeURIComponent('50%')}`)
+      .expect(200);
+    expect((calPercent.body.data as { name: string }[]).map((c) => c.name)).toEqual(['Winter 50%']);
+
+    const resPercent = await actor.agent
+      .get(`${resourcesUrl}?q=${encodeURIComponent('50%')}`)
+      .expect(200);
+    expect((resPercent.body.data as { name: string }[]).map((r) => r.name)).toEqual(['Rate 50%']);
+
+    // `a_b` must match ONLY the literal `a_b`, never `aXb` (the underscore is not "any character").
+    const resUnderscore = await actor.agent.get(`${resourcesUrl}?q=a_b`).expect(200);
+    expect((resUnderscore.body.data as { name: string }[]).map((r) => r.name)).toEqual(['a_b']);
+  });
+
   // -------------------------------------------------------------------------
   // `?kind=` (resources) and the tri-state `?archived=`, and their composition
   // -------------------------------------------------------------------------

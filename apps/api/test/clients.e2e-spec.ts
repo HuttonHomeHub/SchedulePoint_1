@@ -147,6 +147,29 @@ describe.skipIf(!hasDatabase)('Clients API (e2e)', () => {
     ]);
   });
 
+  /**
+   * `docs/TECH_DEBT.md` #337, closed 2026-09-28: Prisma's `contains` compiles to
+   * `name ILIKE '%' || term || '%'` with `%`/`_` in the TERM itself read as wildcards, so
+   * `?q=50%25` (a literal `50%`) also matched `Acme 5000 Ltd` (`50` then `%` = "any run of
+   * characters"), and `?q=a_b` also matched `aXb` (`_` = "exactly one character"). Verified red
+   * against the unescaped code before the fix landed.
+   */
+  it('matches a literal % and _ in ?q=, rather than treating them as wildcards', async () => {
+    const { actor } = await adminWithOrg();
+    await createClient(actor, 'Acme 5000 Ltd');
+    await createClient(actor, 'Rate 50%');
+    await createClient(actor, 'a_b');
+    await createClient(actor, 'aXb');
+
+    const url = '/api/v1/organizations/acme/clients';
+
+    const percent = await actor.agent.get(`${url}?q=${encodeURIComponent('50%')}`).expect(200);
+    expect((percent.body.data as { name: string }[]).map((c) => c.name)).toEqual(['Rate 50%']);
+
+    const underscore = await actor.agent.get(`${url}?q=a_b`).expect(200);
+    expect((underscore.body.data as { name: string }[]).map((c) => c.name)).toEqual(['a_b']);
+  });
+
   it('422s a ?q= over the max length', async () => {
     const { actor } = await adminWithOrg();
     await actor.agent.get(`/api/v1/organizations/acme/clients?q=${'x'.repeat(201)}`).expect(422);

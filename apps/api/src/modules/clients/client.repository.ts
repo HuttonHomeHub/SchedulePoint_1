@@ -1,21 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Client } from '@prisma/client';
 
+import { escapeLikePattern } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
  * The `name` term for a `?q=` search, or `{}` when there is no search.
  *
- * Prisma's `contains` + `mode: 'insensitive'` compiles to `name ILIKE '%q%'`. Two properties of
- * that are worth knowing at the call site rather than discovering from a support question:
- * `%` and `_` in the term are **not escaped**, so a client literally named `50%` cannot be found
- * by searching for it (`docs/TECH_DEBT.md` #337, inherited verbatim from the library searches);
- * and the match is case-insensitive while `uq_clients_org_name` is case-**sensitive**, so `Acme`
- * and `acme` can both exist and one search returns both.
+ * Prisma's `contains` + `mode: 'insensitive'` compiles to `name ILIKE '%q%'`. One property of
+ * that is worth knowing at the call site rather than discovering from a support question: the
+ * match is case-insensitive while `uq_clients_org_name` is case-**sensitive**, so `Acme` and
+ * `acme` can both exist and one search returns both. `%`/`_`/`\` in `search` are escaped
+ * (`docs/TECH_DEBT.md` #337, closed 2026-09-28) so a client literally named e.g. `50%` IS found
+ * by searching for it rather than the term being read as a wildcard.
  */
 function clientSearchWhere(search: string | undefined): Prisma.ClientWhereInput {
   if (search === undefined) return {};
-  return { name: { contains: search, mode: 'insensitive' } };
+  return { name: { contains: escapeLikePattern(search), mode: 'insensitive' } };
 }
 
 /**

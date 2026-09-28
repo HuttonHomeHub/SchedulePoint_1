@@ -894,7 +894,9 @@ is live) and are still swept by the project-delete cascade. Deleting an archived
 The `archived` filter, like `scope`, is a **usability** control and never an authorisation boundary: the
 security controls are the write-time rejects above, applied server-side whatever a list returns. `q` is a
 case-insensitive substring match bounded by the org filter; there is deliberately no index for it (see
-`docs/TECH_DEBT.md` for the measured `pg_trgm` escalation).
+`docs/TECH_DEBT.md` for the measured `pg_trgm` escalation). `%` and `_` in `q` match **literally** — a
+resource or calendar named e.g. `50%` is found by searching for `50%`, rather than the characters being
+read as wildcards (`docs/TECH_DEBT.md` #337, closed 2026-09-28).
 
 #### Clients gained the same `q` (ADR-0145 D7)
 
@@ -916,9 +918,9 @@ per-endpoint declaration, matching every other list route.
 2.3–7.0 ms at ADR-0053's 5,000-row ceiling for a term matching nothing, across both plan regimes,
 against CLAUDE.md §15's 200 ms budget. The escalation trigger is a single organisation past ~2,000
 active clients or a p95 past ~20 ms, and the remedy is a `pg_trgm` GIN index on **`name`** — not
-`lower(name)`, which cannot serve `ILIKE` at all (`docs/TECH_DEBT.md` #336). `#337` applies here
-verbatim: `%` and `_` in a term are wildcards, parameterised and therefore not an injection risk, and
-a correctness wart shared with the two library searches.
+`lower(name)`, which cannot serve `ILIKE` at all (`docs/TECH_DEBT.md` #336). `%` and `_` in `q`
+match **literally**, the same fix as the two library searches above (`docs/TECH_DEBT.md` #337,
+closed 2026-09-28) — a client named e.g. `50%` is found by searching for `50%`.
 
 #### A detail read carries child counts; a list read does not (ADR-0146 D3)
 
