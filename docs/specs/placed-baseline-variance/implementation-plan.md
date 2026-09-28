@@ -1,7 +1,7 @@
 # Implementation Plan: Baseline variance on the placed basis
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-09-28. Q1: a `NONE` baseline compares earliest against earliest (option (a), the default; "all data is dummy data, so pick any").
 - **Owner:** api + web
 
 ## Breakdown

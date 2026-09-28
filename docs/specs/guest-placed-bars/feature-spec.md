@@ -1,6 +1,6 @@
 # Feature Spec: A share link draws the bars where the planner placed them
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved — by the product owner, 2026-09-28 (a guest sees the placed bars).
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-28
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #356

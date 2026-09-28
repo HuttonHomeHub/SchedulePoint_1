@@ -1,6 +1,6 @@
 # Feature Spec: Baseline variance on the placed basis
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-09-28. Q1: a `NONE` baseline compares earliest against earliest (option (a), the default; "all data is dummy data, so pick any").
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-28
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #359 (approved for fixing by the product owner, 2026-09-28)

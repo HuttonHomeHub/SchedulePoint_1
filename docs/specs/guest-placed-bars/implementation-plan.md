@@ -1,7 +1,7 @@
 # Implementation Plan: A share link draws the bars where the planner placed them
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
-- **Status:** Draft — **do not implement before approval** (`docs/PROCESS.md` Definition of Ready)
+- **Status:** Approved — by the product owner, 2026-09-28 (a guest sees the placed bars).
 - **Owner:** api + web (`docs/TECH_DEBT.md` #356)
 
 ## Breakdown

@@ -1,8 +1,6 @@
 # Feature Spec: The activities panel at plan scale
 
-- **Status:** Draft — the approach (measure first; correct the docblock and pin the header whatever
-  the measurement says; virtualize only if M0 requires it) was approved by the product owner on
-  2026-09-28. This document awaits approval before implementation.
+- **Status:** Approved — by the product owner, 2026-09-28.
 - **Author(s):** feature-analyst (Claude)
 - **Date:** 2026-09-28
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #334

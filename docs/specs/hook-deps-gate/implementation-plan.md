@@ -1,7 +1,7 @@
 # Implementation Plan: A lint warning is a failure, and `exhaustive-deps` is armed
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-09-28. Q1: `--max-warnings=0` in all nine workspaces. Q2: the default (reasons required) stands.
 - **Owner:** web / repository tooling
 
 ## Breakdown

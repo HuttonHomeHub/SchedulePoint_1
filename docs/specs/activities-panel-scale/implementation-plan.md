@@ -1,7 +1,7 @@
 # Implementation Plan: The activities panel at plan scale
 
 - **Feature spec:** [feature-spec.md](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-09-28.
 - **Owner:** web
 
 ## Breakdown
