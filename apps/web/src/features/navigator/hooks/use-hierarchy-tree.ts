@@ -194,7 +194,7 @@ export function useHierarchyTree(
   useEffect(() => {
     if (ancestorPath.length > 0) expandPath(ancestorPath);
     // ancestorKey captures the path identity without depending on the array reference.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ancestorKey stands in for ancestorPath's identity (see above)
   }, [ancestorKey, expandPath]);
 
   /**
@@ -268,7 +268,7 @@ export function useHierarchyTree(
     // is the only way an outcome can arise. `groupStates` and the callback are read but deliberately
     // not depended on — the map is rebuilt on every background refetch, and depending on it would
     // re-run this with nothing having moved. The `afterDelete?.seq` precedent, one file over.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- groupSignature is the real trigger (see above)
   }, [groupSignature]);
 
   return {

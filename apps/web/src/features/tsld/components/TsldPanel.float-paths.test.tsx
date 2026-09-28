@@ -147,7 +147,7 @@ function Harness({
   useEffect(() => {
     if (isolate === true) canvasUi.setIsolateMode('driving');
     if (filterQuery !== undefined) canvasUi.setFilterQuery(filterQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount to arm the fixture
   }, []);
   return (
     <TsldPanel

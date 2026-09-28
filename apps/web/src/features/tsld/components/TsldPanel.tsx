@@ -2402,7 +2402,7 @@ export function TsldPanel({
     arrangeSignalSeen.current = autoArrangeSignal;
     openAutoArrange();
     // openAutoArrange reads current activities at call time; re-run only on a new signal.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads live at call time (see above)
   }, [autoArrangeSignal]);
 
   // Compose the LOE span from the two picked drivers (Stage D) — shared by the pointer commit (a

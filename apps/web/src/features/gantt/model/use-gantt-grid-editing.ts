@@ -205,7 +205,7 @@ export function useGanttGridEditing({
     // the edit state would re-run it on every keystroke — harmless, because the reducer refuses a
     // reseed on a dirty cell, but it would make the guard load-bearing for correctness rather than
     // for the race it is actually about. `hoursPerDayFor` is called live inside.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the row, not the edit state (see above)
   }, [activities, barDateSource]);
 
   return {

@@ -146,7 +146,7 @@ function Harness(props: HarnessProps): ReactElement {
     if (props.colourMode === 'wbs') ui.setColourMode('wbs');
     if (props.baselineOverlay === true) ui.toggleBaselineOverlay();
     if (props.filterQuery !== undefined) ui.setFilterQuery(props.filterQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount to arm the fixture
   }, []);
   return (
     <TsldPanel

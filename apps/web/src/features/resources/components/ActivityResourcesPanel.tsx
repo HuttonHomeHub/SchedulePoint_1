@@ -190,7 +190,7 @@ export function ActivityResourcesPanel({
         })),
     // `assignedIds` is rebuilt each render from the assignments query; depending on the query's own
     // data keeps the memo honest without a new identity every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- depends on assignments.data instead (see above)
     [search.resources, assignments.data],
   );
 

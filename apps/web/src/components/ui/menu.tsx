@@ -196,7 +196,7 @@ export function Menu({
       document.removeEventListener('pointerdown', onPointer, true);
     };
     // restoreFocusRef is a stable ref object; onClose is provided stable by callers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restoreFocusRef is a stable ref, read only on cleanup
   }, [open, onClose]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {

@@ -190,7 +190,7 @@ describe('TsldPanel — over-allocation highlight (Stage E M2, flag on)', () => 
       useEffect(() => {
         // Filter to "Pour" so Survey (A1) is a non-match ⇒ dimmed, while A1 is also over-allocated.
         ui.setFilterQuery('Pour');
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount to arm the fixture
       }, []);
       return (
         <TsldPanel
