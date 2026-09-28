@@ -210,8 +210,13 @@ export function useTsldToolbarContext({
   // rule is re-derived; nothing here does anything until a flag-on item reads it. The two open-*
   // callbacks are defined inline in the memo below (keyed on the selection, which is exactly when the
   // context re-identifies anyway), so they need no separate stabilisation.
-  const { todayIso, selectedActivityId, selectedActivity, canWriteNotes, revealActivityNotes } =
-    model;
+  // `canWriteNotes`/`revealActivityNotes` used to be destructured here too, for a context field
+  // ADR-0093 (`docs/specs/object-bar-defects/` M2) removed — Notes moved to the object bar, whose
+  // subject is the selected activity — leaving the two properties read from `model` and carried in
+  // this memo's own dependency list with nothing in the factory body ever reading either. Armed
+  // `react-hooks/exhaustive-deps` (`docs/TECH_DEBT.md` #353) flagged both as unnecessary once the
+  // site-3 fix removed the missing-dependency report that had been masking it.
+  const { todayIso, selectedActivityId, selectedActivity } = model;
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing; the workspace derives it the
   // same way to build `authoringEnabled`. Expose it on the context so a pen-gated item disabled BY the
   // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
@@ -344,7 +349,7 @@ export function useTsldToolbarContext({
       CANVAS_LENSES_ENABLED && isFilterActive(lensState.filterQuery, lensState.filterAttrs);
     const isolateChain =
       CANVAS_NAV_ENABLED && navState.isolateActive && selectedActivityId !== null
-        ? computeLogicPath(selectedActivityId, model.dependencies.data ?? [], {
+        ? computeLogicPath(selectedActivityId, dependencies, {
             mode: navState.isolateMode,
           })
         : undefined;
@@ -370,7 +375,13 @@ export function useTsldToolbarContext({
     navState.isolateActive,
     navState.isolateMode,
     selectedActivityId,
-    model.dependencies,
+    // The stabilised edges (`:201`), not the raw `model.dependencies` query-result wrapper
+    // (`react-hooks/exhaustive-deps`, `docs/TECH_DEBT.md` #353 E13). `useQuery` hands back a new
+    // `trackResult` Proxy on every render regardless of whether the cached data changed
+    // (`useBaseQuery.js:46`), so keying on the wrapper churned this memo — and the whole toolbar
+    // context memo below it, which lists `exportMatch` — on every render, not only when a link
+    // was actually added or removed.
+    dependencies,
   ]);
 
   // The three imperative canvas viewport commands (ADR-0078 S11). Extracting the two readers below
@@ -403,6 +414,10 @@ export function useTsldToolbarContext({
     ...(comparedWithPlanName === undefined ? {} : { comparedWithPlanName }),
     canvasControlRef,
   });
+
+  // Read out before the memo: the compiler infers `model.variance.data?.summary` from an optional
+  // chain read inside it, which is less specific than the `.basis` listed, and refuses the memo.
+  const varianceBasis = model.variance.data?.summary.basis;
 
   // Memoised on the actual values it reads, so an unrelated parent re-render (an activity-panel
   // drag, the 15s pen poll) doesn't hand `<Toolbar>` a fresh context and churn its resolve →
@@ -724,7 +739,7 @@ export function useTsldToolbarContext({
               : {}),
             // Names which dates the ghost/column compare on paper (`placement-baseline-variance`,
             // US-2) — the same read `varianceByActivityId` above is built from.
-            varianceBasis: model.variance.data?.summary.basis,
+            varianceBasis,
             // The printed programme reads the SAME dates the screen does. Without these it drew
             // every VISUAL-mode bar from the early columns while the chart beside it drew them
             // from the effective-Visual ones — and paper is where that is hardest to notice and
@@ -871,7 +886,6 @@ export function useTsldToolbarContext({
     plan.plannedStart,
     planView,
     setPlanView,
-    plan.version,
     planId,
     viewToggles,
     toggleView,
@@ -918,8 +932,6 @@ export function useTsldToolbarContext({
     selectedActivity,
     revealComments,
     model.notesOpen,
-    canWriteNotes,
-    revealActivityNotes,
     lateOverlayActive,
     // Insight lenses — re-identify only when the lens view state / variance status changes (setters
     // are stable). `lensState` is one memoised object off `useTsldCanvasUiState`, so it churns only
@@ -941,7 +953,7 @@ export function useTsldToolbarContext({
     model.varianceByActivityId,
     // Names the basis on the printed legend (`placement-baseline-variance`, US-2) — omitting it
     // would print yesterday's baseline's basis word beside today's comparison.
-    model.variance.data?.summary.basis,
+    varianceBasis,
     // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
     // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
     navState.isolateActive,
@@ -964,10 +976,15 @@ export function useTsldToolbarContext({
     canvasUi.lensState.searchCursorId,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
     // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
-    // dependency edges, the view toggles and the late overlay reach the DIAGRAM picture through
-    // `buildDiagramImage`'s own dependency list rather than this one — but the Gantt print path
-    // above reads `dependencies` directly (the Predecessors column, ADR-0059 M4), so it belongs
-    // here too: without it, printing after a link changed would print the OLD predecessor list.
+    // view toggles and the late overlay reach the picture through `buildDiagramImage`'s own
+    // dependency list rather than this one — but the printed Gantt's Predecessors column
+    // (`printDiagram`'s `planView === 'gantt'` branch, below) reads `dependencies` directly, so
+    // it is listed here too (`react-hooks/exhaustive-deps`, `docs/TECH_DEBT.md` #353 E12). Before
+    // this was added, a link added since this memo last ran was often missing from the printed
+    // column even though `model.activities.data` was unchanged — masked, not absent, whenever
+    // `buildDiagramImage` also happened to rebuild for its own reason on the same render, since
+    // it too takes `dependencies` as a dependency; listing it here removes that fragility rather
+    // than relying on it.
     activities,
     dependencies,
     plan.name,
