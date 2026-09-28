@@ -184,7 +184,7 @@ its strong form.
 
 - Feature spec: [`docs/specs/baselines.md`](../specs/baselines.md) · Implementation plan:
   [`docs/plans/baselines.md`](../plans/baselines.md)
-- Feature spec (Amendment 3): `docs/specs/placed-baseline-variance/feature-spec.md`
+- Feature spec (Amendment 3): [`docs/specs/placed-baseline-variance/feature-spec.md`](../specs/placed-baseline-variance/feature-spec.md)
 - Builds on: ADR-0012 (RBAC + resource scoping), ADR-0016 (identity & tenancy), ADR-0022
   (CPM execution & persistence — the plan advisory lock), ADR-0023 (CPM date convention),
   ADR-0024 (working-day calendars).

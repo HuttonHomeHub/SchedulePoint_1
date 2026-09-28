@@ -245,5 +245,5 @@ being deleted, which is when it is most wanted.
   `m-e/window.md`, `m-f/collapse.md`, `m-i/premise.md`, `m-i/record.md`, `m0/measurements.md`
 - ADR-0033 (the mode this amends), ADR-0041, ADR-0043, ADR-0045, ADR-0052, ADR-0054, ADR-0088,
   ADR-0126, ADR-0134, ADR-0140
-- Read alongside ADR-0025 Amendment 3 (`docs/specs/placed-baseline-variance/`) — variance measures
+- Read alongside ADR-0025 Amendment 3 ([`docs/specs/placed-baseline-variance/`](../specs/placed-baseline-variance/feature-spec.md)) — variance measures
   the placed span this ADR made the plan's single answer, wherever the active baseline recorded one.

@@ -428,7 +428,12 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   factory at the engine port; org library + per-plan default; per-activity deferred).
 - **ADR-0025** — Baselines: snapshot-copy model (non-FK `source_activity_id`),
   one-active-per-plan invariant (partial unique + plan lock), and server-side
-  working-day variance.
+  working-day variance. **Amendment 3 (2026-09-28, `docs/TECH_DEBT.md` #359):** variance picks
+  one basis per read from the baseline's `placementSnapshotLevel` — placed against placed on a
+  `FULL` baseline, earliest against earliest on a `NONE` one (every capture before ADR-0148 M-C,
+  permanently, since a backfill would invent history) — and says which on the response and on
+  screen. It never mixes the two per row, because a frozen network date against a live placed one
+  reads a converted constraint as "ahead" while its bar has not moved.
 - **ADR-0026** — TSLD canvas: Canvas 2D (layered, culled) with a WebGL escalation
   gate, the coordinate/viewport/hit-test/recalc model, and a parallel focusable DOM
   a11y layer (prototype-at-scale gate passed — draw ≤4ms p95 @ 2,000 activities).
