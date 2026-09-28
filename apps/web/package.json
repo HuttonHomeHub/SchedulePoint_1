@@ -48,6 +48,7 @@
     "test:e2e:revision-compare": "playwright test --config playwright.revision-compare.config.ts",
     "test:e2e:search-nav": "playwright test --config playwright.search-nav.config.ts --pass-with-no-tests",
     "measure:draw": "node scripts/measure-link-routing.mjs 120 scale --headed",
+    "measure:activities-panel": "node scripts/measure-activities-panel.mjs",
     "test:e2e:designed-ui": "playwright test --config playwright.designed-ui.config.ts --pass-with-no-tests",
     "test:e2e:designed-chrome": "playwright test --config playwright.designed-chrome.config.ts --pass-with-no-tests",
     "test:e2e:gantt": "playwright test --config playwright.gantt.config.ts --pass-with-no-tests",
