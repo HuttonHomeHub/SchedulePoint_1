@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { TsldPanel } from '@/features/tsld';
 import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
+import { barDateSourceFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The uniform "gone" copy for ANY dead token (ADR-0051 §5) — no oracle for whether a token existed. */
@@ -259,6 +260,11 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
                 calendar={calendar}
                 canEdit={false}
                 fill
+                // The guest surface has no Late overlay (`TsldViewControls.tsx` offers grid, data
+                // date, today, non-working and labels only) — `barDateSourceFor(false)` therefore
+                // always resolves to `'visual'`: the plan as the planner laid it out (ADR-0148),
+                // which is what the placed span this share link now carries is FOR (ADR-0163).
+                barDateSource={barDateSourceFor(false)}
               />
             )}
           </main>

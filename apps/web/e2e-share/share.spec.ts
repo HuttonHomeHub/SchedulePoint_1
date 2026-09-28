@@ -1,7 +1,18 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-import { drawActivity, onboard, openNewPlan, startEditing } from './support';
+import {
+  barExtentsByRow,
+  canvas,
+  drawActivity,
+  memberActivities,
+  onboard,
+  openNewPlan,
+  placeActivity,
+  recalculatePlan,
+  seedActivities,
+  startEditing,
+} from './support';
 
 /**
  * Flag-ON **External-Guest per-plan share links** journey (`VITE_GUEST_SHARE_LINKS`, ADR-0051 F-M4).
@@ -201,6 +212,188 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   await guestPage.reload();
   await expect(guestPage.getByText('This share link is no longer available.')).toBeVisible();
   await expect(guestPage.getByRole('heading', { name: 'Guest Plan', level: 1 })).toHaveCount(0);
+
+  await guestContext.close();
+});
+
+/**
+ * The date-span + lane clause of a Tier-1 listbox sentence (`describeActivity`,
+ * `render/a11y.ts:100-233`): `, DD Mon YYYY(?: to DD Mon YYYY)?, lane N`. Deliberately **not** the
+ * whole sentence — the float and conflict clauses differ between the member and the guest on
+ * purpose, because `remainingFloat`/`visualConflict*` stay excluded from `SCHEDULE_READ`
+ * (`guest-dto.spec.ts`) and `a11y.ts:176-215` leaves those clauses out for the guest accordingly.
+ * Comparing the whole string would therefore fail the case FC-5 exists to prove.
+ */
+const DATE_LANE_CLAUSE = /, (\d{2} \w{3} \d{4}(?: to \d{2} \w{3} \d{4})?), lane (\d+)/;
+
+function dateLaneClause(optionText: string): { dates: string; lane: string } {
+  const match = DATE_LANE_CLAUSE.exec(optionText);
+  if (!match?.[1] || !match[2]) {
+    throw new Error(
+      `no ", <dates>, lane <n>" clause in the listbox option text: ${JSON.stringify(optionText)}`,
+    );
+  }
+  return { dates: match[1], lane: match[2] };
+}
+
+/**
+ * Poll the painted canvas until two bar bands exist, returning
+ * `(topBand.left − nextBand.left) / (nextBand.right − nextBand.left)` — the scale-free ratio FC-6
+ * compares. Lane 0 paints above lane 1 (`barExtentsByRow`'s own docblock), so the topmost band is
+ * Excavate's (lane 0) and the next is Pour's (lane 1).
+ *
+ * **`expect.poll(...)` resolves to `void`, not the polled value** — a value produced only inside
+ * the callback would otherwise be unreachable outside it, so a closure-captured `ratio` carries the
+ * last computed number out once the poll's own `.not.toBeNull()` has passed.
+ */
+async function fitRatio(target: Page): Promise<number> {
+  let ratio: number | null = null;
+  await expect
+    .poll(
+      async () => {
+        const bands = await barExtentsByRow(target);
+        const topBand = bands[0];
+        const nextBand = bands[1];
+        if (!topBand || !nextBand) {
+          ratio = null;
+          return null;
+        }
+        const span = nextBand.right - nextBand.left;
+        ratio = span > 0 ? (topBand.left - nextBand.left) / span : null;
+        return ratio;
+      },
+      { message: 'waiting for two painted bar bands after Fit to plan' },
+    )
+    .not.toBeNull();
+  if (ratio === null) throw new Error('unreachable: the poll passed on a null ratio');
+  return ratio;
+}
+
+/**
+ * **ADR-0163 (spec §2, FC-1/FC-5/FC-6).** A guest reads the SAME placed span as the member, in
+ * both the picture (the canvas) and the spoken sentence (the parallel accessible listbox,
+ * ADR-0026 D7) — not the CPM early dates the guest canvas drew before this fix.
+ *
+ * The fixture is seeded through the REAL API rather than drawn by click pixels (`drawActivity`'s
+ * own docblock: a click position cannot land on an exact date), giving a **precise, falsifiable**
+ * placement: Pour is 5 working days from the plan's data date (Monday 2026-01-05, `openNewPlan`),
+ * finishing Friday 2026-01-09; Excavate is hand-placed 3 working days into that span
+ * (Thursday 2026-01-08) in a different lane, so `(Excavate.left − Pour.left) / (Pour.right −
+ * Pour.left) ≈ 3/5 = 0.6` — a ratio, not an absolute pixel position, so it holds regardless of the
+ * zoom/DPI a runner happens to use.
+ *
+ * **FC-1's precondition is asserted before anything else is compared**: a placement identical to
+ * the early date would prove nothing, since early and placed would coincide by accident and every
+ * assertion downstream would pass for the wrong reason.
+ *
+ * Serial with the suite's other journey (shares nothing — a fresh org per `stamp` — but the config
+ * runs one worker); Chromium only (TECH_DEBT #25a).
+ */
+test('a guest reads the SAME placed span the member does — the picture and the spoken sentence agree (ADR-0163)', async ({
+  page,
+  browser,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Pour', laneIndex: 1, durationDays: 5 },
+    { name: 'Excavate', laneIndex: 0, durationDays: 2 },
+  ]);
+  const pour = seeded[0];
+  const excavate = seeded[1];
+  if (!pour || !excavate) throw new Error('seeding did not return both activities');
+  // Monday 2026-01-05 + 3 working days = Thursday 2026-01-08 (`support.ts:openNewPlan`).
+  await placeActivity(page, orgSlug, excavate, '2026-01-08');
+  // Recalculates AND reloads (the write above bypasses the page's own TanStack Query cache).
+  await recalculatePlan(page, orgSlug);
+  await expect(canvas(page)).toBeAttached({ timeout: 15_000 });
+
+  // FC-1's precondition, read straight off the member API rather than the UI: the placement must
+  // provably differ from the network's own answer, or nothing below demonstrates anything.
+  const members = await memberActivities(page, orgSlug);
+  const memberExcavate = members.find((r) => r.id === excavate.id);
+  const memberPour = members.find((r) => r.id === pour.id);
+  if (!memberExcavate || !memberPour)
+    throw new Error('seeded activity missing from the member read');
+  expect(memberExcavate.visualEffectiveStart).not.toBeNull();
+  expect(memberExcavate.visualEffectiveStart).not.toBe(memberExcavate.earlyStart);
+  expect(memberExcavate.visualEffectiveStart).toBe('2026-01-08');
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  // FC-5, member half: the date-span + lane clause the member is told.
+  const memberOptionText =
+    (await diagram.getByRole('option', { name: /Excavate/ }).textContent()) ?? '';
+  const memberClause = dateLaneClause(memberOptionText);
+  expect(memberClause.dates).toContain('08 Jan 2026');
+  expect(memberClause.lane).toBe('1'); // laneIndex 0 → "lane 1" (`describeActivity`, 1-indexed)
+
+  // FC-6, member half: press Fit, then read the painted ink (scale-free — a RATIO, not a pixel
+  // position, so it does not depend on the runner's zoom/DPI). Lane 0 (Excavate) paints above
+  // lane 1 (Pour, `barExtentsByRow`'s own docblock), so the topmost two bands are, in order,
+  // Excavate's and Pour's.
+  await page
+    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('button', { name: 'Fit to plan' })
+    .click();
+  const memberR = await fitRatio(page);
+  expect(memberR).toBeGreaterThan(0.4);
+
+  // (1) Share the plan and read the guest link — same flow as the base journey.
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  await toolbar.getByRole('button', { name: /Share & export/ }).click();
+  await page.getByRole('menuitem', { name: 'Share…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share links' });
+  await dialog.getByLabel('Label').fill('Placed-bars check');
+  await dialog.getByRole('button', { name: 'Create link' }).click();
+  const urlField = dialog.getByLabel('Guest link');
+  await expect(urlField).toBeVisible();
+  const shareUrl = await urlField.inputValue();
+  // Close the dialog — it is a modal `<dialog>` and would otherwise sit over the canvas this test
+  // still has to read pixels from (unlike the base journey, which never presses Fit).
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(dialog).toBeHidden();
+
+  // (2) A completely session-less context — no cookies, no auth state — opens the guest URL.
+  const guestContext = await browser.newContext();
+  const guestPage: Page = await guestContext.newPage();
+  await guestPage.goto(shareUrl);
+  await expect(guestPage.getByRole('heading', { name: 'Guest Plan', level: 1 })).toBeVisible();
+  const guestDiagram = guestPage.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await expect(guestDiagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  // FC-5, guest half: the SAME clause. **This is the red case (spec §2 table)**: before ADR-0163
+  // the guest adapter set `visualEffectiveStart: null` unconditionally, so `describeActivity` took
+  // the `drawn.start === null` branch and this option read "…, not yet scheduled" — no
+  // ", <dates>, lane <n>" substring at all, and `dateLaneClause` above throws on it.
+  const guestOptionText =
+    (await guestDiagram.getByRole('option', { name: /Excavate/ }).textContent()) ?? '';
+  const guestClause = dateLaneClause(guestOptionText);
+  expect(guestClause.dates).toBe(memberClause.dates);
+  expect(guestClause.lane).toBe(memberClause.lane);
+
+  // FC-6, guest half: the guest's own Fit button (`TsldViewControls`, not the member's toolbar —
+  // the guest view mounts no `role="toolbar"` at all, asserted in the sibling journey above).
+  await guestPage.getByRole('button', { name: 'Fit to plan' }).click();
+  const guestR = await fitRatio(guestPage);
+
+  // **This is the other red case (spec §2 table)**: before ADR-0163 the guest canvas drew every
+  // bar at the CPM early dates (`GuestPlanView` passed no `barDateSource`, so `TsldPanel` fell
+  // back to `'early'`), and with no predecessor link both Pour and Excavate start at the data
+  // date — so `guestR ≈ 0`, failing the `> 0.4` bound below.
+  expect(guestR).toBeGreaterThan(0.4);
+  expect(Math.abs(guestR - memberR)).toBeLessThan(0.1);
+
+  // FC-3 (spec §4.5/ADR-0163): no forbidden field leaked on the guest surface either — the fix
+  // widens the scope by exactly two fields, not by relaxing the boundary generally.
+  expect(
+    (await new AxeBuilder({ page: guestPage }).withTags(['wcag2a', 'wcag2aa']).analyze())
+      .violations,
+  ).toEqual([]);
 
   await guestContext.close();
 });

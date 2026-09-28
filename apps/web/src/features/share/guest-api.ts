@@ -101,6 +101,15 @@ export interface GuestActivity {
   percentComplete: number;
   actualStart: string | null;
   actualFinish: string | null;
+  /**
+   * Where the bar is drawn: the plan as the planner laid it out (ADR-0148/ADR-0163). **Optional on
+   * the wire type** — an older API does not send it (FC-7, the version-skew fallback): an absent
+   * key means "fall back to the early dates", a present `null` means "the plan has never been
+   * calculated", and the two must not be conflated (`toActivitySummary` below carries the rule).
+   */
+  visualEffectiveStart?: string | null;
+  /** The placed finish paired with {@link visualEffectiveStart} — same skew rule. */
+  visualEffectiveFinish?: string | null;
 }
 
 /** A guest dependency edge (`GuestDependencyDto`) — references endpoints by id only. */
@@ -226,9 +235,27 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     externalDriven: false,
     loeNoSpan: false,
     resourceDriverMissing: false,
+    // ADR-0163: the AUTHORING INPUT stays out of the guest scope (never reliably reconstructible
+    // from the drawn span — an unplaced successor pushed by a placed predecessor also draws later
+    // than its early start). `null` is the honest value: the guest view offers no surface that
+    // reads `visualStart` (the placement dialog, the Visual-mode toolbar) so there is nothing this
+    // could feed.
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    // ADR-0163 (FC-7, the skew rule): an ABSENT key (an older API) falls back to the early dates —
+    // today's picture, never a blank diagram. A PRESENT key, `null` included, is passed straight
+    // through: `null` means the plan has never been calculated, and a11y.ts's `describeActivity`
+    // deliberately has no fallback for that state (a fallback would describe a bar that is not
+    // there). `??`/`||` would be wrong here: both treat an explicit `null` the same as `undefined`,
+    // which is exactly the two states this rule must NOT conflate — so the check is against
+    // `undefined` by name, never against falsiness.
+    visualEffectiveStart:
+      activity.visualEffectiveStart === undefined
+        ? activity.earlyStart
+        : activity.visualEffectiveStart,
+    visualEffectiveFinish:
+      activity.visualEffectiveFinish === undefined
+        ? activity.earlyFinish
+        : activity.visualEffectiveFinish,
     visualConflict: false,
     // Null beside the `false` above, which is what the database's own
     // `ck_activities_visual_conflict_matches_reason` requires of the pair — so this projection

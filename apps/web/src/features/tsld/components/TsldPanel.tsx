@@ -505,10 +505,14 @@ export interface TsldPanelProps {
   /** Externally-owned canvas UI state (mode/toggles/zoom/fit/help), so the workspace toolbar and the
    * canvas share one source of truth (ADR-0031). Absent → the panel owns it (unchanged behaviour). */
   canvasUi?: TsldCanvasUiState;
-  /** Which engine dates draw each bar (ADR-0033): `early` (default, classic CPM), `visual` (VISUAL
-   * mode's effective-Visual dates), or `late` (the read-only Late-Start overlay). The route derives
-   * it from the plan's `schedulingMode` + the Late overlay toggle, gated by `VITE_SCHEDULING_MODES`
-   * (flag-off it stays `early`, byte-for-byte). */
+  /** Which engine dates draw each bar (`@/lib/bar-dates`): `visual` (the placed span — the plan
+   * as the planner laid it out, ADR-0148) for a real plan, `late` for the read-only Late-Start
+   * overlay, or `early` (classic CPM) for an analysis that measures the network rather than the
+   * plan as placed. **`early` is the default here only because 78 test mounts across 35 suites
+   * rely on it, not because it is the right value for a real screen** (ADR-0163 spec §4.8) — every
+   * PRODUCTION host states its basis explicitly (`barDateSourceFor`), pinned by
+   * `guest-bar-basis.structural.test.ts`. Since M-F the plan carries no `schedulingMode` for a
+   * caller to derive this from — it is a fact about the VIEW (which overlay is on), not the plan. */
   barDateSource?: BarDateSource;
   /**
    * The conflict remedy the selection bar offers (ADR-0094 M4) — the shared
