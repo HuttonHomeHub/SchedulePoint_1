@@ -1593,7 +1593,10 @@ controller's 30 / 60 s per handler.
   every member). **This route runs the CPM engine — twice** — on an in-memory
   copy of the plan graph: a control pass, then a pass with 600 working days
   injected into the front of the critical path, and the verdict from whether
-  the control run's completion carrier moved in step. Its parity claim is
+  the control run's completion carrier moved in step. On a plan that levels
+  resources each pass is also levelled, exactly as a recalculation would
+  (`docs/TECH_DEBT.md` #248, closed 2026-09-28), so up to four passes run and
+  the carrier is judged on the levelled finish. Its parity claim is
   deliberately the report route's WEAKER sibling (ADR-0116 D7): it computes
   **read-only and persists nothing** — no lock, no pen, no write path — proved
   by an e2e reading every engine-owned column back after the call. Returns the
@@ -1602,7 +1605,8 @@ controller's 30 / 60 s per handler.
   `detail`, so the verdict is reproducible by hand. Its own throttle
   (**14/60 s**) is derived from a committed formula and measurement
   (`docs/specs/schedule-health-check/m6-measurement.md`), never copied from
-  the float-paths budget.
+  the float-paths budget. That measurement was of the two network passes; it
+  has not been re-taken with levelling added.
 
 - `GET …/schedule/revision-compare?from=<uuid>&to=<uuid|live>` reports **what
   entered and left the critical path** between two computed schedules of one
