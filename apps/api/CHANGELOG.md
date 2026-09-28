@@ -1,5 +1,14 @@
 # @repo/api
 
+## 0.78.1
+
+### Patch Changes
+
+- [#719](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/719) [`fef85fe`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fef85fe89b745c741b5c8e92a06b8aa51290ed47) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A share-link viewer now sees a relationship's lag in the same working days a member sees, measured
+  on that relationship's own lag calendar rather than on a fixed 24-hour day.
+
+- [#719](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/719) [`fef85fe`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fef85fe89b745c741b5c8e92a06b8aa51290ed47) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Searching calendars, resources or clients by name (or a resource's code) now matches `%` and `_` literally, so a row named e.g. `50%` is found by searching for `50%` instead of the characters being read as wildcards.
+
 ## 0.78.0
 
 ### Minor Changes

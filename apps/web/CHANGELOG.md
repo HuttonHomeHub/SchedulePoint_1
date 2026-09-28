@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.152.1
+
+### Patch Changes
+
+- [#719](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/719) [`fef85fe`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fef85fe89b745c741b5c8e92a06b8aa51290ed47) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A `SectionCard`'s description now caps at a readable measure, matching the fix already shipped for
+  `PageHeader`, so a section's blurb no longer stretches to whatever width its own text happens to need.
+
 ## 0.152.0
 
 ### Minor Changes
