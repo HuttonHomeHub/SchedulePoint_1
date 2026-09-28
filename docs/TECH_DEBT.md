@@ -660,10 +660,13 @@ behaves against it, is still the row's actual subject and still nobody has measu
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-09-23 · **PARKED 2026-09-10** — see the
+**Status:** deferred (on a trigger) · **Verified:** 2026-09-28 · **PARKED 2026-09-10** — see the
 box below.
 
-> **Items 1–8 pre-date the painter that ships now; item 9 does not (updated 2026-09-23).** The
+> **Items 1–9 pre-date the painter that ships now; item 10 does not (updated 2026-09-28).** Item 10
+> (Dell, `web` 0.152.0) is the first sitting on the ADR-0157/0158/0159 painter: Week passes at both
+> scales and Fit/2000 reads 45.9 fps. Item 9 is kept below because it is the Surface reading.
+> **Item 9's own note, from 2026-09-23:** The
 > sixth sitting was 2026-09-21; ADR-0151 (2026-09-22) replaced the bar with a 5 px line plus node
 > glyphs and three text rows, and NetPoint-layout (2026-09-23, ADR-0152/0154 and M1) added chevrons,
 > lag plates, waiting dashes, a centre item and a 60 px pitch. Both epics committed a paint condition
@@ -1330,6 +1333,53 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
    the floor in **two** sittings (21.5, 26.0 fps), across two painters, while every Dell sitting
    since 2026-09-10 meets it. Whether that fires the trigger is **the product owner's call**. Power
    state is unrecorded again, and on a Surface that matters (7(f)).
+
+10. **Item 10 — an EIGHTH sitting, 2026-09-28 07:40–07:42 UTC (product owner, `web` 0.152.0, `api`
+    0.78.0), back on the Dell, and the first on the painter ADR-0157/0158/0159 shipped.**
+
+    Same machine as items 5, 6 and 8: Intel Arc Pro Graphics (0x00007D55), 22 threads, ~32 GiB, DPR
+    1, **1912×948 CSS** (item 8's viewport exactly), Edge 154, idle interval 16.70 ms, attention held
+    throughout, no motion preference. Power state unrecorded (#283).
+
+    | scenario        | framing | scale | on screen                 | result                                                                                     |
+    | --------------- | ------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------ |
+    | `canvas-draw`   | Week    | 500   | 233 bars                  | **60.0 fps, 0.00 pp**, worst p95 16.80 ms — PASS (45)                                      |
+    | `canvas-draw`   | Week    | 2000  | 257 bars                  | **60.0 fps, 0.00 pp**, worst p95 16.80 ms — PASS (30)                                      |
+    | `canvas-draw`   | Fit     | 500   | 294 bars at 5.28 px/day   | 60.0 fps, 0.00 pp, p95 16.80 ms — ungraded                                                 |
+    | `canvas-draw`   | Fit     | 2000  | 864 bars at 1.66 px/day   | **45.9 fps (45.4–46.4), 30.19 pp**, p95 33.40 ms — ungraded                                |
+    | `revision-diff` | Week    | 2000  | 264 bars                  | baseline 0.19 pp (spread 0.56), treatment 0.00 pp at 60.0 fps, **delta −0.19 pp** — PASS   |
+    | `revision-diff` | Fit     | 2000  | 2,160 bars (x-only count) | baseline 30.00 pp (spread 1.11), treatment 30.19 pp at 45.9 fps, delta +0.19 pp — ungraded |
+
+    **(a) Week passes on today's painter, on both machines.** Item 9 established it on the Surface;
+    this is the Dell. `revision-diff` at Week confirms ADR-0129 P3 a fifth time, the overlay drawing
+    37/264 bars and 49/372 links, as in every earlier sitting.
+
+    **(b) Fit/2000 on the Dell: 34.6 fps with 1,658 bars (item 8, pre-ADR-0151 painter) → 45.9 fps
+    with 864 bars.** About half the bars on screen, because the 60 px pitch puts fewer lanes in the
+    viewport, and **inside §9's 30 fps floor by 15.9 fps**. Frame time fell from ~28.9 ms to
+    ~21.8 ms (−25 %) for −48 % of bars, so cost does not fall in proportion to bars at this framing:
+    a large part of a Fit frame does not scale with bars drawn. That is consistent with the ~8 ms
+    this row has never attributed, and **it is a consistency, not an attribution**. The rule stands:
+    a DevTools recording is the instrument.
+
+    **(c) `revision-diff` at Fit has headroom for the first time on today's painter, and the overlay
+    costs nothing measurable there on this machine.** Baseline 30.00 pp leaves ~70 pp of headroom
+    (item 9's 97.41 pp left 2.59). The +0.19 pp delta is below the 1.11 pp spread, and both are below
+    ADR-0127's 2.00 pp bar. Fit stays **ungraded by policy** (ADR-0128), so this is recorded and not
+    judged. What it does establish is narrower than "free at Fit": on the Dell, on this painter,
+    in one sitting, the overlay's Fit cost is smaller than the machine's own spread. Item 8(c)'s
+    +4.81 pp (spread 4.44) was on the pre-ADR-0151 painter and is not contradicted: different
+    painter, twice the bars.
+
+    **(d) The `revision-diff` head line still says 2,160 bars at Fit, against `canvas-draw`'s 864 at
+    the same framing and viewport.** That is the x-only count this file already records (the
+    `revision-diff` on-screen row, parked with #283), not a new finding, and it is why the table
+    labels it. Treatment fps equals `canvas-draw` Fit to the decimal (45.9), which is what you
+    would expect if both scenarios draw the same culled scene. That is an inference from equal
+    numbers, not a check of the code.
+
+    **(e) Item 9(e)'s question is unchanged.** Fit/2000 still misses §9's floor only on the product
+    owner's Surface (26.0 fps, item 9). This sitting does not bear on it: different machine.
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
@@ -11903,3 +11953,41 @@ When it fits neither side (a viewport shorter than the trigger's distance from t
 height), the second call to the shared clamp can push it back over the trigger. The same squeeze
 applies to every consumer of `clampAnchor`, and a short name tip in a real toolbar does not reach it.
 Reopen if a trigger is found where it does.
+
+### 401. Almost every zero-duration task on the deployed host is resourced, so Make milestone is shut for them
+
+**Status:** open · **Verified:** 2026-09-28 · **Raised:** 2026-09-28 (the first staff-diagnostics
+press after `api-v0.78.0`) · **Size:** S (the decision) · **Owner:** web
+
+The two ADR-0162 staff diagnostics, read by the product owner on the deployed host at
+2026-09-28T07:39:46Z:
+
+- `zero-duration-tasks`: **58 of 504** tasks, across **2 plans** in one organisation;
+- `zero-duration-tasks-resourced`: **56 of those 58** hold a live resource assignment.
+
+Two consequences, both from the spec (`docs/specs/zero-duration-task/feature-spec.md`):
+
+1. **The spec's reopen trigger for bulk conversion has fired.** It reads _"Reopen if M0-T1 or the
+   staff diagnostic finds an import with more than 20 zero-duration tasks."_ Fifty-eight tasks
+   across two plans means at least one plan holds at least 29. The counts are per installation,
+   not per import, so which plan it is and whether both came from imports is not known.
+2. **Bulk conversion would not help, because the resourced rule dominates.** **Make milestone…** is
+   shaded for a resourced task (ADR-0082: _shut by a state the reader can change_), and the reason
+   sends the planner to Resources to remove the assignment first. So 56 of the 58 can only be
+   converted one at a time, after an assignment is removed by hand for each. The plural action the
+   trigger reopens could reach two.
+
+**The question is the product owner's, and it comes before any build:** what a resourced
+zero-duration task means on this host. Unverified from here, because the diagnostic names no plan
+(ADR-0140):
+
+- whether they arrived by import, and whether their assignments carry any units. One possible
+  explanation, not checked against a P6 install or a file: if the source tool refuses resources on
+  a milestone, a planner who wanted a resourced event would have entered a task;
+- whether "remove the assignment first" is the right answer for them, or whether converting should
+  offer to remove it, or leave these tasks alone.
+
+The spec records that the API does not refuse an assignment on a milestone, so "only an
+unresourced task may convert" is a product rule rather than a constraint the API holds (E19). Each
+answer is therefore open. The health report's advisory already lists them and
+counts the resourced ones, so a planner can find them now.
