@@ -152,6 +152,19 @@ const executablePath =
 // ── Auth + org/project setup (browser-driven, so the same session's cookies serve every fetch) ──
 
 /** Sign in if the state names an org already onboarded; otherwise sign up and create one. */
+/**
+ * Centre a target in its scroller before clicking it. Playwright's own scroll-into-view stops as
+ * soon as the element is inside the scrollport, which in the pinned-header table leaves it under
+ * the sticky header or on the region's bottom edge, and the click then times out as "intercepted"
+ * (the first real run, 2026-09-28). A person clicks what they can see; this puts it where they can.
+ */
+async function centre(locator) {
+  await locator.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+}
+
+/** The setup session's cookies, handed to every measuring context (set in `main`). */
+let AUTH_STATE;
+
 async function ensureSignedIn(page, state) {
   if (state.orgSlug) {
     await page.goto(`${BASE}/sign-in`);
@@ -488,6 +501,7 @@ async function measureScroll(page, session, regionSelector) {
 
 async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewport, cpuRate }) {
   const context = await browser.newContext({
+    storageState: AUTH_STATE,
     viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: viewport.deviceScaleFactor ?? 1,
   });
@@ -568,7 +582,7 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
       const checkboxCount = await checkboxes.count();
       if (checkboxCount > 0) {
         const mid = checkboxes.nth(Math.floor(checkboxCount / 2));
-        await mid.scrollIntoViewIfNeeded();
+        await centre(mid);
         const i2Act = () => measureEventTiming(page, () => mid.click());
         const d = captureAttribution
           ? await withAttribution(session, i2Act).then(({ result, attribution: a }) => {
@@ -577,7 +591,10 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
             })
           : await i2Act();
         results.I2.push(d ?? 15);
-        await mid.click(); // toggle back, so the next repeat starts from the same state
+        // Toggle back, so the next repeat starts from the same state. Re-centred first: the first
+        // click opened the bulk-assign bar above the table, which moved the row.
+        await centre(mid);
+        await mid.click();
       }
 
       // ── I3: row menu at row ≈ N/2 ────────────────────────────────────────────────────────────
@@ -585,7 +602,7 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
       const menuCount = await menuButtons.count();
       if (menuCount > 0) {
         const midMenu = menuButtons.nth(Math.floor(menuCount / 2));
-        await midMenu.scrollIntoViewIfNeeded();
+        await centre(midMenu);
         const i3Act = () => measureEventTiming(page, () => midMenu.click());
         const d = captureAttribution
           ? await withAttribution(session, i3Act).then(({ result, attribution: a }) => {
@@ -624,7 +641,10 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
 async function measureOverflow(browser, orgSlug, planId) {
   const facts = {};
   for (const width of OVERFLOW_WIDTHS) {
-    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    const context = await browser.newContext({
+      storageState: AUTH_STATE,
+      viewport: { width, height: 1000 },
+    });
     const page = await context.newPage();
     await page.goto(`${BASE}/orgs/${orgSlug}/plans/${planId}`);
     await page.waitForLoadState('networkidle');
@@ -642,7 +662,7 @@ async function measureOverflow(browser, orgSlug, planId) {
 /** N1: total long-task time while the narrow single-pane workspace opens with the hidden pane mounted. */
 /* eslint-disable no-undef -- `addInitScript`/`evaluate` callbacks below run in the PAGE. */
 async function measureNarrowOpen(browser, orgSlug, planId) {
-  const context = await browser.newContext({ viewport: NARROW_VIEWPORT });
+  const context = await browser.newContext({ storageState: AUTH_STATE, viewport: NARROW_VIEWPORT });
   const page = await context.newPage();
   await page.addInitScript(() => {
     window.__spLongTasks = 0;
@@ -670,6 +690,10 @@ async function main() {
 
   const setupPage = await (await browser.newContext()).newPage();
   const orgSlug = await ensureSignedIn(setupPage, state);
+  // Every measuring context below is a fresh `newContext()`, which starts with no cookies. Without
+  // the setup session's storage it lands on /sign-in and waits for a panel that is not there (the
+  // first real run's failure, 2026-09-28), so the signed-in state is handed to each one.
+  AUTH_STATE = await setupPage.context().storageState();
   const { clientId, projectId } = await ensureClientAndProject(setupPage, orgSlug, state);
   state.orgSlug = orgSlug;
   state.clientId = clientId;

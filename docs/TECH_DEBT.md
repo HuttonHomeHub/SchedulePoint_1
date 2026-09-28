@@ -11595,3 +11595,21 @@ closed, a plan with `levelResources` on runs up to four passes per request (two 
 levelling). The route is authenticated and levelling is opt-in per plan, so this is an unquantified
 cost increase inside an unchanged rate envelope rather than a new exposure. **Remedy:** re-run the
 M6-T0 harness on a large levelled plan and keep or lower the limit from the number.
+
+### 407. The API's 64 KB body cap makes the 2,000-item batch endpoints fail past ~500 items, as a 500
+
+**Status:** open · **Verified:** 2026-09-28 (reproduced against a running API) · **Raised:**
+2026-09-28 (seeding `scale-2000` for the activities-panel measurement) · **Size:** S · **Owner:** api
+
+`app-setup.ts` installs `json({ limit: '64kb' })` for every route — the comment above it reasons
+about the unauthenticated CSP-report routes. The authenticated batch endpoints declare
+`@ArrayMaxSize(2000)` (`update-parents.dto.ts`, `update-positions.dto.ts`,
+`update-placements.dto.ts`), so the DTO promises a size the body parser refuses long before it.
+Measured on `PATCH …/activities/parents`: 500 items (≈57 KB) returns 200, 1,000 items (≈114 KB)
+returns **500 `INTERNAL_ERROR`** in 0 ms — the parser's `PayloadTooLarge` is not mapped to 413 by the
+exception filter, so the caller cannot tell a too-large body from a server fault. The seed
+catalogue's `scale-2000` tier hits it (its WBS-parentage write is one batch of 2,000), so that tier
+has been seeding without parentage and reporting it as an API finding. Two remedies, both needed:
+map the parser's error to **413** with the envelope, and either raise the cap on the authenticated
+routes (a per-route parser, keeping 64 KB on the public ones — a security-reviewed change) or lower
+`@ArrayMaxSize` to what 64 KB holds and make clients chunk.
