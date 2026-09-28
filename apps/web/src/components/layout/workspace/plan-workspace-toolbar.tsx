@@ -791,9 +791,12 @@ export function ToolbarPlanWorkspace({
   const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   // `planId` is read out of `model` first so the memo depends on the id rather than on the whole
-  // model object — `react-hooks/exhaustive-deps` cannot see through a member expression and would
-  // otherwise demand `model`, which changes on every plan mutation and would re-read the store on
-  // each one.
+  // model object. **Not because the rule cannot see through a member expression** — it accepts a
+  // property read like `model.planId` with no further ask (`docs/TECH_DEBT.md` #353 E20; it asks
+  // for the whole object only when a method is CALLED on it, e.g. `model.scheduleRefusal(...)`,
+  // `plan-workspace-toolbar.tsx`'s `scheduleState` memo). The extraction still does real work: it
+  // stops this memo from re-reading `localStorage` on every plan mutation, which is what listing
+  // `model` itself — a new object on every render (E9) — would otherwise force.
   const migrationPlanId = model.planId;
   // **The key is never null, and that is a fix rather than a tidy-up.** It was
   // `migrationUserId === null ? null : …`, which made `dismissedKey !== migrationKey` compare
@@ -873,6 +876,15 @@ export function ToolbarPlanWorkspace({
    * suite mounts the workspace and reads the DOM, so deleting a branch of the derivation left it
    * green while breaking a journey. What is left here is the wiring.
    */
+  // `scheduleRefusal` is read out of `model` first so the memo below **calls** the callback
+  // rather than a member expression on `model` (`docs/TECH_DEBT.md` #353 E8/E20). The rule
+  // accepts a plain property read (`model.planId`) with no further ask, and asks for `model`
+  // itself only when a method is CALLED on it — `model.scheduleRefusal('recalculate')` did that,
+  // even with `model.scheduleRefusal` already listed. Adding `model` would recompute this memo on
+  // every render, since `use-plan-workspace-model.ts` returns a new object each time (E9): the
+  // callback itself is already a stable `useCallback` and uses no `this`, so the fix changes the
+  // call shape and nothing about correctness.
+  const { scheduleRefusal } = model;
   const scheduleState = useMemo<ScheduleState>(
     () =>
       deriveScheduleState({
@@ -881,16 +893,10 @@ export function ToolbarPlanWorkspace({
         failed: model.autoRecalc.failed,
         activities: model.activities.data,
         canRecalculate: model.canRecalc,
-        refusalReason: model.scheduleRefusal('recalculate'),
+        refusalReason: scheduleRefusal('recalculate'),
         hasDataDate: plan.plannedStart != null,
       }),
-    [
-      model.autoRecalc,
-      model.canRecalc,
-      model.scheduleRefusal,
-      plan.plannedStart,
-      model.activities.data,
-    ],
+    [model.autoRecalc, model.canRecalc, scheduleRefusal, plan.plannedStart, model.activities.data],
   );
 
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
