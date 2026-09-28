@@ -68,3 +68,17 @@ before this file's reasoning is treated as more than a placed bet. The M1 journe
 (`apps/web/e2e-workspace-chrome/activities-panel-scroll.spec.ts`) exercises SC-2/SC-3/SC-5 in a real
 Chromium and is the nearest thing to that check this session could still provide honestly: it is
 **written and its red-run recipe is recorded**, but it was not run here either (same constraint).
+
+## What was then run (2026-09-28, central)
+
+The M1 journey was run in **Chromium** against the real rendered layout
+(`playwright.workspace-chrome.config.ts`, `activities-panel-scroll.spec.ts`): all three cases pass,
+including SC-3's walk of Shift+Tab through real rows at 1646 and 1920, which asserts no focused
+row lands wholly behind the pinned header. So `scroll-pt-12` holds in Chromium, observed. Red run:
+the pre-M1 structure (with only the test id added, so the failure is about behaviour and not about
+a missing locator) fails SC-5 at 1646 — the panel body scrolls, `scrollHeight` 2753 against
+`clientHeight` 176. **Firefox and WebKit were not run**: neither browser is installed in the dev
+container, so the cross-engine border question stays on the `border-separate` safe default and is
+CI's to answer (it runs this suite in Chromium only, `docs/TECH_DEBT.md` #25a). The two journey
+fixes the first run needed (build the plan before narrowing to 390, and a raised rate limit for
+this harness) are in the commit that recorded this.
