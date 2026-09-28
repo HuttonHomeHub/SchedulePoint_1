@@ -5,6 +5,7 @@ import {
   ACTIVITY_TYPE_LABELS,
   CONSTRAINT_TYPE_LABELS,
 } from '@/features/activities';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatMoney } from '@/lib/format-money';
 
 /**
@@ -13,6 +14,10 @@ import { formatMoney } from '@/lib/format-money';
  * React or data-fetching dependency — it only projects the already-shipped `ActivitySummary` columns
  * the activities table consumes into an Excel-friendly, injection-safe CSV, so it is exhaustively
  * unit-tested. `use-tsld-toolbar-context` wires it into `downloadBlob` + the announcer.
+ *
+ * `Start`/`Finish` read `lib/bar-dates.ts`'s own placed-basis derivation (`docs/TECH_DEBT.md` #357)
+ * — the same picker the canvas and the Gantt read — rather than restating its rule; the labelled
+ * `Early start`/`Early finish` columns are kept unchanged for the analyses.
  *
  * Format contract (§2 Validation / §Success criteria): one header row + one row per activity in the
  * activities-table column order; ISO `YYYY-MM-DD` dates; integer floats/durations; booleans `Yes`/`No`;
@@ -54,6 +59,20 @@ function dateCell(value: string | null): string {
   return value ?? '';
 }
 
+/**
+ * **The basis the `Start`/`Finish` columns read** (`docs/TECH_DEBT.md` #357).
+ *
+ * Since the scheduling-mode collapse (ADR-0148) every bar on the canvas is drawn from
+ * `visualEffective*` — `lib/bar-dates.ts`'s `'visual'` source, the same one `barDateSourceFor`
+ * resolves to whenever the read-only Late-start overlay is off. The CSV has no overlay toggle to
+ * read, and "the dates the canvas draws" is a statement about the plan as PLACED, not about an
+ * analysis overlay — so the export fixes on `'visual'` rather than threading a toggle state through
+ * a pure, DOM-free serialiser. `Early start`/`Early finish` are kept unchanged, reading `'early'`
+ * exactly as before (`earlyStart`/`earlyFinish` directly) — the network basis `bar-dates.ts` reserves
+ * for the analyses (DCMA, float paths, baseline variance), never the placed picture.
+ */
+const CSV_BAR_DATE_SOURCE: BarDateSource = 'visual';
+
 /** A conditionally-projected money amount (minor units): blank when `null` (unset OR the caller lacked
  * `cost:read`, so nothing leaks), else the plain grouped-decimal `format-money` rendering. */
 function moneyCell(minorUnits: number | null): string {
@@ -69,6 +88,13 @@ function moneyCell(minorUnits: number | null): string {
  * Each cell is a pure projection of a shipped `ActivitySummary` field. Only the WBS-parent column reads
  * the {@link CsvCellContext}; the rest take one argument (fewer-param functions assign cleanly to the
  * two-param `cell` type).
+ *
+ * **`Start`/`Finish` carry the placed basis; `Early start`/`Early finish` stay the network basis**
+ * (`docs/TECH_DEBT.md` #357). They are two different questions — "where is this bar drawn" against
+ * "what does the network say is earliest" — and both are kept: a planner who exports to hand a
+ * programme upward wants the first, and the analysis columns already in this file (Total float,
+ * Late start/finish, Critical) are all read on the second. `Start`/`Finish` lead the date columns
+ * because they are the ones matching the diagram a reader just looked at.
  */
 export const SCHEDULE_COLUMNS: readonly ScheduleColumn[] = [
   { header: 'Code', cell: (a) => a.code ?? '' },
@@ -77,6 +103,8 @@ export const SCHEDULE_COLUMNS: readonly ScheduleColumn[] = [
   { header: 'Duration (days)', cell: (a) => String(a.durationDays) },
   { header: 'Status', cell: (a) => ACTIVITY_STATUS_LABELS[a.status] },
   { header: '% complete', cell: (a) => String(a.percentComplete) },
+  { header: 'Start', cell: (a) => dateCell(barDatesFor(a, CSV_BAR_DATE_SOURCE).start) },
+  { header: 'Finish', cell: (a) => dateCell(barDatesFor(a, CSV_BAR_DATE_SOURCE).finish) },
   { header: 'Early start', cell: (a) => dateCell(a.earlyStart) },
   { header: 'Early finish', cell: (a) => dateCell(a.earlyFinish) },
   { header: 'Late start', cell: (a) => dateCell(a.lateStart) },
