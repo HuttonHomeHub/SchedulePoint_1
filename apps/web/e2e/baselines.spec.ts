@@ -90,6 +90,9 @@ async function useAllDaysCalendar(page: Page, orgSlug: string): Promise<void> {
     { org: orgSlug, id: planId },
   );
   expect(status).toBe(200);
+  // The PATCH bumped the plan's `version` behind React Query's cache, so the next `Edit plan` save
+  // would send the stale one and be refused as "changed elsewhere". Reload so the page reads it.
+  await page.reload();
 }
 
 /** An activity's id, optimistic version and drawn start, read straight off the API. */
