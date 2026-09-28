@@ -2,7 +2,7 @@
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
 - **Agreement round:** [./agreement-round.md](./agreement-round.md)
-- **Status:** Approved — agreement round complete 2026-09-26 (see agreement-round.md); product owner delegated the open questions
+- **Status:** Accepted — shipped (ADR-0162), M0–M6 landed 2026-09-28
 - **Owner:** product owner (approval); build by Claude Code sessions
 
 ## Breakdown

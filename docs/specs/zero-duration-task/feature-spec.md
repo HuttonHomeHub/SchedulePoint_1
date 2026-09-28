@@ -1,6 +1,6 @@
 # Feature Spec: A zero-duration task keeps its date, is reported, and converts without moving the schedule
 
-- **Status:** Approved — agreement round complete 2026-09-26 (see agreement-round.md); product owner delegated the open questions
+- **Status:** Accepted — shipped (ADR-0162), M0–M6 landed 2026-09-28
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-26 (drafted); folded 2026-09-26 after the agreement round
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #384 (and #387, fixed inside this epic, D9)

@@ -1,6 +1,7 @@
 # ADR-0162: A zero-duration task keeps its date, is reported, and converts without moving the schedule
 
-- **Status:** Proposed; each decision is accepted with the milestone that builds it (below).
+- **Status:** Accepted (2026-09-28). Each decision was accepted with the milestone that built it
+  (below); M6's gate pass closed the epic.
 - **Date:** 2026-09-26
 - **Deciders:** James Ewbank (with Claude Code); the open choices were delegated by the product
   owner on 2026-09-26 ("go with the most robust options you consider correct and let the agents
