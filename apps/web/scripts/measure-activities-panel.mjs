@@ -22,7 +22,11 @@
  *   1. A Postgres the API can reach — `scripts/e2e-local.sh --db-only` matches CI's shape, or any
  *      instance whose `DATABASE_URL` you export before step 2.
  *   2. The API, migrated and running on :3000:
- *        DATABASE_URL=… BETTER_AUTH_SECRET=… pnpm --filter @repo/api exec nest start
+ *        DATABASE_URL=… BETTER_AUTH_SECRET=… CORS_ORIGINS=http://localhost:4173 \
+ *          pnpm --filter @repo/api exec nest start
+ *      `CORS_ORIGINS` is required, not optional: the API's default trusts only the dev server's
+ *      origin (:5173), so Better Auth refuses the preview origin's sign-up with `403 INVALID_ORIGIN`
+ *      and the run dies waiting for the onboarding form (found on the first real run, 2026-09-28).
  *      (`nest start --watch` also works; a production `node dist/main.js` after `pnpm --filter
  *      @repo/api build` is closer to what a released image runs, if that distinction matters to
  *      the reading you are taking.)
@@ -286,9 +290,12 @@ async function activityCount(page, orgSlug, planId) {
           `/api/v1/organizations/${orgSlug}/plans/${planId}/activities`,
           location.origin,
         );
-        url.searchParams.set('limit', '200');
+        // 100 is the API's page ceiling (`common/dto/pagination-query.dto.ts` `@Max(100)`); 200 was
+        // refused with a 422 on the first real run, and `body.data` was undefined.
+        url.searchParams.set('limit', '100');
         if (cursor) url.searchParams.set('cursor', cursor);
         const r = await fetch(url, { credentials: 'include' });
+        if (!r.ok) throw new Error(`activity list ${String(r.status)}: ${await r.text()}`);
         const body = await r.json();
         total += body.data.length;
         cursor = body.meta?.nextCursor ?? null;
