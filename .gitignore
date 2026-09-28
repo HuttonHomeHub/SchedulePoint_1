@@ -91,3 +91,6 @@ measure-output/
 # The web bundle's size report — a BUILD ARTEFACT, written outside `dist/` so it is never served.
 # `apps/web/check:bundle-size` reads it in CI immediately after the build that writes it.
 apps/web/bundle-report.json
+
+# The activities-panel measurement harness keeps its seeded org/plan ids here between runs.
+apps/web/.tmp/

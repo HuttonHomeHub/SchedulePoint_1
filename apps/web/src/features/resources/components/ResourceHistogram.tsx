@@ -85,7 +85,7 @@ export function ResourceHistogram({
     // defeat the memo. The names only change when `resources.data` does, which changes `series`
     // in the same fetch cycle in practice — and a stale NAME is a cosmetic miss, never a wrong
     // number, because every value here comes from `series`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resourceName closes over nameById by design (see above)
   }, [series, buckets.length, stackBy, resources.data]);
 
   return (

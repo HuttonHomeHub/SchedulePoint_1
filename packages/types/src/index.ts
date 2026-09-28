@@ -1418,6 +1418,30 @@ export const CALENDAR_ERROR = {
 export type CalendarErrorReason = keyof typeof CALENDAR_ERROR;
 
 /**
+ * What a baseline's capture froze of the PLACEMENT (`placement-baseline-variance`,
+ * amending ADR-0025 §Amendments 3). `NONE` is the literal truth of every baseline
+ * captured before `api-v0.70.0` — the pure-network dates only. `FULL` is that plus
+ * `baseline_activities.placedStart`/`placedFinish` (where the bar actually sat) and
+ * `.visualStart` (what the planner placed). Mutually assignable with Prisma's
+ * generated `PlacementSnapshotLevel` enum — see the lock-step check in
+ * `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`, which fails to
+ * compile if either side gains a member the other lacks.
+ */
+export type PlacementSnapshotLevel = 'NONE' | 'FULL';
+
+/**
+ * Which dates a variance read compared (`placement-baseline-variance`, amending
+ * ADR-0025 §Amendments 3): `PLACED` reads the frozen `placedStart`/`placedFinish`
+ * against the live `visualEffectiveStart`/`visualEffectiveFinish` — the bars as
+ * drawn (ADR-0148). `NETWORK` reads the frozen `baselineStart`/`baselineFinish`
+ * against the live `earlyStart`/`earlyFinish` — the pure-network dates, which is
+ * the only comparison available on a baseline captured before placements were
+ * recorded (`placementSnapshotLevel: 'NONE'`). The basis is chosen **once per
+ * read**, from the active baseline's level, never per row.
+ */
+export type VarianceBasis = 'PLACED' | 'NETWORK';
+
+/**
  * A baseline — a named, frozen snapshot of a plan's schedule, the "plan of record"
  * a planner compares the live schedule against (M7, ADR-0025). At most one baseline
  * per plan is `isActive` (the comparison baseline). The denormalised fields
@@ -1439,6 +1463,13 @@ export interface BaselineSummary {
   capturedProjectFinish: string | null;
   /** How many activity snapshots the baseline froze. */
   activityCount: number;
+  /**
+   * What this capture froze of the placement (`placement-baseline-variance`).
+   * `NONE` for every baseline captured before `api-v0.70.0`; `FULL` after.
+   * Decides the basis a variance read against this baseline can use — see
+   * {@link VarianceBasis}.
+   */
+  placementSnapshotLevel: PlacementSnapshotLevel;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1463,6 +1494,24 @@ export interface BaselineActivitySnapshot {
   lateFinish: string | null;
   totalFloat: number | null;
   isCritical: boolean;
+  /**
+   * The frozen placed span (`placement-baseline-variance`) — where the bar actually
+   * sat at capture, copied from `activities.visualEffectiveStart`/`Finish`. Meaningful
+   * only when the parent baseline's `placementSnapshotLevel` is `'FULL'`; null there
+   * means the plan had not been calculated at capture. On a `'NONE'` baseline these
+   * are null because nothing was recorded — read the level, never infer it from the
+   * null.
+   */
+  placedStart: string | null;
+  placedFinish: string | null;
+  /**
+   * The planner's own frozen hand-placement (`activities.visualStart`), distinct from
+   * `placedStart`/`placedFinish`: this is the INPUT the planner gave, those are the
+   * engine's OUTPUT from it plus the network. Null on a `'FULL'` baseline means the
+   * activity was never hand-placed at capture — the common case. Null on a `'NONE'`
+   * baseline means "not recorded", not "never placed".
+   */
+  visualStart: string | null;
 }
 
 /** A baseline with its frozen activity snapshots embedded — the single-baseline (GET one) shape. */
@@ -1476,9 +1525,19 @@ export interface BaselineDetail extends BaselineSummary {
  * since been removed. Variance is in **working days** on the plan's calendar
  * (consistent with float/lag, ADR-0024), signed so that **positive = current later
  * than baseline (behind schedule)**; `floatVarianceDays` is `current − baseline`
- * total float (positive = more float now). `inBaseline` is false for an activity added
- * after capture (variance fields null); `removed` is true for a baselined activity no
- * longer present live (current fields null). All dates are calendar days (`YYYY-MM-DD`).
+ * total float (positive = more float now, total float on **both** bases — see below).
+ * `inBaseline` is false for an activity added after capture (variance fields null);
+ * `removed` is true for a baselined activity no longer present live (current fields
+ * null). All dates are calendar days (`YYYY-MM-DD`).
+ *
+ * **`baselineStart`/`baselineFinish`/`currentStart`/`currentFinish` and the two
+ * variance fields are on the read's `meta.basis`** (`placement-baseline-variance`,
+ * amending ADR-0025 §Amendments 3) — see {@link VarianceBasis} and
+ * {@link PlanVarianceSummary.basis}. On `basis: 'PLACED'` they compare the frozen
+ * placed span against the live placed span (where the bars are drawn, ADR-0148); on
+ * `basis: 'NETWORK'` they compare the frozen and live pure-network dates. The field
+ * names do not change with the basis — a field named "early" holding placed dates
+ * would be the silent redefinition ADR-0148 refused elsewhere.
  */
 export interface BaselineVarianceRow {
   /** The activity id — the live activity's id, or the baselined `sourceActivityId` for a removed row. */
@@ -1517,6 +1576,15 @@ export interface PlanVarianceSummary {
   behindCount: number;
   addedCount: number;
   removedCount: number;
+  /**
+   * Which dates this read compared (`placement-baseline-variance`, amending ADR-0025
+   * §Amendments 3). `null` only when `baselineId` is `null` (no active baseline —
+   * nothing was compared). Every row's dated fields and start/finish variances are on
+   * this basis; float variance is total float on both bases, always. An older API
+   * image (a rolling update, ADR-0047) omits this field — a client reading it as
+   * `undefined` shows no basis wording rather than guessing one.
+   */
+  basis: VarianceBasis | null;
 }
 
 /**

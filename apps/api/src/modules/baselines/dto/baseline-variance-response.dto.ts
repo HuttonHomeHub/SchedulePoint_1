@@ -1,11 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { BaselineVarianceRow, PlanVarianceSummary } from '@repo/types';
+import type { BaselineVarianceRow, PlanVarianceSummary, VarianceBasis } from '@repo/types';
 
 /**
  * One row of the plan variance read model (ADR-0025). Variance is in working days on the
  * plan's calendar, signed so **positive = current later than baseline (behind)**. Dates
  * are calendar days (`YYYY-MM-DD`); the mapped shape matches {@link BaselineVarianceRow},
  * so the service's rows are returned as-is (this class exists for OpenAPI).
+ *
+ * **Every dated field and both variance fields below are on the read's `meta.basis`**
+ * (`placement-baseline-variance`, amending ADR-0025) — see
+ * {@link PlanVarianceSummaryResponseDto.basis}. `currentTotalFloat`/`baselineTotalFloat`/
+ * `floatVarianceDays` are total float on both bases, always.
  */
 export class BaselineVarianceRowResponseDto implements BaselineVarianceRow {
   @ApiProperty({ format: 'uuid' })
@@ -77,4 +82,17 @@ export class PlanVarianceSummaryResponseDto implements PlanVarianceSummary {
 
   @ApiProperty({ description: 'Baselined activities removed since capture.' })
   removedCount!: number;
+
+  @ApiProperty({
+    enum: ['PLACED', 'NETWORK'],
+    nullable: true,
+    description:
+      'Which dates this read compared (placement-baseline-variance, amending ADR-0025). ' +
+      "null only when baselineId is null (no active baseline). 'PLACED': the frozen placed " +
+      'span vs the live placed span (where the bars are drawn, ADR-0148) — the active ' +
+      "baseline's placementSnapshotLevel is FULL. 'NETWORK': the frozen and live pure-" +
+      'network dates — the level is NONE, i.e. this baseline was captured before placements ' +
+      'were recorded. Every row’s dated fields and start/finish variances are on this basis.',
+  })
+  basis!: VarianceBasis | null;
 }

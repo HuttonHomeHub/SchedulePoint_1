@@ -78,6 +78,13 @@ export function BaselinesPanel({
       header: 'Project finish',
       cell: (b) => formatCalendarDate(b.capturedProjectFinish),
     },
+    // `placementSnapshotLevel` (placement-baseline-variance, amending ADR-0025) says which
+    // dates a variance read against THIS baseline will compare (`meta.basis`) — surfaced so
+    // a planner choosing which baseline to activate knows what they will get.
+    {
+      header: 'Compares',
+      cell: (b) => (b.placementSnapshotLevel === 'FULL' ? 'Placed dates' : 'Earliest dates'),
+    },
     {
       header: 'Activities',
       cellClassName: 'tabular-nums',

@@ -292,3 +292,17 @@ reader trusting the number in the meantime.
 Found by two independent reviewers (database-architect and test-engineer) while reviewing the
 revision-compare spec, which proposed to reuse this replay mechanism and would have inherited the
 gap.
+
+## Addendum (2026-09-28) — the what-if now levels both passes
+
+The engine half of `docs/TECH_DEBT.md` #248 is done, on the product owner's approval. The 2026-09-10
+addendum above stands as the record of the gap. The what-if now levels both the control and the
+perturbed pass whenever `plan.levelResources` is true, through `levelIfEnabled`
+(`apps/api/src/modules/schedule/level-if-enabled.ts`). That helper is also what `recalculateInLock`
+calls, so both paths share one levelling rule. The completion carrier is chosen from the levelled
+finish where levelling ran (`completion-carrier.ts`). The carrier's movement and the two printed
+completion dates are read from the levelled finish too. On a levelled plan, levelling can therefore
+change which activity is the carrier, and this is deliberate. Off `levelResources` the result is
+byte-identical, pinned in `critical-path-test.spec.ts`. The 14/60 s throttle was derived from two
+network passes and has **not** been re-measured with levelling added. It stands until the M6-T0
+harness is re-run.

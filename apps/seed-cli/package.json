@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint . --cache --cache-strategy content",
+    "lint": "eslint . --cache --cache-strategy content --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx src/main.ts",

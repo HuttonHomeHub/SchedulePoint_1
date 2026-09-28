@@ -1,6 +1,7 @@
 # ADR-0051: External-Guest per-plan share links
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by ADR-0163 (§4 — `SCHEDULE_READ` widens to include the placed
+  span, `visualEffectiveStart`/`visualEffectiveFinish`).
 - **Date:** 2026-07-21
 - **Deciders:** Backend architecture, Security, Product
 - **Related:** ADR-0003 (Better Auth), ADR-0012 (RBAC + resource scoping), ADR-0016

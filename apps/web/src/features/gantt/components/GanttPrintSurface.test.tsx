@@ -201,6 +201,56 @@ describe('GanttPrintSurface', () => {
     expect(legend?.textContent).toContain('Baseline');
     expect(legend?.textContent).toContain('Milestone');
   });
+
+  // T6 (placement-baseline-variance, US-2): paper has no tooltip, so the legend names the
+  // basis whenever the variance column is actually printed — and only then, since an
+  // absent basis on a hidden variance column has nothing to name.
+  it('names the basis on the legend’s Baseline entry when variance is printed', () => {
+    const placed = render(
+      <GanttPrintSurface
+        columns={VISIBLE_COLUMNS}
+        dependencies={[]}
+        title="N"
+        subtitle="—"
+        activities={[anActivity({ id: 'a1' })]}
+        varianceByActivityId={new Map([['a1', varianceRow()]])}
+        varianceBasis="PLACED"
+      />,
+    );
+    expect(placed.container.querySelector('.gantt-print-legend')?.textContent).toContain(
+      'Baseline (placed dates)',
+    );
+
+    const network = render(
+      <GanttPrintSurface
+        columns={VISIBLE_COLUMNS}
+        dependencies={[]}
+        title="N"
+        subtitle="—"
+        activities={[anActivity({ id: 'a1' })]}
+        varianceByActivityId={new Map([['a1', varianceRow()]])}
+        varianceBasis="NETWORK"
+      />,
+    );
+    expect(network.container.querySelector('.gantt-print-legend')?.textContent).toContain(
+      'Baseline (earliest dates)',
+    );
+
+    // No variance printed → nothing to name, whatever `varianceBasis` says.
+    const noVariance = render(
+      <GanttPrintSurface
+        columns={VISIBLE_COLUMNS}
+        dependencies={[]}
+        title="N"
+        subtitle="—"
+        activities={[anActivity()]}
+        varianceBasis="PLACED"
+      />,
+    );
+    const noVarianceLegend = noVariance.container.querySelector('.gantt-print-legend')?.textContent;
+    expect(noVarianceLegend).toContain('Baseline');
+    expect(noVarianceLegend).not.toContain('(placed dates)');
+  });
 });
 
 describe('printGanttSchedule (mount / teardown lifecycle)', () => {

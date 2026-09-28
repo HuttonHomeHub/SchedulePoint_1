@@ -19,9 +19,15 @@ vi.mock('../guest-api', async (importOriginal) => ({
   fetchGuestDependencies: vi.fn(),
 }));
 
-// The read-only canvas is heavy (Canvas 2D) and out of scope here — stub it to a marker.
+// The read-only canvas is heavy (Canvas 2D) and out of scope here — stub it to a marker that
+// CAPTURES its `barDateSource` prop (ADR-0163 M2-T2), so a regression that stops passing it, or
+// passes the wrong value, is visible from a component test rather than only from a pixel journey.
 vi.mock('@/features/tsld', () => ({
-  TsldPanel: () => <div data-testid="tsld-panel">canvas</div>,
+  TsldPanel: (props: { barDateSource?: string }) => (
+    <div data-testid="tsld-panel" data-bar-date-source={String(props.barDateSource)}>
+      canvas
+    </div>
+  ),
 }));
 
 const { fetchGuestPlan, fetchGuestActivities, fetchGuestDependencies } =
@@ -110,6 +116,23 @@ describe('GuestPlanView', () => {
     expect(await screen.findByRole('heading', { name: 'Riverside Tower' })).toBeInTheDocument();
     expect(screen.getByText('Read-only shared view')).toBeInTheDocument();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
+  });
+
+  /**
+   * ADR-0163: the guest view has no Late overlay, so `barDateSourceFor(false)` always resolves to
+   * `'visual'` — the plan as the planner laid it out (ADR-0148). This is what makes the placed span
+   * `#356`'s API widening carries actually reach the canvas rather than being ignored by a host that
+   * still passes nothing (M1's fields alone are not the fix — the census in
+   * `guest-bar-basis.structural.test.ts` covers the same seam at the file-scan level).
+   */
+  it('draws on the PLACED basis: passes barDateSource="visual" to TsldPanel', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
+    vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    const panel = await screen.findByTestId('tsld-panel');
+    expect(panel.dataset.barDateSource).toBe('visual');
   });
 
   it('shows an empty state for a plan with no activities (no canvas)', async () => {

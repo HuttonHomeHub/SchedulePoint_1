@@ -1,7 +1,10 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, DependencySummary } from '@repo/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as diagramImageModule from './commands/use-diagram-image';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -64,8 +67,14 @@ vi.mock('@/features/gantt', async (importOriginal) => ({
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));
+// A SINGLE stable object (not a fresh literal per call): `useTsldToolbarContext`'s context memo
+// lists `recalc` (`useRecalculateCommand`'s return), so a mock returning a new `{ isPending, run }`
+// pair on every call would invalidate that memo every render for a reason that has nothing to do
+// with this file's own identity cases (R8, M0-T4) — masking exactly the defect each exists to
+// isolate. `vi.clearAllMocks()` resets `run`'s call history without replacing the reference.
+const recalculateCommand = vi.hoisted(() => ({ isPending: false, run: vi.fn() }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
-  useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
+  useRecalculateCommand: () => recalculateCommand,
   useScheduleSummary: () => ({ isPending: true, data: undefined }),
 }));
 vi.mock('./plan-summary-panel', () => ({ PlanSummaryPanel: () => null }));
@@ -324,6 +333,182 @@ describe('useTsldToolbarContext — Print follows the active view', () => {
     });
     expect(printDiagramImage).toHaveBeenCalledTimes(1);
     expect(printGanttSchedule).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Site 3 (`docs/TECH_DEBT.md` #353, `docs/specs/hook-deps-gate/`): the context memo's own
+ * dependency list omits `dependencies`, though `printDiagram`'s Gantt branch reads it. A link
+ * added since the memo last ran is therefore missing from the printed Predecessors column, even
+ * though `model.activities.data` is unchanged (TanStack Query shares unchanged structure, so an
+ * added — non-driving — link moves no date and touches no activity row).
+ *
+ * **`useDiagramImage` is stubbed to a STABLE function** (M0's own finding, `m0-measurement.md`
+ * §"E12 is masked, not absent"): its real implementation takes `dependencies` (this file's
+ * stabilised local, `use-tsld-toolbar-context.tsx:201`) as a `useCallback` dependency, and
+ * `buildDiagramImage` is itself listed on the outer context memo — so ANY change to
+ * `model.dependencies?.data` already forces the whole memo (and `printDiagram` with it) to
+ * rebuild, via that unrelated wiring, before the fix under test ever runs. Left real, this case
+ * would pass identically with or without M1-T1's fix, which is exactly what M0 found when it was
+ * first written this way. The stub removes that incidental cover; nothing about the Gantt branch
+ * (which never calls `buildDiagramImage`) depends on what the stub returns.
+ */
+describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R8)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prints a link added since the last render, with the activities array unchanged', () => {
+    vi.spyOn(diagramImageModule, 'useDiagramImage').mockReturnValue(vi.fn(() => null));
+
+    const canvasUi = makeCanvasUi();
+    // `dependencies` is a MUTABLE wrapper, mutated in place below — the same object identity,
+    // a new `.data` array. That isolates the missing-dependency defect from E13's unrelated
+    // churn: `exportMatch` lists the whole `model.dependencies` WRAPPER, so if the wrapper's own
+    // reference changed too (as a real refetch's `trackResult` Proxy would), `exportMatch` would
+    // recompute for its OWN reason and incidentally carry the context memo along with it,
+    // masking this defect rather than isolating it. Holding the wrapper steady and changing only
+    // its `.data` is exactly "a new `dependencies.data` array" (M1-T1's own words).
+    const dependencies: { data: DependencySummary[] } = { data: [] };
+    const model = { ...makeModel(), dependencies } as PlanWorkspaceModel;
+    // Every prop the outer memo lists is hoisted and created ONCE, so only `dependencies.data`
+    // moves across the re-render — an inline `vi.fn()` inside the render callback would be a NEW
+    // function on every call and would (correctly) invalidate the memo for an unrelated reason,
+    // masking exactly the defect this case exists to isolate. The four `useTsldToolbarContext`
+    // no-op DEFAULTS (`toggleFloatPaths`/`toggleHealthCheck`/`toggleRevisionCompare`/
+    // `setPlanView`) are exactly such a source when left implicit — a fresh `() => {}` is minted
+    // on every render the prop is omitted from — so all four are passed explicitly here too.
+    const openDialog = vi.fn();
+    const legend = { open: false, toggle: vi.fn() };
+    const minimap = { open: false, toggle: vi.fn() };
+    const revealComments = vi.fn();
+    const toggleFloatPaths = vi.fn();
+    const toggleHealthCheck = vi.fn();
+    const toggleRevisionCompare = vi.fn();
+    const setPlanView = vi.fn();
+    const { result, rerender } = renderHook(
+      () =>
+        useTsldToolbarContext({
+          model,
+          plan: PLAN,
+          canvasUi,
+          openDialog,
+          legend,
+          minimap,
+          revealComments,
+          toggleFloatPaths,
+          toggleHealthCheck,
+          toggleRevisionCompare,
+          setPlanView,
+          planView: 'gantt',
+        }),
+      {},
+    );
+
+    const addedLink = {
+      id: 'd1',
+      predecessorId: 'a1',
+      successorId: 'a2',
+    } as unknown as DependencySummary;
+    // Same `activities` reference, same `dependencies` WRAPPER reference — only its `.data`
+    // moves. A pure logic add that touches no activity row.
+    dependencies.data = [addedLink];
+    rerender();
+
+    act(() => {
+      result.current.printDiagram();
+    });
+
+    const [arg] = printGanttSchedule.mock.calls.at(-1) as unknown as [
+      { dependencies: readonly DependencySummary[] },
+    ];
+    expect(arg.dependencies).toEqual([addedLink]);
+  });
+});
+
+/**
+ * E13/M0-T4: `model.dependencies` is a real `useQuery` result, not the `{ data: [] }` literal
+ * every other fixture in this file reuses. `useBaseQuery.js:46` hands back a NEW `trackResult`
+ * Proxy on every render regardless of whether the cached data changed — so a memo keyed on the
+ * whole query-result object (rather than on `.data`) churns every render, and that churn was
+ * propagating to the whole toolbar context via `exportMatch` (M1-T1 fixes it to read the
+ * stabilised `dependencies` local instead of `model.dependencies`).
+ *
+ * **Isolated from two OTHER identity confounds M0 found the same way it found E12's mask**
+ * (`m0-measurement.md`): the four `useTsldToolbarContext` no-op parameter DEFAULTS
+ * (`toggleFloatPaths`/`toggleHealthCheck`/`toggleRevisionCompare`/`setPlanView`), each a fresh
+ * `() => {}` on every render the prop is omitted from; and `useRecalculateCommand`'s mock, which
+ * returned a new `{ isPending, run }` literal per call. Both are unconditional churn sources —
+ * present whether or not E13 exists — so left uncontrolled this case would fail for THREE
+ * reasons at once and a fix to `exportMatch` alone could never turn it green. The `dependencies`
+ * local (`:201`) itself does not move here (the cached `.data` array is the SAME reference on
+ * both renders — only the `trackResult` Proxy wrapping it is new), so `useDiagramImage` needs no
+ * stub in this case the way R8's does.
+ */
+describe('useTsldToolbarContext — context identity against a REAL query result (M0-T4/E13)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not change identity across a re-render with nothing changed', async () => {
+    const { usePlanDependencies, dependencyKeys } = await import('@/features/dependencies');
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(dependencyKeys.byPlan('acme', 'p1'), []);
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children);
+
+    const canvasUi = makeCanvasUi();
+    // Every prop besides `dependencies` is hoisted and created ONCE. `usePlanDependencies` is the
+    // ONLY thing allowed to differ between the two renders below — an inline `vi.fn()` (or a
+    // fresh `makeModel()` call) inside the render callback would itself be a new reference every
+    // render and would invalidate the memo for a reason that has nothing to do with E13.
+    const baseModel = makeModel();
+    const openDialog = vi.fn();
+    const legend = { open: false, toggle: vi.fn() };
+    const minimap = { open: false, toggle: vi.fn() };
+    const revealComments = vi.fn();
+    const toggleFloatPaths = vi.fn();
+    const toggleHealthCheck = vi.fn();
+    const toggleRevisionCompare = vi.fn();
+    const setPlanView = vi.fn();
+    const { result, rerender } = renderHook(
+      () => {
+        const dependencies = usePlanDependencies('acme', 'p1');
+        const model = { ...baseModel, dependencies };
+        return useTsldToolbarContext({
+          model,
+          plan: PLAN,
+          canvasUi,
+          openDialog,
+          legend,
+          minimap,
+          revealComments,
+          toggleFloatPaths,
+          toggleHealthCheck,
+          toggleRevisionCompare,
+          setPlanView,
+          planView: 'gantt',
+        });
+      },
+      { wrapper },
+    );
+
+    // Let the (already-cached) query settle so `dependencies.data` is populated on the first
+    // read, matching the app's steady state rather than its very first loading render.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const first = result.current;
+    // An unrelated re-render — nothing about the model's VALUES changes, only that
+    // `usePlanDependencies` is called again and (per `useBaseQuery.js:46`) hands back a fresh
+    // Proxy wrapper each time.
+    act(() => {
+      rerender();
+    });
+    const second = result.current;
+
+    expect(second).toBe(first);
   });
 });
 

@@ -222,18 +222,39 @@ which the port is not bound. That is invisible on a healthy host and worth knowi
 you are watching: a container that seems to hang for five seconds and then comes up normally,
 right after a mail-server change, is this check timing out and not a fault.
 
-#### Every send is bounded at 10 seconds
+#### Every send is bounded at 10 seconds, and three of the four sends no longer wait on it
 
-Mail **is** on the request path, which surprised this project's own design documents (ADR-0075
-§"Mail is on the request path"). Better Auth awaits the send unless a background handler is
-configured, and none is, so sign-up, password-reset requests, verification resends and invitation
-creation each wait for a real SMTP round trip. Nodemailer's own defaults would allow that wait to
-reach **ten minutes** on a socket that connects and then goes quiet, so the adapter caps it at ten
-seconds.
+Mail **was** on the request path, which surprised this project's own design documents once already
+(ADR-0075 §"Mail is on the request path"): Better Auth awaited the send unless a background handler
+was configured, and none was, so sign-up, password-reset requests, verification resends and
+invitation creation each waited for a real SMTP round trip. Nodemailer's own defaults would allow
+that wait to reach **ten minutes** on a socket that connects and then goes quiet, which is why the
+adapter caps it at ten seconds regardless of who is waiting on it.
 
-Practically: a broken relay costs each affected request ten seconds and then answers normally. If
-you see request latency on those four endpoints step to ~10 s, look at `mail.send_failed` before
-looking at the database.
+**`docs/TECH_DEBT.md` #99 closed that for three of the four.**
+`advanced.backgroundTasks.handler` is now configured
+(`apps/api/src/common/auth/better-auth.ts`), so Better Auth calls it INSTEAD of awaiting for
+`sendResetPassword` and `emailVerification.sendVerificationEmail` — which covers sign-up (it sends
+the same verification email), password-reset requests and verification resends. Those three now
+answer without waiting on the send at all, which is also what closes the timing this project's
+uniform response bodies exist to guard: a **known** address on `/request-password-reset` used to
+wait for the send while an **unknown** one answered after one database lookup, so an identical body
+arrived at two different speeds — a caller with a stopwatch could tell them apart even though
+neither could read the body. **Invitation creation is the one that still waits**:
+`InvitationsService` awaits `sendInvitation` directly in its own code, entirely outside Better
+Auth's plumbing, so nothing about that handler reaches it.
+
+The ten-second bound stays for all four sends, for two different reasons. For invitation creation
+it is unchanged: a broken relay still costs that request up to ten seconds before it answers
+normally, and the practical advice below still applies to it. For the other three the bound no
+longer protects a request — nothing is waiting on the send — but an abandoned background send would
+otherwise hold a socket open for as long as a black-holed relay stays black-holed, which is exactly
+the kind of unbounded background work that should never be allowed to run forever, watched or not.
+
+Practically, for invitation creation: a broken relay costs that request ten seconds and then answers
+normally. If you see its latency step to ~10 s, look at `mail.send_failed` before looking at the
+database. For the other three, that latency step is gone; a broken relay now shows up **only** as
+`mail.send_failed` in the log, with no user-visible symptom to notice it by.
 
 **What a success does not prove**, which is why step 3 of the checklist below still exists:
 

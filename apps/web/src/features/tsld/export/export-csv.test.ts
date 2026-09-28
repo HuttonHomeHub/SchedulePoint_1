@@ -16,6 +16,8 @@ function act(over: Partial<ActivitySummary> = {}): ActivitySummary {
     percentComplete: 0,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-05',
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-05',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-05',
     totalFloat: 0,
@@ -112,6 +114,8 @@ describe('buildScheduleCsv', () => {
         act({
           earlyStart: null,
           earlyFinish: null,
+          visualEffectiveStart: null,
+          visualEffectiveFinish: null,
           lateStart: null,
           lateFinish: null,
           totalFloat: null,
@@ -126,6 +130,8 @@ describe('buildScheduleCsv', () => {
     );
     const cells = lines(csv)[1]!.split(',');
     for (const header of [
+      'Start',
+      'Finish',
       'Early start',
       'Late finish',
       'Total float',
@@ -138,6 +144,42 @@ describe('buildScheduleCsv', () => {
       const index = SCHEDULE_COLUMNS.findIndex((c) => c.header === header);
       expect(cells[index]).toBe('');
     }
+  });
+
+  it('shows the placed date under Start/Finish and the network date under Early start/finish when they differ (#357)', () => {
+    // A hand-placed activity: the planner moved it well past where the network would put it, so the
+    // two bases must disagree for this case to prove anything about which column reads which.
+    const csv = buildScheduleCsv(
+      [
+        act({
+          earlyStart: '2026-01-01',
+          earlyFinish: '2026-01-05',
+          visualEffectiveStart: '2026-02-10',
+          visualEffectiveFinish: '2026-02-14',
+        }),
+      ],
+      NO_PARENT,
+    );
+    const cells = lines(csv)[1]!.split(',');
+    const at = (header: string): string | undefined =>
+      cells[SCHEDULE_COLUMNS.findIndex((c) => c.header === header)];
+
+    expect(at('Start')).toBe('2026-02-10');
+    expect(at('Finish')).toBe('2026-02-14');
+    expect(at('Early start')).toBe('2026-01-01');
+    expect(at('Early finish')).toBe('2026-01-05');
+  });
+
+  it('places Start/Finish before Early start/Early finish in the header row', () => {
+    const header = SCHEDULE_COLUMNS.map((c) => c.header);
+    const startIndex = header.indexOf('Start');
+    const finishIndex = header.indexOf('Finish');
+    const earlyStartIndex = header.indexOf('Early start');
+    const earlyFinishIndex = header.indexOf('Early finish');
+    expect(startIndex).toBeGreaterThanOrEqual(0);
+    expect(startIndex).toBeLessThan(finishIndex);
+    expect(finishIndex).toBeLessThan(earlyStartIndex);
+    expect(earlyStartIndex).toBeLessThan(earlyFinishIndex);
   });
 
   it('resolves the WBS-parent column from the supplied resolver', () => {
@@ -161,6 +203,10 @@ describe('buildScheduleCsv', () => {
           percentComplete: 40,
           earlyStart: '2026-01-01',
           earlyFinish: '2026-01-05',
+          // Distinct from earlyStart/earlyFinish so a row that read the wrong basis for either
+          // column would produce a different string, not merely a passing-by-coincidence one.
+          visualEffectiveStart: '2026-01-08',
+          visualEffectiveFinish: '2026-01-12',
           lateStart: '2026-01-02',
           lateFinish: '2026-01-06',
           totalFloat: 1,
@@ -176,7 +222,7 @@ describe('buildScheduleCsv', () => {
       { scope: 'all', resolveWbsParent: (id) => (id === 'p1' ? 'WBS Site' : '') },
     );
     expect(lines(csv)[1]).toBe(
-      'A100,Excavate,Task,5,In progress,40,2026-01-01,2026-01-05,2026-01-02,2026-01-06,1,0,No,Start no earlier than,2026-01-01,WBS Site,"1,234.56",',
+      'A100,Excavate,Task,5,In progress,40,2026-01-08,2026-01-12,2026-01-01,2026-01-05,2026-01-02,2026-01-06,1,0,No,Start no earlier than,2026-01-01,WBS Site,"1,234.56",',
     );
   });
 

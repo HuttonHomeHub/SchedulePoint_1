@@ -341,4 +341,93 @@ describe('DataTable — Column.width', () => {
       expect(container.querySelectorAll('[data-col-width]')).toHaveLength(0);
     });
   });
+
+  /**
+   * `scroll` (`docs/specs/activities-panel-scale/`, TECH_DEBT #334). `'page'` (the default, omitted
+   * or explicit) must be BYTE-IDENTICAL to what this component rendered before the prop existed —
+   * SC-4, and the one thing that makes the other 23 call sites safe to leave untouched. `'contained'`
+   * is a new DOM shape this repository has never rendered, so it is pinned by class set rather than
+   * assumed: the header rule moves off the `<tr>` and onto each `<th>`/`<td>` (`border-separate`
+   * cannot render a row's own border — see the component's docblock), and the header pins with
+   * `sticky top-0`.
+   *
+   * **Verified red**: reverting the `contained` branch to `overflow-x-auto` (the pre-M1 region
+   * class) turns the 'contained' cases below red, because the pinned classes stop appearing at all.
+   */
+  describe('scroll', () => {
+    const rows = [{ id: '1', name: 'Alpha' }];
+
+    const regionOf = (container: HTMLElement) =>
+      container.querySelector('[role="region"]') as HTMLElement;
+    const headerOf = () => screen.getAllByRole('columnheader')[0]!;
+    const headRowOf = () => headerOf().closest('tr')!;
+    const cellOf = () => screen.getAllByRole('cell')[0]!;
+    const bodyRowOf = () => cellOf().closest('tr')!;
+
+    it('is the exact pre-existing DOM when omitted', () => {
+      const { container } = render(<DataTable {...common} query={query({ data: rows })} />);
+      expect(regionOf(container).className).toBe('overflow-x-auto');
+      expect(container.querySelector('table')!.className).toBe('w-full text-sm');
+      expect(headRowOf().className).toBe('border-border text-muted-foreground border-b text-left');
+      expect(bodyRowOf().className).toBe('border-border border-b');
+    });
+
+    it('`scroll="page"` given explicitly renders identically to it being omitted', () => {
+      const omitted = render(<DataTable {...common} query={query({ data: rows })} />);
+      const explicit = render(
+        <DataTable {...common} query={query({ data: rows })} scroll="page" />,
+      );
+      expect(explicit.container.innerHTML).toBe(omitted.container.innerHTML);
+      omitted.unmount();
+      explicit.unmount();
+    });
+
+    it('`scroll="contained"` gives the region one scroller and pins the header', () => {
+      const { container } = render(
+        <DataTable {...common} query={query({ data: rows })} scroll="contained" />,
+      );
+
+      // The region owns both axes and reserves room for the pinned header (SC-2, SC-3, SC-5).
+      const region = regionOf(container);
+      expect(region.className).toContain('overflow-auto');
+      expect(region.className).not.toContain('overflow-x-auto');
+      expect(region.className).toContain('flex-1');
+      expect(region.className).toContain('md:min-h-32');
+      expect(region.className).toContain('scroll-pt-12');
+
+      // `border-separate` because a collapsed-model row border is not guaranteed to survive a
+      // sticky cell across engines (the component's own docblock) — the safe default.
+      expect(container.querySelector('table')!.className).toContain('border-separate');
+
+      // The header rule moved off the row and onto the cell, which now also pins.
+      expect(headRowOf().className).not.toContain('border-b');
+      const th = headerOf();
+      expect(th.className).toContain('sticky');
+      expect(th.className).toContain('top-0');
+      expect(th.className).toContain('bg-background');
+      expect(th.className).toContain('border-b');
+
+      // Every data row's border moved to its cells too, for the same reason.
+      expect(bodyRowOf().className).toBe('');
+      const td = cellOf();
+      expect(td.className).toContain('border-b');
+      expect(td.className).toContain('border-border');
+    });
+
+    it('`scroll="contained"` moves a detail row\'s rule onto its cell too', () => {
+      const { container } = render(
+        <DataTable
+          {...common}
+          query={query({ data: rows })}
+          scroll="contained"
+          renderDetail={(row) => <span>detail for {row.name}</span>}
+        />,
+      );
+      const detailRow = container.querySelectorAll('tbody tr')[1]!;
+      expect(detailRow.className).not.toContain('border-b');
+      const detailCell = detailRow.querySelector('td')!;
+      expect(detailCell.className).toContain('border-b');
+      expect(detailCell.className).toContain('border-border');
+    });
+  });
 });

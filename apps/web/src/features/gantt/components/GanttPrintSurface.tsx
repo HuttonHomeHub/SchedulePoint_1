@@ -1,4 +1,9 @@
-import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
+import type {
+  ActivitySummary,
+  BaselineVarianceRow,
+  DependencySummary,
+  VarianceBasis,
+} from '@repo/types';
 
 import './GanttPrintSurface.css';
 
@@ -85,6 +90,14 @@ export interface GanttPrintSurfaceProps {
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
   /**
+   * Which dates the variance figures compare (`placement-baseline-variance`, amending
+   * ADR-0025, US-2) — undefined when `varianceByActivityId` is absent/empty (nothing is
+   * printed to name), and otherwise the active baseline's `meta.basis`. Paper has no
+   * tooltip, so the legend states it in words rather than leaving a reader to assume early
+   * dates.
+   */
+  varianceBasis?: VarianceBasis | null | undefined;
+  /**
    * Which persisted dates draw each bar (ADR-0033) — the same value the live panel gets. A printed
    * programme is the artefact that leaves the building and gets read in a progress meeting, so it
    * drawing a VISUAL plan from the early columns is the worse half of `docs/TECH_DEBT.md` #135:
@@ -131,6 +144,7 @@ export function GanttPrintSurface({
   barDateSource,
   hoursPerDayFor,
   varianceByActivityId,
+  varianceBasis,
   columns,
   dependencies,
 }: GanttPrintSurfaceProps): React.ReactElement {
@@ -152,6 +166,16 @@ export function GanttPrintSurface({
   const span = rowsDateSpan(rows, barDateSource);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
+  // Names which dates the ghost bar and the "vs baseline" column compare
+  // (`placement-baseline-variance`, US-2) — only worth stating when variance is actually
+  // printed, and only when the caller knows the answer (an absent `basis`, an older API
+  // image mid rolling-update, ADR-0047, says nothing rather than guessing).
+  const basisSuffix =
+    showVariance && varianceBasis === 'PLACED'
+      ? ' (placed dates)'
+      : showVariance && varianceBasis === 'NETWORK'
+        ? ' (earliest dates)'
+        : '';
   const gridWidth =
     columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0) +
     (showVariance ? PRINT_VARIANCE_WIDTH : 0);
@@ -252,7 +276,7 @@ export function GanttPrintSurface({
           <p className="gantt-print-legend">
             <span className="gantt-print-swatch gantt-print-bar" /> Activity
             <span className="gantt-print-swatch gantt-print-bar gantt-print-critical" /> Critical
-            <span className="gantt-print-swatch gantt-print-ghost" /> Baseline
+            <span className="gantt-print-swatch gantt-print-ghost" /> Baseline{basisSuffix}
             <span className="gantt-print-swatch gantt-print-diamond" /> Milestone
           </p>
         </>
@@ -387,6 +411,11 @@ export interface PrintGanttInput {
   activities: readonly ActivitySummary[];
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow> | undefined;
   /**
+   * Which dates the variance figures compare (`placement-baseline-variance`, US-2) — the
+   * active baseline's `meta.basis`, so the legend can name it alongside the ghost swatch.
+   */
+  varianceBasis?: VarianceBasis | null | undefined;
+  /**
    * Which persisted dates the bars are drawn from (ADR-0033).
    *
    * **This was the half TECH_DEBT #135's fix missed.** `GanttPrintSurface` gained the prop and this
@@ -430,6 +459,7 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       columns={GANTT_COLUMNS.filter((column) => !input.hiddenColumns.has(column.key))}
       dependencies={input.dependencies}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
+      {...(input.varianceBasis !== undefined ? { varianceBasis: input.varianceBasis } : {})}
       {...(input.barDateSource ? { barDateSource: input.barDateSource } : {})}
       {...(input.hoursPerDayFor ? { hoursPerDayFor: input.hoursPerDayFor } : {})}
     />,

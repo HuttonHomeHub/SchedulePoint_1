@@ -298,6 +298,12 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     'levelingWindowExceeded',
     'visualStart',
     'visualConflict',
+    // ADR-0163: the placed span (`visualEffectiveStart`/`Finish`) is now exposed — deliberately
+    // NOT in this list — but its three neighbouring analysis fields stay out, pinned here at the
+    // wire level as well as in `guest-dto.spec.ts`'s exact-key/forbidden-key contract.
+    'visualConflictReason',
+    'visualDriftDays',
+    'remainingFloat',
     'constraintType',
     'constraintDate',
     'externalEarlyStart',
@@ -510,5 +516,105 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     expect(guestDependency?.lagMinutes).toBe(memberDependency?.lagMinutes);
     expect(guestDependency?.lagDays).toBe(memberDependency?.lagDays);
     expect(guestDependency?.lagDays).toBe(1);
+  });
+
+  /**
+   * **FC-1 (spec §2, ADR-0163).** Since ADR-0148 the placed span IS the plan
+   * (`docs/adr/0148-visual-is-the-plan.md:48-50`) — the member canvas draws
+   * `visualEffectiveStart`/`Finish`, and until this fix the guest canvas drew the CPM early dates
+   * instead, a picture the planner never chose. This is the wire-level proof that the guest now
+   * reads the SAME placed span a member reads, for the same activity.
+   *
+   * **The precondition inside the case is load-bearing** (spec §2's own warning): a placement at
+   * the activity's early date would prove nothing, since early and placed would coincide by
+   * accident. So the assertion that `visualEffectiveStart !== earlyStart` on the MEMBER'S OWN read
+   * runs before the guest comparison — if it ever fails, the fixture stopped placing anything and
+   * the rest of the test is vacuous.
+   */
+  it('a placed activity’s bar sits where the planner put it — the guest reads the SAME placed span as the member (FC-1)', async () => {
+    const { actor } = await adminWithOrg('Acme', 'admin@example.com');
+    const planId = await makePlan(actor, 'acme', 'Riverside Plan');
+    const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+
+    const excavate = await actor.agent
+      .post(base)
+      .send({ name: 'Excavate', durationDays: 3, laneIndex: 0 })
+      .expect(201);
+    const excavateId = excavate.body.data.id as string;
+    const excavateVersion = excavate.body.data.version as number;
+
+    const untouched = await actor.agent
+      .post(base)
+      .send({ name: 'Untouched', durationDays: 2, laneIndex: 1 })
+      .expect(201);
+    const untouchedId = untouched.body.data.id as string;
+
+    // Hand-place Excavate well past its own early start (data date), so the placed span and the
+    // computed early span provably differ.
+    await actor.agent
+      .patch(`${base}/placements`)
+      .send({
+        placements: [
+          {
+            id: excavateId,
+            version: excavateVersion,
+            constraintType: null,
+            constraintDate: null,
+            visualStart: '2026-01-15',
+            laneIndex: null,
+          },
+        ],
+      })
+      .expect(200);
+
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+
+    interface MemberRow {
+      id: string;
+      earlyStart: string | null;
+      visualEffectiveStart: string | null;
+      visualEffectiveFinish: string | null;
+    }
+    const memberRead = await actor.agent.get(`${base}?limit=100`).expect(200);
+    const memberRows = memberRead.body.data as MemberRow[];
+    const memberExcavate = memberRows.find((r) => r.id === excavateId)!;
+    const memberUntouched = memberRows.find((r) => r.id === untouchedId)!;
+
+    // The precondition (spec §2): a placement identical to the early date proves nothing.
+    expect(memberExcavate.visualEffectiveStart).not.toBeNull();
+    expect(memberExcavate.visualEffectiveStart).not.toBe(memberExcavate.earlyStart);
+    // The unplaced control: its placed span equals its logic-earliest (`bar-dates.ts:48-52`), the
+    // same pixels as today.
+    expect(memberUntouched.visualEffectiveStart).toBe(memberUntouched.earlyStart);
+
+    const { token } = await mintShareToken(actor, 'acme', planId);
+    const guestRead = await guestGet('/api/v1/share/activities', token).expect(200);
+    interface GuestRow {
+      id: string;
+      earlyStart: string | null;
+      visualEffectiveStart: string | null;
+      visualEffectiveFinish: string | null;
+    }
+    const guestRows = guestRead.body.data as GuestRow[];
+    const guestExcavate = guestRows.find((r) => r.id === excavateId)!;
+    const guestUntouched = guestRows.find((r) => r.id === untouchedId)!;
+
+    // The placed row: the guest's placed span is IDENTICAL to the member's, not the early dates.
+    expect(guestExcavate.visualEffectiveStart).toBe(memberExcavate.visualEffectiveStart);
+    expect(guestExcavate.visualEffectiveFinish).toBe(memberExcavate.visualEffectiveFinish);
+    expect(guestExcavate.visualEffectiveStart).not.toBe(guestExcavate.earlyStart);
+
+    // The unplaced row: the guest's placed span equals its early start too — identical to the
+    // member, and identical to what the guest drew before this fix (an unplaced activity's picture
+    // never changes).
+    expect(guestUntouched.visualEffectiveStart).toBe(guestUntouched.earlyStart);
+    expect(guestUntouched.visualEffectiveStart).toBe(memberUntouched.visualEffectiveStart);
+
+    // No forbidden key leaked on this read either (the analysis fields stay out even though the
+    // placed span is now present).
+    expect(containsKey(guestRead.body, FORBIDDEN_KEYS)).toBe(false);
   });
 });

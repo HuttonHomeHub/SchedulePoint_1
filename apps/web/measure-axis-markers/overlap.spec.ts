@@ -199,5 +199,6 @@ test('M0-T2 — the data-date/today overlap, observed at five separations', asyn
     report,
   });
   expect(Object.keys(report)).toHaveLength(SEPARATIONS.length);
+  // eslint-disable-next-line no-console -- names the written measurement file for a reader following along
   console.log(`wrote ${path}`);
 });

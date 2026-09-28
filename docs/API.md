@@ -236,6 +236,17 @@ It applies to every other type (`TASK`, `START_MILESTONE`, `HAMMOCK`, `LEVEL_OF_
 of effort takes its position from its span, a summary from its branch, and a resource-dependent
 activity from its driving resource's calendar, none of which a type change keeps.
 
+**A `type` change into or out of `WBS_SUMMARY` is rejected against ADR-0038, not silently accepted**
+(`docs/TECH_DEBT.md` #396). `PATCH …/activities/:activityId {type}` away from `WBS_SUMMARY` while
+the activity still parents an active (non-deleted) child is a **422 `PARENT_NOT_SUMMARY`**, naming
+the count — the same reason `assertValidParent` throws when a child's own `parentId` is pointed at a
+non-summary, read here from the parent's side instead. A `type` change into `WBS_SUMMARY` while the
+activity still names an active dependency (as predecessor or successor) is a **422
+`SUMMARY_HAS_NO_LOGIC`**, naming the count — the same reason a dependency `create()` throws when a
+NEW link targets a summary endpoint (ADR-0035 §24). Move or remove the children, or the links, first;
+neither check applies when `type` is unchanged, or the destination type isn't `WBS_SUMMARY` on either
+end of the change.
+
 **`resourceAssignmentCount` is counted for zero-duration tasks only** (ADR-0162 decision 6). Every
 activity read, list and write response carries it. For a `TASK` whose stored duration is 0 it is the
 number of **live** resource assignments the activity holds — an assignment counts when neither it
@@ -259,6 +270,36 @@ guest share DTO does not carry it.
 where the two disagree — **read the reason wherever the sentence or the mark differs by direction**.
 Never derive `remainingFloat` client-side from `totalFloat − visualDriftDays`: the difference of two
 roundings is not the rounding of the difference, and minutes are persisted for neither input.
+
+### Baseline variance basis (`placement-baseline-variance`, amending ADR-0025)
+
+`GET …/plans/:planId/baselines/variance`'s `meta.basis: 'PLACED' | 'NETWORK' | null` names which
+dates the read compared, chosen **once per read** from the active baseline's
+`placementSnapshotLevel` — never per row, which would mix two questions in one table. `null` only
+when `meta.baselineId` is `null` (no active baseline — nothing was compared; nothing is guessed).
+
+- **`PLACED`** (`placementSnapshotLevel: 'FULL'`, every baseline captured since `api-v0.70.0`): the
+  frozen `placedStart`/`placedFinish` (where the bar sat at capture) against the live
+  `visualEffectiveStart`/`visualEffectiveFinish` (where it is drawn now, ADR-0148). A bar that has
+  genuinely moved reads as moved; removing a binding constraint and placing the bar exactly where
+  the constraint held it does not read as movement, because neither side has changed.
+- **`NETWORK`** (`placementSnapshotLevel: 'NONE'`, a baseline captured before placement capture
+  existed): the frozen `baselineStart`/`baselineFinish` against the live `earlyStart`/`earlyFinish`
+  — the only comparison such a baseline can honestly make. The accepted residual: on a `NETWORK`
+  baseline, converting a binding constraint into a placement (or a later drag) still reads as
+  "ahead", because the network dates moved and the placed ones were never recorded.
+
+`baselineStart`, `baselineFinish`, `currentStart`, `currentFinish` and the start/finish variance
+fields are on `meta.basis`; the field names do **not** change with the basis (a field named "early"
+sometimes holding a placed date would be the silent redefinition ADR-0148 refused elsewhere).
+`currentTotalFloat`, `baselineTotalFloat` and `floatVarianceDays` are total float on **both** bases,
+always — no baseline has ever frozen remaining float.
+
+`GET …/baselines` and `GET …/baselines/:baselineId` expose the same discriminator directly:
+`BaselineSummary.placementSnapshotLevel` says which basis a variance read against that baseline
+will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are meaningful only
+under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
+the null.
 
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
@@ -537,11 +578,11 @@ is `@Public()` (bypasses the session guard) and instead resolves an
 construction). Reads go through the existing org-scoped repositories, scoped **only** by
 the token's `planId` + `organizationId`, and return **field-stripped, read-only** DTOs.
 
-| Method | Path                         | Notes                                                                                                                                                                                                             |
-| ------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                  |
-| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, actual dates, total float, `isCritical`, lane, and progress (`status`, `percentComplete`). |
-| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days).                                                                                                                   |
+| Method | Path                         | Notes                                                                                                                                                                                                                                                                              |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                                                                                   |
+| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, lane, and progress (`status`, `percentComplete`). |
+| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days).                                                                                                                                                                                    |
 
 - **Uniform 404** — any dead / revoked / expired / soft-deleted-grant / deleted-plan
   token resolves to the same `404`, never `401/403` (no oracle).
@@ -554,7 +595,11 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   `Referrer-Policy: no-referrer` (§2/§5): not crawlable, not a referrer-leak source.
 - **Never exposed** — cost / Earned-Value / money, resources / assignments, baselines /
   variance, notes, audit columns (`createdBy`/`updatedBy`/`version`/`deletedAt`/
-  timestamps), any user identity, the plan-lock holder, and the token / tokenHash.
+  timestamps), any user identity, the plan-lock holder, and the token / tokenHash. As of
+  ADR-0163: the **placement input, conflict, drift and remaining float**
+  (`visualStart`/`visualConflict`/`visualConflictReason`/`visualDriftDays`/`remainingFloat`) —
+  a guest is shown where the work sits, never the planner's working notes about why it sits
+  there, and a float is analysis rather than the schedule a share link exists to show.
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
   link), fired-and-forgotten so it never blocks or fails a read.
@@ -1548,7 +1593,10 @@ controller's 30 / 60 s per handler.
   every member). **This route runs the CPM engine — twice** — on an in-memory
   copy of the plan graph: a control pass, then a pass with 600 working days
   injected into the front of the critical path, and the verdict from whether
-  the control run's completion carrier moved in step. Its parity claim is
+  the control run's completion carrier moved in step. On a plan that levels
+  resources each pass is also levelled, exactly as a recalculation would
+  (`docs/TECH_DEBT.md` #248, closed 2026-09-28), so up to four passes run and
+  the carrier is judged on the levelled finish. Its parity claim is
   deliberately the report route's WEAKER sibling (ADR-0116 D7): it computes
   **read-only and persists nothing** — no lock, no pen, no write path — proved
   by an e2e reading every engine-owned column back after the call. Returns the
@@ -1557,7 +1605,8 @@ controller's 30 / 60 s per handler.
   `detail`, so the verdict is reproducible by hand. Its own throttle
   (**14/60 s**) is derived from a committed formula and measurement
   (`docs/specs/schedule-health-check/m6-measurement.md`), never copied from
-  the float-paths budget.
+  the float-paths budget. That measurement was of the two network passes; it
+  has not been re-taken with levelling added.
 
 - `GET …/schedule/revision-compare?from=<uuid>&to=<uuid|live>` reports **what
   entered and left the critical path** between two computed schedules of one

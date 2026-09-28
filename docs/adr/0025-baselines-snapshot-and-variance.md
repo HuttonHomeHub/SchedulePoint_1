@@ -135,11 +135,58 @@ Three consequences are accepted rather than discovered later:
   breakdown also leaves PV **byte-identical** to the pre-amendment answer, which is asserted rather
   than asserted-about: capturing components must not by itself move a single minor unit.
 
+### 3 — Variance measures the placed span where the baseline recorded it (`docs/TECH_DEBT.md` #359, 2026-09-28)
+
+**Decision 3's "working days on the plan's calendar" is still true; what changed is which two dates
+that arithmetic is applied to.** ADR-0148 made a bar's position the plan's single answer to "when is
+this activity" — a drag writes `visualStart`, not a constraint — and variance had never caught up:
+`GET …/baselines/variance` still joined the frozen **early** start/finish against the live **early**
+start/finish on both sides, so a bar dragged after capture read as unmoved (both sides still 0), and
+removing a binding constraint and placing the bar exactly where the constraint held it — the ADR-0148
+strip's own transformation, and something a planner can do by hand — read the activity and everything
+downstream of it as **ahead** of baseline, though nothing on the diagram had moved.
+
+`baseline_activities.placed_start`/`placed_finish`/`visual_start` (M-C, the one-planning-surface
+capture) already froze the bar's actual position at capture and **nothing read them**. The fix is a
+**basis, chosen once per read** from the active baseline's `placement_snapshot_level`
+(`PlacementSnapshotLevel`, `'NONE' | 'FULL'`) — never per row, which would mix two questions in one
+table:
+
+- **`FULL → PLACED`** (every baseline captured since `api-v0.70.0`): compares the frozen
+  `placedStart`/`placedFinish` against the live `visualEffectiveStart`/`visualEffectiveFinish` — the
+  bars as drawn (ADR-0148). A bar that has moved reads as moved; a constraint-to-placement conversion
+  that leaves the bar where it was does not.
+- **`NONE → NETWORK`** (every baseline captured before placement capture existed, permanently — a
+  frozen snapshot cannot be back-filled with a placement it never recorded, the same reasoning
+  Amendment 2 applies to cost): compares the frozen early dates against the live early dates,
+  unchanged from before this amendment. The accepted residual: on such a baseline, a
+  constraint-to-placement conversion and a later drag both still read as "ahead"/unmoved respectively,
+  because the only dates such a baseline can honestly compare are network ones. The response names the
+  basis (`meta.basis: 'PLACED' | 'NETWORK' | null`) so a reader — and a screen — can tell which
+  question was answered rather than assuming early dates.
+
+The pure diff (`computeVariance`) is **unchanged apart from basis-neutral field names** on its live
+input (`earlyStart`/`earlyFinish` become `start`/`finish`): it has no idea which basis it was handed,
+which is the same property that let baseline-vs-baseline comparison come free for the revision delta
+(ADR-0125/0126). Float variance stays **total float on both bases, always** — no baseline has ever
+frozen remaining float, Amendment 2's `cost_snapshot_level` precedent notwithstanding.
+
+**Consequences.** The same plan reports different variance figures against a `NONE` and a `FULL`
+baseline for a hand-placed activity — expected, and named on screen. Four other readers still measure
+early dates and will disagree with variance for a hand-placed bar until their own decision is worked:
+the revision comparison's delta/`REDATED`/ghosts, the organisation landing page's plan-standing read
+(`capturedProjectFinish` vs `MAX(earlyFinish)`), and Earned Value's PV phasing. DCMA health correctly
+stays on the network basis (structural, not a comparison, ADR-0116). **The CPM engine is untouched** —
+the variance read does not call `computeSchedule`, so the ADR-0034 recalc parity gate is unaffected in
+its strong form.
+
 ## References
 
 - Feature spec: [`docs/specs/baselines.md`](../specs/baselines.md) · Implementation plan:
   [`docs/plans/baselines.md`](../plans/baselines.md)
+- Feature spec (Amendment 3): [`docs/specs/placed-baseline-variance/feature-spec.md`](../specs/placed-baseline-variance/feature-spec.md)
 - Builds on: ADR-0012 (RBAC + resource scoping), ADR-0016 (identity & tenancy), ADR-0022
   (CPM execution & persistence — the plan advisory lock), ADR-0023 (CPM date convention),
   ADR-0024 (working-day calendars).
+- Amended by: ADR-0148 (a bar is drawn where it is placed — the placed basis this amendment reads).
 - PROJECT_BRIEF §8 (Must-have), §10 (Journey 4), §11, §13 (retention), §17 (trust risk).

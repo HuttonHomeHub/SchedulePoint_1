@@ -1,6 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { ActivityType, Baseline, BaselineActivity } from '@prisma/client';
-import type { BaselineActivitySnapshot, BaselineDetail, BaselineSummary } from '@repo/types';
+import type {
+  ActivityType,
+  Baseline,
+  BaselineActivity,
+  PlacementSnapshotLevel as PrismaPlacementSnapshotLevel,
+} from '@prisma/client';
+import type {
+  BaselineActivitySnapshot,
+  BaselineDetail,
+  BaselineSummary,
+  PlacementSnapshotLevel,
+} from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import { minutesToDays } from '../../activities/day-factor';
@@ -53,6 +63,17 @@ export class BaselineResponseDto implements BaselineSummary {
   @ApiProperty({ description: 'How many activity snapshots the baseline froze.' })
   activityCount!: number;
 
+  @ApiProperty({
+    enum: ['NONE', 'FULL'],
+    description:
+      'What this capture froze of the placement (placement-baseline-variance, amending ' +
+      "ADR-0025). 'NONE' for every baseline captured before api-v0.70.0 — the pure-network " +
+      "dates only. 'FULL' after — plus placedStart/placedFinish/visualStart on each snapshot " +
+      'row. Decides which dates GET …/baselines/variance compares against this baseline; see ' +
+      'that route’s `meta.basis`.',
+  })
+  placementSnapshotLevel!: PlacementSnapshotLevel;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -74,6 +95,7 @@ export class BaselineResponseDto implements BaselineSummary {
         ? formatCalendarDate(entity.capturedProjectFinish)
         : null,
       activityCount,
+      placementSnapshotLevel: entity.placementSnapshotLevel,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
@@ -116,6 +138,33 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
   @ApiProperty()
   isCritical!: boolean;
 
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'The frozen placed span — where the bar actually sat at capture (placement-baseline-' +
+      "variance). Meaningful only when the parent baseline's placementSnapshotLevel is FULL; " +
+      'a null there means the plan had not been calculated at capture. On a NONE baseline ' +
+      'this is null because nothing was recorded. Read the level; never infer it from the null.',
+  })
+  placedStart!: string | null;
+
+  @ApiProperty({ format: 'date', nullable: true, type: String })
+  placedFinish!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      "The planner's own frozen hand-placement, distinct from placedStart/placedFinish: this " +
+      'is the input the planner gave, those are the engine’s output from it plus the ' +
+      'network. Null on a FULL baseline means the activity was never hand-placed at capture ' +
+      '— the common case. Null on a NONE baseline means “not recorded”.',
+  })
+  visualStart!: string | null;
+
   /**
    * `hoursPerDayMinutes` is the PARENT baseline's frozen factor (ADR-0068 §5), passed in rather
    * than read from the live calendar — a snapshot whose reported durations move when someone edits
@@ -138,6 +187,11 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
       lateFinish: entity.lateFinish ? formatCalendarDate(entity.lateFinish) : null,
       totalFloat: entity.totalFloat,
       isCritical: entity.isCritical,
+      // The frozen PLACEMENT (placement-baseline-variance). All three null is the commonest
+      // real capture, not an empty placeholder — see the field docblocks above.
+      placedStart: entity.placedStart ? formatCalendarDate(entity.placedStart) : null,
+      placedFinish: entity.placedFinish ? formatCalendarDate(entity.placedFinish) : null,
+      visualStart: entity.visualStart ? formatCalendarDate(entity.visualStart) : null,
     };
   }
 }
@@ -156,3 +210,19 @@ export class BaselineDetailResponseDto extends BaselineResponseDto implements Ba
     };
   }
 }
+
+/**
+ * Lock-step check (`schema.prisma`'s own `PlacementSnapshotLevel` docblock demands it "when
+ * the comparison surfaces it" — `placement-baseline-variance` is that moment): Prisma's
+ * generated enum and `@repo/types`'s union must describe exactly the same set of values.
+ * `MutuallyAssignable` evaluates to `false` the moment either side gains a member the other
+ * lacks, and assigning `true` to a `false`-typed const then fails to compile — never
+ * silently, and never only at runtime. Exported (rather than a bare unread local) so
+ * `noUnusedLocals` does not itself have to be told to look away from the one line whose job
+ * is to be looked at.
+ */
+type MutuallyAssignable<A, B> = A extends B ? (B extends A ? true : false) : false;
+export const _placementSnapshotLevelLockStep: MutuallyAssignable<
+  PrismaPlacementSnapshotLevel,
+  PlacementSnapshotLevel
+> = true;

@@ -28,6 +28,11 @@ export default [
     plugins: { 'react-hooks': reactHooks, 'jsx-a11y': jsxA11y },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Armed at `error` (ADR-0164, `docs/TECH_DEBT.md` #353). The recommended preset ships it as
+      // `warn`, and a warning passed `pnpm lint` silently while four real staleness defects shipped
+      // under it. Every workspace also lints with `--max-warnings=0`, so no rule can pass while
+      // printing a finding nobody reads.
+      'react-hooks/exhaustive-deps': 'error',
       ...jsxA11y.flatConfigs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',

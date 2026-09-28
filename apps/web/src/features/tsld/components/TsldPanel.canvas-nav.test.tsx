@@ -133,7 +133,7 @@ function IsolateHarness({
     canvasUi.setIsolateMode(mode); // arms isolate on
     if (filterQuery) canvasUi.setFilterQuery(filterQuery);
     // Arm once on mount; the setters are stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount, by design (see above)
   }, []);
   return (
     <TsldPanel

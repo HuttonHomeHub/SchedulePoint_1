@@ -13,13 +13,20 @@ export interface VarianceBaselineRow {
   totalFloat: number | null;
 }
 
-/** A live activity projected to the fields variance needs (dates as `YYYY-MM-DD`). */
+/**
+ * A live activity projected to the fields variance needs (dates as `YYYY-MM-DD`).
+ *
+ * `start`/`finish` rather than `earlyStart`/`earlyFinish` (`placement-baseline-variance`):
+ * this function is basis-blind, and the caller projects the live row onto whichever basis
+ * `meta.basis` names before calling it — a field named "early" that sometimes holds a
+ * PLACED date is the silent redefinition ADR-0148 refused elsewhere.
+ */
 export interface VarianceLiveRow {
   id: string;
   code: string | null;
   name: string;
-  earlyStart: string | null;
-  earlyFinish: string | null;
+  start: string | null;
+  finish: string | null;
   totalFloat: number | null;
 }
 
@@ -63,6 +70,13 @@ function workingDiff(
  * `inBaseline: false` (variance null); a baselined activity no longer live is a
  * `removed: true` row (current fields null). Live rows keep their input order; removed
  * rows follow.
+ *
+ * **Basis-blind** (`placement-baseline-variance`, amending ADR-0025): this function has no
+ * idea whether `baselineStart`/`start` are placed or network dates — the caller projects
+ * both inputs onto whichever basis the active baseline's `placementSnapshotLevel` selects
+ * (`meta.basis`) before calling it. Keeping the maths blind is the same property that let
+ * baseline-vs-baseline come free for the revision delta (`schedule.service.ts`): one join,
+ * two possible projections of its inputs, chosen once by the caller.
  */
 export function computeVariance(
   baselineRows: readonly VarianceBaselineRow[],
@@ -82,10 +96,10 @@ export function computeVariance(
   for (const live of liveRows) {
     const base = baselineById.get(live.id) ?? null;
     const startVarianceDays = base
-      ? workingDiff(calendar, base.baselineStart, live.earlyStart, dayFactorMinutes)
+      ? workingDiff(calendar, base.baselineStart, live.start, dayFactorMinutes)
       : null;
     const finishVarianceDays = base
-      ? workingDiff(calendar, base.baselineFinish, live.earlyFinish, dayFactorMinutes)
+      ? workingDiff(calendar, base.baselineFinish, live.finish, dayFactorMinutes)
       : null;
     const floatVarianceDays =
       base && live.totalFloat !== null && base.totalFloat !== null
@@ -106,8 +120,8 @@ export function computeVariance(
       name: live.name,
       inBaseline: base !== null,
       removed: false,
-      currentStart: live.earlyStart,
-      currentFinish: live.earlyFinish,
+      currentStart: live.start,
+      currentFinish: live.finish,
       currentTotalFloat: live.totalFloat,
       baselineStart: base?.baselineStart ?? null,
       baselineFinish: base?.baselineFinish ?? null,

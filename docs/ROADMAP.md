@@ -395,14 +395,20 @@ keep `main` releasable.
   identically. MS Project files do not carry the layout yet. Whether a real P6 opens the file has
   not been observed.
 
+- **A share link shows the plan as placed** — **shipped** (ADR-0163, 2026-09-28). A share link
+  drew the computed dates while its author saw the bars where they had placed them, and a screen
+  reader told the guest every activity was "not yet scheduled". The guest now sees exactly the
+  planner's picture; four other schedule fields stay private, each with a written reason. Every
+  existing link shows the placed picture from this release.
+
 - **A zero-duration task keeps its date, and changing its type no longer moves it** (ADR-0162,
-  amending ADR-0035 §22; in progress). A zero-duration task is still dated by the day it starts, so
+  amending ADR-0035 §22; **shipped** 2026-09-28). A zero-duration task is still dated by the day it starts, so
   after a task ending Friday it reads Monday where a finish milestone at the same instant reads
   Friday. Changing such an activity's type in the editor now re-expresses its stored dates so its
   place in the schedule, its successors and its float are unchanged; before, it moved by up to a
-  working day. Still to come in this epic: the health check lists zero-duration tasks in a section
-  of its own, an import says which activities arrived with no duration, and a **Make milestone**
-  action turns one into a milestone in one step.
+  working day. The health check lists zero-duration tasks in a section of its own, an import says
+  which activities arrived with no duration, and a **Make milestone** action turns one into a
+  milestone in one step.
 
 - **A link between two plans gives the same dates as the same link in one plan** (ADR-0161,
   amending ADR-0045 §2 and ADR-0035 §30.5). A cross-plan link used its own simplified arithmetic,

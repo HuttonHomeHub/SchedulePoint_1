@@ -97,7 +97,6 @@ import {
   computeResourceHistogram,
   computeSchedule,
   HistogramTooManyBucketsError,
-  levelSchedule,
   resolveCurveProfile,
   ScheduleGraphNotADagError,
   type ComputeOptions,
@@ -113,6 +112,7 @@ import {
 } from './engine';
 import { computeHealthReport, healthActivityAssignmentFields } from './health/compute-health';
 import type { HealthActivityInput } from './health/compute-health';
+import { levelIfEnabled } from './level-if-enabled';
 import {
   buildPlanCalendar,
   buildPlanCalendarOrReject,
@@ -549,23 +549,14 @@ export class ScheduleService {
         // Resource levelling (ADR-0041): iff the plan opted in AND has assignments, run the pure
         // second pass and persist its additive overlay. Off ⇒ the network `output.results` are written
         // as-is and the leveled columns are cleared to null/false (byte-identical, the parity gate).
-        let results = output.results;
-        let summary: EngineSummary = output.summary;
-        if (graph.leveling) {
-          const leveled = levelSchedule(
-            graph.activities,
-            output,
-            graph.leveling.assignments,
-            graph.leveling.resources,
-            {
-              levelWithinFloatOnly: plan.levelWithinFloatOnly,
-              dataDate,
-              planCalendar: graph.options.calendar,
-            },
-          );
-          results = leveled.results;
-          summary = { ...output.summary, ...leveled.summary };
-        }
+        // `levelIfEnabled` (`docs/TECH_DEBT.md` #248) is the ONE rule for this — the DCMA metric-12
+        // what-if runs the identical call over its own control and perturbed passes, so the two can
+        // never again disagree about what "levelled" means.
+        const { results, summary } = levelIfEnabled(graph.activities, output, graph.leveling, {
+          levelWithinFloatOnly: plan.levelWithinFloatOnly,
+          dataDate,
+          planCalendar: graph.options.calendar,
+        });
         // Float and drift are persisted IN DAYS by this write, so they take the same factor the
         // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
         // float" for one span — not a smaller change than converting them, an incoherent one.
@@ -1043,11 +1034,19 @@ export class ScheduleService {
    * **DCMA metric 12, computed for real** (health M6, ADR-0116 D7) — a what-if perturbation on an
    * in-memory copy of the plan's graph, `schedule:read` (any member).
    *
-   * **This route's parity sentence is D7's, never D1's**: the CPM engine IS invoked here — twice —
-   * and the claim that holds is the different, weaker one: it **computes read-only and persists
-   * nothing**. No plan lock, no pen, and the one transaction is the read-snapshot
-   * `buildEngineGraph` shares with `floatPaths`; no write path is reachable from this method, and
-   * the non-mutation e2e proves it by reading every engine-owned column back after the call.
+   * **This route's parity sentence is D7's, never D1's**: the CPM engine IS invoked here — up to
+   * four times (the control network pass, its optional levelling pass, the perturbed network pass,
+   * its optional levelling pass) — and the claim that holds is the different, weaker one: it
+   * **computes read-only and persists nothing**. No plan lock, no pen, and the one transaction is
+   * the read-snapshot `buildEngineGraph` shares with `floatPaths`; no write path is reachable from
+   * this method, and the non-mutation e2e proves it by reading every engine-owned column back after
+   * the call.
+   *
+   * **Levels BOTH passes when the plan does** (`docs/TECH_DEBT.md` #248, product-owner-approved
+   * 2026-09-28): `graph.leveling` is now carried through to `runCriticalPathTest`, which runs it
+   * through the exact same `levelIfEnabled` rule {@link recalculateInLock} uses, so the what-if's
+   * verdict is measured against the schedule the product actually shows a levelled plan's planner —
+   * never the pure network dates a recalculation no longer persists once `levelResources` is on.
    */
   async getCriticalPathTest(
     principal: Principal,
@@ -1070,26 +1069,12 @@ export class ScheduleService {
     const dataDate = formatCalendarDate(plan.plannedStart);
 
     // The same read snapshot `floatPaths` takes: the exact engine-input builder `recalculate`
-    // uses, so the what-if can never drift from what a real recalculation would compute.
-    //
-    // **`graph.leveling` is deliberately NOT taken, and that is a KNOWN GAP rather than a
-    // decision** (`docs/TECH_DEBT.md` #248, ADR-0116 addendum 2026-09-10). `buildEngineGraph` also
-    // returns `leveling: { assignments, resources } | null`, and `recalculate` runs
-    // `levelSchedule` with it whenever `plan.levelResources` is true and persists THAT result — so
-    // on a levelled plan this what-if perturbs a schedule the product does not display, and
-    // measures the movement against a baseline the planner never sees.
-    //
-    // The sentence above ("can never drift from what a real recalculation would compute") is
-    // therefore true of the INPUT and not of the passes run over it. It is left standing because it
-    // is the reason the builder is shared at all; this note is what stops it being read as a
-    // guarantee about the output.
-    //
-    // Named here rather than left implicit because the drop was invisible: a destructure that omits
-    // a field looks exactly like a destructure of a type that never had one, every number the route
-    // returns is internally consistent, and the seeded fixture has `level_resources = false`, so no
-    // test could report it. Threading it through and levelling BOTH passes is the correct fix and
-    // is the open half of #248.
-    const [{ activities, edges, options, meta }, labelRows] = await Promise.all([
+    // uses, so the what-if can never drift from what a real recalculation would compute — of the
+    // INPUT, and now of the passes run over it too: `graph.leveling` is taken here and threaded
+    // through to `runCriticalPathTest`, which runs it through `levelIfEnabled`, the SAME rule
+    // `recalculateInLock` uses. `docs/TECH_DEBT.md` #248 named the previous drop and is why this is
+    // stated rather than left implicit.
+    const [{ activities, edges, options, leveling, meta }, labelRows] = await Promise.all([
       this.prisma.$transaction((tx) => this.buildEngineGraph(organization.id, plan, dataDate, tx)),
       this.schedule.loadHealthActivities(organization.id, planId),
     ]);
@@ -1114,6 +1099,8 @@ export class ScheduleService {
         activities,
         edges,
         options,
+        leveling,
+        levelWithinFloatOnly: plan.levelWithinFloatOnly,
         dayFactorMinutesOf: (id) => byId.get(id)?.dayFactorMinutes ?? DEFAULT_HOURS_PER_DAY_MINUTES,
         labelOf: (id) => {
           const row = byId.get(id);
@@ -1121,8 +1108,9 @@ export class ScheduleService {
         },
       });
     } catch (error) {
-      // The what-if runs the same two passes a recalculation would, so the walk-time horizon
-      // guard is reachable here too and takes the same 422 (`docs/TECH_DEBT.md` #205(b)).
+      // The what-if runs the same passes a recalculation would — network, and (on a levelled plan)
+      // levelling too — so the walk-time horizon guard is reachable here too and takes the same 422
+      // (`docs/TECH_DEBT.md` #205(b)).
       rejectIfWorkingTimeHorizonExceeded(error, {
         planCalendarId: plan.calendarId ?? null,
         activityCalendarCount: meta.activityCalendarCount,

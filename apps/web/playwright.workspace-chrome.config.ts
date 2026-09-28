@@ -71,7 +71,15 @@ export default defineConfig({
             url: 'http://localhost:3000/api/v1/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: { LOG_LEVEL: 'silent', PLAN_EDIT_LOCK_ENFORCED: 'true' },
+            env: {
+              LOG_LEVEL: 'silent',
+              PLAN_EDIT_LOCK_ENFORCED: 'true',
+              // `activities-panel-scroll.spec.ts` seeds sixty activities per test, one POST each, to
+              // overflow the panel, which trips the global throttler (100/60 s) on the second test.
+              // Raised for this harness only, as `playwright.gantt.config.ts` does; the guard itself
+              // is untouched and no other suite or environment sees this value.
+              RATE_LIMIT_LIMIT: '100000',
+            },
           },
           {
             command: 'pnpm dev',

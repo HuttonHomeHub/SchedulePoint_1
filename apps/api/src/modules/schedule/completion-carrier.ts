@@ -13,6 +13,12 @@ import type { WorkingTimeCalendar } from './engine/working-time-calendar';
  * is the extraction. It is behaviour-preserving: `critical-path-test.spec.ts` was green before the
  * move and is the before/after oracle (the ADR-0078 barrel-preserving argument — a refactor changes
  * no assertion).
+ *
+ * **Both functions below read the levelled overlay when it is there** (`docs/TECH_DEBT.md` #248):
+ * they take whatever {@link EngineResult} they are handed, and a result that has been through
+ * {@link levelIfEnabled} carries `leveledFinish(Offset)` for its participants. Neither function runs
+ * the levelling pass itself — that is the caller's job, once, via `levelIfEnabled` — these only decide
+ * which of the two finishes on an already-merged row is the one a planner would see.
  */
 
 /**
@@ -34,13 +40,44 @@ export function isPerturbableType(type: ActivityType): boolean {
 }
 
 /**
- * The **completion carrier**: the control run's latest-finishing NON-SUMMARY activity.
+ * **The finish a caller that has already run {@link levelIfEnabled} should read** (`docs/TECH_DEBT.md`
+ * #248) — the levelled overlay when this row is a levelling participant (`leveledFinishOffset` is
+ * non-null only then), the pure network finish otherwise. On a `computeSchedule` result with no
+ * overlay merged on — `leveledFinishOffset` is always `undefined` there — this is exactly
+ * `earlyFinishOffset`, so a caller that never levels sees no change at all.
+ */
+function effectiveFinishOffset(r: EngineResult): number {
+  return r.leveledFinishOffset ?? r.earlyFinishOffset;
+}
+
+/**
+ * The date twin of {@link effectiveFinishOffset}, for the working-time delta AND for reporting.
+ * Exported (`docs/TECH_DEBT.md` #248): a caller's `detail` payload must show the SAME date this
+ * module measured the movement from, or the "everything injected rides `detail` so the verdict is
+ * reproducible by hand" promise (the route's own `@ApiOperation`) breaks silently on a levelled
+ * plan — a reader recomputing by hand from the printed network finish would get the movement the
+ * pre-#248 route reported, not the one the response's own verdict is based on.
+ */
+export function effectiveFinish(r: EngineResult): string {
+  return r.leveledFinish ?? r.earlyFinish;
+}
+
+/**
+ * The **completion carrier**: the control run's latest-finishing NON-SUMMARY activity, on the
+ * **displayed** schedule — the levelled overlay where the plan levels, the pure network finish
+ * where it does not ({@link effectiveFinishOffset}).
  *
  * **Not the max-over-all project finish**, and that distinction is the whole reason this function
  * exists. `projectFinish` is the max early finish, and a perturbed activity's own finish grows
  * unconditionally — so measuring the max passes a network whose downstream logic absorbed the delay
  * entirely. The first fixture written against ADR-0116 M6 proved exactly that: a MANDATORY pin
  * masking the whole chain read as PASS.
+ *
+ * **Reading the levelled finish here, and not only in the movement measurement, is deliberate**
+ * (#248's engine remedy): levelling can delay a DIFFERENT activity past what was the network's
+ * latest finish, so a carrier chosen on `earlyFinishOffset` alone could pick an activity that is no
+ * longer the one that finishes last once the plan is actually levelled — the activity the product
+ * shows finishing last, and the completion a levelled plan's what-if should be judging.
  *
  * Summaries are excluded because their dates are a rollup over their children (`compute.ts:544`),
  * so a summary can never be the thing that finished last in any sense a planner means. That
@@ -59,12 +96,20 @@ export function selectCompletionCarrier(
     .filter((r) => !summaryIds.has(r.activityId))
     .sort(
       (x, y) =>
-        y.earlyFinishOffset - x.earlyFinishOffset || x.activityId.localeCompare(y.activityId),
+        effectiveFinishOffset(y) - effectiveFinishOffset(x) ||
+        x.activityId.localeCompare(y.activityId),
     )[0];
 }
 
 /**
  * How far the carrier moved, in days, measured on an **explicitly supplied** calendar.
+ *
+ * **Reads the levelled finish when the caller has one, the network finish otherwise**
+ * ({@link effectiveFinish}) — the same rule {@link selectCompletionCarrier} applies to *which*
+ * activity is the carrier, applied here to *how far* it moved. A caller that hands this two
+ * `computeSchedule` results (no overlay merged on) measures exactly what it always measured; one
+ * that has run both its control and its perturbed pass through `levelIfEnabled` measures the two
+ * dates the product actually shows.
  *
  * **The calendar is a required parameter and must not be defaulted**, because the right answer
  * differs by caller and picking one silently gives the other caller the wrong semantics:
@@ -86,8 +131,8 @@ export function measureCarrierMovementDays(params: {
 }): number {
   const { carrier, carrierPerturbed, calendar, dayFactorMinutes } = params;
   const deltaMinutes = calendar.workingTimeBetween(
-    carrier.earlyFinish,
-    carrierPerturbed.earlyFinish,
+    effectiveFinish(carrier),
+    effectiveFinish(carrierPerturbed),
   );
   return Math.round((deltaMinutes / dayFactorMinutes) * 10) / 10;
 }

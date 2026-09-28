@@ -29,6 +29,15 @@
 # It deliberately does NOT run the e2e half. That needs a database and a browser, takes tens of
 # minutes, and `scripts/e2e-local.sh` already owns it — see docs/TESTING.md "Before you push" for
 # when it is required.
+#
+# **A gate's finding either blocks (FAIL) or is declared advisory (WARN, and only for a name in
+# ADVISORY_GATES below). There is no third, print-but-pass state** (ADR-0164). `run()` below sends a
+# PASSING gate's output to a log and prints only `ok`, so a gate that exits 0 while printing a
+# finding is invisible here by construction — which is exactly what `pnpm lint` did before
+# ADR-0164 armed `--max-warnings=0` on every workspace: a warning passed silently, and four real
+# staleness defects shipped under it before anyone read one. `check:claims`' `note: … registered
+# but no longer cited` line is the same defect outside lint, confirmed and filed rather than fixed
+# here (an ADR-0105 shared-gate trigger of its own).
 set -uo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

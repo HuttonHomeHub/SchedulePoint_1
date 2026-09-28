@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1392 web
+> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1395 web
 > source files with 46 Playwright suites beside the base journey, and
-> 162 ADRs.
+> 164 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -140,7 +140,9 @@ SchedulePoint/
 - **TypeScript strict everywhere.** No `any` without a written justification;
   prefer `unknown` + narrowing. `noUncheckedIndexedAccess` is on.
 - **Formatting is not a debate.** Prettier owns formatting; ESLint owns
-  correctness. Never hand-format to fight the tools.
+  correctness. Never hand-format to fight the tools. A lint warning fails lint
+  (`--max-warnings=0` on every workspace, ADR-0164) — there is no passing state
+  that prints a finding nobody reads.
 - **Naming:** `camelCase` for variables/functions, `PascalCase` for
   types/components/classes, `SCREAMING_SNAKE_CASE` for constants, `kebab-case`
   for file names (React components may use `PascalCase.tsx`).
@@ -428,7 +430,12 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   factory at the engine port; org library + per-plan default; per-activity deferred).
 - **ADR-0025** — Baselines: snapshot-copy model (non-FK `source_activity_id`),
   one-active-per-plan invariant (partial unique + plan lock), and server-side
-  working-day variance.
+  working-day variance. **Amendment 3 (2026-09-28, `docs/TECH_DEBT.md` #359):** variance picks
+  one basis per read from the baseline's `placementSnapshotLevel` — placed against placed on a
+  `FULL` baseline, earliest against earliest on a `NONE` one (every capture before ADR-0148 M-C,
+  permanently, since a backfill would invent history) — and says which on the response and on
+  screen. It never mixes the two per row, because a frozen network date against a live placed one
+  reads a converted constraint as "ahead" while its bar has not moved.
 - **ADR-0026** — TSLD canvas: Canvas 2D (layered, culled) with a WebGL escalation
   gate, the coordinate/viewport/hit-test/recalc model, and a parallel focusable DOM
   a11y layer (prototype-at-scale gate passed — draw ≤4ms p95 @ 2,000 activities).
@@ -6012,6 +6019,39 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   sentence still saying no importer produced the advisory, one milestone after both did.
   `check:engine-parity` expires with #384 in the commit that closes it. **The CPM engine is not
   modified and no migration runs.**
+
+- **ADR-0163** _(Accepted; landed 2026-09-28)_ — A guest sees the plan as placed. Since ADR-0148
+  the placed span **is** the plan, and the member canvas draws it for every plan; a share link still
+  drew the CPM early dates, because the guest DTO forbade the two placed fields, the web adapter
+  nulled them and `GuestPlanView` passed no bar basis. So the one artefact a planner hands to
+  somebody who was not in the room showed the bars somewhere other than where they were put.
+  `SCHEDULE_READ` widens by exactly `visualEffectiveStart`/`visualEffectiveFinish` — amending
+  ADR-0051 §4 rather than rewriting it — on the argument that a placement is the same kind of fact a
+  guest already reads (a date span on a visible activity, beside a lane index already exposed), and
+  that before ADR-0148 the same drag wrote a binding constraint that moved the early dates guests saw.
+  Four neighbours stay out, each with a written reason. **The change repaired a second defect nobody
+  had reported**: the guest's accessible channel defaulted to the placed dates the adapter nulled,
+  so a screen reader announced every activity as "not yet scheduled" beside a sighted picture of
+  early dates. A structural census now makes every production `TsldPanel` host state its basis, so
+  no host inherits the `'early'` default meant for unit suites; the journey pins bar position by a
+  scale-free pixel ratio as well as by text, because the spoken sentence does not read the painter's
+  basis and a half fix would pass the text alone. An older API that omits the fields draws early
+  dates rather than a blank diagram. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0164** _(Accepted; landed 2026-09-28)_ — A lint warning is a failure, and a gate has no
+  pass-with-findings outcome. `react-hooks/exhaustive-deps` ran at `warn` and no workspace linted with
+  `--max-warnings=0`, so the rule named real staleness defects on the day each shipped while `pnpm
+lint` stayed green (`docs/TECH_DEBT.md` #353). **D1** `--max-warnings=0` in all nine workspace lint
+  scripts; **D2** `exhaustive-deps` at `error`; **D3** every `react-hooks/*` suppression carries a
+  written reason; all three pinned by `lint-policy.structural.test.ts`, which reads the **resolved**
+  config rather than the source. **D5**, the wide claim: a gate's finding either blocks or is
+  declared advisory — there is no print-but-pass state (refines ADR-0120/0124); `check:claims`'s
+  dead-registration note is the confirmed instance outside lint, filed as #410. The tree was cleaned
+  before arming (ADR-0058: a gate that fails on day one gets deleted): three sites fixed, one of them a
+  real defect (a newly added link missing from the printed Gantt's Predecessors column), and M0
+  measured the spec's inventory rather than trusting its cache-derived count. The red run reproduced
+  eight of nine limbs as predicted; the ninth found a second path masking that print defect (#408).
+  Rollback is reverting one commit. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

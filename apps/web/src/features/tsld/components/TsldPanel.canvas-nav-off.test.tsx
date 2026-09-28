@@ -97,7 +97,7 @@ function OffHarness(): React.ReactElement {
   const canvasUi: TsldCanvasUiState = useTsldCanvasUiState();
   useEffect(() => {
     canvasUi.setIsolateMode('full'); // arms isolate on — but the flag is off, so nothing dims
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount to arm the fixture
   }, []);
   return (
     <TsldPanel

@@ -566,6 +566,17 @@ export function GanttPanel({
   const anchor = span === null ? null : chartAnchor(span);
   const chartPx = span === null ? 0 : chartWidth(span, pxPerDay);
 
+  // `useVirtualizer` returns functions the compiler's analysis cannot prove are safe to memoize, so
+  // it skips this WHOLE component's analysis (the `react-hooks/refs`/`set-state-*` diagnostics
+  // below do not run here, D3/`docs/TECH_DEBT.md` #353) — the exact hazard the `activitiesRef`
+  // effect two paragraphs down exists to guard against by hand. Turning the rule off would let a
+  // NEW incompatible call site pass silently; wrapping the call in a local hook would hide the
+  // incompatibility from the analysis without making the code any safer, and would become a real
+  // stale-UI defect the day `babel-plugin-react-compiler` is wired into the build (not today,
+  // per the note two paragraphs down). `incompatible-library` costs nothing EXTRA here — the
+  // component was already skipped because of the library — and `reportUnusedDisableDirectives`
+  // (ESLint 9's default) flags this directive the day `useVirtualizer` stops needing it.
+  // eslint-disable-next-line react-hooks/incompatible-library -- see above
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -621,11 +632,12 @@ export function GanttPanel({
   // `pnpm lint` did not catch it. `eslint-plugin-react-hooks` v7 carries the React Compiler's
   // analysis as lint rules — that is where `react-hooks/refs` comes from — but this component also
   // calls `useVirtualizer`, which the same analysis reports as an **incompatible library** and then
-  // bails out of the WHOLE component for (the `Compilation Skipped` warning `pnpm lint` prints for
-  // this file, every run). The M6 component gate reproduced that blind spot in an isolated
-  // component rather than asserting it. So the rule that caught the identical pattern in
-  // `use-gantt-grid-editing.ts` gave no protection here: the same defect, in the same diff, in the
-  // one file the tool cannot see.
+  // bails out of the WHOLE component for it (the `Compilation Skipped` finding, now suppressed at
+  // the call site with the consequence stated — `docs/TECH_DEBT.md` #353 D3 — rather than printing
+  // on every run, which is what it did before that suppression existed). The M6 component gate
+  // reproduced that blind spot in an isolated component rather than asserting it. So the rule that
+  // caught the identical pattern in `use-gantt-grid-editing.ts` gave no protection here: the same
+  // defect, in the same diff, in the one file the tool cannot see.
   //
   // Worth being precise, because the M6 performance gate over-read this in the other direction and
   // reported the compiler as "not running at all": `babel-plugin-react-compiler` is indeed **not**

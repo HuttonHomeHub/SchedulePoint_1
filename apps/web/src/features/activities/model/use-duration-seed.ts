@@ -78,6 +78,6 @@ export function useDurationSeed({
     // `readDuration`/`setDuration`/`activity` are read at the moment the factor lands; adding them
     // here would re-run this on every keystroke and every list refetch, which is the opposite of
     // "once". The values they return are read live inside, so nothing here goes stale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per open, reads live (see above)
   }, [open, hoursPerDay]);
 }

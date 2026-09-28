@@ -25,6 +25,7 @@ const BASELINES: BaselineSummary[] = [
     dataDate: '2026-01-05',
     capturedProjectFinish: '2026-03-01',
     activityCount: 12,
+    placementSnapshotLevel: 'FULL',
     version: 1,
     createdAt: '2026-01-05T09:00:00Z',
     updatedAt: '2026-01-05T09:00:00Z',
@@ -38,6 +39,10 @@ const BASELINES: BaselineSummary[] = [
     dataDate: '2026-01-05',
     capturedProjectFinish: '2026-03-10',
     activityCount: 12,
+    // Captured before placements were recorded (placement-baseline-variance) — the
+    // "Compares" column reads "Earliest dates" for this row and "Placed dates" for the
+    // FULL row above.
+    placementSnapshotLevel: 'NONE',
     version: 1,
     createdAt: '2026-02-01T09:00:00Z',
     updatedAt: '2026-02-01T09:00:00Z',
@@ -71,6 +76,14 @@ describe('BaselinesPanel', () => {
     expect(screen.getByRole('button', { name: 'Activate Revised Baseline' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Contract Baseline is active' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Delete Revised Baseline' })).toBeInTheDocument();
+  });
+
+  // T6 (placement-baseline-variance): the "Compares" column reports what a variance read
+  // against each row will use, from its frozen placementSnapshotLevel.
+  it('shows which dates each baseline compares (placement-baseline-variance)', () => {
+    renderPanel(true);
+    expect(screen.getByText('Placed dates')).toBeInTheDocument();
+    expect(screen.getByText('Earliest dates')).toBeInTheDocument();
   });
 
   it('hides all write actions from a non-manager', () => {

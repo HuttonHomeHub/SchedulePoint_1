@@ -16,10 +16,20 @@ import { BaselineVarianceSummary } from '@/features/baselines';
  * canvas above keeps the rest. The workspace owns the drag-resizer (the shared
  * resizable-panel primitive) and the panel's height; this component is the panel *content*.
  *
- * Reuses the same `ActivitiesTable` (computed columns, variance, progress editor, CRUD,
- * virtualization) the stacked page used, driven off the shared model so behaviour is
- * identical to the legacy layout. The pen read-only note is **not** shown here — the
- * workspace shows a single consolidated note above the whole body (ADR-0030 US-4).
+ * Reuses the same `ActivitiesTable` (computed columns, variance, progress editor, CRUD) the
+ * stacked page used, driven off the shared model so behaviour is identical to the legacy layout.
+ *
+ * **This claimed "virtualization" until `docs/TECH_DEBT.md` #334, and that was false.**
+ * `ActivitiesTable` hands its whole row list to `DataTable`'s plain `rows.map`
+ * (`components/ui/data-table.tsx:370`) — every activity mounts, however many the plan holds. Whether
+ * that is actually slow at plan scale (ADR-0026's 2,000-activity ceiling) is a measured question,
+ * not an assumed one: the committed conditions and bars are
+ * `docs/specs/activities-panel-scale/m0-conditions.md`, and the reading against them —
+ * `docs/specs/activities-panel-scale/m0-measurement.md`, once taken — decides whether this needs
+ * render isolation, windowing, or neither.
+ *
+ * The pen read-only note is **not** shown here — the workspace shows a single consolidated note
+ * above the whole body (ADR-0030 US-4).
  */
 export function ActivityBottomPanel({
   model,
@@ -105,7 +115,25 @@ export function ActivityBottomPanel({
           ) : null}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      {/* No `overflow-y-auto` here any more (activities-panel-scale M1) — `ActivitiesTable`'s own
+          region is now the panel's ONE scroller (`scroll="contained"`, `data-table.tsx`), so this
+          div only needs to pass its height through as a flex column. A second scroller here would
+          have reproduced the exact defect the milestone exists to remove: two nested overflow
+          containers where only the outer one actually scrolled vertically.
+
+          `data-testid` rather than a class-string or copy locator (the standing rule after
+          `docs/TECH_DEBT.md` #124/#133's journeys broke on exactly that): SC-5's own journey needs
+          to assert THIS div's `scrollHeight === clientHeight` and it has no accessible name of its
+          own to query by.
+
+          `overflow-y-auto` IS here, but only as a fallback: while the table's region fits, it
+          fills this div exactly and this div never scrolls (SC-5 holds). When a selection's
+          bulk-assign bar plus the region's `min-h-32` floor exceed a short panel, this div scrolls
+          so the rows stay reachable, rather than the region collapsing to its header. */}
+      <div
+        data-testid="activities-panel-body"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4"
+      >
         <ActivitiesTable
           orgSlug={model.orgSlug}
           planId={model.planId}

@@ -73,7 +73,7 @@ export function useScopeForm<TValues extends FieldValues>(
     //
     // The directive must sit on the line ABOVE the dependency array, not above this explanation:
     // the first draft put it three lines up, where it disabled a comment and suppressed nothing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seeds on open/target only (see above)
   }, [open, activity?.id]);
 
   return {

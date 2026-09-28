@@ -601,15 +601,65 @@ export class ActivitiesService {
     const effectiveType = patch.type ?? existing.type;
     if (MILESTONE_TYPES.includes(effectiveType)) patch.durationMinutes = 0;
 
+    // A type change into or out of WBS_SUMMARY is a structural WBS-tree write too (ADR-0038,
+    // `docs/TECH_DEBT.md` #396): it was previously unguarded, so `PATCH {type: 'TASK'}` on a summary
+    // with a child was accepted, leaving a non-summary whose child still names it as parent. Computed
+    // here (rather than inline below) so both branches read the same intent whether or not the lock
+    // ends up taken for some other reason too.
+    const changingOutOfSummary = existing.type === 'WBS_SUMMARY' && effectiveType !== 'WBS_SUMMARY';
+    const changingIntoSummary = existing.type !== 'WBS_SUMMARY' && effectiveType === 'WBS_SUMMARY';
+
     try {
       await this.prisma.$transaction(async (tx) => {
         // Re-parenting: serialise the parent-tree read-then-write per plan (ADR-0038 invariant (a))
-        // — see `assertValidParent`. Only on the branch that sets a NON-NULL parent: clearing to
-        // top-level cannot create a cycle, and an ordinary edit (no `parentId` in the DTO) must not
-        // pay for a plan-wide lock. Taken FIRST, before the calendar guard's lock (order:
-        // plan → calendar).
-        if (parentId !== undefined && parentId !== null) {
+        // — see `assertValidParent`. Taken on that branch, or when this write itself changes the
+        // activity's WBS_SUMMARY status (below): both are read-then-write against state a concurrent
+        // re-parent or dependency create could otherwise move, under the SAME namespace those take
+        // (`acquirePlanWriteLock`/`DependencyRepository.lockPlanForWrite` share one key). An ordinary
+        // edit — no `parentId` in the DTO and no type change into/out of WBS_SUMMARY — must not pay
+        // for a plan-wide lock. Taken FIRST, before the calendar guard's lock (order: plan → calendar).
+        if (
+          (parentId !== undefined && parentId !== null) ||
+          changingOutOfSummary ||
+          changingIntoSummary
+        ) {
           await acquirePlanWriteLock(tx, existing.planId);
+        }
+        // Converting AWAY from WBS_SUMMARY while it still parents an active child would leave that
+        // child's `parentId` pointing at a non-summary — "only a WBS_SUMMARY may be a parent"
+        // (ADR-0038), the identical rule `assertValidParent` enforces from the CHILD's side (below),
+        // read here from the PARENT's. Reuses its `PARENT_NOT_SUMMARY` reason rather than minting a
+        // new one — the invariant violated is the same, only which end moved differs.
+        if (changingOutOfSummary) {
+          const childCount = await tx.activity.count({
+            where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
+          });
+          if (childCount > 0) {
+            throw new ValidationError(
+              `This activity has ${childCount} child ${childCount === 1 ? 'activity' : 'activities'}; move or remove ${childCount === 1 ? 'it' : 'them'} first.`,
+              { reason: 'PARENT_NOT_SUMMARY' },
+            );
+          }
+        }
+        // Converting INTO WBS_SUMMARY while it still names an active dependency would leave a summary
+        // carrying logic — the same 422 `DependenciesService.create()` throws when a NEW link targets
+        // a summary endpoint (ADR-0035 §24 / ADR-0038). Reuses its `SUMMARY_HAS_NO_LOGIC` reason: the
+        // create-time guard reads the endpoint's type before the write; this reads it after, from the
+        // opposite direction (the activity already has the links, the write proposes the type).
+        if (changingIntoSummary) {
+          const linkCount = await tx.activityDependency.count({
+            where: {
+              organizationId: organization.id,
+              deletedAt: null,
+              OR: [{ predecessorId: activityId }, { successorId: activityId }],
+            },
+          });
+          if (linkCount > 0) {
+            throw new ValidationError(
+              `A WBS summary carries no logic; this activity has ${linkCount} ${linkCount === 1 ? 'dependency' : 'dependencies'} — remove ${linkCount === 1 ? 'it' : 'them'} first.`,
+              { reason: 'SUMMARY_HAS_NO_LOGIC' },
+            );
+          }
         }
         // Assigning a specific calendar: THE shared scope guard (ADR-0053 §2) validates active
         // + in-org (404) under the calendar advisory lock — serialised with the delete-in-use

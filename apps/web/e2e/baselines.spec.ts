@@ -55,12 +55,128 @@ async function addActivity(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
 }
 
+/** The open plan's id, from the URL — `/orgs/:org/…/plans/:id/…`. */
+function currentPlanId(page: Page): string {
+  const planId = new URL(page.url()).pathname.split('/plans/')[1]?.split('/')[0];
+  if (!planId) throw new Error(`no plan id in ${page.url()}`);
+  return planId;
+}
+
+/**
+ * Forces the plan onto the all-days calendar, the SAME move the API's own R1/R2 fixtures make
+ * (`apps/api/test/baselines.e2e-spec.ts`'s `makePlan`) — org creation seeds an active Standard
+ * (Mon–Fri) calendar, and a new plan defaults to it, so a bare "5 days later" would land on a
+ * different weekday than it started and mean a different number of WORKING days depending on
+ * which weekdays it crossed. All-days makes a calendar-day shift and a working-day shift the same
+ * number, which is what lets T5 assert an exact "+5" without hand-computing which days are
+ * weekends.
+ */
+async function useAllDaysCalendar(page: Page, orgSlug: string): Promise<void> {
+  const planId = currentPlanId(page);
+  const status = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const planRes = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        credentials: 'include',
+      });
+      const plan = (await planRes.json()) as { data: { version: number } };
+      const patchRes = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendarId: null, version: plan.data.version }),
+      });
+      return patchRes.status;
+    },
+    { org: orgSlug, id: planId },
+  );
+  expect(status).toBe(200);
+  // The PATCH bumped the plan's `version` behind React Query's cache, so the next `Edit plan` save
+  // would send the stale one and be refused as "changed elsewhere". Reload so the page reads it.
+  await page.reload();
+}
+
+/** An activity's id, optimistic version and drawn start, read straight off the API. */
+async function findActivity(
+  page: Page,
+  orgSlug: string,
+  name: string,
+): Promise<{ id: string; version: number; visualEffectiveStart: string | null }> {
+  const planId = currentPlanId(page);
+  const row = await page.evaluate(
+    async ({ org, id, activityName }: { org: string; id: string; activityName: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      const body = (await response.json()) as {
+        data: { id: string; name: string; version: number; visualEffectiveStart: string | null }[];
+      };
+      return body.data.find((a) => a.name === activityName) ?? null;
+    },
+    { org: orgSlug, id: planId, activityName: name },
+  );
+  if (row === null) throw new Error(`no activity named ${name}`);
+  return row;
+}
+
+/**
+ * Hand-place an activity through the API — T5's "drag" (`placement-baseline-variance`
+ * §2 R2). A raw PATCH rather than a canvas/grid gesture: what this journey proves is that the
+ * TABLE reads the resulting placement correctly, not that a particular pointer gesture writes
+ * one — that is ADR-0052/0095's territory, exercised elsewhere.
+ */
+async function patchVisualStart(
+  page: Page,
+  orgSlug: string,
+  activityId: string,
+  version: number,
+  visualStart: string,
+): Promise<void> {
+  const status = await page.evaluate(
+    async (args: { org: string; id: string; visualStart: string; version: number }) => {
+      const response = await fetch(`/api/v1/organizations/${args.org}/activities/${args.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visualStart: args.visualStart, version: args.version }),
+      });
+      return response.status;
+    },
+    { org: orgSlug, id: activityId, visualStart, version },
+  );
+  expect(status).toBe(200);
+}
+
+/** Recalculate through the API directly — the counterpart to an out-of-band PATCH the UI's own
+ *  toolbar `Recalculate` button has no reason to know about yet. */
+async function recalcViaApi(page: Page, orgSlug: string): Promise<void> {
+  const planId = currentPlanId(page);
+  const status = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/schedule/recalculate`,
+        { method: 'POST', credentials: 'include' },
+      );
+      return response.status;
+    },
+    { org: orgSlug, id: planId },
+  );
+  expect(status).toBe(200);
+}
+
+/** `n` calendar days after a `YYYY-MM-DD` day, as `YYYY-MM-DD` (all-days calendar, so this is
+ *  also `n` WORKING days — see {@link useAllDaysCalendar}). */
+function plusDays(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
 test('a planner captures a baseline and sees per-activity variance (accessible)', async ({
   page,
 }) => {
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
+  await useAllDaysCalendar(page, orgSlug);
 
   // Schedule the plan: a start date + one activity, then recalculate.
   await page.getByRole('button', { name: 'Edit plan' }).click();
@@ -105,10 +221,35 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await expect(baselines).toBeHidden();
 
   // The activities table now shows the variance columns; the sole activity matches the
-  // just-captured baseline, and the plan-level roll-up appears above the table.
+  // just-captured baseline, and the plan-level roll-up appears above the table, naming the
+  // basis it compares (M2, US-2, `placement-baseline-variance`) — this baseline was just
+  // captured on `FULL`, so it reads placed dates.
   await expect(page.getByRole('columnheader', { name: 'Finish variance' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'On baseline' }).first()).toBeVisible();
-  await expect(page.getByText(/vs\. Contract Baseline:/)).toBeVisible();
+  await expect(page.getByText(/vs\. Contract Baseline \(placed dates\):/)).toBeVisible();
+
+  // T5 (`placement-baseline-variance` M1): hand-place the baselined activity 5 days later
+  // through the API — the "drag" — and recalculate. Its bar has genuinely moved, so on the
+  // PLACED basis both its Start and Finish variance now read the slip; before this epic they
+  // read 0 (the network dates never moved).
+  const excavate = await findActivity(page, orgSlug, 'Excavate');
+  if (excavate.visualEffectiveStart === null) {
+    throw new Error('Excavate has no computed start to shift from');
+  }
+  await patchVisualStart(
+    page,
+    orgSlug,
+    excavate.id,
+    excavate.version,
+    plusDays(excavate.visualEffectiveStart, 5),
+  );
+  await recalcViaApi(page, orgSlug);
+  // The API write happened out-of-band (not through the UI), so the workspace's cached
+  // queries have not seen it — reload rather than waiting on a mechanism with nothing to
+  // trigger it.
+  await page.reload();
+  await showActivities(page);
+  await expect(page.getByRole('cell', { name: '5 d behind' })).toHaveCount(2); // Start + Finish
 
   // Add a new activity after capture and recalculate → it reads as "Added" variance.
   await addActivity(page, 'Pour slab');

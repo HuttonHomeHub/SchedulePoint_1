@@ -13,6 +13,10 @@ import { GuestDependencyDto } from './guest-dependency.dto';
 import { GuestCalendarDto, GuestPlanViewDto, GuestScheduleSummaryDto } from './guest-plan.dto';
 
 const DAY = new Date(Date.UTC(2026, 6, 1));
+// Distinct from DAY so the placed-span value case (ADR-0163) cannot pass by a column being mapped
+// to the wrong same-valued date — every other date on this fixture is DAY, so a mapping of
+// `visualEffectiveStart: day(entity.earlyStart)` would otherwise pass FC-3 by accident.
+const PLACED_DAY = new Date(Date.UTC(2026, 6, 8));
 
 /**
  * These tests are the FIELD-EXCLUSION contract for the session-less guest surface (ADR-0051 §4).
@@ -70,8 +74,10 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
     loeNoSpan: false,
     resourceDriverMissing: false,
     visualStart: DAY,
-    visualEffectiveStart: DAY,
-    visualEffectiveFinish: DAY,
+    // Distinct from `earlyStart`/`earlyFinish` (both DAY) so a mapping of
+    // `visualEffectiveStart: day(entity.earlyStart)` cannot pass FC-3 by every date coinciding.
+    visualEffectiveStart: PLACED_DAY,
+    visualEffectiveFinish: PLACED_DAY,
     visualConflict: false,
     // one-planning-surface M-D. NULL here is the ONLY value consistent with the `false` above:
     // ck_activities_visual_conflict_matches_reason refuses a row where the flag and the reason
@@ -139,9 +145,15 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'externalDriven',
   'loeNoSpan',
   'resourceDriverMissing',
+  // ADR-0163: this is the AUTHORING INPUT — which bars a person pinned by hand — never reliably
+  // reconstructible from the exposed `visualEffectiveStart` (an unplaced successor pushed by a
+  // placed predecessor also draws later than its early start). `visualEffectiveStart`/`Finish`
+  // (the DRAWN span) are the whitelisted pair now and are asserted present, not forbidden, by the
+  // exact-key list above.
   'visualStart',
-  'visualEffectiveStart',
-  'visualEffectiveFinish',
+  // ADR-0163: "a guest is shown where the work sits, never the planner's working notes about why a
+  // placement is contentious" (also true of `visualConflictReason` below). `LATER_THAN_BOUND` would
+  // also reveal that a constraint exists, and constraints are out.
   'visualConflict',
   // one-planning-surface M-D. The guest scope is SCHEDULE_READ (ADR-0051): a guest is shown where
   // the work sits, never the planner's working notes about why a placement is contentious. The
@@ -196,6 +208,12 @@ describe('GuestActivityDto', () => {
         'percentComplete',
         'actualStart',
         'actualFinish',
+        // ADR-0163: the DRAWN span — "the plan as the planner laid it out" (ADR-0148). Not the
+        // input (`visualStart`, forbidden above) and not the analysis (drift/conflict/float,
+        // forbidden above) — the same kind of fact as `earlyStart`/`earlyFinish`, about the same
+        // activity.
+        'visualEffectiveStart',
+        'visualEffectiveFinish',
       ].sort(),
     );
   });
@@ -214,6 +232,15 @@ describe('GuestActivityDto', () => {
       percentComplete: 40,
       laneIndex: 3,
     });
+  });
+
+  // FC-3 (spec §2): the fixture's OTHER dates are all `DAY` (2026-07-01) — this pins that the
+  // placed span reads from `visualEffectiveStart`/`Finish`, distinct dates, and not from
+  // `earlyStart`/`earlyFinish` by every date on the fixture coinciding.
+  it('copies the PLACED span from visualEffectiveStart/Finish, not earlyStart/Finish (ADR-0163)', () => {
+    expect(dto.visualEffectiveStart).toBe('2026-07-08');
+    expect(dto.visualEffectiveFinish).toBe('2026-07-08');
+    expect(dto.visualEffectiveStart).not.toBe(dto.earlyStart);
   });
 });
 

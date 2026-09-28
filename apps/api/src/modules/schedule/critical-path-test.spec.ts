@@ -6,12 +6,13 @@ import {
   CRITICAL_PATH_TEST_TOLERANCE_DAYS,
   runCriticalPathTest,
 } from './critical-path-test';
-import type { EngineActivity, EngineEdge } from './engine/types';
+import type { EngineActivity, EngineAssignment, EngineEdge, EngineResource } from './engine/types';
 import {
   buildWorkingTimeCalendar,
   fullDayWeek,
   type WorkingTimeCalendar,
 } from './engine/working-time-calendar';
+import type { LevelingDemand } from './level-if-enabled';
 
 /**
  * **The metric-12 perturbation rule** (health M6-T1) — real engine, small graphs: an intact chain
@@ -36,11 +37,20 @@ function edge(predecessorId: string, successorId: string, type: DependencyType =
   return { id: `${predecessorId}-${successorId}`, predecessorId, successorId, type, lagMinutes: 0 };
 }
 
-function run(activities: readonly EngineActivity[], edges: readonly EngineEdge[] = []) {
+function run(
+  activities: readonly EngineActivity[],
+  edges: readonly EngineEdge[] = [],
+  leveling: {
+    demand: LevelingDemand | null;
+    levelWithinFloatOnly?: boolean;
+  } = { demand: null },
+) {
   return runCriticalPathTest({
     activities,
     edges,
     options: { dataDate: DATA_DATE, calendar: FIVE_DAY },
+    leveling: leveling.demand,
+    levelWithinFloatOnly: leveling.levelWithinFloatOnly ?? false,
     dayFactorMinutesOf: () => DAY,
     labelOf: (id) => ({ code: id.toUpperCase(), name: `Activity ${id}` }),
   });
@@ -143,5 +153,91 @@ describe('health M6 — the critical-path what-if', () => {
     );
     expect(result.verdict).toBe('PASS');
     expect(result.detail?.deltaDays).toBe(CRITICAL_PATH_TEST_INJECTED_DAYS);
+  });
+
+  // ── `docs/TECH_DEBT.md` #248 — the what-if levels BOTH passes when the plan does ─────────────
+
+  /**
+   * One fixture, read two ways: an a→b critical chain (10 working days) whose front, `a`, is the
+   * subject perturbed — exactly the PASS fixture above — PLUS three disconnected 4-day activities
+   * (`c1`/`c2`/`c3`) sharing ONE unit of a finite resource, none of them critical and none on
+   * `a`/`b`'s path, so subject selection is untouched by any of this.
+   *
+   * **Unlevelled, `c1`/`c2`/`c3` each finish on day 4 — well short of `b`'s day-10 network finish**,
+   * so `selectCompletionCarrier` (reading raw `earlyFinishOffset`) picks `b`, and injecting into `a`
+   * moves `b` by the full 600 d: PASS. That PASS is `leveling: null` below — the route's behaviour
+   * before this fix, and still its behaviour on a plan that does not opt into levelling.
+   *
+   * **Levelled, the resource has room for only one at a time**: the composite priority order
+   * (`docs/TECH_DEBT.md` #248 / ADR-0041 §1 — no `levelingPriority`, equal total float, equal early
+   * start, so id ascending) serialises them `c1 → c2 → c3`, and `levelWithinFloatOnly: false` lets
+   * the last one extend past its own float rather than being capped — `c3` finishes LEVELLED on day
+   * 12, a day past `b`. `selectCompletionCarrier` now picks `c3`. `c3` shares no logic and no
+   * resource with `a`/`b`, so injecting 600 d into `a` moves it by exactly **zero**: FAIL. Same
+   * activities, same injection, opposite verdict — because the plan's real completion (what a
+   * levelled recalculation persists and the product shows) was never on the chain the test was
+   * measuring against.
+   */
+  const CHAIN_AND_CONTENDED_RESOURCE = [
+    task('a', 5 * DAY),
+    task('b', 5 * DAY),
+    task('c1', 4 * DAY),
+    task('c2', 4 * DAY),
+    task('c3', 4 * DAY),
+  ];
+  const CHAIN_EDGE = [edge('a', 'b')];
+  const RESOURCE: EngineResource = { id: 'r', capacity: 1 };
+  const CONTENDED_ASSIGNMENTS: readonly EngineAssignment[] = (['c1', 'c2', 'c3'] as const).map(
+    (activityId) => ({ activityId, resourceId: 'r', unitsPerHour: 1 }),
+  );
+  const CONTENDED_DEMAND: LevelingDemand = {
+    assignments: CONTENDED_ASSIGNMENTS,
+    resources: [RESOURCE],
+  };
+
+  it('UNLEVELLED: the resource contention is invisible, and the chain’s own movement PASSES', () => {
+    const result = run(CHAIN_AND_CONTENDED_RESOURCE, CHAIN_EDGE, { demand: null });
+    expect(result.verdict).toBe('PASS');
+    expect(result.detail?.completionActivityId).toBe('b');
+    expect(result.detail?.deltaDays).toBe(CRITICAL_PATH_TEST_INJECTED_DAYS);
+  });
+
+  it('LEVELLED: the same plan FAILS — the true completion carrier never moves (#248)', () => {
+    const unlevelled = run(CHAIN_AND_CONTENDED_RESOURCE, CHAIN_EDGE, { demand: null });
+    const result = run(CHAIN_AND_CONTENDED_RESOURCE, CHAIN_EDGE, {
+      demand: CONTENDED_DEMAND,
+      levelWithinFloatOnly: false,
+    });
+    // The subject is still `a` — levelling never changes which activity is perturbed (`isCritical`
+    // / `earlyStartOffset` are network-pure and untouched by the overlay).
+    expect(result.detail?.perturbedActivityId).toBe('a');
+    // The carrier FLIPPED from `b` to the resource-serialised `c3` — the whole point of #248.
+    expect(result.detail?.completionActivityId).toBe('c3');
+    expect(result.detail?.deltaDays).toBe(0);
+    expect(result.verdict).toBe('FAIL');
+    expect(result.offenders[0]?.activityId).toBe('a');
+    // `controlCompletionFinish` must be `c3`'s LEVELLED finish (day 12), not its raw network finish
+    // (day 4, same as `c1`/`c2`) — printing the raw date would make the payload's own numbers
+    // disagree with its verdict (`docs/TECH_DEBT.md` #248's `effectiveFinish` fix). `c3` levelled is
+    // later than `b`'s own raw/unlevelled finish (day 10), which only holds if the reported date
+    // really is the levelled one.
+    const levelledFinish = result.detail?.controlCompletionFinish;
+    const unlevelledFinish = unlevelled.detail?.controlCompletionFinish;
+    expect(levelledFinish).toBeDefined();
+    expect(unlevelledFinish).toBeDefined();
+    expect(levelledFinish! > unlevelledFinish!).toBe(true);
+  });
+
+  it('LEVELLED with a plan that does not opt in stays byte-identical (control)', () => {
+    // Same topology, `plan.levelResources` off in spirit (`leveling: null`, exactly what
+    // `buildEngineGraph` returns for an opted-out or assignment-free plan) — must read identically
+    // to the pre-#248 route on every field, not merely the verdict.
+    const before = run(CHAIN_AND_CONTENDED_RESOURCE, CHAIN_EDGE, { demand: null });
+    const after = run(CHAIN_AND_CONTENDED_RESOURCE, CHAIN_EDGE, {
+      demand: null,
+      levelWithinFloatOnly: false,
+    });
+    expect(after).toEqual(before);
+    expect(after.verdict).toBe('PASS');
   });
 });

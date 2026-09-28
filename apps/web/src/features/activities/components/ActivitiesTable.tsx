@@ -833,7 +833,11 @@ export function ActivitiesTable({
     columns.push(
       varianceColumn('Start variance', 'start', 'lg'),
       varianceColumn('Finish variance', 'finish'),
-      varianceColumn('Float variance', 'float', 'lg'),
+      // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
+      // column beside it is "Float left" (remaining float, above) — without the word, a
+      // reader takes this column to be variance OF that one, when it is always total float
+      // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
+      varianceColumn('Total float variance', 'float', 'lg'),
     );
   }
   if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
@@ -925,28 +929,39 @@ export function ActivitiesTable({
   };
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+    <div ref={regionRef} tabIndex={-1} className="flex h-full min-h-0 flex-col gap-3 outline-none">
       {/*
         Above the table, not floating over it: the bar appears and disappears with the selection, and
         a floating layer that reflows the rows underneath it moves the very checkboxes the user is
         working through. Unmounting it on success would strand focus, so `onDone` clears the
         selection and returns focus to this region — the same hand-off delete and dissolve use.
+
+        `shrink-0` (activities-panel-scale M1): this wrapper is now a flex column whose OTHER child,
+        `DataTable`'s `scroll="contained"` region, grows to fill whatever height is left and scrolls
+        internally. Without it the bar has no declared floor and the table's `flex-1` could squeeze
+        it, which is the opposite of "stays above the scrolling rows" (spec §2 edge cases).
       */}
       {bulkAssignActive ? (
-        <WbsBulkAssignBar
-          orgSlug={orgSlug}
-          planId={planId}
-          selected={effectiveSelection}
-          planActivities={loadedActivities}
-          gate={membersGate}
-          onClear={clearSelection}
-          onDone={() => {
-            flushSync(clearSelection);
-            regionRef.current?.focus();
-          }}
-        />
+        <div className="shrink-0">
+          <WbsBulkAssignBar
+            orgSlug={orgSlug}
+            planId={planId}
+            selected={effectiveSelection}
+            planActivities={loadedActivities}
+            gate={membersGate}
+            onClear={clearSelection}
+            onDone={() => {
+              flushSync(clearSelection);
+              regionRef.current?.focus();
+            }}
+          />
+        </div>
       ) : null}
 
+      {/* `scroll="contained"`: this table is the ONE scroller inside a height-capped pane
+          (`ActivityBottomPanel`), so its header pins while the rows scroll underneath it
+          (TECH_DEBT #334, `docs/specs/activities-panel-scale/`). Every other `DataTable` consumer
+          stays on the default `'page'` scroll, which this table used before M1. */}
       <DataTable
         caption="Activities"
         columns={columns}
@@ -957,6 +972,7 @@ export function ActivitiesTable({
         empty={
           <>No activities yet.{canEditSchedule ? ' Add the first activity to this plan.' : ''}</>
         }
+        scroll="contained"
       />
 
       {RESOURCES_ENABLED && !hostOwnsResources ? (

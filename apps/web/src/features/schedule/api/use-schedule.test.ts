@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useRecalculate } from './use-schedule';
+import { useRecalculate, useRecalculateCommand } from './use-schedule';
 
 import { apiFetch } from '@/lib/api/client';
 import {
@@ -51,5 +51,21 @@ describe('useRecalculate', () => {
         JSON.stringify(dependencyKeys.byPlan('acme', 'p1')),
       ]),
     );
+  });
+});
+
+describe('useRecalculateCommand', () => {
+  it('keeps its identity across an unrelated re-render (the toolbar context lists it)', () => {
+    // `useMutation` returns a fresh object every render, so a command that closed over it re-identified
+    // every render and rebuilt the whole TSLD toolbar context with it (#353's performance review). Every
+    // consumer test mocks this hook to a stable literal, so only a real QueryClient can show it.
+    const queryClient = new QueryClient();
+    const { result, rerender } = renderHook(() => useRecalculateCommand('acme', 'p1'), {
+      wrapper: wrapper(queryClient),
+    });
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+    expect(result.current.run).toBe(first.run);
   });
 });

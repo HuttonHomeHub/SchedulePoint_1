@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PrismaService } from '../../prisma/prisma.service';
 import { hashToken } from '../tokens/token';
@@ -78,5 +78,70 @@ describe('createAuth security options', () => {
     await expect(hash(identifier)).resolves.toBe(hashToken(identifier));
     // And it is not the input, which is the whole point.
     await expect(hash(identifier)).resolves.not.toBe(identifier);
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #99: without `advanced.backgroundTasks.handler` configured, Better Auth's
+   * `runInBackgroundOrAwait` awaits `sendResetPassword`/`sendVerificationEmail` on the request
+   * path, so a known address on `/request-password-reset` answers slower than an unknown one — a
+   * timing oracle for an endpoint whose whole design is an identical body either way.
+   */
+  describe('sends Better Auth mail off the request path (#99)', () => {
+    it('configures a background-task handler', () => {
+      const auth = createAuth(prisma, options);
+
+      expect(typeof auth.options.advanced?.backgroundTasks?.handler).toBe('function');
+    });
+
+    /** Let the handler's own un-awaited `.catch` microtask settle before asserting on it. */
+    const settle = async (): Promise<void> => {
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    it('swallows a rejection that escapes the mail adapter’s own catch, and logs it once', async () => {
+      // In practice this never fires: both `SmtpMailService` and `LoggingMailService` catch
+      // internally and never reject. This proves the handler is a correct backstop anyway, for a
+      // future adapter that stops self-catching.
+      const logs: { level: string; message: string; args: unknown[] }[] = [];
+      const auth = createAuth(prisma, {
+        ...options,
+        log: (level, message, args) => logs.push({ level, message, args }),
+      });
+      const handler = auth.options.advanced?.backgroundTasks?.handler;
+      if (typeof handler !== 'function') {
+        throw new Error('advanced.backgroundTasks.handler is not configured');
+      }
+
+      const error = new Error('escaped the adapter’s own catch');
+      // Never an unhandled rejection: the handler must attach its own `.catch` synchronously.
+      const unhandled = vi.fn();
+      process.once('unhandledRejection', unhandled);
+      handler(Promise.reject(error));
+      await settle();
+      process.off('unhandledRejection', unhandled);
+
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(logs).toHaveLength(1);
+      expect(logs[0]?.level).toBe('error');
+      expect(logs[0]?.args).toEqual([error]);
+      // Never restates the mail adapter's own event — a second `mail.send_failed` here would read
+      // as the same failure logged twice.
+      expect(logs[0]?.message).not.toContain('mail.send_failed');
+    });
+
+    it('does nothing when the handed-off promise resolves', async () => {
+      const logs: unknown[] = [];
+      const auth = createAuth(prisma, { ...options, log: (...args) => logs.push(args) });
+      const handler = auth.options.advanced?.backgroundTasks?.handler;
+      if (typeof handler !== 'function') {
+        throw new Error('advanced.backgroundTasks.handler is not configured');
+      }
+
+      expect(() => handler(Promise.resolve('sent'))).not.toThrow();
+      await settle();
+
+      expect(logs).toHaveLength(0);
+    });
   });
 });

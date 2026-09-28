@@ -99,6 +99,53 @@ export type LockView =
     });
 
 /**
+ * **The complete field set a content key must read**, `satisfies`-checked rather than
+ * hand-maintained (`docs/TECH_DEBT.md` #353 D1a) — adding a field to {@link LockView} without
+ * adding it here fails typecheck. `LockView` is a discriminated union whose per-tone fields are
+ * optional on the branches that do not carry them; this names every field that appears on ANY
+ * branch, so {@link lockViewKey} reads each one's resting value (`undefined`) on a tone that omits
+ * it — closing E11's gap (`badgeName`/`messageVisible` were left out of `use-pen-lock-view.ts`'s
+ * old hand-written signature, safe today only by the coincidence that E11 records) without
+ * depending on that coincidence continuing to hold.
+ */
+const LOCK_VIEW_KEY_FIELDS = {
+  tone: true,
+  badge: true,
+  message: true,
+  aside: true,
+  actions: true,
+  badgeName: true,
+  messageVisible: true,
+} satisfies Record<keyof LockViewCommon | 'tone' | 'badgeName' | 'messageVisible', true>;
+
+const LOCK_VIEW_KEY_FIELD_NAMES = Object.keys(
+  LOCK_VIEW_KEY_FIELDS,
+) as (keyof typeof LOCK_VIEW_KEY_FIELDS)[];
+
+/**
+ * A content key for `LockView | null` — two views key IDENTICALLY exactly when every field
+ * {@link LOCK_VIEW_KEY_FIELDS} names is equal, `actions` compared by its own contents (a freshly
+ * built array of the same action names is not the same reference, and `resolveLockView` returns a
+ * new one every call). Used at the one call site that needs a value-keyed identity rather than a
+ * reference-keyed one (`use-pen-lock-view.ts`'s `useKeyedIdentity`, M1-T2, `docs/TECH_DEBT.md`
+ * #353) — a memo whose identity should follow *content*, which `react-hooks/exhaustive-deps`
+ * cannot express directly (D1a).
+ *
+ * A field separator (`\u0001`) that cannot occur in any of this module's own UI copy is used
+ * between fields, and a bare comma joins `actions`'s own short identifiers (`LockAction` has none),
+ * so no field's content can accidentally fold two distinct views onto one key.
+ */
+export function lockViewKey(view: LockView | null): string {
+  if (view === null) return 'null';
+  const record = view as unknown as Record<string, unknown>;
+  return LOCK_VIEW_KEY_FIELD_NAMES.map((field) => {
+    const value = record[field];
+    if (field === 'actions') return (value as readonly LockAction[]).join(',');
+    return String(value);
+  }).join('\u0001');
+}
+
+/**
  * Resolve the banner view from the lock status and the two local flags. Pure and
  * exhaustively unit-testable — every control's presence is keyed on a **server**
  * capability flag (`canAcquire`/`canRequest`/`canTakeOver`/`canOverride`), never a

@@ -111,6 +111,11 @@ here because nothing in the epic's plan names them.
 places bars and exports "the plan" gets the **computed** dates, and after the collapse placing bars
 is the normal way to work rather than a mode somebody opted into.
 
+**Closed 2026-09-28** (`docs/TECH_DEBT.md` #357): the CSV now leads with **`Start`/`Finish`**,
+reading `lib/bar-dates.ts`'s `'visual'` basis — the same picker the canvas and the Gantt read — and
+keeps the labelled `Early start`/`Early finish` columns unchanged for the analysis reader. Both
+bases are on the sheet now; this row's finding stands as the record of why.
+
 ### 5.2 A share link draws early dates while its author sees placed ones
 
 Five checked facts, no inference past them:

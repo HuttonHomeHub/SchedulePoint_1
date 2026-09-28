@@ -198,6 +198,11 @@ describe('ActivitiesService', () => {
   // The in-transaction membership read the batch placement / bulk-delete paths do before writing —
   // hoisted so a test can put a summary, a stale version or a ghost id in front of them.
   let txActivityFindMany: ReturnType<typeof vi.fn>;
+  // The type-change WBS guards (ADR-0038, `docs/TECH_DEBT.md` #396): a live child count on the way
+  // OUT of WBS_SUMMARY, a live dependency-endpoint count on the way IN. Default: zero, so an
+  // ordinary type change stays uncounted-and-unrefused.
+  let txActivityCount: ReturnType<typeof vi.fn>;
+  let txDependencyCount: ReturnType<typeof vi.fn>;
   // Hoisted so a test can assert WHICH advisory locks a write path took. Both the plan write lock
   // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
   // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
@@ -245,6 +250,8 @@ describe('ActivitiesService', () => {
     txExecuteRaw = vi.fn();
     txParentFindFirst = vi.fn().mockResolvedValue({ name: 'Phase 1' });
     txActivityFindMany = vi.fn().mockResolvedValue([]);
+    txActivityCount = vi.fn().mockResolvedValue(0);
+    txDependencyCount = vi.fn().mockResolvedValue(0);
     prisma = {
       // The post-transaction re-read of the rows a batch write moved.
       activity: { findMany: vi.fn().mockResolvedValue([]) },
@@ -253,7 +260,12 @@ describe('ActivitiesService', () => {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
-          activity: { findFirst: txParentFindFirst, findMany: txActivityFindMany },
+          activity: {
+            findFirst: txParentFindFirst,
+            findMany: txActivityFindMany,
+            count: txActivityCount,
+          },
+          activityDependency: { count: txDependencyCount },
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
             updateMany: txDrivingUpdateMany,
@@ -770,6 +782,101 @@ describe('ActivitiesService', () => {
           version: 1,
         });
         expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
+      });
+    });
+
+    // A type change into or out of WBS_SUMMARY is a structural WBS-tree write too (ADR-0038,
+    // `docs/TECH_DEBT.md` #396) — unguarded before this fix, so `PATCH {type: 'TASK'}` on a summary
+    // with a child was silently accepted (the E29 e2e characterisation, now flipped to an
+    // acceptance test).
+    describe('WBS_SUMMARY type-change guard (ADR-0038)', () => {
+      it('422s a change AWAY from WBS_SUMMARY that still has an active child (PARENT_NOT_SUMMARY)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(
+          activity({ type: 'WBS_SUMMARY', parentId: null }),
+        );
+        txActivityCount.mockResolvedValue(3);
+        const error: unknown = await service
+          .update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'TASK', version: 1 })
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as Error).message).toContain('3');
+        expect(error).toMatchObject({ details: { reason: 'PARENT_NOT_SUMMARY' } });
+        expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+        // Counted against THIS activity as parent, scoped to the org, non-deleted only.
+        expect(txActivityCount).toHaveBeenCalledWith({
+          where: { organizationId: ORG_ID, parentId: ACTIVITY_ID, deletedAt: null },
+        });
+      });
+
+      it('422s a change INTO WBS_SUMMARY that still names an active dependency (SUMMARY_HAS_NO_LOGIC)', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+        txDependencyCount.mockResolvedValue(2);
+        const error: unknown = await service
+          .update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'WBS_SUMMARY', version: 1 })
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as Error).message).toContain('2');
+        expect(error).toMatchObject({ details: { reason: 'SUMMARY_HAS_NO_LOGIC' } });
+        expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+        expect(txDependencyCount).toHaveBeenCalledWith({
+          where: {
+            organizationId: ORG_ID,
+            deletedAt: null,
+            OR: [{ predecessorId: ACTIVITY_ID }, { successorId: ACTIVITY_ID }],
+          },
+        });
+      });
+
+      it('accepts a change AWAY from WBS_SUMMARY when it has no active children', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(
+          activity({ type: 'WBS_SUMMARY', parentId: null }),
+        );
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txActivityCount.mockResolvedValue(0);
+        await expect(
+          service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'TASK', version: 1 }),
+        ).resolves.toBeDefined();
+        expect(activities.updateIfVersionMatches).toHaveBeenCalled();
+      });
+
+      it('accepts a change INTO WBS_SUMMARY when it has no active dependencies', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        txDependencyCount.mockResolvedValue(0);
+        await expect(
+          service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+            type: 'WBS_SUMMARY',
+            version: 1,
+          }),
+        ).resolves.toBeDefined();
+        expect(activities.updateIfVersionMatches).toHaveBeenCalled();
+      });
+
+      it('runs neither count when type is unchanged', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 });
+        expect(txActivityCount).not.toHaveBeenCalled();
+        expect(txDependencyCount).not.toHaveBeenCalled();
+      });
+
+      it('takes the plan write lock for a type change away from WBS_SUMMARY', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(
+          activity({ type: 'WBS_SUMMARY', parentId: null }),
+        );
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'TASK', version: 1 });
+        expect(locksTaken()).toContain('dependency-plan');
+      });
+
+      it('takes the plan write lock for a type change into WBS_SUMMARY', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
+        activities.updateIfVersionMatches.mockResolvedValue(1);
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          type: 'WBS_SUMMARY',
+          version: 1,
+        });
+        expect(locksTaken()).toContain('dependency-plan');
       });
     });
 

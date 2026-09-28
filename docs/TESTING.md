@@ -340,6 +340,9 @@ exits non-zero if any failed.
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to
 `scripts/e2e-local.sh` — the rows below still say when that is required.
 
+**A lint warning fails `pnpm lint`, not only an error** — every workspace `lint` script carries
+`--max-warnings=0` (ADR-0164, `docs/TECH_DEBT.md` #353), so row 1 below blocks on a warning too.
+
 **The formatting check is one of the derived gates, `check:format`** (since 2026-09-28,
 `docs/specs/prepush-format-gate/`). Until then CI ran `pnpm format:check` and no local gate did: the
 lint-staged hook formats **staged** files only, so a file Prettier would reformat reached CI unseen,

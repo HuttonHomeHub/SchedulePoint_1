@@ -111,7 +111,12 @@ export class BaselinesController {
     description:
       'A bounded, plan-scoped list (no cursor pagination). Empty with meta.baselineId = null ' +
       'when the plan has no active baseline. Variance is in working days on the plan calendar; ' +
-      'positive = current later than baseline (behind).',
+      'positive = current later than baseline (behind). meta.basis names which dates were ' +
+      "compared (placement-baseline-variance, amending ADR-0025): 'PLACED' when the active " +
+      'baseline recorded placements (placementSnapshotLevel FULL) — the bars as drawn ' +
+      "(ADR-0148); 'NETWORK' on an older baseline that predates placement capture. Every " +
+      'row’s dated fields and start/finish variances are on this basis; float variance is ' +
+      'total float on both.',
   })
   @ApiOkResponse({ type: BaselineVarianceRowResponseDto, isArray: true })
   @ApiUnprocessableEntityResponse({

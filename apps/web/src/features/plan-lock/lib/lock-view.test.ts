@@ -1,7 +1,7 @@
 import type { PlanEditLockActor, PlanEditLockStatus } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveLockView, type LockView } from './lock-view';
+import { lockViewKey, resolveLockView, type LockView } from './lock-view';
 
 const ME = 'user-me';
 const JANE: PlanEditLockActor = { id: 'user-jane', name: 'Jane Doe', email: 'jane@x.com' };
@@ -269,5 +269,53 @@ describe('LockView is a discriminated union, not a flat bag', () => {
     // @ts-expect-error omitting it leaves a changed badge, a bare Dismiss and no explanation.
     const lost: LockView = { badge: 'Read-only', message: 'x', tone: 'lost', actions: ['dismiss'] };
     expect(lost.tone).toBe('lost');
+  });
+});
+
+/**
+ * M1-T2 (`docs/TECH_DEBT.md` #353, D1a): `lockViewKey` is the content key `useKeyedIdentity`
+ * (`use-pen-lock-view.ts`) uses to decide whether a re-render's `view` is a REAL change. Every
+ * field named by `LOCK_VIEW_KEY_FIELDS` is exercised in isolation here so the array cannot drift
+ * from `LockView`'s own shape without a failing case naming which field stopped being covered.
+ */
+describe('lockViewKey', () => {
+  // A full `locked` view (the tone carrying the most optional fields). `messageVisible` is
+  // exercised below via a cast, the same way this file's own discriminated-union tests do —
+  // `lockViewKey` reads every field generically and does not care which tone "really" produces it.
+  const base: LockView = {
+    tone: 'locked',
+    badge: 'Locked',
+    message: 'Alexandra is editing this plan.',
+    aside: 'active 2 min ago',
+    actions: ['request'],
+    badgeName: 'Alexandra',
+    messageVisible: undefined,
+  };
+
+  it('keys `null` differently from any real view', () => {
+    expect(lockViewKey(null)).not.toBe(lockViewKey(base));
+  });
+
+  it('keys two views with identical field VALUES the same, even with a fresh `actions` array', () => {
+    const a: LockView = { ...base, actions: ['request'] };
+    const b: LockView = { ...base, actions: ['request'] };
+    expect(a.actions).not.toBe(b.actions);
+    expect(lockViewKey(a)).toBe(lockViewKey(b));
+  });
+
+  it.each<[string, LockView]>([
+    ['tone', { ...base, tone: 'neutral', badgeName: undefined }],
+    ['badge', { ...base, badge: 'Read-only' }],
+    ['message', { ...base, message: 'Sam is editing this plan.' }],
+    ['aside', { ...base, aside: 'active 3 min ago' }],
+    ['aside present vs. absent', { ...base, aside: undefined } as unknown as LockView],
+    ['actions', { ...base, actions: ['override'] }],
+    ['badgeName', { ...base, badgeName: 'Sam' }],
+    // Not a real `locked` shape (`messageVisible` is `locked ? undefined`), and deliberately so —
+    // this asserts the KEY FUNCTION distinguishes the field, independent of which tone the type
+    // would actually let it appear on.
+    ['messageVisible', { ...base, messageVisible: true } as unknown as LockView],
+  ])('differs from the base view when only %s changes', (_field, variant) => {
+    expect(lockViewKey(variant)).not.toBe(lockViewKey(base));
   });
 });
