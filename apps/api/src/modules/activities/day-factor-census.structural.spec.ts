@@ -141,6 +141,17 @@ const CENSUS: readonly CensusEntry[] = [
       '(ADR-0070 §5), and a driven end does that work on its driving resource calendar.',
   },
   {
+    file: 'src/modules/share/share-guest.service.ts',
+    symbol: 'attachLagDayFactors',
+    rule: 'scheduling',
+    quantity: 'guest read of lagDays on every relationship',
+    reason:
+      'The guest twin of the member read above, by calling the SAME helper rather than a second ' +
+      'copy (`docs/TECH_DEBT.md` #316): the guest DTO used to hard-pin 1440, reading a one-day ' +
+      'lag on an eight-hour lag calendar as zero. A lag measures the work at the end it names, so ' +
+      'a guest reads it on the same calendar a member does.',
+  },
+  {
     file: 'src/modules/dependencies/dependencies.service.ts',
     symbol: 'resolveLagDayFactorMinutes',
     rule: 'scheduling',

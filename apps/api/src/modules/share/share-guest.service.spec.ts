@@ -219,6 +219,9 @@ describe('ShareGuestService', () => {
           successorId: 'a2',
           type: 'FS',
           lagMinutes: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+          predecessor: { calendarId: null, type: 'TASK' },
+          successor: { calendarId: null, type: 'TASK' },
         },
       ]);
       const page = await service.listDependencies(guest, { limit: 20 });
@@ -237,6 +240,33 @@ describe('ShareGuestService', () => {
         // two-hour cure from no lag at all.
         lagMinutes: 0,
       });
+    });
+
+    /**
+     * `docs/TECH_DEBT.md` #316: the guest path used to read `Math.round(lagMinutes / 1440)`,
+     * ignoring the relationship's OWN lag calendar entirely — the member DTO's rule
+     * (`minutesToDays`, ADR-0068 §4). On an eight-hour lag calendar a one-day lag (480 minutes)
+     * used to read as `0`; it now reads `1`, exactly as a member sees it.
+     */
+    it('measures lag on the relationship’s OWN lag calendar, not a hard-pinned 1440', async () => {
+      plans.findCalendarIds.mockResolvedValue([{ id: PLAN_ID, calendarId: 'cal-8h' }]);
+      calendars.findHoursPerDayMinutes.mockResolvedValue(new Map([['cal-8h', 480]]));
+      dependencies.findManyActiveByPlan.mockResolvedValue([
+        {
+          id: 'd1',
+          predecessorId: 'a1',
+          successorId: 'a2',
+          type: 'FS',
+          lagMinutes: 480,
+          lagCalendar: 'PROJECT_DEFAULT',
+          predecessor: { calendarId: null, type: 'TASK' },
+          successor: { calendarId: null, type: 'TASK' },
+        },
+      ]);
+
+      const page = await service.listDependencies(guest, { limit: 20 });
+
+      expect(page.items[0]).toMatchObject({ lagDays: 1, lagMinutes: 480 });
     });
   });
 

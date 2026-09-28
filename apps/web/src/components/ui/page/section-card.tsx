@@ -186,7 +186,18 @@ export function SectionCard({
               <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
             )}
           </div>
-          {description ? <CardDescription className="mt-1">{description}</CardDescription> : null}
+          {description ? (
+            /**
+             * `max-w-prose` is `PageHeader`'s exact fix for the same defect (`docs/TECH_DEBT.md`
+             * #339, `page-header.tsx`'s own comment above its description `<p>`): with no cap a
+             * description is its own text's width wearing one, so two screens' descriptions render
+             * at whatever width their own prose happens to need. The class is applied **here, at
+             * this call site, and not inside `CardDescription`** — that component is shared by
+             * every `Card` in the estate (dialogs, auth cards, …), and capping it there would
+             * change every one of them for a defect specific to this archetype's two-column header.
+             */
+            <CardDescription className="mt-1 max-w-prose">{description}</CardDescription>
+          ) : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </CardHeader>

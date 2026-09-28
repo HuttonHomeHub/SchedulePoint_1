@@ -20,13 +20,23 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Directories never walked. */
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.turbo']);
+
+/**
+ * Directories never walked, by path from the root. Agent worktrees are full copies of this
+ * repository; they are excluded from git by `.git/info/exclude`, which this walk does not read, and
+ * `EXCLUDED_FILES` below is keyed by root-relative path, so every copy of the template reported its
+ * links as broken and the gate failed locally whenever a worktree existed. CI has none, which is why
+ * only a local run ever saw it (found 2026-09-28, docs/specs/prepush-format-gate/ E4 — the same
+ * defect in Prettier's walk).
+ */
+const SKIP_PATHS = new Set(['.claude/worktrees']);
 
 /**
  * Files whose relative links are intentionally unresolvable, with the reason.
@@ -47,7 +57,9 @@ function* markdownFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name)) continue;
-      yield* markdownFiles(join(dir, entry.name));
+      const path = join(dir, entry.name);
+      if (SKIP_PATHS.has(relative(ROOT, path).split(sep).join('/'))) continue;
+      yield* markdownFiles(path);
     } else if (entry.name.endsWith('.md')) {
       yield join(dir, entry.name);
     }

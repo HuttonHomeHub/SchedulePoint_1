@@ -57,3 +57,26 @@ export function normaliseSearchTerm(q: string | undefined): string | undefined {
   if (trimmed.length === 0) return undefined;
   return trimmed.slice(0, LIBRARY_SEARCH_MAX_LENGTH);
 }
+
+/**
+ * Escape `\`, `%` and `_` in a raw search term before it is handed to Prisma's `contains`
+ * (`docs/TECH_DEBT.md` #337). `contains` compiles to `column ILIKE '%' || $1 || '%'` with **no
+ * escaping of the term itself** — Postgres's `LIKE`/`ILIKE` family treats `%` and `_` as
+ * wildcards wherever they appear in the pattern, backslash as ITS OWN escape character by
+ * default (verified against a real database: `ILIKE` with no explicit `ESCAPE` clause already
+ * honours a leading `\`), and the bind parameter is passed through unmodified — so a literal
+ * `50%` searched for `50%` matched `Acme 5000 Ltd` (`50` then any run of characters) and a
+ * literal `a_b` matched `aXb` (`_` is "exactly one character").
+ *
+ * Escaping `\` FIRST is load-bearing, and matters for every term containing `%` or `_`, not only
+ * one that already has a backslash: escaping `%`/`_` first and `\` second would re-escape the
+ * backslash the earlier pass just inserted, so `50%` would become `50\\%` (an escaped, literal
+ * backslash followed by `%` read once again as a wildcard) instead of `50\%` (one escaped,
+ * literal `%`) — silently reproducing the exact bug this function exists to fix. This function is
+ * the ONLY place a search term may reach a `contains` filter — call it at every `…SearchWhere`
+ * site rather than escaping ad hoc, or the next site silently reintroduces the wildcard (pinned
+ * by `library-filters.structural.spec.ts`).
+ */
+export function escapeLikePattern(term: string): string {
+  return term.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}

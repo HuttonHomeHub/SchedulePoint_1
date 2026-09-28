@@ -9,6 +9,7 @@ import { attachDayFactors } from '../activities/day-factor';
 import { toDrivingCalendarMap } from '../activities/driving-calendars';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
+import { attachLagDayFactors } from '../dependencies/lag-day-factor';
 import { PlanRepository } from '../plans/plan.repository';
 import { ScheduleRepository } from '../schedule/schedule.repository';
 
@@ -125,8 +126,30 @@ export class ShareGuestService {
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
     const { items, meta } = this.paginate(rows, query.limit);
+    // A relationship's lag is measured on its OWN `lagCalendar` (ADR-0068 §4), never on a
+    // hard-pinned 1440 — the member read's rule, applied here through the SAME helper
+    // (`attachLagDayFactors`) rather than a second copy of it (`docs/TECH_DEBT.md` #316). The
+    // plan's calendar is one lookup for the page; a per-activity calendar resolves itself.
+    const planCalendarId =
+      (await this.plans.findCalendarIds([guest.planId]))[0]?.calendarId ?? null;
+    const decorated = await attachLagDayFactors(
+      this.calendars,
+      items,
+      planCalendarId,
+      // Asked of THIS PAGE's endpoints, not of the plan (`docs/TECH_DEBT.md` #86): a page with no
+      // RESOURCE_DEPENDENT endpoint needs no driver read at all.
+      items.some(
+        (row) =>
+          row.predecessor.type === 'RESOURCE_DEPENDENT' ||
+          row.successor.type === 'RESOURCE_DEPENDENT',
+      )
+        ? toDrivingCalendarMap(
+            await this.schedule.loadDrivingResourceCalendars(guest.organizationId, guest.planId),
+          )
+        : new Map(),
+    );
     this.touchAccess(guest.shareId);
-    return { items: items.map((row) => GuestDependencyDto.from(row)), meta };
+    return { items: decorated.map((row) => GuestDependencyDto.from(row)), meta };
   }
 
   /** Keyset page helper (id cursor) — the member list convention (take limit+1, peek for hasMore). */

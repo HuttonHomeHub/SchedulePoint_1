@@ -11,7 +11,11 @@ import {
 } from '@prisma/client';
 import { WorkingWeekdays } from '@repo/types';
 
-import { archivedFilterWhere, type ArchivedFilter } from '../../common/query/library-filters';
+import {
+  archivedFilterWhere,
+  escapeLikePattern,
+  type ArchivedFilter,
+} from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -21,10 +25,13 @@ import { PrismaService } from '../../prisma/prisma.service';
  * set to one tenant in cursor order and this is a recheck over that bounded set. Returned as a
  * spreadable fragment (`{}` when there is no search) — and NOT as an `OR`, so it composes with
  * the project list's tier `OR` without either clobbering the other.
+ *
+ * `%`/`_`/`\` in `search` are escaped first (`docs/TECH_DEBT.md` #337) so a calendar literally
+ * named e.g. `50%` is matched by that search rather than treated as a wildcard.
  */
 function calendarSearchWhere(search: string | undefined): Prisma.CalendarWhereInput {
   if (search === undefined) return {};
-  return { name: { contains: search, mode: 'insensitive' } };
+  return { name: { contains: escapeLikePattern(search), mode: 'insensitive' } };
 }
 
 /**

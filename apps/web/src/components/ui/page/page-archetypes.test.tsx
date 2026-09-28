@@ -176,6 +176,19 @@ describe('SectionCard', () => {
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
+  it("caps its description at a readable measure, `PageHeader`'s own fix for `docs/TECH_DEBT.md` #339", () => {
+    // With no cap a description is its own text's width wearing one — the defect `PageHeader`
+    // was fixed for. `max-w-prose` is applied at THIS call site and not inside `CardDescription`,
+    // which every `Card` in the estate shares, so capping it there would change every consumer.
+    render(
+      <SectionCard title="Calendars" description="What this section holds.">
+        rows
+      </SectionCard>,
+    );
+    const description = screen.getByText('What this section holds.');
+    expect(description.className).toMatch(/\bmax-w-prose\b/);
+  });
+
   it('is a region named by its own heading, so sections are navigable', () => {
     // A `<section>` with an accessible name IS a landmark, which is how a screen-reader user jumps
     // between "Recently changed" and "Needs your attention" instead of walking the page. It is safe

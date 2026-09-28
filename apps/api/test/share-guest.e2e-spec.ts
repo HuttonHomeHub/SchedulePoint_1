@@ -206,10 +206,31 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     planId: string,
     predecessorId: string,
     successorId: string,
+    extra: Record<string, unknown> = {},
   ): Promise<string> {
     const res = await actor.agent
       .post(`/api/v1/organizations/${orgSlug}/plans/${planId}/dependencies`)
-      .send({ predecessorId, successorId })
+      .send({ predecessorId, successorId, ...extra })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  /**
+   * An org-scoped calendar working every day, `hours` long — the
+   * `resource-dependent-day-factor.e2e-spec.ts` pattern, so an 8-hour lag calendar produces
+   * `hoursPerDay: 8` (480 working minutes/day) rather than the 24-hour default.
+   */
+  async function makeCalendar(actor: Actor, orgSlug: string, hours: number): Promise<string> {
+    const res = await actor.agent
+      .post(`/api/v1/organizations/${orgSlug}/calendars`)
+      .send({
+        name: `${hours}h calendar`,
+        shifts: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+          weekday,
+          startMinute: 0,
+          endMinute: hours * 60,
+        })),
+      })
       .expect(201);
     return res.body.data.id as string;
   }
@@ -442,5 +463,52 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     expect(collected).toHaveLength(23);
     expect(new Set(collected).size).toBe(23); // no duplicates across pages
     expect(collected.sort()).toEqual([...expectedIds].sort());
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #316: `GuestDependencyDto.from` used to compute
+   * `lagDays: Math.round(entity.lagMinutes / 1440)` — a hard-pinned 24-hour day — while the member
+   * DTO measures a lag on the relationship's OWN `lagCalendar` (`minutesToDays`, ADR-0068 §4).
+   * `share-guest.service.ts` never called `attachLagDayFactors`, so the factor the member path
+   * resolves was not even loaded on the guest path.
+   *
+   * On this plan's 8-hour calendar a 1-day FS lag stores 480 working minutes: a member correctly
+   * reads `lagDays: 1`. Before the fix the guest read `Math.round(480 / 1440)` = `0` — told there
+   * was no lag at all, on the same relationship a member sees delayed by a working day.
+   */
+  it('reads a relationship’s lag on its OWN lag calendar, exactly as a member does (#316)', async () => {
+    const { actor } = await adminWithOrg('Acme', 'admin@example.com');
+    const eightHourCalendarId = await makeCalendar(actor, 'acme', 8);
+    const planId = await makePlan(actor, 'acme', 'Riverside Plan');
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: eightHourCalendarId, version: 1 })
+      .expect(200);
+
+    const a = await makeActivity(actor, 'acme', planId, 'Excavate');
+    const b = await makeActivity(actor, 'acme', planId, 'Pour slab');
+    // Default `lagCalendar` is `PROJECT_DEFAULT` — the plan's own (now 8-hour) calendar — so a
+    // 1-day lag stores 480 working minutes, not 1440.
+    const dependencyId = await makeDependency(actor, 'acme', planId, a, b, { lagDays: 1 });
+
+    const memberRead = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .expect(200);
+    const memberDependency = (
+      memberRead.body.data as { id: string; lagDays: number; lagMinutes: number }[]
+    ).find((row) => row.id === dependencyId);
+    expect(memberDependency).toMatchObject({ lagDays: 1, lagMinutes: 480 });
+
+    const { token } = await mintShareToken(actor, 'acme', planId);
+    const guestRead = await guestGet('/api/v1/share/dependencies', token).expect(200);
+    const guestDependency = (
+      guestRead.body.data as { id: string; lagDays: number; lagMinutes: number }[]
+    ).find((row) => row.id === dependencyId);
+
+    // The exact minutes were always correct (both DTOs expose `lagMinutes`); the defect was in the
+    // conversion to days. A guest must read the SAME `lagDays` a member reads off the same edge.
+    expect(guestDependency?.lagMinutes).toBe(memberDependency?.lagMinutes);
+    expect(guestDependency?.lagDays).toBe(memberDependency?.lagDays);
+    expect(guestDependency?.lagDays).toBe(1);
   });
 });

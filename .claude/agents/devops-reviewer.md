@@ -63,8 +63,9 @@ not edit code.
   app is unchanged, because `turbo.json` declares the report as a build output), then
   calls the workspace `check:bundle-size`. It was CI-only before that, and PR #701
   passed prepush and failed CI on it.
-- **`pnpm format:check` runs in CI and in no local gate** (TECH_DEBT #299), so formatting
-  failures are only ever found after a push.
+- **The formatting check is a root gate, `check:format`** (since 2026-09-28,
+  `docs/specs/prepush-format-gate/`), so `pnpm prepush` runs it and CI runs the same command.
+  What is still unasserted is the CI-to-prepush direction in general (TECH_DEBT #299).
 - **Known gap:** the image build has no GHA-backed layer cache, so both images
   rebuild from scratch every run (TECH_DEBT #18).
 
