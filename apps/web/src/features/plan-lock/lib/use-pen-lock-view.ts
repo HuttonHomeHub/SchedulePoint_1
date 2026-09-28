@@ -3,7 +3,42 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanPen } from '../api/use-plan-edit-lock';
 import type { EditLockControlsProps } from '../components/EditLockControls';
 
-import { type LockView, resolveLockView } from './lock-view';
+import { type LockView, lockViewKey, resolveLockView } from './lock-view';
+
+/**
+ * **A value-keyed identity**: the SAME reference across renders whenever `key` is unchanged, and
+ * the new `value` the first render it is not (`docs/TECH_DEBT.md` #353 D1a, M1-T2).
+ *
+ * `react-hooks/exhaustive-deps` cannot express "recompute when the *content* changes" — a `useMemo`
+ * whose dependency array is a content key rather than the value it derives is exactly the shape the
+ * rule exists to reject, since the array would then omit `value` itself. Two designs were tried and
+ * both were wrong for this hook specifically (`usePenLockView` carries two refs and a focus-restore
+ * effect, exactly what `react-hooks/refs` exists to check): listing `view` in the return memo's own
+ * array brings back the per-tick churn this file's history records (a `useMemo` that recomputes on
+ * every tick is a memo that never memoised anything); a call-site `eslint-disable-next-line
+ * react-hooks/exhaustive-deps` was measured (M0-T3, a scratch probe with a ref read alongside both a
+ * same-function and a separate-module-private-hook suppression) to leave `react-hooks/refs` firing
+ * regardless of where the suppression sits — so there is no scope, narrow or wide, in which
+ * suppressing here is known to be free, and the honest reading of `DEFAULT_ESLINT_SUPPRESSIONS`
+ * existing is that it protects SOME case, not that it protects this one.
+ *
+ * This is React's own documented "store information from previous renders" pattern instead —
+ * `setState` called conditionally during render, which needs no suppression of any rule because it
+ * reads no stale closure and calls no method on a ref: `key`'s own identity IS the dependency, and
+ * the rule has nothing to ask for. M0-T3 confirmed it (the same probe, lint clean).
+ *
+ * **Not exported, and not moved to `src/hooks/`.** A shared "memo by key" helper reads as a general
+ * tool and invites reuse it was not built to review; this hook's own history is why it stays next
+ * to the one consumer that needs it.
+ */
+function useKeyedIdentity<T>(value: T, key: string): T {
+  const [cached, setCached] = useState<{ key: string; value: T }>({ key, value });
+  if (cached.key !== key) {
+    setCached({ key, value });
+    return value;
+  }
+  return cached.value;
+}
 
 /**
  * One resolved pen, shared by the two surfaces that show it (console epic M5).
@@ -146,15 +181,18 @@ export function usePenLockView(
   // `<Toolbar>` a fresh context and churn its resolve → partition → measure cycle" — and M5
   // defeated it unconditionally.
   //
-  // `signature` is already the hook's own answer to "has anything about the view changed", and it
-  // is what the focus effect keys on. Reusing it here is not a convenience: it means the identity
-  // and the effect cannot disagree about what counts as a change.
+  // `signature` (above) is the hook's own coarser answer to "has anything about the view changed" —
+  // it is what the focus effect keys on, and that effect is deliberately left reading `signature`
+  // and the raw `view` rather than the value-keyed pair below (Risk (a), M1-T2): a focus restore
+  // cares whether the tone/actions changed at all, not whether the exact content did.
   //
-  // The tick still fires; it just stops producing a new object when the second it counted did not
-  // move any date the reader sees. What still moves per tick is the `aria-hidden` aside — which is
-  // inside `view` and therefore inside `signature`'s subject only when its text changes, so a
-  // countdown crossing a whole minute re-renders and the fifty-nine seconds between do not.
-  const signatureWithAside = `${signature}|${view?.aside ?? ''}|${view?.message ?? ''}|${view?.badge ?? ''}`;
+  // `lockViewKey` is the FULL content key — every field `LockView` can carry, not the four
+  // `signature` and its aside covered by hand (`docs/TECH_DEBT.md` #353 E11: two real fields,
+  // `badgeName`/`messageVisible`, were left out of that hand-written list, safe today only by
+  // coincidence). `useKeyedIdentity` turns that key into a STABLE reference: the tick still fires
+  // every second, but it stops producing a new `view` object here when the second it counted moved
+  // nothing a reader can see, which is what stops it invalidating the toolbar context memo below.
+  const stableView = useKeyedIdentity(view, lockViewKey(view));
 
   // **The dependencies are the STABLE pieces, never `pen` itself**, and the first version of this
   // memo got that wrong in a way worth keeping: it listed `pen`, which `usePlanPen` rebuilds as a
@@ -164,9 +202,9 @@ export function usePenLockView(
   // rather than by anything failing, which is the only way this class is ever caught.
   //
   // The pieces below ARE stable: every callback is a `useCallback` on that hook, `penManaged` is a
-  // build-time constant, and `holder` comes from the query cache. `signatureWithAside` covers
-  // everything the two surfaces render, so a change a reader can see always produces a new object
-  // and a tick that moves nothing does not.
+  // build-time constant, and `holder` comes from the query cache. `stableView` covers everything
+  // the two surfaces render, so a change a reader can see always produces a new object and a tick
+  // that moves nothing does not.
   const { startEditing, stopEditing, requestControl, takeOver, handoff, dismissLost } = pen;
   const holder = pen.status?.holder ?? null;
   const requestedById = pen.status?.requestedBy?.id ?? null;
@@ -175,10 +213,10 @@ export function usePenLockView(
   return useMemo(
     () => ({
       penManaged,
-      view,
+      view: stableView,
       containerRef,
       controlsProps: {
-        actions: view?.actions ?? [],
+        actions: stableView?.actions ?? [],
         holder,
         isPending,
         onStart: act(startEditing),
@@ -197,12 +235,13 @@ export function usePenLockView(
       },
     }),
 
-    // construction and `signatureWithAside` is the derived answer to whether it says anything
-    // different; `act` is a local closure over a ref, which is stable by definition.
+    // `stableView` is the value-keyed identity above, and is the derived answer to whether the
+    // rendered content says anything different; `act` is a local closure over a ref, which is
+    // stable by definition and needs no dependency.
     [
       penManaged,
       isPending,
-      signatureWithAside,
+      stableView,
       holder,
       requestedById,
       startEditing,

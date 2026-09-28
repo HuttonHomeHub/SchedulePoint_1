@@ -125,4 +125,65 @@ describe('usePenLockView keeps one identity while the lock is unchanged', () => 
     rerender({ p: pen({ isPending: true }) });
     expect(result.current).not.toBe(first);
   });
+
+  /**
+   * M1-T2 (`docs/TECH_DEBT.md` #353): the two cases the plan asks for, against the
+   * `HELD_BY_OTHER` read-only branch whose `aside` is `activeAside`'s "active {relative}" phrase
+   * — the one piece of `LockView` that ticks every second without the sentence, badge or action
+   * list changing. `lockViewKey` folds the aside in, so these are exactly the two states
+   * `useKeyedIdentity` exists to tell apart.
+   */
+  const HELD_BY_OTHER_BASE = 1_700_000_000_000;
+  // Hoisted so it is the SAME reference across both renders below — `holder` is one of the outer
+  // memo's own listed dependencies, and a fresh `{ id, name }` literal per call would force a
+  // recompute for a reason that has nothing to do with the aside this case exists to isolate
+  // (the R8/M0-T4 lesson, `docs/specs/hook-deps-gate/m0-measurement.md`).
+  const OTHER_HOLDER = { id: 'u-other', name: 'Alexandra Reyes' };
+  function heldByOtherPen(now: number): PlanPen {
+    return pen({
+      status: {
+        state: 'HELD_BY_OTHER',
+        holder: OTHER_HOLDER,
+        requestedBy: null,
+        // Five minutes before `now`, so the "min ago" bucket has room to move without landing on
+        // a boundary this test would need to reason about separately.
+        heartbeatAt: new Date(now - 5 * 60_000).toISOString(),
+        graceEndsAt: null,
+        canAcquire: false,
+        canRequest: false,
+        canTakeOver: false,
+        canOverride: false,
+      } as unknown as PlanPen['status'],
+    });
+  }
+
+  it('keeps identity when `now` advances within the same "active …" minute bucket', () => {
+    const { result, rerender } = renderHook(
+      ({ now }: { now: number }) => usePenLockView(heldByOtherPen(HELD_BY_OTHER_BASE), 'u-me', now),
+      { initialProps: { now: HELD_BY_OTHER_BASE } },
+    );
+    const first = result.current;
+    expect(first.view?.aside).toBe('active 5 min ago');
+
+    // +1 s: still "5 min ago" — the tick that fires every second, most of which say nothing new.
+    rerender({ now: HELD_BY_OTHER_BASE + 1_000 });
+
+    expect(result.current.view?.aside).toBe('active 5 min ago');
+    expect(result.current).toBe(first);
+  });
+
+  it('gives a new identity once `now` crosses the "active …" minute boundary', () => {
+    const { result, rerender } = renderHook(
+      ({ now }: { now: number }) => usePenLockView(heldByOtherPen(HELD_BY_OTHER_BASE), 'u-me', now),
+      { initialProps: { now: HELD_BY_OTHER_BASE } },
+    );
+    const first = result.current;
+    expect(first.view?.aside).toBe('active 5 min ago');
+
+    // +60 s: the heartbeat is now six minutes old — a real, reader-visible change.
+    rerender({ now: HELD_BY_OTHER_BASE + 60_000 });
+
+    expect(result.current.view?.aside).toBe('active 6 min ago');
+    expect(result.current).not.toBe(first);
+  });
 });
