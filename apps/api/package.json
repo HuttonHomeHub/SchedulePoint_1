@@ -9,7 +9,7 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "lint": "eslint . --cache --cache-strategy content",
+    "lint": "eslint . --cache --cache-strategy content --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
