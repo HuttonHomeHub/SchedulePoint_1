@@ -11599,3 +11599,17 @@ entry in `dependency-claims.json` and exits 0, so under `prepush.sh` the note go
 `ok` is shown — the pass-with-findings shape ADR-0164 D5 rules out. It is the one confirmed instance
 outside lint in M0-T5's survey. Changing a shared gate's exit behaviour is an ADR-0105 trigger of its
 own, so it was filed rather than folded into ADR-0164.
+
+### 411. A warm local ESLint cache can under-report type-aware findings under `--max-warnings=0`
+
+**Status:** open · **Verified:** 2026-09-28 (hook-deps-gate devops review) · **Raised:** 2026-09-28 ·
+**Size:** S · **Owner:** repo
+
+Every workspace `lint` script runs `eslint . --cache --cache-strategy content`. A content-keyed cache
+re-lints a file only when **that file's** bytes change, so a type-aware finding caused by an edit to a
+**different** file (a changed export type, a hook's return shape) is not re-reported locally until the
+cached file itself is touched. CI starts cold and sees it; `pnpm prepush` on a warm tree may not. Under
+ADR-0164's `--max-warnings=0` that gap is now a gate disagreement rather than a missed warning. Not
+observed failing yet — filed from the review's reasoning, which is the reason it is `S` and open
+rather than fixed. Candidate remedies: drop `--cache` from the prepush invocation only, or clear
+`.eslintcache` when `tsconfig`/lockfile inputs change. Either changes a shared gate (ADR-0105).
