@@ -66,7 +66,7 @@
     "rimraf": "^6.0.1",
     "supertest": "catalog:",
     "typescript": "catalog:",
-    "unplugin-swc": "^1.6.0",
+    "unplugin-swc": "^2.0.0",
     "vitest": "^5.0.1"
   }
 }
