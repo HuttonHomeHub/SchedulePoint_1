@@ -109,6 +109,32 @@ describe('the items', () => {
     expect(ctx.onProgress).toHaveBeenCalledTimes(1);
   });
 
+  it('offers Make milestone… on a zero-duration task and converts it (ADR-0162 decision 4)', () => {
+    // Every other fixture in this file sets `applies: false`, so this menu's copy of the item was
+    // never rendered or pressed by any test — the docked bar the journey drives is a different
+    // surface (M6 component gate). The mechanism is shared; this case proves the surface.
+    const ctx = openMenu(
+      context({
+        definitionGate: { writable: true, reason: null },
+        makeMilestone: { applies: true, enabled: true, reason: null },
+      }),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Make milestone…/ }));
+    expect(ctx.onMakeMilestone).toHaveBeenCalledTimes(1);
+  });
+
+  it('shades Make milestone… with its reason rather than dropping it', () => {
+    openMenu(
+      context({
+        definitionGate: { writable: false, reason: 'Start editing to change this.' },
+        makeMilestone: { applies: true, enabled: false, reason: 'Start editing to change this.' },
+      }),
+    );
+    const item = screen.getByRole('menuitem', { name: /^Make milestone…/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription('Start editing to change this.');
+  });
+
   it('shades a shut item with a reason instead of dropping it', () => {
     // ADR-0082: the option stays visible and focusable so its reason is readable by keyboard. That
     // decision's load-bearing change was making `Menu`'s roving focus reach a shaded item at all.

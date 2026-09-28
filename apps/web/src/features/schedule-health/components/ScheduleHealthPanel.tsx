@@ -375,7 +375,7 @@ function HealthMetricRow({
               onClick={() => {
                 if (!criticalPathTest.isPending) criticalPathTest.run();
               }}
-              className="h-6 px-2 text-xs"
+              className="h-6 px-2 text-xs aria-disabled:pointer-events-none aria-disabled:opacity-60"
             >
               {criticalPathTest.isPending ? 'Running…' : 'Run critical path test'}
             </Button>
