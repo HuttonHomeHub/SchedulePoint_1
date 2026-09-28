@@ -402,7 +402,10 @@ describe('ActivitiesTable — baseline variance', () => {
     );
     expect(screen.getByRole('columnheader', { name: 'Finish variance' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Start variance' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Float variance' })).toBeInTheDocument();
+    // "Total float variance" (placement-baseline-variance, F2) — the "Float left" column
+    // above it is remaining float, and without the word a reader takes this to be variance
+    // of that one.
+    expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
   });
 
   it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {

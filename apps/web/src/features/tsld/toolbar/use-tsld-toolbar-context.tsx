@@ -722,6 +722,9 @@ export function useTsldToolbarContext({
             ...(model.varianceByActivityId
               ? { varianceByActivityId: model.varianceByActivityId }
               : {}),
+            // Names which dates the ghost/column compare on paper (`placement-baseline-variance`,
+            // US-2) — the same read `varianceByActivityId` above is built from.
+            varianceBasis: model.variance.data?.summary.basis,
             // The printed programme reads the SAME dates the screen does. Without these it drew
             // every VISUAL-mode bar from the early columns while the chart beside it drew them
             // from the effective-Visual ones — and paper is where that is hardest to notice and
@@ -936,6 +939,9 @@ export function useTsldToolbarContext({
     // The printed programme reads the variance map directly (ADR-0059 M4). Omitting it here would
     // print last refetch's comparison — a stale document that looks current.
     model.varianceByActivityId,
+    // Names the basis on the printed legend (`placement-baseline-variance`, US-2) — omitting it
+    // would print yesterday's baseline's basis word beside today's comparison.
+    model.variance.data?.summary.basis,
     // Canvas nav — re-identify only when the nav view state / conflict set / callbacks change (setters
     // are stable). `navState` is one memoised object off `useTsldCanvasUiState`.
     navState.isolateActive,
@@ -958,9 +964,12 @@ export function useTsldToolbarContext({
     canvasUi.lensState.searchCursorId,
     // Export & print — re-identify only when the exported set / its match state / the plan name change
     // (the callbacks close over these). `todayIso` + `announce` are already listed above. The
-    // dependency edges, the view toggles and the late overlay now reach the picture through
-    // `buildDiagramImage`'s own dependency list rather than this one.
+    // dependency edges, the view toggles and the late overlay reach the DIAGRAM picture through
+    // `buildDiagramImage`'s own dependency list rather than this one — but the Gantt print path
+    // above reads `dependencies` directly (the Predecessors column, ADR-0059 M4), so it belongs
+    // here too: without it, printing after a link changed would print the OLD predecessor list.
     activities,
+    dependencies,
     plan.name,
     exportMatch,
     // The extracted image builder (ADR-0078 S11) — a `useCallback` keyed on exactly what the block

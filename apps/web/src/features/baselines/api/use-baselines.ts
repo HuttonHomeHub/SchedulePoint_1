@@ -31,6 +31,7 @@ const EMPTY_SUMMARY: PlanVarianceSummary = {
   behindCount: 0,
   addedCount: 0,
   removedCount: 0,
+  basis: null,
 };
 
 export function baselinesQueryOptions(orgSlug: string, planId: string) {

@@ -833,7 +833,11 @@ export function ActivitiesTable({
     columns.push(
       varianceColumn('Start variance', 'start', 'lg'),
       varianceColumn('Finish variance', 'finish'),
-      varianceColumn('Float variance', 'float', 'lg'),
+      // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
+      // column beside it is "Float left" (remaining float, above) — without the word, a
+      // reader takes this column to be variance OF that one, when it is always total float
+      // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
+      varianceColumn('Total float variance', 'float', 'lg'),
     );
   }
   if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
