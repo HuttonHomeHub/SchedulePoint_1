@@ -10394,32 +10394,26 @@ to three sentences and a trailing fact, and at 464 px the trailing fact is takin
 comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
 roughly 768–1400 px wide.
 
-### 334. The activities panel renders every row of a plan, under a docblock claiming it does not
+### 334. The activities panel is slow to open at plan scale, and renders every row
 
-**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M0, read) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-28 (M0 measured) · **Raised:** 2026-09-16 (page-consistency
+M0, read) · **Size:** M · **Owner:** web
 
-`components/layout/workspace/activity-bottom-panel.tsx:19`'s docblock credits `ActivitiesTable` with
-**virtualization**. It has none — `grep virtual` in `features/activities/components/ActivitiesTable.tsx`
-returns nothing, and `DataTable` (`components/ui/data-table.tsx:247`) `rows.map`s every row it is
-given. So the panel renders a full `<tr>` per activity, inside the capped scroller at `:108`
-(`min-h-0 flex-1 overflow-y-auto`), with **no sticky `<thead>`** — the header scrolls away on the
-first wheel click and the columns are then unlabelled for the rest of the list.
+**Half of this row is done.** The docblock that credited the table with virtualization is
+corrected, and the header now stays pinned in one scroller (`DataTable`'s opt-in
+`scroll="contained"`, `docs/specs/activities-panel-scale/` M1). Measuring before building found a
+regression in that same change — a selection's bulk-assign bar squeezed the table to its header —
+fixed before release with a red-verified journey case.
 
-**The scale is the plan's, not a page's.** ADR-0026's own gate is written at 2,000 activities and the
-seed catalogue ships plans at that size (ADR-0066), so this is up to ~2,000 un-virtualized rows in a
-~400 px box on the product's primary surface.
+**What remains is speed, now measured rather than guessed** (`m0-measurement.md`): opening the panel
+takes **472–488 ms at 540 rows and ~1.7 s at 2,160** against a 200 ms bar (every repeat over it),
+and ticking a checkbox takes 288 ms at 2,160. Scrolling passes at both sizes. The product owner
+ruled the 2,000-row reading a fail (CQ-A), which arms **M2** (stop the panel and rows
+re-rendering) and **M3** (window the rows inside `DataTable`, ADR first, with CQ-B — losing
+find-in-page and browse-mode reach for off-screen rows — put to the product owner).
 
-**It is filed rather than fixed because it is canvas-adjacent and was found sideways.** The
-page-consistency epic's M0 turned it up while establishing that the landing's capped-box model does
-not transfer to the table screens — this is that same model, already shipped, at the one scale where
-it hurts. The product owner scoped it out of that epic deliberately (2026-09-16) so it would not
-widen into the plan workspace.
-
-**What is NOT yet known**, and should be measured before anyone designs a fix: whether it is
-actually slow. Nobody has profiled it, and `docs/TECH_DEBT.md` #75's history here is that the
-alarming reading and the reassuring one were both half-truths. The cheap first step is the ADR-0128
-staff probe or a `measure-*` harness at 500 and 2,000 activities; the stale docblock should be
-corrected either way, because a false claim of virtualization is exactly what stops anyone looking.
+**Trigger:** the next epic after the 2026-09-28 release; the plan and harness are ready
+(`apps/web/scripts/measure-activities-panel.mjs`, re-run after each milestone).
 
 ### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
 

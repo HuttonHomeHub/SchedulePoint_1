@@ -50,3 +50,11 @@ layout (0 rows painted).
 Row "Any judged limb INDETERMINATE" applies: **M1 only, then stop. CQ-A goes to the product owner
 with these numbers.** Had E1 been judged FAIL rather than INDETERMINATE, the table would arm M3
 (windowing, ADR first, CQ-B), and I2's FAIL at 2,000 would arm M2 as well.
+
+## CQ-A, answered
+
+**Product owner, 2026-09-28: treat it as a fail.** Every repeat sat over the bar, so the direction
+is not in doubt. So the table's E1-FAIL row applies: **M3 is armed** (windowing, ADR first, with
+CQ-B put to the product owner with these numbers), and **M2 as well** because I2 fails at 2,000
+rows. Both are a follow-up after the release that ships M1; `docs/TECH_DEBT.md` #334 stays open
+for them.
