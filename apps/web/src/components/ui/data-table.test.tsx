@@ -413,5 +413,21 @@ describe('DataTable — Column.width', () => {
       expect(td.className).toContain('border-b');
       expect(td.className).toContain('border-border');
     });
+
+    it('`scroll="contained"` moves a detail row\'s rule onto its cell too', () => {
+      const { container } = render(
+        <DataTable
+          {...common}
+          query={query({ data: rows })}
+          scroll="contained"
+          renderDetail={(row) => <span>detail for {row.name}</span>}
+        />,
+      );
+      const detailRow = container.querySelectorAll('tbody tr')[1]!;
+      expect(detailRow.className).not.toContain('border-b');
+      const detailCell = detailRow.querySelector('td')!;
+      expect(detailCell.className).toContain('border-b');
+      expect(detailCell.className).toContain('border-border');
+    });
   });
 });

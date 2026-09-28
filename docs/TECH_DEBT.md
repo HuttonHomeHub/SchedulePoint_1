@@ -11583,3 +11583,15 @@ worked as its own decision:
 
 DCMA health correctly stays on the network basis and is not part of this row
 (`float-basis.structural.spec.ts`). **Trigger:** the next epic that touches any of these readers.
+
+### 406. The critical-path what-if's throttle was measured before it levelled
+
+**Status:** open · **Verified:** 2026-09-28 · **Raised:** 2026-09-28 (the #248 fix; security and API
+reviews) · **Size:** S · **Owner:** api
+
+`CRITICAL_PATH_TEST_THROTTLE` (14/60 s, `schedule.controller.ts`) was derived from
+`docs/specs/schedule-health-check/m6-measurement.md`, which timed two network passes. Since #248
+closed, a plan with `levelResources` on runs up to four passes per request (two network, two
+levelling). The route is authenticated and levelling is opt-in per plan, so this is an unquantified
+cost increase inside an unchanged rate envelope rather than a new exposure. **Remedy:** re-run the
+M6-T0 harness on a large levelled plan and keep or lower the limit from the number.

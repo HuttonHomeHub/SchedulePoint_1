@@ -274,6 +274,9 @@ export function DataTable<T>({
    */
   scroll?: 'page' | 'contained';
 }): React.ReactElement {
+  // `scroll` shapes only the populated table below. The loading, error and empty branches return
+  // before it is read, and need no scroller of their own: each is a bounded, short block (a
+  // three-row skeleton or a sentence) that fits inside the smallest open panel.
   if (query.isPending) {
     // **A skeleton, not a spinner** (`docs/TECH_DEBT.md` #161(b),
     // `docs/specs/empty-state-consolidation/` M7). `docs/UX_STANDARDS.md` asks for a skeleton
