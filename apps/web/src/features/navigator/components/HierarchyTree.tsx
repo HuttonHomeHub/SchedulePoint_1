@@ -212,6 +212,15 @@ export function HierarchyTree({
     [activeIndex, selectedIndex, menuIndex],
   );
 
+  // `useVirtualizer` returns functions the compiler's analysis cannot prove are safe to memoize, so
+  // it skips this WHOLE component's analysis — the `react-hooks/refs`/`set-state-*` diagnostics do
+  // not run here (`docs/TECH_DEBT.md` #353 D3, the same call as `GanttPanel.tsx`'s). Turning the
+  // rule off would let a NEW incompatible call site pass silently elsewhere in this component;
+  // wrapping the call in a local hook would hide the incompatibility from the analysis without
+  // making the code any safer. Costs nothing extra — the component was already skipped because of
+  // the library — and `reportUnusedDisableDirectives` (ESLint 9's default) flags this the day
+  // `useVirtualizer` stops needing it.
+  // eslint-disable-next-line react-hooks/incompatible-library -- see above
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -309,7 +318,7 @@ export function HierarchyTree({
     const target = parentRow ?? scrollRef.current;
     if (target && target.offsetParent !== null) target.focus();
     // Fire once per delete (keyed on seq); rowRefs/scrollRef are stable refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on seq, not on afterDelete's own identity (see above)
   }, [afterDelete?.seq]);
 
   const focusRow = (index: number): void => {

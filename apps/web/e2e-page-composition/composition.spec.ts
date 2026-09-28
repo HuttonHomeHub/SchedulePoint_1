@@ -508,12 +508,18 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
 
   // Printed either way: a run that tolerates five wraps and a run that saw none are different
   // facts, and only one of them means the exemption is doing anything.
+  // eslint-disable-next-line no-console -- the sweep's own summary is the reviewer-facing evidence
   console.log(
     `wrap sweep: ${String(examined.length)} screen-widths examined, ` +
       `${String(tolerated.length)} declared-auto wrap(s) tolerated, ` +
       `${String(findings.length)} finding(s).`,
   );
+  // Each tolerated wrap is named so a reviewer can tell the exemption is doing something rather
+  // than nothing having wrapped at all.
+  // eslint-disable-next-line no-console -- see above
   for (const w of tolerated) console.log(`  tolerated: ${describe(w)}`);
+  // Named ahead of the assertion below, so a failure's output already says which wraps caused it.
+  // eslint-disable-next-line no-console -- see above
   for (const w of findings) console.log(`  FINDING:   ${describe(w)}`);
 
   // **The instrument must have seen something before its verdict means anything** (ADR-0093). An

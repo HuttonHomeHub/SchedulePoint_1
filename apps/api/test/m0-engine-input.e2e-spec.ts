@@ -73,6 +73,9 @@ describe('M0 — engine input fidelity', () => {
     );
     const summary = computeSchedule(graph.activities, graph.edges, graph.options).summary;
 
+    // The fidelity comparison this spec exists to run is read from this line: the product's own
+    // summary, to set beside the harness's engine input.
+    // eslint-disable-next-line no-console -- see above
     console.log('PRODUCT BUILDER:', JSON.stringify(summary));
     expect(graph.activities.length).toBe(147);
     expect(graph.edges.length).toBe(188);

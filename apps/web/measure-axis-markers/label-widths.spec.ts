@@ -169,5 +169,6 @@ test('M0-T1/T3/T7 — label widths, ruler occupancy, and the cost of a layout re
   // The harness throws rather than reporting a verdict from an `undefined` (ADR-0097 Landing C).
   expect(Object.keys(widths.widths)).toHaveLength(PERSISTENT.length + TRANSIENT.length);
   expect(Object.keys(occupancy)).toHaveLength(PRESETS.length);
+  // eslint-disable-next-line no-console -- names the written measurement file for a reader following along
   console.log(`wrote ${path}`);
 });
