@@ -2308,113 +2308,6 @@ fails and therefore what to do about it: a periodic re-derivation pass cannot fi
 never right, and will keep finding the same class forever unless the ordering changes at the point of
 writing.
 
-### 248. The DCMA what-if drops the levelling pass, and nothing says so
-
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** M · **Owner:** api
-
-**The honesty half is DONE (2026-09-11 sweep) and the engine half is what survives.** The row named
-two remedies and said to do at least one. The cheap one landed with the ADR-0116 addendum and is now
-in all three places a reader could meet it: the addendum §"the what-if does NOT run the levelling
-pass", a paragraph at the drop site naming this row, and the route's own OpenAPI description
-(`schedule.controller.ts:285` — _"It runs the NETWORK pass only — resource levelling is not
-applied"_). **So the sentence below beginning "Nothing records this as a limitation" is no longer
-true, and its `grep -ci "level" docs/adr/0116-*.md` returns 10 rather than 0.** It is kept rather
-than deleted because it is the finding's evidence as of the day it was raised; read it as history.
-
-**What is owed is the correct remedy**: thread `graph.leveling` through and level BOTH the control
-and the perturbed pass. That is engine work with a second pass per side, which is a decision rather
-than a fold, and it is why this row stays open.
-
-**Its citation has now drifted TWICE, and the second time inside the commit that fixed the first.**
-On 2026-09-10 the row corrected `:822` to `:952`; the destructure is at **`:971`** today, because
-the addendum's own explanatory paragraph pushed it down. That is #246 in miniature, so this row stops
-citing a line: the site is **the `const [{ activities, edges, options, meta }, labelRows]`
-destructure inside `getCriticalPathTest`**, which a reader can find whatever moves above it.
-
-`getCriticalPathTest` destructures `{ activities, edges, options, meta }` from
-`buildEngineGraph` — and the builder's return type also carries
-`leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null`, which is
-**dropped on the floor**. So ADR-0116 M6's critical-path test runs `computeSchedule` twice and never
-calls `levelSchedule`, while `recalculate` (`schedule.service.ts:277-296`) runs the levelling pass
-whenever `plan.levelResources` is true and persists **that** result.
-
-On a levelled plan the what-if therefore perturbs a schedule the product does not display. Its
-control run reproduces the pure network dates, so the movement it reports is measured against the
-wrong baseline — and the answer looks entirely reasonable, because every number in it is internally
-consistent.
-
-**Nothing records this as a limitation.** _(As of 2026-09-03, when this was raised. Fixed — see the
-top of this row.)_ `grep -ci "level" docs/adr/0116-*.md` returns **0**. The
-ADR is otherwise scrupulous about naming what its measurement does and does not cover — it carries
-its own deliberately weaker parity sentence and a written non-mutation proof — so the omission reads
-as an oversight rather than a decision, which is exactly what makes it worth a row: a reader
-auditing that endpoint would find a careful document that never mentions the gap.
-
-**Found by two independent reviewers** (database-architect and test-engineer) while reviewing the
-revision-compare spec, because that spec proposed to reuse this module's replay mechanism and would
-have inherited the gap. It is filed here rather than there because it is **live in shipped code**
-and stands whatever happens to that epic.
-
-**Why no gate caught it.** The seeded fixture plan reports `leveledActivityCount: 0` with
-`level_resources = false` and 45 resource assignments — so every test that exercises this route runs
-against a plan where the dropped pass would have been a no-op anyway.
-
-**The fix is one of two, and the choice is the decision.** Either thread `graph.leveling` through and
-run `levelSchedule` on both the control and the perturbed pass — which makes the what-if agree with
-what the planner sees, at the cost of a second pass per side — or state the limitation in the route's
-OpenAPI description and in ADR-0116, the way that ADR already states its parity caveat. The second is
-cheap and honest; the first is correct. **Do not do neither.**
-
----
-
-**2026-09-10 — the SECOND remedy is done; the first is still the open decision, and that is why this
-row stays open.** The limitation is now stated in three places: the route's `@ApiOperation`
-description, an addendum to ADR-0116 (recorded rather than rewritten, on the ADR-0026 §9b
-precedent), and a comment at the destructure itself. Nothing about the engine changed, so a
-levelled plan still gets a what-if measured against the network-only baseline — a reader is now told
-so instead of trusting it. **Threading `graph.leveling` through remains unbuilt** and is a decision
-about engine work: it costs a second levelling pass per side on every call to a route already
-throttled at 14/60 s on a measured budget.
-
-**Two things were found doing the honest half, and one is worse than what the row reported.**
-
-1. **The route's OpenAPI did not merely omit this — it claimed the opposite.** The 422 description
-   read _"the what-if runs the same passes a recalculation would, so it meets the same calendar
-   states"_. The conclusion holds (those three errors come from the network pass, which does run),
-   but the reason as stated is broader than the code and is simply false on a levelled plan. This
-   row said "nothing records this as a limitation"; in fact the one document a caller reads asserted
-   the gap away. Corrected in place with the old wording quoted, not silently replaced.
-2. **The citation had drifted again while this row was being acted on** — the destructure is at
-   `schedule.service.ts:953`, not the `:952` the 2026-09-10 re-verification recorded, which was
-   itself a correction of `:822`. Third line number for one statement. The comment now lives **at**
-   the destructure, so the next reader does not need a line number at all.
-
-**No regression test, and the reason is stated rather than skipped.** What changed is prose. A test
-asserting a description contains a word is the scan-matching-prose trap this repository has recorded
-four times, and it would pass against a route that had quietly started levelling. The behavioural
-assertion belongs with the first remedy, where there is something to assert.
-
-> **A natural experiment inside one row: the symbol-based citation survived and the line range did
-> not** (re-derived 2026-09-13). This row's own remedy — stop citing `:952`/`:971` and name _the
-> `const [{ activities, edges, options, meta }, labelRows]` destructure inside `getCriticalPathTest`_
-> — was the right call and is now proven: that site has moved **again**, to `:999`, and the citation
-> still resolves in one grep. Two other citations also held exactly: the OpenAPI caveat at
-> `schedule.controller.ts:285`, and `grep -ci "level" docs/adr/0116-*.md` returning **10**.
->
-> **The one citation the row did NOT convert is the one that broke.** `schedule.service.ts:277-296`,
-> given as where `recalculate` runs the levelling pass, today holds `criticalityRuleOf` — an
-> unrelated helper with no levelling in it at all. The site is `levelSchedule(`, called inside the
-> `if (graph.leveling)` guard, and it is named here as a symbol rather than a line for the reason
-> this row already established about its neighbour.
->
-> **And that guard is narrower than this row says.** The text reads "whenever `plan.levelResources`
-> is true"; the code branches on `graph.leveling`, which the builder populates only when the plan
-> opted in **and has assignments** — its own comment says "iff the plan opted in AND has
-> assignments". The row's argument is unaffected in substance, because a levelled plan is one with
-> assignments, but a plan with `levelResources: true` and no assignments runs no levelling pass, so
-> for that plan the what-if's baseline is not wrong. **The engine half of the remedy is unchanged and
-> still owed.**
-
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
@@ -2753,107 +2646,6 @@ the row's own stated first task, and the answer changes the scope in both direct
 So M7's primitive is **available at three of the fifteen and free at none of them**, and the work
 that remains is still the page-level pattern this row identifies. What is removed is the risk that a
 chunk of it was already solved.
-
-### 99. `/request-password-reset` leaks account existence through timing
-
-**Status:** open · **Verified:** 2026-09-13
-
-The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
-address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
-It is not uniform in **how long it takes**. Better Auth awaits the send
-(`runInBackgroundOrAwait` → `else await promise`, `better-auth@1.7.1`,
-`create-context.mjs:220`), so:
-
-| address | work done                                      | response time           |
-| ------- | ---------------------------------------------- | ----------------------- |
-| known   | token minted, mail sent                        | a real SMTP round trip  |
-| unknown | a token generated and discarded, one DB lookup | one database round trip |
-
-_(Corrected 2026-09-03 by the register verification sweep. This row said the unknown branch does
-**"nothing"** and returns **"immediate"**, and that is false: `password.mjs` takes an explicit
-not-found branch that calls `generateId(24)` and awaits
-`findVerificationValue("dummy-verification-token")`, under a comment saying it does so "to mitigate
-timing attacks". The library already equalises the cheap half. That does **not** close this row — a
-database lookup is not an SMTP round trip, and the gap this row is about is the send — but it makes
-the signal smaller than the table claimed, and it would have sent whoever picked this up hunting for
-a branch that does nothing.)_
-
-A caller with a stopwatch can therefore still distinguish the two, which is the thing the uniform
-body exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
-Auth mints a throwaway token and holds a 500 ms floor precisely to equalise the two branches
-(`email-verification.mjs:104-116`) — the machinery exists in the library, and this route does not
-use it.
-
-**ADR-0075 M4 narrowed it and did not close it.** `SEND_TIMEOUT_MS` bounds the known-address branch
-at 10 s, so the observable gap went from "up to ten minutes" to "up to ten seconds". A smaller
-worst case is not a smaller signal: a few hundred milliseconds is comfortably measurable over the
-network, and the gap is _reliable_ rather than noisy because it tracks a real network operation.
-
-> **Re-derived 2026-09-13, exact — and this row is the worked example `#88` needs.** Everything the
-> row asserts about our own code holds: `SEND_TIMEOUT_MS = 10_000` (`smtp-mail.service.ts:71`), and
-> `advanced.backgroundTasks.handler` is still unconfigured, asserted by two comments and by there
-> being no other mention of it in `apps/api/src`.
->
-> **The part worth carrying is the contrast.** All three of this row's dependency-internals
-> citations are **registered** in `scripts/dependency-claims.json` — `create-context.mjs:220` and
-> `email-verification.mjs:104-116` verbatim, and the 2026-09-03 correction's `password.mjs` branch
-> among eleven registered refs into that file. So they are gated by `check:claims` and were verified
-> against the installed package rather than asserted. `#88` makes claims of exactly the same kind
-> (`better-auth.ts:249-250`'s "bare acting GET", and `GET /api/auth/reset-password/:token`
-> redirecting with the raw token) and has **no** entry for either. Two security rows, one file, same
-> class of claim, opposite treatment — and this one shows the destination, which is what that row's
-> _"a task and not an edit"_ was missing.
->
-> **The register currently describes the code that ships**, which is not automatic (ADR-0107 #178):
-> `verifiedAgainst.better-auth` is `1.7.1`, both workspaces declare `^1.7.1`, and only `1.7.1` is
-> installed. So the split-estate failure #178 describes — a claims register green against a version
-> the application no longer runs — is not live today. That is a property of the current tree, not a
-> guarantee, and it is the thing to re-check first if these citations ever start looking wrong.
-
-**Options, in the order they should be considered:**
-
-1. **Configure `advanced.backgroundTasks.handler`.** One key. It moves every Better Auth send off
-   the request path, which closes this row **and** removes the request-path cost that made M4's
-   bound necessary at all. Needs care: the handler owns the rejection, so `mail.send_failed` must
-   still reach Pino, and the characterisation suite's four assertions must be re-run rather than
-   assumed — they are the record of what today's behaviour is.
-2. **A response floor**, mirroring what the library does for verification: hold every answer to a
-   fixed minimum. Cheap and self-contained, but it is a floor over a variable, so it only works if
-   the floor exceeds a slow send — which is exactly what a bad day removes.
-3. **Accept and document.** Defensible, but check the mitigation before leaning on it. The route's
-   limit is **3 per 60 s per IP** — its own rule, not the 3-per-10-s one that covers
-   `/sign-in`/`/sign-up`/`/change-password`/`/change-email` (`index.mjs:309-314`) — and it is
-   `enabled: options.isProduction` (`better-auth.ts:271`), so it does not exist in development at
-   all. It is also per-replica in-process memory (#14(b)), so the real ceiling is 3 × replicas.
-   Three probes a minute still enumerates a targeted list; it does not enumerate a dictionary.
-
-Option 1 is the recommendation, and it is a small enough change that the reason it is not done here
-is scope rather than difficulty — it alters how every mail send in the application is dispatched,
-which deserves its own change and its own re-run of the characterisation suite.
-
-**Risk:** low-severity, low-frequency. It reveals whether an address has an account — the same fact
-a sign-up attempt reveals under a _non_-enforcing configuration — and reveals nothing about the
-account itself. It is recorded because the endpoint's whole design is the claim that it reveals
-nothing, and a claim that is true of the body and false of the clock is the kind of half-truth this
-register exists for.
-
----
-
-> **Re-derived 2026-09-10 against the installed `better-auth@1.7.1` and STILL TRUE — every
-> decision-bearing citation exact.** `create-context.mjs:220` is literally `} else await promise;`;
-> `password.mjs:83` awaits the send on the request path; `password.mjs:61-72` really does
-> `generateId(24)` plus a dummy verification lookup under a "mitigate timing attacks" comment (so
-> the 2026-09-03 correction stands and the original "does nothing" wording would have sent a reader
-> hunting a branch that does not exist); `better-auth.ts:271` is `enabled: options.isProduction`;
-> and `SEND_TIMEOUT_MS = 10_000` is applied at `smtp-mail.service.ts:308-309`.
->
-> **Two citations were wrong and are corrected above.** The 3-per-10 s rule covers **four** paths,
-> not three — `/change-email` is in the same predicate (`index.mjs:305`) — and its block is
-> `:309-314`, where the row said `:311-324`; the file is **318 lines**, so that range ran past the
-> end of it. The 500 ms floor is `email-verification.mjs:104-116`, not `:108-121`, which was off at
-> both ends. Both passed `check:claims` throughout, because a claim registers an **anchor** line and
-> nothing validates a range's extent — **#181**'s blind spot, observed rather than argued, twice in
-> one row.
 
 ### 100. The operator-facing mail signal still has no operator-facing channel
 
@@ -6771,6 +6563,10 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                           | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --- | ----------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 396 | A type change into or out of `WBS_SUMMARY` was not guarded                                            | 2026-09-28 | **Closed.** `ActivitiesService.update()` refuses leaving `WBS_SUMMARY` while active children remain (422 `PARENT_NOT_SUMMARY`) and entering it while the activity is a dependency endpoint (422 `SUMMARY_HAS_NO_LOGIC`) — the reasons ADR-0038's existing seams already use — under the plan's `dependency-plan` advisory lock. `update()` is the only path that writes `type`. The E29 characterisation in `zero-duration-type-change.e2e-spec.ts` is now its acceptance test, with the reverse case and two positive controls.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 357 | The CSV export carried only the early dates the canvas no longer draws                                | 2026-09-28 | **Closed by adding `Start`/`Finish`** (the placed dates, from `barDatesFor(a, 'visual')` in `lib/bar-dates.ts` — the canvas's own picker) before the labelled `Early start`/`Early finish`, which stay for analysis. Product-owner decision 2026-09-28. `export-csv.test.ts` pins header order and a placed-vs-early row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 248 | The DCMA what-if dropped the levelling pass                                                           | 2026-09-28 | **Closed by the engine remedy.** `levelIfEnabled` (`apps/api/src/modules/schedule/level-if-enabled.ts`) is now the one levelling invocation, called by `recalculateInLock` and by both what-if passes; the completion carrier and its printed dates read the levelled finish when levelling ran (`completion-carrier.ts`). Off `levelResources` the result is byte-identical (pinned). The 14/60 s throttle was measured on network passes only and has not been re-measured.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 99  | `/request-password-reset` leaked account existence through timing                                     | 2026-09-28 | **Closed by option 1:** `createAuth()` sets `advanced.backgroundTasks.handler`, so Better Auth's `runInBackgroundOrAwait` hands every send off the request path (`create-context.mjs:217-227`, registered) and a known and an unknown address answer in the same time. The handler's `.catch` is a backstop — Better Auth already wraps the promise — and logs under a message distinct from `mail.send_failed`. Pinned by `better-auth.spec.ts` and `mail-background-dispatch.e2e-spec.ts` (a slow send no longer delays the response). A send in flight at shutdown is dropped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 348 | The float tail was drawn from the placed bar at total float and overshot the late finish by the drift | 2026-09-28 | **Closed as stale, fixed by ADR-0148 M-E** (one-planning-surface): the float and drift tails were replaced by the feasible window, whose right edge is derived from `remainingFloat` (`T − d`) rather than total float — `feasibleWindowRect` in `apps/web/src/features/tsld/render/geometry.ts`, painted from `paint.ts` Layer 2.7 and 3.56. `floatTailRect` no longer exists outside two historical comments. Re-verified against the tree on 2026-09-28.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 316 | A guest read a relationship's lag on 1440 while a member read it on the lag calendar                  | 2026-09-28 | **Closed.** `GuestDependencyDto.from` computed `lagDays: Math.round(entity.lagMinutes / 1440)`, hard-pinning 24-hour days, while `share-guest.service.ts:listDependencies` never called `attachLagDayFactors` — the member helper — so the factor was never even loaded on the guest path. Fixed by calling `attachLagDayFactors` (the SAME helper `dependencies.service.ts` calls, not a second copy) and converting with `minutesToDays`, exactly as the member DTO does. On an eight-hour lag calendar a one-day FS lag (480 stored minutes) now reads `lagDays: 1` for a guest, matching a member, instead of `Math.round(480 / 1440) = 0`. Regression: `share-guest.e2e-spec.ts` (verified red against the old code — member `1`, guest `0`), the `GuestDependencyDto` unit test, and a new `share-guest.service.spec.ts` case; the `day-factor-census.structural.spec.ts` (#86) census gained the new call site.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 337 | Prisma's `contains` did not escape `%` or `_`, so a searched literal was a wildcard                   | 2026-09-28 | **Closed by `escapeLikePattern`** (`apps/api/src/common/query/library-filters.ts`), called at every `contains:` site — calendars, resources (name and code) and clients — and pinned by a structural test (`library-filters.structural.spec.ts`) so a new `?q=` search cannot reach for a raw, unescaped `contains: search` again. Backslash is escaped first, so `%`/`_` escaping cannot double-escape a backslash already in the term; verified against a real Postgres 16 `ILIKE` (no explicit `ESCAPE` clause — the shape Prisma emits — already honours a leading `\`). API e2e cases in `clients.e2e-spec.ts` and `library-search.e2e-spec.ts` show `?q=50%25` now matching `Rate 50%` and not `Acme 5000 Ltd`/`Winter 5000`, and `?q=a_b` matching only the literal `a_b`, not `aXb`; both verified red against the unescaped code first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -11228,32 +11024,6 @@ written down, so it needs its own reasoning about what a guest may learn from a 
 **Trigger:** the next epic touching the share surface, or the first report of a shared link showing
 the wrong dates — whichever comes first.
 
-### 357. The CSV export carries a basis the canvas no longer draws
-
-**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (alongside `#356`, same
-census) · **Size:** S · **Owner:** web
-
-`apps/web/src/features/tsld/export/export-csv.ts:80` emits a column headed **"Early start"** read
-from `a.earlyStart`, and the finish column beside it does the same. After the collapse every bar on
-the canvas is drawn from `visualEffective*`, so a planner who places their programme and exports it
-gets the **computed** dates.
-
-**This is materially weaker than `#356` and is filed separately for that reason.** The column says
-what it is, so nothing is misrepresented — it is a labelled early-dates export, and a reader who
-wanted the placed dates can see they did not get them. `#356`'s guest view carries no such label.
-
-It is also a different remedy with a different owner: `apps/web` alone, no security boundary and no
-DTO change. Bundling the two would put one decision's trigger on the other's row.
-
-**Check before acting:** whether the CSV is meant to be the plan or the analysis. `lib/bar-dates.ts`
-records that `'early'` "survives for the **analyses**, which measure the network rather than the
-plan as placed", and the float-paths panel is gated to early dates **by decision**
-(`float-paths-view-agnostic.structural.test.ts`). If the CSV is an analysis export this row closes
-as a decision rather than a change, which is why no remedy is written here as an instruction.
-
-**Trigger:** the next change to the export surface, or `#356`'s decision — whose answer probably
-settles this one too.
-
 ### 358. A rule cited nine times, which the file citing it most already breaks
 
 **Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-I,
@@ -11758,23 +11528,6 @@ the 48 probe rows, so the defect was latent. Item 9 is `route-frame.tracks.test.
 writes the split lines back; the painter trims an offset head to √(reach² − δ²)), item 10 is
 `text-width-table.test.ts`, and item 11's dead fallback is gone. Each new case was run against a
 deliberate break of the code it guards.
-
-### 396. A type change into or out of `WBS_SUMMARY` is not guarded
-
-**Status:** open · **Verified:** 2026-09-26 · **Raised:** 2026-09-26 (zero-duration-task M0-T3,
-spec E29) · **Size:** S · **Owner:** api
-
-`ActivitiesService.update()` has one rule about `type`: a milestone's duration is forced to 0. It
-guards no structural change into or out of `WBS_SUMMARY`, against ADR-0038's invariants (only a
-summary may be a parent; a summary carries no logic). Measured, not read:
-`apps/api/test/zero-duration-type-change.e2e-spec.ts` "characterisation (E29)" sends
-`PATCH {type: 'TASK'}` to a `WBS_SUMMARY` that has a child and gets `200`, leaving a `TASK` whose
-child still names it as its parent. The reverse (an activity with dependencies changed to
-`WBS_SUMMARY`) is the same rule's other half and was not exercised.
-
-It is not the zero-duration epic's to fix: that epic's type-change work (M2) is about dates. The
-remedy is a refusal in `update()` (a 422 naming the children or the links), with the e2e case
-flipped from a characterisation to its acceptance test.
 
 ### 397. The selection bar's pen-gated items word the role refusal differently from Make milestone
 

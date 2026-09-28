@@ -184,3 +184,14 @@ useful to the next reader than a clean file would be.
   build) and `docs/DEPLOYMENT.md` §Transactional email.
 - Builds on ADR-0016 (the port), ADR-0047 (unattended recreate), ADR-0058 (verify the claim),
   ADR-0074 (recovery, and the M5-T1 inversion this depends on).
+
+## Addendum (2026-09-28) — the send leaves the request path
+
+`docs/TECH_DEBT.md` #99 (the timing difference this ADR's context names) is closed by that row's
+option 1. `createAuth()` now sets `advanced.backgroundTasks.handler`, so Better Auth's
+`runInBackgroundOrAwait` (`create-context.mjs:217-227`, registered in
+`scripts/dependency-claims.json`) no longer awaits a send on the request path. A known address and
+an unknown one now answer in the same time. Nothing else in this ADR changes. Failures still reach
+Pino as `mail.send_failed` from the adapter's own catch, and the operator-facing signal is
+unchanged. A send in flight when the process stops is lost. That is the cost, and it is stated here
+rather than hidden.
