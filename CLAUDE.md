@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1392 web
+> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1394 web
 > source files with 46 Playwright suites beside the base journey, and
-> 162 ADRs.
+> 163 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -6012,6 +6012,24 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   sentence still saying no importer produced the advisory, one milestone after both did.
   `check:engine-parity` expires with #384 in the commit that closes it. **The CPM engine is not
   modified and no migration runs.**
+
+- **ADR-0163** _(Accepted; landed 2026-09-28)_ — A guest sees the plan as placed. Since ADR-0148
+  the placed span **is** the plan, and the member canvas draws it for every plan; a share link still
+  drew the CPM early dates, because the guest DTO forbade the two placed fields, the web adapter
+  nulled them and `GuestPlanView` passed no bar basis. So the one artefact a planner hands to
+  somebody who was not in the room showed the bars somewhere other than where they were put.
+  `SCHEDULE_READ` widens by exactly `visualEffectiveStart`/`visualEffectiveFinish` — amending
+  ADR-0051 §4 rather than rewriting it — on the argument that a placement is the same kind of fact a
+  guest already reads (a date span on a visible activity, beside a lane index already exposed), and
+  that before ADR-0148 the same drag wrote a binding constraint that moved the early dates guests saw.
+  Four neighbours stay out, each with a written reason. **The change repaired a second defect nobody
+  had reported**: the guest's accessible channel defaulted to the placed dates the adapter nulled,
+  so a screen reader announced every activity as "not yet scheduled" beside a sighted picture of
+  early dates. A structural census now makes every production `TsldPanel` host state its basis, so
+  no host inherits the `'early'` default meant for unit suites; the journey pins bar position by a
+  scale-free pixel ratio as well as by text, because the spoken sentence does not read the painter's
+  basis and a half fix would pass the text alone. An older API that omits the fields draws early
+  dates rather than a blank diagram. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
