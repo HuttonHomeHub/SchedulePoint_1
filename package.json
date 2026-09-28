@@ -16,7 +16,7 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
+    "format:check": "pnpm check:format",
     "typecheck": "turbo run typecheck",
     "check:doc-register": "node scripts/lib/doc-register.test.mjs && node scripts/check-reconcile-due.test.mjs && node scripts/check-spec-status.test.mjs && node scripts/check-ci-roster.test.mjs && node scripts/check-e2e-roster.test.mjs && node scripts/commitlint-fixtures.test.mjs && node scripts/pr-title-workflow.test.mjs && node scripts/check-licenses.test.mjs && node scripts/lib/advisory-gates.test.mjs && node scripts/lib/build-steps.test.mjs && node scripts/check-bundle-size.test.mjs && node scripts/e2e-durations.test.mjs && node scripts/check-adr-coverage.test.mjs && node scripts/check-engine-parity.test.mjs",
     "check:debt-status": "node scripts/check-debt-status.mjs",
@@ -48,7 +48,8 @@
     "check:engine-parity": "node scripts/check-engine-parity.mjs",
     "prepush": "bash scripts/prepush.sh",
     "check:browser-safe": "node scripts/check-browser-safe.mjs",
-    "check:web-bundle": "rimraf apps/web/bundle-report.json && turbo run build --filter=@repo/web && pnpm --filter @repo/web check:bundle-size"
+    "check:web-bundle": "rimraf apps/web/bundle-report.json && turbo run build --filter=@repo/web && pnpm --filter @repo/web check:bundle-size",
+    "check:format": "prettier --check --cache --cache-strategy content \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\""
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",

@@ -8,6 +8,12 @@ coverage/
 playwright-report/
 test-results/
 
+# Agent worktrees are full copies of this repository. They are excluded from git by
+# .git/info/exclude, which Prettier does not read, so without this line a local `format:check`
+# walks every worktree and flags the copies of the fixtures ignored below (the patterns are
+# anchored at the root). CI has no worktrees, which is why only a local run ever saw it.
+.claude/worktrees/
+
 # Generated files
 pnpm-lock.yaml
 CHANGELOG.md

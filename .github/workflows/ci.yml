@@ -46,8 +46,10 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate
 
+      # A root gate, so `pnpm prepush` derives it and runs the same command (ADR-0160's rule,
+      # applied to the formatting check in docs/specs/prepush-format-gate/).
       - name: Format check
-        run: pnpm format:check
+        run: pnpm check:format
 
       - name: Lint
         run: pnpm lint

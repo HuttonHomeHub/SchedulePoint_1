@@ -37,11 +37,11 @@ pnpm dev
 Your change must pass locally what CI enforces:
 
 ```bash
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
+pnpm prepush
 ```
+
+It runs formatting, lint, typecheck, unit tests and every `check:*` gate, and names what failed
+(`docs/TESTING.md`, "Before you push").
 
 Git hooks (Husky) run `lint-staged` and commitlint automatically, but running
 the full suite yourself avoids CI round-trips.
