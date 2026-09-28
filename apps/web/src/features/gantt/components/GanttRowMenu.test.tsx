@@ -115,7 +115,7 @@ describe('the items', () => {
     // surface (M6 component gate). The mechanism is shared; this case proves the surface.
     const ctx = openMenu(
       context({
-        definitionGate: { writable: true, reason: null },
+        definitionGate: { readable: true, writable: true, reason: null },
         makeMilestone: { applies: true, enabled: true, reason: null },
       }),
     );
@@ -126,7 +126,11 @@ describe('the items', () => {
   it('shades Make milestone… with its reason rather than dropping it', () => {
     openMenu(
       context({
-        definitionGate: { writable: false, reason: 'Start editing to change this.' },
+        definitionGate: {
+          readable: true,
+          writable: false,
+          reason: 'Start editing to change this.',
+        },
         makeMilestone: { applies: true, enabled: false, reason: 'Start editing to change this.' },
       }),
     );
