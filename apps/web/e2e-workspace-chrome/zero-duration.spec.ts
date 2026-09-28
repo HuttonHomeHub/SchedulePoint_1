@@ -380,7 +380,7 @@ test.describe('Make milestone… (M4)', () => {
       .getByRole('button', { name: MAKE_MILESTONE });
     await expect(button).toHaveAttribute('aria-disabled', 'true');
     await expect(button).toHaveAccessibleDescription(
-      'It has 1 resource assignment. A milestone does no work; remove them in Resources first.',
+      'It has 1 resource assignment. A milestone does no work; remove it in Resources first.',
     );
     await button.click({ force: true });
     await expect(page.getByRole('dialog', { name: /milestone/ })).toHaveCount(0);
