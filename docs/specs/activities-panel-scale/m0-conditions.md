@@ -72,9 +72,5 @@ before M3 is built (ADR-0142 D4).
 
 ## Status
 
-**Not yet run.** `apps/web/scripts/measure-activities-panel.mjs` exists (M0-T2) with its judge
-verified against named mutations (`measure-activities-panel.judge.test.mjs`), but M0-T3's reading
-requires the shared database and API this session does not have exclusive access to. See
-`apps/web/scripts/measure-activities-panel.mjs`'s own header for the exact invocation. Once a
-reading is taken, it is recorded in `m0-measurement.md` beside this file, and the decision table
-above is applied to it mechanically — never re-argued.
+**Taken 2026-09-28** — see `m0-measurement.md`. The decision table's INDETERMINATE row applied:
+M1 only, then CQ-A to the product owner.
