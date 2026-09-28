@@ -1,5 +1,51 @@
 # @repo/web
 
+## 0.152.0
+
+### Minor Changes
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import report can now carry advisories: activities an import brought in faithfully that you
+  probably want to change afterwards, such as a task with no duration. The import review shows them in
+  an "Advisories" group after the approximations, repairs and drops, naming each activity by its code,
+  and they never block the import. No importer produces one yet. The review's finding lists and the
+  resource-name collision list are now announced as lists by screen readers that drop the role from
+  unstyled lists.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import report is now read tolerantly: a report carrying a field this release does not know is
+  accepted with that field dropped, at every level of the report, instead of failing the import review
+  with "Something went wrong". Known fields are validated exactly as strictly as before. The producer's
+  own tests use `interchangeReportStrictSchema`, which still refuses an undeclared key (ADR-0162 D9).
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The health check panel and its printed report gain a section headed "Beyond the DCMA assessment",
+  after the fourteen metrics, that lists zero-duration tasks. Each one can be selected in the plan
+  from the list, as the metrics' offenders can, and the row reads "None" when there are none. The
+  announcement that reads out the settled report now ends with the same count. Against an API that
+  does not yet send the section, the panel shows nothing extra and does not fail.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A task with no duration can now be turned into a milestone. Select it and choose **Make milestone…**
+  from the bar at the foot of the diagram, from the Gantt row menu, or from the activities table's row
+  menu. The dialog offers a finish or a start milestone, says how each is dated, and preselects finish
+  when the task has a predecessor. Converting keeps every date its successors read, and one undo puts
+  it back. The action is shaded, with the reason, when you do not hold the edit lock or when the task
+  has resource assignments (a milestone does no work). Also fixed: an icon-only control's name
+  tooltip now opens above its control when there is no room below, instead of covering the control
+  and swallowing the mouse click.
+
+### Patch Changes
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activity responses now carry `resourceAssignmentCount`: for a task with no duration, the number of
+  live resource assignments it holds, counting neither a removed assignment nor one to a deleted
+  resource. It is `null` for every other activity, meaning it was not counted for that kind of row, so
+  a page without such a task costs no extra query. After you assign or unassign a resource, the web
+  refetches the plan's activities so the count stays current.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity editor says so under Type when changing a zero-duration activity to or from a finish
+  milestone will re-express its dates, and after that save the Scheduling tab shows the dates the
+  server stored rather than the ones it opened with (unless you have unsaved changes there).
+- Updated dependencies [[`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa)]:
+  - @repo/interchange@0.12.0
+  - @repo/types@0.36.0
+
 ## 0.151.1
 
 ### Patch Changes

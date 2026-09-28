@@ -1,5 +1,15 @@
 # @repo/types
 
+## 0.36.0
+
+### Minor Changes
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activity responses now carry `resourceAssignmentCount`: for a task with no duration, the number of
+  live resource assignments it holds, counting neither a removed assignment nor one to a deleted
+  resource. It is `null` for every other activity, meaning it was not counted for that kind of row, so
+  a page without such a task costs no extra query. After you assign or unassign a resource, the web
+  refetches the plan's activities so the count stays current.
+
 ## 0.35.0
 
 ### Minor Changes

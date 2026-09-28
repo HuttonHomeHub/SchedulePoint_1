@@ -1,5 +1,27 @@
 # @repo/interchange
 
+## 0.12.0
+
+### Minor Changes
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import report can now carry advisories: activities an import brought in faithfully that you
+  probably want to change afterwards, such as a task with no duration. The import review shows them in
+  an "Advisories" group after the approximations, repairs and drops, naming each activity by its code,
+  and they never block the import. No importer produces one yet. The review's finding lists and the
+  resource-name collision list are now announced as lists by screen readers that drop the role from
+  unstyled lists.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import report is now read tolerantly: a report carrying a field this release does not know is
+  accepted with that field dropped, at every level of the report, instead of failing the import review
+  with "Something went wrong". Known fields are validated exactly as strictly as before. The producer's
+  own tests use `interchangeReportStrictSchema`, which still refuses an undeclared key (ADR-0162 D9).
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import now names each activity it brought in as a task with no duration, under **Advisories** in
+  the import review, from both P6 (`.xer`) and Microsoft Project (`.xml`) files. The activity is
+  imported unchanged; the advisory suggests converting it to a milestone afterwards. The import
+  report's API response documents the optional `advisories` array, which is absent when there is
+  nothing to advise.
+
 ## 0.11.0
 
 ### Minor Changes
