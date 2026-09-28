@@ -1,5 +1,52 @@
 # @repo/api
 
+## 0.78.0
+
+### Minor Changes
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activity responses now carry `resourceAssignmentCount`: for a task with no duration, the number of
+  live resource assignments it holds, counting neither a removed assignment nor one to a deleted
+  resource. It is `null` for every other activity, meaning it was not counted for that kind of row, so
+  a page without such a task costs no extra query. After you assign or unassign a resource, the web
+  refetches the plan's activities so the count stays current.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console's Diagnostics panel reports two more counts: how many tasks have zero duration,
+  and how many of those hold a live resource assignment. A zero-duration task is dated at the start
+  of its day, where a finish milestone at the same point is dated at the end of it; these counts size
+  how many activities a coming change to that behaviour will reach. Both are prospective: they count
+  tasks as they are now, not stored numbers that went wrong, and a zero-duration task is not
+  necessarily a mistake.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The schedule health check now reports zero-duration tasks in a new `advisories` array beside its
+  fourteen DCMA metrics. A zero-duration task is usually a milestone entered as a task. The advisory
+  lists each one with how many resource assignments it holds, gives the count out of the plan's
+  activities, and says how many of them are resourced. It reads stored durations, so a plan that has
+  never been calculated is still assessed. It is never counted in the summary, and the fourteen
+  metrics and their order are unchanged. The health check makes no extra query for it.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import now names each activity it brought in as a task with no duration, under **Advisories** in
+  the import review, from both P6 (`.xer`) and Microsoft Project (`.xml`) files. The activity is
+  imported unchanged; the advisory suggests converting it to a milestone afterwards. The import
+  report's API response documents the optional `advisories` array, which is absent when there is
+  nothing to advise.
+
+- [#716](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/716) [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Changing a zero-duration activity's type into or out of a finish milestone no longer moves it. A
+  finish milestone reads a date as the end of that day and every other type as the start, so the same
+  stored date used to mean a later point after the change: a zero-duration task pinned to a Monday
+  became a milestone at the end of that Monday, and its successors moved a working day later. The API
+  now moves each stored placement, constraint and external date that the request did not send by one
+  calendar day, so a task, a milestone or a hammock keeps its point in the schedule and its
+  successors and float are unchanged. A level of effort, a WBS summary or a resource-dependent
+  activity has its dates re-expressed too, but can still move, because it takes its position from its
+  span, its branch or its driving resource's calendar. A date sent in the same request is read the new type's way and is not moved, and the
+  external-date ordering check now runs on the dates that will actually be saved.
+
+### Patch Changes
+
+- Updated dependencies [[`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa), [`da50bf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da50bf8cff0d7ff99d666499ca594ee7d1f7f4fa)]:
+  - @repo/interchange@0.12.0
+  - @repo/types@0.36.0
+
 ## 0.77.0
 
 ### Minor Changes
