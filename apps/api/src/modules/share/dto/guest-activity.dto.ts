@@ -12,18 +12,28 @@ import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
  */
 
 /**
- * Guest read DTO for an activity (ADR-0051 §4, F-M3) — a DELIBERATELY field-stripped,
- * READ-ONLY projection for the session-less External-Guest surface. It exposes ONLY the
- * schedule + progress fields the guest scope allows: identity (id/code/name/type), the
- * computed CPM dates, duration/float/critical, lane position, and the progress trio.
+ * Guest read DTO for an activity (ADR-0051 §4, F-M3; widened by ADR-0163) — a DELIBERATELY
+ * field-stripped, READ-ONLY projection for the session-less External-Guest surface. It exposes
+ * ONLY the schedule + progress fields the guest scope allows: identity (id/code/name/type), the
+ * computed CPM dates, the PLACED span (where the bar is drawn — ADR-0163), duration/float/
+ * critical, lane position, and the progress trio.
  *
- * EXCLUDED BY CONSTRUCTION (must NEVER appear — no `from` copies them): cost / Earned-Value
- * / money (budgetedExpense, actualExpense, percentCompleteType, physicalPercentComplete,
- * accrualType); resources / assignments; baseline / variance; notes; the levelling overlay
- * (leveled*, levelingPriority, selfOverAllocated); the visual-planning fields (visual*);
- * the constraint / external / expected-finish / duration-type authoring fields; the calendar
- * and WBS parent ids; audit columns (createdBy/updatedBy/version/createdAt/updatedAt/
- * deletedAt); and any user identity. See `guest-dto.spec.ts` for the exclusion assertions.
+ * EXCLUDED BY CONSTRUCTION (must NEVER appear — no `from` copies them), each for a reason ADR-0163
+ * §4.5/§4.6 states rather than assumes:
+ * - `visualStart` — the authoring INPUT (which bars a person pinned by hand), not reliably
+ *   reconstructible from the effective span (an unplaced successor pushed by a placed predecessor
+ *   also draws later than its early start).
+ * - `visualConflict`/`visualConflictReason` — the planner's working notes about WHY a placement is
+ *   contentious, never shown to a guest; `LATER_THAN_BOUND` would also reveal that a constraint
+ *   exists, and constraints are out.
+ * - `visualDriftDays`/`remainingFloat` — a float is analysis, not the schedule a share link exists
+ *   to show (a guest can only ESTIMATE these from the exposed fields).
+ * - cost / Earned-Value / money (budgetedExpense, actualExpense, percentCompleteType,
+ *   physicalPercentComplete, accrualType); resources / assignments; baseline / variance; notes;
+ *   the levelling overlay (leveled*, levelingPriority, selfOverAllocated); the constraint /
+ *   external / expected-finish / duration-type authoring fields; the calendar and WBS parent ids;
+ *   audit columns (createdBy/updatedBy/version/createdAt/updatedAt/deletedAt); and any user
+ *   identity. See `guest-dto.spec.ts` for the exclusion assertions.
  */
 export class GuestActivityDto {
   @ApiProperty({ format: 'uuid' })
@@ -94,6 +104,28 @@ export class GuestActivityDto {
   @ApiProperty({ format: 'date', nullable: true, type: String, description: 'Actual finish.' })
   actualFinish!: string | null;
 
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Where the bar is drawn: the plan as the planner laid it out (ADR-0148). Equals the ' +
+      'logic-earliest start for an activity nobody has placed. Null until the plan has been ' +
+      'calculated.',
+  })
+  visualEffectiveStart!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'Where the bar is drawn: the plan as the planner laid it out (ADR-0148). Equals the ' +
+      'logic-earliest finish for an activity nobody has placed. Null until the plan has been ' +
+      'calculated.',
+  })
+  visualEffectiveFinish!: string | null;
+
   /** Map an activity row to the guest shape — copying ONLY the whitelisted scope fields. */
   static from(entity: WithDayFactor<Activity>): GuestActivityDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
@@ -117,6 +149,8 @@ export class GuestActivityDto {
       percentComplete: entity.percentComplete,
       actualStart: day(entity.actualStart),
       actualFinish: day(entity.actualFinish),
+      visualEffectiveStart: day(entity.visualEffectiveStart),
+      visualEffectiveFinish: day(entity.visualEffectiveFinish),
     };
   }
 }
