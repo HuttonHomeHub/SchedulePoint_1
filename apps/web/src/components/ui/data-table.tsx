@@ -377,8 +377,17 @@ export function DataTable<T>({
     // `contained`'s classes are a LITERAL ternary rather than routed through `cn()`: the `'page'`
     // branch must stay the exact string it always was (SC-4), never a functionally-equivalent
     // reordering `cn()` could produce.
+    //
+    // `min-h-32` (128px — the header and about three rows) is `contained`'s floor. Without it the
+    // region shrinks to whatever its siblings leave, and in the activities panel's default 280px a
+    // selection's bulk-assign bar left 50px: the header and no rows at all (measured 2026-09-28).
+    // With the floor the region keeps its rows and the host scrolls the rest (see its body div).
+    // From `md` up only: the single-pane narrow layout gives the whole panel body ~89px at 390,
+    // less than the floor itself, so there it would make the body scroll with nothing selected.
     <div
-      className={contained ? 'min-h-0 flex-1 scroll-pt-12 overflow-auto' : 'overflow-x-auto'}
+      className={
+        contained ? 'min-h-0 flex-1 scroll-pt-12 overflow-auto md:min-h-32' : 'overflow-x-auto'
+      }
       role="region"
       aria-label={caption}
       {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}

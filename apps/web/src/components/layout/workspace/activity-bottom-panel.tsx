@@ -124,8 +124,16 @@ export function ActivityBottomPanel({
           `data-testid` rather than a class-string or copy locator (the standing rule after
           `docs/TECH_DEBT.md` #124/#133's journeys broke on exactly that): SC-5's own journey needs
           to assert THIS div's `scrollHeight === clientHeight` and it has no accessible name of its
-          own to query by. */}
-      <div data-testid="activities-panel-body" className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+          own to query by.
+
+          `overflow-y-auto` IS here, but only as a fallback: while the table's region fits, it
+          fills this div exactly and this div never scrolls (SC-5 holds). When a selection's
+          bulk-assign bar plus the region's `min-h-32` floor exceed a short panel, this div scrolls
+          so the rows stay reachable, rather than the region collapsing to its header. */}
+      <div
+        data-testid="activities-panel-body"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4"
+      >
         <ActivitiesTable
           orgSlug={model.orgSlug}
           planId={model.planId}

@@ -6,6 +6,7 @@ import {
   ensurePen,
   newPlan,
   onboard,
+  openPlanId,
   recalculate,
   seedActivities,
 } from './support';
@@ -179,6 +180,65 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
       regionMetrics.scrollHeight,
       'the region at 390px is the one that overflows, not its pane',
     ).toBeGreaterThan(regionMetrics.clientHeight);
+  });
+
+  test('a selection keeps rows on screen at the default panel height', async ({ page }) => {
+    // Found by the M0 harness, not by this suite: ticking a row opens the bulk-assign bar above
+    // the table, and in the default 280px panel it squeezed the region to 50px — the pinned header
+    // and not one row. The region now has a floor and the panel body scrolls the rest. Asserted as
+    // "a data row is painted inside the region", because a region height alone passes against a
+    // region that is tall and entirely under its own header.
+    const orgSlug = await onboard(page, STAMP + 3);
+    await createHierarchy(page);
+    await newPlan(page, 'Panel scale select');
+    await ensurePen(page);
+    // The selection column exists only on a plan that has a WBS summary to assign rows to
+    // (`ActivitiesTable`'s `bulkAssignActive`), so seed one alongside the sixty tasks.
+    const summaryStatus = await page.evaluate(
+      async ({ org, id }: { org: string; id: string }) =>
+        (
+          await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: 'Phase 1', type: 'WBS_SUMMARY', laneIndex: 60 }),
+          })
+        ).status,
+      { org: orgSlug, id: openPlanId(page) },
+    );
+    expect(summaryStatus).toBe(201);
+    await seedSixty(page, orgSlug);
+
+    await page.getByRole('button', { name: 'Expand activities panel' }).click();
+    const region = activitiesRegion(page);
+    await expect(region).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Select Activity 01', exact: true }).check();
+    await expect(page.getByText(/1 activity selected/)).toBeVisible();
+
+    // The fallback: the body scrolls the bar away and the region keeps its floor, so bring the
+    // region into the body's view the way a person would, by scrolling the body to its end.
+    await panelBody(page).evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    const painted = await region.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const head = el.querySelector('thead')?.getBoundingClientRect();
+      const top = Math.max(box.top, head ? head.bottom : box.top);
+      if (box.bottom - top < 1) return 0;
+      let rows = 0;
+      for (const tr of el.querySelectorAll('tbody tr')) {
+        const r = tr.getBoundingClientRect();
+        const y = (r.top + r.bottom) / 2;
+        if (y > top && y < box.bottom) {
+          const hit = document.elementFromPoint(r.left + 8, y);
+          if (hit && tr.contains(hit)) rows += 1;
+        }
+      }
+      return rows;
+    });
+    expect(painted, 'data rows painted below the header while a row is selected').toBeGreaterThan(
+      1,
+    );
   });
 
   test('no new accessibility violation on the pinned header and scroll region', async ({
