@@ -1,10 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { DependencyType } from '@prisma/client';
 
+import { minutesToDays } from '../../activities/day-factor';
 import type { DependencyWithEndpoints } from '../../dependencies/dependency.repository';
-
-/** Day↔minute factor (ADR-0036 §4.2): lag is stored in signed minutes, exposed as signed days. */
-const MINUTES_PER_DAY = 1440;
+import type { WithLagDayFactor } from '../../dependencies/lag-day-factor';
 
 /**
  * Guest read DTO for a dependency edge (ADR-0051 §4, F-M3) — the READ-ONLY logic tie the
@@ -13,6 +12,12 @@ const MINUTES_PER_DAY = 1440;
  * embed the endpoint name/code summaries the member DTO carries (the guest already has the
  * activity list) — and it deliberately omits the engine-owned `isDriving`, `lagCalendar`, and
  * ALL audit columns (version/createdAt/updatedAt/created-by). No `from` copies anything else.
+ *
+ * `lagDays` is measured on the relationship's OWN `lagCalendar` (ADR-0068 §4), the same rule the
+ * member DTO applies — `from` takes a row already carrying `lagDayFactorMinutes`
+ * ({@link WithLagDayFactor}, attached by `ShareGuestService` via `attachLagDayFactors`, the SAME
+ * helper the member path calls) rather than hard-pinning 1440, which read an eight-hour lag calendar's
+ * one-day lag as zero (`docs/TECH_DEBT.md` #316).
  */
 export class GuestDependencyDto {
   @ApiProperty({ format: 'uuid' })
@@ -41,14 +46,15 @@ export class GuestDependencyDto {
   })
   lagMinutes!: number;
 
-  static from(entity: DependencyWithEndpoints): GuestDependencyDto {
+  static from(entity: WithLagDayFactor<DependencyWithEndpoints>): GuestDependencyDto {
     return {
       id: entity.id,
       predecessorId: entity.predecessorId,
       successorId: entity.successorId,
       type: entity.type,
-      // Stored as signed working-minutes (ADR-0036); both forms are exposed.
-      lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      // Stored as signed working-minutes (ADR-0036); both forms are exposed. Converted on the
+      // relationship's OWN lag calendar, exactly as the member DTO does (`docs/TECH_DEBT.md` #316).
+      lagDays: minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes),
       lagMinutes: entity.lagMinutes,
     };
   }

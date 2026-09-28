@@ -5,6 +5,7 @@ import type { WithDayFactor } from '../../activities/day-factor';
 import type { WithAssignmentCount } from '../../activities/resource-assignment-counts';
 import type { CalendarWithExceptions } from '../../calendars/calendar.repository';
 import type { DependencyWithEndpoints } from '../../dependencies/dependency.repository';
+import type { WithLagDayFactor } from '../../dependencies/lag-day-factor';
 import type { ScheduleAggregate } from '../../schedule/schedule.repository';
 
 import { GuestActivityDto } from './guest-activity.dto';
@@ -216,8 +217,14 @@ describe('GuestActivityDto', () => {
   });
 });
 
-/** A dependency row with endpoints + audit + engine flags set — a leak would be caught. */
-function dependencyRow(): DependencyWithEndpoints {
+/**
+ * A dependency row with endpoints + audit + engine flags set — a leak would be caught. Carries the
+ * `lagDayFactorMinutes` `attachLagDayFactors` attaches (ADR-0068 §4): an EIGHT-hour factor, chosen
+ * because it discriminates the fix from the defect it replaces — `Math.round(480 / 1440)` (the old,
+ * hard-pinned rule) rounds to `0`, while `minutesToDays(480, 480)` (this relationship's own lag
+ * calendar) is `1` (`docs/TECH_DEBT.md` #316).
+ */
+function dependencyRow(): WithLagDayFactor<DependencyWithEndpoints> {
   return {
     id: 'dep-1',
     organizationId: 'org-1',
@@ -225,7 +232,7 @@ function dependencyRow(): DependencyWithEndpoints {
     predecessorId: 'act-1',
     successorId: 'act-2',
     type: 'FS',
-    lagMinutes: 2880,
+    lagMinutes: 480,
     lagCalendar: 'PREDECESSOR',
     isDriving: true,
     version: 4,
@@ -237,7 +244,8 @@ function dependencyRow(): DependencyWithEndpoints {
     deleteBatchId: null,
     predecessor: { id: 'act-1', code: 'A100', name: 'Excavate' },
     successor: { id: 'act-2', code: 'A200', name: 'Pour' },
-  } as unknown as DependencyWithEndpoints;
+    lagDayFactorMinutes: 480,
+  } as unknown as WithLagDayFactor<DependencyWithEndpoints>;
 }
 
 describe('GuestDependencyDto', () => {
@@ -264,13 +272,19 @@ describe('GuestDependencyDto', () => {
     'createdBy',
     'updatedBy',
     'deletedAt',
+    // The factor rides the ROW so `from` can convert with it, but a guest never sees the
+    // calendar's raw minutes-per-day — only the already-converted `lagDays` (`docs/TECH_DEBT.md`
+    // #316).
+    'lagDayFactorMinutes',
   ])('never exposes %s', (key) => {
     expect(dto).not.toHaveProperty(key);
   });
 
-  it('maps lag minutes → signed working days, and echoes the exact minutes', () => {
-    expect(dto.lagDays).toBe(2); // 2880 / 1440
-    expect(dto.lagMinutes).toBe(2880);
+  it('measures lag on the relationship’s OWN lag calendar, not a hard-pinned 1440 (#316)', () => {
+    // A one-working-day lag on an eight-hour calendar is 480 minutes. The defect this pins was
+    // `Math.round(480 / 1440) === 0` — a guest told a one-day lag does not exist.
+    expect(dto.lagDays).toBe(1);
+    expect(dto.lagMinutes).toBe(480);
   });
 });
 
