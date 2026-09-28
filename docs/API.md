@@ -236,6 +236,17 @@ It applies to every other type (`TASK`, `START_MILESTONE`, `HAMMOCK`, `LEVEL_OF_
 of effort takes its position from its span, a summary from its branch, and a resource-dependent
 activity from its driving resource's calendar, none of which a type change keeps.
 
+**A `type` change into or out of `WBS_SUMMARY` is rejected against ADR-0038, not silently accepted**
+(`docs/TECH_DEBT.md` #396). `PATCH …/activities/:activityId {type}` away from `WBS_SUMMARY` while
+the activity still parents an active (non-deleted) child is a **422 `PARENT_NOT_SUMMARY`**, naming
+the count — the same reason `assertValidParent` throws when a child's own `parentId` is pointed at a
+non-summary, read here from the parent's side instead. A `type` change into `WBS_SUMMARY` while the
+activity still names an active dependency (as predecessor or successor) is a **422
+`SUMMARY_HAS_NO_LOGIC`**, naming the count — the same reason a dependency `create()` throws when a
+NEW link targets a summary endpoint (ADR-0035 §24). Move or remove the children, or the links, first;
+neither check applies when `type` is unchanged, or the destination type isn't `WBS_SUMMARY` on either
+end of the change.
+
 **`resourceAssignmentCount` is counted for zero-duration tasks only** (ADR-0162 decision 6). Every
 activity read, list and write response carries it. For a `TASK` whose stored duration is 0 it is the
 number of **live** resource assignments the activity holds — an assignment counts when neither it

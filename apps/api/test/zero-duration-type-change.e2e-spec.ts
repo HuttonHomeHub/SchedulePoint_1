@@ -31,9 +31,17 @@ import { clearDomainData } from './audit-reset';
  * branches on whether a minute is non-working, never on why; the exception calendar shows that rather
  * than asserting it.
  *
- * **Case 2 is a plain characterisation and this epic does not flip it** (spec E29): a
- * `PATCH {type: 'TASK'}` on a `WBS_SUMMARY` that has a child is accepted today, leaving a `TASK` with a
- * child, against ADR-0038's rule that only a summary may be a parent (`docs/TECH_DEBT.md` #396).
+ * **Case 2 was M0's characterisation of a SECOND defect and is `docs/TECH_DEBT.md` #396's acceptance
+ * test.** `update()` had one rule about `type` (the milestone-duration coercion above) and guarded no
+ * structural change into or out of `WBS_SUMMARY`: `PATCH {type: 'TASK'}` on a summary with a child was
+ * accepted, leaving a `TASK` whose child still named it as parent — against ADR-0038's "only a
+ * WBS_SUMMARY may be a parent". The reverse, converting an activity that still has a dependency into
+ * `WBS_SUMMARY`, breaks the sibling invariant — "a summary carries no logic" — the same rule
+ * `DependenciesService.create()` already enforces when a NEW link targets a summary endpoint. Both are
+ * now 422s, reusing that create-time guard's `SUMMARY_HAS_NO_LOGIC` reason for the second and the
+ * re-parent guard's `PARENT_NOT_SUMMARY` reason for the first — the same invariant, read from the
+ * opposite side. Two positive controls prove neither check overreaches: a *childless* summary still
+ * converts to a plain type, and a *link-free* activity still converts to a summary.
  *
  * The first plan is created with no calendar, so it takes the organisation's default five-day week
  * (ADR-0155 "Corrections recorded"); Friday 9 Jan and Monday 12 Jan are the two days either side of a
@@ -469,19 +477,59 @@ describe.skipIf(!hasDatabase)(
       );
     });
 
-    it('characterisation (E29): a WBS_SUMMARY with a child accepts PATCH {type: TASK} today', async () => {
+    it('acceptance (spec E29, #396): a WBS_SUMMARY with an active child rejects PATCH {type: TASK} (422 PARENT_NOT_SUMMARY)', async () => {
       const api = await setup();
       const summary = await api.create({ name: 'Phase', code: 'W', type: 'WBS_SUMMARY' });
       await api.create({ name: 'Child', code: 'C', durationDays: 2, parentId: summary.id });
 
       const res = await api.patch(summary.id, { version: summary.version, type: 'TASK' });
 
-      // Accepted, and the child still names it as its parent: a TASK with a child, which ADR-0038 says
-      // only a summary may be. Filed in docs/TECH_DEBT.md; this epic does not flip it.
-      expect(res.status).toBe(200);
+      // Refused: converting away would leave the child's `parentId` pointing at a non-summary — the
+      // rule was previously unenforced (M0's characterisation was `.expect(200)` here).
+      expect(res.status).toBe(422);
+      expect(res.body.error.details.reason).toBe('PARENT_NOT_SUMMARY');
+      // Names the count.
+      expect(res.body.error.message).toContain('1');
       const rows = await api.rows();
-      expect(rows.get('W')!.type).toBe('TASK');
+      expect(rows.get('W')!.type).toBe('WBS_SUMMARY');
       expect(rows.get('C')!.parentId).toBe(summary.id);
+    });
+
+    it('acceptance (#396): a TASK named by an active dependency rejects PATCH {type: WBS_SUMMARY} (422 SUMMARY_HAS_NO_LOGIC)', async () => {
+      const api = await setup();
+      const before = await api.create({ name: 'Before', code: 'B', durationDays: 1 });
+      const middle = await api.create({ name: 'Middle', code: 'M', durationDays: 1 });
+      await api.link(before.id, middle.id);
+
+      const res = await api.patch(middle.id, { version: middle.version, type: 'WBS_SUMMARY' });
+
+      // Refused: converting the endpoint would leave a summary carrying logic (ADR-0035 §24), the
+      // same rule DependenciesService.create() enforces on a NEW link, read from the other side.
+      expect(res.status).toBe(422);
+      expect(res.body.error.details.reason).toBe('SUMMARY_HAS_NO_LOGIC');
+      expect(res.body.error.message).toContain('1');
+      const rows = await api.rows();
+      expect(rows.get('M')!.type).toBe('TASK');
+    });
+
+    it('positive control (#396): a childless WBS_SUMMARY still converts to a plain type', async () => {
+      const api = await setup();
+      const summary = await api.create({ name: 'Empty phase', code: 'E', type: 'WBS_SUMMARY' });
+
+      const res = await api.patch(summary.id, { version: summary.version, type: 'TASK' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.type).toBe('TASK');
+    });
+
+    it('positive control (#396): a link-free activity still converts to WBS_SUMMARY', async () => {
+      const api = await setup();
+      const solo = await api.create({ name: 'Solo', code: 'S', durationDays: 3 });
+
+      const res = await api.patch(solo.id, { version: solo.version, type: 'WBS_SUMMARY' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.type).toBe('WBS_SUMMARY');
     });
   },
 );

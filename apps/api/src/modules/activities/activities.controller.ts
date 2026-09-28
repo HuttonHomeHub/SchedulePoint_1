@@ -86,7 +86,10 @@ export class ActivitiesController {
     description:
       'A field-level validation failure, or `calendarId` names a calendar this activity’s project ' +
       'may not use — a PROJECT calendar owned by another project (CALENDAR_WRONG_SCOPE, ' +
-      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4).',
+      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4). A `type` change is also ' +
+      'rejected against ADR-0038: away from WBS_SUMMARY while it still parents an active child ' +
+      '(PARENT_NOT_SUMMARY), or into WBS_SUMMARY while it still names an active dependency ' +
+      '(SUMMARY_HAS_NO_LOGIC).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(
