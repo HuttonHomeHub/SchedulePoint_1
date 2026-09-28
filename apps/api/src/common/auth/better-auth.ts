@@ -101,6 +101,11 @@ export interface CreateAuthOptions {
    * so a broken relay produced silently unverifiable accounts and, since ADR-0074, silently
    * unrecoverable ones. Routing it here is the cheap half of #94; the hard half (knowing a send
    * failed *before* the handoff) is unchanged and still open.
+   *
+   * **A second, narrower use** (`docs/TECH_DEBT.md` #99): `advanced.backgroundTasks.handler`
+   * below calls this directly, not through the `logger:` glue, as the last-resort backstop for a
+   * rejection that somehow reaches it. See that handler's own docblock for why that should be
+   * unreachable in practice.
    */
   log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, args: unknown[]) => void;
 }
@@ -329,6 +334,55 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
       }),
     },
     advanced: {
+      /**
+       * **Send Better Auth's mail off the request path** (`docs/TECH_DEBT.md` #99).
+       *
+       * **WHY.** Unconfigured, `runInBackgroundOrAwait` (`better-auth@1.7.5`,
+       * `create-context.mjs:217-227`) takes the `else await promise` branch at
+       * `create-context.mjs:220` and the request blocks on the whole send — bounded at
+       * `SEND_TIMEOUT_MS` (`SmtpMailService`), but still real: a known address on
+       * `/request-password-reset` waits for a live SMTP round trip while an unknown one answers
+       * after one database lookup, and that gap is the timing oracle the endpoint's identical body
+       * exists to close (ADR-0075). Configuring this handler makes Better Auth call it INSTEAD of
+       * awaiting (the `if (options.advanced?.backgroundTasks?.handler)` branch two lines above the
+       * one it replaces), so the response stops waiting on the send at all — which is also what
+       * removes the request-path cost that made the `SEND_TIMEOUT_MS` bound necessary in the first
+       * place (ADR-0075 M4).
+       *
+       * **WHAT ARRIVES HERE.** Better Auth calls `handler(promise.catch(e => logger.error(...)))`
+       * — a promise it has ALREADY wrapped with its own catch, using the very logger this file
+       * routes to Pino above — so what this function receives can never reject. The `.catch` below
+       * is defence against a future adapter that stops self-catching, never load-bearing today:
+       * `SmtpMailService.sendPasswordReset` / `sendEmailVerification` already catch internally and
+       * log `event: 'mail.send_failed'` (`smtp-mail.service.ts`) before this promise ever settles,
+       * so that event fires, or does not, exactly as it did before this handler existed — this
+       * function never repeats it. A rejection that escaped anyway is logged here under a
+       * DIFFERENT message (`options.log`, not a new sink), so it can never read as a second
+       * `mail.send_failed`.
+       *
+       * **WHAT IS LOST.** This is fire-and-forget with no drain: a send still mid-flight when the
+       * process exits (SIGTERM, a container recreate — ADR-0047) is abandoned exactly as an
+       * abandoned `SEND_TIMEOUT_MS` send already is — the request has answered by then, and
+       * nothing here waits for it or retries it.
+       *
+       * **This is a global Better Auth setting**, not a mail-specific one — every call this
+       * library makes through `runInBackgroundOrAwait` is affected, not only the two this app
+       * configures (`sendResetPassword`, `emailVerification.sendVerificationEmail`). The other
+       * internal caller found while verifying this (the rate-limiter's own row-pruning sweep)
+       * already resolves its own promise before handing it over, so it is unaffected either way.
+       */
+      backgroundTasks: {
+        handler: (promise: Promise<unknown>) => {
+          void promise.catch((error: unknown) => {
+            options.log(
+              'error',
+              'a background auth task rejected outside its own adapter catch — this should not ' +
+                'happen; the mail adapter is expected to swallow and log its own failures',
+              [error],
+            );
+          });
+        },
+      },
       /**
        * **Keep the origin check on under test.** Better Auth defaults `skipOriginCheck` to
        * `isTest() ? true : false` (`context/create-context.mjs:210`), so without this line every

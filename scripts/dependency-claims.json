@@ -480,6 +480,7 @@
       "lines": "217-227",
       "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
       "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
         "docs/adr/0075-mail-delivery-is-best-effort.md",
         "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
       ]
@@ -491,6 +492,7 @@
       "lines": "221",
       "anchor": "} else await promise;",
       "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
         "docs/TECH_DEBT.md",
         "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
       ]

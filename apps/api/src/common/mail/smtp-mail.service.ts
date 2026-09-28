@@ -47,22 +47,37 @@ export const VERIFY_TIMEOUT_MS = 5_000;
 /**
  * How long a single message may take before the send is abandoned (ADR-0075 M4).
  *
- * **This exists because the milestone's own central claim was wrong.** The spec's risk table said
- * "no request-path cost", and the ADR reasoned about mail as if it were off to one side. It is not:
- * Better Auth's `runInBackgroundOrAwait` **awaits** the promise unless
- * `advanced.backgroundTasks.handler` is configured, this application configures no such handler,
- * and `InvitationsService` awaits its send directly in the request handler. So four endpoints —
- * sign-up, request-password-reset, send-verification-email and invitation-create — sit on a live
- * SMTP round trip, bounded only by nodemailer's defaults: **30 s greeting, 2 min connection,
- * 10 min socket**. A black-holed relay port does not merely fail to deliver mail; it holds the
- * request open for ten minutes and occupies a worker while it does.
+ * **Originally existed because mail turned out to be on the request path**, contrary to the
+ * milestone's own first draft, which had reasoned about mail as if it were off to one side: Better
+ * Auth's `runInBackgroundOrAwait` **awaited** the promise unless
+ * `advanced.backgroundTasks.handler` was configured, and nothing configured it. Four endpoints sat
+ * on a live SMTP round trip, bounded only by nodemailer's own defaults — **30 s greeting, 2 min
+ * connection, 10 min socket** — so a black-holed relay port did not merely fail to deliver mail; it
+ * held the request open for up to ten minutes and occupied a worker while it did.
+ *
+ * **`docs/TECH_DEBT.md` #99 has since closed that for three of the four.**
+ * `advanced.backgroundTasks.handler` is now configured (`common/auth/better-auth.ts`), so Better
+ * Auth calls it INSTEAD of awaiting for `sendResetPassword` and
+ * `emailVerification.sendVerificationEmail` — which covers sign-up (`sign-up.mjs:254` sends the
+ * same verification email), request-password-reset and send-verification-email. **Invitation
+ * creation is the one that stays on the request path**: `InvitationsService`
+ * (`invitations.service.ts:119`) awaits `sendInvitation` directly, entirely outside Better Auth's
+ * plumbing, so nothing about that handler touches it.
+ *
+ * **The bound is kept for both halves anyway, for different reasons.** For invitation creation it
+ * is unchanged: the only thing standing between a black-holed relay and a request held open for up
+ * to ten minutes. For the three backgrounded sends it no longer protects a request — nothing is
+ * waiting on them — but an unbounded background send is still a real cost: each one holds a socket
+ * open for the duration, and a relay outage that never refuses the connection (the case this bound
+ * exists for) would otherwise let them accumulate for as long as the outage lasts. A fire-and-forget
+ * send is exactly the shape of thing that should never be allowed to run forever, watched or not.
  *
  * Ten seconds is chosen against what a healthy send costs rather than what a user will tolerate: a
  * warm relay answers in well under a second, and a cold TLS handshake to a distant one in a couple.
  * Anything past ten is a transport in trouble, and the correct response to a transport in trouble
- * is the same as to one that refused outright — log `mail.send_failed` and let the caller through.
- * The bound is generous enough that it should never fire in ordinary operation, which is the
- * property that makes it safe to apply to all three messages uniformly.
+ * is the same as to one that refused outright — log `mail.send_failed` and move on. The bound is
+ * generous enough that it should never fire in ordinary operation, which is the property that makes
+ * it safe to apply to all three messages uniformly.
  *
  * **It bounds the wait, not the send.** Nodemailer keeps working after we stop listening, so a
  * message that was merely slow may still arrive. That asymmetry is deliberate: abandoning the wait
