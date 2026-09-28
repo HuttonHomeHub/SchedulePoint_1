@@ -187,3 +187,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0161](0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)                                  | A cross-plan link is the same link in one plan                                    | Accepted           |
 | [0162](0162-a-zero-duration-task-keeps-its-date.md)                                             | A zero-duration task keeps its date, is reported, and converts without moving it  | Accepted           |
 | [0163](0163-a-guest-sees-the-plan-as-placed.md)                                                 | A guest sees the plan as placed                                                   | Accepted           |
+| [0164](0164-a-lint-warning-is-a-failure.md)                                                     | A lint warning is a failure, and a gate has no pass-with-findings outcome         | Accepted           |
