@@ -1,13 +1,15 @@
 import type { HealthMetricResult } from '@repo/types';
 
 import {
+  effectiveFinish,
   isPerturbableType,
   measureCarrierMovementDays,
   selectCompletionCarrier,
 } from './completion-carrier';
 import { computeSchedule, type ComputeOptions } from './engine/compute';
-import type { EngineActivity, EngineEdge } from './engine/types';
+import type { EngineActivity, EngineEdge, LevelingOptions } from './engine/types';
 import { HEALTH_METRICS } from './health/thresholds';
+import { levelIfEnabled, type LevelingDemand } from './level-if-enabled';
 
 /**
  * **DCMA metric 12 — the Critical Path Test, computed for real** (health M6, ADR-0116 D7).
@@ -19,10 +21,20 @@ import { HEALTH_METRICS } from './health/thresholds';
  *
  * **This module imports the CPM engine, and the health report's parity sentence must never be
  * copied onto it** (ADR-0116 D7; the spec calls this the single most likely wrong claim in the
- * epic). Its own, weaker argument: it computes **read-only and persists nothing** — both passes run
- * on an in-memory copy of the input graph, no new input kind reaches `computeSchedule`, and the
- * non-mutation e2e proves the claim by reading every engine-owned column back after the call.
- * It lives OUTSIDE `health/` so `health-engine-free.structural.spec.ts` keeps meaning what it says.
+ * epic). Its own, weaker argument: it computes **read-only and persists nothing** — every pass runs
+ * on an in-memory copy of the input graph (the control network pass, its optional levelling pass, the
+ * perturbed network pass, and its optional levelling pass — `docs/TECH_DEBT.md` #248), no new input
+ * kind reaches `computeSchedule` or `levelSchedule`, and the non-mutation e2e proves the claim by
+ * reading every engine-owned column back after the call. It lives OUTSIDE `health/` so
+ * `health-engine-free.structural.spec.ts` keeps meaning what it says.
+ *
+ * **Levelling now runs on BOTH sides, through the SAME rule `recalculate` uses** (`levelIfEnabled`,
+ * `docs/TECH_DEBT.md` #248, product-owner-approved 2026-09-28). Until this fix the control run
+ * reproduced the pure network dates and the what-if measured the perturbed movement against a
+ * baseline the product never persists or shows on a levelled plan — every number it returned was
+ * internally consistent, which is exactly why nothing reported it. `leveling === null` (the plan
+ * does not opt in, or opts in with no assignments) makes `levelIfEnabled` a no-op on both sides, so
+ * a levelling-off plan's what-if is byte-identical to what this route has always returned.
  */
 
 /**
@@ -59,6 +71,19 @@ export interface CriticalPathTestInput {
   activities: readonly EngineActivity[];
   edges: readonly EngineEdge[];
   options: ComputeOptions;
+  /**
+   * The resource-levelling demand model, or `null` when the plan does not level (ADR-0041 §7) —
+   * the SAME `buildEngineGraph` field `recalculate` reads, passed straight through
+   * (`docs/TECH_DEBT.md` #248). `null` makes {@link levelIfEnabled} a no-op on both the control and
+   * the perturbed pass, so a levelling-off plan's what-if is unchanged.
+   */
+  leveling: LevelingDemand | null;
+  /**
+   * Level within total float only (ADR-0041 §4) — the plan's own setting. The other two
+   * {@link LevelingOptions} fields (`dataDate`, `planCalendar`) are already carried in `options`,
+   * so this is the one field levelling needs that the network pass does not.
+   */
+  levelWithinFloatOnly: boolean;
   /** Working minutes per day for the activity's SCHEDULING calendar (ADR-0068), by activity id. */
   dayFactorMinutesOf: (activityId: string) => number;
   /** Display metadata for the offender/detail fields, by activity id. */
@@ -104,12 +129,36 @@ function notAssessable(reason: HealthMetricResult['reason']): HealthMetricResult
  * hands this function a write path.
  */
 export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricResult {
-  const { activities, edges, options, dayFactorMinutesOf, labelOf } = input;
+  const {
+    activities,
+    edges,
+    options,
+    leveling,
+    levelWithinFloatOnly,
+    dayFactorMinutesOf,
+    labelOf,
+  } = input;
 
   const nonSummary = activities.filter((a) => a.type !== 'WBS_SUMMARY');
   if (nonSummary.length === 0) return notAssessable('EMPTY_PLAN');
 
-  const control = computeSchedule(activities, edges, options);
+  // The SAME rule `recalculate` runs, on BOTH passes (`docs/TECH_DEBT.md` #248): the network pass
+  // is untouched — `isCritical`/`earlyStartOffset`/`totalFloat` below are never recomputed by
+  // levelling (ADR-0041 §3, Q2), so subject selection is unaffected either way — and
+  // `levelIfEnabled` merges the levelled overlay on top when the plan opts in and has assignments,
+  // a no-op otherwise. `dataDate`/`planCalendar` ride in `options`, which the network pass already
+  // takes; `levelWithinFloatOnly` is the one setting levelling needs that it does not.
+  const levelOptions: LevelingOptions = {
+    levelWithinFloatOnly,
+    dataDate: options.dataDate,
+    planCalendar: options.calendar,
+  };
+  const control = levelIfEnabled(
+    activities,
+    computeSchedule(activities, edges, options),
+    leveling,
+    levelOptions,
+  );
 
   const complete = new Set(activities.filter((a) => a.actualFinish != null).map((a) => a.id));
   if (nonSummary.every((a) => complete.has(a.id))) {
@@ -146,7 +195,12 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
         }
       : a,
   );
-  const perturbed = computeSchedule(perturbedActivities, edges, options);
+  const perturbed = levelIfEnabled(
+    perturbedActivities,
+    computeSchedule(perturbedActivities, edges, options),
+    leveling,
+    levelOptions,
+  );
 
   // **What must move is the COMPLETION CARRIER — the control run's latest-finishing activity —
   // not the max-over-all project finish.** The summary's `projectFinish` is max early finish, and
@@ -156,6 +210,12 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   // DCMA's question is "does the project completion move", and the completion is the thing that
   // finished last BEFORE the injection. When the subject IS the carrier — a single chain ending
   // at the subject — its own movement legitimately is the completion moving.
+  //
+  // `control.results` and `perturbed.results` have already been through `levelIfEnabled` above, so
+  // on a levelled plan `selectCompletionCarrier` picks the activity that finishes last on the
+  // LEVELLED schedule (the one the product shows), and `measureCarrierMovementDays` below reads its
+  // levelled finish on both sides (`docs/TECH_DEBT.md` #248). Off `leveling`, both are exactly the
+  // pure network reading they always were.
   const carrier = selectCompletionCarrier(activities, control.results);
   if (carrier === undefined) return notAssessable('EMPTY_PLAN');
   const carrierPerturbed = perturbed.results.find((r) => r.activityId === carrier.activityId);
@@ -189,8 +249,13 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
     perturbedActivityName: label.name,
     completionActivityId: carrier.activityId,
     completionActivityName: carrierLabel.name,
-    controlCompletionFinish: carrier.earlyFinish,
-    perturbedCompletionFinish: carrierPerturbed.earlyFinish,
+    // The SAME date `measureCarrierMovementDays` measured from — the levelled finish where the
+    // carrier is a levelling participant, the network finish otherwise (`effectiveFinish`,
+    // `docs/TECH_DEBT.md` #248). Printing `carrier.earlyFinish` here would show the pure network
+    // date while `deltaDays` above was computed from the levelled one: correct in isolation, and
+    // together a payload that cannot be "reproduced by hand" as the route's own OpenAPI promises.
+    controlCompletionFinish: effectiveFinish(carrier),
+    perturbedCompletionFinish: effectiveFinish(carrierPerturbed),
   };
   const measured = {
     count: null,
