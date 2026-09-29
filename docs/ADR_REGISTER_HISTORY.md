@@ -5,7 +5,10 @@ loaded into every session and every agent run, and had grown to ~133k tokens —
 file — so §16 now holds **one line per ADR** and this file keeps the narratives verbatim, as they
 stood on that date. It is an archive, not a register: it is **not** kept in step with new ADRs.
 The authoritative account of any decision is its own file in [`adr/`](adr/); several entries below
-record corrections and findings that are worth reading alongside it. See
+record corrections and findings that are worth reading alongside it. **One sentence is not
+verbatim**: ADR-0077's worked example of the prose citation form is described rather than
+reproduced, because `check:claims` scans `docs/` (and not root-level markdown) and would read the
+example as an unregistered dependency claim. See
 [`DECISIONS.md`](DECISIONS.md), 2026-09-29.
 
 Recorded as ADRs in [`docs/adr/`](adr/). Current set:
@@ -1184,7 +1187,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   "fix all three" would have changed a correct screen (ADR-0076's rule, third consecutive brief to
   fail it). **M0 also found ADR-0076's own gate passing for the wrong reason**: `check:claims`
   matched one citation form, so every citation into a `.js` file was invisible to it, as was the
-  prose form (`file.mjs`, lines **234**) that this epic's artefacts had been pushed into by a
+  prose form (a backticked basename, then "lines" and a bold line number) that this epic's artefacts had been pushed into by a
   third hole — the scan could not tell a dependency from this repository's own tooling. All three
   fixed, and the widening immediately surfaced two load-bearing dependency citations that had sat in
   the tree unregistered (`nodemailer`'s `_formatError`, `zod`'s `allowsEval` probe). The register is
