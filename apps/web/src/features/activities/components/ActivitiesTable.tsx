@@ -1,9 +1,13 @@
 import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
 import { MoreHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use-activities';
+import {
+  createActivitiesTableStore,
+  type ActivitiesTableStore,
+} from '../lib/activities-table-store';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorPurpose } from '../lib/activity-editor-intent';
 import { deleteActivityDescription, dissolveSummaryDescription } from '../lib/delete-activity-copy';
@@ -134,6 +138,121 @@ function SelectAllCheckbox({
 }
 
 /**
+ * A stable default for `calendars`. A `= []` in the parameter list is a **new array on every
+ * render**, which would make every memo below that lists `calendars` recompute every render — the
+ * exact churn M2 removes (`docs/TECH_DEBT.md` #334).
+ */
+const NO_CALENDARS: CalendarSummary[] = [];
+
+/** One entry in a row's overflow menu. */
+type RowAction = {
+  key: string;
+  label: string;
+  destructive?: boolean;
+  onSelect: () => void;
+  /**
+   * Present but shut, with why (ADR-0082 §3). Absent ⇒ actionable.
+   *
+   * Only for a reason the reader can DO something about — the pen, a role. An action that does
+   * not apply to this row (Dissolve off a non-summary), or whose flag is off, is still **omitted**:
+   * shading those would imply a capability that does not exist, and the flag-off parity suites
+   * depend on absence.
+   */
+  disabledReason?: string;
+};
+
+/**
+ * A row's select box, subscribed to **its own row's slice** of the selection.
+ *
+ * The snapshot is a boolean, so `useSyncExternalStore` re-renders this leaf only when THIS row's
+ * answer flips — the other 1,999 boxes and their rows stay put (`docs/TECH_DEBT.md` #334, M2).
+ * 24 px of hit area around a 16 px box — see `SelectAllCheckbox` for why.
+ */
+function RowSelectCheckbox({
+  store,
+  id,
+  name,
+}: {
+  store: ActivitiesTableStore;
+  id: string;
+  name: string;
+}): React.ReactElement {
+  const checked = useSyncExternalStore(store.subscribe, () => store.getState().selectedIds.has(id));
+  return (
+    <label className="flex size-6 cursor-pointer items-center justify-center">
+      <input
+        type="checkbox"
+        className="accent-primary size-4 align-middle"
+        checked={checked}
+        onChange={() => store.toggleRow(id)}
+        aria-label={`Select ${name}`}
+      />
+    </label>
+  );
+}
+
+/**
+ * The header's select-all, subscribed to the **count** of live selected rows rather than to the set,
+ * so it re-renders when the tri-state can change and the header — which is outside the memoised
+ * rows — costs nothing otherwise. `selectableIds` arrives as a prop and changes only with the list.
+ */
+function SelectAllControl({
+  store,
+  selectableIds,
+}: {
+  store: ActivitiesTableStore;
+  selectableIds: ReadonlySet<string>;
+}): React.ReactElement {
+  const liveCount = useSyncExternalStore(store.subscribe, () => {
+    let count = 0;
+    for (const id of store.getState().selectedIds) if (selectableIds.has(id)) count += 1;
+    return count;
+  });
+  const allSelected = selectableIds.size > 0 && liveCount === selectableIds.size;
+  return (
+    <SelectAllCheckbox
+      checked={allSelected}
+      indeterminate={liveCount > 0 && !allSelected}
+      onChange={(checked) => {
+        store.setSelectedIds(checked ? new Set(selectableIds) : new Set());
+      }}
+    />
+  );
+}
+
+/** A row's "⋯" trigger; re-renders only when THIS row's menu opens or closes. */
+function RowActionsButton({
+  store,
+  activity,
+  menuTriggerRef,
+}: {
+  store: ActivitiesTableStore;
+  activity: ActivitySummary;
+  menuTriggerRef: React.RefObject<HTMLElement | null>;
+}): React.ReactElement {
+  const openHere = useSyncExternalStore(
+    store.subscribe,
+    () => store.getState().menu?.activity.id === activity.id,
+  );
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Actions for ${activity.name}`}
+      aria-haspopup="menu"
+      aria-expanded={openHere}
+      onClick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        menuTriggerRef.current = event.currentTarget;
+        store.setMenu({ activity, anchor: { x: rect.left, y: rect.bottom } });
+      }}
+    >
+      <MoreHorizontal aria-hidden="true" className="size-4" />
+    </Button>
+  );
+}
+
+/**
  * A plan's activities as a table (code, name, type, duration, progress).
  * Edit/Delete render only for writers; delete is a soft delete confirmed first.
  * The edit target is looked up by id from the live query so a 409 retry carries
@@ -155,7 +274,7 @@ export function ActivitiesTable({
   onOpenResources,
   varianceByActivityId,
   noteCountByActivityId,
-  calendars = [],
+  calendars = NO_CALENDARS,
   planCalendarId,
   calendarsLoading = false,
 }: {
@@ -295,15 +414,14 @@ export function ActivitiesTable({
   // variable, one boolean away from each other.
   const [dissolving, setDissolving] = useState<ActivitySummary | null>(null);
   const [dissolveError, setDissolveError] = useState<string | null>(null);
-  // The bulk-assign selection (M4b). Ids, not rows: the list refetches under it, and holding rows
-  // would mean re-sending a version the server has already superseded.
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
-  // The per-row actions overflow menu (one open at a time, ADR-0029 `Menu` primitive / TECH_DEBT #38).
-  // `anchor` is the trigger's viewport position; `menuTriggerRef` restores focus to it on close.
-  const [menu, setMenu] = useState<{
-    activity: ActivitySummary;
-    anchor: { x: number; y: number };
-  } | null>(null);
+  // The bulk-assign selection (M4b) and the open row menu live in a per-table store rather than in
+  // `useState` (`docs/TECH_DEBT.md` #334, M2): read by closure inside the cells they made `columns`
+  // change on every tick, and every row re-render for it. Selection holds ids, not rows: the list
+  // refetches under it, and holding rows would mean re-sending a version the server has already
+  // superseded. The menu is the per-row actions overflow (one open at a time, ADR-0029 `Menu`
+  // primitive / TECH_DEBT #38); `menuTriggerRef` restores focus to its trigger on close.
+  const [store] = useState(createActivitiesTableStore);
+  const { selectedIds, menu } = useSyncExternalStore(store.subscribe, store.getState);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
 
   const managingResources = resourcesId
@@ -361,532 +479,520 @@ export function ActivitiesTable({
     return live;
   }, [selectedIds, selectableIds]);
   const membersGate = editorGating?.members ?? { writable: canEditSchedule, reason: null };
-  const allSelected = selectableIds.size > 0 && effectiveSelection.size === selectableIds.size;
-
-  const toggleRow = (id: string): void => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const clearSelection = (): void => setSelectedIds(new Set());
+  const clearSelection = store.clearSelection;
 
   /** Open the tabbed editor on the tab this purpose belongs to (ADR-0060 §7). */
-  const openFor = (activity: ActivitySummary, purpose: ActivityEditorPurpose): void => {
-    onOpenEditor(activity, purpose);
-  };
+  const openFor = useCallback(
+    (activity: ActivitySummary, purpose: ActivityEditorPurpose): void => {
+      onOpenEditor(activity, purpose);
+    },
+    [onOpenEditor],
+  );
 
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
   // row's "⋯" trigger and the items in its overflow `Menu` (TECH_DEBT #38: dense row actions belong
   // behind the APG `Menu`, never a spread of hover-only ghost buttons — docs/UX_STANDARDS.md).
-  type RowAction = {
-    key: string;
-    label: string;
-    destructive?: boolean;
-    onSelect: () => void;
-    /**
-     * Present but shut, with why (ADR-0082 §3). Absent ⇒ actionable.
-     *
-     * Only for a reason the reader can DO something about — the pen, a role. An action that does
-     * not apply to this row (Dissolve off a non-summary), or whose flag is off, is still **omitted**:
-     * shading those would imply a capability that does not exist, and the flag-off parity suites
-     * depend on absence.
-     */
-    disabledReason?: string;
-  };
-  const actionsFor = (activity: ActivitySummary): RowAction[] => {
-    const actions: RowAction[] = [];
-    if (onOpenLogic) {
-      actions.push({ key: 'logic', label: 'Logic', onSelect: () => onOpenLogic(activity) });
-    }
-    /*
-     * **Notes — added with the object bar's item, in one commit**
-     * (`docs/specs/object-bar-defects/` M2).
-     *
-     * The milestone's subject was the object bar, and stopping there would have left this roster
-     * one item short of it — which is the split-vocabulary defect the same milestone's M1 refused
-     * to create in the other direction, when it removed `Steps` from both surfaces rather than one.
-     * `selection-actions.tsx` states the rule: the two vocabularies must match so the same
-     * operation reads the same in both places.
-     *
-     * It also removes a two-step: the only route to an activity's notes from this menu was `Logic`
-     * followed by a tab click, which `e2e-notes` describes in its own comment as "the row menu's
-     * only route into the editor".
-     *
-     * Role-gated, never pen-gated (ADR-0046) — the same rule `Progress` below follows.
-     */
-    if (canWriteNotes) {
-      actions.push({
-        key: 'notes',
-        label: 'Notes',
-        onSelect: () => openFor(activity, 'notes'),
-      });
-    }
-    if (canReportProgress) {
-      actions.push({
-        key: 'progress',
-        // Renamed with the canvas selection bar in one commit, never on its own: `:423-425` of
-        // `selection-actions.tsx` requires the two vocabularies to match so the same operation
-        // reads the same in both places, and that is exactly what a one-sided rename breaks.
-        label: 'Progress',
-        onSelect: () => openFor(activity, 'progress'),
-      });
-    }
-    // Members — only on a summary, because it is the only row that can hold anything. Any member
-    // may look (the panel shades its controls with a reason rather than hiding them), so this is
-    // not gated on `canEditSchedule`: seeing what is in a grouping is a read.
-    if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
-      actions.push({
-        key: 'members',
-        label: 'Members',
-        onSelect: () => openFor(activity, 'members'),
-      });
-    }
-    // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
-    // writes inside are gated on `canEditSchedule`).
-    if (RESOURCES_ENABLED) {
-      actions.push({
-        key: 'resources',
-        label: 'Resources',
-        onSelect: () =>
-          hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
-      });
-    }
-    {
-      // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
-      // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
-      // the canvas and simply absent here — one operation teaching two mental models.
-      //
-      // The gate is `editorGating.general` **by identity**, not a second `{ writable, reason }`
-      // assembled beside it: two derivations of "may this person write" drift, and the drift is
-      // invisible because each surface looks right alone (ADR-0062's argument, pinned by a test).
-      //
-      // With **no** gating object there is nothing to shade *with*: `canEditSchedule` is a bare
-      // boolean that cannot say whether the refusal is a role or a missing pen. The first draft
-      // invented a fourth sentence here ("You cannot change this plan right now."), which is the
-      // failure `docs/UX_STANDARDS.md` "Row / node actions" warns about and ADR-0060 records
-      // shipping once. So that case **omits**, exactly as `docs/TECH_DEBT.md` #114 decides for
-      // `plan-actions-menu.tsx` — one rule, not a special case: shading needs a reason to show.
-      const gate = editorGating?.general ?? null;
-      const shut =
-        gate === null || gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
-      // No gating object and no write right ⇒ nothing to say, so say nothing (above).
-      if (gate === null && !canEditSchedule) return actions;
-
+  const actionsFor = useCallback(
+    (activity: ActivitySummary): RowAction[] => {
+      const actions: RowAction[] = [];
+      if (onOpenLogic) {
+        actions.push({ key: 'logic', label: 'Logic', onSelect: () => onOpenLogic(activity) });
+      }
       /*
-       * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1), for the reason
-       * recorded beside its twin in `selection-actions.tsx`: it opened the same dialog on the same
-       * tab as `Progress`, differing only in where focus landed.
+       * **Notes — added with the object bar's item, in one commit**
+       * (`docs/specs/object-bar-defects/` M2).
        *
-       * It goes from BOTH surfaces in one commit. ADR-0093's whole subject is these two rosters
-       * naming one action the same way; removing it here alone would have split the vocabulary
-       * again, which is the objection that forced `Report progress` → `Progress` to move together.
+       * The milestone's subject was the object bar, and stopping there would have left this roster
+       * one item short of it — which is the split-vocabulary defect the same milestone's M1 refused
+       * to create in the other direction, when it removed `Steps` from both surfaces rather than one.
+       * `selection-actions.tsx` states the rule: the two vocabularies must match so the same
+       * operation reads the same in both places.
        *
-       * Two things this deliberately does NOT undo. The shade-don't-omit fix its old comment
-       * recorded — two reviewers found `Edit` shaded beside `Steps` absent, off one gate — is a
-       * finding about `editorGating`, and it still governs every action left in this menu. And the
-       * steps panel itself is untouched: it lives on the Progress tab, which both remaining entry
-       * points open.
+       * It also removes a two-step: the only route to an activity's notes from this menu was `Logic`
+       * followed by a tab click, which `e2e-notes` describes in its own comment as "the row menu's
+       * only route into the editor".
+       *
+       * Role-gated, never pen-gated (ADR-0046) — the same rule `Progress` below follows.
        */
-      actions.push({
-        key: 'edit',
-        label: 'Edit',
-        ...shut,
-        onSelect: () => openFor(activity, 'edit'),
-      });
-      // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
-      // planner reaches for when the row is nearly right. Deliberately NOT offered on a summary:
-      // duplicating one leaf of a band would produce an empty grouping, and copying the band with
-      // its subtree is M2. The check is `type`, the same fact `dissolve` gates on, so the action
-      // cannot reach a state the product would render as breakage.
-      if (ACTIVITY_COPY_PASTE_ENABLED && onDuplicate && activity.type !== 'WBS_SUMMARY') {
+      if (canWriteNotes) {
         actions.push({
-          key: 'duplicate',
-          label: 'Duplicate',
-          ...shut,
-          onSelect: () => onDuplicate(activity),
+          key: 'notes',
+          label: 'Notes',
+          onSelect: () => openFor(activity, 'notes'),
         });
       }
-      // Make milestone… — the SAME derivation the selection bar and the Gantt row menu run, from
-      // the SAME `general` gate object, by identity (ADR-0162 decision 4, spec D6). This roster is
-      // the one hand-kept list of the three surfaces, which is why the label is imported rather
-      // than spelled here and why `make-milestone-gate-identity.test.tsx` pins the gate.
-      //
-      // Needs the gate object to derive from, so the no-gating path omits it — the same rule the
-      // block above states for the write actions.
-      if (onMakeMilestone && gate !== null) {
-        const milestone = deriveMakeMilestoneGate(activity, gate);
-        if (milestone.applies) {
-          actions.push({
-            key: 'make-milestone',
-            label: MAKE_MILESTONE_LABEL,
-            ...(milestone.enabled ? {} : { disabledReason: milestone.reason }),
-            onSelect: () => onMakeMilestone(activity),
-          });
-        }
+      if (canReportProgress) {
+        actions.push({
+          key: 'progress',
+          // Renamed with the canvas selection bar in one commit, never on its own: `:423-425` of
+          // `selection-actions.tsx` requires the two vocabularies to match so the same operation
+          // reads the same in both places, and that is exactly what a one-sided rename breaks.
+          label: 'Progress',
+          onSelect: () => openFor(activity, 'progress'),
+        });
       }
-      // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
-      // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
-      // the non-destructive one has to be visible at the moment the destructive one is chosen.
+      // Members — only on a summary, because it is the only row that can hold anything. Any member
+      // may look (the panel shades its controls with a reason rather than hiding them), so this is
+      // not gated on `canEditSchedule`: seeing what is in a grouping is a read.
       if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
         actions.push({
-          key: 'dissolve',
-          label: 'Dissolve',
+          key: 'members',
+          label: 'Members',
+          onSelect: () => openFor(activity, 'members'),
+        });
+      }
+      // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
+      // writes inside are gated on `canEditSchedule`).
+      if (RESOURCES_ENABLED) {
+        actions.push({
+          key: 'resources',
+          label: 'Resources',
+          onSelect: () =>
+            hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
+        });
+      }
+      {
+        // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
+        // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
+        // the canvas and simply absent here — one operation teaching two mental models.
+        //
+        // The gate is `editorGating.general` **by identity**, not a second `{ writable, reason }`
+        // assembled beside it: two derivations of "may this person write" drift, and the drift is
+        // invisible because each surface looks right alone (ADR-0062's argument, pinned by a test).
+        //
+        // With **no** gating object there is nothing to shade *with*: `canEditSchedule` is a bare
+        // boolean that cannot say whether the refusal is a role or a missing pen. The first draft
+        // invented a fourth sentence here ("You cannot change this plan right now."), which is the
+        // failure `docs/UX_STANDARDS.md` "Row / node actions" warns about and ADR-0060 records
+        // shipping once. So that case **omits**, exactly as `docs/TECH_DEBT.md` #114 decides for
+        // `plan-actions-menu.tsx` — one rule, not a special case: shading needs a reason to show.
+        const gate = editorGating?.general ?? null;
+        const shut =
+          gate === null || gate.writable ? {} : { disabledReason: gate.reason ?? 'Not available.' };
+        // No gating object and no write right ⇒ nothing to say, so say nothing (above).
+        if (gate === null && !canEditSchedule) return actions;
+
+        /*
+         * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1), for the reason
+         * recorded beside its twin in `selection-actions.tsx`: it opened the same dialog on the same
+         * tab as `Progress`, differing only in where focus landed.
+         *
+         * It goes from BOTH surfaces in one commit. ADR-0093's whole subject is these two rosters
+         * naming one action the same way; removing it here alone would have split the vocabulary
+         * again, which is the objection that forced `Report progress` → `Progress` to move together.
+         *
+         * Two things this deliberately does NOT undo. The shade-don't-omit fix its old comment
+         * recorded — two reviewers found `Edit` shaded beside `Steps` absent, off one gate — is a
+         * finding about `editorGating`, and it still governs every action left in this menu. And the
+         * steps panel itself is untouched: it lives on the Progress tab, which both remaining entry
+         * points open.
+         */
+        actions.push({
+          key: 'edit',
+          label: 'Edit',
+          ...shut,
+          onSelect: () => openFor(activity, 'edit'),
+        });
+        // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
+        // planner reaches for when the row is nearly right. Deliberately NOT offered on a summary:
+        // duplicating one leaf of a band would produce an empty grouping, and copying the band with
+        // its subtree is M2. The check is `type`, the same fact `dissolve` gates on, so the action
+        // cannot reach a state the product would render as breakage.
+        if (ACTIVITY_COPY_PASTE_ENABLED && onDuplicate && activity.type !== 'WBS_SUMMARY') {
+          actions.push({
+            key: 'duplicate',
+            label: 'Duplicate',
+            ...shut,
+            onSelect: () => onDuplicate(activity),
+          });
+        }
+        // Make milestone… — the SAME derivation the selection bar and the Gantt row menu run, from
+        // the SAME `general` gate object, by identity (ADR-0162 decision 4, spec D6). This roster is
+        // the one hand-kept list of the three surfaces, which is why the label is imported rather
+        // than spelled here and why `make-milestone-gate-identity.test.tsx` pins the gate.
+        //
+        // Needs the gate object to derive from, so the no-gating path omits it — the same rule the
+        // block above states for the write actions.
+        if (onMakeMilestone && gate !== null) {
+          const milestone = deriveMakeMilestoneGate(activity, gate);
+          if (milestone.applies) {
+            actions.push({
+              key: 'make-milestone',
+              label: MAKE_MILESTONE_LABEL,
+              ...(milestone.enabled ? {} : { disabledReason: milestone.reason }),
+              onSelect: () => onMakeMilestone(activity),
+            });
+          }
+        }
+        // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
+        // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
+        // the non-destructive one has to be visible at the moment the destructive one is chosen.
+        if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+          actions.push({
+            key: 'dissolve',
+            label: 'Dissolve',
+            ...shut,
+            onSelect: () => {
+              setDissolveError(null);
+              setDissolving(activity);
+            },
+          });
+        }
+        actions.push({
+          key: 'delete',
+          label: 'Delete',
+          destructive: true,
           ...shut,
           onSelect: () => {
-            setDissolveError(null);
-            setDissolving(activity);
+            setDeleteError(null);
+            setDeleting(activity);
           },
         });
       }
-      actions.push({
-        key: 'delete',
-        label: 'Delete',
-        destructive: true,
-        ...shut,
-        onSelect: () => {
-          setDeleteError(null);
-          setDeleting(activity);
+      return actions;
+    },
+    [
+      onOpenLogic,
+      canWriteNotes,
+      canReportProgress,
+      hostOwnsResources,
+      onOpenResources,
+      editorGating,
+      canEditSchedule,
+      onDuplicate,
+      onMakeMilestone,
+      openFor,
+    ],
+  );
+
+  /*
+   * **`columns` is memoised over what it actually reads** (`docs/TECH_DEBT.md` #334, M2-F2). It was
+   * rebuilt on every render, so `DataTable`'s row memo could never hit and one checkbox tick ran
+   * every cell of every row. What made that unavoidable was per-row volatile state — the selection
+   * and the open menu — being read by closure inside the cells; both now live in `store` and are
+   * rendered by the self-subscribing leaves above, so nothing volatile is left in here.
+   */
+  const columns = useMemo(() => {
+    const cols: Column<ActivitySummary>[] = [
+      // The bulk-assign selection column, first so a tick is the leftmost thing on a row. Conditional
+      // spread (not a post-hoc unshift) so its position cannot drift.
+      ...(bulkAssignActive
+        ? [
+            {
+              header: 'Select',
+              // No `srHeader`: `headerCell` wins the render, so it was never reachable
+              // (`docs/TECH_DEBT.md` #73). `SelectAllCheckbox` carries its own accessible name.
+              headClassName: 'py-2 pr-3 font-medium',
+              cellClassName: 'py-2 pr-3',
+              headerCell: () => <SelectAllControl store={store} selectableIds={selectableIds} />,
+              cell: (activity: ActivitySummary) =>
+                // A summary has no checkbox at all rather than a disabled one: "you may not file this
+                // here" is not the message — it is filed from the Breakdown picker, which a shaded box
+                // on this row would not tell anyone.
+                //
+                // Selecting is deliberately NOT gated on the write right. Ticking a row is a read —
+                // nothing is sent until Assign — and it is the ONLY way to reach the bar that says
+                // why the write is shut. Disabling the boxes would leave a reader with a column of
+                // dead controls and the explanation behind them, unreachable. (Contrast the Members
+                // checklist, where ticking IS the pending edit, so there the boxes do shade.)
+                selectableIds.has(activity.id) ? (
+                  <RowSelectCheckbox store={store} id={activity.id} name={activity.name} />
+                ) : null,
+            } satisfies Column<ActivitySummary>,
+          ]
+        : []),
+      {
+        header: 'Code',
+        cell: (activity) =>
+          activity.code ? (
+            <span className="font-mono text-xs">{activity.code}</span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
+        header: 'Name',
+        cell: (activity) => {
+          // A mandatory pin that broke logic (engine-owned, ADR-0035 §7): surface it as a "Conflict"
+          // pill beside the name — always visible (the Constraint column hides below `lg`), so a
+          // produced-and-flagged violation can't slip off narrow screens. Text carries the meaning
+          // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
+          // users, matching the summary strip's wording. Only shown when the M4 surface is on.
+          const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
+          // An imported external bound drove this activity's schedule (engine-owned, ADR-0043 M1):
+          // the per-activity companion to the summary strip's "Externally driven" count, so a planner
+          // can see WHICH activities an external commitment gated. Informational (soft bound), so a
+          // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
+          // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
+          const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
+          // A resource-dependent activity with no driving assignment (engine-owned, ADR-0035 §23):
+          // the engine produces-and-flags rather than refusing, scheduling it on the ordinary calendar
+          // and setting this. Until now the flag was computed, persisted and rendered NOWHERE, so the
+          // failure was silent — the activity simply scheduled on the wrong working time and looked
+          // fine. Critical tone because it means the dates on screen are not the ones the planner
+          // asked for. Gated on the same flag as the type that produces it.
+          const driverMissing = ADVANCED_ACTIVITY_TYPES_ENABLED && activity.resourceDriverMissing;
+          // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
+          // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
+          const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
+          return (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{activity.name}</span>
+              <NoteCountBadge count={noteCount} />
+              {violated ? (
+                <Badge
+                  variant="critical"
+                  size="sm"
+                  title="A mandatory constraint forces a date earlier than the logic allows; shown as pinned, not corrected — review the dates."
+                >
+                  Conflict
+                  <span className="sr-only">
+                    {' '}
+                    — a mandatory constraint forces a date earlier than the logic allows; shown as
+                    pinned, not corrected. Review the dates.
+                  </span>
+                </Badge>
+              ) : null}
+              {externalDriven ? (
+                <Badge
+                  variant="neutral"
+                  size="sm"
+                  title="An imported date from another project drove this activity's schedule this recalculation."
+                >
+                  External
+                  <span className="sr-only">
+                    {' '}
+                    — an imported date from another project drove this activity’s schedule this
+                    recalculation.
+                  </span>
+                </Badge>
+              ) : null}
+              {driverMissing ? (
+                <Badge
+                  variant="critical"
+                  size="sm"
+                  title="This resource-dependent activity has no driving resource assignment, so it was scheduled on the plan's calendar instead of the resource's."
+                >
+                  Needs a driver
+                  <span className="sr-only">
+                    {' '}
+                    — this resource-dependent activity has no driving resource assignment, so it was
+                    scheduled on the plan’s calendar instead of the resource’s. Assign a resource
+                    and mark it driving, then recalculate.
+                  </span>
+                </Badge>
+              ) : null}
+            </span>
+          );
+        },
+      },
+      { header: 'Type', cell: (activity) => ACTIVITY_TYPE_LABELS[activity.type] },
+      {
+        header: 'Duration',
+        cellClassName: 'whitespace-nowrap tabular-nums',
+        cell: (activity) => (
+          <span className="text-muted-foreground">
+            {formatDuration(
+              activity,
+              // The Duration column measures the work (#86), so it reads on the calendar the
+              // activity schedules on — which is what the API's own `durationDays` is measured on.
+              // Shared with the Gantt's own read-out (#317).
+              activitySchedulingHoursPerDay(calendars, activity, planCalendarId),
+            )}
+          </span>
+        ),
+      },
+      {
+        header: 'Progress',
+        cellClassName: 'tabular-nums',
+        cell: (activity) => (
+          <span className="text-muted-foreground">{formatProgress(activity)}</span>
+        ),
+      },
+      // A set date constraint (the definition a planner enters), so it's visible without opening
+      // each row. The shorthand ("SNET · 01 May 2026") carries the meaning in text (never colour,
+      // WCAG 1.4.1); the full label is the accessible name. Hidden below `lg` like the late-date
+      // columns to keep narrow screens legible — the edit dialog still shows it there.
+      {
+        header: 'Constraint',
+        headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+        cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+        cell: (activity) => {
+          const constraint = formatConstraint(activity);
+          // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
+          // shorthand visually (aria-hidden) with the spelled-out label in an sr-only node — the
+          // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover. A
+          // produced-and-flagged violation shows as a "Conflict" pill in the always-visible Name cell.
+          return constraint ? (
+            <span className="text-muted-foreground" title={constraint.full}>
+              <span aria-hidden="true">{constraint.short}</span>
+              <span className="sr-only">{constraint.full}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
+      },
+      // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
+      // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
+      // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
+      // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
+      // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
+      // drift. Hidden below `lg` like the other definition detail columns.
+      ...(ACTIVITY_CALENDAR_ENABLED
+        ? [
+            {
+              header: 'Calendar',
+              headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+              cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+              cell: (activity: ActivitySummary) => {
+                if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
+                const name = calendarNameById.get(activity.calendarId);
+                if (name) return <span className="text-muted-foreground">{name}</span>;
+                return (
+                  <span className="text-muted-foreground italic" title={activity.calendarId}>
+                    {calendarsLoading ? 'Loading…' : 'Unnamed'}
+                  </span>
+                );
+              },
+            } satisfies Column<ActivitySummary>,
+          ]
+        : []),
+      // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
+      // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
+      // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
+      // fetch, mirroring the Calendar column. Conditional spread (not a splice) so its position is stable;
+      // hidden below `lg` like the other definition-detail columns.
+      ...(ADVANCED_ACTIVITY_TYPES_ENABLED
+        ? [
+            {
+              header: 'WBS',
+              headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+              cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+              cell: (activity: ActivitySummary) => {
+                const parentLabel = wbsParentLabelById.get(activity.id);
+                return parentLabel ? (
+                  <span className="text-muted-foreground" title={parentLabel}>
+                    {parentLabel}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                );
+              },
+            } satisfies Column<ActivitySummary>,
+          ]
+        : []),
+      // Engine-owned computed columns (M6, read-only). Null renders as an em dash
+      // until the plan is recalculated. Late dates hide first on narrow screens.
+      scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
+      scheduleColumn('Early finish', (a) => a.earlyFinish, 'md'),
+      scheduleColumn('Late start', (a) => a.lateStart, 'lg'),
+      scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
+      {
+        // **`Float left`, reading `remainingFloat`** (M-E-T7) — the slack left from where the bar is
+        // drawn, which is the float a planner spends. Labelled in the same commit as the field for
+        // the reason the Gantt's twin records: the number is plausible under either meaning, so a
+        // bare `Float` heading changing origin is invisible to the reader it misleads.
+        header: 'Float left',
+        cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
+        cell: (activity) => formatRemainingFloat(activity.remainingFloat),
+      },
+      {
+        header: 'Critical path',
+        cellClassName: 'py-2 pr-4 whitespace-nowrap',
+        cell: (activity) => {
+          const flag = criticality(activity);
+          return flag ? (
+            <Badge variant={flag.variant}>{flag.label}</Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
+      },
+    ];
+    // Variance vs the active baseline — only when the route supplies the map (M7). The
+    // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
+    // Finish variance is the headline (always shown); start/float variance hide first on
+    // narrow screens, mirroring the early/late date columns.
+    if (varianceByActivityId) {
+      const varianceColumn = (
+        header: string,
+        field: VarianceField,
+        hideBelow?: 'lg',
+      ): Column<ActivitySummary> => {
+        const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
+        return {
+          header,
+          headClassName: `py-2 pr-4 font-medium${show}`,
+          cellClassName: `py-2 pr-4 whitespace-nowrap tabular-nums${show}`,
+          cell: (activity) => {
+            const row = varianceByActivityId.get(activity.id);
+            if (!row) return <span className="text-muted-foreground">—</span>;
+            const variance = formatDayVariance(row, field);
+            return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
+          },
+        };
+      };
+      cols.push(
+        varianceColumn('Start variance', 'start', 'lg'),
+        varianceColumn('Finish variance', 'finish'),
+        // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
+        // column beside it is "Float left" (remaining float, above) — without the word, a
+        // reader takes this column to be variance OF that one, when it is always total float
+        // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
+        varianceColumn('Total float variance', 'float', 'lg'),
+      );
+    }
+    if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
+      cols.push({
+        header: 'Actions',
+        srHeader: true,
+        headClassName: 'py-2 font-medium',
+        cellClassName: 'py-2 text-right whitespace-nowrap',
+        cell: (activity) => {
+          const actions = actionsFor(activity);
+          // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
+          // the second clause a Viewer would open a menu of nothing but refusals — and it is what
+          // keeps the all-disabled focus trap out of reach rather than merely fixed.
+          // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
+          // this component** — established by trying to test it rather than by assuming either way, after
+          // the consolidation pass blocked on it being untested. The column above renders only when
+          // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
+          // four contributes an action that is never shaded (Logic, Resources and Report progress are
+          // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
+          // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
+          //
+          // A unit test can only reach it by turning all four off, at which point the column is absent and
+          // the test passes for the wrong reason. The first version of that test did exactly that and still
+          // passed with this clause deleted. Kept as a guard against a future action set where it IS
+          // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
+          // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
+          if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
+            return null;
+          }
+          return (
+            <RowActionsButton store={store} activity={activity} menuTriggerRef={menuTriggerRef} />
+          );
         },
       });
     }
-    return actions;
-  };
-
-  const columns: Column<ActivitySummary>[] = [
-    // The bulk-assign selection column, first so a tick is the leftmost thing on a row. Conditional
-    // spread (not a post-hoc unshift) so its position cannot drift.
-    ...(bulkAssignActive
-      ? [
-          {
-            header: 'Select',
-            // No `srHeader`: `headerCell` wins the render, so it was never reachable
-            // (`docs/TECH_DEBT.md` #73). `SelectAllCheckbox` carries its own accessible name.
-            headClassName: 'py-2 pr-3 font-medium',
-            cellClassName: 'py-2 pr-3',
-            headerCell: () => (
-              <SelectAllCheckbox
-                checked={allSelected}
-                indeterminate={effectiveSelection.size > 0 && !allSelected}
-                onChange={(checked) => {
-                  setSelectedIds(checked ? new Set(selectableIds) : new Set());
-                }}
-              />
-            ),
-            cell: (activity: ActivitySummary) =>
-              // A summary has no checkbox at all rather than a disabled one: "you may not file this
-              // here" is not the message — it is filed from the Breakdown picker, which a shaded box
-              // on this row would not tell anyone.
-              //
-              // Selecting is deliberately NOT gated on the write right. Ticking a row is a read —
-              // nothing is sent until Assign — and it is the ONLY way to reach the bar that says
-              // why the write is shut. Disabling the boxes would leave a reader with a column of
-              // dead controls and the explanation behind them, unreachable. (Contrast the Members
-              // checklist, where ticking IS the pending edit, so there the boxes do shade.)
-              selectableIds.has(activity.id) ? (
-                // 24 px of hit area around a 16 px box — see `SelectAllCheckbox` for why.
-                <label className="flex size-6 cursor-pointer items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className="accent-primary size-4 align-middle"
-                    checked={effectiveSelection.has(activity.id)}
-                    onChange={() => toggleRow(activity.id)}
-                    aria-label={`Select ${activity.name}`}
-                  />
-                </label>
-              ) : null,
-          } satisfies Column<ActivitySummary>,
-        ]
-      : []),
-    {
-      header: 'Code',
-      cell: (activity) =>
-        activity.code ? (
-          <span className="font-mono text-xs">{activity.code}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    },
-    {
-      header: 'Name',
-      cell: (activity) => {
-        // A mandatory pin that broke logic (engine-owned, ADR-0035 §7): surface it as a "Conflict"
-        // pill beside the name — always visible (the Constraint column hides below `lg`), so a
-        // produced-and-flagged violation can't slip off narrow screens. Text carries the meaning
-        // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
-        // users, matching the summary strip's wording. Only shown when the M4 surface is on.
-        const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
-        // An imported external bound drove this activity's schedule (engine-owned, ADR-0043 M1):
-        // the per-activity companion to the summary strip's "Externally driven" count, so a planner
-        // can see WHICH activities an external commitment gated. Informational (soft bound), so a
-        // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
-        // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
-        const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
-        // A resource-dependent activity with no driving assignment (engine-owned, ADR-0035 §23):
-        // the engine produces-and-flags rather than refusing, scheduling it on the ordinary calendar
-        // and setting this. Until now the flag was computed, persisted and rendered NOWHERE, so the
-        // failure was silent — the activity simply scheduled on the wrong working time and looked
-        // fine. Critical tone because it means the dates on screen are not the ones the planner
-        // asked for. Gated on the same flag as the type that produces it.
-        const driverMissing = ADVANCED_ACTIVITY_TYPES_ENABLED && activity.resourceDriverMissing;
-        // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
-        // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
-        const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
-        return (
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{activity.name}</span>
-            <NoteCountBadge count={noteCount} />
-            {violated ? (
-              <Badge
-                variant="critical"
-                size="sm"
-                title="A mandatory constraint forces a date earlier than the logic allows; shown as pinned, not corrected — review the dates."
-              >
-                Conflict
-                <span className="sr-only">
-                  {' '}
-                  — a mandatory constraint forces a date earlier than the logic allows; shown as
-                  pinned, not corrected. Review the dates.
-                </span>
-              </Badge>
-            ) : null}
-            {externalDriven ? (
-              <Badge
-                variant="neutral"
-                size="sm"
-                title="An imported date from another project drove this activity's schedule this recalculation."
-              >
-                External
-                <span className="sr-only">
-                  {' '}
-                  — an imported date from another project drove this activity’s schedule this
-                  recalculation.
-                </span>
-              </Badge>
-            ) : null}
-            {driverMissing ? (
-              <Badge
-                variant="critical"
-                size="sm"
-                title="This resource-dependent activity has no driving resource assignment, so it was scheduled on the plan's calendar instead of the resource's."
-              >
-                Needs a driver
-                <span className="sr-only">
-                  {' '}
-                  — this resource-dependent activity has no driving resource assignment, so it was
-                  scheduled on the plan’s calendar instead of the resource’s. Assign a resource and
-                  mark it driving, then recalculate.
-                </span>
-              </Badge>
-            ) : null}
-          </span>
-        );
-      },
-    },
-    { header: 'Type', cell: (activity) => ACTIVITY_TYPE_LABELS[activity.type] },
-    {
-      header: 'Duration',
-      cellClassName: 'whitespace-nowrap tabular-nums',
-      cell: (activity) => (
-        <span className="text-muted-foreground">
-          {formatDuration(
-            activity,
-            // The Duration column measures the work (#86), so it reads on the calendar the
-            // activity schedules on — which is what the API's own `durationDays` is measured on.
-            // Shared with the Gantt's own read-out (#317).
-            activitySchedulingHoursPerDay(calendars, activity, planCalendarId),
-          )}
-        </span>
-      ),
-    },
-    {
-      header: 'Progress',
-      cellClassName: 'tabular-nums',
-      cell: (activity) => <span className="text-muted-foreground">{formatProgress(activity)}</span>,
-    },
-    // A set date constraint (the definition a planner enters), so it's visible without opening
-    // each row. The shorthand ("SNET · 01 May 2026") carries the meaning in text (never colour,
-    // WCAG 1.4.1); the full label is the accessible name. Hidden below `lg` like the late-date
-    // columns to keep narrow screens legible — the edit dialog still shows it there.
-    {
-      header: 'Constraint',
-      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
-      cell: (activity) => {
-        const constraint = formatConstraint(activity);
-        // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
-        // shorthand visually (aria-hidden) with the spelled-out label in an sr-only node — the
-        // same visible-glyph + hidden-text pattern the diagram legend uses. `title` = hover. A
-        // produced-and-flagged violation shows as a "Conflict" pill in the always-visible Name cell.
-        return constraint ? (
-          <span className="text-muted-foreground" title={constraint.full}>
-            <span aria-hidden="true">{constraint.short}</span>
-            <span className="sr-only">{constraint.full}</span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        );
-      },
-    },
-    // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
-    // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
-    // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
-    // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
-    // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
-    // drift. Hidden below `lg` like the other definition detail columns.
-    ...(ACTIVITY_CALENDAR_ENABLED
-      ? [
-          {
-            header: 'Calendar',
-            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
-            cell: (activity: ActivitySummary) => {
-              if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
-              const name = calendarNameById.get(activity.calendarId);
-              if (name) return <span className="text-muted-foreground">{name}</span>;
-              return (
-                <span className="text-muted-foreground italic" title={activity.calendarId}>
-                  {calendarsLoading ? 'Loading…' : 'Unnamed'}
-                </span>
-              );
-            },
-          } satisfies Column<ActivitySummary>,
-        ]
-      : []),
-    // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
-    // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
-    // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
-    // fetch, mirroring the Calendar column. Conditional spread (not a splice) so its position is stable;
-    // hidden below `lg` like the other definition-detail columns.
-    ...(ADVANCED_ACTIVITY_TYPES_ENABLED
-      ? [
-          {
-            header: 'WBS',
-            headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-            cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
-            cell: (activity: ActivitySummary) => {
-              const parentLabel = wbsParentLabelById.get(activity.id);
-              return parentLabel ? (
-                <span className="text-muted-foreground" title={parentLabel}>
-                  {parentLabel}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              );
-            },
-          } satisfies Column<ActivitySummary>,
-        ]
-      : []),
-    // Engine-owned computed columns (M6, read-only). Null renders as an em dash
-    // until the plan is recalculated. Late dates hide first on narrow screens.
-    scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
-    scheduleColumn('Early finish', (a) => a.earlyFinish, 'md'),
-    scheduleColumn('Late start', (a) => a.lateStart, 'lg'),
-    scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
-    {
-      // **`Float left`, reading `remainingFloat`** (M-E-T7) — the slack left from where the bar is
-      // drawn, which is the float a planner spends. Labelled in the same commit as the field for
-      // the reason the Gantt's twin records: the number is plausible under either meaning, so a
-      // bare `Float` heading changing origin is invisible to the reader it misleads.
-      header: 'Float left',
-      cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
-      cell: (activity) => formatRemainingFloat(activity.remainingFloat),
-    },
-    {
-      header: 'Critical path',
-      cellClassName: 'py-2 pr-4 whitespace-nowrap',
-      cell: (activity) => {
-        const flag = criticality(activity);
-        return flag ? (
-          <Badge variant={flag.variant}>{flag.label}</Badge>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        );
-      },
-    },
-  ];
-  // Variance vs the active baseline — only when the route supplies the map (M7). The
-  // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
-  // Finish variance is the headline (always shown); start/float variance hide first on
-  // narrow screens, mirroring the early/late date columns.
-  if (varianceByActivityId) {
-    const varianceColumn = (
-      header: string,
-      field: VarianceField,
-      hideBelow?: 'lg',
-    ): Column<ActivitySummary> => {
-      const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
-      return {
-        header,
-        headClassName: `py-2 pr-4 font-medium${show}`,
-        cellClassName: `py-2 pr-4 whitespace-nowrap tabular-nums${show}`,
-        cell: (activity) => {
-          const row = varianceByActivityId.get(activity.id);
-          if (!row) return <span className="text-muted-foreground">—</span>;
-          const variance = formatDayVariance(row, field);
-          return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
-        },
-      };
-    };
-    columns.push(
-      varianceColumn('Start variance', 'start', 'lg'),
-      varianceColumn('Finish variance', 'finish'),
-      // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
-      // column beside it is "Float left" (remaining float, above) — without the word, a
-      // reader takes this column to be variance OF that one, when it is always total float
-      // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
-      varianceColumn('Total float variance', 'float', 'lg'),
-    );
-  }
-  if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
-    columns.push({
-      header: 'Actions',
-      srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
-      cell: (activity) => {
-        const actions = actionsFor(activity);
-        // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
-        // the second clause a Viewer would open a menu of nothing but refusals — and it is what
-        // keeps the all-disabled focus trap out of reach rather than merely fixed.
-        // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
-        // this component** — established by trying to test it rather than by assuming either way, after
-        // the consolidation pass blocked on it being untested. The column above renders only when
-        // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
-        // four contributes an action that is never shaded (Logic, Resources and Report progress are
-        // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
-        // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
-        //
-        // A unit test can only reach it by turning all four off, at which point the column is absent and
-        // the test passes for the wrong reason. The first version of that test did exactly that and still
-        // passed with this clause deleted. Kept as a guard against a future action set where it IS
-        // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
-        // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
-        if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
-          return null;
-        }
-        const openHere = menu?.activity.id === activity.id;
-        return (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Actions for ${activity.name}`}
-            aria-haspopup="menu"
-            aria-expanded={openHere}
-            onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              menuTriggerRef.current = event.currentTarget;
-              setMenu({ activity, anchor: { x: rect.left, y: rect.bottom } });
-            }}
-          >
-            <MoreHorizontal aria-hidden="true" className="size-4" />
-          </Button>
-        );
-      },
-    });
-  }
+    return cols;
+  }, [
+    bulkAssignActive,
+    selectableIds,
+    store,
+    calendars,
+    calendarNameById,
+    calendarsLoading,
+    planCalendarId,
+    wbsParentLabelById,
+    noteCountByActivityId,
+    varianceByActivityId,
+    canEditSchedule,
+    canReportProgress,
+    onOpenLogic,
+    actionsFor,
+  ]);
 
   const confirmDelete = (): void => {
     if (!deleting) return;
@@ -1052,7 +1158,7 @@ export function ActivitiesTable({
       {menu ? (
         <Menu
           open
-          onClose={() => setMenu(null)}
+          onClose={() => store.setMenu(null)}
           anchor={menu.anchor}
           label={`Actions for ${menu.activity.name}`}
           restoreFocusRef={menuTriggerRef}

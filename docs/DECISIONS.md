@@ -10,6 +10,26 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-29 — A per-instance external store is allowed to keep row state out of memoised columns
+
+**What.** A hand-rolled external store read through `useSyncExternalStore` is permitted in the
+frontend for one purpose: keeping **row-level volatile state** (a selection, an open menu) out of
+memoised `DataTable` columns, so a change re-renders the one row it belongs to rather than every
+row. It is created **per component instance** (`useState(createStore)`), **never a module
+singleton** — two tables, or two tests, must not share state — and each leaf subscribes to a
+boolean snapshot of its own row's slice. Precedent: `unsaved-work-provider.tsx`; first use
+`features/activities/lib/activities-table-store.ts` (`docs/TECH_DEBT.md` #334, M2).
+
+**Why.** `docs/FRONTEND_ARCHITECTURE.md` says "no store installed", which is still true (no library
+is added). The alternatives fail here: `useState` read by closure in a cell makes `columns` change on
+every tick, and a context re-renders every consumer on any change.
+
+**Consequences.** A memoised `columns` array obliges every input a cell reads to be in the memo
+deps or read through a subscribing leaf (`Column.cell` TSDoc). Anything wider than row-level
+volatile state still belongs in TanStack Query, the router or local state (ADR-0004).
+
+---
+
 ## 2026-09-29 — Model routing is pinned in config, and CLAUDE.md §16 is one line per ADR
 
 **What.** Four changes, chosen by the product owner to cut AI usage without lowering the

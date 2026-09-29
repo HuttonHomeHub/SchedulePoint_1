@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useCallback, useMemo, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DataTable, type Column } from './data-table';
@@ -429,5 +430,102 @@ describe('DataTable — Column.width', () => {
       expect(detailCell.className).toContain('border-b');
       expect(detailCell.className).toContain('border-border');
     });
+  });
+});
+
+/**
+ * **Row memoisation** (`docs/TECH_DEBT.md` #334, M2-F2). Rows skip a parent render only when both the
+ * row object and the `columns` array are unchanged; every other call site declares `columns` inline
+ * and must keep rendering exactly as before.
+ */
+describe('DataTable — row memoisation', () => {
+  const DATA: Row[] = [
+    { id: 'a', name: 'Alpha' },
+    { id: 'b', name: 'Bravo' },
+    { id: 'c', name: 'Charlie' },
+  ];
+  const rows = query({ data: DATA });
+
+  /** A host that re-renders on demand; `mode` picks how it builds `columns`. */
+  function Host({
+    mode,
+    cells,
+  }: {
+    mode: 'inline' | 'memo';
+    cells: { count: number };
+  }): React.ReactElement {
+    const [, setTick] = useState(0);
+    const build = useCallback(
+      (): Column<Row>[] => [
+        {
+          header: 'Name',
+          cell: (row) => {
+            cells.count += 1;
+            return row.name;
+          },
+        },
+      ],
+      [cells],
+    );
+    const memoised = useMemo(() => build(), [build]);
+    return (
+      <>
+        <button type="button" onClick={() => setTick((n) => n + 1)}>
+          Render
+        </button>
+        <DataTable {...common} columns={mode === 'memo' ? memoised : build()} query={rows} />
+      </>
+    );
+  }
+
+  it('re-renders every row on a parent render when columns is declared inline', () => {
+    const cells = { count: 0 };
+    render(<Host mode="inline" cells={cells} />);
+    expect(cells.count).toBe(DATA.length);
+    cells.count = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Render' }));
+
+    expect(cells.count).toBe(DATA.length);
+  });
+
+  it('skips every row on a parent render when columns is memoised', () => {
+    const cells = { count: 0 };
+    render(<Host mode="memo" cells={cells} />);
+    cells.count = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Render' }));
+
+    expect(cells.count).toBe(0);
+    expect(screen.getByText('Bravo')).toBeInTheDocument();
+  });
+
+  it('updates a renderDetail row on a parent render even when columns is memoised', () => {
+    // `renderDetail` returns a new node on every call, so its rows cannot skip and a detail that
+    // depends on host state stays current.
+    function DetailHost(): React.ReactElement {
+      const [label, setLabel] = useState('first');
+      const memoised = useMemo<Column<Row>[]>(() => [{ header: 'Name', cell: (r) => r.name }], []);
+      return (
+        <>
+          <button type="button" onClick={() => setLabel('second')}>
+            Change
+          </button>
+          <DataTable
+            {...common}
+            columns={memoised}
+            query={rows}
+            renderDetail={(row) => <p>{`${row.id}-${label}`}</p>}
+          />
+        </>
+      );
+    }
+    render(<DetailHost />);
+    expect(screen.getByText('b-first')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+
+    expect(screen.getByText('b-second')).toBeInTheDocument();
+    expect(screen.queryByText('b-first')).not.toBeInTheDocument();
   });
 });

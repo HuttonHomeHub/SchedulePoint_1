@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
+import {
+  ActivityBottomPanel,
+  ActivityPanelCollapsedBar,
+  useActivityPanelModel,
+} from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
@@ -195,6 +199,9 @@ export function ToolbarPlanWorkspace({
 }): React.ReactElement {
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
   const canvasUi = useTsldCanvasUiState();
+  // The activities panel's narrowed, stable slice of the model (`docs/TECH_DEBT.md` #334, M2-F1): the
+  // whole `model` is a new object every render, and this component renders on every canvas selection.
+  const activityPanelModel = useActivityPanelModel(model);
   const [dialog, setDialog] = useState<PlanDialogKind | null>(null);
   // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
   // toggled from the toolbar's Legend control and rendered over the canvas below.
@@ -2301,7 +2308,7 @@ export function ToolbarPlanWorkspace({
                     />
                     <div style={{ height: panelHeight }} className="shrink-0">
                       <ActivityBottomPanel
-                        model={model}
+                        model={activityPanelModel}
                         onCollapse={collapse}
                         focusCollapseOnMount={interacted}
                       />
@@ -2356,7 +2363,7 @@ export function ToolbarPlanWorkspace({
                     and take every docked strip out of the accessibility tree. Without one,
                     `CanvasDock` renders in place — where those strips were before this epic, and
                     the right answer on a screen with no spare row to dock into. */}
-                  <ActivityBottomPanel model={model} hostsPlanSlots={false} />
+                  <ActivityBottomPanel model={activityPanelModel} hostsPlanSlots={false} />
                 </div>
               </>
             )}

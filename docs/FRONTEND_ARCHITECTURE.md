@@ -37,6 +37,9 @@ maintainability over short-term convenience.**
 | Icons        | Lucide (`lucide-react`)                          | —    |
 | Testing      | Vitest + Testing Library; Playwright (e2e)       | —    |
 
+One narrow exception to "no store installed": a per-instance `useSyncExternalStore` store for
+row-level volatile state, never a module singleton — see `docs/DECISIONS.md`, 2026-09-29.
+
 ## Folder structure
 
 A **feature-first** structure. Code is grouped by _what it does for the user_,
