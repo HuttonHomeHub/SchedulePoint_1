@@ -853,6 +853,94 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       expect((row?.projectFinish ?? '') > (movement?.baselineFinish ?? '')).toBe(true);
     });
 
+    /**
+     * A plan whose placed finish can move while its network finish does not (#405 (b)): a 10-day
+     * activity finishing in January, and a 1-day activity a planner has placed in March. Returns a
+     * function that re-places the second one, which changes where the last bar is DRAWN and nothing
+     * the logic computes.
+     */
+    async function placedPlan(actor: Actor, name: string) {
+      const planId = await createPlan(actor, name);
+      await addActivity(actor, planId, 'Network');
+      const placed = await addActivity(actor, planId, 'Placed', 1);
+      let version = placed.version;
+      const place = async (visualStart: string) => {
+        const res = await actor.agent
+          .patch(`/api/v1/organizations/acme/plans/${planId}/activities/placements`)
+          .send({
+            placements: [
+              {
+                id: placed.id,
+                version,
+                constraintType: null,
+                constraintDate: null,
+                visualStart,
+                laneIndex: null,
+              },
+            ],
+          })
+          .expect(200);
+        version = (res.body.data as Array<{ version: number }>)[0]?.version ?? version;
+        await recalculate(actor, planId);
+      };
+      await place('2026-03-02');
+      return { planId, place };
+    }
+
+    /**
+     * Capture a baseline. A fresh capture records the placement (`FULL`) — so the `NONE` case is
+     * built the only way one can exist today, as a baseline captured BEFORE placement was recorded:
+     * the level put back and the frozen placed finishes erased.
+     */
+    async function captureAs(actor: Actor, planId: string, level: 'NONE' | 'FULL') {
+      const res = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Contract award' })
+        .expect(201);
+      const baselineId = res.body.data.id as string;
+      expect(res.body.data.placementSnapshotLevel).toBe('FULL');
+      if (level === 'NONE') {
+        await prisma.baselineActivity.updateMany({
+          where: { baselineId },
+          data: { placedStart: null, placedFinish: null, visualStart: null },
+        });
+        await prisma.baseline.update({
+          where: { id: baselineId },
+          data: { placementSnapshotLevel: 'NONE' },
+        });
+      }
+    }
+
+    it('reports movement when only the PLACED finish moved, against a placement-recording baseline', async () => {
+      const { actor } = await adminWithOrg();
+      const { planId, place } = await placedPlan(actor, 'Tower P');
+      await captureAs(actor, planId, 'FULL');
+
+      // The last bar is re-placed two weeks later; the network's own finish does not change.
+      await place('2026-03-16');
+
+      const row = standingFor(await fetchOverview(actor), planId);
+      expect(row?.projectFinish).toBe('2026-03-16');
+      expect(row?.baselineMovement).toMatchObject({
+        kind: 'MOVED',
+        baselineFinish: '2026-03-02',
+      });
+      expect((row?.baselineMovement as { workingDays: number }).workingDays).toBeGreaterThan(0);
+    });
+
+    it('still compares network finishes for a baseline that recorded no placement', async () => {
+      const { actor } = await adminWithOrg();
+      const { planId, place } = await placedPlan(actor, 'Tower Q');
+      await captureAs(actor, planId, 'NONE');
+
+      await place('2026-03-16');
+
+      // A NONE baseline froze only the network finish, and comparing today's PLACED finish against
+      // it would report the placement as slippage (the ADR-0025 Amendment 3 fallback, as #359).
+      const row = standingFor(await fetchOverview(actor), planId);
+      expect(row?.baselineMovement).toMatchObject({ kind: 'UNCHANGED' });
+    });
+
     it('omits a flag that is zero, and carries one that is not', async () => {
       const { actor } = await adminWithOrg();
       const healthy = await createPlan(actor, 'Tower E');

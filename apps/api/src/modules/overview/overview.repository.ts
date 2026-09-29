@@ -3,6 +3,7 @@ import type { PlanStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { expiredInvitationWhere, liveInvitationWhere } from '../invitations/invitation-predicates';
+import { placedFinishSql } from '../schedule/placed-finish';
 
 /**
  * A plan in the organisation, with the instant it was last touched by ANY of the three
@@ -92,11 +93,25 @@ export interface PlanStandingRow {
   status: PlanStatus;
   scheduleComputedAt: Date | null;
   editedSinceCalculated: boolean;
-  /** `MAX(early_finish)`. Null when the plan has no active activities, or was never calculated. */
+  /**
+   * The PLACED finish (`placedFinishSql`, ADR-0148) — the same figure `summarise` states. Null when
+   * the plan has no active activities, or was never calculated.
+   */
   projectFinish: string | null;
   activityCount: number;
-  /** The active baseline's frozen project finish, if there is an active baseline carrying one. */
+  /**
+   * The active baseline's finish on ITS basis (#405 (b)): the latest frozen `placed_finish` for a
+   * `FULL` baseline, the frozen `captured_project_finish` for one that recorded no placement. Null
+   * when there is no active baseline, or it froze no finish on that basis.
+   */
   baselineFinish: string | null;
+  /**
+   * The live finish on the SAME basis as `baselineFinish` — the placed finish against a `FULL`
+   * baseline, `MAX(early_finish)` against any other — so the movement compares like with like.
+   * Differs from `projectFinish` exactly when a bar is drawn later than the network finishes and
+   * the baseline recorded no placement.
+   */
+  movementFinish: string | null;
   baselineName: string | null;
   /** The factor that baseline froze, for converting a working-time walk into days (ADR-0068). */
   baselineHoursPerDayMinutes: number | null;
@@ -215,9 +230,18 @@ export class OverviewRepository {
    *
    * **One query for N plans, never one per plan.** The aggregate is grouped over `activities` and
    * the baseline is a `LEFT JOIN LATERAL … LIMIT 1` — a one-row-per-plan indexed lookup on
-   * `uq_baselines_plan_active`, never a read of `baseline_activities`. `captured_project_finish` is
-   * a denormalised plan-level date whose own schema comment says it exists so a list renders
-   * without loading snapshot rows; this is that reader.
+   * `uq_baselines_plan_active`. `captured_project_finish` is a denormalised plan-level date whose
+   * own schema comment says it exists so a list renders without loading snapshot rows; this is that
+   * reader, and it stays the whole story for a baseline that recorded no placement
+   * (`placement_snapshot_level` NONE — a baseline captured before placement was recorded).
+   *
+   * **A `FULL` baseline is the one case that does read `baseline_activities`** (#405 (b)): its finish
+   * is `MAX(placed_finish)` over its own snapshot rows, because the live finish it is compared with
+   * is the PLACED one (ADR-0148) and a placed date set against a frozen early date would report a
+   * placement as slippage. That read is a `CASE` arm evaluated only for a `FULL` baseline, and it is
+   * served by the `(baseline_id, source_activity_id)` index's `baseline_id` prefix — one baseline
+   * per plan, the plan list capped at eight. Measured 2026-09-29 on 2,049 snapshot rows (scratch
+   * Postgres 16): a Bitmap Index Scan on that prefix, 4.7 ms execution.
    *
    * **The counting columns are read exactly as `ScheduleRepository.summarise` reads them**
    * (`schedule.repository.ts:375-416`) — the same `COUNT(*) FILTER (WHERE …)` over the same
@@ -250,6 +274,7 @@ export class OverviewRepository {
         project_finish: string | null;
         activity_count: bigint;
         baseline_finish: string | null;
+        movement_finish: string | null;
         baseline_name: string | null;
         baseline_hours_per_day_minutes: number | null;
         plan_calendar_id: string | null;
@@ -274,12 +299,19 @@ export class OverviewRepository {
                COALESCE(d.at, 'epoch'::timestamptz)
              )                      AS last_touched_at,
              to_char(a.project_finish, 'YYYY-MM-DD') AS project_finish,
+             -- The live side of the baseline comparison, on the BASELINE's basis: placed against a
+             -- placement-recording baseline, network against one that froze only the network.
+             to_char(
+               CASE WHEN b.placement_snapshot_level = 'FULL'::"PlacementSnapshotLevel"
+                    THEN a.project_finish ELSE a.network_finish END,
+               'YYYY-MM-DD'
+             )                      AS movement_finish,
              COALESCE(a.activity_count, 0)             AS activity_count,
              COALESCE(a.constraint_violated_count, 0)  AS constraint_violated_count,
              COALESCE(a.loe_no_span_count, 0)          AS loe_no_span_count,
              COALESCE(a.resource_driver_missing_count, 0) AS resource_driver_missing_count,
              COALESCE(a.visual_conflict_count, 0)      AS visual_conflict_count,
-             to_char(b.captured_project_finish, 'YYYY-MM-DD') AS baseline_finish,
+             to_char(b.compared_finish, 'YYYY-MM-DD') AS baseline_finish,
              b.name                 AS baseline_name,
              b.hours_per_day_minutes AS baseline_hours_per_day_minutes
         FROM plans p
@@ -287,7 +319,8 @@ export class OverviewRepository {
         JOIN clients  cl ON cl.id = pr.client_id
         LEFT JOIN LATERAL (
           SELECT COUNT(*)                                        AS activity_count,
-                 MAX(act.early_finish)                           AS project_finish,
+                 MAX(${placedFinishSql('act')})                  AS project_finish,
+                 MAX(act.early_finish)                           AS network_finish,
                  MAX(act.updated_at)                             AS last_activity_at,
                  COUNT(*) FILTER (WHERE act.constraint_violated)  AS constraint_violated_count,
                  COUNT(*) FILTER (WHERE act.loe_no_span)          AS loe_no_span_count,
@@ -308,7 +341,15 @@ export class OverviewRepository {
         -- LIMIT is belt-and-braces so a future relaxation degrades to "one of them" rather than to
         -- duplicate plan rows silently doubling the section.
         LEFT JOIN LATERAL (
-          SELECT bl.name, bl.captured_project_finish, bl.hours_per_day_minutes
+          SELECT bl.name, bl.hours_per_day_minutes, bl.placement_snapshot_level,
+                 -- The baseline's finish on ITS basis. The CASE arm that reads the snapshot runs
+                 -- only for a FULL baseline, so a NONE one (captured before placement was
+                 -- recorded) never touches baseline_activities.
+                 CASE WHEN bl.placement_snapshot_level = 'FULL'::"PlacementSnapshotLevel"
+                      THEN (SELECT MAX(ba.placed_finish)
+                              FROM baseline_activities ba
+                             WHERE ba.baseline_id = bl.id AND ba.deleted_at IS NULL)
+                      ELSE bl.captured_project_finish END AS compared_finish
             FROM baselines bl
            WHERE bl.plan_id = p.id AND bl.is_active AND bl.deleted_at IS NULL
            LIMIT 1
@@ -332,6 +373,7 @@ export class OverviewRepository {
       projectFinish: row.project_finish,
       activityCount: Number(row.activity_count),
       baselineFinish: row.baseline_finish,
+      movementFinish: row.movement_finish,
       baselineName: row.baseline_name,
       baselineHoursPerDayMinutes: row.baseline_hours_per_day_minutes,
       planCalendarId: row.plan_calendar_id,

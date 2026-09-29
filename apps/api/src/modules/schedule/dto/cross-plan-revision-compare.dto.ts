@@ -16,6 +16,7 @@ import type {
   RevisionChangeClass,
   RevisionNotAssessableReason,
   RevisionSettingsVerdict,
+  VarianceBasis,
 } from '@repo/types';
 import {
   REVISION_FREE_CHANGE_CLASSES,
@@ -25,6 +26,7 @@ import {
 } from '@repo/types';
 
 import {
+  DATES_BASIS_NOTE,
   RevisionCompletionDto,
   RevisionGhostBarDto,
   RevisionLinkChangeDto,
@@ -197,10 +199,14 @@ export class CrossPlanMovedActivityDto implements CrossPlanMovedActivity {
   })
   floatMovementDays!: number | null;
 
-  @ApiProperty({ nullable: true, type: String }) fromEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String }) toEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String }) fromEarlyFinish!: string | null;
-  @ApiProperty({ nullable: true, type: String }) toEarlyFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromEarlyStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toEarlyStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromEarlyFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toEarlyFinish!: string | null;
 
   @ApiProperty({
     description:
@@ -238,8 +244,22 @@ export class CrossPlanChangeRowDto implements CrossPlanChangeRow {
 
   @ApiProperty({ nullable: true, type: String }) code!: string | null;
   @ApiProperty() name!: string;
-  @ApiProperty({ nullable: true, type: String }) from!: string | null;
-  @ApiProperty({ nullable: true, type: String }) to!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'How the OLD side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
+      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+  })
+  from!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'How the NEW side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
+      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+  })
+  to!: string | null;
   @ApiProperty({ nullable: true, type: String }) orderKey!: string | null;
   @ApiProperty() existsLive!: boolean;
 }
@@ -325,6 +345,17 @@ export class CrossPlanCriticalPathDeltaDto implements CrossPlanCriticalPathDelta
 }
 
 export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
+  @ApiProperty({
+    enum: ['PLACED', 'NETWORK'],
+    description:
+      'Which dates every date-bearing figure compares, chosen once per read: `PLACED` when every ' +
+      'baseline side recorded where its bars were placed, `NETWORK` (earliest dates on both ' +
+      'sides) when any baseline side predates that record; two live plans have no baseline side ' +
+      'and are `PLACED`. The `Early*` fields carry whichever dates this states. Criticality and ' +
+      'float are network quantities on either basis.',
+  })
+  datesBasis!: VarianceBasis;
+
   @ApiProperty({ type: CrossPlanRevisionPlanDto }) fromPlan!: CrossPlanRevisionPlanDto;
 
   @ApiProperty({

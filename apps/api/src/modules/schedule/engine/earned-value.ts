@@ -100,7 +100,11 @@ export function rollupPhysicalPercent(
  * One activity's Earned-Value inputs. `percentComplete` is the M2 **schedule** %-complete (the
  * `DURATION` source); `physicalPercentComplete` is the ADR-0042 **performance** measure (the `PHYSICAL`
  * source). Baseline fields carry the ADR-0025 cost-baseline snapshot (null = missing → the live-budget
- * PV fallback); `earlyStart`/`earlyFinish` are the persisted CPM dates used for that fallback.
+ * PV fallback); `liveStart`/`liveFinish` are the persisted span used for that fallback.
+ *
+ * **The function does not know which span it was handed** (ADR-0042 amendment): the caller chooses one
+ * basis for the whole read — placed or early — and maps both the frozen and the live anchor onto it.
+ * The names say so, because a field called "early" holding a placed date is a silent redefinition.
  */
 export interface EvActivityInput {
   activityId: string;
@@ -132,9 +136,11 @@ export interface EvActivityInput {
    */
   accrualType?: AccrualType;
   assignments: EvAssignmentInput[];
-  /** Cost-baseline start (`YYYY-MM-DD`); used for PV only when both baseline dates are present. */
+  /**
+   * The span the baseline froze, on the read's basis (`YYYY-MM-DD`); used for PV only when both dates
+   * are present. Named for the baseline, not the basis: the caller says which span it holds.
+   */
   baselineStart: string | null;
-  /** Cost-baseline finish (`YYYY-MM-DD`); used for PV only when both baseline dates are present. */
   baselineFinish: string | null;
   /** Cost-baseline budgeted cost (minor units); null = missing → PV falls back to live BAC + a plan flag. */
   baselineBudgetedCost: number | null;
@@ -145,10 +151,12 @@ export interface EvActivityInput {
    * approximate path is unchanged rather than re-derived.
    */
   baselineCostComponents?: EvBaselineCostComponents;
-  /** Live early start (`YYYY-MM-DD`) — the PV time-phasing anchor when no cost baseline exists. */
-  earlyStart: string | null;
-  /** Live early finish (`YYYY-MM-DD`) — the PV time-phasing anchor when no cost baseline exists. */
-  earlyFinish: string | null;
+  /**
+   * The live span on the same basis as the baseline fields (`YYYY-MM-DD`) — the PV time-phasing anchor
+   * when the baseline has no dates for this activity, or none exists.
+   */
+  liveStart: string | null;
+  liveFinish: string | null;
 }
 
 /** The full input to {@link computeEarnedValue}. */
@@ -575,8 +583,8 @@ export function computeEarnedValue(input: EvInput): PlanEarnedValueResult {
     if (hasAllZeroWeightSteps(activity)) stepWeightZeroCount += 1;
 
     const useBaseline = activity.baselineStart !== null && activity.baselineFinish !== null;
-    const start = useBaseline ? activity.baselineStart : activity.earlyStart;
-    const finish = useBaseline ? activity.baselineFinish : activity.earlyFinish;
+    const start = useBaseline ? activity.baselineStart : activity.liveStart;
+    const finish = useBaseline ? activity.baselineFinish : activity.liveFinish;
     if (activity.baselineBudgetedCost === null) costBaselineMissing = true;
     const pvCost = activity.baselineBudgetedCost ?? bac;
     const plannedPercent = leafPlannedPercent(activity, start, finish, dataDate, calendar);

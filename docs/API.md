@@ -127,7 +127,7 @@ every failure by `AllExceptionsFilter`:
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
 | 410  | Gone — the resource existed but has expired (e.g. a token) |
-| 413  | Payload too large — upload exceeds the boundary cap        |
+| 413  | Payload too large — body exceeds the boundary cap (below)  |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
@@ -139,6 +139,19 @@ brings a cascade back, an activation moves a per-plan invariant and reports a co
 cannot derive). A sub-action that flips an **orthogonal lifecycle flag** to a value the caller
 already knows returns `204` (`…/archive`, `…/unarchive`, ADR-0053 §4) — the body would carry only
 the incremented `version`, and the list the caller is looking at is invalidated either way.
+
+**413 and the JSON body cap.** The body parser runs before any guard, so the limit is chosen by
+path and by whether credentials are _presented_ (a session cookie or an `Authorization` header —
+presence only; the guard alone decides whether they are good). A request under
+`/api/v1/organizations` that presents credentials is read up to **512 KB**, sized so the four
+`@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit (the widest,
+2,000 placements, is about 356 KB). **Everything else is 64 KB**: the routes a caller with no session
+can post to (`csp-report`, `invitations/preview`), guest `share` reads, an anonymous request under
+`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff`. An over-cap
+body answers `413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered
+an opaque 500. Because the parser cannot validate a credential, a junk cookie still buys the 512 KB
+read before the 401. Multipart uploads are a separate cap (the interchange upload cap, see
+Interchange below).
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
@@ -301,6 +314,26 @@ will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are
 under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
 the null.
 
+### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
+
+`GET …/plans/:planId/schedule/earned-value` phases Planned Value on **one basis per read**, chosen
+from the active baseline's `placementSnapshotLevel`, and the response does not name it (its shape is
+unchanged). The same rule as variance above, with one difference: there is no `null` case, because
+the live-budget fallback always phases on something.
+
+- **Placed** — no active baseline, or `placementSnapshotLevel: 'FULL'`: the frozen
+  `placedStart`/`placedFinish` from the baseline, and the live `visualEffectiveStart`/
+  `visualEffectiveFinish` (ADR-0148) for an activity the baseline does not hold, or holds without a
+  placed date. It never falls back to an early date.
+- **Network** — `placementSnapshotLevel: 'NONE'`: the frozen `baselineStart`/`baselineFinish` and the
+  live `earlyStart`/`earlyFinish`, exactly as before. A baseline that never recorded a placement cannot
+  be backfilled with one.
+
+`pv`, `sv` and `spi` follow the basis, and so do `eac`, `etc` and `vac` under
+`eacMethod = CPI_TIMES_SPI` (the only method that reads SPI). `bac`, `ev`, `ac`, `cv`, `cpi` and
+`tcpi` read no date and do not change. A plan with no placement reads byte-identically on either
+basis. The resource histogram is a different read and still spreads units over the early span.
+
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
 `placementNotAssessableReason` — `null` when both sides recorded a placement, `NOT_SNAPSHOTTED` when
@@ -310,6 +343,24 @@ put it, so every baseline captured before that change is `placement_snapshot_lev
 reported whether or not either plan happens to hold a placement, because a reason that appeared only
 when there was something to compare could not separate "nobody looked" from "we looked and there was
 nothing".
+
+**Revision comparison states which dates it compared — `datesBasis`** (`#405` (a), ADR-0025
+Amendment 3), on both routes and always present. `PLACED` when every baseline side is
+`placement_snapshot_level: FULL`: frozen `placedStart`/`placedFinish` against the live
+effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, the ghosts, the moved
+rows' `from`/`toEarly*` and the completion's finish dates). `NETWORK` when any baseline side is
+`NONE`: earliest dates on both sides, exactly as before, and it is a property of the **pair** — one
+short side makes the whole read `NETWORK` rather than mixing two questions in one report. It is
+chosen once per read, never per row. It sits in `data` (the revision comparison has no `meta`) and
+is deliberately named `datesBasis` rather than `basis`, which is the variance read's `meta.basis`.
+The `Early*` field names are unchanged and carry whichever dates `datesBasis` states; criticality
+and float stay network quantities on either basis. Two live plans (cross-plan) have no baseline
+side and are `PLACED`. **A `NETWORK` read is not comparable with an earlier `PLACED` read of the
+same pair**: the basis can flip when a baseline is re-captured, so compare `datesBasis` before
+comparing figures across reads. On `PLACED` the live side reads `visualEffectiveStart`/`Finish`
+and falls back to the early date for a row that has none; that fallback is kept rather than proved
+unreachable, because nothing here establishes that a live row always carries an effective-Visual
+span.
 
 ### The placement migration report (one-planning-surface M-I)
 
@@ -1240,8 +1291,10 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   (`docs/DECISIONS.md`, 2026-09-16).
 
   It covers exactly the plans `recentlyChanged` covers, and reads **only columns the last
-  recalculation persisted**: `MAX(early_finish)` for the finish, the flag counts, and the active
-  baseline's frozen finish. **The CPM engine is not invoked** — `computeSchedule` is not imported by
+  recalculation persisted**: the **placed** finish (ADR-0148) for `projectFinish`, the flag counts, and the active
+  baseline's frozen finish. `baselineMovement` compares the two **on the baseline's basis**
+  (`docs/TECH_DEBT.md` #405 (b)): placed against the latest frozen `placed_finish` for a
+  `placementSnapshotLevel: FULL` baseline, earliest against the frozen early finish for a `NONE` one. **The CPM engine is not invoked** — `computeSchedule` is not imported by
   the read or by the pure derivation beside it, pinned by
   `modules/overview/plan-standing-engine-free.structural.spec.ts` — so the ADR-0034 recalculation
   parity gate is untouched by construction.
@@ -1501,6 +1554,9 @@ controller's 30 / 60 s per handler.
   `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
   roll-up carries `externalDrivenCount` (how many activities an external bound
   drove) — engine-derived on a recalculation.
+- `projectFinish` — on `GET …/schedule/summary`, the recalculate response and a share link's
+  `GET /share/plan` alike — is the **placed** finish: the latest drawn finish, which a hand-placed
+  bar can push past the network's earliest finish (ADR-0148, `docs/TECH_DEBT.md` #404).
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a
@@ -1517,8 +1573,8 @@ controller's 30 / 60 s per handler.
   and **`accrualType`** (`START` / `UNIFORM` default / `END`, ADR-0044 §32 /
   ADR-0035 §32). `accrualType` governs **when** the activity's cost is recognised
   in the `GET …/schedule/earned-value` read's Planned-Value time-phasing — START
-  at its start, END at its finish, UNIFORM linearly — and **never changes a CPM
-  date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
+  at its placed start, END at its placed finish, UNIFORM linearly between them —
+  and **never changes a CPM date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing on the same span. None of these
   feed the scheduler.
 - An activity's **weighted progress steps** (ADR-0044 §2 / ADR-0035 §33) are a
   bulk-replace sub-resource: `GET …/activities/:activityId/steps` lists the active

@@ -39,6 +39,7 @@ function standingRow(overrides: Partial<PlanStandingRow> = {}): PlanStandingRow 
     scheduleComputedAt: new Date('2026-08-18T09:41:07.221Z'),
     editedSinceCalculated: false,
     projectFinish: '2026-10-09',
+    movementFinish: '2026-10-09',
     activityCount: 24,
     baselineFinish: '2026-09-25',
     baselineName: 'Contract award',

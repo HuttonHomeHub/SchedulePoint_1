@@ -3,7 +3,9 @@ import type {
   ConstraintType,
   DependencyType,
   LagCalendarSource,
+  PlacementSnapshotLevel,
 } from '@prisma/client';
+import type { VarianceBasis } from '@repo/types';
 
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 
@@ -37,6 +39,18 @@ import type { RevisionEdge, RevisionRow } from './revision-delta';
 export const revisionDate = (value: Date | null): string | null =>
   value ? formatCalendarDate(value) : null;
 
+/**
+ * **Which dates a comparison reads — chosen ONCE per read, from the frozen sides' placement level,
+ * and never per row** (ADR-0025 Amendment 3; `varianceBasisFor` is the same rule for the variance
+ * read). `PLACED` only when every frozen side recorded where its bars were placed; one side that
+ * predates the record makes the whole pair `NETWORK`, because comparing a placed span on one side
+ * with a network span on the other would report every placement as a move. A read with no frozen
+ * side at all (two live plans, cross-plan) has nothing to fall back from and is `PLACED`.
+ */
+export const revisionDatesBasis = (
+  frozenLevels: readonly PlacementSnapshotLevel[],
+): VarianceBasis => (frozenLevels.every((level) => level === 'FULL') ? 'PLACED' : 'NETWORK');
+
 /** The columns a snapshot row must carry for {@link frozenRevisionSide} to project it. */
 export interface FrozenRevisionRowInput {
   readonly sourceActivityId: string;
@@ -48,6 +62,8 @@ export interface FrozenRevisionRowInput {
   readonly totalFloat: number | null;
   readonly baselineStart: Date | null;
   readonly baselineFinish: Date | null;
+  readonly placedStart: Date | null;
+  readonly placedFinish: Date | null;
   readonly laneIndex: number | null;
   readonly parentId: string | null;
   readonly calendarId: string | null;
@@ -71,6 +87,8 @@ export interface LiveRevisionRowInput {
   readonly totalFloat: number | null;
   readonly earlyStart: Date | null;
   readonly earlyFinish: Date | null;
+  readonly visualEffectiveStart: Date | null;
+  readonly visualEffectiveFinish: Date | null;
   readonly laneIndex: number;
   readonly parentId: string | null;
   readonly calendarId: string | null;
@@ -90,7 +108,10 @@ export interface LiveRevisionRowInput {
  * them is NULL, and nothing here interprets that. Only the capture-level discriminator is entitled
  * to, and it lives at the seam.
  */
-export const frozenRevisionSide = (rows: readonly FrozenRevisionRowInput[]): RevisionRow[] =>
+export const frozenRevisionSide = (
+  rows: readonly FrozenRevisionRowInput[],
+  basis: VarianceBasis,
+): RevisionRow[] =>
   rows.map((r) => ({
     activityId: r.sourceActivityId,
     code: r.code,
@@ -99,8 +120,11 @@ export const frozenRevisionSide = (rows: readonly FrozenRevisionRowInput[]): Rev
     durationMinutes: r.durationMinutes,
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
-    earlyStart: revisionDate(r.baselineStart),
-    earlyFinish: revisionDate(r.baselineFinish),
+    // `earlyStart`/`earlyFinish` carry the BASIS's dates — placed on `PLACED`, earliest on
+    // `NETWORK` — and the read states which in `datesBasis`. Never chosen per row. Renaming these
+    // to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
+    earlyStart: revisionDate(basis === 'PLACED' ? r.placedStart : r.baselineStart),
+    earlyFinish: revisionDate(basis === 'PLACED' ? r.placedFinish : r.baselineFinish),
     laneIndex: r.laneIndex,
     parentId: r.parentId,
     calendarId: r.calendarId,
@@ -113,8 +137,15 @@ export const frozenRevisionSide = (rows: readonly FrozenRevisionRowInput[]): Rev
     actualFinish: revisionDate(r.actualFinish),
   }));
 
-/** A **live** side — the plan's own persisted columns. */
-export const liveRevisionSide = (rows: readonly LiveRevisionRowInput[]): RevisionRow[] =>
+/**
+ * A **live** side — the plan's own persisted columns. On `PLACED` the effective-Visual span, which
+ * is where the bar is drawn (ADR-0148), falling back to the earliest date only for a row no
+ * recalculation has written one for.
+ */
+export const liveRevisionSide = (
+  rows: readonly LiveRevisionRowInput[],
+  basis: VarianceBasis,
+): RevisionRow[] =>
   rows.map((r) => ({
     activityId: r.id,
     code: r.code,
@@ -123,8 +154,12 @@ export const liveRevisionSide = (rows: readonly LiveRevisionRowInput[]): Revisio
     durationMinutes: r.durationMinutes,
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
-    earlyStart: revisionDate(r.earlyStart),
-    earlyFinish: revisionDate(r.earlyFinish),
+    earlyStart: revisionDate(
+      basis === 'PLACED' ? (r.visualEffectiveStart ?? r.earlyStart) : r.earlyStart,
+    ),
+    earlyFinish: revisionDate(
+      basis === 'PLACED' ? (r.visualEffectiveFinish ?? r.earlyFinish) : r.earlyFinish,
+    ),
     laneIndex: r.laneIndex,
     parentId: r.parentId,
     calendarId: r.calendarId,

@@ -336,6 +336,20 @@ describe('ScheduleService.recalculate', () => {
     expect(summary.projectFinish).toBe('2026-01-02');
   });
 
+  it('states the placed finish, not the network finish, when a hand-placed bar ends later (#404, ADR-0148)', async () => {
+    // A is a 3-day task on the data date, so the NETWORK finish is 2026-01-03. B is hand-placed on
+    // 2026-01-20 — its drawn bar ends 2026-01-20, so the header must say that, or it states a finish
+    // earlier than the last bar on screen.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3),
+      activityRow('B', 1, { visualStart: new Date('2026-01-20') }),
+    ]);
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    expect(results.find((r) => r.activityId === 'B')!.visualEffectiveFinish).toBe('2026-01-20');
+    expect(summary.projectFinish).toBe('2026-01-20');
+  });
+
   it('threads the plan’s progress recalc mode into the engine (M2)', async () => {
     // P (in progress, 5 days left) FS→ B (in progress out of sequence, 2 days left). Under
     // PROGRESS_OVERRIDE B ignores the incomplete P and its remaining runs from the data date.
@@ -1205,6 +1219,7 @@ describe('ScheduleService.getEarnedValue', () => {
   it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
     schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
       costSnapshotLevel: 'ACTIVITY',
+      placementSnapshotLevel: 'NONE',
       activities: [
         {
           sourceActivityId: 'act-1',
@@ -1219,6 +1234,117 @@ describe('ScheduleService.getEarnedValue', () => {
     const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
     // A snapshot cost is present for every leaf → the live-budget fallback flag is off.
     expect(result.costBaselineMissing).toBe(false);
+  });
+
+  describe('PV phases on one basis per read, chosen from the baseline’s placement level (#405 (c))', () => {
+    // UNIFORM, £10,000.00 over ten-day spans, data date D+10, with the four anchors set eight, six,
+    // four and two days before it: frozen early D+2, frozen placed D+4, live early D+6, live placed
+    // D+8. Each anchor gives a different PV, so a read that switches only one of them, or the wrong
+    // one, lands on a different number.
+    const at = (day: number) => new Date(Date.UTC(2026, 0, 1 + day));
+    const FROZEN_EARLY = 800000;
+    const FROZEN_PLACED = 600000;
+    const LIVE_EARLY = 400000;
+    const LIVE_PLACED = 200000;
+
+    beforeEach(() => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: at(10) }));
+      schedule.loadEarnedValueActivities.mockResolvedValue([
+        {
+          id: 'act-1',
+          type: 'TASK',
+          parentId: null,
+          percentCompleteType: 'DURATION',
+          percentComplete: 0,
+          physicalPercentComplete: null,
+          accrualType: 'UNIFORM',
+          steps: [],
+          budgetedExpense: 1000000n,
+          actualExpense: null,
+          earlyStart: at(6),
+          earlyFinish: at(16),
+          visualEffectiveStart: at(8),
+          visualEffectiveFinish: at(18),
+          assignments: [],
+        },
+      ]);
+    });
+
+    const snapshot = (
+      placementSnapshotLevel: 'FULL' | 'NONE',
+      placed: { placedStart: Date | null; placedFinish: Date | null } = {
+        placedStart: at(4),
+        placedFinish: at(14),
+      },
+    ) => ({
+      costSnapshotLevel: 'ACTIVITY',
+      placementSnapshotLevel,
+      activities: [
+        {
+          sourceActivityId: 'act-1',
+          budgetedCost: 1000000n,
+          budgetedExpense: 1000000n,
+          baselineStart: at(2),
+          baselineFinish: at(12),
+          ...placed,
+        },
+      ],
+      assignments: [],
+    });
+
+    const pv = async () =>
+      (await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID)).total.pv;
+
+    it('U1: a FULL baseline phases on the frozen placed span, not on any of the other three', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('FULL'));
+      const value = await pv();
+      expect(value).toBe(FROZEN_PLACED);
+      expect([FROZEN_EARLY, LIVE_EARLY, LIVE_PLACED]).not.toContain(value);
+    });
+
+    it('U2a: a FULL row with no placed dates falls back to the live PLACED span, never an early one', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
+        snapshot('FULL', { placedStart: null, placedFinish: null }),
+      );
+      expect(await pv()).toBe(LIVE_PLACED);
+    });
+
+    it.each([
+      ['start', { placedStart: null, placedFinish: at(14) }],
+      ['finish', { placedStart: at(4), placedFinish: null }],
+    ])(
+      'U2b: a FULL row missing only its placed %s falls back to the live PLACED span, not a mix',
+      async (_which, placed) => {
+        schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('FULL', placed));
+        expect(await pv()).toBe(LIVE_PLACED);
+      },
+    );
+
+    it('U2c: a NONE baseline phases on its frozen early span, ignoring any placement', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('NONE'));
+      expect(await pv()).toBe(FROZEN_EARLY);
+    });
+
+    it('U2d: on a NONE baseline an activity added after capture falls back to its live EARLY span', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+        ...snapshot('NONE'),
+        activities: [],
+      });
+      expect(await pv()).toBe(LIVE_EARLY);
+    });
+
+    it('U2e: on a FULL baseline an activity added after capture falls back to its live PLACED span', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+        ...snapshot('FULL'),
+        activities: [],
+      });
+      expect(await pv()).toBe(LIVE_PLACED);
+    });
+
+    it('U2f: with no active baseline the live-budget PV phases on the live placed span', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(null);
+      expect(await pv()).toBe(LIVE_PLACED);
+    });
   });
 
   describe('the cost-snapshot level decides the PV split, and a row count never does', () => {
@@ -1256,6 +1382,7 @@ describe('ScheduleService.getEarnedValue', () => {
       assignments: unknown[] = [],
     ) => ({
       costSnapshotLevel,
+      placementSnapshotLevel: 'NONE',
       activities: [
         {
           sourceActivityId: 'act-1',

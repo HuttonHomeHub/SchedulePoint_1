@@ -1174,10 +1174,13 @@ export function TsldPanel({
         describeActivity(a, {
           overlapsInLane: overlap.get(a.id) ?? false,
           withCodes: viewToggles.activityCodes ?? false,
+          // The spoken dates must be the drawn ones: `describeActivity` no longer chooses a basis,
+          // so omitting this speaks placed dates under the read-only Late overlay (#402).
+          barDateSource,
         }),
       ]),
     );
-  }, [activities, renderActivities, viewToggles.activityCodes]);
+  }, [activities, renderActivities, viewToggles.activityCodes, barDateSource]);
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when

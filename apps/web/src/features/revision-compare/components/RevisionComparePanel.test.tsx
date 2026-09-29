@@ -47,6 +47,7 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
   return {
     planId: 'p1',
     planName: 'Riverside',
+    datesBasis: 'PLACED',
     from: {
       kind: 'BASELINE',
       id: 'b1',

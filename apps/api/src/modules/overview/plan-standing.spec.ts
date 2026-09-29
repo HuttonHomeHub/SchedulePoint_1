@@ -7,6 +7,7 @@ function row(over: Partial<Parameters<typeof baselineMovementOf>[0]> = {}) {
   return {
     activityCount: 3,
     projectFinish: '2026-02-20',
+    movementFinish: '2026-02-20',
     baselineFinish: '2026-02-20',
     baselineName: 'Contract award',
     baselineHoursPerDayMinutes: 1440,
@@ -16,7 +17,9 @@ function row(over: Partial<Parameters<typeof baselineMovementOf>[0]> = {}) {
 
 describe('baselineMovementOf', () => {
   it('reports a later finish as MOVED, carrying the baseline it moved against', () => {
-    const movement = baselineMovementOf(row({ projectFinish: '2026-03-20' }));
+    const movement = baselineMovementOf(
+      row({ projectFinish: '2026-03-20', movementFinish: '2026-03-20' }),
+    );
 
     expect(movement).toEqual({
       kind: 'MOVED',
@@ -29,7 +32,9 @@ describe('baselineMovementOf', () => {
   it('signs an earlier finish negative rather than reporting its magnitude', () => {
     // A plan that has come IN is news too, and `Math.abs` here would report it as a slip. The
     // direction lives in the number; the word that renders it is the client's.
-    const movement = baselineMovementOf(row({ projectFinish: '2026-02-06' }));
+    const movement = baselineMovementOf(
+      row({ projectFinish: '2026-02-06', movementFinish: '2026-02-06' }),
+    );
 
     expect(movement).toMatchObject({ kind: 'MOVED', workingDays: -14 });
   });
@@ -52,7 +57,7 @@ describe('baselineMovementOf', () => {
    */
   it.each([
     ['PLAN_EMPTY', { activityCount: 0 }],
-    ['PLAN_NOT_SCHEDULED', { projectFinish: null }],
+    ['PLAN_NOT_SCHEDULED', { projectFinish: null, movementFinish: null }],
     ['NO_BASELINE', { baselineName: null, baselineFinish: null }],
     ['BASELINE_HAS_NO_FINISH', { baselineFinish: null }],
   ] as const)('reports %s, and never a number', (reason, over) => {
@@ -71,11 +76,21 @@ describe('baselineMovementOf', () => {
       baselineMovementOf({
         activityCount: 0,
         projectFinish: null,
+        movementFinish: null,
         baselineFinish: null,
         baselineName: null,
         baselineHoursPerDayMinutes: null,
       }),
     ).toEqual({ kind: 'NOT_ASSESSABLE', reason: 'PLAN_EMPTY' });
+  });
+
+  it('measures the movement on movementFinish, not on the displayed placed finish (#405 (b))', () => {
+    // A NONE baseline froze the network finish, so the live side is the network finish even though
+    // the row DISPLAYS a later placed one; comparing the displayed figure would report a placement
+    // as slippage.
+    expect(
+      baselineMovementOf(row({ projectFinish: '2026-03-20', movementFinish: '2026-02-20' })),
+    ).toMatchObject({ kind: 'UNCHANGED' });
   });
 
   it('measures in the injected frame, not in calendar days', () => {
@@ -90,7 +105,10 @@ describe('baselineMovementOf', () => {
     };
 
     expect(
-      baselineMovementOf({ ...row({ projectFinish: '2026-03-20' }) }, eightHourWeek),
+      baselineMovementOf(
+        { ...row({ projectFinish: '2026-03-20', movementFinish: '2026-03-20' }) },
+        eightHourWeek,
+      ),
     ).toMatchObject({ kind: 'MOVED', workingDays: 20 });
   });
 });

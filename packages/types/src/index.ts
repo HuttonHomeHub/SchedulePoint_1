@@ -1536,8 +1536,10 @@ export interface BaselineDetail extends BaselineSummary {
  * {@link PlanVarianceSummary.basis}. On `basis: 'PLACED'` they compare the frozen
  * placed span against the live placed span (where the bars are drawn, ADR-0148); on
  * `basis: 'NETWORK'` they compare the frozen and live pure-network dates. The field
- * names do not change with the basis — a field named "early" holding placed dates
- * would be the silent redefinition ADR-0148 refused elsewhere.
+ * names do not change with the basis here, because they are basis-neutral
+ * (`start`/`finish`). The revision comparison is the exception: its `Early*` fields
+ * predate the placed basis and hold placed dates when `datesBasis` is `PLACED`;
+ * renaming them to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
  */
 export interface BaselineVarianceRow {
   /** The activity id — the live activity's id, or the baselined `sourceActivityId` for a removed row. */
@@ -3515,6 +3517,8 @@ export interface CrossPlanCriticalPathDelta extends Omit<
  * shading it, because the action does not apply to the object (ADR-0082).
  */
 export interface CrossPlanRevisionCompare {
+  /** Which dates this comparison reads — see {@link RevisionCompare.datesBasis}. */
+  readonly datesBasis: VarianceBasis;
   /** The OLD side's plan. */
   readonly fromPlan: CrossPlanRevisionPlan;
   /** The NEW side's plan — **the anchor**: the one the reader has open and the one ids resolve in. */
@@ -3542,6 +3546,17 @@ export interface CrossPlanRevisionCompare {
 export interface RevisionCompare {
   planId: string;
   planName: string;
+  /**
+   * Which dates every date-bearing figure below compares — chosen **once per read**, never per row
+   * (ADR-0025 Amendment 3; the variance read follows the same rule). `PLACED`: every frozen side
+   * recorded where its bars were placed, so placed spans are compared against the live
+   * effective-Visual span and a bar moved by placement alone is a move. `NETWORK`: some frozen side
+   * predates that record, so the only honest comparison is the network's earliest dates on both
+   * sides. It is a property of the PAIR, so a mixed pair is `NETWORK`. The `Early*` field names
+   * elsewhere in this response carry whichever dates this states; criticality and float are
+   * network quantities on either basis.
+   */
+  datesBasis: VarianceBasis;
   from: RevisionSide;
   to: RevisionSide;
   /**

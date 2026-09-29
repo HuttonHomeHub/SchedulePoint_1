@@ -115,7 +115,9 @@ near-identical cases inflate a mutation count without testing anything more.
 
 - When `REDATED` switches to the placed basis at M-F, `placementNotAssessableReason` is already
   there to gate it. It is the field that stops a placed-basis variance read reporting "unmoved"
-  against a baseline that never recorded a placement.
+  against a baseline that never recorded a placement. **Met by `#405` (a)**, not at M-F: `REDATED`,
+  the ghosts and the delta now compare placed spans when every baseline side is `FULL`, and fall
+  back to earliest-vs-earliest otherwise, stated per read as `datesBasis`.
 - The plan's second M-C-T2 risk — _a migrated plan (M-I) shows float variance against a
   pre-migration baseline; a basis change, not slippage_ — is **not** closed by this field and is not
   claimed to be. This says the placement is not comparable; it says nothing about float measured on

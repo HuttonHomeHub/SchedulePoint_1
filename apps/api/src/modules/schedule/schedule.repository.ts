@@ -8,6 +8,7 @@ import {
   type DependencyType,
   type LagCalendarSource,
   type PercentCompleteType,
+  type PlacementSnapshotLevel,
   type ResourceCurveType,
 } from '@prisma/client';
 
@@ -19,6 +20,7 @@ import { liveAssignmentWhere } from '../activities/live-assignment';
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import type { EngineEdgeResult, EngineResult } from './engine';
+import { placedFinishSql } from './placed-finish';
 
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
@@ -144,6 +146,9 @@ export interface EarnedValueActivityRow {
   actualExpense: bigint | null;
   earlyStart: Date | null;
   earlyFinish: Date | null;
+  /** The span as drawn (ADR-0148): where the bar is placed. Equal to the early span on an unplaced plan. */
+  visualEffectiveStart: Date | null;
+  visualEffectiveFinish: Date | null;
   assignments: {
     budgetedCost: bigint | null;
     actualCost: bigint;
@@ -186,6 +191,9 @@ export interface EarnedValueBaselineRow {
   budgetedExpense: bigint | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
+  /** The frozen placed span (ADR-0025 Amendment 3); null on a `NONE`-level baseline. */
+  placedStart: Date | null;
+  placedFinish: Date | null;
 }
 
 /**
@@ -207,6 +215,8 @@ export interface EarnedValueBaselineAssignmentRow {
  */
 export interface EarnedValueCostSnapshot {
   costSnapshotLevel: BaselineCostSnapshotLevel;
+  /** Whether capture froze the placed span; decides which span PV is phased on (ADR-0042 amendment). */
+  placementSnapshotLevel: PlacementSnapshotLevel;
   activities: EarnedValueBaselineRow[];
   assignments: EarnedValueBaselineAssignmentRow[];
 }
@@ -233,7 +243,7 @@ export interface ScheduleAggregate {
   selfOverAllocatedCount: number;
   /** Max inclusive leveled finish as `YYYY-MM-DD`; null when the plan does not level. */
   leveledProjectFinish: string | null;
-  /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
+  /** Max inclusive PLACED finish (`placedFinishSql`) as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
 
@@ -408,7 +418,9 @@ export class ScheduleRepository {
           THEN to_char(MAX(COALESCE(leveled_finish, early_finish)), 'YYYY-MM-DD')
           ELSE NULL
         END AS leveled_project_finish,
-        to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
+        -- The PLACED finish (ADR-0148, #404): where the last bar is drawn, which a hand-placed bar can
+        -- push past the network's early finish. One definition, shared with the landing.
+        to_char(MAX(${placedFinishSql()}), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
         AND organization_id = ${organizationId}::uuid
@@ -621,6 +633,8 @@ export class ScheduleRepository {
         actualExpense: true,
         earlyStart: true,
         earlyFinish: true,
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
@@ -697,7 +711,7 @@ export class ScheduleRepository {
   ): Promise<EarnedValueCostSnapshot | null> {
     const active = await db.baseline.findFirst({
       where: { organizationId, planId, isActive: true, deletedAt: null },
-      select: { id: true, costSnapshotLevel: true },
+      select: { id: true, costSnapshotLevel: true, placementSnapshotLevel: true },
     });
     if (!active) return null;
     const [activities, assignments] = await Promise.all([
@@ -709,6 +723,8 @@ export class ScheduleRepository {
           budgetedExpense: true,
           baselineStart: true,
           baselineFinish: true,
+          placedStart: true,
+          placedFinish: true,
         },
       }),
       db.baselineAssignment.findMany({
@@ -722,7 +738,12 @@ export class ScheduleRepository {
         },
       }),
     ]);
-    return { costSnapshotLevel: active.costSnapshotLevel, activities, assignments };
+    return {
+      costSnapshotLevel: active.costSnapshotLevel,
+      placementSnapshotLevel: active.placementSnapshotLevel,
+      activities,
+      assignments,
+    };
   }
 
   /**

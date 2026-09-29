@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { CriticalPathDefinition, Prisma, TotalFloatMode } from '@prisma/client';
+import type {
+  CriticalPathDefinition,
+  PlacementSnapshotLevel,
+  Prisma,
+  TotalFloatMode,
+} from '@prisma/client';
 import type {
   CrossPlanChangeReport,
   CrossPlanCorrelation,
@@ -58,6 +63,7 @@ import {
   frozenRevisionSide,
   liveRevisionEdges,
   liveRevisionSide,
+  revisionDatesBasis,
   revisionDate,
 } from '../baselines/revision-projections';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -113,6 +119,7 @@ import {
 import { computeHealthReport, healthActivityAssignmentFields } from './health/compute-health';
 import type { HealthActivityInput } from './health/compute-health';
 import { levelIfEnabled } from './level-if-enabled';
+import { placedProjectFinishOf } from './placed-finish';
 import {
   buildPlanCalendar,
   buildPlanCalendarOrReject,
@@ -576,7 +583,12 @@ export class ScheduleService {
         // plan row: `plan` was loaded before this transaction opened and a settings PATCH takes no
         // plan lock, so re-reading could stamp a rule this computation never used.
         await this.schedule.stampScheduleComputedAt(planId, graph.criticality, tx);
-        return summary;
+        // The response states the PLACED finish, as the summary read does (#404, ADR-0148) — the
+        // engine's own `projectFinish` is the network's, and a hand-placed bar can end after it.
+        return {
+          ...summary,
+          projectFinish: placedProjectFinishOf(results) ?? summary.projectFinish,
+        };
       });
     } catch (error) {
       // The engine's walk-time horizon guard is a user-caused, user-fixable state
@@ -1125,8 +1137,12 @@ export class ScheduleService {
    * Viewer/Contributor never reads commercially sensitive money). Resolves the org from the caller's
    * memberships (anti-IDOR) and asserts `cost:read` BEFORE any load; 404s if the plan is not in the
    * caller's org. It NEVER recomputes or mutates: no write lock, no `computeSchedule` — it reads the
-   * persisted `earlyStart`/`earlyFinish` and cost inputs, joins the active baseline's cost snapshot
-   * (live-budget fallback when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   * persisted span and cost inputs, joins the active baseline's cost snapshot (live-budget fallback
+   * when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   *
+   * PV is phased on **one basis for the whole read** (ADR-0042 amendment, ADR-0148): the placed span —
+   * frozen on a baseline that recorded one, live otherwise — or the early span against a baseline that
+   * never recorded a placement. The pure function does not know which it was handed.
    */
   async getEarnedValue(
     principal: Principal,
@@ -1148,6 +1164,7 @@ export class ScheduleService {
     // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
     // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
     const baselineById = new Map((snapshot?.activities ?? []).map((s) => [s.sourceActivityId, s]));
+    const basis = this.pvBasisFor(snapshot);
     const componentsById = frozenCostComponents(snapshot);
     const activities: EvActivityInput[] = activityRows.map((r) => {
       const base = baselineById.get(r.id) ?? null;
@@ -1184,8 +1201,12 @@ export class ScheduleService {
           // received before the column existed and takes the single-window fast path by construction.
           ...(a.lagMinutes > 0 ? { lagMinutes: a.lagMinutes } : {}),
         })),
-        baselineStart: base ? day(base.baselineStart) : null,
-        baselineFinish: base ? day(base.baselineFinish) : null,
+        baselineStart: base
+          ? day(basis === 'PLACED' ? base.placedStart : base.baselineStart)
+          : null,
+        baselineFinish: base
+          ? day(basis === 'PLACED' ? base.placedFinish : base.baselineFinish)
+          : null,
         // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
         // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
         baselineBudgetedCost: base
@@ -1197,8 +1218,8 @@ export class ScheduleService {
         // present, so an activity outside an ASSIGNMENT-level snapshot builds the identical object the
         // EV read received before, and the live-share path is preserved rather than re-derived.
         ...(frozen ? { baselineCostComponents: frozen } : {}),
-        earlyStart: day(r.earlyStart),
-        earlyFinish: day(r.earlyFinish),
+        liveStart: day(basis === 'PLACED' ? r.visualEffectiveStart : r.earlyStart),
+        liveFinish: day(basis === 'PLACED' ? r.visualEffectiveFinish : r.earlyFinish),
       };
     });
 
@@ -1765,6 +1786,26 @@ export class ScheduleService {
   }
 
   /**
+   * Which span the Earned-Value read phases planned value on, chosen once for the whole read from the
+   * active baseline's placement level (ADR-0042 amendment; the same rule as variance's
+   * `varianceBasisFor`, ADR-0025 Amendment 3). No baseline or `FULL`: `PLACED`, the bar as drawn
+   * (ADR-0148). `NONE`: `NETWORK` — a baseline that never recorded a placement cannot be backfilled
+   * with one, so it keeps the early dates on both sides. Exhaustive with no `default`: a third level is
+   * a compile error rather than a silent fall-through.
+   */
+  private pvBasisFor(
+    snapshot: { placementSnapshotLevel: PlacementSnapshotLevel } | null,
+  ): 'PLACED' | 'NETWORK' {
+    if (snapshot === null) return 'PLACED';
+    switch (snapshot.placementSnapshotLevel) {
+      case 'FULL':
+        return 'PLACED';
+      case 'NONE':
+        return 'NETWORK';
+    }
+  }
+
+  /**
    * The plan's working-day calendar for this recalculation, built once (ADR-0024).
    * A null `calendarId`, or a calendar that is missing/soft-deleted (defensive — the
    * delete-in-use guard prevents deleting an in-use calendar), falls back to
@@ -1907,8 +1948,15 @@ export class ScheduleService {
         wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
       ]);
 
+    // The dates the whole read compares, chosen ONCE from the frozen sides (#405 (a)) — never per
+    // row, which would mix two questions in one report. `bothPlacementSnapshotted` below is derived
+    // from this, so there is one rule for "was placement recorded on every frozen side".
+    const datesBasis = revisionDatesBasis(
+      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
+    );
+
     // The SHARED projections. A local copy would look right and drift — `revision-projections.ts`.
-    const liveSide = liveRevisionSide(liveRows);
+    const liveSide = liveRevisionSide(liveRows, datesBasis);
 
     // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
     // FROZEN hours-per-day factor. Not the carrier's own calendar — `BaselineActivity` carries no
@@ -1931,8 +1979,8 @@ export class ScheduleService {
      * It also makes the "one projection, three readers" claim in this method's docblocks true by
      * construction rather than by three identical calls happening to agree.
      */
-    const fromSide = frozenRevisionSide(fromRows);
-    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows);
+    const fromSide = frozenRevisionSide(fromRows, datesBasis);
+    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows, datesBasis);
 
     const delta = computeRevisionDelta(fromSide, toSide, REVISION_ROW_CAP, movementDaysBetween);
 
@@ -1998,9 +2046,8 @@ export class ScheduleService {
     // rather than a widening of the one above: the two levels are written by different milestones,
     // so a baseline can carry either without the other, and folding them would make a
     // shape-complete baseline report its placement as recorded when it is not.
-    const bothPlacementSnapshotted =
-      fromBaseline.placementSnapshotLevel === 'FULL' &&
-      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+    // Derived from `datesBasis` so the flag and the dates compared cannot disagree.
+    const bothPlacementSnapshotted = datesBasis === 'PLACED';
 
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
 
@@ -2066,6 +2113,7 @@ export class ScheduleService {
     const result: RevisionCompare = {
       planId,
       planName: plan.name,
+      datesBasis,
       from: {
         kind: 'BASELINE',
         id: fromBaseline.id,
@@ -2294,6 +2342,12 @@ export class ScheduleService {
       toPlanId,
     );
 
+    // The dates the whole comparison reads — once, from the frozen sides (#405 (a)). Two live
+    // plans have no frozen side to fall back from and compare placed spans.
+    const datesBasis = revisionDatesBasis(
+      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
+    );
+
     const [
       fromRawRows,
       toRawRows,
@@ -2306,15 +2360,15 @@ export class ScheduleService {
       fromBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(fromBaseline.id, organization.id)
-            .then(frozenRevisionSide)
+            .then((rows) => frozenRevisionSide(rows, datesBasis))
         : this.baselines
             .loadActiveActivitiesForDelta(organization.id, fromPlanId)
-            .then(liveRevisionSide),
+            .then((rows) => liveRevisionSide(rows, datesBasis)),
       toBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(toBaseline.id, organization.id)
-            .then(frozenRevisionSide)
-        : anchorLiveRowsPromise.then(liveRevisionSide),
+            .then((rows) => frozenRevisionSide(rows, datesBasis))
+        : anchorLiveRowsPromise.then((rows) => liveRevisionSide(rows, datesBasis)),
       /**
        * **The anchor plan's LIVE rows, read whether or not the `to` side is live — but read ONCE.**
        *
@@ -2441,6 +2495,7 @@ export class ScheduleService {
     };
 
     const identity = {
+      datesBasis,
       fromPlan: {
         id: fromPlan.id,
         name: fromPlan.name,
@@ -2542,9 +2597,7 @@ export class ScheduleService {
       (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
 
     // The PLACEMENT half (M-C) — see the sibling derivation on the plan-nested route.
-    const bothPlacementSnapshotted =
-      (fromBaseline === null || fromBaseline.placementSnapshotLevel === 'FULL') &&
-      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+    const bothPlacementSnapshotted = datesBasis === 'PLACED';
 
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
     // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.

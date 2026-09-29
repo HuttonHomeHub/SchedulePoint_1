@@ -318,11 +318,13 @@ budgetedExpense`; `AC = Σ (assignment actualCost) + activity actualExpense`. Th
     - **EV = BAC × performance %** (rounded once, to the minor unit).
     - **PV — time-phased against the committed plan, with a flagged live-budget fallback (ADR-0042 §1
       Q2).** Planned Value is the **active ADR-0025 cost baseline's** budgeted cost, spread linearly
-      across the baselined activity's baseline start→finish (a milestone is binary on its baseline
-      start) and measured to the **data date** on the plan/activity calendar (ADR-0037), summed and
-      rolled up like BAC/EV/AC. When no cost baseline exists for an activity (no active baseline, or one
-      captured before this rung), PV falls back to the **live** budget (BAC) time-phased over the
-      persisted `earlyStart`/`earlyFinish`, and the plan-level **`costBaselineMissing`** flag is set —
+      across the baselined activity's **frozen placed** start→finish (a milestone is binary on its
+      start; a baseline that never recorded a placement, `placementSnapshotLevel = NONE`, uses its
+      frozen early span instead — ADR-0042 Amendment 1) and measured to the **data date** on the
+      plan/activity calendar (ADR-0037), summed and rolled up like BAC/EV/AC. When no cost baseline
+      exists for an activity (no active baseline, or one captured before this rung), PV falls back to
+      the **live** budget (BAC) time-phased over the live placed span (the live early span against a
+      `NONE` baseline), and the plan-level **`costBaselineMissing`** flag is set —
       produced, never hidden, exactly the produce-and-flag posture §7 established for constraints.
     - **The default EAC forecast is `BAC / CPI`** (ADR-0042 §1 Q3, P6's "typical/performance-factor"
       method) — a plan's `eacMethod` selects the alternates: `REMAINING_AT_BUDGET` (`AC + (BAC − EV)`,
@@ -484,8 +486,10 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
       `accrualType` (`UNIFORM` default | `START` | `END`) that governs how its cost lump-sum (its
       `budgetedExpense` and any assignment-derived budget — the §29 BAC source) is **time-phased** into
       the Planned-Value / cost S-curve as the data date advances. It moves no CPM date and never affects
-      EV, AC, BAC, SPI/CPI, or float — only the **PV curve's shape** over time (a crane mobilisation
-      recognised up-front vs retention held to the end is a cash-flow fact, not a scheduling one).
+      EV, AC, BAC, CPI, or float — only the **PV curve's shape** over time, and so SV and SPI, which
+      read PV (a crane mobilisation recognised up-front vs retention held to the end is a cash-flow
+      fact, not a scheduling one). The start and finish it recognises at are §29's PV span: the
+      **placed** span, except against a `NONE`-level baseline (ADR-0044 Amendment 1).
     - **The three shapes.** `START` recognises the activity's whole PV the moment the data date reaches
       its **start** (planned % jumps 0 → 100 at the start); `END` recognises nothing until the data date
       reaches its **finish** (0 → 100 at the finish); `UNIFORM` (default) spreads it **linearly** across

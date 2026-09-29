@@ -20,7 +20,9 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
     format: 'date',
     nullable: true,
     type: String,
-    description: 'The latest computed finish across the plan; null if not yet calculated.',
+    description:
+      'The latest PLACED finish across the plan — where the last bar is drawn, which a hand-placed ' +
+      'bar can push past the network’s earliest finish (ADR-0148); null if not yet calculated.',
   })
   projectFinish!: string | null;
 

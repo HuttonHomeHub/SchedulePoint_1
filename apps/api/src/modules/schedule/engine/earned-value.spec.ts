@@ -48,8 +48,8 @@ function activity(overrides: Partial<EvActivityInput> & { activityId: string }):
     baselineStart: null,
     baselineFinish: null,
     baselineBudgetedCost: null,
-    earlyStart: null,
-    earlyFinish: null,
+    liveStart: null,
+    liveFinish: null,
     ...overrides,
   };
 }
@@ -284,7 +284,7 @@ describe('computeEarnedValue', () => {
   });
 
   it('(6) costBaselineMissing is true when a baseline budget is absent; PV falls back to live BAC on early dates', () => {
-    // No baseline dates/cost ⇒ PV uses (earlyStart, earlyFinish) and pvCost = BAC.
+    // No baseline dates/cost ⇒ PV uses (liveStart, liveFinish) and pvCost = BAC.
     // early 2026-01-01→2026-01-11 (10 days), data date 2026-01-04 = 3 days in = 30% ⇒ PV = 100000×0.30 = 30000.
     const result = run(
       [
@@ -293,8 +293,8 @@ describe('computeEarnedValue', () => {
           percentComplete: 40,
           budgetedExpense: 100000,
           actualExpense: 30000,
-          earlyStart: '2026-01-01',
-          earlyFinish: '2026-01-11',
+          liveStart: '2026-01-01',
+          liveFinish: '2026-01-11',
           // baselineStart/Finish/BudgetedCost all null
         }),
       ],
@@ -460,8 +460,8 @@ describe('computeEarnedValue — per-component PV phasing for a late-joining res
     activity({
       activityId: 'A',
       accrualType: 'UNIFORM',
-      earlyStart: '2026-01-01',
-      earlyFinish: '2026-01-11',
+      liveStart: '2026-01-01',
+      liveFinish: '2026-01-11',
       assignments: [assignment({ budgetedCost: 1000 })],
       ...overrides,
     });
@@ -716,8 +716,8 @@ describe('computeEarnedValue — the frozen per-assignment cost baseline (ADR-00
         activity({
           activityId: 'A',
           accrualType: 'UNIFORM',
-          earlyStart: '2026-01-01',
-          earlyFinish: '2026-01-11',
+          liveStart: '2026-01-01',
+          liveFinish: '2026-01-11',
           assignments: [assignment({ budgetedCost: 1000, lagMinutes: 4 * DAY })],
         }),
       ],

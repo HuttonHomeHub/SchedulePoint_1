@@ -52,6 +52,7 @@ export function baselineMovementOf(
     PlanStandingRow,
     | 'activityCount'
     | 'projectFinish'
+    | 'movementFinish'
     | 'baselineFinish'
     | 'baselineName'
     | 'baselineHoursPerDayMinutes'
@@ -59,7 +60,7 @@ export function baselineMovementOf(
   movementDaysBetween: (from: string, to: string) => number | null = calendarDaysBetween,
 ): BaselineMovement {
   if (row.activityCount === 0) return { kind: 'NOT_ASSESSABLE', reason: 'PLAN_EMPTY' };
-  if (row.projectFinish === null) {
+  if (row.projectFinish === null || row.movementFinish === null) {
     return { kind: 'NOT_ASSESSABLE', reason: 'PLAN_NOT_SCHEDULED' };
   }
   if (row.baselineName === null) return { kind: 'NOT_ASSESSABLE', reason: 'NO_BASELINE' };
@@ -70,7 +71,10 @@ export function baselineMovementOf(
     return { kind: 'NOT_ASSESSABLE', reason: 'BASELINE_HAS_NO_FINISH' };
   }
 
-  const workingDays = movementDaysBetween(row.baselineFinish, row.projectFinish);
+  // **The live side is `movementFinish`, not `projectFinish`** (#405 (b)): the two baseline bases
+  // (placed, network) each need the live finish on their own basis, and the row's displayed finish
+  // is always the placed one.
+  const workingDays = movementDaysBetween(row.baselineFinish, row.movementFinish);
   // **The frame declining is a fifth reason, not a zero.** A plan whose calendar cannot be built or
   // walked has no working-day frame at all, and the only alternatives were both worse: falling back
   // to calendar days would print a number in a DIFFERENT frame from every other row on the screen

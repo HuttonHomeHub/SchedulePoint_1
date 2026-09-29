@@ -520,6 +520,8 @@ export class BaselineRepository {
       totalFloat: number | null;
       baselineStart: Date | null;
       baselineFinish: Date | null;
+      placedStart: Date | null;
+      placedFinish: Date | null;
       laneIndex: number | null;
       parentId: string | null;
       calendarId: string | null;
@@ -544,6 +546,12 @@ export class BaselineRepository {
         totalFloat: true,
         baselineStart: true,
         baselineFinish: true,
+        // The frozen placed span (placement-baseline-variance). Selected unconditionally for the
+        // reason the shape columns are: branching the SELECT on the level would make this read's
+        // shape depend on the answer the seam supplies. NULL on a NONE-level baseline, where the
+        // seam never reads it.
+        placedStart: true,
+        placedFinish: true,
         // The frozen SHAPE (ADR-0126). Selected unconditionally, including from a NONE-level
         // baseline where every one of them is NULL: the caller decides whether they mean anything
         // by reading `revision_snapshot_level`, and branching the SELECT on the level would make
@@ -584,6 +592,8 @@ export class BaselineRepository {
       totalFloat: number | null;
       earlyStart: Date | null;
       earlyFinish: Date | null;
+      visualEffectiveStart: Date | null;
+      visualEffectiveFinish: Date | null;
       laneIndex: number;
       parentId: string | null;
       calendarId: string | null;
@@ -609,6 +619,9 @@ export class BaselineRepository {
         totalFloat: true,
         earlyStart: true,
         earlyFinish: true,
+        // Where the bar is DRAWN (ADR-0148) — the live counterpart of the frozen placed span.
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
         // The live plan's shape — the counterpart of the frozen columns above. The live side is
         // ALWAYS fully recorded: it IS the plan, so `bothSnapshotted` turns only on the frozen
         // side(s).

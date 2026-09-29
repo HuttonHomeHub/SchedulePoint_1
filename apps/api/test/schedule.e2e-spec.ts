@@ -11,6 +11,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { EV_UNPLACED_GOLDEN } from './fixtures/ev-unplaced-golden';
 
 /**
  * End-to-end tests for the CPM recalculation endpoint (M6, ADR-0022):
@@ -578,6 +579,37 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await viewer.agent.get(summaryUrl(planId)).expect(200);
   });
 
+  it('the project finish is the placed finish, on the recalculate response and the read alike (#404)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await makeActivity(actor, planId, 'Early', 3);
+    const late = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Placed late', durationDays: 1 })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}/activities/placements`)
+      .send({
+        placements: [
+          {
+            id: late.body.data.id as string,
+            version: late.body.data.version as number,
+            constraintType: null,
+            constraintDate: null,
+            visualStart: '2026-03-02',
+            laneIndex: null,
+          },
+        ],
+      })
+      .expect(200);
+
+    // The network finishes 2026-01-03; the last DRAWN bar ends 2026-03-02, and the header says that.
+    const recalculated = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(recalculated.body.data.projectFinish).toBe('2026-03-02');
+    const read = await actor.agent.get(summaryUrl(planId)).expect(200);
+    expect(read.body.data.projectFinish).toBe('2026-03-02');
+  });
+
   it('summary hides the plan from non-members (404)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
@@ -828,6 +860,223 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       select: { budgetedCost: true, lagMinutes: true },
     });
     expect(frozen).toEqual([{ budgetedCost: 100000n, lagMinutes: 4 * 1440 }]);
+  });
+
+  // The placed basis (`docs/specs/ev-placed-planned-value`, #405 (c)). START accrual is the smallest
+  // fixture that tells the bases apart through public routes: the engine's data-date floor means an
+  // unstarted bar never sits before the data date, so under UNIFORM a live-anchored PV is 0 on both
+  // bases; START switches from 0 to the whole budget at its anchor, so it reads full on D and nothing
+  // on D+3.
+  const dateOnly = (d: Date | null | undefined) => d?.toISOString().slice(0, 10) ?? null;
+
+  async function startAccruedActivity(
+    actor: Actor,
+    planId: string,
+    visualStart: string,
+  ): Promise<string> {
+    const res = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({
+        name: 'A',
+        durationDays: 10,
+        budgetedExpense: 1000000,
+        accrualType: 'START',
+        visualStart,
+      })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  /** E1's fixture: captured while placed at D+3, then the placement is cleared and recalculated. */
+  async function capturedThenUnplaced(actor: Actor, planId: string, a: string): Promise<string> {
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+      .send({ name: 'Contract' })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${a}`)
+      .send({ visualStart: null, version: 1 })
+      .expect(200);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    return created.body.data.id as string;
+  }
+
+  it('E1: PV phases on the frozen placed span of a FULL baseline, not its early span', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await startAccruedActivity(actor, planId, '2026-01-04');
+    const baselineId = await capturedThenUnplaced(actor, planId, a);
+
+    // The fixture must tell the bases apart, or a 0 below could come from a plan where they never
+    // differed: the bar is now live-unplaced (D) and the snapshot froze it placed at D+3.
+    const live = await prisma.activity.findUniqueOrThrow({
+      where: { id: a },
+      select: { visualEffectiveStart: true },
+    });
+    expect(dateOnly(live.visualEffectiveStart)).toBe('2026-01-01');
+    const frozen = await prisma.baselineActivity.findFirstOrThrow({
+      where: { baselineId, sourceActivityId: a },
+      select: { placedStart: true, baselineStart: true },
+    });
+    expect(dateOnly(frozen.placedStart)).toBe('2026-01-04');
+    expect(dateOnly(frozen.baselineStart)).toBe('2026-01-01'); // the network span, not the placement
+
+    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+    // Frozen early (D), live early (D) and live placed (D) would all read the whole budget here.
+    expect(res.body.data.total.pv).toBe(0);
+  });
+
+  it('E2: a NONE baseline keeps phasing on its frozen early span (characterisation)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await startAccruedActivity(actor, planId, '2026-01-04');
+    const baselineId = await capturedThenUnplaced(actor, planId, a);
+
+    // The shape a baseline captured before `api-v0.70.0` has, which the public API no longer produces.
+    await prisma.baselineActivity.updateMany({
+      where: { baselineId },
+      data: { placedStart: null, placedFinish: null, visualStart: null },
+    });
+    await prisma.baseline.update({
+      where: { id: baselineId },
+      data: { placementSnapshotLevel: 'NONE' },
+    });
+
+    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+    expect(res.body.data.total.pv).toBe(1000000);
+  });
+
+  it('E3: with no baseline, the live-budget PV phases on the live placed span', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await startAccruedActivity(actor, planId, '2026-01-04');
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+    expect(res.body.data.costBaselineMissing).toBe(true);
+    // Live early is D, so phasing on it would read the whole budget; the bar is drawn at D+3.
+    expect(res.body.data.total).toMatchObject({ pv: 0, sv: 0, spi: null });
+  });
+
+  it('E4: an unplaced plan reads exactly as it did before the placed basis (golden)', async () => {
+    // Recorded against the code BEFORE the placed-basis change and committed as a literal
+    // (fixtures/ev-unplaced-golden.ts); a plan with
+    // no placement must be byte-identical after it. Covers a started task, a complete task, a WBS
+    // summary over two children, a level-of-effort, UNIFORM and END accrual, a lagged assignment and an
+    // activity added after capture, read at two data dates past several spans.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const url = `/api/v1/organizations/acme/plans/${planId}/activities`;
+    const create = async (body: Record<string, unknown>): Promise<string> =>
+      (await actor.agent.post(url).send(body).expect(201)).body.data.id as string;
+
+    const started = await create({ name: 'Started', durationDays: 10, budgetedExpense: 200000 });
+    const complete = await create({ name: 'Complete', durationDays: 5, budgetedExpense: 150000 });
+    const summary = await create({ name: 'Summary', durationDays: 0, type: 'WBS_SUMMARY' });
+    const w1 = await create({
+      name: 'Child1',
+      durationDays: 4,
+      budgetedExpense: 80000,
+      parentId: summary,
+    });
+    const w2 = await create({
+      name: 'Child2',
+      durationDays: 6,
+      budgetedExpense: 120000,
+      accrualType: 'END',
+      parentId: summary,
+    });
+    const loe = await create({
+      name: 'Loe',
+      durationDays: 3,
+      type: 'LEVEL_OF_EFFORT',
+      budgetedExpense: 60000,
+    });
+    const uniform = await create({ name: 'Uniform', durationDays: 7, budgetedExpense: 70000 });
+    const end = await create({
+      name: 'End',
+      durationDays: 8,
+      budgetedExpense: 90000,
+      accrualType: 'END',
+    });
+    const lagged = await create({ name: 'Lagged', durationDays: 10 });
+
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: started, successorId: loe, type: 'SS' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: loe, successorId: w2, type: 'FF' })
+      .expect(201);
+    const crane = await actor.agent
+      .post('/api/v1/organizations/acme/resources')
+      .send({ name: 'Crane', kind: 'EQUIPMENT', costPerUnit: 100 })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${lagged}/assignments`)
+      .send({
+        resourceId: crane.body.data.id as string,
+        budgetedCost: 100000,
+        lagMinutes: 4 * 1440,
+      })
+      .expect(201);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+      .send({ name: 'Contract' })
+      .expect(201);
+
+    // Progress after capture, so the frozen and live spans differ for these two.
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${started}/progress`)
+      .send({ percentComplete: 40, actualStart: '2026-01-01', version: 1 })
+      .expect(200);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${complete}/progress`)
+      .send({
+        percentComplete: 100,
+        actualStart: '2025-12-25',
+        actualFinish: '2025-12-30',
+        version: 1,
+      })
+      .expect(200);
+    const added = await create({ name: 'Added', durationDays: 6, budgetedExpense: 50000 });
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const nameOf = new Map([
+      [started, 'Started'],
+      [complete, 'Complete'],
+      [summary, 'Summary'],
+      [w1, 'Child1'],
+      [w2, 'Child2'],
+      [loe, 'Loe'],
+      [uniform, 'Uniform'],
+      [end, 'End'],
+      [lagged, 'Lagged'],
+      [added, 'Added'],
+    ]);
+    const readAt = async (dataDate: string, version: number) => {
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ plannedStart: dataDate, version })
+        .expect(200);
+      const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
+      const data = res.body.data as { activities: { activityId: string }[] };
+      return {
+        ...data,
+        activities: data.activities.map((row) => ({
+          ...row,
+          activityId: nameOf.get(row.activityId) ?? row.activityId,
+        })),
+      };
+    };
+    const first = await readAt('2026-01-04', 2);
+    const second = await readAt('2026-01-08', 3);
+    const third = await readAt('2026-01-12', 4);
+    expect({ first, second, third }).toEqual(EV_UNPLACED_GOLDEN);
   });
 
   it('forbids a Viewer and a Contributor from reading Earned Value (403 — cost:read)', async () => {

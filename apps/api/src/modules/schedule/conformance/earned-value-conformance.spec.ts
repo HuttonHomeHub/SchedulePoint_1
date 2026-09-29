@@ -157,7 +157,7 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
       eacMethod: 'CPI',
       calendar: allMinutesWorkCalendar,
     });
-    // No baseline AND no live earlyStart/earlyFinish anchor (this adapter never runs computeSchedule) ⇒
+    // No baseline AND no live span anchor (this adapter never runs computeSchedule) ⇒
     // there is nothing to time-phase against, so PV = 0 — the fixture's honest "no anchor at all" case.
     expect(withoutBaseline.costBaselineMissing).toBe(true);
     expect(withoutBaseline.total.pv).toBe(0);
@@ -238,7 +238,7 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
 
     /**
      * A single-expense TASK carrier for one fixture expense: no assignments, so BAC = the expense's
-     * `budgeted_cost` and PV = that amount phased by `accrualType`. `earlyStart`/`earlyFinish` supply
+     * `budgeted_cost` and PV = that amount phased by `accrualType`. `liveStart`/`liveFinish` supply
      * the live-budget PV anchor (no cost baseline, exactly the fixture's honest state); `parentId` null
      * so the plan total mirrors the row. `accrualType` reads from the fixture expense unless overridden
      * (the differential flips it).
@@ -259,8 +259,8 @@ describe('EV3 conformance — earned value against the real P6 fixture (ADR-0042
         baselineStart: null,
         baselineFinish: null,
         baselineBudgetedCost: null,
-        earlyStart: '2026-01-01',
-        earlyFinish: '2026-01-11', // a 10-continuous-day window (allMinutesWorkCalendar)
+        liveStart: '2026-01-01',
+        liveFinish: '2026-01-11', // a 10-continuous-day window (allMinutesWorkCalendar)
       } satisfies EvActivityInput;
     }
 

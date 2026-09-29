@@ -354,6 +354,96 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
     ).toHaveLength(1);
   });
 
+  describe('the dates compared (#405 (a): placed spans, with a per-read fallback)', () => {
+    // A bar the network leaves at 5-6 Jan on both sides, and that the OLD side placed at 12-13 Jan
+    // while the NEW side draws it at 5-6 Jan: only a comparison of PLACED spans sees it move.
+    const baselineOf = (placementSnapshotLevel: 'FULL' | 'NONE') => ({
+      id: 'baseline-a',
+      name: 'Rev A',
+      capturedAt: new Date(),
+      dataDate: null,
+      hoursPerDayMinutes: 1440,
+      capturedProjectFinish: new Date(),
+      revisionSnapshotLevel: 'FULL',
+      placementSnapshotLevel,
+      criticalPathDefinition: 'TOTAL_FLOAT',
+      criticalFloatThresholdMinutes: 0,
+      totalFloatMode: 'FINISH',
+      makeOpenEndsCritical: false,
+    });
+    const snapshotRow = {
+      sourceActivityId: 'old-uuid',
+      code: 'A100',
+      name: 'Activity A100',
+      type: 'TASK' as const,
+      durationMinutes: 480,
+      isCritical: false,
+      totalFloat: 0,
+      baselineStart: new Date('2026-01-05T00:00:00.000Z'),
+      baselineFinish: new Date('2026-01-06T00:00:00.000Z'),
+      placedStart: new Date('2026-01-12T00:00:00.000Z'),
+      placedFinish: new Date('2026-01-13T00:00:00.000Z'),
+      laneIndex: 0,
+      parentId: null,
+      calendarId: null,
+      constraintType: null,
+      constraintDate: null,
+      secondaryConstraintType: null,
+      secondaryConstraintDate: null,
+      percentComplete: null,
+      actualStart: null,
+      actualFinish: null,
+    };
+    const redated = (result: Awaited<ReturnType<typeof compare>>) =>
+      result.changes?.classes.find((c) => c.changeClass === 'REDATED');
+
+    const compareFromBaseline = (level: 'FULL' | 'NONE') => {
+      baselines.findActiveByIdInPlan.mockImplementation((id: string) =>
+        Promise.resolve(id === 'baseline-a' ? baselineOf(level) : null),
+      );
+      baselines.loadSnapshotRowsForDelta.mockResolvedValue([snapshotRow]);
+      baselines.loadActiveActivitiesForDelta.mockImplementation((_org: string, planId: string) =>
+        Promise.resolve([
+          liveRow(`${planId}-uuid`, 'A100', {
+            visualEffectiveStart: new Date('2026-01-05T00:00:00.000Z'),
+            visualEffectiveFinish: new Date('2026-01-06T00:00:00.000Z'),
+          }),
+        ]),
+      );
+      return service.crossPlanRevisionCompare(
+        principalWith(READ),
+        'acme',
+        FROM_PLAN,
+        TO_PLAN,
+        'baseline-a',
+        'live',
+        ['changes', 'ghosts'],
+      );
+    };
+
+    it('reports a bar moved by placement alone when the baseline recorded its placement', async () => {
+      const result = await compareFromBaseline('FULL');
+
+      expect(result.datesBasis).toBe('PLACED');
+      expect(redated(result)?.rows).toEqual([
+        expect.objectContaining({ code: 'A100', from: '2026-01-12 → 2026-01-13' }),
+      ]);
+      expect(result.ghosts).toEqual([
+        expect.objectContaining({ fromStart: '2026-01-12', fromFinish: '2026-01-13' }),
+      ]);
+    });
+
+    it('falls back to earliest-vs-earliest on a baseline captured before placement was recorded', async () => {
+      const result = await compareFromBaseline('NONE');
+
+      expect(result.datesBasis).toBe('NETWORK');
+      // The network did not move the bar, so nothing is reported - the pre-#405 answer, kept
+      // for exactly the baselines that cannot say where a bar was placed.
+      expect(redated(result)?.rows).toEqual([]);
+      expect(result.ghosts).toEqual([]);
+    });
+  });
+
   it('omits every opt-in projection when none was asked for, and loads no edges', async () => {
     const result = await compare();
     expect(result.changes).toBeUndefined();
