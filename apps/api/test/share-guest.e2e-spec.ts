@@ -617,4 +617,47 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     // placed span is now present).
     expect(containsKey(guestRead.body, FORBIDDEN_KEYS)).toBe(false);
   });
+
+  /**
+   * **#404 (ADR-0148).** The header's "Project finish" is the latest DRAWN finish. A bar hand-placed
+   * past the network's early finish must not leave the guest reading a finish earlier than the last
+   * bar on their own canvas.
+   */
+  it('the guest’s project finish is the placed finish, not the network finish (#404)', async () => {
+    const { actor } = await adminWithOrg('Acme', 'admin@example.com');
+    const planId = await makePlan(actor, 'acme', 'Riverside Plan');
+    const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+
+    await actor.agent.post(base).send({ name: 'Early', durationDays: 3, laneIndex: 0 }).expect(201);
+    const late = await actor.agent
+      .post(base)
+      .send({ name: 'Placed late', durationDays: 1, laneIndex: 1 })
+      .expect(201);
+
+    await actor.agent
+      .patch(`${base}/placements`)
+      .send({
+        placements: [
+          {
+            id: late.body.data.id as string,
+            version: late.body.data.version as number,
+            constraintType: null,
+            constraintDate: null,
+            visualStart: '2026-03-02',
+            laneIndex: null,
+          },
+        ],
+      })
+      .expect(200);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+
+    const { token } = await mintShareToken(actor, 'acme', planId);
+    const plan = await guestGet('/api/v1/share/plan', token).expect(200);
+    expect((plan.body.data as { summary: { projectFinish: string } }).summary.projectFinish).toBe(
+      '2026-03-02',
+    );
+  });
 });

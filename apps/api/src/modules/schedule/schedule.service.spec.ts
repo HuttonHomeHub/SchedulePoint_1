@@ -336,6 +336,20 @@ describe('ScheduleService.recalculate', () => {
     expect(summary.projectFinish).toBe('2026-01-02');
   });
 
+  it('states the placed finish, not the network finish, when a hand-placed bar ends later (#404, ADR-0148)', async () => {
+    // A is a 3-day task on the data date, so the NETWORK finish is 2026-01-03. B is hand-placed on
+    // 2026-01-20 — its drawn bar ends 2026-01-20, so the header must say that, or it states a finish
+    // earlier than the last bar on screen.
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 3),
+      activityRow('B', 1, { visualStart: new Date('2026-01-20') }),
+    ]);
+    const summary = await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+    expect(results.find((r) => r.activityId === 'B')!.visualEffectiveFinish).toBe('2026-01-20');
+    expect(summary.projectFinish).toBe('2026-01-20');
+  });
+
   it('threads the plan’s progress recalc mode into the engine (M2)', async () => {
     // P (in progress, 5 days left) FS→ B (in progress out of sequence, 2 days left). Under
     // PROGRESS_OVERRIDE B ignores the incomplete P and its remaining runs from the data date.

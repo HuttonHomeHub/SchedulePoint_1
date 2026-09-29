@@ -19,6 +19,7 @@ import { liveAssignmentWhere } from '../activities/live-assignment';
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import type { EngineEdgeResult, EngineResult } from './engine';
+import { placedFinishSql } from './placed-finish';
 
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
@@ -233,7 +234,7 @@ export interface ScheduleAggregate {
   selfOverAllocatedCount: number;
   /** Max inclusive leveled finish as `YYYY-MM-DD`; null when the plan does not level. */
   leveledProjectFinish: string | null;
-  /** Max inclusive `early_finish` as `YYYY-MM-DD`; null if never calculated. */
+  /** Max inclusive PLACED finish (`placedFinishSql`) as `YYYY-MM-DD`; null if never calculated. */
   projectFinish: string | null;
 }
 
@@ -408,7 +409,9 @@ export class ScheduleRepository {
           THEN to_char(MAX(COALESCE(leveled_finish, early_finish)), 'YYYY-MM-DD')
           ELSE NULL
         END AS leveled_project_finish,
-        to_char(MAX(early_finish), 'YYYY-MM-DD') AS project_finish
+        -- The PLACED finish (ADR-0148, #404): where the last bar is drawn, which a hand-placed bar can
+        -- push past the network's early finish. One definition, shared with the landing.
+        to_char(MAX(${placedFinishSql()}), 'YYYY-MM-DD') AS project_finish
       FROM activities
       WHERE plan_id = ${planId}::uuid
         AND organization_id = ${organizationId}::uuid

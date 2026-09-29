@@ -113,6 +113,7 @@ import {
 import { computeHealthReport, healthActivityAssignmentFields } from './health/compute-health';
 import type { HealthActivityInput } from './health/compute-health';
 import { levelIfEnabled } from './level-if-enabled';
+import { placedProjectFinishOf } from './placed-finish';
 import {
   buildPlanCalendar,
   buildPlanCalendarOrReject,
@@ -576,7 +577,12 @@ export class ScheduleService {
         // plan row: `plan` was loaded before this transaction opened and a settings PATCH takes no
         // plan lock, so re-reading could stamp a rule this computation never used.
         await this.schedule.stampScheduleComputedAt(planId, graph.criticality, tx);
-        return summary;
+        // The response states the PLACED finish, as the summary read does (#404, ADR-0148) — the
+        // engine's own `projectFinish` is the network's, and a hand-placed bar can end after it.
+        return {
+          ...summary,
+          projectFinish: placedProjectFinishOf(results) ?? summary.projectFinish,
+        };
       });
     } catch (error) {
       // The engine's walk-time horizon guard is a user-caused, user-fixable state

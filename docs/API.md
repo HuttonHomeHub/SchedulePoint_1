@@ -1508,6 +1508,9 @@ controller's 30 / 60 s per handler.
   `false` and is set with a targeted PATCH. The computed `GET …/schedule/summary`
   roll-up carries `externalDrivenCount` (how many activities an external bound
   drove) — engine-derived on a recalculation.
+- `projectFinish` — on `GET …/schedule/summary`, the recalculate response and a share link's
+  `GET /share/plan` alike — is the **placed** finish: the latest drawn finish, which a hand-placed
+  bar can push past the network's earliest finish (ADR-0148, `docs/TECH_DEBT.md` #404).
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a

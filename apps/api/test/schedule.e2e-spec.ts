@@ -578,6 +578,37 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await viewer.agent.get(summaryUrl(planId)).expect(200);
   });
 
+  it('the project finish is the placed finish, on the recalculate response and the read alike (#404)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await makeActivity(actor, planId, 'Early', 3);
+    const late = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Placed late', durationDays: 1 })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}/activities/placements`)
+      .send({
+        placements: [
+          {
+            id: late.body.data.id as string,
+            version: late.body.data.version as number,
+            constraintType: null,
+            constraintDate: null,
+            visualStart: '2026-03-02',
+            laneIndex: null,
+          },
+        ],
+      })
+      .expect(200);
+
+    // The network finishes 2026-01-03; the last DRAWN bar ends 2026-03-02, and the header says that.
+    const recalculated = await actor.agent.post(recalcUrl(planId)).expect(200);
+    expect(recalculated.body.data.projectFinish).toBe('2026-03-02');
+    const read = await actor.agent.get(summaryUrl(planId)).expect(200);
+    expect(read.body.data.projectFinish).toBe('2026-03-02');
+  });
+
   it('summary hides the plan from non-members (404)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
