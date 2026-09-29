@@ -96,6 +96,8 @@ calls it (`GanttPanel.tsx:634-636`, `docs/TECH_DEBT.md` #353 D3). `DataTable` ha
 18 files (`grep -rn "<DataTable" apps/web/src`), so the hook must not sit in it. A
 `DataTableWindowedBody` child calls it; `DataTable` renders that child only in windowed mode. A
 structural test pins that `useVirtualizer` is imported by that file and by no shared primitive.
+It has two other importers, both feature components with one call site each: `GanttPanel.tsx` and
+`features/navigator/components/HierarchyTree.tsx` (this ADR first named only the Gantt).
 
 ### D6 — The mode is typed so it cannot be misused
 
@@ -107,7 +109,11 @@ type-level union on `DataTable`'s props, not as a runtime warning. `ActivitiesTa
 ### D7 — Tests keep their rows; the sweep is mandatory
 
 jsdom renders only the initial window (`src/test/setup.ts:62-76` stubs `ResizeObserver` and
-`scrollTo`; the virtualizer's `initialRect` gives it a first window, as in `GanttPanel.tsx:585`).
+`scrollTo`). **`initialRect` alone is not enough, and this ADR first said it was:** once the
+scroller mounts, the virtualizer's own observer replaces the initial rect with the measured size,
+which jsdom reports as 0×0, and a 0-height viewport renders no rows (71 of 155 tests failed on the
+first build). `data-table-windowed-body.tsx` wraps `observeElementRect` to ignore a zero-height
+report, so an unlaid-out scroller — jsdom, or a `display: none` ancestor — keeps the initial window.)
 Small fixtures stay under the window. A test that needs more rows passes a **test-only row budget**,
 never a production flag. The 27 test files that reference `ActivitiesTable`
 (`grep -rl ActivitiesTable apps/web/src --include=*.test.tsx`) must pass unedited unless a fixture
