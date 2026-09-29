@@ -329,10 +329,21 @@ function findsDevClient() {
   return [...document.scripts].some((s) => s.src.includes('/@vite/client'));
 }
 
-/** Non-vacuity: the table renders every row, and the schedule has actually run. */
+/**
+ * Non-vacuity: the table REPRESENTS every row, and the schedule has actually run.
+ *
+ * **Changed for M3 (ADR-0165), 2026-09-29.** Before windowing "represents" meant "renders": every
+ * activity was a `<tr>`. A windowed table renders ~50 rows and declares the rest through
+ * `aria-rowcount` (header + rows) with `aria-hidden` spacer rows around the window, so the check reads
+ * the declared count when present and excludes spacers from what it counts. The bars and the verdict
+ * rule are untouched; only this probe learnt the new shape, and without the change every M3 run would
+ * throw on repeat 0.
+ */
 function nonVacuityProbe() {
   const table = document.querySelector('table');
-  const rowsRendered = table ? table.querySelectorAll('tbody tr').length : 0;
+  const bodyRows = table ? [...table.querySelectorAll('tbody tr:not([aria-hidden="true"])')] : [];
+  const declared = Number(table?.getAttribute('aria-rowcount'));
+  const rowsRendered = Number.isFinite(declared) && declared > 0 ? declared - 1 : bodyRows.length;
   const headers = table
     ? [...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
     : [];
@@ -340,11 +351,10 @@ function nonVacuityProbe() {
   const floatCells =
     floatColumnIndex === -1
       ? []
-      : [...(table?.querySelectorAll('tbody tr') ?? [])].map((tr) =>
-          tr.children[floatColumnIndex]?.textContent?.trim(),
-        );
+      : bodyRows.map((tr) => tr.children[floatColumnIndex]?.textContent?.trim());
   return {
     rowsRendered,
+    rowsInDom: bodyRows.length,
     floatColumnFound: floatColumnIndex !== -1,
     allFloatCellsDash: floatCells.length > 0 && floatCells.every((c) => c === '—'),
   };
