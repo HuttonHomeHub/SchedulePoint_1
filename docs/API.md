@@ -314,6 +314,26 @@ will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are
 under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
 the null.
 
+### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
+
+`GET …/plans/:planId/schedule/earned-value` phases Planned Value on **one basis per read**, chosen
+from the active baseline's `placementSnapshotLevel`, and the response does not name it (its shape is
+unchanged). The same rule as variance above, with one difference: there is no `null` case, because
+the live-budget fallback always phases on something.
+
+- **Placed** — no active baseline, or `placementSnapshotLevel: 'FULL'`: the frozen
+  `placedStart`/`placedFinish` from the baseline, and the live `visualEffectiveStart`/
+  `visualEffectiveFinish` (ADR-0148) for an activity the baseline does not hold, or holds without a
+  placed date. It never falls back to an early date.
+- **Network** — `placementSnapshotLevel: 'NONE'`: the frozen `baselineStart`/`baselineFinish` and the
+  live `earlyStart`/`earlyFinish`, exactly as before. A baseline that never recorded a placement cannot
+  be backfilled with one.
+
+`pv`, `sv` and `spi` follow the basis, and so do `eac`, `etc` and `vac` under
+`eacMethod = CPI_TIMES_SPI` (the only method that reads SPI). `bac`, `ev`, `ac`, `cv`, `cpi` and
+`tcpi` read no date and do not change. A plan with no placement reads byte-identically on either
+basis. The resource histogram is a different read and still spreads units over the early span.
+
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
 `placementNotAssessableReason` — `null` when both sides recorded a placement, `NOT_SNAPSHOTTED` when
@@ -1535,8 +1555,8 @@ controller's 30 / 60 s per handler.
   and **`accrualType`** (`START` / `UNIFORM` default / `END`, ADR-0044 §32 /
   ADR-0035 §32). `accrualType` governs **when** the activity's cost is recognised
   in the `GET …/schedule/earned-value` read's Planned-Value time-phasing — START
-  at its start, END at its finish, UNIFORM linearly — and **never changes a CPM
-  date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
+  at its placed start, END at its placed finish, UNIFORM linearly between them —
+  and **never changes a CPM date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
   feed the scheduler.
 - An activity's **weighted progress steps** (ADR-0044 §2 / ADR-0035 §33) are a
   bulk-replace sub-resource: `GET …/activities/:activityId/steps` lists the active

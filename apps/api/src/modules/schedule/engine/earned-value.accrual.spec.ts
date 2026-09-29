@@ -35,8 +35,8 @@ function task(overrides: Partial<EvActivityInput> = {}): EvActivityInput {
     baselineStart: '2026-01-01',
     baselineFinish: '2026-01-11',
     baselineBudgetedCost: 100000,
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-11',
+    liveStart: '2026-01-01',
+    liveFinish: '2026-01-11',
     ...overrides,
   };
 }
@@ -100,7 +100,7 @@ describe('cost accrual — PV time-phasing (ADR-0044 §32)', () => {
     const milestone = task({
       type: 'FINISH_MILESTONE',
       baselineFinish: '2026-01-01',
-      earlyFinish: '2026-01-01',
+      liveFinish: '2026-01-01',
       accrualType: 'END',
     });
     // The zero-span event recognises its cost at its instant (start), not deferred by END.

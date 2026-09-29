@@ -8,6 +8,7 @@ import {
   type DependencyType,
   type LagCalendarSource,
   type PercentCompleteType,
+  type PlacementSnapshotLevel,
   type ResourceCurveType,
 } from '@prisma/client';
 
@@ -145,6 +146,9 @@ export interface EarnedValueActivityRow {
   actualExpense: bigint | null;
   earlyStart: Date | null;
   earlyFinish: Date | null;
+  /** The span as drawn (ADR-0148): where the bar is placed. Equal to the early span on an unplaced plan. */
+  visualEffectiveStart: Date | null;
+  visualEffectiveFinish: Date | null;
   assignments: {
     budgetedCost: bigint | null;
     actualCost: bigint;
@@ -187,6 +191,9 @@ export interface EarnedValueBaselineRow {
   budgetedExpense: bigint | null;
   baselineStart: Date | null;
   baselineFinish: Date | null;
+  /** The frozen placed span (ADR-0025 Amendment 3); null on a `NONE`-level baseline. */
+  placedStart: Date | null;
+  placedFinish: Date | null;
 }
 
 /**
@@ -208,6 +215,8 @@ export interface EarnedValueBaselineAssignmentRow {
  */
 export interface EarnedValueCostSnapshot {
   costSnapshotLevel: BaselineCostSnapshotLevel;
+  /** Whether capture froze the placed span; decides which span PV is phased on (ADR-0042 amendment). */
+  placementSnapshotLevel: PlacementSnapshotLevel;
   activities: EarnedValueBaselineRow[];
   assignments: EarnedValueBaselineAssignmentRow[];
 }
@@ -624,6 +633,8 @@ export class ScheduleRepository {
         actualExpense: true,
         earlyStart: true,
         earlyFinish: true,
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
@@ -700,7 +711,7 @@ export class ScheduleRepository {
   ): Promise<EarnedValueCostSnapshot | null> {
     const active = await db.baseline.findFirst({
       where: { organizationId, planId, isActive: true, deletedAt: null },
-      select: { id: true, costSnapshotLevel: true },
+      select: { id: true, costSnapshotLevel: true, placementSnapshotLevel: true },
     });
     if (!active) return null;
     const [activities, assignments] = await Promise.all([
@@ -712,6 +723,8 @@ export class ScheduleRepository {
           budgetedExpense: true,
           baselineStart: true,
           baselineFinish: true,
+          placedStart: true,
+          placedFinish: true,
         },
       }),
       db.baselineAssignment.findMany({
@@ -725,7 +738,12 @@ export class ScheduleRepository {
         },
       }),
     ]);
-    return { costSnapshotLevel: active.costSnapshotLevel, activities, assignments };
+    return {
+      costSnapshotLevel: active.costSnapshotLevel,
+      placementSnapshotLevel: active.placementSnapshotLevel,
+      activities,
+      assignments,
+    };
   }
 
   /**

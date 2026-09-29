@@ -257,6 +257,48 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   // "Added" shows in all three variance columns (start/finish/float) for the new activity.
   await expect(page.getByRole('cell', { name: 'Added' }).first()).toBeVisible();
 
+  // Earned Value phases planned value on the PLACED span (`ev-placed-planned-value`, #405 (c)). A
+  // START-accrued activity, hand-placed three days after the data date and created after capture, is
+  // not due yet: measured on its early dates (the data date itself) its whole budget read as planned.
+  // Created through the API like the drag above — what is proved is the PV cell the planner reads.
+  const gutterStatus = await page.evaluate(
+    async ({ org, id, start }: { org: string; id: string; start: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Gutter',
+          durationDays: 10,
+          budgetedExpense: 1_000_000,
+          accrualType: 'START',
+          visualStart: start,
+        }),
+      });
+      return response.status;
+    },
+    { org: orgSlug, id: currentPlanId(page), start: '2026-01-04' },
+  );
+  expect(gutterStatus).toBe(201);
+  await recalcViaApi(page, orgSlug);
+  await page.reload();
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: /Earned value/ }).click();
+  const earnedValue = page.getByRole('dialog', { name: /Earned value/ });
+  const table = earnedValue.getByRole('table', { name: 'Earned value by activity' });
+  await expect(table).toBeVisible();
+  const headers = await table.getByRole('columnheader').allInnerTexts();
+  const pvColumn = headers.findIndex((h) => h.trim() === 'PV');
+  expect(pvColumn).toBeGreaterThanOrEqual(0);
+  await expect(
+    table
+      .getByRole('row', { name: /Gutter/ })
+      .getByRole('cell')
+      .nth(pvColumn),
+  ).toHaveText(/^\D*0\.00$/);
+  await earnedValue.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(earnedValue).toBeHidden();
+
   // The plan view with the baselines panel + variance column is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,

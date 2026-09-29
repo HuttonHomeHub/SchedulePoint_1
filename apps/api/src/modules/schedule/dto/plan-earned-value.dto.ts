@@ -15,7 +15,11 @@ export class EarnedValueMetricsDto implements EarnedValueMetrics {
   @ApiProperty({ description: 'Budget at Completion (minor units).' })
   bac!: number;
 
-  @ApiProperty({ description: 'Planned Value / BCWS (minor units), time-phased to the data date.' })
+  @ApiProperty({
+    description:
+      'Planned Value / BCWS (minor units), time-phased to the data date over the placed span ' +
+      '(the frozen placed span on a baseline that recorded one; see docs/API.md).',
+  })
   pv!: number;
 
   @ApiProperty({ description: 'Earned Value / BCWP (minor units) = BAC × performance %.' })

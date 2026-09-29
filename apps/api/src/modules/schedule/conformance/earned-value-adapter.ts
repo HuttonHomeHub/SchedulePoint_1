@@ -85,7 +85,7 @@ function resolveParentId(activity: FixtureActivity, summaries: FixtureActivity[]
  * documented above. `percentCompleteType` / `percentComplete` / `physicalPercentComplete` are the
  * fixture's own fields, unmodified — the exact vocabulary `@repo/types`' `PercentCompleteType` uses.
  * No cost baseline and no CPM dates are fed (this adapter never runs `computeSchedule`), so every row's
- * `earlyStart`/`earlyFinish`/`baseline*` are null — the live-budget PV fallback with no anchor at all,
+ * `liveStart`/`liveFinish`/`baseline*` are null — the live-budget PV fallback with no anchor at all,
  * i.e. `PV = 0` until a caller supplies one explicitly (the conformance spec's baseline differential).
  */
 export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): EvActivityInput[] {
@@ -175,8 +175,8 @@ export function buildEvActivityInputsFromFixture(fixture: ConformanceFixture): E
       baselineStart: null,
       baselineFinish: null,
       baselineBudgetedCost: null,
-      earlyStart: null,
-      earlyFinish: null,
+      liveStart: null,
+      liveFinish: null,
     };
   });
 }

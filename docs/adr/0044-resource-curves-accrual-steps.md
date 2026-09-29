@@ -149,7 +149,8 @@ ADR-0035 §31/§32/§33 (accept-with-slice) with negatives N27–N29.** Concrete
 
 ### 1 — Accrual anchors follow planned value's basis; curves are unaffected (`docs/TECH_DEBT.md` #405(c), 2026-09-29)
 
-> **Proposed**, together with ADR-0042 Amendment 1, and accepted with it.
+> **Accepted** (2026-09-29), together with ADR-0042 Amendment 1. Feature spec:
+> [`docs/specs/ev-placed-planned-value/spec.md`](../specs/ev-placed-planned-value/spec.md).
 
 **Accrual (§1): the rule is unchanged, and its anchors move.** `START` recognises the cost at the anchor
 start, `END` at the anchor finish, and `UNIFORM` spreads it linearly between them (`leafPlannedPercent`,

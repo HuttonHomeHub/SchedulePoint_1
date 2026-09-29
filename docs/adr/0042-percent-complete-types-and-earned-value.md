@@ -161,8 +161,8 @@ a conceptual distinction the UI (EV4) must make legible.
 
 ### 1 — Planned value is phased on the placed span (`docs/TECH_DEBT.md` #405(c), 2026-09-29)
 
-> **Proposed**, awaiting the product owner's approval of the feature spec for #405(c). The link to that
-> spec is added when it is approved, because `check:spec-status` refuses a Draft spec that an ADR cites.
+> **Accepted** (2026-09-29). Feature spec:
+> [`docs/specs/ev-placed-planned-value/spec.md`](../specs/ev-placed-planned-value/spec.md).
 
 **§4 still holds: PV is measured against the active baseline, with a flagged live-budget fallback.
 What changes is which dates that money is spread over.** Since ADR-0148, a bar is drawn where it is

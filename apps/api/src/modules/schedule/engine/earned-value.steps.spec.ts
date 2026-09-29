@@ -87,8 +87,8 @@ function physicalActivity(overrides: Partial<EvActivityInput> = {}): EvActivityI
     baselineStart: null,
     baselineFinish: null,
     baselineBudgetedCost: null,
-    earlyStart: null,
-    earlyFinish: null,
+    liveStart: null,
+    liveFinish: null,
     ...overrides,
   };
 }

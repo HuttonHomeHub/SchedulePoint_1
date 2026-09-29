@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { CriticalPathDefinition, Prisma, TotalFloatMode } from '@prisma/client';
+import type {
+  CriticalPathDefinition,
+  PlacementSnapshotLevel,
+  Prisma,
+  TotalFloatMode,
+} from '@prisma/client';
 import type {
   CrossPlanChangeReport,
   CrossPlanCorrelation,
@@ -1131,8 +1136,12 @@ export class ScheduleService {
    * Viewer/Contributor never reads commercially sensitive money). Resolves the org from the caller's
    * memberships (anti-IDOR) and asserts `cost:read` BEFORE any load; 404s if the plan is not in the
    * caller's org. It NEVER recomputes or mutates: no write lock, no `computeSchedule` — it reads the
-   * persisted `earlyStart`/`earlyFinish` and cost inputs, joins the active baseline's cost snapshot
-   * (live-budget fallback when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   * persisted span and cost inputs, joins the active baseline's cost snapshot (live-budget fallback
+   * when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
+   *
+   * PV is phased on **one basis for the whole read** (ADR-0042 amendment, ADR-0148): the placed span —
+   * frozen on a baseline that recorded one, live otherwise — or the early span against a baseline that
+   * never recorded a placement. The pure function does not know which it was handed.
    */
   async getEarnedValue(
     principal: Principal,
@@ -1154,6 +1163,7 @@ export class ScheduleService {
     // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
     // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
     const baselineById = new Map((snapshot?.activities ?? []).map((s) => [s.sourceActivityId, s]));
+    const basis = this.pvBasisFor(snapshot);
     const componentsById = frozenCostComponents(snapshot);
     const activities: EvActivityInput[] = activityRows.map((r) => {
       const base = baselineById.get(r.id) ?? null;
@@ -1190,8 +1200,12 @@ export class ScheduleService {
           // received before the column existed and takes the single-window fast path by construction.
           ...(a.lagMinutes > 0 ? { lagMinutes: a.lagMinutes } : {}),
         })),
-        baselineStart: base ? day(base.baselineStart) : null,
-        baselineFinish: base ? day(base.baselineFinish) : null,
+        baselineStart: base
+          ? day(basis === 'PLACED' ? base.placedStart : base.baselineStart)
+          : null,
+        baselineFinish: base
+          ? day(basis === 'PLACED' ? base.placedFinish : base.baselineFinish)
+          : null,
         // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
         // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
         baselineBudgetedCost: base
@@ -1203,8 +1217,8 @@ export class ScheduleService {
         // present, so an activity outside an ASSIGNMENT-level snapshot builds the identical object the
         // EV read received before, and the live-share path is preserved rather than re-derived.
         ...(frozen ? { baselineCostComponents: frozen } : {}),
-        earlyStart: day(r.earlyStart),
-        earlyFinish: day(r.earlyFinish),
+        liveStart: day(basis === 'PLACED' ? r.visualEffectiveStart : r.earlyStart),
+        liveFinish: day(basis === 'PLACED' ? r.visualEffectiveFinish : r.earlyFinish),
       };
     });
 
@@ -1768,6 +1782,26 @@ export class ScheduleService {
         ...(crossPlanUpstreamMissingCount !== undefined ? { crossPlanUpstreamMissingCount } : {}),
       },
     };
+  }
+
+  /**
+   * Which span the Earned-Value read phases planned value on, chosen once for the whole read from the
+   * active baseline's placement level (ADR-0042 amendment; the same rule as variance's
+   * `varianceBasisFor`, ADR-0025 Amendment 3). No baseline or `FULL`: `PLACED`, the bar as drawn
+   * (ADR-0148). `NONE`: `NETWORK` — a baseline that never recorded a placement cannot be backfilled
+   * with one, so it keeps the early dates on both sides. Exhaustive with no `default`: a third level is
+   * a compile error rather than a silent fall-through.
+   */
+  private pvBasisFor(
+    snapshot: { placementSnapshotLevel: PlacementSnapshotLevel } | null,
+  ): 'PLACED' | 'NETWORK' {
+    if (snapshot === null) return 'PLACED';
+    switch (snapshot.placementSnapshotLevel) {
+      case 'FULL':
+        return 'PLACED';
+      case 'NONE':
+        return 'NETWORK';
+    }
   }
 
   /**

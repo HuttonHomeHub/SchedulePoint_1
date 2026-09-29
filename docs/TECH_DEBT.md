@@ -11514,8 +11514,11 @@ worked as its own decision:
   `baseline_activities` it adds is a `CASE` arm evaluated for a `FULL` baseline only, served by the
   `(baseline_id, source_activity_id)` index's prefix (`EXPLAIN (ANALYZE)` on 2,048 activities and
   ~125k snapshot rows: Bitmap Index Scan, 59 buffers, 4.7 ms for the whole query) — no schema change.
-- Earned Value phases planned value on the frozen early dates (`schedule.service.ts`,
-  `earned-value.ts`).
+- ~~Earned Value phases planned value on the frozen early dates~~ — **part (c) closed 2026-09-29**
+  (`docs/specs/ev-placed-planned-value/`, ADR-0042 Amendment 1): one basis per read from the
+  baseline's `placementSnapshotLevel` — placed on `FULL` and with no baseline, early on `NONE`.
+  E1–E4 in `schedule.e2e-spec.ts`, U1/U2 in `schedule.service.spec.ts`. The resource histogram still
+  reads early dates and is not part of this row.
 
 DCMA health correctly stays on the network basis and is not part of this row
 (`float-basis.structural.spec.ts`). **Trigger:** the next epic that touches any of these readers.
