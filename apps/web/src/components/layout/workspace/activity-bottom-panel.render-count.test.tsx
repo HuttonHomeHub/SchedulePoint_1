@@ -47,7 +47,7 @@ const CALENDARS: CalendarSummary[] = [];
 const NOOP = (): void => {};
 
 /** A fresh model literal — the shape of the real hook's return, on every call. */
-function freshModel(): PlanWorkspaceModel {
+function freshModel(overrides: Partial<PlanWorkspaceModel> = {}): PlanWorkspaceModel {
   return {
     orgSlug: 'acme',
     planId: 'pl1',
@@ -68,17 +68,23 @@ function freshModel(): PlanWorkspaceModel {
     activities: { data: ACTIVITIES, isPending: false, isError: false },
     plan: { data: { calendarId: null } },
     variance: { data: undefined },
+    ...overrides,
   } as unknown as PlanWorkspaceModel;
 }
 
 function Harness(): React.ReactElement {
   // The canvas selection: state in the workspace that the panel does not read.
   const [selected, setSelected] = useState(0);
-  const panelModel = useActivityPanelModel(freshModel());
+  // A workspace input the panel DOES read, so a genuine model change can be told from a selection.
+  const [editable, setEditable] = useState(false);
+  const panelModel = useActivityPanelModel(freshModel({ canEditSchedule: editable }));
   return (
     <>
       <button type="button" onClick={() => setSelected((n) => n + 1)}>
         Select next ({selected})
+      </button>
+      <button type="button" onClick={() => setEditable((e) => !e)}>
+        Toggle edit
       </button>
       <ActivityBottomPanel model={panelModel} />
     </>
@@ -107,6 +113,24 @@ describe('ActivityBottomPanel — render isolation (M2)', () => {
 
     expect(screen.getByRole('button', { name: 'Select next (1)' })).toBeInTheDocument();
     expect(badgeRenders.count).toBe(0);
+  });
+
+  it('DOES re-render the rows when the workspace changes an input the panel reads', () => {
+    // Positive control: without it `toBe(0)` above is satisfied by a panel that never re-renders.
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), ACTIVITIES);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+    badgeRenders.count = 0;
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle edit' }));
+    });
+
+    expect(badgeRenders.count).toBeGreaterThanOrEqual(ACTIVITIES.length);
   });
 
   it('forwards a duplicate to the LATEST workspace closure, not the one it was built with', () => {

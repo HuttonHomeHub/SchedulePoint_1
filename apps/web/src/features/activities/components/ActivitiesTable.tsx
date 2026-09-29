@@ -228,7 +228,7 @@ function RowActionsButton({
 }: {
   store: ActivitiesTableStore;
   activity: ActivitySummary;
-  menuTriggerRef: React.MutableRefObject<HTMLElement | null>;
+  menuTriggerRef: React.RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const openHere = useSyncExternalStore(
     store.subscribe,

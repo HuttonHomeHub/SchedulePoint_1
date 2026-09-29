@@ -10422,7 +10422,8 @@ seen failing first: the panel takes a narrowed, referentially stable `ActivityPa
 selection runs **zero** row cell renderers (25 before); and `DataTable` renders rows through a
 memoised row keyed on row and `columns` identity while `ActivitiesTable` memoises `columns` and
 moves the selection and open-menu state into a per-table store read by self-subscribing leaves, so
-a checkbox tick or a menu open re-renders at most one row (31 of 31 before). **Whether that moves
+a checkbox tick or a menu open runs at most one row's cell renderers (31 of 31 before; the table
+itself still re-renders on a tick, and its rows skip). **Whether that moves
 I2, I3 and I4 under 200 ms is the harness's to say** — re-run
 `apps/web/scripts/measure-activities-panel.mjs` and append to `m0-measurement.md` under "after M2".
 This row stays **open**: M3 (windowing) is undecided, and E1 (open) is a mount cost M2 does not

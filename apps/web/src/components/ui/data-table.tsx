@@ -9,7 +9,15 @@ import { cn } from '@/lib/utils';
 export interface Column<T> {
   /** Header text; also the accessible header even when visually hidden. */
   header: string;
-  /** Cell renderer for a row. */
+  /**
+   * Cell renderer for a row.
+   *
+   * `DataTable` memoises each row on row identity and `columns` identity, so a host that memoises
+   * `columns` also stops its rows re-rendering. **If you memoise `columns`, every input a cell reads
+   * must be in the memo deps or be read through a subscribing leaf** — a cell closing over anything
+   * else keeps showing the value it saw when the array was last rebuilt (`ActivitiesTable`
+   * subscribes its checkbox and menu trigger to a per-table store for exactly this reason).
+   */
   cell: (row: T) => React.ReactNode;
   /**
    * Render a control in the header cell instead of the {@link header} text — a select-all checkbox,
@@ -291,6 +299,11 @@ export function DataTable<T>({
   scroll = 'page',
 }: {
   caption: string;
+  /**
+   * Column definitions. Keep the array referentially stable to let unchanged rows skip rendering,
+   * and see {@link Column.cell} for what that obliges a cell to do. An inline array is always safe
+   * and re-renders every row on each parent render, as before.
+   */
   columns: Column<T>[];
   /**
    * A `react-query` result, narrowed to what the states need. `refetch` is typed as returning
