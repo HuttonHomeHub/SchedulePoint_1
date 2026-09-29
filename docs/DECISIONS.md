@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-29 — Correction: malformed JSON was never a 500
+
+**What was decided.** The reconciliation pass entry below says `entity.parse.failed` "still reaches
+the opaque-500 branch", and `#412` was filed on that. **It was half wrong.** Nest's router error layer
+rewrites any `SyntaxError` into `new BadRequestException(err.message)` before a filter runs
+(`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON failure is a `SyntaxError`,
+so malformed JSON was always a **400, but one echoing the parser's text**. The other cases the pass
+named (charset, encoding, corrupt compression) really were 500s.
+
+**How it was found, which is the point.** The claim was established by reading the filter, not by
+sending a request. So was the first fix: it passed all 20 filter unit cases and still echoed the
+text, because a unit spec that calls `filter.catch()` directly never runs Nest's router.
+`body-limit.e2e-spec.ts` caught it on its first run. That is §19.8's e2e half doing exactly what it
+says it is for, and ADR-0076 Class 3 in the pass that exists to find Class 3. The entry below is
+left as written; `#412`'s closing note and `docs/API.md` now say what was true.
+
+---
+
 ## 2026-09-29 — Reconciliation pass: the fix for one parser error left its siblings, and the one-line register dropped its qualifiers
 
 **What was decided.** The pass `docs/HANDOFF.md` said was due — ten ADRs since 2026-09-23
