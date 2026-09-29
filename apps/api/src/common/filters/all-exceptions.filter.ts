@@ -19,6 +19,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../errors/domain-errors';
+import { isBodyParserError } from '../http/body-parser-errors';
 
 interface Mapped {
   status: number;
@@ -64,8 +65,13 @@ const BODY_PARSER_ERRORS: ReadonlyMap<string, Mapped> = new Map([
 
 function mapBodyParserError(exception: unknown): Mapped | undefined {
   if (typeof exception !== 'object' || exception === null) return undefined;
-  const type = (exception as { type?: unknown }).type;
-  return typeof type === 'string' ? BODY_PARSER_ERRORS.get(type) : undefined;
+  const { type, status } = exception as { type?: unknown; status?: unknown };
+  const known = typeof type === 'string' ? BODY_PARSER_ERRORS.get(type) : undefined;
+  if (known) return known;
+  // body-parser wraps a raw-body/zlib failure (a corrupt gzip body) as a bare 400 with no `type`.
+  // The status is only believed because our own wrapper saw the parser pass the error to `next`
+  // (`isBodyParserError`) — never on the status alone. Any other status stays a 500.
+  return isBodyParserError(exception) && status === HttpStatus.BAD_REQUEST ? BAD_BODY : undefined;
 }
 
 /**

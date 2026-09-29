@@ -249,6 +249,23 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
       });
     });
 
+    it.each(['gzip', 'br', 'deflate'])(
+      'answers a corrupt %s body on the anonymous CSP sink with 400, not an opaque 500',
+      async (encoding) => {
+        // body-parser hands a zlib failure on with status 400 and NO `type` tag, so only the
+        // parser-error marker set in `app-setup.ts` lets the filter recognise it.
+        const res = await request(server())
+          .post('/api/v1/csp-report')
+          .set('Content-Type', 'application/json')
+          .set('Content-Encoding', encoding)
+          .send(Buffer.from('this is not compressed data at all'))
+          .expect(400);
+        expect(res.body).toEqual({
+          error: { code: 'BAD_REQUEST', message: 'The request body could not be read.' },
+        });
+      },
+    );
+
     it('answers truncated JSON in the browser’s own CSP content type the same way', async () => {
       const res = await request(server())
         .post('/api/v1/csp-report')
@@ -280,7 +297,7 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
       expect(await prisma.cspReport.count()).toBe(0);
     });
 
-    it('is not buffered either: 100 KB of form data is not refused by a body cap', async () => {
+    it('is not refused by a body cap: 100 KB of form data answers 204, not the old 413', async () => {
       // Before the fix this was a 413 from the 100 KB form parser (the default limit is 102,400
       // bytes); now the body is left unread and the sink answers its usual 204.
       await request(server())

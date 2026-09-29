@@ -44,10 +44,14 @@ review; you do not edit code. Assume an adversarial user.
   and guest share included. The accepted residue: a junk cookie still buys one 512 KB read before
   its 401. `public-routes-census.structural.spec.ts` pins that no `@Public()` handler lives under
   the org prefix — a new one there is blocking. JSON is the only body format parsed (the unbounded
-  `urlencoded` parser was removed, `#415`), so 64 KB genuinely bounds what an anonymous caller can
-  make the process buffer. Parser errors are allow-listed on their `type` tag in
-  `all-exceptions.filter.ts` — unreadable body 400, unsupported charset/encoding 415, never echoing
-  the parser's text, never trusting a bare `status` (`#412`). An oversize body answers 413 `PAYLOAD_TOO_LARGE` in the standard envelope.
+  `urlencoded` parser was removed, `#415`), so 64 KB bounds every body **this app's own parsers**
+  read. It does not bound `/api/auth/*`: Better Auth is mounted before the parsers and reads its own
+  bodies (`#416`, unverified whether better-call caps them). Parser errors are recognised in
+  `all-exceptions.filter.ts` by an allow-list on their `type` tag, plus a 400 with no tag only when
+  our own wrapper (`common/http/body-parser-errors.ts`) saw the parser pass it on — unreadable body
+  400, unsupported charset/encoding 415, never echoing the parser's text, never trusting a bare
+  `status` (`#412`).
+  An oversize body answers 413 `PAYLOAD_TOO_LARGE` in the standard envelope.
 - **Guest scope widened once, by name (ADR-0163).** `SCHEDULE_READ` now includes exactly
   `visualEffectiveStart`/`visualEffectiveFinish` (`guest-activity.dto.ts`); every other exclusion
   in `guest-dto.spec.ts` stands, and any further widening needs its own reasoning (`#403`).

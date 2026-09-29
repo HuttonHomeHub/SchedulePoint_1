@@ -1,6 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
 import type { ApiError } from '@repo/types';
+import type { Request, Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +12,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../errors/domain-errors';
+import { tagBodyParserErrors } from '../http/body-parser-errors';
 
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
@@ -122,6 +124,59 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
     // A client's mistake is an expected outcome, not an incident.
     expect(filter['logger'].error).not.toHaveBeenCalled();
     expect(filter['logger'].warn).toHaveBeenCalled();
+  });
+
+  // What body-parser does to a raw-body/zlib failure: `createError(400, error)` with NO `type`
+  // (`lib/read.js:125`, `:136`) — a gzip body of junk bytes is `Z_DATA_ERROR`. Only the fact that
+  // OUR wrapper saw the parser hand it to `next` can tell it from any other error with a status.
+  /** Pass an error through `tagBodyParserErrors` the way `app-setup.ts` mounts the parsers. */
+  function fromParser<T extends Error>(error: T): T {
+    let seen: unknown;
+    tagBodyParserErrors((_req, _res, next) => next(error))({} as Request, {} as Response, (e) => {
+      seen = e;
+    });
+    expect(seen).toBe(error);
+    return error;
+  }
+
+  it('maps a parser error with no type tag and status 400 to 400 when the parser handed it over', () => {
+    const corrupt = fromParser(
+      Object.assign(new Error('incorrect header check'), {
+        status: 400,
+        statusCode: 400,
+        code: 'Z_DATA_ERROR',
+      }),
+    );
+    const { host, sent } = mockHost();
+    filter.catch(corrupt, host);
+    expect(sent.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(sent.body?.error).toEqual({
+      code: 'BAD_REQUEST',
+      message: 'The request body could not be read.',
+    });
+    expect(filter['logger'].error).not.toHaveBeenCalled();
+  });
+
+  it('does not map the same error when nothing marked it as coming from a parser', () => {
+    const { host, sent } = mockHost();
+    filter.catch(
+      Object.assign(new Error('incorrect header check'), { status: 400, code: 'Z_DATA_ERROR' }),
+      host,
+    );
+    expect(sent.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+  });
+
+  it.each([
+    ['a server-side stream fault', 'stream.not.readable', 500],
+    ['an untyped error with an unexpected status', undefined, 403],
+  ])('keeps %s from the parser a 500', (_name, type, status) => {
+    const { host, sent } = mockHost();
+    filter.catch(
+      fromParser(Object.assign(new Error('stream is not readable'), { type, status })),
+      host,
+    );
+    expect(sent.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(sent.body?.error.code).toBe('INTERNAL_ERROR');
   });
 
   it('does not map a parser tag that is not on the allow-list (a server-side stream fault)', () => {

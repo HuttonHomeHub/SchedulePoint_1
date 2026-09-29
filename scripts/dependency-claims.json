@@ -1208,6 +1208,26 @@
       "lines": "61-63",
       "anchor": "? 102400 // 100kb default",
       "citedBy": ["docs/DECISIONS.md", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "read.js:125",
+      "package": "body-parser",
+      "path": "lib/read.js",
+      "lines": "125",
+      "anchor": "_error = createError(400, error)",
+      "citedBy": [
+        "apps/api/src/common/http/body-parser-errors.ts",
+        "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
+        "docs/TECH_DEBT.md"
+      ]
+    },
+    {
+      "ref": "request.mjs:47-55",
+      "package": "better-call",
+      "path": "dist/adapters/node/request.mjs",
+      "lines": "47-55",
+      "anchor": "function get_raw_body(req, body_size_limit)",
+      "citedBy": ["docs/TECH_DEBT.md"]
     }
   ]
 }

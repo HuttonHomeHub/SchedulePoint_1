@@ -156,13 +156,15 @@ Interchange below).
 
 **400 and 415 from the body parser.** A body the parser cannot read is the client's fault and
 answers so, in the standard envelope, before any guard: truncated or malformed JSON, a request
-aborted mid-body, or a length that did not match `Content-Length` is `400 BAD_REQUEST` with the
-fixed text "The request body could not be read."; a charset or `Content-Encoding` the parser does
+aborted mid-body, a length that did not match `Content-Length`, or a corrupt `gzip`/`br`/`deflate`
+body is `400 BAD_REQUEST` with the fixed text "The request body could not be read."; a charset or `Content-Encoding` the parser does
 not support is `415 UNSUPPORTED_MEDIA_TYPE`. The parser's own message is never echoed (it carries
-byte counts and parse positions). Before #412 all of these were an opaque 500, logged as an
+byte counts and parse positions). Before #412 these were an opaque 500, logged as an
 incident. **JSON is the only body format parsed**: a `application/x-www-form-urlencoded` body is
 not read (`req.body` is undefined) — the form parser was removed in #415, having taken 100 KB from
-any caller beside the 64 KB promise above.
+any caller beside the 64 KB promise above. The 64 KB figure bounds every body **this app's own
+parsers** read; `/api/auth/*` (Better Auth) is mounted before them and reads its own bodies, outside
+that cap (#416).
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
