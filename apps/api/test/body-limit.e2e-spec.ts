@@ -220,4 +220,74 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
       error: { code: 'PAYLOAD_TOO_LARGE', message: expect.any(String) },
     });
   });
+
+  // TECH_DEBT #412. The parser's other errors used to reach the opaque-500 branch and be logged as
+  // incidents. `{"a":` is truncated JSON — what a dropped connection or a hand-rolled client sends.
+  describe('a malformed body (#412)', () => {
+    const TRUNCATED = '{"a":';
+
+    it('answers truncated JSON on an authenticated org route with 400 and the envelope', async () => {
+      const { agent } = await signedInPlan();
+      const res = await agent
+        .post('/api/v1/organizations/acme/clients')
+        .set('Content-Type', 'application/json')
+        .send(TRUNCATED)
+        .expect(400);
+      expect(res.body).toEqual({
+        error: { code: 'BAD_REQUEST', message: 'The request body could not be read.' },
+      });
+    });
+
+    it('answers truncated JSON on the anonymous CSP sink with 400 and the envelope', async () => {
+      const res = await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/json')
+        .send(TRUNCATED)
+        .expect(400);
+      expect(res.body).toEqual({
+        error: { code: 'BAD_REQUEST', message: 'The request body could not be read.' },
+      });
+    });
+
+    it('answers truncated JSON in the browser’s own CSP content type the same way', async () => {
+      const res = await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/csp-report')
+        .send(TRUNCATED)
+        .expect(400);
+      expect(res.body.error.code).toBe('BAD_REQUEST');
+    });
+  });
+
+  // TECH_DEBT #415. No route reads a form body, so the `urlencoded` parser (100 KB default, no
+  // `limit`) was removed. The smallest honest test is a body that only that parser could have
+  // turned into something: with `extended: true`, bracketed keys parse into the nested object a
+  // legacy CSP report is, and the sink would record it. With no parser the body is never read into
+  // `req.body`, so the sink sees nothing to record.
+  describe('a form-encoded body (#415)', () => {
+    it('is not parsed: a form that would parse into a CSP report records nothing', async () => {
+      await prisma.cspReport.deleteMany();
+      const form = new URLSearchParams({
+        'csp-report[document-uri]': 'https://app.example/plans/42',
+        'csp-report[effective-directive]': 'script-src-elem',
+        'csp-report[blocked-uri]': 'inline',
+      }).toString();
+      await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/x-www-form-urlencoded')
+        .send(form)
+        .expect(204);
+      expect(await prisma.cspReport.count()).toBe(0);
+    });
+
+    it('is not buffered either: 100 KB of form data is not refused by a body cap', async () => {
+      // Before the fix this was a 413 from the 100 KB form parser (the default limit is 102,400
+      // bytes); now the body is left unread and the sink answers its usual 204.
+      await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/x-www-form-urlencoded')
+        .send(`padding=${'x'.repeat(100 * 1024)}`)
+        .expect(204);
+    });
+  });
 });

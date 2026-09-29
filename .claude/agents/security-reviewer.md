@@ -43,9 +43,11 @@ review; you do not edit code. Assume an adversarial user.
   when a cookie or `Authorization` header is presented; 64 KB everywhere else, the anonymous sinks
   and guest share included. The accepted residue: a junk cookie still buys one 512 KB read before
   its 401. `public-routes-census.structural.spec.ts` pins that no `@Public()` handler lives under
-  the org prefix — a new one there is blocking. **Not yet true:** the `urlencoded` parser has no
-  limit (100 KB default, `#415`), and body-parser errors other than oversize still map to 500
-  (`#412`). An oversize body answers 413 `PAYLOAD_TOO_LARGE` in the standard envelope.
+  the org prefix — a new one there is blocking. JSON is the only body format parsed (the unbounded
+  `urlencoded` parser was removed, `#415`), so 64 KB genuinely bounds what an anonymous caller can
+  make the process buffer. Parser errors are allow-listed on their `type` tag in
+  `all-exceptions.filter.ts` — unreadable body 400, unsupported charset/encoding 415, never echoing
+  the parser's text, never trusting a bare `status` (`#412`). An oversize body answers 413 `PAYLOAD_TOO_LARGE` in the standard envelope.
 - **Guest scope widened once, by name (ADR-0163).** `SCHEDULE_READ` now includes exactly
   `visualEffectiveStart`/`visualEffectiveFinish` (`guest-activity.dto.ts`); every other exclusion
   in `guest-dto.spec.ts` stands, and any further widening needs its own reasoning (`#403`).

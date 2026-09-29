@@ -18,7 +18,9 @@ import { CspReportService } from './csp-report.service';
  * **It always answers 204, whatever arrives.** Two reasons, and the second is the load-bearing one:
  * there is no caller to inform — a browser posting a report does not read the response and cannot
  * act on it — and an endpoint that returned errors would tell an attacker which probes were
- * interesting. Malformed bodies are dropped silently rather than rejected loudly.
+ * interesting. Malformed bodies are dropped silently rather than rejected loudly — **once they
+ * reach this handler**. A body the parser cannot read at all (truncated JSON) never gets here: the
+ * exception filter answers it 400 (TECH_DEBT #412), which used to be an opaque 500.
  *
  * Hidden from the OpenAPI document: it is a browser-to-server mechanism defined by a web
  * specification, not part of this product's API, and listing it would invite a client to call it.

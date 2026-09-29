@@ -1,7 +1,7 @@
 import { VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, urlencoded, type Request, type RequestHandler } from 'express';
+import { json, type Request, type RequestHandler } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
@@ -98,6 +98,14 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // sends a junk cookie, because the parser precedes the guard and cannot validate one. That residue
   // is one 512 KB buffer per in-flight request from a caller who then gets a 401.
   //
+  // **JSON is the only body format parsed here, which is what makes "64 KB" a bound on everything
+  // an anonymous caller can make the process buffer.** A `urlencoded` parser used to be mounted
+  // after these with no `limit`, so body-parser's 100 KB default applied on every route beside a
+  // comment promising 64 (TECH_DEBT #415); no route reads a form body, so it was removed rather
+  // than capped. A form-encoded body now reaches its handler unparsed (`req.body` undefined).
+  // Multipart is multer's, capped per route; Better Auth is mounted above
+  // and reads its own bodies.
+  //
   // Mounted first: body-parser skips a request an earlier parser already read
   // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
   // below never sees a body the large one handled.
@@ -111,7 +119,6 @@ export function configureHttpApp(app: NestExpressApplication): void {
   };
   app.use(ORG_SCOPED_PATH_PREFIX, orgScoped);
   app.use(json({ type: jsonTypes, limit: DEFAULT_JSON_LIMIT }));
-  app.use(urlencoded({ extended: true }));
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).
   app.setGlobalPrefix('api');

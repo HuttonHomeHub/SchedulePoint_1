@@ -1,7 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
 import type { ApiError } from '@repo/types';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ConflictError,
@@ -80,6 +80,11 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
   vi.spyOn(filter['logger'], 'warn').mockImplementation(() => undefined);
   vi.spyOn(filter['logger'], 'error').mockImplementation(() => undefined);
 
+  beforeEach(() => {
+    vi.mocked(filter['logger'].warn).mockClear();
+    vi.mocked(filter['logger'].error).mockClear();
+  });
+
   it('maps the JSON parser’s entity.too.large error to 413 with the envelope', () => {
     // The shape `body-parser` throws (an http-errors object): neither a DomainError nor an
     // HttpException, so it used to fall through to the opaque 500.
@@ -95,6 +100,41 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
     expect(sent.status).toBe(HttpStatus.PAYLOAD_TOO_LARGE);
     expect(sent.body?.error).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
     expect(sent.body?.error.message).not.toContain('entity');
+  });
+
+  // The shapes body-parser@2.3.0 / raw-body@3.0.2 throw, by their own `type` tag (read from
+  // `body-parser/lib/read.js` and `raw-body/index.js`). Each carries a message that echoes the
+  // request — the parser's own text must never reach the client.
+  it.each([
+    ['entity.parse.failed', 400, 'BAD_REQUEST', 'Unexpected end of JSON input'],
+    ['entity.verify.failed', 403, 'BAD_REQUEST', 'verify failed'],
+    ['request.aborted', 400, 'BAD_REQUEST', 'request aborted'],
+    ['request.size.invalid', 400, 'BAD_REQUEST', 'request size did not match content length'],
+    ['charset.unsupported', 415, 'UNSUPPORTED_MEDIA_TYPE', 'unsupported charset "UTF-7"'],
+    ['encoding.unsupported', 415, 'UNSUPPORTED_MEDIA_TYPE', 'unsupported content encoding "br"'],
+  ])('maps the parser’s %s error (its status %i) to a client error', (type, status, code, text) => {
+    const error = Object.assign(new Error(text), { type, status, statusCode: status });
+    const { host, sent } = mockHost();
+    filter.catch(error, host);
+    expect(sent.status).toBe(code === 'BAD_REQUEST' ? 400 : 415);
+    expect(sent.body?.error.code).toBe(code);
+    expect(sent.body?.error.message).not.toContain(text);
+    // A client's mistake is an expected outcome, not an incident.
+    expect(filter['logger'].error).not.toHaveBeenCalled();
+    expect(filter['logger'].warn).toHaveBeenCalled();
+  });
+
+  it('does not map a parser tag that is not on the allow-list (a server-side stream fault)', () => {
+    const { host, sent } = mockHost();
+    filter.catch(
+      Object.assign(new Error('stream is not readable'), {
+        type: 'stream.not.readable',
+        status: 500,
+      }),
+      host,
+    );
+    expect(sent.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(sent.body?.error.code).toBe('INTERNAL_ERROR');
   });
 
   it('does not trust a bare `status` property on an unknown error', () => {
