@@ -240,7 +240,8 @@ export class OverviewRepository {
    * is the PLACED one (ADR-0148) and a placed date set against a frozen early date would report a
    * placement as slippage. That read is a `CASE` arm evaluated only for a `FULL` baseline, and it is
    * served by the `(baseline_id, source_activity_id)` index's `baseline_id` prefix — one baseline
-   * per plan, the plan list capped at eight; the measured plan is in the commit that added it.
+   * per plan, the plan list capped at eight. Measured 2026-09-29 on 2,049 snapshot rows (scratch
+   * Postgres 16): a Bitmap Index Scan on that prefix, 4.7 ms execution.
    *
    * **The counting columns are read exactly as `ScheduleRepository.summarise` reads them**
    * (`schedule.repository.ts:375-416`) — the same `COUNT(*) FILTER (WHERE …)` over the same
