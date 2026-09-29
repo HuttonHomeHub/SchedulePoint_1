@@ -1,5 +1,14 @@
 # @repo/web
 
+## 0.153.2
+
+### Patch Changes
+
+- [#727](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/727) [`12b7b7e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/12b7b7e2e186089c57dba9b6ee03d0e841471a50) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activities panel no longer re-renders its whole table when you select something on the
+  canvas, and ticking a row's checkbox or opening its actions menu now runs at most one row's cell
+  renderers instead of every row's, which is what made those clicks slow on plans with thousands of
+  activities.
+
 ## 0.153.1
 
 ### Patch Changes
