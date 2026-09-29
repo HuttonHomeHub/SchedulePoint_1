@@ -11547,8 +11547,8 @@ worked as its own decision:
 
 DCMA health correctly stays on the network basis and is not part of this row
 (`float-basis.structural.spec.ts`). **What is left:** only the rename. **Trigger:** the next change
-that already breaks the revision comparison's response, or a product-owner decision to take the
-breaking change on its own (put to them in `docs/HANDOFF.md`, 2026-09-29).
+that already breaks the revision comparison's response. The product owner chose, 2026-09-29, not to
+take the breaking change on its own.
 
 ### 406. The critical-path what-if's throttle was measured before it levelled
 
@@ -11660,11 +11660,12 @@ them (`#404`, `#405`). The resource histogram did not: `loadResourceHistogramAss
 `activity.earlyStart/earlyFinish`, so a bar the planner has dragged later is still counted as load
 at its earliest possible dates. `#405` said so in one line and tracked it nowhere.
 
-**This is a product decision before it is a fix** (put to the product owner in `docs/HANDOFF.md`,
-2026-09-29): levelling (ADR-0071 M2) and the histogram share the early-date basis — the leveller
-starts every activity from `earlyStartOffset` (`engine/level.ts:165`, `:216`) — and moving the
-chart without the leveller would show load the leveller does not see. **Trigger:** the product
-owner's answer.
+**Product owner, 2026-09-29: label it now, decide the basis with levelling later** (option (b) of
+the question in `docs/HANDOFF.md`). The basis is not a fix on its own: levelling (ADR-0071 M2) and
+the histogram share the early-date basis — the leveller starts every activity from
+`earlyStartOffset` (`engine/level.ts:165`, `:216`) — and moving the chart without the leveller would
+show load the leveller does not see. This row stays open for that decision once the label ships.
+**Trigger:** the next epic that touches levelling.
 
 ### 414. Concurrent `pnpm prepush` runs overwrite each other's failure output
 

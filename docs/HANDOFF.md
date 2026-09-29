@@ -30,6 +30,11 @@ epic boundary; its history is in git.
 
 ## Open decisions for the product owner
 
+> **Answered, 2026-09-29: the product owner took every recommendation below** — (1) windowing,
+> option (a); (2) label the chart, option (b), levelling decided later; (3) rows say they speak late
+> dates and the overlay toggle is announced, float/drift wording unchanged; (4) rename deferred;
+> (5) 512 KB confirmed. The text below is kept as what was asked.
+
 Written for the product owner in plain English. Each one says what the choice is, what each answer
 costs, and what I'd recommend. Nothing below has been started.
 

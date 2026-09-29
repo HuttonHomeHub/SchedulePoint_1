@@ -58,3 +58,10 @@ is not in doubt. So the table's E1-FAIL row applies: **M3 is armed** (windowing,
 CQ-B put to the product owner with these numbers), and **M2 as well** because I2 fails at 2,000
 rows. Both are a follow-up after the release that ships M1; `docs/TECH_DEBT.md` #334 stays open
 for them.
+
+## CQ-B, answered
+
+**Product owner, 2026-09-29: option (a) — window the table and accept the two costs** (find-in-page
+cannot reach off-window rows; screen-reader table navigation reaches rows as the window moves), put
+to them in plain English in `docs/HANDOFF.md` with these numbers. The filter box (option (b)) was
+not taken. M3 opens with its ADR, as the plan requires.
