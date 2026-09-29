@@ -10,6 +10,33 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-29 — Model routing is pinned in config, and CLAUDE.md §16 is one line per ADR
+
+**What.** Four changes, chosen by the product owner to cut AI usage without lowering the
+standard: (1) `CLAUDE.md` §16 becomes one line per ADR, with the previous narratives archived
+verbatim in [`ADR_REGISTER_HISTORY.md`](ADR_REGISTER_HISTORY.md); (2) a Sonnet **builder** agent
+and a Haiku **explorer** agent join `.claude/agents/`, with the planners kept on Opus; (3) the
+main session runs Sonnet for build-and-ship stretches and Opus for planning; (4) a fresh session
+starts at each batch or epic boundary from [`HANDOFF.md`](HANDOFF.md). Recorded as `CLAUDE.md`
+§19.14.
+
+**Why.** Measured rather than assumed. `CLAUDE.md` was 603 KB (~150k tokens), and §16 was 534 KB
+of it — and that file is loaded into every session and every agent run, ~300 agent runs in the
+one session that found it. Every builder, however small its task, paid for the whole ADR
+register before reading its brief. The session itself had reached ~640k tokens of context,
+re-read on every turn. And the transcript showed builder runs split 20 on Opus (sent to
+`general-purpose`, which inherits the session model) against 16 on Sonnet (passed explicitly) —
+a policy that depended on remembering to pass a parameter.
+
+**Consequences.** `CLAUDE.md` falls to ~103 KB. ADR-0147's gate is unchanged: it requires one
+bolded entry per ADR and each line is one. ADR-0147 D7 (§16 is checked, not generated) still
+holds — the one-liners were generated once and are hand-maintained from here. The archive is
+not kept in step with new ADRs; each ADR file is the authoritative account. Rejected: moving §16
+out of `CLAUDE.md` entirely (the gate would have to read a different file, a shared-gate change)
+and lowering reviewer effort (the gate passes catch real blocking defects nearly every epic).
+
+---
+
 ## 2026-09-23 — The seed catalogue gains a sixth tier: reference programmes
 
 **What was decided.** A `reference` tier joins ADR-0066's five, holding whole programmes transcribed
