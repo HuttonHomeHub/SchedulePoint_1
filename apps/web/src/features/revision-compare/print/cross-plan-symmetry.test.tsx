@@ -44,6 +44,7 @@ import { RevisionComparePrintDocument } from './RevisionComparePrintDocument';
  */
 
 const CROSS_PLAN: CrossPlanRevisionCompare = {
+  datesBasis: 'PLACED',
   fromPlan: { id: 'p-old', name: 'Riverside Rev A', projectId: 'proj', projectName: 'Riverside' },
   toPlan: { id: 'p-new', name: 'Riverside Rev B', projectId: 'proj', projectName: 'Riverside' },
   from: {

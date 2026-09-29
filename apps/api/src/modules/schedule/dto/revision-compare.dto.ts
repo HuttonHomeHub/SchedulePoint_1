@@ -17,6 +17,7 @@ import type {
   RevisionSettingsVerdict,
   RevisionSide,
   RevisionSideKind,
+  VarianceBasis,
 } from '@repo/types';
 import {
   REVISION_COMPLETION_REASONS,
@@ -384,6 +385,19 @@ export class RevisionLinkChangeDto implements RevisionLinkChange {
 export class RevisionCompareDto implements RevisionCompare {
   @ApiProperty() planId!: string;
   @ApiProperty() planName!: string;
+
+  @ApiProperty({
+    enum: ['PLACED', 'NETWORK'],
+    description:
+      'Which dates every date-bearing figure compares, chosen once per read. `PLACED` when every ' +
+      'baseline side recorded where its bars were placed (placed spans against the live ' +
+      'effective-Visual span — ADR-0025 Amendment 3, ADR-0148); `NETWORK` when any baseline side ' +
+      'predates that record, so earliest dates are compared on both sides. The `Early*` fields ' +
+      'carry whichever dates this states. Criticality and float are network quantities on either ' +
+      'basis.',
+  })
+  datesBasis!: VarianceBasis;
+
   @ApiProperty({ type: RevisionSideDto }) from!: RevisionSideDto;
   @ApiProperty({ type: RevisionSideDto }) to!: RevisionSideDto;
 

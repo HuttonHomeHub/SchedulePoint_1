@@ -3515,6 +3515,8 @@ export interface CrossPlanCriticalPathDelta extends Omit<
  * shading it, because the action does not apply to the object (ADR-0082).
  */
 export interface CrossPlanRevisionCompare {
+  /** Which dates this comparison reads — see {@link RevisionCompare.datesBasis}. */
+  readonly datesBasis: VarianceBasis;
   /** The OLD side's plan. */
   readonly fromPlan: CrossPlanRevisionPlan;
   /** The NEW side's plan — **the anchor**: the one the reader has open and the one ids resolve in. */
@@ -3542,6 +3544,17 @@ export interface CrossPlanRevisionCompare {
 export interface RevisionCompare {
   planId: string;
   planName: string;
+  /**
+   * Which dates every date-bearing figure below compares — chosen **once per read**, never per row
+   * (ADR-0025 Amendment 3; the variance read follows the same rule). `PLACED`: every frozen side
+   * recorded where its bars were placed, so placed spans are compared against the live
+   * effective-Visual span and a bar moved by placement alone is a move. `NETWORK`: some frozen side
+   * predates that record, so the only honest comparison is the network's earliest dates on both
+   * sides. It is a property of the PAIR, so a mixed pair is `NETWORK`. The `Early*` field names
+   * elsewhere in this response carry whichever dates this states; criticality and float are
+   * network quantities on either basis.
+   */
+  datesBasis: VarianceBasis;
   from: RevisionSide;
   to: RevisionSide;
   /**

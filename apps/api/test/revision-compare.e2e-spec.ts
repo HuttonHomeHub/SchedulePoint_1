@@ -651,5 +651,53 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       };
       expect([...delta.entered, ...delta.left, ...delta.added, ...delta.removed]).toHaveLength(0);
     });
+
+    describe('the dates compared (#405 (a))', () => {
+      /** A bar hand-placed AFTER capture: the network's dates do not move, the drawn bar does. */
+      async function placedAfterCapture(baselineLevel: 'FULL' | 'NONE') {
+        const admin = await adminWithOrg();
+        const { planId, a } = await chainPlan(admin);
+        const from = await capture(admin, planId, 'Rev A');
+        if (baselineLevel === 'NONE') {
+          // The legacy state (every baseline taken before placement was recorded), which the public
+          // API can no longer produce — the same exception as the revision-level case above.
+          await prisma.baseline.update({
+            where: { id: from },
+            data: { placementSnapshotLevel: 'NONE' },
+          });
+        }
+        const live = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
+        await admin.agent
+          .patch(`/api/v1/organizations/acme/activities/${a}`)
+          .send({ visualStart: '2026-01-20', version: live.version })
+          .expect(200);
+        await recalculate(admin, planId);
+        const after = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
+        // The premise, asserted rather than assumed: placement moved the drawn bar and left the
+        // network's dates alone. Without it neither outcome below proves anything.
+        expect(after.visualEffectiveStart?.toISOString()).not.toBe(after.earlyStart?.toISOString());
+        expect(after.earlyStart?.toISOString()).toBe(live.earlyStart?.toISOString());
+        const res = await admin.agent
+          .get(`${compareUrl(planId, from)}&include=changes&include=ghosts`)
+          .expect(200);
+        return { body: res.body, a, classes: classesOf(res.body) };
+      }
+
+      it('reports a bar moved by placement alone, on a baseline that recorded its placement', async () => {
+        const { body, a, classes } = await placedAfterCapture('FULL');
+
+        expect(body.data.datesBasis).toBe('PLACED');
+        expect(classes.get('REDATED')?.rows.map((r) => r.subjectId)).toEqual([a]);
+        expect(body.data.ghosts.map((g: { activityId: string }) => g.activityId)).toContain(a);
+      });
+
+      it('falls back to earliest-vs-earliest on a baseline captured before placement was recorded', async () => {
+        const { body, classes } = await placedAfterCapture('NONE');
+
+        expect(body.data.datesBasis).toBe('NETWORK');
+        expect(classes.get('REDATED')?.rows).toEqual([]);
+        expect(body.data.ghosts).toEqual([]);
+      });
+    });
   });
 });

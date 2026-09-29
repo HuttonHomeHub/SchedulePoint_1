@@ -29,6 +29,7 @@ const completion = (over: Partial<RevisionCompletion> = {}): RevisionCompletion 
 const compare = (over: Partial<RevisionCompare> = {}): RevisionCompare => ({
   planId: 'p1',
   planName: 'Riverside',
+  datesBasis: 'PLACED',
   from: {
     kind: 'BASELINE',
     id: 'b1',

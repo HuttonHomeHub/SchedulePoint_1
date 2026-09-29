@@ -189,4 +189,8 @@ its strong form.
   (CPM execution & persistence — the plan advisory lock), ADR-0023 (CPM date convention),
   ADR-0024 (working-day calendars).
 - Amended by: ADR-0148 (a bar is drawn where it is placed — the placed basis this amendment reads).
+- Amendment 3 now also governs the revision comparison (`#405` (a)): both routes choose one
+  `datesBasis` per read from the frozen sides' `placementSnapshotLevel` — placed against placed only
+  when every baseline side is `FULL`, earliest against earliest otherwise — through
+  `revisionDatesBasis` in `revision-projections.ts`.
 - PROJECT_BRIEF §8 (Must-have), §10 (Journey 4), §11, §13 (retention), §17 (trust risk).

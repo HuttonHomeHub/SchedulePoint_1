@@ -179,7 +179,9 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
      * not `apps/api/test`. Widening it turned the comment into a failing test, which is what a
      * gate is for and an intention is not.
      */
-    const project_ = liveRevisionSide;
+    // Two live plans, no frozen side: the basis the service derives for exactly this pair.
+    const project_ = (rows: Parameters<typeof liveRevisionSide>[0]) =>
+      liveRevisionSide(rows, 'PLACED');
 
     /**
      * The correlation M1 will ship, written here so P2 measures its shape rather than omitting it.

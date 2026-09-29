@@ -344,6 +344,17 @@ reported whether or not either plan happens to hold a placement, because a reaso
 when there was something to compare could not separate "nobody looked" from "we looked and there was
 nothing".
 
+**Revision comparison states which dates it compared — `datesBasis`** (`#405` (a), ADR-0025
+Amendment 3), on both routes and always present. `PLACED` when every baseline side is
+`placement_snapshot_level: FULL`: frozen `placedStart`/`placedFinish` against the live
+effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, the ghosts, the moved
+rows' `from`/`toEarly*` and the completion's finish dates). `NETWORK` when any baseline side is
+`NONE`: earliest dates on both sides, exactly as before, and it is a property of the **pair** — one
+short side makes the whole read `NETWORK` rather than mixing two questions in one report. It is
+chosen once per read, never per row, and mirrors `meta.basis` on the variance read. The `Early*`
+field names are unchanged and carry whichever dates `datesBasis` states; criticality and float stay
+network quantities on either basis.
+
 ### The placement migration report (one-planning-surface M-I)
 
 `GET …/plans/:planId/placement-migration` — **any member** of the organisation

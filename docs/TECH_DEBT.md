@@ -11501,9 +11501,12 @@ placed dates on a `FULL` baseline — the bars as drawn (ADR-0148). Other reader
 network's earliest dates and will disagree with variance for any hand-placed bar until each is
 worked as its own decision:
 
-- The revision comparison's delta, `REDATED` class and ghosts read early dates on both sides
-  (`revision-projections.ts`); `m-c/placement-snapshot.md` expected `REDATED` to move to placed at
-  M-F, and it did not.
+- **(a) closed 2026-09-29.** The revision comparison's delta, `REDATED` class and ghosts read early
+  dates on both sides (`revision-projections.ts`); `m-c/placement-snapshot.md` expected `REDATED` to
+  move to placed at M-F, and it did not. Both routes now choose one `datesBasis` per read —
+  `PLACED` when every baseline side is `FULL`, earliest against earliest otherwise — pinned by
+  `revision-projections.spec.ts`, the `#405 (a)` cases in
+  `schedule.service.cross-plan-revision.spec.ts` and `revision-compare.e2e-spec.ts`.
 - ~~The landing page's plan standing compares `capturedProjectFinish` with `MAX(early_finish)`
   (`overview.repository.ts`), and `capturedProjectFinish` is itself the maximum early finish at
   capture (`baselines.service.ts`).~~ **Part (b) closed 2026-09-29:** the standing states the placed

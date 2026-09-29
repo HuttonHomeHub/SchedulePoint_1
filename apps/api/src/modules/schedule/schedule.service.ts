@@ -63,6 +63,7 @@ import {
   frozenRevisionSide,
   liveRevisionEdges,
   liveRevisionSide,
+  revisionDatesBasis,
   revisionDate,
 } from '../baselines/revision-projections';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -1947,8 +1948,15 @@ export class ScheduleService {
         wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
       ]);
 
+    // The dates the whole read compares, chosen ONCE from the frozen sides (#405 (a)) — never per
+    // row, which would mix two questions in one report. The same derivation as
+    // `bothPlacementSnapshotted` below, kept as ONE rule by both being about `placementSnapshotLevel`.
+    const datesBasis = revisionDatesBasis(
+      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
+    );
+
     // The SHARED projections. A local copy would look right and drift — `revision-projections.ts`.
-    const liveSide = liveRevisionSide(liveRows);
+    const liveSide = liveRevisionSide(liveRows, datesBasis);
 
     // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
     // FROZEN hours-per-day factor. Not the carrier's own calendar — `BaselineActivity` carries no
@@ -1971,8 +1979,8 @@ export class ScheduleService {
      * It also makes the "one projection, three readers" claim in this method's docblocks true by
      * construction rather than by three identical calls happening to agree.
      */
-    const fromSide = frozenRevisionSide(fromRows);
-    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows);
+    const fromSide = frozenRevisionSide(fromRows, datesBasis);
+    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows, datesBasis);
 
     const delta = computeRevisionDelta(fromSide, toSide, REVISION_ROW_CAP, movementDaysBetween);
 
@@ -2106,6 +2114,7 @@ export class ScheduleService {
     const result: RevisionCompare = {
       planId,
       planName: plan.name,
+      datesBasis,
       from: {
         kind: 'BASELINE',
         id: fromBaseline.id,
@@ -2334,6 +2343,12 @@ export class ScheduleService {
       toPlanId,
     );
 
+    // The dates the whole comparison reads — once, from the frozen sides (#405 (a)). Two live
+    // plans have no frozen side to fall back from and compare placed spans.
+    const datesBasis = revisionDatesBasis(
+      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
+    );
+
     const [
       fromRawRows,
       toRawRows,
@@ -2346,15 +2361,15 @@ export class ScheduleService {
       fromBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(fromBaseline.id, organization.id)
-            .then(frozenRevisionSide)
+            .then((rows) => frozenRevisionSide(rows, datesBasis))
         : this.baselines
             .loadActiveActivitiesForDelta(organization.id, fromPlanId)
-            .then(liveRevisionSide),
+            .then((rows) => liveRevisionSide(rows, datesBasis)),
       toBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(toBaseline.id, organization.id)
-            .then(frozenRevisionSide)
-        : anchorLiveRowsPromise.then(liveRevisionSide),
+            .then((rows) => frozenRevisionSide(rows, datesBasis))
+        : anchorLiveRowsPromise.then((rows) => liveRevisionSide(rows, datesBasis)),
       /**
        * **The anchor plan's LIVE rows, read whether or not the `to` side is live — but read ONCE.**
        *
@@ -2481,6 +2496,7 @@ export class ScheduleService {
     };
 
     const identity = {
+      datesBasis,
       fromPlan: {
         id: fromPlan.id,
         name: fromPlan.name,

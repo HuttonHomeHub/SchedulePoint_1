@@ -16,6 +16,7 @@ import type {
   RevisionChangeClass,
   RevisionNotAssessableReason,
   RevisionSettingsVerdict,
+  VarianceBasis,
 } from '@repo/types';
 import {
   REVISION_FREE_CHANGE_CLASSES,
@@ -325,6 +326,16 @@ export class CrossPlanCriticalPathDeltaDto implements CrossPlanCriticalPathDelta
 }
 
 export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
+  @ApiProperty({
+    enum: ['PLACED', 'NETWORK'],
+    description:
+      'Which dates every date-bearing figure compares, chosen once per read: `PLACED` when every ' +
+      'baseline side recorded where its bars were placed, `NETWORK` (earliest dates on both ' +
+      'sides) when any baseline side predates that record. The `Early*` fields carry whichever ' +
+      'dates this states.',
+  })
+  datesBasis!: VarianceBasis;
+
   @ApiProperty({ type: CrossPlanRevisionPlanDto }) fromPlan!: CrossPlanRevisionPlanDto;
 
   @ApiProperty({
