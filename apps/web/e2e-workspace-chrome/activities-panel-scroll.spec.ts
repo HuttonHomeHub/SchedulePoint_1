@@ -236,6 +236,20 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
       ).toBe(true);
     }
 
+    // ── WCAG 2.4.3: a scroll far past the overscan does not drop focus ─────────────────────────
+    // Row 1's control holds focus while the region is scrolled to the bottom with `scrollTop` (a
+    // wheel or scrollbar drag, not a Tab), which would unmount an un-pinned row and leave <body>.
+    const firstControl = region.getByRole('button', { name: 'Actions for Activity 01' });
+    await firstControl.focus();
+    await region.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(firstControl).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+    await region.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+
     // ── D1: column widths did not move across a full scroll, down and back ──────────────────────
     const seen: number[][] = [];
     for (const fraction of [0.25, 0.5, 0.75, 1, 0.5, 0]) {

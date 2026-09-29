@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataTable, type Column } from './data-table';
@@ -125,6 +125,59 @@ describe('windowed DataTable — window and announced size', () => {
   });
 });
 
+describe('windowed DataTable — the header and the focused row', () => {
+  it('numbers the header row 1, and only in windowed mode', () => {
+    render(table(rowsOf(5)));
+    expect(screen.getAllByRole('row')[0]).toHaveAttribute('aria-rowindex', '1');
+  });
+
+  const focusable: Column<Row>[] = [
+    { header: 'Name', cell: (row) => <button type="button">{`Open ${row.name}`}</button> },
+  ];
+  const scrollTo = (top: number) => {
+    const scroller = screen.getByRole('region');
+    scroller.scrollTop = top;
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+  };
+
+  it('keeps the row that holds focus mounted after the window scrolls far away', () => {
+    render(table(rowsOf(500), focusable));
+    const button = screen.getByRole('button', { name: 'Open Row 0' });
+    act(() => {
+      button.focus();
+    });
+    scrollTo(37 * 300);
+    expect(screen.queryByRole('button', { name: 'Open Row 300' })).not.toBeNull();
+    expect(button.isConnected).toBe(true);
+    expect(button).toHaveFocus();
+    // The gap between the pinned row and the window is a spacer, so the total height is intact.
+    const heights = [...screen.getByRole('table').querySelectorAll('tbody > tr[aria-hidden]')].map(
+      (tr) => Number.parseFloat(tr.querySelector('td')!.style.height),
+    );
+    expect(heights.length).toBeGreaterThanOrEqual(3);
+    expect(heights.reduce((a, b) => a + b, 0) + dataRows().length * 37).toBe(500 * 37);
+    const indexes = dataRows().map((tr) => Number(tr.getAttribute('aria-rowindex')));
+    expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
+  });
+
+  it('lets the row unmount once focus is released', () => {
+    render(table(rowsOf(500), focusable));
+    const button = screen.getByRole('button', { name: 'Open Row 0' });
+    act(() => {
+      button.focus();
+    });
+    scrollTo(37 * 300);
+    expect(button.isConnected).toBe(true);
+    act(() => {
+      button.blur();
+    });
+    expect(screen.queryByRole('button', { name: 'Open Row 0' })).toBeNull();
+    fireEvent.scroll(screen.getByRole('region'));
+  });
+});
+
 describe('windowed DataTable — column widths are frozen (ADR-0165 D1)', () => {
   let widths: Record<string, number>;
   let scrollerWidth: number;
@@ -214,6 +267,30 @@ describe('windowed DataTable — column widths are frozen (ADR-0165 D1)', () => 
     widths = { Code: 90, Name: 200, Extra: 110 };
     rerender(table(rowsOf(50), [...columns, { header: 'Extra', cell: () => 'x' }]));
     expect(colWidths()).toEqual(['90px', '200px', '110px']);
+  });
+
+  it('re-measures once when the web fonts finish loading', async () => {
+    let resolveFonts: () => void = () => {};
+    const ready = new Promise<void>((resolve) => {
+      resolveFonts = resolve;
+    });
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { status: 'loading', ready },
+    });
+    try {
+      render(table(rowsOf(50)));
+      expect(colWidths()).toEqual(['90px', '310px']);
+      // The fallback face measured 90/310; the real face is wider.
+      widths = { Code: 110, Name: 360 };
+      await act(async () => {
+        resolveFonts();
+        await ready;
+      });
+      expect(colWidths()).toEqual(['110px', '360px']);
+    } finally {
+      Reflect.deleteProperty(document, 'fonts');
+    }
   });
 
   it('does not read layout on a scroll', () => {

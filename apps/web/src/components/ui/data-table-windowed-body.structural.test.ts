@@ -46,3 +46,24 @@ describe('useVirtualizer import sites', () => {
     expect(importers()).not.toContain('src/components/ui/data-table.tsx');
   });
 });
+
+describe('the test-only row budget', () => {
+  it('is imported by no non-test file (ADR-0165 D7: never a production flag)', () => {
+    let out = '';
+    try {
+      out = execFileSync(
+        'grep',
+        ['-rl', '--include=*.ts', '--include=*.tsx', 'setWindowedRowBudgetForTests', 'src'],
+        { encoding: 'utf8' },
+      );
+    } catch {
+      out = '';
+    }
+    const users = out
+      .split('\n')
+      .filter((file) => file !== '' && !/\.test\.tsx?$/.test(file))
+      .sort();
+    // Only its own definition may mention it.
+    expect(users).toEqual(['src/components/ui/data-table-windowed-body.tsx']);
+  });
+});

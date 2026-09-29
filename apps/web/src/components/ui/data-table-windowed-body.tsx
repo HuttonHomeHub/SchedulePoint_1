@@ -1,10 +1,11 @@
 import {
+  defaultRangeExtractor,
   measureElement as defaultMeasureElement,
   observeElementRect as defaultObserveElementRect,
   useVirtualizer,
   type VirtualItem,
 } from '@tanstack/react-virtual';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { Column } from './data-table';
 
@@ -31,10 +32,22 @@ import { cn } from '@/lib/utils';
  * scrolling into view would widen its column and shift every column while the planner reads. So the
  * first rendered window (header included) is laid out by the browser as usual, its column widths are
  * read, and from then on a `<colgroup>` under `table-layout: fixed` holds them. They are read again
- * only when the column set changes or the scroller's width changes — never on scroll, never on a
- * data change. A longer off-window value wraps inside its frozen width instead of widening it, which
+ * only when the column set changes, the scroller's width changes, or the page's web fonts finish
+ * loading (faces use `font-display: swap`, so the first read can be taken in the fallback font;
+ * `document.fonts.ready` bumps the same epoch once, and an environment without `document.fonts`,
+ * such as jsdom, simply skips it) — never on scroll, never on a data change. **The column-set key is
+ * the scroller epoch plus the header texts only**: a column whose width or visibility changes while
+ * its header text does not (a future column toggle, say) will NOT re-measure, so such a change must
+ * change the key. A longer off-window value wraps inside its frozen width instead of widening it, which
  * is why the frozen table lets cells wrap (`whitespace-normal`): `fit` here means "the width the
  * first window needed", not "what every row needs" (this amends ADR-0146 for this table alone).
+ *
+ * **Focus is kept mounted (WCAG 2.4.3).** A scroll of more than the overscan would unmount the row
+ * holding focus and drop focus to `<body>`. The row that contains focus is pinned into the rendered
+ * indexes (`rangeExtractor`), so it stays until focus leaves; the rows between it and the window are
+ * then a gap, which gets a spacer row of its own so the arithmetic stays exact. Focus moving out of
+ * the table entirely (a portalled menu) keeps the pin until focus next lands in a row or goes to
+ * nowhere, which costs one extra mounted row, never a lost focus.
  *
  * **Deliberate departures from the Gantt's use of the same hook.** Rows here have content-dependent
  * height, so each is measured (`measureElement`) rather than fixed; and a row measured as 0px —
@@ -133,6 +146,10 @@ export function DataTableWindowedBody<T>({
   renderRow,
 }: DataTableWindowedBodyProps<T>): React.ReactElement {
   const tableRef = useRef<HTMLTableElement>(null);
+  // The key of the row that holds focus, so it is kept mounted however far the window scrolls.
+  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
+  const pinnedIndex =
+    pinnedKey === null ? -1 : rows.findIndex((row) => getRowKey(row) === pinnedKey);
 
   // `useVirtualizer` returns functions the compiler's analysis cannot prove are safe to memoize, so
   // it skips this WHOLE component's analysis — the reason the hook lives in this child and not in
@@ -151,6 +168,13 @@ export function DataTableWindowedBody<T>({
       return row === undefined ? index : getRowKey(row);
     },
     overscan: OVERSCAN,
+    rangeExtractor: (range) => {
+      const indexes = defaultRangeExtractor(range);
+      if (pinnedIndex < 0 || pinnedIndex >= range.count || indexes.includes(pinnedIndex)) {
+        return indexes;
+      }
+      return [...indexes, pinnedIndex].sort((a, b) => a - b);
+    },
     initialRect: {
       width: INITIAL_RECT.width,
       height: Math.max(INITIAL_RECT.height, (testRowBudget ?? 0) * ESTIMATED_ROW_HEIGHT),
@@ -170,7 +194,8 @@ export function DataTableWindowedBody<T>({
   });
 
   const items = virtualizer.getVirtualItems();
-  const { top, bottom } = spacerHeights(items, virtualizer.getTotalSize());
+  const totalSize = virtualizer.getTotalSize();
+  const { top, bottom } = spacerHeights(items, totalSize);
 
   // ── Column widths (D1) ────────────────────────────────────────────────────────────────────────
   const [scrollerEpoch, setScrollerEpoch] = useState(0);
@@ -187,6 +212,18 @@ export function DataTableWindowedBody<T>({
     if (measured) setFrozen({ key: measureKey, widths: measured });
   }, [widths, measureKey]);
 
+  useEffect(() => {
+    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+    if (!fonts || fonts.status === 'loaded') return;
+    let live = true;
+    void fonts.ready.then(() => {
+      if (live) setScrollerEpoch((epoch) => epoch + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const scroller = tableRef.current?.parentElement;
     if (!scroller || typeof ResizeObserver === 'undefined') return;
@@ -202,6 +239,10 @@ export function DataTableWindowedBody<T>({
       observer.disconnect();
     };
   }, []);
+
+  // A spacer spans the columns that exist. Columns hidden below a breakpoint are not in the
+  // `<colgroup>`, and a span wider than the columns would add phantom columns under a fixed layout.
+  const spanOf = widths?.length ?? columns.length;
 
   return (
     <table
@@ -221,16 +262,37 @@ export function DataTableWindowedBody<T>({
         </colgroup>
       )}
       {head}
-      <tbody>
+      <tbody
+        onFocus={(event) => {
+          const index = (event.target as HTMLElement).closest('tr')?.getAttribute('data-index');
+          const row = index === null || index === undefined ? undefined : rows[Number(index)];
+          if (row !== undefined) setPinnedKey(getRowKey(row));
+        }}
+        onBlur={(event) => {
+          // Focus going to nowhere releases the pin; going to another row re-pins on its focus.
+          if (event.relatedTarget === null) setPinnedKey(null);
+        }}
+      >
         <tr aria-hidden="true">
-          <td colSpan={columns.length} style={{ height: top, padding: 0, border: 0 }} />
+          <td colSpan={spanOf} style={{ height: top, padding: 0, border: 0 }} />
         </tr>
-        {items.map((item) => {
+        {items.map((item, position) => {
           const row = rows[item.index];
-          return row === undefined ? null : renderRow(row, item.index, virtualizer.measureElement);
+          const previous = items[position - 1];
+          const gap = previous ? item.start - previous.end : 0;
+          return row === undefined ? null : (
+            <Fragment key={getRowKey(row)}>
+              {gap > 0 ? (
+                <tr aria-hidden="true">
+                  <td colSpan={spanOf} style={{ height: gap, padding: 0, border: 0 }} />
+                </tr>
+              ) : null}
+              {renderRow(row, item.index, virtualizer.measureElement)}
+            </Fragment>
+          );
         })}
         <tr aria-hidden="true">
-          <td colSpan={columns.length} style={{ height: bottom, padding: 0, border: 0 }} />
+          <td colSpan={spanOf} style={{ height: bottom, padding: 0, border: 0 }} />
         </tr>
       </tbody>
     </table>

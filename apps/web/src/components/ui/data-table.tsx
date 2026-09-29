@@ -391,6 +391,9 @@ type DataTableModeProps =
        *   not observed with a screen reader.
        *
        * Valid only with `scroll="contained"`, and not with `renderDetail`.
+       *
+       * **It must be the literal `true`.** The type union that enforces the two rules above is
+       * discriminated on it, so a `boolean` variable does not compile, by design.
        */
       windowed?: false | undefined;
     }
@@ -523,6 +526,8 @@ export function DataTable<T>({
   const head = (
     <thead>
       <tr
+        // Row 1 of the windowed table's `aria-rowcount` (ADR-0165 D2); no other table sets it.
+        aria-rowindex={windowed ? 1 : undefined}
         className={
           contained
             ? 'text-muted-foreground text-left'
