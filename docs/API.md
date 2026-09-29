@@ -1567,7 +1567,7 @@ controller's 30 / 60 s per handler.
   ADR-0035 §32). `accrualType` governs **when** the activity's cost is recognised
   in the `GET …/schedule/earned-value` read's Planned-Value time-phasing — START
   at its placed start, END at its placed finish, UNIFORM linearly between them —
-  and **never changes a CPM date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing. None of these
+  and **never changes a CPM date**; `UNIFORM` is byte-identical to the pre-ADR-0044 phasing on the same span. None of these
   feed the scheduler.
 - An activity's **weighted progress steps** (ADR-0044 §2 / ADR-0035 §33) are a
   bulk-replace sub-resource: `GET …/activities/:activityId/steps` lists the active

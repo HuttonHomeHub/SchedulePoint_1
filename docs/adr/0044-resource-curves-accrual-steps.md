@@ -154,7 +154,7 @@ ADR-0035 §31/§32/§33 (accept-with-slice) with negatives N27–N29.** Concrete
 
 **Accrual (§1): the rule is unchanged, and its anchors move.** `START` recognises the cost at the anchor
 start, `END` at the anchor finish, and `UNIFORM` spreads it linearly between them (`leafPlannedPercent`,
-`earned-value.ts:386-408`). ADR-0042 Amendment 1 changes which span those anchors are: the frozen or
+`leafPlannedPercent` in `earned-value.ts`). ADR-0042 Amendment 1 changes which span those anchors are: the frozen or
 live **placed** span, except against a baseline captured before placements were recorded. So "at the
 activity start" in §1 now means "at the activity's **placed** start". No accrual code changes. A crane
 mobilisation on a bar dragged a week later is now recognised a week later, which is what the diagram

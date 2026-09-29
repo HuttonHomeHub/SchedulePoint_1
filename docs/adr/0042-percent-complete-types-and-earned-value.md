@@ -168,7 +168,7 @@ a conceptual distinction the UI (EV4) must make legible.
 What changes is which dates that money is spread over.** Since ADR-0148, a bar is drawn where it is
 placed (`visualEffectiveStart`/`visualEffectiveFinish`), and since ADR-0025 Amendment 3, baseline
 variance compares placed dates. PV still spread cost over the **frozen early** span when the baseline
-row had both dates, and over the **live early** span otherwise (`earned-value.ts:577-579`). So an
+row had both dates, and over the **live early** span otherwise (`computeEarnedValue`'s anchor choice). So an
 activity dragged later before capture spent its committed budget before the bar starts, and SV/SPI
 reported it as behind while variance on the same plan said "on plan".
 

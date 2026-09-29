@@ -1074,8 +1074,9 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       };
     };
     const first = await readAt('2026-01-04', 2);
-    const second = await readAt('2026-01-12', 3);
-    expect({ first, second }).toEqual(EV_UNPLACED_GOLDEN);
+    const second = await readAt('2026-01-08', 3);
+    const third = await readAt('2026-01-12', 4);
+    expect({ first, second, third }).toEqual(EV_UNPLACED_GOLDEN);
   });
 
   it('forbids a Viewer and a Contributor from reading Earned Value (403 — cost:read)', async () => {

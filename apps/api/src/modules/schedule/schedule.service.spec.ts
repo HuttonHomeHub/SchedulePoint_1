@@ -1302,19 +1302,30 @@ describe('ScheduleService.getEarnedValue', () => {
       expect([FROZEN_EARLY, LIVE_EARLY, LIVE_PLACED]).not.toContain(value);
     });
 
-    it('U2: a FULL row with no placed dates falls back to the live PLACED span, never an early one', async () => {
+    it('U2a: a FULL row with no placed dates falls back to the live PLACED span, never an early one', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
         snapshot('FULL', { placedStart: null, placedFinish: null }),
       );
       expect(await pv()).toBe(LIVE_PLACED);
     });
 
-    it('U2: a NONE baseline phases on its frozen early span, ignoring any placement', async () => {
+    it.each([
+      ['start', { placedStart: null, placedFinish: at(14) }],
+      ['finish', { placedStart: at(4), placedFinish: null }],
+    ])(
+      'U2b: a FULL row missing only its placed %s falls back to the live PLACED span, not a mix',
+      async (_which, placed) => {
+        schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('FULL', placed));
+        expect(await pv()).toBe(LIVE_PLACED);
+      },
+    );
+
+    it('U2c: a NONE baseline phases on its frozen early span, ignoring any placement', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('NONE'));
       expect(await pv()).toBe(FROZEN_EARLY);
     });
 
-    it('U2: on a NONE baseline an activity added after capture falls back to its live EARLY span', async () => {
+    it('U2d: on a NONE baseline an activity added after capture falls back to its live EARLY span', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
         ...snapshot('NONE'),
         activities: [],
@@ -1322,7 +1333,7 @@ describe('ScheduleService.getEarnedValue', () => {
       expect(await pv()).toBe(LIVE_EARLY);
     });
 
-    it('U2: on a FULL baseline an activity added after capture falls back to its live PLACED span', async () => {
+    it('U2e: on a FULL baseline an activity added after capture falls back to its live PLACED span', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
         ...snapshot('FULL'),
         activities: [],
@@ -1330,7 +1341,7 @@ describe('ScheduleService.getEarnedValue', () => {
       expect(await pv()).toBe(LIVE_PLACED);
     });
 
-    it('U2: with no active baseline the live-budget PV phases on the live placed span', async () => {
+    it('U2f: with no active baseline the live-budget PV phases on the live placed span', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(null);
       expect(await pv()).toBe(LIVE_PLACED);
     });

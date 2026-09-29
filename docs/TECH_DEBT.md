@@ -11524,7 +11524,7 @@ worked as its own decision:
   reads early dates and is not part of this row.
 
 DCMA health correctly stays on the network basis and is not part of this row
-(`float-basis.structural.spec.ts`). **Trigger:** the next epic that touches any of these readers.
+(`float-basis.structural.spec.ts`). **Trigger:** the next epic that touches the revision comparison, the one reader (part (a)) still open.
 
 ### 406. The critical-path what-if's throttle was measured before it levelled
 
