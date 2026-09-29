@@ -185,10 +185,29 @@ early_finish))` — share one definition with #404, do not write it twice (`over
 - **Reviewers:** **security-reviewer is mandatory before merge** (a request-size limit on the
   attack surface); api-reviewer.
 
-### #405 (c) — Earned Value phased on placed dates
+### #405 (c) — Earned Value planned value on the placed basis (api, M)
 
-Awaiting the product owner's approval of `docs/specs/ev-placed-planned-value/`; its brief is added
-here once approved.
+- **Approved spec and plan:** `docs/specs/ev-placed-planned-value/spec.md` and `plan.md` (product
+  owner, 2026-09-29, both defaults). Build **M1 exactly as the plan's tasks T1–T4 state**; the spec
+  is the brief, and this entry only adds what the orchestrator needs.
+- **Checked here:** `engine/earned-value.ts:577-579` (frozen early dates when the baseline row has
+  both, else live early), `:292-296` (`CPI_TIMES_SPI` is the only EAC method that reads SPI).
+- **Shape.** Basis chosen once per read in the service from `placementSnapshotLevel` (exhaustive
+  switch, as `baselines.service.ts:465-472`): `FULL` or no baseline → placed; `NONE` → early. The
+  engine's maths does not change; only its live field names do. No schema change, no response field,
+  no flag.
+- **Red first:** E1 (`FULL` baseline) and E3 (no baseline) in `schedule.e2e-spec.ts`, U1/U2 unit;
+  **record E4's golden against today's code before changing anything** (the unplaced-plan
+  byte-identity proof), and E2 as characterisation. Existing `earned-value.spec.ts` passes with no
+  assertion edited.
+- **Docs (T4):** mark the ADR-0042 and ADR-0044 amendments Accepted and add the spec link (allowed
+  now the spec is Approved); ADR-0035 §29/§32; `docs/API.md`; the `pv` OpenAPI description; the
+  three corrections in spec §0 at close-out. Close #405 when (a), (b) and (c) have all landed.
+  **Changeset:** `api` minor.
+- **Journeys:** the new step in `apps/web/e2e/baselines.spec.ts` (base `web` target), plus
+  `e2e-revision-compare` is unaffected but runs in the sweep.
+- **Reviewers:** api-reviewer and test-engineer (the latter confirms E4 was recorded before the
+  change).
 
 Then **#334 M2** (render isolation), from its approved plan in `docs/specs/activities-panel-scale/`.
 **M3** (windowing) needs an ADR and CQ-B, a product-owner decision, before it starts.

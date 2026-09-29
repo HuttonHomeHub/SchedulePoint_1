@@ -1,6 +1,6 @@
 # Feature Spec: Earned Value planned value on the placed basis
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-09-29, with the defaults: Q1 live-budget PV uses the live **placed** dates (ADR-0148); Q2 the response does not name its basis (shape unchanged).
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-29
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #405, part (c) (parts (a) and (b) are decided separately)
