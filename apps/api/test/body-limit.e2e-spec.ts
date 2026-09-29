@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -129,22 +131,22 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
   it('parses the widest valid 2,000-row placements body (~356 KB) rather than refusing it', async () => {
     const { agent, planId } = await signedInPlan();
     const row = {
-      id: '019ab7c2-7f3e-7a41-9c2d-0123456789ab',
       version: 2_147_483_647,
       constraintType: 'MANDATORY_FINISH',
       constraintDate: '2026-12-31',
       visualStart: '2026-12-31',
       laneIndex: 10_000,
     };
-    const body = { placements: Array.from({ length: BATCH }, () => row) };
+    const body = {
+      placements: Array.from({ length: BATCH }, () => ({ id: randomUUID(), ...row })),
+    };
     expect(JSON.stringify(body).length).toBeGreaterThan(350_000);
     // The ids are not this plan's, so the write itself is refused — the point is that it is the
-    // service refusing (404), not the parser (413).
+    // service refusing (404), not the parser (413) and not a duplicate-id 422.
     const res = await agent
       .patch(`/api/v1/organizations/acme/plans/${planId}/activities/placements`)
       .send(body);
-    expect(res.status).not.toBe(413);
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(404);
   });
 
   it('answers an over-cap body on an org-scoped route with 413 and the standard envelope', async () => {
@@ -158,6 +160,52 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
     expect(res.body).toEqual({
       error: { code: 'PAYLOAD_TOO_LARGE', message: expect.any(String) },
     });
+  });
+
+  it('accepts a body just under the org-scoped cap (the parser does not refuse it)', async () => {
+    const { agent, planId } = await signedInPlan();
+    // ~500 KB of padding against a 512 KB cap: read in full, then refused by the DTO, not the parser.
+    const res = await agent
+      .patch(parentsUrl(planId))
+      .send({ parents: [], padding: 'x'.repeat(500 * 1024) });
+    expect(res.status).toBe(422);
+  });
+
+  it('holds an anonymous caller to 64 KB even under the org-scoped prefix', async () => {
+    // No session cookie and no Authorization header: the large parser is skipped, so a 300 KB body
+    // is refused by the 64 KB one before the guard would have answered 401.
+    const res = await request(server())
+      .post('/api/v1/organizations/acme/clients')
+      .send({ padding: 'x'.repeat(300 * 1024) })
+      .expect(413);
+    expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
+  it('reads the large cap for any request that PRESENTS credentials — validity is the guard’s job', async () => {
+    // Documents the residue the docblock in app-setup.ts states: presence is all the parser can
+    // check, so a junk Authorization header buys the 512 KB read and then a 401.
+    await request(server())
+      .post('/api/v1/organizations/acme/clients')
+      .set('Authorization', 'Bearer not-a-real-token')
+      .send({ padding: 'x'.repeat(300 * 1024) })
+      .expect(401);
+  });
+
+  it('keeps 64 KB on an authenticated route outside the org-scoped prefix', async () => {
+    const { agent } = await signedInPlan();
+    const res = await agent
+      .post('/api/v1/staff/diagnostics')
+      .send({ padding: 'x'.repeat(100 * 1024) })
+      .expect(413);
+    expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
+  it('does not let a differently-cased path slip past the 64 KB cap', async () => {
+    const res = await request(server())
+      .post('/API/V1/Invitations/preview')
+      .send({ padding: 'x'.repeat(100 * 1024) })
+      .expect(413);
+    expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
 
   it.each([

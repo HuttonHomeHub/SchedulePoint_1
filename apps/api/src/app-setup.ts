@@ -1,14 +1,30 @@
 import { VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, type Request, type RequestHandler } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
+import {
+  DEFAULT_JSON_LIMIT,
+  ORG_SCOPED_JSON_LIMIT,
+  ORG_SCOPED_PATH_PREFIX,
+} from './common/http/body-limits';
 import { AppConfigService } from './config/app-config.service';
 
-/** 2,000 placements at their widest valid row is ~356 KB; 512 KB leaves headroom for whitespace. */
-const ORG_SCOPED_JSON_LIMIT = '512kb';
+/**
+ * Whether a request PRESENTS credentials — presence only, never validity. Better Auth names its
+ * session cookie `<cookiePrefix>.session_token` (`better-auth.ts`, `cookiePrefix: 'schedulepoint'`),
+ * with a `__Secure-` prefix in production, so a substring match covers both. `AuthenticationGuard`
+ * stays the authority on whether the credential is good; this only decides which size cap a request
+ * is read under, before any guard has run.
+ */
+function presentsCredentials(req: Request): boolean {
+  return (
+    req.headers.authorization !== undefined ||
+    (req.headers.cookie ?? '').includes('schedulepoint.session_token')
+  );
+}
 
 /**
  * Applies the HTTP-layer wiring shared by production bootstrap (`main.ts`) and
@@ -69,17 +85,32 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // A body cap belongs here too — these arrive on an unauthenticated route.
   const jsonTypes = ['application/json', 'application/csp-report', 'application/reports+json'];
 
-  // **The cap is decided by path because the parser runs before any guard.** Four batch DTOs accept
-  // `@ArrayMaxSize(2000)` rows (positions, placements, parents, bulk-delete); a 2,000-row placements
-  // body is 292-356 KB measured (a row is ~146-178 bytes with every field set), so 64 KB made the
-  // documented ceiling unreachable and a large `parents` batch died in the parser (TECH_DEBT #407).
-  // The larger limit is mounted ONLY under the org-scoped prefix, every route of which sits behind
-  // the session guard — no `@Public()` handler lives there, so a stranger cannot spend the memory.
-  // Mounted first: body-parser skips a request that an earlier parser already read, so the global
-  // 64 KB parser below never sees an org-scoped body and still governs everything a stranger can
-  // reach (CSP sink, invitation preview, guest share reads).
-  app.use('/api/v1/organizations', json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT }));
-  app.use(json({ type: jsonTypes, limit: '64kb' }));
+  // **The cap is decided by path and by whether credentials are presented, because the parser runs
+  // before any guard.** Four batch DTOs accept `@ArrayMaxSize(2000)` rows (positions, placements,
+  // parents, bulk-delete); a 2,000-row placements body is 292-356 KB measured (a row is ~146-178
+  // bytes with every field set), so 64 KB made the documented ceiling unreachable and a large
+  // `parents` batch died in the parser (TECH_DEBT #407).
+  //
+  // The larger limit applies only under the org-scoped prefix (no `@Public()` handler lives there —
+  // pinned by `public-routes-census.structural.spec.ts`) AND only when the request carries a session
+  // cookie or an Authorization header. That bounds what an anonymous caller can make the process
+  // buffer to 64 KB on every route; it does NOT make the large cap safe against a caller who merely
+  // sends a junk cookie, because the parser precedes the guard and cannot validate one. That residue
+  // is one 512 KB buffer per in-flight request from a caller who then gets a 401.
+  //
+  // Mounted first: body-parser skips a request an earlier parser already read
+  // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
+  // below never sees a body the large one handled.
+  const orgScopedJson = json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT });
+  const orgScoped: RequestHandler = (req, res, next) => {
+    if (presentsCredentials(req)) {
+      orgScopedJson(req, res, next);
+    } else {
+      next();
+    }
+  };
+  app.use(ORG_SCOPED_PATH_PREFIX, orgScoped);
+  app.use(json({ type: jsonTypes, limit: DEFAULT_JSON_LIMIT }));
   app.use(urlencoded({ extended: true }));
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).

@@ -29,6 +29,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ORG_SCOPED_JSON_LIMIT } from '../../common/http/body-limits';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
@@ -41,8 +42,7 @@ import { UpdatePlacementsDto } from './dto/update-placements.dto';
 import { UpdatePositionsDto } from './dto/update-positions.dto';
 
 /** The four `@ArrayMaxSize(2000)` batch bodies; the cap is set in `app-setup.ts` (TECH_DEBT #407). */
-const BATCH_BODY_TOO_LARGE =
-  'The JSON body exceeds the 512 KB cap for organisation routes (2,000 rows fit).';
+const BATCH_BODY_TOO_LARGE = `The JSON body exceeds the ${ORG_SCOPED_JSON_LIMIT} cap for organisation routes (2,000 rows fit).`;
 
 /**
  * Activity routes nested under a parent plan: create and list. The parent plan

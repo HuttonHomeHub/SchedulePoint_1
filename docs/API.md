@@ -141,11 +141,17 @@ already knows returns `204` (`…/archive`, `…/unarchive`, ADR-0053 §4) — t
 the incremented `version`, and the list the caller is looking at is invalidated either way.
 
 **413 and the JSON body cap.** The body parser runs before any guard, so the limit is chosen by
-path: **512 KB** under `/api/v1/organizations` (every route there requires a session; sized so the
-four `@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit, the
-widest being 2,000 placements at about 356 KB) and **64 KB** everywhere else, which is where a
-caller with no session can post (`csp-report`, `invitations/preview`). An over-cap body answers
-`413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered an opaque 500.
+path and by whether credentials are _presented_ (a session cookie or an `Authorization` header —
+presence only; the guard alone decides whether they are good). A request under
+`/api/v1/organizations` that presents credentials is read up to **512 KB**, sized so the four
+`@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit (the widest,
+2,000 placements, is about 356 KB). **Everything else is 64 KB**: the routes a caller with no session
+can post to (`csp-report`, `invitations/preview`), guest `share` reads, an anonymous request under
+`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff`. An over-cap
+body answers `413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered
+an opaque 500. Because the parser cannot validate a credential, a junk cookie still buys the 512 KB
+read before the 401. Multipart uploads are a separate cap (the interchange upload cap, see
+Interchange below).
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
