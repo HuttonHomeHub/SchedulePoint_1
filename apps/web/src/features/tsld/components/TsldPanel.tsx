@@ -1565,6 +1565,18 @@ export function TsldPanel({
     }, 400);
     return () => clearTimeout(handle);
   }, [filterActive, activities.length, filterDimmedIds, searchCursorId, announce]);
+  // Announce the Late overlay switching on/off (WCAG 4.1.3): the canvas redraws at late dates and the
+  // toolbar greys out editing, but nothing spoke the change. Skips the first render (a plan opened
+  // with the overlay already on is not a change) and only reacts to entering/leaving 'late', not
+  // the early/visual basis. The overlay is read-only analysis (ADR-0033 M4), so "read-only" is true
+  // for every reader; the toolbar's own banner says editing is paused for those who could edit.
+  const lateShownRef = useRef(barDateSource === 'late');
+  useEffect(() => {
+    const late = barDateSource === 'late';
+    if (late === lateShownRef.current) return;
+    lateShownRef.current = late;
+    announce(late ? 'Late dates shown. This view is read-only.' : 'Placed dates shown.');
+  }, [barDateSource, announce]);
   // Announce isolate for AT (WCAG 4.1.3 / 1.4.1) — the canvas dimming + listbox marking are otherwise
   // colour/emphasis-only. Fires on activate, selection change, or mode change; clears on exit. Isolate
   // changes only on those (not per keystroke), so no debounce is needed. Inert when the flag is off.

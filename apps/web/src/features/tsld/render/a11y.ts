@@ -165,10 +165,13 @@ export function describeActivity(
    */
   const drawn = barDatesFor(a, opts?.barDateSource ?? 'visual');
   if (drawn.start === null) return `${name}${duration}, not yet scheduled`;
-  const dates =
+  const span =
     drawn.finish && drawn.finish !== drawn.start
       ? `${formatCalendarDate(drawn.start)} to ${formatCalendarDate(drawn.finish)}`
       : formatCalendarDate(drawn.start);
+  // While the read-only Late overlay is on the dates are not the placed ones; say so (#402 follow-up,
+  // product owner 2026-09-29). Float and drift wording deliberately do not change.
+  const dates = opts?.barDateSource === 'late' ? `late dates ${span}` : span;
   // **`remainingFloat`, not `totalFloat`** (M-E-T7). Criticality still comes from the engine's own
   // flags, which are pure-network facts and stay so: an activity is critical because of the
   // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
