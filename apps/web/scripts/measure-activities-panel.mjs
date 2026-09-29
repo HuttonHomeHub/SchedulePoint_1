@@ -564,6 +564,8 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
         await page
           .waitForFunction(
             (expected) => {
+              // Runs in the PAGE, like the probes below (their `eslint-disable no-undef` blocks).
+              // eslint-disable-next-line no-undef
               const table = document.querySelector('table');
               const declared = Number(table?.getAttribute('aria-rowcount'));
               const n =
