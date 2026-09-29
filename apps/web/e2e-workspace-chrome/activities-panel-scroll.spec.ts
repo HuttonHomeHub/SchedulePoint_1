@@ -150,6 +150,105 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     }
   });
 
+  test('the windowed table stays keyboard-reachable, announced and steady (ADR-0165, M3)', async ({
+    page,
+  }) => {
+    // Written and NOT run: the session that wrote it was told not to run Playwright. Red recipe: in
+    // `ActivitiesTable.tsx` drop `windowed`, and `aria-rowcount` is absent, so the count assertion
+    // fails first (an un-windowed table has no announced size). For D4, in `data-table-windowed-
+    // body.tsx` set OVERSCAN to 0: the next row is no longer rendered when Tab moves on, and the
+    // walk is expected to lose the table (focus falls to <body>) before row 60.
+    const orgSlug = await onboard(page, STAMP + 4);
+    await createHierarchy(page);
+    await newPlan(page, 'Panel scale windowed');
+    await ensurePen(page);
+    await seedSixty(page, orgSlug);
+    await ensurePen(page);
+
+    await page.getByRole('button', { name: 'Expand activities panel' }).click();
+    const region = activitiesRegion(page);
+    await expect(region).toBeVisible();
+    const table = region.getByRole('table');
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await expect(nameHeader).toBeVisible();
+
+    // The table announces its whole size, not the window's: 60 activities plus the header row.
+    await expect(table).toHaveAttribute('aria-rowcount', '61');
+    // ...while the DOM holds a window, which is the point of the change.
+    expect(await table.locator('tbody tr[data-index]').count()).toBeLessThan(60);
+
+    const columnWidths = () =>
+      table
+        .locator('thead th')
+        .evaluateAll((cells) =>
+          cells.map((cell) => Math.round(cell.getBoundingClientRect().width)),
+        );
+    const before = await columnWidths();
+    expect(before.length).toBeGreaterThan(1);
+
+    const insideTable = () =>
+      region.evaluate(
+        (el) => document.activeElement !== null && el.contains(document.activeElement),
+      );
+    const focusedRowIndex = () =>
+      page.evaluate(
+        () => document.activeElement?.closest('tr')?.getAttribute('aria-rowindex') ?? null,
+      );
+
+    // ── D4: Tab forward through 60 rows reaches row 60 without leaving the table ────────────────
+    await region.getByRole('button', { name: 'Actions for Activity 01', exact: false }).focus();
+    expect(await focusedRowIndex()).toBe('2');
+    let presses = 0;
+    while ((await focusedRowIndex()) !== '61') {
+      presses += 1;
+      // Two stops per row at most (checkbox, Actions); a walk this long has lost its way.
+      expect(presses, 'Tab never reached row 60').toBeLessThan(200);
+      await page.keyboard.press('Tab');
+      expect(await insideTable(), `focus left the table on Tab press ${String(presses)}`).toBe(
+        true,
+      );
+    }
+    await expect(
+      region.getByRole('button', { name: 'Actions for Activity 60', exact: false }),
+    ).toBeFocused();
+
+    // ── header stays pinned at the far end ──────────────────────────────────────────────────────
+    const headerBox = await nameHeader.boundingBox();
+    if (!headerBox) throw new Error('the Name header has no box');
+    const hitsHeader = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('th') !== null,
+      {
+        x: Math.round(headerBox.x + headerBox.width / 2),
+        y: Math.round(headerBox.y + headerBox.height / 2),
+      },
+    );
+    expect(hitsHeader, 'the Name header is still the element under its own centre').toBe(true);
+
+    // ── D4: Shift+Tab walks back to row 1 without leaving the table ─────────────────────────────
+    presses = 0;
+    while ((await focusedRowIndex()) !== '2') {
+      presses += 1;
+      expect(presses, 'Shift+Tab never reached row 1').toBeLessThan(200);
+      await page.keyboard.press('Shift+Tab');
+      expect(
+        await insideTable(),
+        `focus left the table on Shift+Tab press ${String(presses)}`,
+      ).toBe(true);
+    }
+
+    // ── D1: column widths did not move across a full scroll, down and back ──────────────────────
+    const seen: number[][] = [];
+    for (const fraction of [0.25, 0.5, 0.75, 1, 0.5, 0]) {
+      await region.evaluate(
+        (el, f) => el.scrollTo({ top: (el.scrollHeight - el.clientHeight) * f }),
+        fraction,
+      );
+      await expect(table).toHaveAttribute('aria-rowcount', '61');
+      seen.push(await columnWidths());
+    }
+    for (const widths of seen) expect(widths).toEqual(before);
+  });
+
   test('scrolls as one region at 390px, the narrow single-pane layout too', async ({ page }) => {
     // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
     // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
