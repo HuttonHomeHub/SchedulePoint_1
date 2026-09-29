@@ -74,3 +74,33 @@ describe('AllExceptionsFilter — domain error → status/code mapping', () => {
     });
   });
 });
+
+describe('AllExceptionsFilter — body-parser payload errors', () => {
+  const filter = new AllExceptionsFilter();
+  vi.spyOn(filter['logger'], 'warn').mockImplementation(() => undefined);
+  vi.spyOn(filter['logger'], 'error').mockImplementation(() => undefined);
+
+  it('maps the JSON parser’s entity.too.large error to 413 with the envelope', () => {
+    // The shape `body-parser` throws (an http-errors object): neither a DomainError nor an
+    // HttpException, so it used to fall through to the opaque 500.
+    const tooLarge = Object.assign(new Error('request entity too large'), {
+      type: 'entity.too.large',
+      status: 413,
+      statusCode: 413,
+      limit: 65_536,
+      length: 100_000,
+    });
+    const { host, sent } = mockHost();
+    filter.catch(tooLarge, host);
+    expect(sent.status).toBe(HttpStatus.PAYLOAD_TOO_LARGE);
+    expect(sent.body?.error).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    expect(sent.body?.error.message).not.toContain('entity');
+  });
+
+  it('does not trust a bare `status` property on an unknown error', () => {
+    const { host, sent } = mockHost();
+    filter.catch(Object.assign(new Error('boom'), { status: 413 }), host);
+    expect(sent.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(sent.body?.error.code).toBe('INTERNAL_ERROR');
+  });
+});

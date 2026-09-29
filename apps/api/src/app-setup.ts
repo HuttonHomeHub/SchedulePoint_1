@@ -7,6 +7,9 @@ import helmet from 'helmet';
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
 import { AppConfigService } from './config/app-config.service';
 
+/** 2,000 placements at their widest valid row is ~356 KB; 512 KB leaves headroom for whitespace. */
+const ORG_SCOPED_JSON_LIMIT = '512kb';
+
 /**
  * Applies the HTTP-layer wiring shared by production bootstrap (`main.ts`) and
  * the e2e tests, so both exercise identical middleware ordering.
@@ -64,12 +67,19 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // green and worthless. Found by the schema review, not by the suite.
   //
   // A body cap belongs here too — these arrive on an unauthenticated route.
-  app.use(
-    json({
-      type: ['application/json', 'application/csp-report', 'application/reports+json'],
-      limit: '64kb',
-    }),
-  );
+  const jsonTypes = ['application/json', 'application/csp-report', 'application/reports+json'];
+
+  // **The cap is decided by path because the parser runs before any guard.** Four batch DTOs accept
+  // `@ArrayMaxSize(2000)` rows (positions, placements, parents, bulk-delete); a 2,000-row placements
+  // body is 292-356 KB measured (a row is ~146-178 bytes with every field set), so 64 KB made the
+  // documented ceiling unreachable and a large `parents` batch died in the parser (TECH_DEBT #407).
+  // The larger limit is mounted ONLY under the org-scoped prefix, every route of which sits behind
+  // the session guard — no `@Public()` handler lives there, so a stranger cannot spend the memory.
+  // Mounted first: body-parser skips a request that an earlier parser already read, so the global
+  // 64 KB parser below never sees an org-scoped body and still governs everything a stranger can
+  // reach (CSP sink, invitation preview, guest share reads).
+  app.use('/api/v1/organizations', json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT }));
+  app.use(json({ type: jsonTypes, limit: '64kb' }));
   app.use(urlencoded({ extended: true }));
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).

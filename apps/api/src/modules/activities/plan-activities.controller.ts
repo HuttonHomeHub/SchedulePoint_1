@@ -17,6 +17,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiPayloadTooLargeResponse,
   ApiTags,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
@@ -38,6 +39,10 @@ import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateParentsDto } from './dto/update-parents.dto';
 import { UpdatePlacementsDto } from './dto/update-placements.dto';
 import { UpdatePositionsDto } from './dto/update-positions.dto';
+
+/** The four `@ArrayMaxSize(2000)` batch bodies; the cap is set in `app-setup.ts` (TECH_DEBT #407). */
+const BATCH_BODY_TOO_LARGE =
+  'The JSON body exceeds the 512 KB cap for organisation routes (2,000 rows fit).';
 
 /**
  * Activity routes nested under a parent plan: create and list. The parent plan
@@ -99,6 +104,7 @@ export class PlanActivitiesController {
     summary: 'Batch-move activities to new lanes (Planner or Org Admin). All-or-nothing.',
   })
   @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
+  @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description:
@@ -138,6 +144,7 @@ export class PlanActivitiesController {
       'cannot reach a definition field.',
   })
   @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
+  @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description:
@@ -178,6 +185,7 @@ export class PlanActivitiesController {
       'stale until the next recalculation.',
   })
   @ApiOkResponse({ type: BulkDeleteResultDto })
+  @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description: 'The organisation or plan is not found, or a row names an id not in the plan.',
@@ -259,6 +267,7 @@ export class PlanActivitiesController {
       'tree, so a batch that is cycle-free row by row but cyclic as a whole is still rejected.',
   })
   @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
+  @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description:

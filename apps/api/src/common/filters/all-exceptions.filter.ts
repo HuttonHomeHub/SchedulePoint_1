@@ -27,6 +27,14 @@ interface Mapped {
   details?: unknown;
 }
 
+function isBodyTooLarge(exception: unknown): boolean {
+  return (
+    typeof exception === 'object' &&
+    exception !== null &&
+    (exception as { type?: unknown }).type === 'entity.too.large'
+  );
+}
+
 /**
  * Global exception filter: maps every error — domain errors, HTTP exceptions,
  * Prisma errors, and unexpected failures — to the standard {@link ApiError}
@@ -84,6 +92,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       return this.mapHttp(exception);
+    }
+
+    // The JSON body parser runs before Nest's router and throws a plain http-errors object, which
+    // is none of the above — so an over-cap body used to read as a server fault. Recognised by the
+    // parser's own `type` tag only: a bare `status` on an unknown error is not evidence of anything.
+    if (isBodyTooLarge(exception)) {
+      return {
+        status: HttpStatus.PAYLOAD_TOO_LARGE,
+        code: 'PAYLOAD_TOO_LARGE',
+        // Fixed text: the parser's message carries the request's byte counts.
+        message: 'The request body is too large.',
+      };
     }
 
     // Unknown/unexpected → opaque 500 (never leak internals).

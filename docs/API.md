@@ -127,7 +127,7 @@ every failure by `AllExceptionsFilter`:
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
 | 410  | Gone — the resource existed but has expired (e.g. a token) |
-| 413  | Payload too large — upload exceeds the boundary cap        |
+| 413  | Payload too large — body exceeds the boundary cap (below)  |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
@@ -139,6 +139,13 @@ brings a cascade back, an activation moves a per-plan invariant and reports a co
 cannot derive). A sub-action that flips an **orthogonal lifecycle flag** to a value the caller
 already knows returns `204` (`…/archive`, `…/unarchive`, ADR-0053 §4) — the body would carry only
 the incremented `version`, and the list the caller is looking at is invalidated either way.
+
+**413 and the JSON body cap.** The body parser runs before any guard, so the limit is chosen by
+path: **512 KB** under `/api/v1/organizations` (every route there requires a session; sized so the
+four `@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit, the
+widest being 2,000 placements at about 356 KB) and **64 KB** everywhere else, which is where a
+caller with no session can post (`csp-report`, `invitations/preview`). An over-cap body answers
+`413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered an opaque 500.
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
