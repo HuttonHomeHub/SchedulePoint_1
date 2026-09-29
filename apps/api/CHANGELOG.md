@@ -1,5 +1,37 @@
 # @repo/api
 
+## 0.80.0
+
+### Minor Changes
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Earned Value now phases planned value over placed dates; SV and SPI change for plans with hand-placed
+  activities (and EAC, ETC and VAC under the `CPI_TIMES_SPI` method). A baseline that recorded placements
+  uses its frozen placed span, one that never did keeps its early span, and with no baseline the live
+  budget follows the bars as drawn. A plan with no placement reads exactly as it did.
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The revision comparison now compares where bars are drawn. A bar moved by placement alone — its
+  network dates unchanged — is reported as re-dated and its ghost sits at the old placed span, when
+  every baseline in the comparison recorded its placement. A baseline captured before placement was
+  recorded falls back to earliest against earliest, as before. Both comparison routes gain a
+  `datesBasis` field (`PLACED` or `NETWORK`) saying which dates the read compared, chosen once per read.
+
+### Patch Changes
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A request body over the size limit is now refused with a 413 and the standard error envelope
+  (`PAYLOAD_TOO_LARGE`) instead of an opaque 500, and the batch endpoints that accept up to 2,000
+  activities (positions, placements, parents, bulk delete) now accept a full batch: the limit under
+  `/api/v1/organizations` is 512 KB, while routes reachable without a session keep 64 KB.
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The landing's "where each programme stands" now compares placed finishes. It set today's earliest
+  finish against the baseline's earliest finish, so a bar moved by placement alone never showed as
+  movement. A baseline that recorded placement is compared on placed finishes, and one captured
+  before that on earliest finishes, as the baseline variance already does.
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - "Project finish" now states the placed finish. The schedule summary — the member strip, the
+  recalculate response and a share link's plan header — reported the network's earliest finish, so a
+  bar hand-placed past it left the header naming a date earlier than the last bar on screen. It is
+  now the latest drawn finish (ADR-0148), falling back to the early finish where a row has none.
+
 ## 0.79.0
 
 ### Minor Changes
