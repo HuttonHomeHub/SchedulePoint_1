@@ -156,3 +156,50 @@ a conceptual distinction the UI (EV4) must make legible.
   minor units, explicit rounding); kept only for rate **coefficients**.
 - **Weighted activity steps for physical %.** **Deferred:** a whole child-table sub-model; a single manual
   field covers the common construction-reporting case now.
+
+## Amendments
+
+### 1 — Planned value is phased on the placed span (`docs/TECH_DEBT.md` #405(c), 2026-09-29)
+
+> **Proposed**, awaiting the product owner's approval of the feature spec for #405(c). The link to that
+> spec is added when it is approved, because `check:spec-status` refuses a Draft spec that an ADR cites.
+
+**§4 still holds: PV is measured against the active baseline, with a flagged live-budget fallback.
+What changes is which dates that money is spread over.** Since ADR-0148, a bar is drawn where it is
+placed (`visualEffectiveStart`/`visualEffectiveFinish`), and since ADR-0025 Amendment 3, baseline
+variance compares placed dates. PV still spread cost over the **frozen early** span when the baseline
+row had both dates, and over the **live early** span otherwise (`earned-value.ts:577-579`). So an
+activity dragged later before capture spent its committed budget before the bar starts, and SV/SPI
+reported it as behind while variance on the same plan said "on plan".
+
+**Decision.** The basis is chosen **once per read**, in the service, from the active baseline's
+`placementSnapshotLevel`, using an exhaustive switch with no `default`:
+
+- **No active baseline, or `FULL`: placed.** The frozen anchor is `baseline_activities.placed_start` /
+  `placed_finish`. The live fallback (for a missing frozen date, or an activity added after capture) is
+  the live `visualEffectiveStart`/`Finish`.
+- **`NONE`: network.** Frozen `baselineStart`/`baselineFinish` and live `earlyStart`/`earlyFinish`, the
+  same as before this amendment. It is the same fallback rule ADR-0025 Amendment 3 chose for variance,
+  for the same reason: a baseline that never recorded a placement cannot be backfilled with one.
+
+The basis never changes per row. Within a basis, the rule "frozen when both frozen dates are present,
+otherwise live" is kept exactly as it was. `computeEarnedValue` does not know its basis: its live fields
+are renamed from `earlyStart`/`earlyFinish` to `liveStart`/`liveFinish`, so a field named "early" never
+holds a placed date. There are no other changes to its maths.
+
+**What moves:** PV, SV and SPI, and so EAC/ETC/VAC **only** under `eacMethod = CPI_TIMES_SPI`. BAC, EV, AC,
+CV, CPI and TCPI do not read a date and do not change. The response shape does not change.
+
+**Consequences.**
+
+- **An unplaced plan is byte-identical.** For every activity type, including started, complete, LOE and
+  WBS summary, Pass 2 produces the same span as Pass 1 when nothing is placed (ADR-0148 D0, FC-11 in
+  `compute.visual.spec.ts`). Capture copies both spans in one locked transaction. The residual case is a
+  plan whose persisted engine columns predate D0 and have not been recalculated since; that plan can
+  differ until its next recalculation, and baseline variance has had the same exposure since #359.
+- **The recalc parity gate is unaffected in its strong form.** EV still never calls `computeSchedule`.
+- **Resource curves are not involved.** They never fed PV (see ADR-0044's amendment). The resource
+  histogram still reads early dates and will disagree with EV for a hand-placed bar until it is worked
+  as its own decision.
+- The organisation landing standing and the revision comparison (#405 (a) and (b)) are separate
+  decisions and are not changed here.

@@ -144,3 +144,29 @@ ADR-0035 §31/§32/§33 (accept-with-slice) with negatives N27–N29.** Concrete
   (percent-complete types & Earned Value), ADR-0025 (baselines / cost baseline), ADR-0037 (own-calendar axis),
   ADR-0034 (conformance methodology), ADR-0016/0012 (tenancy / RBAC)
 - Fixture: `packages/engine-conformance/fixtures/` (`resource_curves`, `expenses.accrual_type`, `steps`)
+
+## Amendments
+
+### 1 — Accrual anchors follow planned value's basis; curves are unaffected (`docs/TECH_DEBT.md` #405(c), 2026-09-29)
+
+> **Proposed**, together with ADR-0042 Amendment 1, and accepted with it.
+
+**Accrual (§1): the rule is unchanged, and its anchors move.** `START` recognises the cost at the anchor
+start, `END` at the anchor finish, and `UNIFORM` spreads it linearly between them (`leafPlannedPercent`,
+`earned-value.ts:386-408`). ADR-0042 Amendment 1 changes which span those anchors are: the frozen or
+live **placed** span, except against a baseline captured before placements were recorded. So "at the
+activity start" in §1 now means "at the activity's **placed** start". No accrual code changes. A crane
+mobilisation on a bar dragged a week later is now recognised a week later, which is what the diagram
+shows. `UNIFORM` stays byte-identical to the pre-ADR-0044 maths on whichever span it is given.
+
+**Curves (§3): not affected, and one sentence of §3 was never true.** §3 says curves "feed cost
+time-phasing". They do not. `earned-value.ts` has no curve input, so PV has never been shaped by a curve.
+The only reader of a curve is the resource histogram (`computeResourceHistogram`, called from
+`ScheduleService.getResourceHistogram`). That histogram spreads units over the **early** span
+(`schedule.repository.ts` `loadResourceHistogramAssignments`; `schedule.service.ts` maps
+`earlyStart`/`earlyFinish` into it), and this amendment does **not** change that. It is a units picture
+with `schedule:read` permission, not a baseline reader, and it was not part of #405. After this
+amendment, a hand-placed activity's cost is phased on its placed span while its resource load stays on its
+early span. That disagreement is recorded as its own register row rather than folded in here.
+
+**Steps (§2): unaffected.** Steps feed the physical % and read no date.
