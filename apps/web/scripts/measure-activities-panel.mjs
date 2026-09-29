@@ -557,6 +557,25 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
       await page.getByRole('table').waitFor({ timeout: 10_000 });
 
       if (repeat === 0) {
+        // Wait for the list to finish loading before judging it. At 4x CPU the probe used to run
+        // while the activity list was still arriving and counted 3 rows of 2,160, which aborted both
+        // the M0 run and the first M3 run before their 1920 passes (m0-measurement.md, "What stopped
+        // the run"). A timeout here still falls through to the probe, which then throws as before.
+        await page
+          .waitForFunction(
+            (expected) => {
+              const table = document.querySelector('table');
+              const declared = Number(table?.getAttribute('aria-rowcount'));
+              const n =
+                Number.isFinite(declared) && declared > 0
+                  ? declared - 1
+                  : (table?.querySelectorAll('tbody tr:not([aria-hidden="true"])').length ?? 0);
+              return n === expected;
+            },
+            expectedRowCount,
+            { timeout: 120_000 },
+          )
+          .catch(() => undefined);
         const probe = await page.evaluate(nonVacuityProbe);
         rowsRendered = probe.rowsRendered;
         if (rowsRendered !== expectedRowCount) {
@@ -798,6 +817,9 @@ async function main() {
               `bar ${String(judged.bar)}${direction === 'max' ? 'ms' : 'fps'}  ${judged.verdict}` +
               (judged.indeterminateReason ? `\n      — ${judged.indeterminateReason}` : ''),
           );
+          // The repeats in order, so an outlier can be placed (repeat 0 also carries limb A's CDP
+          // capture). Printed, never judged.
+          console.log(`      repeats: ${values.map((v) => String(v)).join(', ')}`);
           return { label, ...judged, values };
         };
 
