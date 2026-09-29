@@ -184,7 +184,6 @@ export function DataTableWindowedBody<T>({
     const table = tableRef.current;
     if (widths !== null || !table) return;
     const measured = measureColumnWidths(table);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- a DOM measurement, read after layout
     if (measured) setFrozen({ key: measureKey, widths: measured });
   }, [widths, measureKey]);
 

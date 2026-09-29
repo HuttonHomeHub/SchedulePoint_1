@@ -529,3 +529,53 @@ describe('DataTable — row memoisation', () => {
     expect(screen.queryByText('b-first')).not.toBeInTheDocument();
   });
 });
+
+describe('DataTable — the windowed mode leaves every other table as it was (ADR-0165)', () => {
+  const data = [
+    { id: '1', name: 'Alpha' },
+    { id: '2', name: 'Beta' },
+  ];
+
+  it.each(['page', 'contained'] as const)(
+    'renders no windowing markup for a %s-scroll table',
+    (scroll) => {
+      const { container } = render(
+        <DataTable {...common} query={query({ data })} scroll={scroll} />,
+      );
+      const html = container.innerHTML;
+      expect(html).not.toContain('aria-rowcount');
+      expect(html).not.toContain('aria-rowindex');
+      expect(html).not.toContain('data-index');
+      expect(html).not.toContain('aria-hidden');
+      expect(container.querySelector('colgroup')).toBeNull();
+      expect(container.querySelector('table')?.className).not.toContain('table-fixed');
+    },
+  );
+
+  it('renders the exact DOM a page-scroll table always has', () => {
+    const { container } = render(<DataTable {...common} query={query({ data })} />);
+    const table = container.querySelector('table')!;
+    expect(table.outerHTML).toBe(
+      '<table class="w-full text-sm"><caption class="sr-only">Rows</caption>' +
+        '<thead><tr class="border-border text-muted-foreground border-b text-left">' +
+        '<th scope="col" class="py-2 pr-4 font-medium" data-col-width="undeclared">Name</th>' +
+        '</tr></thead><tbody>' +
+        '<tr class="border-border border-b"><td class="py-2 pr-4" data-col-width="undeclared">Alpha</td></tr>' +
+        '<tr class="border-border border-b"><td class="py-2 pr-4" data-col-width="undeclared">Beta</td></tr>' +
+        '</tbody></table>',
+    );
+  });
+
+  it('refuses windowing without a contained scroller, or with a detail row, at the type level', () => {
+    const q = query({ data });
+    const props = { ...common, query: q };
+    // Each line below must stay a compile error; `tsc` fails the suite if one starts to compile.
+    // @ts-expect-error windowing needs scroll="contained"
+    void (<DataTable {...props} windowed />);
+    // @ts-expect-error windowing needs scroll="contained", not "page"
+    void (<DataTable {...props} windowed scroll="page" />);
+    // @ts-expect-error windowing is refused with renderDetail
+    void (<DataTable {...props} windowed scroll="contained" renderDetail={() => null} />);
+    expect(true).toBe(true);
+  });
+});
