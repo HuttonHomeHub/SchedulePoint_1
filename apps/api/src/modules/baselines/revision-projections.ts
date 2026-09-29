@@ -121,7 +121,8 @@ export const frozenRevisionSide = (
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
     // `earlyStart`/`earlyFinish` carry the BASIS's dates — placed on `PLACED`, earliest on
-    // `NETWORK` — and the read states which in `datesBasis`. Never chosen per row.
+    // `NETWORK` — and the read states which in `datesBasis`. Never chosen per row. Renaming these
+    // to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
     earlyStart: revisionDate(basis === 'PLACED' ? r.placedStart : r.baselineStart),
     earlyFinish: revisionDate(basis === 'PLACED' ? r.placedFinish : r.baselineFinish),
     laneIndex: r.laneIndex,

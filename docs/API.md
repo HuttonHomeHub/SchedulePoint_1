@@ -351,9 +351,16 @@ effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, t
 rows' `from`/`toEarly*` and the completion's finish dates). `NETWORK` when any baseline side is
 `NONE`: earliest dates on both sides, exactly as before, and it is a property of the **pair** — one
 short side makes the whole read `NETWORK` rather than mixing two questions in one report. It is
-chosen once per read, never per row, and mirrors `meta.basis` on the variance read. The `Early*`
-field names are unchanged and carry whichever dates `datesBasis` states; criticality and float stay
-network quantities on either basis.
+chosen once per read, never per row. It sits in `data` (the revision comparison has no `meta`) and
+is deliberately named `datesBasis` rather than `basis`, which is the variance read's `meta.basis`.
+The `Early*` field names are unchanged and carry whichever dates `datesBasis` states; criticality
+and float stay network quantities on either basis. Two live plans (cross-plan) have no baseline
+side and are `PLACED`. **A `NETWORK` read is not comparable with an earlier `PLACED` read of the
+same pair**: the basis can flip when a baseline is re-captured, so compare `datesBasis` before
+comparing figures across reads. On `PLACED` the live side reads `visualEffectiveStart`/`Finish`
+and falls back to the early date for a row that has none; that fallback is kept rather than proved
+unreachable, because nothing here establishes that a live row always carries an effective-Visual
+span.
 
 ### The placement migration report (one-planning-surface M-I)
 

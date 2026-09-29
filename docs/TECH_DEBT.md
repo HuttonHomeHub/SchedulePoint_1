@@ -11507,6 +11507,10 @@ worked as its own decision:
   `PLACED` when every baseline side is `FULL`, earliest against earliest otherwise — pinned by
   `revision-projections.spec.ts`, the `#405 (a)` cases in
   `schedule.service.cross-plan-revision.spec.ts` and `revision-compare.e2e-spec.ts`.
+  **Follow-up:** the public `Early*`/finish fields (`fromEarlyStart`, the completion's
+  `fromFinish`/`toFinish`, ghost `fromStart`/`fromFinish`) now hold placed dates on `PLACED`, so they
+  are misnamed; each carries a per-field description saying so, and renaming them to basis-neutral
+  names is the intended follow-up (a breaking change, deferred deliberately).
 - ~~The landing page's plan standing compares `capturedProjectFinish` with `MAX(early_finish)`
   (`overview.repository.ts`), and `capturedProjectFinish` is itself the maximum early finish at
   capture (`baselines.service.ts`).~~ **Part (b) closed 2026-09-29:** the standing states the placed

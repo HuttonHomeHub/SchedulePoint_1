@@ -1536,8 +1536,10 @@ export interface BaselineDetail extends BaselineSummary {
  * {@link PlanVarianceSummary.basis}. On `basis: 'PLACED'` they compare the frozen
  * placed span against the live placed span (where the bars are drawn, ADR-0148); on
  * `basis: 'NETWORK'` they compare the frozen and live pure-network dates. The field
- * names do not change with the basis — a field named "early" holding placed dates
- * would be the silent redefinition ADR-0148 refused elsewhere.
+ * names do not change with the basis here, because they are basis-neutral
+ * (`start`/`finish`). The revision comparison is the exception: its `Early*` fields
+ * predate the placed basis and hold placed dates when `datesBasis` is `PLACED`;
+ * renaming them to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
  */
 export interface BaselineVarianceRow {
   /** The activity id — the live activity's id, or the baselined `sourceActivityId` for a removed row. */

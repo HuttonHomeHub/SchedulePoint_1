@@ -57,6 +57,14 @@ import {
  * that a fourth state would reach this file on its own.
  */
 
+/**
+ * The one sentence every `Early*`/finish date field on both routes carries, because the field names
+ * predate the placed basis and renaming them is a breaking change deferred to a follow-up (#405).
+ */
+export const DATES_BASIS_NOTE =
+  '`YYYY-MM-DD`. Holds the PLACED date when the read’s `datesBasis` is `PLACED`, and the ' +
+  'network’s earliest date when it is `NETWORK`, whatever the field’s name says.';
+
 export class RevisionSideDto implements RevisionSide {
   @ApiProperty({ enum: REVISION_SIDE_KINDS, description: 'Which kind of revision this side is.' })
   kind!: RevisionSideKind;
@@ -112,10 +120,14 @@ export class RevisionMovedActivityDto implements RevisionMovedActivity {
   })
   floatMovementDays!: number | null;
 
-  @ApiProperty({ nullable: true, type: String }) fromEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String }) toEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String }) fromEarlyFinish!: string | null;
-  @ApiProperty({ nullable: true, type: String }) toEarlyFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromEarlyStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toEarlyStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromEarlyFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toEarlyFinish!: string | null;
 
   @ApiProperty({
     description:
@@ -163,8 +175,10 @@ export class RevisionCompletionDto implements RevisionCompletion {
   carrierActivityId!: string | null;
 
   @ApiProperty({ nullable: true, type: String }) carrierName!: string | null;
-  @ApiProperty({ nullable: true, type: String }) fromFinish!: string | null;
-  @ApiProperty({ nullable: true, type: String }) toFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toFinish!: string | null;
 
   @ApiProperty({
     nullable: true,
@@ -274,8 +288,22 @@ export class RevisionChangeRowDto implements RevisionChangeRow {
 
   @ApiProperty({ nullable: true, type: String }) code!: string | null;
   @ApiProperty() name!: string;
-  @ApiProperty({ nullable: true, type: String }) from!: string | null;
-  @ApiProperty({ nullable: true, type: String }) to!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'How the OLD side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
+      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+  })
+  from!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'How the NEW side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
+      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+  })
+  to!: string | null;
 
   @ApiProperty({
     nullable: true,
@@ -351,9 +379,13 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
 export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() activityId!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ description: '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost.' })
+  @ApiProperty({
+    description:
+      '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost. ' +
+      'The old span is placed when `datesBasis` is `PLACED`, earliest when `NETWORK`.',
+  })
   fromStart!: string;
-  @ApiProperty() fromFinish!: string;
+  @ApiProperty({ description: DATES_BASIS_NOTE }) fromFinish!: string;
 
   @ApiProperty({
     description:

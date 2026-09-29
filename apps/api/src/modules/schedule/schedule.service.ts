@@ -1949,8 +1949,8 @@ export class ScheduleService {
       ]);
 
     // The dates the whole read compares, chosen ONCE from the frozen sides (#405 (a)) — never per
-    // row, which would mix two questions in one report. The same derivation as
-    // `bothPlacementSnapshotted` below, kept as ONE rule by both being about `placementSnapshotLevel`.
+    // row, which would mix two questions in one report. `bothPlacementSnapshotted` below is derived
+    // from this, so there is one rule for "was placement recorded on every frozen side".
     const datesBasis = revisionDatesBasis(
       [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
     );
@@ -2046,9 +2046,8 @@ export class ScheduleService {
     // rather than a widening of the one above: the two levels are written by different milestones,
     // so a baseline can carry either without the other, and folding them would make a
     // shape-complete baseline report its placement as recorded when it is not.
-    const bothPlacementSnapshotted =
-      fromBaseline.placementSnapshotLevel === 'FULL' &&
-      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+    // Derived from `datesBasis` so the flag and the dates compared cannot disagree.
+    const bothPlacementSnapshotted = datesBasis === 'PLACED';
 
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
 
@@ -2598,9 +2597,7 @@ export class ScheduleService {
       (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
 
     // The PLACEMENT half (M-C) — see the sibling derivation on the plan-nested route.
-    const bothPlacementSnapshotted =
-      (fromBaseline === null || fromBaseline.placementSnapshotLevel === 'FULL') &&
-      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+    const bothPlacementSnapshotted = datesBasis === 'PLACED';
 
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
     // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.
