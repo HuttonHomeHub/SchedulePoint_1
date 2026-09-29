@@ -130,14 +130,38 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
   // (`lib/read.js:125`, `:136`) — a gzip body of junk bytes is `Z_DATA_ERROR`. Only the fact that
   // OUR wrapper saw the parser hand it to `next` can tell it from any other error with a status.
   /** Pass an error through `tagBodyParserErrors` the way `app-setup.ts` mounts the parsers. */
-  function fromParser<T extends Error>(error: T): T {
+  function fromParser(error: Error): Error {
     let seen: unknown;
     tagBodyParserErrors((_req, _res, next) => next(error))({} as Request, {} as Response, (e) => {
       seen = e;
     });
-    expect(seen).toBe(error);
-    return error;
+    expect(seen).toBeInstanceOf(Error);
+    return seen as Error;
   }
+
+  // Nest's router error layer turns any `SyntaxError` into `new BadRequestException(err.message)`
+  // before a filter sees it (`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON
+  // failure IS a `SyntaxError`, so the wrapper must hand on something that is not one, or the filter
+  // receives an HttpException carrying "Unexpected end of JSON input" and echoes it.
+  it('hands on a parser SyntaxError as a non-SyntaxError that keeps only its type and status', () => {
+    const parse = Object.assign(new SyntaxError('Unexpected end of JSON input'), {
+      type: 'entity.parse.failed',
+      status: 400,
+      body: '{"a":',
+    });
+    const forwarded = fromParser(parse);
+    expect(forwarded).not.toBeInstanceOf(SyntaxError);
+    expect(forwarded).toMatchObject({ type: 'entity.parse.failed', status: 400 });
+    expect(forwarded.message).not.toContain('JSON input');
+    expect(forwarded).not.toHaveProperty('body');
+    const { host, sent } = mockHost();
+    filter.catch(forwarded, host);
+    expect(sent.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(sent.body?.error).toEqual({
+      code: 'BAD_REQUEST',
+      message: 'The request body could not be read.',
+    });
+  });
 
   it('maps a parser error with no type tag and status 400 to 400 when the parser handed it over', () => {
     const corrupt = fromParser(

@@ -1228,6 +1228,18 @@
       "lines": "47-55",
       "anchor": "function get_raw_body(req, body_size_limit)",
       "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "routes-resolver.js:99-100",
+      "package": "@nestjs/core",
+      "path": "router/routes-resolver.js",
+      "lines": "99-100",
+      "anchor": "return new common_1.BadRequestException(err.message);",
+      "citedBy": [
+        "apps/api/src/common/http/body-parser-errors.ts",
+        "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
+        "docs/TECH_DEBT.md"
+      ]
     }
   ]
 }
