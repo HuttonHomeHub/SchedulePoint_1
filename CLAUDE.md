@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1400 web
 > source files with 46 Playwright suites beside the base journey, and
-> 164 ADRs.
+> 165 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -562,6 +562,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0162** _(Accepted)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
 - **ADR-0163** _(Accepted)_ — A guest sees the plan as placed → [`0163-a-guest-sees-the-plan-as-placed.md`](docs/adr/0163-a-guest-sees-the-plan-as-placed.md)
 - **ADR-0164** _(Accepted)_ — A lint warning is a failure, and a gate has no pass-with-findings outcome → [`0164-a-lint-warning-is-a-failure.md`](docs/adr/0164-a-lint-warning-is-a-failure.md)
+- **ADR-0165** _(Accepted)_ — A long table renders the rows in view → [`0165-a-long-table-renders-the-rows-in-view.md`](docs/adr/0165-a-long-table-renders-the-rows-in-view.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)
