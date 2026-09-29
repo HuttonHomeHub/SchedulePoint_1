@@ -127,7 +127,7 @@ describe('switching the Late overlay is announced', () => {
     const { rerender } = render(panel('visual'));
     expect(lateCalls()).toEqual([]);
     rerender(panel('late'));
-    expect(lateCalls()).toEqual(['Late dates shown. This view is read-only.']);
+    expect(lateCalls()).toEqual(['Late dates shown.']);
     rerender(panel('visual'));
     expect(lateCalls()).toHaveLength(2);
     expect(lateCalls()[1]).toBe('Placed dates shown.');

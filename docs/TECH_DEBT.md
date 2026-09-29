@@ -11669,3 +11669,16 @@ maximum buffered body on `/api/auth/sign-up/email` and its siblings is unknown, 
 needs the raw body, so a peek-and-forward or a `Content-Length` guard, not a consuming parser) or set the
 option Better Auth exposes. Security-reviewer. **Trigger:** next change to `app-setup.ts` or to Better Auth
 wiring.
+
+### 417. Switching the Late overlay in the Gantt view is not announced
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (accessibility review of the
+`#402` follow-up) · **Size:** S · **Owner:** web
+
+The `#402` follow-up announces "Late dates shown." / "Placed dates shown." from `TsldPanel`, which is
+only mounted in the diagram view: `plan-workspace-toolbar.tsx:1378` renders `GanttPanel` **instead
+of** the diagram when `planView === 'gantt'`, and the Gantt also draws on `barDateSource`. So a
+screen-reader user toggling the overlay in the Gantt view hears nothing, unless they can edit — the
+toolbar's `role="status"` "editing is paused" banner still speaks for them. **Remedy:** move the
+announcement up to the host that owns `lateOverlayActive` (the toolbar), so both views share one
+source, and drop the panel's copy. **Trigger:** next change to the overlay or the Gantt's speech.
