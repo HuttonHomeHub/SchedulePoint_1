@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Children, Fragment, isValidElement } from 'react';
+import { Children, Fragment, isValidElement, memo } from 'react';
 
 import { Skeleton } from '@/components/ui/page/skeleton';
 import { QueryErrorState } from '@/components/ui/query-error-state';
@@ -192,6 +192,85 @@ function isEmptyNode(empty: React.ReactNode): boolean {
  */
 export const EMPTY_FRAME =
   'border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm';
+
+/**
+ * One body row (plus its optional detail sibling), memoised on **row identity and column identity**
+ * (`docs/TECH_DEBT.md` #334, M2-F2).
+ *
+ * `DataTable` re-renders whenever its host does, and at 2,000 rows that meant re-running every cell
+ * renderer for a change that touched one row. A host that keeps `columns` referentially stable and
+ * keeps a row's volatile state out of the cell closures (`ActivitiesTable` mounts small
+ * self-subscribing leaves) now costs the unchanged rows one shallow compare each.
+ *
+ * **It is identity-neutral for every other call site**, which is the condition this shared primitive
+ * was changed on: they declare `columns` inline, so the array is new on every render, the compare
+ * never hits, and the row renders exactly as it did — plus the compare. Nor does it change the DOM:
+ * the `<tr>`s are the same siblings the keyed `Fragment` produced, in the same order.
+ *
+ * `detail` is compared by identity too, so a table that uses `renderDetail` (whose node is new each
+ * call) re-renders its rows as before; a table that does not passes `undefined` and can skip.
+ * Cast because `memo` erases a component's type parameter.
+ */
+const DataTableRow = memo(function DataTableRow<T>({
+  row,
+  columns,
+  contained,
+  detail,
+}: {
+  row: T;
+  columns: Column<T>[];
+  contained: boolean;
+  detail: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <>
+      <tr className={contained ? '' : 'border-border border-b'}>
+        {columns.map((column) => (
+          <td
+            key={column.header}
+            className={
+              contained
+                ? cn(cellClassesOf(column), 'border-border border-b')
+                : cellClassesOf(column)
+            }
+            data-col-width={column.width ?? 'undeclared'}
+          >
+            {column.cell(row)}
+          </td>
+        ))}
+      </tr>
+      {/* **A SIBLING row with ONE cell spanning the table — never a non-cell child of the
+        row above.** `role="row"` (which a `<tr>` maps to) may contain only
+        `gridcell`/`columnheader`/`rowheader`, and putting a panel directly inside a row
+        is an `aria-required-children` violation axe rates CRITICAL — 110 of them shipped
+        in ADR-0095 M5 and were caught by a journey rather than by review.
+
+        Deliberately not a `treegrid`: that pattern buys roving tabindex and per-cell
+        navigation, which a detail panel with no per-cell actions does not need and
+        would have to hand-roll. A disclosure over a plain table is the APG pattern that
+        fits, and it needs no grid roles at all.
+
+        `contained` moves this row's own border onto its cell too — `border-separate`
+        does not render a `<tr>`'s border in any engine this table targets, so leaving
+        it here would silently drop the rule the moment `scroll="contained"` is set. */}
+      {detail === undefined || detail === null ? null : (
+        <tr className={contained ? '' : 'border-border border-b'}>
+          <td
+            colSpan={columns.length}
+            className={contained ? cn('p-0', 'border-border border-b') : 'p-0'}
+          >
+            {detail}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}) as <T>(props: {
+  row: T;
+  columns: Column<T>[];
+  contained: boolean;
+  detail: React.ReactNode;
+}) => React.ReactElement;
 
 /**
  * The single table primitive (DESIGN_SYSTEM.md → Tables). Renders the shared
@@ -432,52 +511,15 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const detail = renderDetail?.(row);
-            return (
-              <Fragment key={getRowKey(row)}>
-                <tr className={contained ? '' : 'border-border border-b'}>
-                  {columns.map((column) => (
-                    <td
-                      key={column.header}
-                      className={
-                        contained
-                          ? cn(cellClassesOf(column), 'border-border border-b')
-                          : cellClassesOf(column)
-                      }
-                      data-col-width={column.width ?? 'undeclared'}
-                    >
-                      {column.cell(row)}
-                    </td>
-                  ))}
-                </tr>
-                {/* **A SIBLING row with ONE cell spanning the table — never a non-cell child of the
-                    row above.** `role="row"` (which a `<tr>` maps to) may contain only
-                    `gridcell`/`columnheader`/`rowheader`, and putting a panel directly inside a row
-                    is an `aria-required-children` violation axe rates CRITICAL — 110 of them shipped
-                    in ADR-0095 M5 and were caught by a journey rather than by review.
-
-                    Deliberately not a `treegrid`: that pattern buys roving tabindex and per-cell
-                    navigation, which a detail panel with no per-cell actions does not need and
-                    would have to hand-roll. A disclosure over a plain table is the APG pattern that
-                    fits, and it needs no grid roles at all.
-
-                    `contained` moves this row's own border onto its cell too — `border-separate`
-                    does not render a `<tr>`'s border in any engine this table targets, so leaving
-                    it here would silently drop the rule the moment `scroll="contained"` is set. */}
-                {detail === undefined || detail === null ? null : (
-                  <tr className={contained ? '' : 'border-border border-b'}>
-                    <td
-                      colSpan={columns.length}
-                      className={contained ? cn('p-0', 'border-border border-b') : 'p-0'}
-                    >
-                      {detail}
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
+          {rows.map((row) => (
+            <DataTableRow
+              key={getRowKey(row)}
+              row={row}
+              columns={columns}
+              contained={contained}
+              detail={renderDetail?.(row)}
+            />
+          ))}
         </tbody>
       </table>
     </div>

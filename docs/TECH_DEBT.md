@@ -10416,8 +10416,20 @@ ruled the 2,000-row reading a fail (CQ-A), which arms **M2** (stop the panel and
 re-rendering) and **M3** (window the rows inside `DataTable`, ADR first, with CQ-B — losing
 find-in-page and browse-mode reach for off-screen rows — put to the product owner).
 
-**Trigger:** the next epic after the 2026-09-28 release; the plan and harness are ready
-(`apps/web/scripts/measure-activities-panel.mjs`, re-run after each milestone).
+**M2 (render isolation) is built, and is unmeasured.** Two changes, each with a render-count case
+seen failing first: the panel takes a narrowed, referentially stable `ActivityPanelModel`
+(`useActivityPanelModel`) instead of the whole per-render `model` and is `memo`ised, so a canvas
+selection runs **zero** row cell renderers (25 before); and `DataTable` renders rows through a
+memoised row keyed on row and `columns` identity while `ActivitiesTable` memoises `columns` and
+moves the selection and open-menu state into a per-table store read by self-subscribing leaves, so
+a checkbox tick or a menu open re-renders at most one row (31 of 31 before). **Whether that moves
+I2, I3 and I4 under 200 ms is the harness's to say** — re-run
+`apps/web/scripts/measure-activities-panel.mjs` and append to `m0-measurement.md` under "after M2".
+This row stays **open**: M3 (windowing) is undecided, and E1 (open) is a mount cost M2 does not
+touch.
+
+**Trigger:** the M2 re-measurement, then the M3 decision (ADR first, CQ-B). The plan and harness
+are ready (`apps/web/scripts/measure-activities-panel.mjs`, re-run after each milestone).
 
 ### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
 

@@ -1,5 +1,6 @@
+import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { CanvasDockOutlet } from './canvas-dock';
 import { PlanFactsOutlet } from './plan-facts-host';
@@ -7,8 +8,156 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
-import { ActivitiesTable, CreateActivityButton, openActivityEditor } from '@/features/activities';
+import {
+  ActivitiesTable,
+  CreateActivityButton,
+  openActivityEditor,
+  type ActivityEditorPurpose,
+} from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
+
+/**
+ * What {@link ActivityBottomPanel} reads from the workspace — narrowed, and stable.
+ *
+ * **Why the panel does not take `PlanWorkspaceModel`** (`docs/TECH_DEBT.md` #334, M2-F1). That model
+ * is a fresh object literal on every workspace render (the hook's `return {…}`), and the workspace
+ * renders on every canvas selection change — so a panel keyed on `model` re-ran its whole activity
+ * table for a selection that changes nothing the table shows. This is the list of what it does
+ * read, and {@link useActivityPanelModel} is the one place that builds it, so the memo below
+ * compares exactly the inputs the panel uses and cannot drift from them.
+ */
+export interface ActivityPanelModel extends Pick<
+  PlanWorkspaceModel,
+  | 'orgSlug'
+  | 'planId'
+  | 'canEditSchedule'
+  | 'canProgress'
+  | 'canWriteNotes'
+  | 'activityEditorGating'
+  | 'setEditorIntent'
+  | 'onOpenLogic'
+  | 'onResourcesActivity'
+  | 'onMakeMilestone'
+  | 'recordActivityDelete'
+  | 'recordDissolveBoundary'
+  | 'varianceByActivityId'
+  | 'noteCountByActivityId'
+> {
+  /** Fire-and-forget: the panel never awaits a duplicate. */
+  onDuplicateActivity: (activity: ActivitySummary) => void;
+  varianceSummary: NonNullable<PlanWorkspaceModel['variance']['data']>['summary'] | undefined;
+  calendars: CalendarSummary[];
+  calendarsLoading: boolean;
+  calendarsError: boolean;
+  /** The plan's own calendar — what an activity's empty calendar resolves to. */
+  planCalendarId: string | undefined;
+  planActivities: ActivitySummary[];
+  planActivitiesLoading: boolean;
+  planActivitiesError: boolean;
+}
+
+/** A stable stand-in for "no list yet", so the narrowed model does not change on an absent `data`. */
+const NO_CALENDARS: CalendarSummary[] = [];
+const NO_ACTIVITIES: ActivitySummary[] = [];
+
+/**
+ * Build the panel's narrowed model from the workspace's, **referentially stable** across renders
+ * that changed none of its inputs (M2-F1).
+ *
+ * It reads leaf values (`.data`, `.isPending`) rather than the query-result objects around them, so
+ * a fresh container costs nothing. Every callback it forwards is already a `useCallback` in the
+ * model **except `onDuplicateActivity`**, a plain closure over the whole duplicate pipeline that is
+ * new every render. That one is wrapped in a stable function that calls the **latest** one through a
+ * ref written in a layout effect — never a stale closure, and never the reason the panel re-renders.
+ * (The React Compiler is not wired into the build, `GanttPanel.tsx`, so this is manual.)
+ */
+export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelModel {
+  const latestDuplicate = useRef(model.onDuplicateActivity);
+  useLayoutEffect(() => {
+    latestDuplicate.current = model.onDuplicateActivity;
+  });
+  const onDuplicateActivity = useCallback((activity: ActivitySummary): void => {
+    void latestDuplicate.current(activity);
+  }, []);
+
+  const {
+    orgSlug,
+    planId,
+    canEditSchedule,
+    canProgress,
+    canWriteNotes,
+    activityEditorGating,
+    setEditorIntent,
+    onOpenLogic,
+    onResourcesActivity,
+    onMakeMilestone,
+    recordActivityDelete,
+    recordDissolveBoundary,
+    varianceByActivityId,
+    noteCountByActivityId,
+  } = model;
+  const varianceSummary = model.variance.data?.summary;
+  const calendars = model.calendars.data ?? NO_CALENDARS;
+  const calendarsLoading = model.calendars.isPending;
+  const calendarsError = model.calendars.isError;
+  const planCalendarId = model.plan.data?.calendarId ?? undefined;
+  const planActivities = model.activities.data ?? NO_ACTIVITIES;
+  const planActivitiesLoading = model.activities.isPending;
+  const planActivitiesError = model.activities.isError;
+
+  return useMemo(
+    () => ({
+      orgSlug,
+      planId,
+      canEditSchedule,
+      canProgress,
+      canWriteNotes,
+      activityEditorGating,
+      setEditorIntent,
+      onOpenLogic,
+      onResourcesActivity,
+      onMakeMilestone,
+      recordActivityDelete,
+      recordDissolveBoundary,
+      varianceByActivityId,
+      noteCountByActivityId,
+      onDuplicateActivity,
+      varianceSummary,
+      calendars,
+      calendarsLoading,
+      calendarsError,
+      planCalendarId,
+      planActivities,
+      planActivitiesLoading,
+      planActivitiesError,
+    }),
+    [
+      orgSlug,
+      planId,
+      canEditSchedule,
+      canProgress,
+      canWriteNotes,
+      activityEditorGating,
+      setEditorIntent,
+      onOpenLogic,
+      onResourcesActivity,
+      onMakeMilestone,
+      recordActivityDelete,
+      recordDissolveBoundary,
+      varianceByActivityId,
+      noteCountByActivityId,
+      onDuplicateActivity,
+      varianceSummary,
+      calendars,
+      calendarsLoading,
+      calendarsError,
+      planCalendarId,
+      planActivities,
+      planActivitiesLoading,
+      planActivitiesError,
+    ],
+  );
+}
 
 /**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
@@ -31,13 +180,14 @@ import { BaselineVarianceSummary } from '@/features/baselines';
  * The pen read-only note is **not** shown here — the workspace shows a single consolidated note
  * above the whole body (ADR-0030 US-4).
  */
-export function ActivityBottomPanel({
+export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   model,
   onCollapse,
   focusCollapseOnMount = false,
   hostsPlanSlots = true,
 }: {
-  model: PlanWorkspaceModel;
+  /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
+  model: ActivityPanelModel;
   /**
    * Whether this panel provides the plan's slot outlets — the **facts** and the **canvas dock**
    * (workspace-chrome M3; widened from `hostsDock` in the foot-row epic's M7).
@@ -73,6 +223,13 @@ export function ActivityBottomPanel({
   useEffect(() => {
     if (focusCollapseOnMount) collapseRef.current?.focus();
   }, [focusCollapseOnMount]);
+  // Stable, so the table's `columns` (memoised over these) do not change on a workspace render.
+  const { setEditorIntent, onDuplicateActivity } = model;
+  const onOpenEditor = useCallback(
+    (activity: ActivitySummary, purpose: ActivityEditorPurpose): void =>
+      setEditorIntent(openActivityEditor(activity, purpose)),
+    [setEditorIntent],
+  );
 
   return (
     <section
@@ -85,8 +242,8 @@ export function ActivityBottomPanel({
       <div className="flex flex-wrap items-center gap-2 px-4 py-2">
         <div className="flex shrink-0 flex-wrap items-center gap-3">
           <h2 className="text-sm font-medium">Activities</h2>
-          {model.variance.data ? (
-            <BaselineVarianceSummary summary={model.variance.data.summary} />
+          {model.varianceSummary ? (
+            <BaselineVarianceSummary summary={model.varianceSummary} />
           ) : null}
         </div>
         {/* **The dock is NOT here any more** (foot-row epic M4). It lived in this header until
@@ -102,15 +259,15 @@ export function ActivityBottomPanel({
             <CreateActivityButton
               orgSlug={model.orgSlug}
               planId={model.planId}
-              calendars={model.calendars.data ?? []}
-              calendarsLoading={model.calendars.isPending}
-              calendarsError={model.calendars.isError}
-              {...(model.plan.data?.calendarId == null
+              calendars={model.calendars}
+              calendarsLoading={model.calendarsLoading}
+              calendarsError={model.calendarsError}
+              {...(model.planCalendarId === undefined
                 ? {}
-                : { planCalendarId: model.plan.data.calendarId })}
-              planActivities={model.activities.data ?? []}
-              planActivitiesLoading={model.activities.isPending}
-              planActivitiesError={model.activities.isError}
+                : { planCalendarId: model.planCalendarId })}
+              planActivities={model.planActivities}
+              planActivitiesLoading={model.planActivitiesLoading}
+              planActivitiesError={model.planActivitiesError}
             />
           ) : null}
         </div>
@@ -147,12 +304,10 @@ export function ActivityBottomPanel({
            * modal from here, for the same activity. It routes to the workspace's intent now, so the
            * chrome is decided in one place.
            */
-          onOpenEditor={(activity, purpose) =>
-            model.setEditorIntent(openActivityEditor(activity, purpose))
-          }
+          onOpenEditor={onOpenEditor}
           onOpenLogic={model.onOpenLogic}
           onOpenResources={model.onResourcesActivity}
-          onDuplicate={(a) => void model.onDuplicateActivity(a)}
+          onDuplicate={onDuplicateActivity}
           // Make milestone… (ADR-0162 decision 4). No focus call here: the row menu's `Menu`
           // restores focus to this row's trigger on close, before the dialog opens.
           onMakeMilestone={model.onMakeMilestone}
@@ -164,11 +319,9 @@ export function ActivityBottomPanel({
            */
           onDeleted={model.recordActivityDelete}
           onDissolved={model.recordDissolveBoundary}
-          calendars={model.calendars.data ?? []}
-          calendarsLoading={model.calendars.isPending}
-          {...(model.plan.data?.calendarId == null
-            ? {}
-            : { planCalendarId: model.plan.data.calendarId })}
+          calendars={model.calendars}
+          calendarsLoading={model.calendarsLoading}
+          {...(model.planCalendarId === undefined ? {} : { planCalendarId: model.planCalendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
             : {})}
@@ -202,7 +355,7 @@ export function ActivityBottomPanel({
       />
     </section>
   );
-}
+});
 
 /**
  * **The plan's foot row — one component, rendered in BOTH panel states** (foot-row epic M4).
