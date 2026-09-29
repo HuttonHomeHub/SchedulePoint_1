@@ -11504,9 +11504,16 @@ worked as its own decision:
 - The revision comparison's delta, `REDATED` class and ghosts read early dates on both sides
   (`revision-projections.ts`); `m-c/placement-snapshot.md` expected `REDATED` to move to placed at
   M-F, and it did not.
-- The landing page's plan standing compares `capturedProjectFinish` with `MAX(early_finish)`
+- ~~The landing page's plan standing compares `capturedProjectFinish` with `MAX(early_finish)`
   (`overview.repository.ts`), and `capturedProjectFinish` is itself the maximum early finish at
-  capture (`baselines.service.ts`).
+  capture (`baselines.service.ts`).~~ **Part (b) closed 2026-09-29:** the standing states the placed
+  finish (`placedFinishSql`, shared with #404) and compares it on the baseline's basis — the latest
+  frozen `placed_finish` of a `FULL` baseline, `captured_project_finish` against `MAX(early_finish)`
+  for a `NONE` one; `captured_project_finish` itself is unchanged (DCMA reads it). Pinned by the two
+  placed-finish cases in `overview.e2e-spec.ts` and `plan-standing.spec.ts`. The one read of
+  `baseline_activities` it adds is a `CASE` arm evaluated for a `FULL` baseline only, served by the
+  `(baseline_id, source_activity_id)` index's prefix (`EXPLAIN (ANALYZE)` on 2,048 activities and
+  ~125k snapshot rows: Bitmap Index Scan, 59 buffers, 4.7 ms for the whole query) — no schema change.
 - Earned Value phases planned value on the frozen early dates (`schedule.service.ts`,
   `earned-value.ts`).
 

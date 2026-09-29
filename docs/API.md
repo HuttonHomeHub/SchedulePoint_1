@@ -1253,8 +1253,10 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   (`docs/DECISIONS.md`, 2026-09-16).
 
   It covers exactly the plans `recentlyChanged` covers, and reads **only columns the last
-  recalculation persisted**: `MAX(early_finish)` for the finish, the flag counts, and the active
-  baseline's frozen finish. **The CPM engine is not invoked** — `computeSchedule` is not imported by
+  recalculation persisted**: the **placed** finish (ADR-0148) for `projectFinish`, the flag counts, and the active
+  baseline's frozen finish. `baselineMovement` compares the two **on the baseline's basis**
+  (`docs/TECH_DEBT.md` #405 (b)): placed against the latest frozen `placed_finish` for a
+  `placementSnapshotLevel: FULL` baseline, earliest against the frozen early finish for a `NONE` one. **The CPM engine is not invoked** — `computeSchedule` is not imported by
   the read or by the pure derivation beside it, pinned by
   `modules/overview/plan-standing-engine-free.structural.spec.ts` — so the ADR-0034 recalculation
   parity gate is untouched by construction.
