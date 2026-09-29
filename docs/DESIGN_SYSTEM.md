@@ -991,12 +991,14 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   enters the canvas. Canvas palettes resolve once per theme bump
   (`use-theme-version.ts`), never per frame.
 - **TSLD canvas link refresh (ADR-0052 M5)** — the refreshed link layer adds
-  **no** palette entries: rounded elbows, fan-out and the dashed lag-run
-  depiction restyle shape only (the run strokes in the existing
-  `--color-muted-foreground` edge colour), and the incident-link
-  hover/selection highlight reuses the `--color-ring` selection colour at the
-  next line-weight step up, keeping each pass's dash state — the highlight and
-  the driving cue are weight + dash changes, never colour alone.
+  **no** palette entries: rounded elbows restyle shape only, in the existing
+  `--color-muted-foreground` edge colour, and the incident-link hover/selection
+  highlight reuses the `--color-ring` selection colour at the next line-weight
+  step up — a weight change, never colour alone. M5 also added fan-out and a
+  dashed lag-run; both are **since retired** (ADR-0151 D4 retired fan-out, and no
+  link is dashed any more — see the link grammar below). _Corrected by the
+  2026-09-29 reconciliation pass, which found this bullet still describing both
+  in the present tense._
 - **TSLD Today pill (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F6b, ADR-0056)** — one
   new token, `--color-destructive-foreground` reused as `todayInk` (no new CSS variable — every
   theme already defines it for its destructive-hue text), added to both palette resolvers as the

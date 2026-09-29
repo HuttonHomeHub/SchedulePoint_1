@@ -10441,7 +10441,7 @@ are ready (`apps/web/scripts/measure-activities-panel.mjs`, re-run after each mi
 index on `lower(name)`**. Measured against a real database: **that index is not used by the query
 this repository emits.**
 
-`calendar.repository.ts:25-28` is `{ name: { contains: search, mode: 'insensitive' } }`, which Prisma
+`calendarSearchWhere` in `calendar.repository.ts` is `{ name: { contains: escapeLikePattern(search), mode: 'insensitive' } }` (the escape is `#337`'s, 2026-09-28; this cite read `:25-28` until the 2026-09-29 reconciliation pass found the lines had moved), which Prisma
 compiles to `name ILIKE $1`. The left-hand side is `name`. PostgreSQL matches an expression index
 only when the predicate contains **that exact expression**, so an index on `lower(name)` cannot serve
 it whatever its operator class — the same rule ADR-0086 already records as "expression equality, not
@@ -11504,9 +11504,14 @@ already exposes `nearCriticalCount`. So a guest canvas lacks the near-critical r
 driving-link weight a member sees. Each is its own `SCHEDULE_READ` widening and needs its own
 reasoning (ADR-0051 §4, as amended by ADR-0163); it was deliberately not folded into ADR-0163.
 
-### 405. Four baseline readers still measure earliest dates after #359
+### 405. The revision comparison's public fields say `early` while carrying placed dates
 
-**Status:** open · **Verified:** 2026-09-28 · **Raised:** 2026-09-28 (placed-baseline-variance M1–M2) ·
+> _Retitled by the 2026-09-29 reconciliation pass. It was "Four baseline readers still measure
+> earliest dates after #359", and its trigger still called part (a) open, while (a), (b) and (c) had
+> all closed that day. What is left is the rename follow-up at the end of (a) — a breaking public
+> change — and the resource histogram, now its own row, `#413`._
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-28 (placed-baseline-variance M1–M2) ·
 **Size:** M · **Owner:** api
 
 `#359`'s fix (ADR-0025 Amendment 3) made `GET …/baselines/variance` compare placed dates against
@@ -11538,10 +11543,12 @@ worked as its own decision:
   (`docs/specs/ev-placed-planned-value/`, ADR-0042 Amendment 1): one basis per read from the
   baseline's `placementSnapshotLevel` — placed on `FULL` and with no baseline, early on `NONE`.
   E1–E4 in `schedule.e2e-spec.ts`, U1/U2 in `schedule.service.spec.ts`. The resource histogram still
-  reads early dates and is not part of this row.
+  reads early dates and is not part of this row: it is `#413`.
 
 DCMA health correctly stays on the network basis and is not part of this row
-(`float-basis.structural.spec.ts`). **Trigger:** the next epic that touches the revision comparison, the one reader (part (a)) still open.
+(`float-basis.structural.spec.ts`). **What is left:** only the rename. **Trigger:** the next change
+that already breaks the revision comparison's response, or a product-owner decision to take the
+breaking change on its own (put to them in `docs/HANDOFF.md`, 2026-09-29).
 
 ### 406. The critical-path what-if's throttle was measured before it levelled
 
@@ -11605,3 +11612,84 @@ ADR-0164's `--max-warnings=0` that gap is now a gate disagreement rather than a 
 observed failing yet — filed from the review's reasoning, which is the reason it is `S` and open
 rather than fixed. Candidate remedies: drop `--cache` from the prepush invocation only, or clear
 `.eslintcache` when `tsconfig`/lockfile inputs change. Either changes a shared gate (ADR-0105).
+
+**Observed, 2026-09-29 (reconciliation pass).** The opposite direction happened for real: a fresh
+worktree linted before `prisma generate` and the package builds cached **14 spurious "unsafe type"
+errors**, and they replayed after the types existed until `apps/*/.eslintcache` was deleted
+(`docs/HANDOFF.md`, environment notes). The mechanism is read, not guessed: ESLint's
+`lint-result-cache.js` keys a result on the file's content plus
+`${eslintVersion}_${nodeVersion}_${config}` (`:56`) and caches results that carry errors (`:182`
+skips only results with an `output`), so nothing about **other** files' types — Prisma's client or
+`@repo/*/dist` declarations — is in the key. A false red costs a confused builder; the false green
+this row predicted is the same key seen from the other side.
+
+### 412. A malformed request body is answered as a server fault
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (reconciliation pass, step 5a) ·
+**Size:** S · **Owner:** api
+
+`#407` taught `AllExceptionsFilter` one of the body parser's errors: `isBodyTooLarge`
+(`apps/api/src/common/filters/all-exceptions.filter.ts:30-36`) recognises `type === 'entity.too.large'`
+and answers 413. **Every other error the parser throws still reaches the opaque-500 branch**
+(`:109-114`) and is logged as an incident. The installed `body-parser@2.3.0` throws, by its own `type`
+tag (read from `lib/types/*.js` and `lib/read.js`): `entity.parse.failed` (malformed JSON — its status
+is 400), `entity.verify.failed`, `charset.unsupported` and `encoding.unsupported` (415), and
+`parameters.too.many` from the `urlencoded` parser (413). `app-setup.ts` mounts all three parsers
+ahead of Nest's router, so a client that sends truncated JSON — the public `csp-report` sink is the
+likeliest — gets `500 INTERNAL_ERROR`, which is the exact shape `#407` was filed for.
+
+Nothing tests it: `all-exceptions.filter.spec.ts` covers only `entity.too.large` and the
+bare-`status` refusal, and no API e2e sends a malformed body (`grep -rln 'entity.parse.failed'
+apps/api` finds only an unrelated interchange validator).
+
+**Remedy:** an allow-list keyed on the parser's `type` tag — `entity.parse.failed` → 400
+`BAD_REQUEST`, `*.unsupported` → 415, `parameters.too.many` → 413 — keeping `#407`'s rule that a bare
+`status` on an unknown error is not evidence. A filter spec case per tag, and one API e2e sending
+`{"a":` to an authenticated route and to `csp-report`. Security-reviewer, as for `#407`.
+**Trigger:** next change to the filter or the parsers; small enough to take as a register row.
+
+### 413. The resource histogram still loads work on the earliest dates, not where bars are drawn
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (reconciliation pass; split out
+of `#405`) · **Size:** M · **Owner:** api
+
+ADR-0148 made the drawn (placed) dates the plan's dates, and on 2026-09-29 the header's finish,
+baseline variance, the revision comparison, the landing's standing and Earned Value all moved to
+them (`#404`, `#405`). The resource histogram did not: `loadResourceHistogramAssignments`
+(`apps/api/src/modules/schedule/schedule.repository.ts:660-691`) selects only
+`activity.earlyStart/earlyFinish`, so a bar the planner has dragged later is still counted as load
+at its earliest possible dates. `#405` said so in one line and tracked it nowhere.
+
+**This is a product decision before it is a fix** (put to the product owner in `docs/HANDOFF.md`,
+2026-09-29): levelling (ADR-0071 M2) and the histogram share the early-date basis — the leveller
+starts every activity from `earlyStartOffset` (`engine/level.ts:165`, `:216`) — and moving the
+chart without the leveller would show load the leveller does not see. **Trigger:** the product
+owner's answer.
+
+### 414. Concurrent `pnpm prepush` runs overwrite each other's failure output
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (reconciliation pass, step 7
+devops review) · **Size:** S · **Owner:** repo
+
+`scripts/prepush.sh:113` writes every step's output to one fixed path, `/tmp/prepush-last.log`, and
+`:119`/`:123` print its last 12 lines on a failure. Builders run two prepush gates at once
+(`docs/HANDOFF.md`), so a FAIL can print **the other run's** output — a plausible part of the
+"no-detail `test` failure that passes alone" the hand-off records. **Remedy:** a per-run
+`mktemp` path, removed on exit. **Trigger:** next change to `prepush.sh`.
+
+### 415. The form-body parser accepts 100 KB from anyone, beside a 64 KB promise
+
+**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (reconciliation pass, step 5a) ·
+**Size:** S · **Owner:** api
+
+`app-setup.ts:114` mounts `urlencoded({ extended: true })` with **no `limit`**, so it takes
+`body-parser@2.3.0`'s default, **100 KB** (`lib/utils.js:61-63`, `102400 // 100kb default`), on every
+route and for every caller. Yet the comment above it (`:96-97`) says the design "bounds what
+an anonymous caller can make the process buffer to 64 KB on every route", and `docs/API.md:148` says
+"Everything else is 64 KB". Both are true of JSON only.
+
+No route reads a form body: `grep -rn urlencoded apps/api/src apps/web/src` finds only the mount
+itself. So the parser buys nothing and costs a 100 KB anonymous buffer plus the `extended` (`qs`)
+parser's attack surface. **Remedy:** remove the mount (preferred — nothing consumes it), or give it
+`DEFAULT_JSON_LIMIT`; either way `#412`'s filter mapping covers what it throws. Security-reviewer,
+as for `#407`. **Trigger:** take it with `#412`.

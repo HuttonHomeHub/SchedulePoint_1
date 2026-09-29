@@ -12,8 +12,9 @@ epic boundary; its history is in git.
   is reset onto it and carries only this file.
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
   (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
-- The **reconciliation pass is due** (advisory `check:reconcile-due`; last pass 2026-09-23, ADRs
-  have since been added). Run it in a planning stretch, not mid-build.
+- The **reconciliation pass ran on 2026-09-29** (record: `docs/DECISIONS.md`, same date). It filed
+  `#412`–`#415` and corrected the docs and agents in place. `#412` and `#415` are small register
+  rows (both need **security-reviewer**) and `#414` is a one-line script fix; none needs a decision.
 
 ## What shipped (2026-09-29)
 
@@ -29,24 +30,91 @@ epic boundary; its history is in git.
 
 ## Open decisions for the product owner
 
-1. **#334 M3 (windowing)** — needs an ADR and CQ-B. Not approved, not started. M2's effect is
-   **unmeasured**: the M0 harness (`apps/web/scripts/measure-activities-panel.mjs`) re-read of
-   I2/I3/I4 is owed on real hardware (a full sweep is ~40 minutes of seeding). E1 (mount cost) is
-   untouched by M2 and is what M3 would address.
-2. **#402 accessibility questions** (from the accessibility review, none blocking): should a row
-   say it is speaking late dates; should float/drift wording switch to late under the overlay
-   (today it stays on the placed basis while dates are late); should toggling the overlay be
-   announced. Product calls, not bugs.
-3. **#405 field names** — the revision comparison's public fields still say `early*` while carrying
-   placed dates under `datesBasis: PLACED`. Renaming to basis-neutral names is the recorded
-   follow-up (note inside the #405 row); it is a breaking public-contract change.
-4. **#407 limit** — the brief said ~256 KB; a 2,000-row placements body measures ~292–356 KB, so the
-   authenticated limit is **512 KB**. Say if you want it different.
+Written for the product owner in plain English. Each one says what the choice is, what each answer
+costs, and what I'd recommend. Nothing below has been started.
+
+### 1. Should the activities table use "windowing" to open faster on big plans? (#334 M3, "CQ-B")
+
+**The problem.** The table of activities under the diagram is slow to open on large plans. On the
+test machine, opening it took about **1.7 seconds on a 2,000-activity plan** and about half a
+second on a 500-activity plan. The target is 0.2 seconds. Last night's fix (M2) made clicking and
+ticking inside the table faster, but it does not touch the opening time.
+
+**What windowing is.** Instead of building all 2,000 rows when the table opens, it builds only the
+30 or so rows you can see, and swaps rows in and out as you scroll. It looks the same to a mouse
+user, and opening should become fast whatever the plan's size. That is a prediction from the
+measurements, not yet a measurement; it gets measured after it's built.
+
+**What it costs.**
+
+- **Ctrl+F (the browser's "find on page") can't find a row that is scrolled out of view**, because
+  that row isn't really on the page until you scroll to it. The diagram's own search box still
+  finds any activity by name.
+- **Screen-reader users can't jump through the whole table** with their table-reading keys; they
+  reach rows as the table scrolls. They still have a full, always-complete list of every activity
+  in the diagram, which is the main way they read a plan today.
+- It is a moderately big change to a shared building block, so it needs a written design record
+  (an ADR) and careful testing before it ships.
+
+**Your options.**
+
+- **(a) Go ahead with windowing, accepting the two costs above.** _(My recommendation, if plans of
+  1,000+ activities are normal for your users. It is the only option that fixes the slow opening.)_
+- **(b) Windowing plus a "filter" box on the table**, so people who used Ctrl+F have a replacement.
+  This is more work and is a new feature, so it would need its own short spec first.
+- **(c) Don't window.** Accept that the table takes a second or two to open on very large plans. It
+  may be the right call if plans that size are rare for your users.
+- **(d) Measure on your own computer first** (the Surface Pro) before deciding. The test machine's
+  speed compared to yours is unknown.
+
+**Also owed either way:** re-running the speed measurements to confirm last night's fix worked
+(about 40 minutes of loading test plans).
+
+### 2. Should the resource-loading chart follow the bars as drawn? (#413, new)
+
+As of yesterday, every date the product shows is based on where bars are actually drawn: the
+finish date, baseline comparisons, earned value, and the "where each programme stands" page. The
+**resource-loading chart is the one exception.** It still counts work on each activity's earliest
+possible dates, so if you drag a bar later, the chart doesn't move with it.
+
+- **(a) Move the chart to the drawn dates**, so it matches everything else. The catch: the
+  automatic "levelling" (which spreads work out so no one is overloaded) also works from the
+  earliest dates. After this change the chart and the levelling would disagree unless levelling
+  moves too, and that is a larger decision.
+- **(b) Leave it, and label the chart** "based on earliest dates", so nobody is misled.
+- _My recommendation: (b) now, and decide (a) together with levelling later._
+
+### 3. Accessibility wording for the "Late" view (#402, from the accessibility review; none urgent)
+
+When the "Late" overlay is switched on, the screen-reader descriptions now read the late dates.
+Three small choices remain:
+
+- should each row say it is describing late dates;
+- should the float and drift wording switch to "late" too (today it stays on the drawn dates while
+  the dates themselves are late);
+- should switching the overlay on or off be announced.
+
+_My recommendation: yes to the first and third, since they're cheap and remove ambiguity. The
+second changes what the numbers mean, so leave it unless someone asks._
+
+### 4. Renaming some fields in the revision-comparison data (#405)
+
+Some fields in the data behind the revision comparison are still named "early…" but now carry the
+drawn dates (there's a separate label saying which). Renaming them would be tidier, but anything
+outside the app that reads that data would break. _My recommendation: leave the names until
+something else forces a breaking change, and do both together._
+
+### 5. The size limit on large saves (#407; just confirm)
+
+The brief said about 256 KB. A real 2,000-row save measured up to about 356 KB, so the limit was set
+to **512 KB** for signed-in users. It stays 64 KB for anyone not signed in. _No action needed
+unless you want a different figure._
 
 ## Model switch points
 
-1. Start the next session on **Opus** for a spec/ADR (#334 M3's ADR, the reconciliation pass).
-2. Switch to **Sonnet** for build, reviews, sweep and release once a brief is approved.
+1. Stay on **Opus** to write #334 M3's ADR once decision 1 is answered (if it's (a) or (b)).
+2. Switch to **Sonnet** for build, reviews, sweep and release once a brief is approved. The next
+   build batch that needs no decision is `#412` + `#415` (together) and `#414`.
 
 ## Environment notes a new session would otherwise rediscover
 

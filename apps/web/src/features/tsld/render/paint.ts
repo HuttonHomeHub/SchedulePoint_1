@@ -348,8 +348,8 @@ export interface TsldScene {
    * Absent/false ⇒ byte-for-byte today's bar layer.
    *
    * Under M5 the same field also gates the **link** refresh: rounded elbows on the orthogonal
-   * routing, deterministic fan-out of crowded bar-edge anchors, the dashed lag-run depiction
-   * (with `timeTrueLinks` geometry), and the incident-link highlight for `selectedId`/`hoverId`. */
+   * routing and the incident-link highlight for `selectedId`/`hoverId`. M5's fan-out and dashed
+   * lag-run are retired (ADR-0151 D4; no link is dashed — `docs/DESIGN_SYSTEM.md`). */
   visualRefresh?: boolean | undefined;
   // ── Canvas direct manipulation M5 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
   /** The idle-hovered bar's activity id (published by the canvas from the SAME already-armed

@@ -38,6 +38,17 @@ review; you do not edit code. Assume an adversarial user.
   the CSP sink is an unauthenticated **write** — the only one — so it is rate-limited
   and retention-swept rather than trusted; its path is stored and its query string
   stripped.
+- **Request bodies are capped before any guard runs (#407, `app-setup.ts`,
+  `common/http/body-limits.ts`).** JSON is 512 KB only under `/api/v1/organizations` **and** only
+  when a cookie or `Authorization` header is presented; 64 KB everywhere else, the anonymous sinks
+  and guest share included. The accepted residue: a junk cookie still buys one 512 KB read before
+  its 401. `public-routes-census.structural.spec.ts` pins that no `@Public()` handler lives under
+  the org prefix — a new one there is blocking. **Not yet true:** the `urlencoded` parser has no
+  limit (100 KB default, `#415`), and body-parser errors other than oversize still map to 500
+  (`#412`). An oversize body answers 413 `PAYLOAD_TOO_LARGE` in the standard envelope.
+- **Guest scope widened once, by name (ADR-0163).** `SCHEDULE_READ` now includes exactly
+  `visualEffectiveStart`/`visualEffectiveFinish` (`guest-activity.dto.ts`); every other exclusion
+  in `guest-dto.spec.ts` stands, and any further widening needs its own reasoning (`#403`).
 - **The pen is a third concurrency layer (ADR-0028).** Structural plan writes call
   `assertHoldsPen` and 423 without it — distinct from the optimistic-lock 409. A
   new structural write that skips it is blocking; a non-structural write (progress,
