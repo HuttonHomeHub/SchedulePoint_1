@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.153.1
+
+### Patch Changes
+
+- [#724](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/724) [`667f1e5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/667f1e5ae8021eead8c310ea8dd3faba1a6b90a9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - With the Late-Start overlay on, the activity list and the sentences read out on selection now
+  give the late dates the overlay draws, rather than the placed dates.
+
 ## 0.153.0
 
 ### Minor Changes
