@@ -138,14 +138,17 @@ exceeds the window, and any that is edited says why. 18 journey files call
 
 ## Consequences
 
-- Opening the panel should cost about the same at any plan size (predicted ~125 ms; measured after
-  the build).
+- Opening the panel costs about the same at any plan size: predicted ~125 ms, **measured 72–80 ms**
+  at 2,000 rows (was 1,664 ms) in
+  [`m3-measurement.md`](../specs/activities-panel-scale/m3-measurement.md). The prediction erred high, for a reason
+  nobody has measured.
 - **Accessibility regressions accepted by the product owner:** find-in-page and browse-mode table
   navigation stop at the window. The diagram listbox stays the complete, always-present route.
 - `DataTable` gains a mode, a child component and a type union. The other 23 call sites are
   untouched and render the same DOM.
 - Column widths in the activities table no longer follow off-window content (D1).
-- The plan's M3-T1…T4 build it; the harness re-measures E1 and I2 (SC-7), and #334 closes on PASS.
+- M3-T1…T4 built it; the harness re-measured E1 and I2 (SC-7) to PASS at 2,000 rows, and #334 closed
+  on 2026-09-29.
 
 ## References
 

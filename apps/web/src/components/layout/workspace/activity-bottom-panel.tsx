@@ -174,9 +174,8 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
  * holds. The accepted costs: find-in-page cannot find a row outside the window, and a screen
  * reader's table navigation reaches it only as the window moves (the diagram's listbox lists every
  * activity). The committed conditions and bars are
- * `docs/specs/activities-panel-scale/m0-conditions.md`; whether windowing met them is the harness
- * re-measure #334 still owes (`m0-measurement.md`), and until then the speed-up is predicted, not
- * measured.
+ * `docs/specs/activities-panel-scale/m0-conditions.md`, and the re-measure is `m3-measurement.md`:
+ * at 2,000 rows opening went from ~1,664 ms to 72–80 ms, and every armed limb passes.
  *
  * The pen read-only note is **not** shown here — the workspace shows a single consolidated note
  * above the whole body (ADR-0030 US-4).
