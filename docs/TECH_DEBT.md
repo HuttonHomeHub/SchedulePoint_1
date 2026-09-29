@@ -11641,8 +11641,13 @@ at its earliest possible dates. `#405` said so in one line and tracked it nowher
 the question in `docs/HANDOFF.md`). The basis is not a fix on its own: levelling (ADR-0071 M2) and
 the histogram share the early-date basis — the leveller starts every activity from
 `earlyStartOffset` (`engine/level.ts:165`, `:216`) — and moving the chart without the leveller would
-show load the leveller does not see. This row stays open for that decision once the label ships.
-**Trigger:** the next epic that touches levelling.
+show load the leveller does not see.
+
+**The label shipped (2026-09-29):** `RESOURCE_LOAD_BASIS_NOTE` (`ResourceHistogram.tsx`) — "Load is
+counted on each activity’s earliest dates, not where its bar is drawn." — sits under the histogram
+dialog's heading and in the canvas resource strip's panel, each as the section's accessible
+description. **This row stays open for the basis decision.** **Trigger:** the next epic that touches
+levelling.
 
 ### 414. Concurrent `pnpm prepush` runs overwrite each other's failure output
 

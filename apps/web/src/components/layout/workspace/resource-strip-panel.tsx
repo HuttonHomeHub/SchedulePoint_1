@@ -11,7 +11,10 @@ import {
   useResourceHistogram,
   useResources,
 } from '@/features/resources';
-import { NO_RESOURCE_LOADING_MESSAGE } from '@/features/resources/components/ResourceHistogram';
+import {
+  NO_RESOURCE_LOADING_MESSAGE,
+  RESOURCE_LOAD_BASIS_NOTE,
+} from '@/features/resources/components/ResourceHistogram';
 import { StackByControl } from '@/features/resources/components/StackByControl';
 import { StackLegend } from '@/features/resources/components/StackLegend';
 import {
@@ -84,6 +87,7 @@ export function ResourceStripPanel({
   const stackById = useId();
   const [stackBy, setStackBy] = useState<StackBy>('resource');
   const resourcePickerId = useId();
+  const loadBasisId = useId();
 
   const nameById = useMemo(
     () => new Map((resources.data ?? []).map((r) => [r.id, r.name])),
@@ -242,6 +246,9 @@ export function ResourceStripPanel({
       // A landmark name distinct from "Activities panel" (ADR-0049 §5). `tabIndex={-1}` makes it a
       // focus target for the reveal without adding a Tab stop.
       aria-label="Resource loading"
+      // The load basis (#413), only while the note is on screen — a description pointing at nothing
+      // is worse than none.
+      aria-describedby={series.length > 0 ? loadBasisId : undefined}
       tabIndex={-1}
       // Pinned above the reserved strip band (not to the same bottom edge), so the always-visible chrome
       // never occludes the canvas demand bars + max-tick the band exists to show (UX review B4). The
@@ -279,6 +286,12 @@ export function ResourceStripPanel({
         />
         <BucketSizeSelect id={bucketSizeId} value={granularity} onChange={setGranularity} />
       </div>
+
+      {series.length > 0 ? (
+        <p id={loadBasisId} className="text-muted-foreground mt-2 text-sm">
+          {RESOURCE_LOAD_BASIS_NOTE}
+        </p>
+      ) : null}
 
       {/**
        * **The legend and the truncation notice, which this surface shipped without.**

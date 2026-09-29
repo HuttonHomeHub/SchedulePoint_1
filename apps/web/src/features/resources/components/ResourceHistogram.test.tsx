@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resourceKeys } from '../api/use-resources';
 
-import { ResourceHistogram } from './ResourceHistogram';
+import { RESOURCE_LOAD_BASIS_NOTE, ResourceHistogram } from './ResourceHistogram';
 
 import { apiFetchEnvelope } from '@/lib/api/client';
 
@@ -254,5 +254,12 @@ describe('ResourceHistogram — stacking modes', () => {
     expect(within(table).getByRole('columnheader', { name: 'Chippies' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Tower crane' })).toBeInTheDocument();
     expect(within(table).getByRole('row', { name: /2026-01-05/ }).textContent).toBe(before);
+  });
+
+  it('states the load basis under the heading and associates it with the section (#413)', async () => {
+    renderHistogram();
+    const region = await screen.findByRole('region', { name: 'Resource loading histogram' });
+    expect(region).toHaveAccessibleDescription(RESOURCE_LOAD_BASIS_NOTE);
+    expect(within(region).getByText(RESOURCE_LOAD_BASIS_NOTE)).toBeVisible();
   });
 });

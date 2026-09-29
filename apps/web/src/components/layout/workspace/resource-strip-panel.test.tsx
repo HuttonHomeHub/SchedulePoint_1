@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResourceStripPanel } from './resource-strip-panel';
 
 import { resourceKeys } from '@/features/resources';
+import { RESOURCE_LOAD_BASIS_NOTE } from '@/features/resources/components/ResourceHistogram';
 import { apiFetchEnvelope } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchEnvelope: vi.fn() }));
@@ -73,6 +74,14 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     const region = await screen.findByRole('region', { name: 'Resource loading' });
     expect(region).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Activities panel' })).toBeNull();
+  });
+
+  it('states the load basis visibly and as the landmark description (#413)', async () => {
+    renderPanel();
+    await screen.findByRole('table');
+    const region = screen.getByRole('region', { name: 'Resource loading' });
+    expect(region).toHaveAccessibleDescription(RESOURCE_LOAD_BASIS_NOTE);
+    expect(within(region).getByText(RESOURCE_LOAD_BASIS_NOTE)).toBeVisible();
   });
 
   /**
