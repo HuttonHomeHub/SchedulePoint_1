@@ -20,6 +20,18 @@ same pull request.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | **feature-analyst** | A new idea/feature/requirement is raised. Run **first**: produces the Feature Spec + Implementation Plan per [`docs/PROCESS.md`](../../docs/PROCESS.md) and stops for approval. | Specs/plans only |
 
+## Implementation and search
+
+| Agent        | Use it when…                                                                                                                                | Edits code? |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **builder**  | Implementing an approved brief — a register row, a plan milestone, a folded review finding. Stops on any ADR-0105 trigger or schema change. | Yes         |
+| **explorer** | Read-only code search: where is X, who calls Y. Returns `path:line`, never a judgement.                                                     | No          |
+
+**Model routing lives in each file's `model:` field** (`CLAUDE.md` §19.14): the planners
+(feature-analyst, ui-architect, database-architect) are `opus`; **builder**, **test-engineer**
+and every reviewer are `sonnet`; **explorer** is `haiku`. Send implementation to **builder**,
+never to `general-purpose`, which inherits the session's model.
+
 ## Frontend agents
 
 | Agent                      | Use it when…                                                                                                                                      | Edits code?    |
