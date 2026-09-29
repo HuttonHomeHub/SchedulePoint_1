@@ -10432,8 +10432,18 @@ I2, I3 and I4 under 200 ms is the harness's to say** — re-run
 This row stays **open**: M3 (windowing) is undecided, and E1 (open) is a mount cost M2 does not
 touch.
 
-**Trigger:** the M2 re-measurement, then the M3 decision (ADR first, CQ-B). The plan and harness
-are ready (`apps/web/scripts/measure-activities-panel.mjs`, re-run after each milestone).
+**M3 (windowing) is built, and is unmeasured.** The product owner accepted the costs (CQ-B option
+(a), 2026-09-29) and ADR-0165 records the seven decisions. `DataTable` has an opt-in `windowed`
+mode (type-checked to need `scroll="contained"` and to refuse `renderDetail`) whose virtualizer sits
+in a child component, and `ActivitiesTable` uses it. Unit, structural and render-parity tests are in
+and the M3 journey is written (`activities-panel-scroll.spec.ts`) but **has not been run**. The
+predicted open time is about 125 ms against the 200 ms bar, from M0's slope — **a prediction, not a
+reading**. **Owed:** the full journey sweep (`scripts/e2e-sweep.sh`), accessibility-reviewer and
+component-reviewer, and the harness re-run (`apps/web/scripts/measure-activities-panel.mjs`, SC-7)
+for E1 and I2 appended to `m0-measurement.md` under "after M3". This row stays **open** until that
+reading passes.
+
+**Trigger:** the M3 re-measurement (`apps/web/scripts/measure-activities-panel.mjs`); close on PASS.
 
 ### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
 

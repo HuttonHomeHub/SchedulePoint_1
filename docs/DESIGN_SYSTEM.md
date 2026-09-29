@@ -752,6 +752,22 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   engine-independent answer for whose border wins. Do not reach for `'contained'` outside a bounded
   pane: for every other consumer it is exactly as inert as an unpinned header is here.
 
+  **`windowed` renders only the rows in view, and it is a trade, not a polish** (ADR-0165,
+  TECH_DEBT #334 M3). Opt-in, valid only with `scroll="contained"` and refused with `renderDetail`
+  (both enforced by the props' type, so a wrong combination does not compile). Only the activities
+  table uses it. The hook lives in a child (`data-table-windowed-body.tsx`) so the React Compiler
+  lint bail-out never covers `DataTable`'s 24 call sites. It keeps the native `<table>`, with
+  `aria-hidden` spacer rows above and below the window, `aria-rowcount` (rows + the header) on the
+  table and `aria-rowindex` on each rendered row. **Its costs:** find-in-page (Ctrl+F) cannot find
+  a row outside the window; a screen reader's table navigation reaches such a row only as the
+  window moves; and column widths are measured once from the first window and frozen (re-measured
+  only when the columns or the scroller's width change), so a longer value that scrolls into view
+  wraps inside its column instead of widening it. `width: 'fit'` therefore means "what the first
+  window needed" in this mode, which amends ADR-0146 for a windowed table. The announced size is
+  reasoned from ARIA 1.2, not observed with a screen reader. Do not switch it on for a table whose
+  rows people search with Ctrl+F. Tests that need more rows than the first window (about 29 in
+  jsdom) use `setWindowedRowBudgetForTests`, never a production flag.
+
   > **This entry claimed five features the component does not have** — sortable headers, pagination,
   > row selection, a sticky header and per-column alignment — and was corrected by reading
   > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
