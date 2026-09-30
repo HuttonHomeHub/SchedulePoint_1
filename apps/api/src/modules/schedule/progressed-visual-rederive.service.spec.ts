@@ -205,7 +205,7 @@ describe('ProgressedVisualRederiveService', () => {
       .mockRejectedValue(new Error('db down'));
     expect(() => h.service.onApplicationBootstrap()).not.toThrow();
     await vi.waitFor(() =>
-      expect(h.logger.warn).toHaveBeenCalledWith(
+      expect(h.logger.error).toHaveBeenCalledWith(
         expect.objectContaining({ event: 'schedule.pv_rederive_failed' }),
         expect.any(String),
       ),

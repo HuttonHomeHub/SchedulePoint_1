@@ -70,7 +70,7 @@ export class ProgressedVisualRederiveService implements OnApplicationBootstrap {
 
   onApplicationBootstrap(): void {
     void this.rederive().catch((error: unknown) => {
-      this.logger.warn(
+      this.logger.error(
         { event: 'schedule.pv_rederive_failed', err: error },
         'progressed-predecessor re-derivation did not run',
       );
@@ -94,6 +94,7 @@ export class ProgressedVisualRederiveService implements OnApplicationBootstrap {
                   AND m."finished_at" IS NOT NULL
                   AND m."rolled_back_at" IS NULL
              )
+         -- A boolean filter: no activity row leaves this query, only plan ids.
          AND EXISTS (
                SELECT 1 FROM "activities" a
                 WHERE a."plan_id" = p."id"
