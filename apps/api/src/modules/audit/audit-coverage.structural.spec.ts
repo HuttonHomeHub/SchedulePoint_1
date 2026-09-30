@@ -249,6 +249,11 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check/critical-path-test':
     REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/float-paths': REASONS.READ,
+  // The levelling-application preview COMPUTES (up to three times) and persists nothing, like the
+  // two engine-running reads above: no durable change, and auditing a deterministic recomputation is
+  // the ADR-0072 ENGINE_DERIVED rule. The write that follows it is the batch placement route, which
+  // is classified PLAN_CONTENT below for its own reason.
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/levelling-application': REASONS.READ,
   // The revision comparison reads two persisted snapshots and does not call the engine at all.
   // ADR-0073's two tests both say no: nothing durable changes, and it has no blast radius.
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/revision-compare': REASONS.READ,

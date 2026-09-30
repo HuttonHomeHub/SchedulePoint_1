@@ -10,12 +10,11 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearDomainData } from './audit-reset';
 
 /**
- * **M0 of `docs/specs/apply-levelled-dates/`: the API cases A1-A4, red until M1 adds the route.**
+ * **`docs/specs/apply-levelled-dates/`: the API cases A1-A4 for `GET …/schedule/levelling-application`.**
  *
- * `GET …/plans/:planId/schedule/levelling-application` does not exist yet, so every case is `it.fails`
- * and the suite is green because each one fails. docs/TESTING.md forbids a skipped test and `main`
- * cannot carry a red one, which is why this is `it.fails` and not `it.skip` (the `placed-load-basis`
- * M0 did the same). M1 flips them to plain `it`.
+ * Written in M0 as `it.fails` while the route did not exist (docs/TESTING.md forbids a skipped test and
+ * `main` cannot carry a red one); M1 added the route and flipped them to plain `it`, with no assertion
+ * changed.
  *
  * **Each case opens with a positive assertion on the route** (a Planner gets 200), so none can pass
  * for the wrong reason: a missing route answers 404 to everyone, which would otherwise satisfy A3's
@@ -141,26 +140,23 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     return { actor, orgId: org.body.data.id as string, planId, refs };
   }
 
-  it.fails(
-    'A1: the rows the preview returns, written and recalculated, leave what it predicted',
-    async () => {
-      const { actor, planId } = await seedLevelledPlan();
-      const preview = await actor.agent.get(previewUrl(planId)).expect(200);
-      const { rows, remainingAfterApply } = preview.body.data as {
-        rows: PlacementRow[];
-        remainingAfterApply: number;
-      };
-      expect(rows.length).toBeGreaterThan(0);
-      await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
-      const recalculated = await actor.agent
-        .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
-        .send({})
-        .expect(200);
-      expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
-    },
-  );
+  it('A1: the rows the preview returns, written and recalculated, leave what it predicted', async () => {
+    const { actor, planId } = await seedLevelledPlan();
+    const preview = await actor.agent.get(previewUrl(planId)).expect(200);
+    const { rows, remainingAfterApply } = preview.body.data as {
+      rows: PlacementRow[];
+      remainingAfterApply: number;
+    };
+    expect(rows.length).toBeGreaterThan(0);
+    await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
+    const recalculated = await actor.agent
+      .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+    expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
+  });
 
-  it.fails('A2: the preview writes nothing', async () => {
+  it('A2: the preview writes nothing', async () => {
     const { actor, planId, refs } = await seedLevelledPlan();
     const read = () =>
       prisma.activity.findMany({
@@ -173,51 +169,45 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     expect(await read()).toEqual(before);
   });
 
-  it.fails(
-    'A3: a Planner may read it; a Contributor and a Viewer may not; another organisation cannot',
-    async () => {
-      const { actor, orgId, planId } = await seedLevelledPlan();
-      await actor.agent.get(previewUrl(planId)).expect(200);
+  it('A3: a Planner may read it; a Contributor and a Viewer may not; another organisation cannot', async () => {
+    const { actor, orgId, planId } = await seedLevelledPlan();
+    await actor.agent.get(previewUrl(planId)).expect(200);
 
-      const contributor = await signUp('contrib@example.com');
-      await prisma.orgMember.create({
-        data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
-      });
-      await contributor.agent.get(previewUrl(planId)).expect(403);
+    const contributor = await signUp('contrib@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+    });
+    await contributor.agent.get(previewUrl(planId)).expect(403);
 
-      const viewer = await signUp('viewer@example.com');
-      await prisma.orgMember.create({
-        data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
-      });
-      await viewer.agent.get(previewUrl(planId)).expect(403);
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+    await viewer.agent.get(previewUrl(planId)).expect(403);
 
-      const outsider = await signUp('outsider@example.com');
-      await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
-      await outsider.agent.get(previewUrl(planId, 'other')).expect(404);
-    },
-  );
+    const outsider = await signUp('outsider@example.com');
+    await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
+    await outsider.agent.get(previewUrl(planId, 'other')).expect(404);
+  });
 
-  it.fails(
-    'A4: a row carries the activity constraint unchanged, and none where there is none',
-    async () => {
-      const { actor, planId, refs } = await seedLevelledPlan({ type: 'SNET', date: '2026-01-02' });
-      const preview = await actor.agent.get(previewUrl(planId)).expect(200);
-      const rows = (preview.body.data as { rows: PlacementRow[] }).rows;
-      const byId = new Map(rows.map((r) => [r.id, r]));
-      expect(byId.get(refs[1]!.id)).toMatchObject({
-        constraintType: 'SNET',
-        constraintDate: '2026-01-02',
-      });
-      for (const other of [refs[0]!, refs[2]!]) {
-        const row = byId.get(other.id);
-        if (row) expect(row).toMatchObject({ constraintType: null, constraintDate: null });
-      }
-      await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
-      const stored = await prisma.activity.findUniqueOrThrow({
-        where: { id: refs[1]!.id },
-        select: { constraintType: true },
-      });
-      expect(stored.constraintType).toBe('SNET');
-    },
-  );
+  it('A4: a row carries the activity constraint unchanged, and none where there is none', async () => {
+    const { actor, planId, refs } = await seedLevelledPlan({ type: 'SNET', date: '2026-01-02' });
+    const preview = await actor.agent.get(previewUrl(planId)).expect(200);
+    const rows = (preview.body.data as { rows: PlacementRow[] }).rows;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(refs[1]!.id)).toMatchObject({
+      constraintType: 'SNET',
+      constraintDate: '2026-01-02',
+    });
+    for (const other of [refs[0]!, refs[2]!]) {
+      const row = byId.get(other.id);
+      if (row) expect(row).toMatchObject({ constraintType: null, constraintDate: null });
+    }
+    await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
+    const stored = await prisma.activity.findUniqueOrThrow({
+      where: { id: refs[1]!.id },
+      select: { constraintType: true },
+    });
+    expect(stored.constraintType).toBe('SNET');
+  });
 });

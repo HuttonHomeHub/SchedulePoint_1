@@ -116,3 +116,46 @@ follow-up work; the highest number in the register was 423.
 while `C` has no overlay and keeps its network finish `2026-01-09`. `P` finishes at day 6, so `C` would
 really finish two days later, `2026-01-12` (arithmetic from `P`'s levelled finish, not a third run).
 The summary's "Levelled finish" is 2 days early on this plan.
+
+## M1 — what the preview costs (SC-6)
+
+Recorded 2026-09-30 by `apps/api/scripts/measure-levelling-application.mts`, run as
+`pnpm exec vitest run -c scripts/vitest.measure.config.mts scripts/measure-levelling-application.mts
+--silent=false --disable-console-intercept` from `apps/api`. Node 22.22.2, 4 vCPU Intel Xeon, 16 GB,
+a shared sandbox and not a planner's machine; n = 15 after one untimed warm-up, nearest-rank
+percentiles, both routes timed alternately in the one run on the same plan.
+
+**What is and is not measured.** The harness is **pure: no database, no HTTP, no API.** It times the
+engine work each route does. A recalculation is `computeSchedule` then `levelSchedule`; the preview is
+`planLevellingApplication`, which runs that pair once to read the plan, once with every target written,
+and a third time when any target is dropped for being earlier than its logic. The recalculation's lock,
+graph load and write, and the preview's graph load and name lookup, are **not** in either figure, and a
+whole-endpoint HTTP figure needs a host with a database (as `measure-critical-path-test.mjs` did); it
+was not taken here, because the API e2e and its shared database belong to the orchestrator. Read the
+ratio and the shape, not the milliseconds.
+
+The plan is `scaleSpec({ activities: 2000 })`, the generator behind `plan:scale-2000`: 2,160 activities,
+3,200 links, one `SCALE_CREW` assigned to 35% of tasks.
+
+| Variant                        | Delayed, written, dropped         | Recalculate p50 / p95 | Preview p50 / p95 | Ratio p50 / p95 | Solves |
+| ------------------------------ | --------------------------------- | --------------------- | ----------------- | --------------- | ------ |
+| capacity 8 (as seeded)         | 10 delayed, 2 rows, 8 dropped     | 227.7 / 264.4 ms      | 645.4 / 759.2 ms  | 2.83x / 2.87x   | 3      |
+| capacity 2 (forced contention) | 236 delayed, 18 rows, 218 dropped | 209.3 / 217.8 ms      | 704.9 / 763.9 ms  | 3.37x / 3.51x   | 3      |
+
+Both variants took the three-solve path, so **the preview costs about three recalculations of engine
+work, not the "two" the spec's §3 estimated**: the tentative solve and the re-solve without the dropped
+targets are separate runs. p95 is about 0.76 s at 2,000 activities in both variants.
+
+**A finding the dialog has to be honest about.** On this chain-heavy plan most levelled ghosts are
+logically impossible (A5): 8 of 10 candidates in the seeded variant and 218 of 236 under contention are
+dropped as earlier than their links allow. After applying, `remainingAfterApply` is 0 in the first and
+**236** in the second. So on a plan shaped like this one, "apply once" writes very few rows and the dialog
+will often say a great deal still clashes; that is CQ-3 (a) working as chosen ("one step, then report what
+is left"), and it is also the strongest argument for the follow-up the spec names (making levelling
+logic-aware, so a delayed predecessor pushes its successors in the overlay).
+
+**The throttle.** The M6 precedent (`schedule-health-check/m6-measurement.md`) sizes a route by
+`clamp(floor(12_000 ms / p95), 3, 20)`. On the engine-only p95 of 764 ms that is 15. The route ships at
+**10 per 60 s** instead: the figure excludes the graph load and serialisation, which the M6 run found to
+be a large share of a whole request, so a third was taken off rather than trusting the engine-only number.
+That reduction is a judgement and not a measurement; the orchestrator's HTTP run should confirm or move it.
