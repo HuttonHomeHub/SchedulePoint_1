@@ -12,6 +12,14 @@
  * Recorded at `e83fc56` (the #421 fix, which is the code the placed-basis parity argument holds on):
  * the test was run with the assertion replaced by a write of the response to a scratch file, and the
  * file was then converted to this literal. Nothing about it was hand-edited.
+ *
+ * **Re-derived 2026-09-30 (`docs/TECH_DEBT.md` #423), and this is the one sanctioned exception to "never
+ * regenerate".** The recording above counted every bar's last day as empty: the histogram was handed
+ * the INCLUSIVE display finish and spread `[start, finish)`. Units per resource are unchanged; the
+ * load moved onto each bar's last day (one more DAY bucket, 14 Jan; Rig's week-2 share 0.68). The new
+ * figures were not recorded from a live API run: the five activities' display dates were read from the
+ * old golden, fed to the pure read-model with the old finish (which reproduced the old golden exactly,
+ * DAY and WEEK) and then with the corrected one. `pnpm --filter @repo/api test:e2e` is what confirms them.
  */
 export const HISTOGRAM_UNPLACED_GOLDEN = {
   day: {
@@ -65,6 +73,10 @@ export const HISTOGRAM_UNPLACED_GOLDEN = {
         start: '2026-01-13',
         end: '2026-01-14',
       },
+      {
+        start: '2026-01-14',
+        end: '2026-01-15',
+      },
     ],
     total: 3,
     hasMore: false,
@@ -72,17 +84,17 @@ export const HISTOGRAM_UNPLACED_GOLDEN = {
     series: [
       {
         resourceId: 'Crane',
-        values: [6, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4],
+        values: [3, 3, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3],
         total: 18,
       },
       {
         resourceId: 'Crew',
-        values: [4, 4, 4, 6.6666, 2.6667, 2.6667, 0, 0, 0, 0, 0, 0],
+        values: [3.2, 3.2, 3.2, 5.2, 5.2, 2, 2, 0, 0, 0, 0, 0, 0],
         total: 24,
       },
       {
         resourceId: 'Rig',
-        values: [0, 0, 0, 3.3, 8.2, 7.3, 1.2, 0, 0, 0, 0, 0],
+        values: [0, 0, 0, 2.2, 5.64, 7.12, 4.36, 0.68, 0, 0, 0, 0, 0],
         total: 20,
       },
     ],
@@ -115,7 +127,7 @@ export const HISTOGRAM_UNPLACED_GOLDEN = {
       },
       {
         resourceId: 'Rig',
-        values: [20, 0],
+        values: [19.32, 0.68],
         total: 20,
       },
     ],

@@ -260,6 +260,9 @@ pre-change code, recorded in the PR (ADR-0110 D5).
   spreads `[start, finish)` and is handed the inclusive display finish, so the last day carries none).
   **After:** load in D+10…D+13 on the same convention, and the total is still 10 (units conserved).
   This bullet said "D…D+4" and "D+10…D+14" until M0 read the response.
+  **Convention corrected, 2026-09-30 (`docs/TECH_DEBT.md` #423):** the last day now carries load, so
+  H1 reads D…D+4 and D+10…D+14 at 2 units a day, as this bullet first said, and H2's golden was
+  re-derived. The "same convention" above describes what shipped with #413, not what holds now.
 - **H2: unplaced golden (characterisation).** A plan with no placement: plain tasks, a lagged assignment,
   a BELL curve, a started task and a complete task **with no successor** (C5 kept out). Record the whole
   histogram response against today's code and commit it as a literal. After the change it is `toEqual`.

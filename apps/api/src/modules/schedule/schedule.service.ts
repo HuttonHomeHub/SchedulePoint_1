@@ -102,6 +102,7 @@ import {
   computeFloatPaths,
   computeResourceHistogram,
   computeSchedule,
+  exclusiveFinishOfLastDay,
   HistogramTooManyBucketsError,
   resolveCurveProfile,
   ScheduleGraphNotADagError,
@@ -1336,7 +1337,9 @@ export class ScheduleService {
         // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
         profile: resolveCurveProfile(r.curveType),
         start: start ? formatCalendarDate(start) : null,
-        finish: finish ? formatCalendarDate(finish) : null,
+        // The persisted finish is the inclusive display date (ADR-0023) and the histogram spreads
+        // `[start, finish)`, so hand it the boundary that closes that last day (docs/TECH_DEBT.md #423).
+        finish: finish ? exclusiveFinishOfLastDay(formatCalendarDate(finish)) : null,
         // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
         // just above — so the lag walks the same working time the span does. Until M0 there was no
         // column to read and this was pinned at 0 under a comment saying so; that comment outlived the

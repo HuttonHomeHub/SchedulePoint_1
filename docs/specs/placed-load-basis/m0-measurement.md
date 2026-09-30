@@ -80,6 +80,13 @@ was written for (values above), not on a fixture error.
    days at 2.5. M2 must keep that convention (H2 is recorded on it). Whether it is itself a defect is
    not decided here and is outside #413. It shows in H2's golden: the complete task with actuals
    01-02 to 01-03 loads 01-02 only.
+
+   > **Correction, 2026-09-30 (`docs/TECH_DEBT.md` #423).** The product owner decided it is a defect,
+   > and it is fixed: the service now hands the histogram the boundary that closes the bar's last day,
+   > so a 5-day bar loads all five days at 2 and the complete task above loads 01-02 and 01-03 at 3.
+   > The finding above is what M0 measured and stays as written; the H1/H3 expectations and H2's golden
+   > were re-derived for the corrected convention, and the spec's original "five days at 2" was right.
+
 3. **`MSO` is not a mandatory constraint to the levelling pass**: `isMandatory` is
    `MANDATORY_START`/`MANDATORY_FINISH` (`constraints.ts:38-40`). The first draft of the L3 pinned case
    used `MSO`, was expected to fail and passed, which is how it was caught.
