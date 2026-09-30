@@ -61,6 +61,7 @@ const WINDOWED_FROM = 8;
 
 const EMPTY_TITLE = 'Nothing left to apply.';
 const REFRESH_NOTE_ID = 'apply-levelling-refresh-note';
+const CHECKED_UNCHANGED_TEXT = 'List checked, no changes.';
 const LOADING_TEXT = 'Working out what levelling would move…';
 
 function loadErrorLabel(error: unknown): string {
@@ -174,6 +175,9 @@ function ApplyLevellingBody({
   const [conflict, setConflict] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Set only when a re-read returns the list unchanged: the summary sentence is then identical, so
+  // the status region would stay silent and a screen-reader user could not tell the check finished.
+  const [unchangedNote, setUnchangedNote] = useState('');
   // Where focus goes when the conflict strip (and the "Check again" button the planner was on) is
   // removed: a stable container that outlives every state of the dialog (ADR-0135, WCAG 2.4.3).
   const contentRef = useRef<HTMLDivElement>(null);
@@ -188,6 +192,7 @@ function ApplyLevellingBody({
   const apply = async (): Promise<void> => {
     if (!application) return;
     setPending(true);
+    setUnchangedNote('');
     setConflict(null);
     setFailure(null);
     try {
@@ -210,8 +215,11 @@ function ApplyLevellingBody({
 
   const checkAgain = async (): Promise<void> => {
     setChecking(true);
+    setUnchangedNote('');
     try {
-      await query.refetch();
+      const result = await query.refetch();
+      // TanStack Query keeps the same object when a refetch returns equal data (structural sharing).
+      if (result.data === application) setUnchangedNote(CHECKED_UNCHANGED_TEXT);
     } finally {
       // Focus moves off the button before the strip that holds it goes, so it is never dropped.
       contentRef.current?.focus();
@@ -227,6 +235,8 @@ function ApplyLevellingBody({
     status = LOADING_TEXT;
     content = (
       <p className="text-muted-foreground flex items-center gap-2 text-sm" aria-hidden="true">
+        {/* Not `Spinner`: it carries its own role=status, which would duplicate the persistent
+            status region below. */}
         <Loader2 className="size-5 animate-spin" />
         {LOADING_TEXT}
       </p>
@@ -319,6 +329,8 @@ function ApplyLevellingBody({
     );
   }
 
+  if (unchangedNote && application && count > 0) status = unchangedNote;
+
   const canApply = application !== undefined && count > 0 && count <= APPLY_LEVELLING_LIMIT;
 
   return (
@@ -335,6 +347,7 @@ function ApplyLevellingBody({
             variant="outline"
             size="sm"
             aria-disabled={checking}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
             onClick={() => {
               if (checking) return;
               void checkAgain();

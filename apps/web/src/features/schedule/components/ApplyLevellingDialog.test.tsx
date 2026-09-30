@@ -368,8 +368,9 @@ describe('ApplyLevellingDialog — confirming', () => {
   });
 
   it('shows the conflict sentence, stays open, and Check again re-reads the preview', async () => {
-    const refetch = vi.fn();
-    loaded(application(), { refetch });
+    const data = application();
+    const refetch = vi.fn().mockResolvedValue({ data });
+    loaded(data, { refetch });
     onApply.mockResolvedValue({
       applied: false,
       conflict: 'This plan changed since you opened it — nothing was moved.',
@@ -388,8 +389,9 @@ describe('ApplyLevellingDialog — confirming', () => {
 
   it('keeps focus inside the dialog when Check again removes its own strip', async () => {
     let settle: () => void = () => {};
-    const refetch = vi.fn(() => new Promise<void>((r) => (settle = r)));
-    loaded(application(), { refetch });
+    const data = application();
+    const refetch = vi.fn(() => new Promise((r) => (settle = () => r({ data }))));
+    loaded(data, { refetch });
     onApply.mockResolvedValue({ applied: false, conflict: 'This plan changed.', lostPen: false });
     renderDialog();
     fireEvent.click(applyButton());
@@ -407,6 +409,29 @@ describe('ApplyLevellingDialog — confirming', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(screen.getByRole('group', { name: 'Levelled dates' })).toHaveFocus();
     expect(document.body).not.toHaveFocus();
+  });
+
+  it('announces a re-read that changed nothing in the one status region', async () => {
+    const data = application();
+    loaded(data, { refetch: vi.fn().mockResolvedValue({ data }) });
+    onApply.mockResolvedValue({ applied: false, conflict: 'This plan changed.', lostPen: false });
+    renderDialog();
+    fireEvent.click(applyButton());
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('List checked, no changes.'),
+    );
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('does not say nothing changed when the re-read returned a different list', async () => {
+    loaded(application(), { refetch: vi.fn().mockResolvedValue({ data: application() }) });
+    onApply.mockResolvedValue({ applied: false, conflict: 'This plan changed.', lostPen: false });
+    renderDialog();
+    fireEvent.click(applyButton());
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).not.toHaveTextContent('no changes');
   });
 
   it('closes when the pen was lost, because the pen’s own surface says why', async () => {
