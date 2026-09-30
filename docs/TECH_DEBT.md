@@ -11599,3 +11599,39 @@ reset from event handlers, not an effect, so they do not share this shape.
 is closed mid-save, because the per-call `onSuccess` dies with the unmounted form. The navigator's
 create dialogs were already unmounted on close, so they lose nothing. The cache invalidation still
 runs (hook-level, pinned by a test in `ClientFormDialog.test.tsx`).
+
+### 426. A part-day levelling delay is counted and never drawn
+
+**Status:** open · **Verified:** 2026-09-30 (`docs/specs/apply-levelled-dates/m0-measurement.md`) ·
+**Raised:** 2026-09-30 (Apply levelled dates M0) · **Size:** S · **Owner:** web
+
+`leveledActivityCount` counts every participant with `levelingDelay > 0` working minutes
+(`apps/api/src/modules/schedule/engine/level.ts:358`), but the ghost is withheld when `leveledStart ===
+visualEffectiveStart` as **dates** (`apps/web/src/features/tsld/render/lenses.ts:469-470`). An
+activity pushed from 08:00 to 12:00 on the same day is in the count and has no ghost. Measured on a
+Monday-Friday 08:00-16:00 plan with a 4-hour lift then a 1-day lift on one crane: `leveledActivityCount`
+1, and the second lift's `leveledStart` and `visualEffectiveStart` both `2026-01-05`. The lens docblock
+(`lenses.ts:442-451`) says the two "agree at day granularity", which is true and is exactly the case it
+does not cover. The summary strip's "Levelled activities" therefore reads 1 over a canvas showing none.
+**Not fixed here:** a ghost that starts part-way through a day needs a sub-day position to draw, and a
+placement is a date (`visual_start` is `@db.Date`), which is a schema decision for `database-architect`.
+Whether to draw the ghost at the day's start, or say in the summary that some delays are sub-day, is
+open. **Trigger:** the next change to the levelled lens or the summary strip.
+
+### 427. `leveledProjectFinish` ignores the push a delayed activity gives its followers
+
+**Status:** open · **Verified:** 2026-09-30 (`docs/specs/apply-levelled-dates/m0-measurement.md`) ·
+**Raised:** 2026-09-30 (Apply levelled dates M0) · **Size:** S · **Owner:** api
+
+`levelSchedule` takes no edges, so a follower of a delayed activity is never pushed in the overlay (the
+"A5" finding), and a non-participant counts at its own anchor finish
+(`apps/api/src/modules/schedule/engine/level.ts:362-370`). So "Levelled finish" in the summary strip
+(`apps/web/src/features/schedule/components/ScheduleSummaryStrip.tsx:143`) can be earlier than the
+finish the plan would have after levelling. Measured: `Q` and `P` (3 days each, one crane, `Q` first), `C`
+(2 days, no assignment) after `P`, on a 24/7 calendar: `leveledProjectFinish` is `2026-01-10`, `P`'s
+levelled finish, while `C` keeps its network finish `2026-01-09`; `P` finishes on the 10th (day 6) so `C`
+would finish on `2026-01-12`. The summary is two days early on that plan. Making levelling logic-aware is
+a change to ADR-0041 §1 and ADR-0035 §28 with conformance consequences, so it is not a fold-in.
+`docs/specs/apply-levelled-dates/` computes the real figure for its own preview (spec §4.6 step 6) and
+does not change this one. **Trigger:** the Apply levelled dates epic shipping, since its dialog will show
+the real finish beside this figure.
