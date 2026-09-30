@@ -280,8 +280,13 @@ Default: a **`ProgressedVisualRederiveService`** modelled on `CrossPlanRederiveS
   `actual_finish`, or has `use_expected_finish_dates` set and a live activity with `expected_finish`.
   Recalculating stamps `schedule_computed_at`, so each plan runs once.
 - **Order:** upstream first per organisation, using `orderPlansUpstreamFirst`, because D10 carries
-  the changed placed finish into downstream plans. A downstream plan that is not pending reads stale,
-  which is a visible flag rather than a silent wrong date (the precedent's stated residue).
+  the changed placed finish into downstream plans.
+- **Downstream propagation (decided 2026-09-30, "all at once on release").** During the walk a plan is
+  ALSO recalculated when any of its direct upstream plans was recalculated in this run, pending or not.
+  The walk is topological, so this carries down a whole chain, and it converges: the second boot finds
+  nothing pending and recalculates nothing. This replaces the precedent's stated residue (a non-pending
+  downstream reading stale), because every plan, guest share views included, is corrected at once. A plan
+  whose recalculation fails or is declined does not propagate.
 - Not awaited, never fails the boot, no principal, no pen, not audited (ADR-0072).
 
 ```mermaid

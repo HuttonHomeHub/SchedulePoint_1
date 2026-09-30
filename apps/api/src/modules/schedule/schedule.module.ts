@@ -10,6 +10,7 @@ import { PlansModule } from '../plans/plans.module';
 import { CrossPlanRederiveService } from './cross-plan-rederive.service';
 import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
 import { FinishMilestoneRederiveService } from './finish-milestone-rederive.service';
+import { ProgressedVisualRederiveService } from './progressed-visual-rederive.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleRepository } from './schedule.repository';
 import { ScheduleService } from './schedule.service';
@@ -40,12 +41,15 @@ import { ScheduleService } from './schedule.service';
   // finish-milestone rule (#381, ADR-0155 D5).
   // CrossPlanRederiveService: the one-shot boot recalculation, upstream first, of linked plans computed
   // under the old cross-plan rule (#385, spec D8).
+  // ProgressedVisualRederiveService: the one-shot boot recalculation of plans whose placed dates the old
+  // Pass 2 wrote, and of the plans downstream of them (#421, spec §4.4).
   providers: [
     ScheduleService,
     ScheduleRepository,
     CalendarRepository,
     FinishMilestoneRederiveService,
     CrossPlanRederiveService,
+    ProgressedVisualRederiveService,
   ],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
