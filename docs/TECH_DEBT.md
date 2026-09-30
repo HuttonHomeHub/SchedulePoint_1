@@ -11577,8 +11577,8 @@ component (keyed by the target's id, or `'new'`) whose `useForm` is given the ta
 error. The component props are unchanged. One behaviour difference: closing the dialog while a save
 is in flight now unmounts its mutation observer, so the per-call `onSuccess` (announce, `onCreated`,
 `onClose`) no longer fires for that save; the write itself still completes.
-**Tests:** the "born with the seeded value" property is pinned for the client and project dialogs (the plan dialog has the same shape and only its existing tests) by a layout-effect probe in
-`ClientFormDialog.test.tsx` and `ProjectFormDialog.test.tsx` — layout effects run before any passive
+**Tests:** the "born with the seeded value" property is pinned for all three dialogs by a layout-effect probe in
+`ClientFormDialog.test.tsx`, `ProjectFormDialog.test.tsx` and `PlanFormDialog.test.tsx` — layout effects run before any passive
 effect, so the probe sees the value the field is born with; it was verified red against the
 pre-fix client dialog (received `''`, expected `'Northgate'`). **A test of "text typed right after
 open survives a later effect" is not achievable under jsdom:** `act` flushes passive effects before
@@ -11587,4 +11587,13 @@ has passed the csp suite on several runs** — until then the fix is a structura
 suspected race, not a demonstrated cure.
 **Follow-up, not done here — same reset-on-open shape:** `CreateBaselineDialog`,
 `ResourceFormDialog`, `CalendarFormDialog`, `EditDependencyDialog`, `ShareLinksDialog`, `NoteItem`,
-`ActivityResourcesPanel`, `ActivityProgressPanels`.
+`ActivityResourcesPanel`, `ActivityProgressPanels`, and — found by review, each verified by grep —
+`AddCrossPlanLinkDialog` (`reset(DEFAULT_VALUES)` in an open-effect), `ActivityEditorDialog` (its
+`useScopeForm` re-seeds in a `[open, activity?.id]` effect) and `ActivityCreateDialog` (clears the
+mutation in an open-effect). `InviteMemberDialog` and `ImportScheduleDialog` were also named but
+reset from event handlers, not an effect, so they do not share this shape.
+**Behaviour loss, not a regression of the create paths:** editing a plan through
+`components/layout/workspace/plan-dialogs.tsx:106` no longer announces "Plan … saved." if the dialog
+is closed mid-save, because the per-call `onSuccess` dies with the unmounted form. The navigator's
+create dialogs were already unmounted on close, so they lose nothing. The cache invalidation still
+runs (hook-level, pinned by a test in `ClientFormDialog.test.tsx`).

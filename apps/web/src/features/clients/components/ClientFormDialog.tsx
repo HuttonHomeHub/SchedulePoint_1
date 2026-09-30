@@ -55,6 +55,9 @@ export function ClientFormDialog({
  * runs after the field is on screen can wipe what a fast typist has already entered
  * (`docs/TECH_DEBT.md` #420). The mutation hooks live here for the same reason — a reopened
  * dialog starts with no stale error.
+ *
+ * The `key` must not change while the dialog is open: if a caller ever retargets a live dialog,
+ * focus must be restored to the first field (WCAG 2.4.3), because the remount drops it.
  */
 function ClientForm({
   orgSlug,
@@ -63,6 +66,7 @@ function ClientForm({
   onCreated,
 }: {
   orgSlug: string;
+  // Required-but-`undefined` rather than optional: `exactOptionalPropertyTypes`.
   client: ClientSummary | undefined;
   onClose: () => void;
   onCreated: ((created: ClientSummary) => void) | undefined;

@@ -174,4 +174,51 @@ describe('ClientFormDialog', () => {
 
     expect(screen.getByLabelText('Name')).toHaveValue('');
   });
+
+  it('seeds a different row afresh when the target changes', () => {
+    const queryClient = new QueryClient();
+    const tree = (client: ClientSummary) => (
+      <QueryClientProvider client={queryClient}>
+        <ClientFormDialog orgSlug="acme" open onClose={vi.fn()} client={client} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(CLIENT));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'half-typed' } });
+
+    view.rerender(tree({ ...CLIENT, id: 'c2', name: 'Harbour' }));
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Harbour');
+  });
+
+  /**
+   * The mutation hooks now live inside the keyed form, so closing the dialog mid-save unmounts the
+   * observer. The hook-level `onSettled` is registered on the mutation itself and TanStack Query v5
+   * runs it from the MutationCache, so the list must still refresh even though the per-call
+   * callbacks no longer fire.
+   */
+  it('still invalidates the client list when the dialog closes mid-save', async () => {
+    let resolveSave: (value: ClientSummary) => void = () => undefined;
+    vi.mocked(apiFetch)
+      .mockReset()
+      .mockReturnValue(
+        new Promise<ClientSummary>((resolve) => {
+          resolveSave = resolve;
+        }),
+      );
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const tree = (open: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <ClientFormDialog orgSlug="acme" open={open} onClose={vi.fn()} client={CLIENT} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+
+    view.rerender(tree(false));
+    resolveSave(CLIENT);
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+  });
 });

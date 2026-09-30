@@ -1,6 +1,7 @@
 import type { PlanSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanFormDialog } from './PlanFormDialog';
@@ -88,5 +89,48 @@ describe('PlanFormDialog', () => {
     expect(path).toBe('/organizations/acme/plans/pl1');
     expect(init?.method).toBe('PATCH');
     expect(JSON.parse(init?.body as string)).toMatchObject({ version: 4, status: 'ACTIVE' });
+  });
+
+  // See the client dialog's twin of this test for why the probe is a layout effect (#420).
+  it('is born holding the edited plan’s values, not seeded by a later effect', () => {
+    const born: string[] = [];
+    function Probe(): null {
+      useLayoutEffect(() => {
+        const name = document.querySelector<HTMLInputElement>('input[name="name"]');
+        const start = document.querySelector<HTMLInputElement>('input[name="plannedStart"]');
+        if (name && start) born.push(name.value, start.value);
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PlanFormDialog orgSlug="acme" projectId="p1" open onClose={vi.fn()} plan={PLAN} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(born).toEqual(['Baseline', '2026-05-01']);
+  });
+
+  it('starts clean when reopened after a failed save', async () => {
+    vi.mocked(apiFetch).mockReset().mockRejectedValue(new Error('Name already taken'));
+    const queryClient = new QueryClient();
+    const tree = (open: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <PlanFormDialog orgSlug="acme" projectId="p1" open={open} onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });
+    fireEvent.change(screen.getByLabelText(/Planned start/), { target: { value: '2026-06-15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Name already taken');
+
+    view.rerender(tree(false));
+    view.rerender(tree(true));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('');
+    expect(screen.getByLabelText(/Planned start/)).toHaveValue('');
   });
 });

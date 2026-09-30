@@ -52,11 +52,9 @@ export function ProjectFormDialog({
 }
 
 /**
- * The form proper. The Dialog mounts its children only while open, so `useForm` is born with the
- * target's values instead of being `reset()` by a passive effect after commit: an effect that
- * runs after the field is on screen can wipe what a fast typist has already entered
- * (`docs/TECH_DEBT.md` #420). The mutation hooks live here for the same reason — a reopened
- * dialog starts with no stale error.
+ * The form proper — seeded at mount, not by an effect; see `ClientForm` (`docs/TECH_DEBT.md` #420).
+ * The `key` must not change while the dialog is open: if a caller ever retargets a live dialog,
+ * focus must be restored to the first field (WCAG 2.4.3), because the remount drops it.
  */
 function ProjectForm({
   orgSlug,
@@ -67,6 +65,7 @@ function ProjectForm({
 }: {
   orgSlug: string;
   clientId: string;
+  // Required-but-`undefined` rather than optional: `exactOptionalPropertyTypes`.
   project: ProjectSummary | undefined;
   onClose: () => void;
   onCreated: ((created: ProjectSummary) => void) | undefined;
