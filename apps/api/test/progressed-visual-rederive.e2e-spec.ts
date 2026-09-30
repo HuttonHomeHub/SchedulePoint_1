@@ -121,9 +121,14 @@ describe.skipIf(!hasDatabase)('progressed-predecessor boot re-derivation (e2e)',
     await start(actuals);
     await start(deleted);
     await start(never);
+    // The plan PATCH is optimistically locked, so it carries the version the read returns.
+    const efOnPlan = await agent.get(`/api/v1/organizations/acme/plans/${efOn.planId}`).expect(200);
     await agent
       .patch(`/api/v1/organizations/acme/plans/${efOn.planId}`)
-      .send({ useExpectedFinishDates: true })
+      .send({
+        useExpectedFinishDates: true,
+        version: (efOnPlan.body.data as { version: number }).version,
+      })
       .expect(200);
     await prisma.$executeRawUnsafe(
       `UPDATE "activities" SET "expected_finish" = DATE '2026-01-30' WHERE "id" = ANY($1::uuid[])`,
