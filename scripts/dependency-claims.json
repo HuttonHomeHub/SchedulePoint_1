@@ -1240,6 +1240,14 @@
         "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
         "docs/TECH_DEBT.md"
       ]
+    },
+    {
+      "ref": "throttler.service.js:73-77",
+      "package": "@nestjs/throttler",
+      "path": "dist/throttler.service.js",
+      "lines": "73-77",
+      "anchor": "this.storage.get(key).totalHits.set(throttlerName, hits.length);",
+      "citedBy": ["apps/api/test/throttle-reset.ts"]
     }
   ]
 }

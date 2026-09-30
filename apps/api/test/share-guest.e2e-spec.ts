@@ -1,7 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,6 +10,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * End-to-end tests for the session-less External-Guest READ surface
@@ -144,7 +145,7 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
      * `docs/TESTING.md` already forbids in as many words. Nothing in `apps/api/test` asserts a 429,
      * so no assertion is disarmed by this.
      */
-    (throttlerStorage as ThrottlerStorageService).storage.clear();
+    resetThrottleCounters(throttlerStorage);
     await resetDatabase();
   });
 

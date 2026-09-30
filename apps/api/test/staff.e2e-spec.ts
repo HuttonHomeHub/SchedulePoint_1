@@ -1,7 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * **This suite exists because M2 shipped unable to complete a single request, and 1,589 unit tests
@@ -90,15 +91,16 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
      * 4-entry field loop plus the **30-entry `bad[]` loop inside one test**, about 42 requests
      * against a ceiling of 30, while no other handler comes near it.
      *
-     * None of that changes the fix. `storage.clear()` empties every key, so it isolates whatever
-     * the key shape is; only the explanation needed correcting.
+     * None of that changes the fix. Emptying the store (`resetThrottleCounters`, which since
+     * `@nestjs/throttler@6.7.1` also has to empty its hit-expiry map) isolates whatever the key shape
+     * is; only the explanation needed correcting.
      *
      * The product bound is untouched: every test still runs its own requests under the real 30 per
      * minute. What is removed is one test's spending counting against the next one's, which
      * `docs/TESTING.md` already forbids in as many words — deterministic and isolated, no shared
      * mutable state. Nothing in `apps/api/test` asserts a 429, so no assertion is disarmed by this.
      */
-    (throttlerStorage as ThrottlerStorageService).storage.clear();
+    resetThrottleCounters(throttlerStorage);
 
     await prisma.mailEvent.deleteMany();
     // `perf_probe_results` has no foreign key at all — deliberately, so a reading outlives the
