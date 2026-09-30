@@ -18,6 +18,7 @@ export { computeSchedule, type ComputeOptions, type EngineOutput } from './compu
 export { applyLag, backwardUpperBound, forwardLowerBound } from './edge-bounds';
 export { finishDateInstant, formatExternalInstant, startDateInstant } from './instants';
 export { levelSchedule } from './level';
+export { planLevellingApplication } from './apply-levelling';
 export { computeFloatPaths, type FloatPath } from './float-paths';
 export {
   computeResourceHistogram,

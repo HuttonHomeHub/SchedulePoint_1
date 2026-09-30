@@ -508,6 +508,23 @@ export class ScheduleRepository {
   }
 
   /**
+   * What the levelling-application preview names about each activity the engine does not carry: its
+   * label and the optimistic-locking `version` a placement row must state. Read in the SAME
+   * transaction as the engine's graph, so the version a row carries is the one the preview solved
+   * (a later change still fails the batch write's own version check, which is what makes the read safe).
+   */
+  loadPlacementIdentities(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      select: { id: true, code: true, name: true, version: true },
+    });
+  }
+
+  /**
    * A plan's active activities projected to the Earned-Value read inputs (EV2b, ADR-0042) — the
    * persisted CPM dates plus cost / %-complete inputs, with each active assignment (of an active
    * resource) joined to its resource's cost rate. Org + plan scoped (anti-IDOR), soft-deletes

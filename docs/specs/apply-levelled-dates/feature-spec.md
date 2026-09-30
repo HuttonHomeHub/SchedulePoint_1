@@ -455,6 +455,24 @@ target, laneIndex: null }` — the batch route's complete-row shape, with the co
 The service wraps it: resolve scope, assert `activity:update`, load the plan (404/422), build the graph as
 the recalculation does, call the engine, attach names and the `before` placement for the dialog.
 
+> **Note, 2026-09-30 (M1), amending step 3.** Step 3 as written ("the smallest calendar date `D` such
+> that the placement instant of `D` … is at or after the levelled instant") can name a **non-working**
+> date: a crane freed at 12:00 Friday has Saturday as its smallest such date, which Pass 2 then draws on
+> Monday (`m0-measurement.md`, finding 2). CQ-4 (a) says "the next working day", and the **stored**
+> date is the one that has to say so, because relying on Pass 2 to roll it forward leaves the stored
+> value and the drawn one disagreeing. The target is therefore the earliest **working** date whose
+> placement instant is at or after the levelled instant: a day whose own placement falls on that day.
+> Case P8 pins it. The rule is still derived on the activity's own calendar and through the engine's own
+> reader (`startDateInstant`, which `compute.ts` Pass 2 now calls too), and P6 was rewritten in M0 to
+> assert own-calendar rounding because the spec's original P6 example did not discriminate.
+>
+> **Two further corrections from building it.** T1.1's "extract `compute.ts:351-356` into a named
+> helper" was already done: `instants.ts` has exported `startDateInstant` (written from those same two
+> branches) since #385, so Pass 2 calls it rather than a new function. And step 4's
+> `conflictingPlaced` is wider than "removed candidates carrying a placement": it also names any
+> hand-placed activity a **kept** move newly pushes earlier than its logic, because US-3 promises the
+> dialog names every conflict the apply leaves, and that case is not a candidate at all.
+
 ### 4.7 API and component changes
 
 **API.** `GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/levelling-application`, in

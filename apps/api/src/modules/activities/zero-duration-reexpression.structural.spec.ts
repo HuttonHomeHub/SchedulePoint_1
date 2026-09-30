@@ -103,6 +103,10 @@ function census(): Call[] {
       const argument = args[DATE_ARGUMENT[reader]!] ?? '';
       // A reader delegating its own `date` parameter is the convention, not a caller of it.
       if (file === 'instants.ts' && argument === 'date') continue;
+      // `planLevellingApplication` asks what a date it DERIVED (a levelled target) would place at, so
+      // that it and Pass 2 agree about what a placement date means. The date is an output of the
+      // levelling pass, not a stored activity field, so there is nothing for the rule to re-express.
+      if (file === 'apply-levelling.ts' && argument === 'date') continue;
       calls.push({ file, reader, argument });
     }
   }
@@ -114,11 +118,9 @@ function census(): Call[] {
 describe('the re-expression rule covers every finish-milestone date input', () => {
   it('finds the five engine calls it expects (pinned positive case)', () => {
     expect(census()).toEqual([
-      {
-        file: 'compute.ts',
-        reader: 'finishMilestoneDateInstant',
-        argument: 'activity.visualStart',
-      },
+      // Pass 2 reads a placement through `startDateInstant`, the same reader the constraint clamps
+      // use, since apply-levelled-dates T1.1; it called `finishMilestoneDateInstant` inline before.
+      { file: 'compute.ts', reader: 'startDateInstant', argument: 'activity.visualStart' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'constraintDate' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'external' },
       {

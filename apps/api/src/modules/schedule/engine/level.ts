@@ -188,6 +188,12 @@ export function levelSchedule(
 
   interface Overlay {
     leveledStartOffset: number;
+    /**
+     * The same position as an ABSOLUTE instant, which the plan-frame offset above cannot be turned back
+     * into for an activity on its own calendar (see the mixed-calendar note). In memory only:
+     * `planLevellingApplication` reads it, and `writeResults` persists by named column.
+     */
+    leveledStartInstant: number;
     leveledFinishOffset: number;
     levelingDelay: number;
     leveledStart: string;
@@ -213,6 +219,7 @@ export function levelSchedule(
     }
     overlayById.set(id, {
       leveledStartOffset: accessors.startOffset(r),
+      leveledStartInstant: startInst,
       leveledFinishOffset: accessors.finishOffset(r),
       levelingDelay: 0,
       leveledStart: accessors.startDate(r),
@@ -327,6 +334,7 @@ export function levelSchedule(
     }
     overlayById.set(a.id, {
       leveledStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, leveledStartInst),
+      leveledStartInstant: leveledStartInst,
       leveledFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, leveledFinishInst),
       levelingDelay: Math.max(
         0,

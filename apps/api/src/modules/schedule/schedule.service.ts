@@ -15,6 +15,7 @@ import type {
   CrossPlanRevisionCompare,
   HistogramGranularity,
   PlanEarnedValue,
+  LevellingApplication,
   PlanFloatPaths,
   PlanScheduleSummary,
   ProgrammeScheduleLockedDetails,
@@ -104,6 +105,7 @@ import {
   computeSchedule,
   exclusiveFinishOfLastDay,
   HistogramTooManyBucketsError,
+  planLevellingApplication,
   resolveCurveProfile,
   ScheduleGraphNotADagError,
   type ComputeOptions,
@@ -1151,6 +1153,138 @@ export class ScheduleService {
       });
       throw error;
     }
+  }
+
+  /**
+   * **What applying the plan's levelled positions would do** (`docs/specs/apply-levelled-dates/`,
+   * spec §4.6) — a read-only preview, `activity:update` (Planner and Org Admin).
+   *
+   * `activity:update` rather than `schedule:read` because the read exists to feed a write the caller
+   * must be able to make, and because it runs the engine at least twice: a Viewer should not be able
+   * to spend that. It needs no pen, because it writes nothing; the write is the existing batch
+   * placement route, which asserts the pen itself.
+   *
+   * **No plan lock, no write transaction, no pen** — the `floatPaths` shape. The one transaction is the
+   * read snapshot `buildEngineGraph` takes. A batch committing mid-read can leave the preview a version
+   * behind, which the write's own version check turns into a 409 and nothing moved.
+   *
+   * The response carries names, codes, dates, versions and constraints the caller can already read,
+   * and no cost field, so it cannot vary by `cost:read`. A plan that does not level returns no rows.
+   */
+  async getLevellingApplication(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<LevellingApplication> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'activity:update', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+    if (!plan.plannedStart) {
+      throw new ValidationError('Set the plan’s start date before applying levelled dates.', {
+        reason: SCHEDULE_ERROR.PLAN_START_REQUIRED,
+      });
+    }
+    const dataDate = formatCalendarDate(plan.plannedStart);
+    const startedAt = Date.now();
+
+    const [{ activities, edges, options, leveling, meta }, identities] =
+      await this.prisma.$transaction(
+        async (tx) =>
+          [
+            await this.buildEngineGraph(organization.id, plan, dataDate, tx),
+            await this.schedule.loadPlacementIdentities(organization.id, planId, tx),
+          ] as const,
+      );
+
+    let application: ReturnType<typeof planLevellingApplication>;
+    try {
+      application = planLevellingApplication({
+        activities,
+        edges,
+        // A plan that does not level (`leveling` is null: not opted in, or no assignments) has no
+        // demand model, so nothing is delayed and the preview is empty, byte-for-byte what a
+        // recalculation leaves.
+        assignments: leveling?.assignments ?? [],
+        resources: leveling?.resources ?? [],
+        options: {
+          dataDate,
+          planCalendar: options.calendar,
+          levelWithinFloatOnly: plan.levelWithinFloatOnly,
+          compute: options,
+        },
+      });
+    } catch (error) {
+      // Two to four `computeSchedule` runs over the graph `recalculate` builds: the same walk-time
+      // horizon guard, the same 422 (`docs/TECH_DEBT.md` #205(b)).
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount: meta.activityCalendarCount,
+      });
+      throw error;
+    }
+
+    const identityById = new Map(identities.map((i) => [i.id, i]));
+    const activityById = new Map(activities.map((a) => [a.id, a]));
+    const named = (id: string) => ({ id, name: identityById.get(id)?.name ?? 'Unknown activity' });
+    const rows: LevellingApplication['rows'] = [];
+    const items: LevellingApplication['items'] = [];
+    for (const item of application.items) {
+      const activity = activityById.get(item.activityId);
+      const identity = identityById.get(item.activityId);
+      // Both come from the same snapshot as `activities`; a miss would be a row the preview cannot
+      // state a version for, and writing one blind is worse than refusing it.
+      if (!activity || !identity) {
+        throw new Error(`levelling application names activity "${item.activityId}" with no row`);
+      }
+      rows.push({
+        id: item.activityId,
+        version: identity.version,
+        constraintType: activity.constraintType ?? null,
+        constraintDate: activity.constraintDate ?? null,
+        visualStart: item.targetStart,
+        laneIndex: null,
+      });
+      items.push({
+        id: item.activityId,
+        name: identity.name,
+        code: identity.code,
+        beforeVisualStart: item.beforeVisualStart,
+        beforeDrawnStart: item.beforeDrawnStart,
+        targetStart: item.targetStart,
+        wasPlaced: item.wasPlaced,
+        roundedToNextDay: item.roundedToNextDay,
+      });
+    }
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        planId,
+        userId: principal.userId,
+        activityCount: activities.length,
+        rowCount: rows.length,
+        roundedToNextDayCount: application.roundedToNextDay.length,
+        leftToLogicCount: application.leftToLogic.length,
+        conflictingPlacedCount: application.conflictingPlaced.length,
+        remainingAfterApply: application.remainingAfterApply,
+        durationMs: Date.now() - startedAt,
+      },
+      'levelling application previewed',
+    );
+
+    return {
+      computedFrom: { scheduleComputedAt: plan.scheduleComputedAt?.toISOString() ?? null },
+      rows,
+      items,
+      leftToLogic: application.leftToLogic.map(named),
+      conflictingPlaced: application.conflictingPlaced.map(named),
+      laterThanBoundIntroduced: application.laterThanBoundIntroduced,
+      projectFinishBefore: placedProjectFinishOf(application.before),
+      projectFinishAfter: placedProjectFinishOf(application.after),
+      remainingAfterApply: application.remainingAfterApply,
+    };
   }
 
   /**

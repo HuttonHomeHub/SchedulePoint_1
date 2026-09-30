@@ -19,6 +19,7 @@ import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
+import { LevellingApplicationDto } from './dto/levelling-application.dto';
 import { PlanEarnedValueDto } from './dto/plan-earned-value.dto';
 import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
 import { HealthMetricResultDto, ScheduleHealthReportDto } from './dto/plan-health-check.dto';
@@ -65,6 +66,19 @@ const FLOAT_PATHS_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
  * activities: see that file's results table, which this constant's value must agree with.
  */
 const CRITICAL_PATH_TEST_THROTTLE = { default: { ttl: 60_000, limit: 14 } } as const;
+
+/**
+ * The levelling-application preview's budget: **10 requests / 60 s**. The route runs the engine's
+ * network and levelling passes up to three times (read the plan, write every target, re-solve without
+ * the targets the links refuse). Measured at 2,000 activities on the engine alone: p95 ~0.78 s, about
+ * three recalculations (`docs/specs/apply-levelled-dates/m0-measurement.md`, "M1 — what the preview
+ * costs"). The M6 formula on that figure gives 15; 10 is one third lower because the figure leaves out
+ * the graph load and serialisation, which make up much of a whole request. That reduction is a
+ * judgement, not a measurement, and is recorded as one; an HTTP measurement against a database is
+ * still owed. **Its cost, stated plainly:** at most 10 × the measured p95 (~0.78 s) of synchronous CPU,
+ * about 8 s of event-loop time per client per minute, for this one route.
+ */
+const LEVELLING_APPLICATION_THROTTLE = { default: { ttl: 60_000, limit: 10 } } as const;
 
 @ApiTags('schedule')
 @ApiCookieAuth('schedulepoint.session_token')
@@ -335,6 +349,53 @@ export class ScheduleController {
   ): Promise<HealthMetricResultDto> {
     return HealthMetricResultDto.from(
       await this.service.getCriticalPathTest(principal, orgSlug, planId),
+    );
+  }
+
+  @Get('levelling-application')
+  @Throttle(LEVELLING_APPLICATION_THROTTLE)
+  @ApiOperation({
+    summary: 'Preview applying the plan’s levelled positions as placements (Planner or Org Admin).',
+    description:
+      'Derives the `visualStart` rows that would put every bar levelling moved where its resource ' +
+      'actually frees up — what dragging each bar onto its ghost would write, done at once — and the ' +
+      'consequences of writing them. **Read-only: no lock, no pen, no write**; the write is ' +
+      '`PATCH …/activities/placements`: send `data.rows` as its `placements` array, and do not send when ' +
+      '`rows` is empty. Permission is `activity:update` ' +
+      'rather than `schedule:read`: the read exists to feed a write the caller must be able to make, ' +
+      'and it runs the engine up to three times. **Targets are whole working days**, because a ' +
+      'placement is a date: a resource that frees up part-way through a day puts the bar on the next ' +
+      'working day’s start (`items[].roundedToNextDay`). **A target the links refuse is not written** ' +
+      '(the engine is asked, this route holds no rule about links): it is reported in `leftToLogic`, ' +
+      'or in `conflictingPlaced` when the bar carries a placement of its own. One press is one step: ' +
+      '`remainingAfterApply` says how many bars levelling would still move afterwards, and is ' +
+      'reported, not chased. A plan that does not level returns no rows. **It writes exactly the ' +
+      'constraint each activity already has** in `rows`; nothing here sets or clears one. The response ' +
+      'carries no cost field, so it does not vary by `cost:read`.',
+  })
+  @ApiOkResponse({ type: LevellingApplicationDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role: `activity:update` (Planner or Org Admin) is required.',
+  })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limited by this route’s own budget, 10 requests / 60 s per IP: it runs the engine up to ' +
+      'three times per call (docs/specs/apply-levelled-dates/m0-measurement.md).',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The plan has no start date (PLAN_START_REQUIRED); a calendar the plan schedules on has no ' +
+      'working time at all (CALENDAR_HAS_NO_WORKING_TIME); or a calendar has working time the ' +
+      'schedule cannot reach within the engine’s horizon (CALENDAR_WORKING_TIME_UNREACHABLE) — the ' +
+      'preview runs the same passes a recalculation does.',
+  })
+  async levellingApplication(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<LevellingApplicationDto> {
+    return LevellingApplicationDto.from(
+      await this.service.getLevellingApplication(principal, orgSlug, planId),
     );
   }
 

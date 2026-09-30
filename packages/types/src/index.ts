@@ -1095,6 +1095,67 @@ export interface PlanFloatPaths {
 }
 
 /**
+ * One row of the **levelling application** preview (`docs/specs/apply-levelled-dates/`): exactly the
+ * shape `PATCH …/activities/placements` takes, so a client sends `rows` as the `placements` array (and sends nothing when `rows` is empty). The
+ * constraint is carried as stored, because a row is a complete placement and a stale cache must not be
+ * able to clear one; `laneIndex` is always null (the lane is left alone).
+ */
+export interface LevellingApplicationRow {
+  id: string;
+  version: number;
+  constraintType: ConstraintType | null;
+  constraintDate: string | null;
+  /** The day to place the bar's start on, `YYYY-MM-DD`: a working day on the activity's calendar. */
+  visualStart: string;
+  laneIndex: null;
+}
+
+/** One activity the apply would move, with what a dialog needs to describe it. */
+export interface LevellingApplicationItem {
+  id: string;
+  name: string;
+  code: string | null;
+  /** The stored placement before the apply; null when the bar was not hand-placed. */
+  beforeVisualStart: string | null;
+  /** Where the bar is drawn today (`YYYY-MM-DD`), hand-placed or not. */
+  beforeDrawnStart: string;
+  targetStart: string;
+  /** The bar carried a hand placement of its own, which the apply replaces (undo restores it). */
+  wasPlaced: boolean;
+  /** The resource frees up part-way through a day, so the bar lands on the next day start. */
+  roundedToNextDay: boolean;
+}
+
+/** An activity named in the preview without being moved by it. */
+export interface LevellingApplicationNamedActivity {
+  id: string;
+  name: string;
+}
+
+/**
+ * What applying the plan's levelled positions would do — a read-only preview over an in-memory solve.
+ * Nothing in it is persisted; **the write is the existing batch placement route**, whose
+ * body is `{ placements }`: send `rows` as that array, and nothing when `rows` is empty.
+ */
+export interface LevellingApplication {
+  /** When the schedule this was derived from was last calculated, so a client can refuse a stale one. */
+  computedFrom: { scheduleComputedAt: string | null };
+  rows: LevellingApplicationRow[];
+  items: LevellingApplicationItem[];
+  /** Levelling moved these, but their new position would be earlier than their links allow; logic carries them. */
+  leftToLogic: LevellingApplicationNamedActivity[];
+  /** Hand-placed activities the apply leaves earlier than their logic allows. */
+  conflictingPlaced: LevellingApplicationNamedActivity[];
+  /** Rows whose new position breaches a start or finish bound they did not breach before. */
+  laterThanBoundIntroduced: number;
+  /** The plan's placed finish before and after, from a real solve (`YYYY-MM-DD`; null for an empty plan). */
+  projectFinishBefore: string | null;
+  projectFinishAfter: string | null;
+  /** How many activities levelling would STILL move once the rows are written. */
+  remainingAfterApply: number;
+}
+
+/**
  * Working-day calendar weekly pattern as a 7-bit mask (M5, ADR-0024): bit 0 =
  * Monday … bit 6 = Sunday, a set bit meaning that weekday is worked. This is the
  * single cross-boundary source of truth for the mask semantics — the web weekday
