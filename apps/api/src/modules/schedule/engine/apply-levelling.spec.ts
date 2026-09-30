@@ -392,3 +392,73 @@ describe('planLevellingApplication — P8: the stored date is a working day', ()
     expect(plan.remainingAfterApply).toBe(0);
   });
 });
+
+// ── P9 and P10: what a kept move does to the bars around it ────────────────────────────────────────
+
+/**
+ * Q holds the crane for three days, so P (FS to S) is moved to Thursday 8 January and finishes on the
+ * 11th. S has no resource, so levelling never moves it and it is not a candidate; it was hand-placed
+ * on the 8th, which was fine while P finished on the 8th and is earlier than logic once P moves.
+ */
+const p9: Scenario = {
+  activities: [
+    task('Q', 3 * DAY, { levelingPriority: 1 }),
+    task('P', 3 * DAY, { levelingPriority: 2 }),
+    task('S', 2 * DAY, { visualStart: '2026-01-08' }),
+  ],
+  edges: [fs('P', 'S')],
+  assignments: [on('Q', 'CRANE'), on('P', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+/** B moves to Thursday 8 January and finishes on the 10th, past an FNLT of the 9th it met before. */
+const p10: Scenario = {
+  activities: [
+    task('A', 3 * DAY, { levelingPriority: 1 }),
+    task('B', 3 * DAY, {
+      levelingPriority: 2,
+      constraintType: 'FNLT',
+      constraintDate: '2026-01-09',
+    }),
+  ],
+  edges: [],
+  assignments: [on('A', 'CRANE'), on('B', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P9: a placed bar a kept move pushes past its own placement', () => {
+  it('precondition: S is fine today and is earlier than logic once P is on the 8th', () => {
+    expect(conflictsOf(solve(p9).byId)).toEqual([]);
+    expect(conflictsOf(settle(p9, [{ activityId: 'P', visualStart: '2026-01-08' }]).byId)).toEqual([
+      'S',
+    ]);
+  });
+
+  it('writes P, and names S, which is not a candidate, as now conflicting', () => {
+    const plan = planLevellingApplication(input(p9));
+    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
+    expect(plan.conflictingPlaced).toEqual(['S']);
+    expect(plan.leftToLogic).toEqual([]);
+    expect(conflictsOf(settle(p9, plan.rows).byId)).toEqual(['S']);
+  });
+});
+
+describe('planLevellingApplication — P10: a bound the move newly breaches', () => {
+  it('precondition: B meets its FNLT today and breaches it on the 8th', () => {
+    const reasonOf = (s: ReturnType<typeof solve>) => s.byId.get('B')!.visualConflictReason;
+    expect(reasonOf(solve(p10))).toBeNull();
+    expect(reasonOf(settle(p10, [{ activityId: 'B', visualStart: '2026-01-08' }]))).toBe(
+      'LATER_THAN_BOUND',
+    );
+  });
+
+  it('writes B, which the levelling requires, and counts the bound it introduces', () => {
+    const plan = planLevellingApplication(input(p10));
+    expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
+    expect(plan.laterThanBoundIntroduced).toBe(1);
+    expect(plan.leftToLogic).toEqual([]);
+    expect(plan.conflictingPlaced).toEqual([]);
+  });
+});
