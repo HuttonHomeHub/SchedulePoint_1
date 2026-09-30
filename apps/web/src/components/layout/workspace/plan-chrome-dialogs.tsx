@@ -29,7 +29,13 @@ import { formatCalendarDate } from '@/lib/format-date';
 
 /** The lower-frequency plan-chrome surfaces reachable from either layout's overflow. */
 export type PlanChromeDialog =
-  'details' | 'baselines' | 'calendar' | 'earned-value' | 'resource-histogram' | 'share';
+  | 'details'
+  | 'baselines'
+  | 'calendar'
+  | 'earned-value'
+  | 'resource-histogram'
+  | 'share'
+  | 'apply-levelling';
 
 /**
  * One titled subsection of the **Schedule settings** dialog.

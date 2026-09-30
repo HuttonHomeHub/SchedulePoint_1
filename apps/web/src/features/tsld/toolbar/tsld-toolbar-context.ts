@@ -150,6 +150,20 @@ export interface TsldToolbarContext {
   canAutoArrange: boolean;
   /** Open the auto-arrange confirm flow on the canvas (pen-gated). */
   requestAutoArrange: () => void;
+  /**
+   * How many bars levelling moved — the ghosts the levelled-placement lens would draw. The **Apply
+   * levelled dates…** command reads it for its "Levelling moved nothing" refusal, so the command and
+   * the lens cannot disagree about whether there is anything to apply.
+   */
+  levelledMoveCount: number;
+  /**
+   * True while the computed dates are behind the plan or a recalculation is running. The apply
+   * preview reads current inputs, so offering it then would list something other than the ghosts on
+   * screen (`docs/specs/apply-levelled-dates/` US-6).
+   */
+  scheduleStale: boolean;
+  /** Open the Apply levelled dates dialog, which fetches the preview (pen-gated at the item). */
+  requestApplyLevelling: () => void;
   // --- Undo / redo (group 4, pen-gated — ADR-0048 M3) ---------------------------------------
   /** Whether there is a reversible edit to undo (drives the Undo item's enabled state). */
   canUndo: boolean;
