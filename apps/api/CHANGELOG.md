@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.80.3
+
+### Patch Changes
+
+- [#735](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/735) [`6bd14bb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6bd14bbabded4004078ed23bad075e9b5659be46) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix: tasks that follow started, finished or expected-finish work are now drawn at the right dates.
+  Previously they were drawn after the earlier task's full planned duration, so some bars sat too late
+  and, where remaining work runs longer than planned, some too early. Some bars move, and the stated
+  project finish can change. Existing plans are corrected once, when the new version starts. A baseline
+  taken before this release shows the correction as variance.
+
 ## 0.80.2
 
 ### Patch Changes
