@@ -195,7 +195,7 @@ export function ScheduleSummaryStrip({
       {hasLevelled && levelingWindowExceededCount > 0 ? (
         <p id="leveling-window-hint" className="text-muted-foreground text-xs">
           Window exceeded counts activities whose resource had no free window in time, so levelling
-          extended the schedule past their total float to place them.
+          extended the schedule past the float left from where their bars are drawn to place them.
         </p>
       ) : null}
       {hasLevelled && selfOverAllocatedCount > 0 ? (

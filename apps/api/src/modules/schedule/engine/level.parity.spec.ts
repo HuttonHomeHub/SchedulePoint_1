@@ -168,6 +168,7 @@ describe('levelSchedule — pre-ADR-0071 parity corpus (zero lag)', () => {
           levelWithinFloatOnly: scenario.levelWithinFloatOnly ?? false,
           dataDate: DATA_DATE,
           planCalendar: calendar,
+          anchor: 'PLACED',
         },
       );
       // Snapshot the fields levelling OWNS, sorted by id, so a reordering of the results array is

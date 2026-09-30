@@ -14,7 +14,7 @@ const row = (over: Partial<LevellableActivity> = {}): LevellableActivity => ({
   id: 'a',
   laneIndex: 0,
   type: 'TASK',
-  earlyStart: '2026-01-05',
+  visualEffectiveStart: '2026-01-05',
   leveledStart: null,
   leveledFinish: null,
   ...over,
@@ -44,12 +44,35 @@ describe('the levelled ghost', () => {
   });
 
   it('draws NOTHING for a participant levelling did not move', () => {
-    // `pinAtNetwork` (`level.ts:174`) sets `leveledStart: r.earlyStart`, so an undelayed
-    // participant's ghost would land exactly on the feasible window's LEFT CAP — not on the bar,
-    // which is the collision the old withholding rule was aimed at and the wrong one.
+    // An undelayed participant is pinned at the date its bar is drawn, so its ghost would land
+    // exactly on the bar.
     expect(
       buildLevelledGhosts([row({ leveledStart: '2026-01-05', leveledFinish: '2026-01-09' })]),
     ).toEqual([]);
+  });
+
+  it('compares with the DRAWN start: a placed, undelayed participant gets no ghost (#413)', () => {
+    // Placed a week after its early date; levelling anchors at the placement and did not move it.
+    // The old predicate compared with `earlyStart` and drew a ghost on top of the bar.
+    expect(
+      buildLevelledGhosts([
+        {
+          ...row({ leveledStart: '2026-01-12', leveledFinish: '2026-01-16' }),
+          visualEffectiveStart: '2026-01-12',
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('draws a ghost for a placed participant levelling delayed past its placement (#413)', () => {
+    expect(
+      buildLevelledGhosts([
+        {
+          ...row({ leveledStart: '2026-01-19', leveledFinish: '2026-01-23' }),
+          visualEffectiveStart: '2026-01-12',
+        },
+      ]),
+    ).toHaveLength(1);
   });
 
   it('decides by the DATES, not by a separately rounded delay', () => {
@@ -59,7 +82,11 @@ describe('the levelled ghost', () => {
     // derivation removes one layer up. Pinned by a row that HAS moved: any implementation reading
     // a delay field would need one, and this shape does not carry one at all.
     const moved = buildLevelledGhosts([
-      row({ earlyStart: '2026-01-05', leveledStart: '2026-01-06', leveledFinish: '2026-01-10' }),
+      row({
+        visualEffectiveStart: '2026-01-05',
+        leveledStart: '2026-01-06',
+        leveledFinish: '2026-01-10',
+      }),
     ]);
     expect(moved).toHaveLength(1);
     expect(Object.keys(moved[0]!)).not.toContain('levelingDelayDays');

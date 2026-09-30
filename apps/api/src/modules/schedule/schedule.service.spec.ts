@@ -1458,6 +1458,8 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
     earlyStart: new Date('2026-01-01T00:00:00Z'),
     earlyFinish: new Date('2026-01-22T00:00:00Z'),
+    visualEffectiveStart: null,
+    visualEffectiveFinish: null,
     calendarId: null,
     ...overrides,
   });
@@ -1540,6 +1542,48 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     );
     expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
     expect(result.curveNormalisedCount).toBe(0);
+  });
+
+  it('counts the load on the placed span, not the early span (#413)', async () => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({
+        curveType: 'UNIFORM',
+        budgetedUnits: new Prisma.Decimal(210),
+        visualEffectiveStart: new Date('2026-01-11T00:00:00Z'),
+        visualEffectiveFinish: new Date('2026-01-22T00:00:00Z'),
+      }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    const values = result.series[0]!.values;
+    expect(result.buckets[0]!.start).toBe('2026-01-11');
+    expect(values.slice(0, 11).every((v) => v > 0)).toBe(true);
+    expect(values.reduce((a, b) => a + b, 0)).toBeCloseTo(210, 4);
+  });
+
+  it.each([
+    ['start', { visualEffectiveStart: null, visualEffectiveFinish: new Date('2026-01-22') }],
+    ['finish', { visualEffectiveStart: new Date('2026-01-11'), visualEffectiveFinish: null }],
+  ])('falls back to the early span as a whole when the placed %s is null (#413)', async (_e, o) => {
+    schedule.loadResourceHistogramAssignments.mockResolvedValue([
+      row({ curveType: 'UNIFORM', budgetedUnits: new Prisma.Decimal(210), ...o }),
+    ]);
+    const result = await service.getResourceHistogram(
+      principalWith(READ),
+      'acme',
+      PLAN_ID,
+      'DAY',
+      50,
+      0,
+    );
+    expect(result.buckets[0]!.start).toBe('2026-01-01');
+    expect(result.series[0]!.values).toEqual(new Array(21).fill(10));
   });
 
   it('shifts the load by the assignment’s stored lag (ADR-0071 M1)', async () => {

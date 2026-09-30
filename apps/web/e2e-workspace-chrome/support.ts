@@ -158,13 +158,99 @@ export async function recalculate(page: Page, orgSlug: string): Promise<void> {
 }
 
 /**
- * The placement fields of one activity, straight from the API — this suite's ground truth.
+ * Put a capacity-`capacity` crane in the org's library and book each listed activity on it for a
+ * driving `units` units, through the public REST API.
  *
- * `visualStart` is the planner's INPUT (what the drag persisted); `visualEffectiveStart` is the
- * engine's OUTPUT (`compute.ts:335-338`, after `rollForwardToWorking`). Keeping both is the whole
- * point: M2's claim is that the raw dropped day is stored and the SERVER performs the roll, and
- * reading only one of the two cannot tell that apart from the client having rolled it first.
+ * The levelled lens is only ever asked a real question by a resource conflict, and the conflict is
+ * this journey's fixture rather than its subject — driving the library and assignment dialogs would
+ * put two other surfaces between the test and the lens.
  */
+export async function bookOnCrane(
+  page: Page,
+  orgSlug: string,
+  activityIds: readonly string[],
+  opts: { capacity: number; units: number },
+): Promise<void> {
+  const error = await page.evaluate(
+    async ({
+      org,
+      ids,
+      capacity,
+      units,
+    }: {
+      org: string;
+      ids: readonly string[];
+      capacity: number;
+      units: number;
+    }) => {
+      const made = await fetch(`/api/v1/organizations/${org}/resources`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Tower crane', kind: 'EQUIPMENT', maxUnitsPerHour: capacity }),
+      });
+      if (!made.ok) return `resource ${String(made.status)} ${await made.text()}`;
+      const { data: resource } = (await made.json()) as { data: { id: string } };
+      for (const activityId of ids) {
+        const response = await fetch(
+          `/api/v1/organizations/${org}/activities/${activityId}/assignments`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              resourceId: resource.id,
+              budgetedUnits: units,
+              unitsPerHour: 1,
+              isDriving: true,
+            }),
+          },
+        );
+        if (!response.ok) return `assignment ${String(response.status)} ${await response.text()}`;
+      }
+      return null;
+    },
+    { org: orgSlug, ids: activityIds, capacity: opts.capacity, units: opts.units },
+  );
+  if (error !== null) throw new Error(`booking rejected: ${error}`);
+}
+
+/**
+ * Write an activity's `visualStart` directly, at its current version — a placement exactly as a drag
+ * persists one, without the pixels. The version is read fresh: an assignment write bumps it.
+ */
+export async function placeViaApi(
+  page: Page,
+  orgSlug: string,
+  activityName: string,
+  day: string,
+): Promise<void> {
+  const row = requirePlacement(await placements(page, orgSlug), activityName);
+  const error = await page.evaluate(
+    async ({
+      org,
+      id,
+      version,
+      visualStart,
+    }: {
+      org: string;
+      id: string;
+      version: number;
+      visualStart: string;
+    }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/activities/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visualStart, version }),
+      });
+      return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+    },
+    { org: orgSlug, id: row.id, version: row.version, visualStart: day },
+  );
+  if (error !== null) throw new Error(`placement rejected: ${error}`);
+}
+
 /**
  * Link two activities finish-to-start, through the public REST API (ADR-0094 M5).
  *
@@ -196,6 +282,14 @@ export async function linkActivities(
   if (error !== null) throw new Error(`linking rejected: ${error}`);
 }
 
+/**
+ * The placement fields of one activity, straight from the API — this suite's ground truth.
+ *
+ * `visualStart` is the planner's INPUT (what the drag persisted); `visualEffectiveStart` is the
+ * engine's OUTPUT (`compute.ts:335-338`, after `rollForwardToWorking`). Keeping both is the whole
+ * point: M2's claim is that the raw dropped day is stored and the SERVER performs the roll, and
+ * reading only one of the two cannot tell that apart from the client having rolled it first.
+ */
 export interface PlacementRow {
   id: string;
   name: string;

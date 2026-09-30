@@ -1,14 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  bookOnCrane,
   canvas,
   createHierarchy,
   diagramList,
   ensurePen,
+  isoDay,
   newPlan,
   onboard,
   openViewMenu,
   placements,
+  placeViaApi,
   recalculate,
   requirePlacement,
   seedActivities,
@@ -209,6 +212,54 @@ test.describe('the feasible window and the levelled lens', () => {
     await setLevelResources(page, orgSlug, false);
     await page.reload();
     await expect(page.getByText(/did not move any activity/i)).toHaveCount(0);
+  });
+
+  test('a lift placed clear of the other on a one-lift crane: the lens draws nothing (#413)', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 4);
+    await createHierarchy(page);
+    await newPlan(page, 'Placed lifts');
+    await ensurePen(page);
+
+    const lifts = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+    ]);
+    await bookOnCrane(
+      page,
+      orgSlug,
+      lifts.map((lift) => lift.id),
+      { capacity: 1, units: 24 },
+    );
+    // Both lifts want the crane on the data date; B is placed four weeks clear of A, so there is no
+    // clash left for levelling to resolve.
+    await placeViaApi(page, orgSlug, 'Lift B', '2026-02-02');
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // The fixture is what it claims: B is drawn at its placement, which is NOT its early date.
+    // Without this the case would pass on a plan where nothing had been placed at all.
+    const placed = requirePlacement(await placements(page, orgSlug), 'Lift B');
+    expect(isoDay(placed.visualEffectiveStart)).toBe('2026-02-02');
+    expect(isoDay(placed.earlyStart)).not.toBe('2026-02-02');
+
+    await openViewMenu(page);
+    await expect(levelledToggle(page)).toBeEnabled();
+    await levelledToggle(page).check();
+    await page.keyboard.press('Escape');
+
+    // The lens's own status text, not the canvas: a placed participant levelling did not move is not
+    // a ghost. Before #413 the predicate compared with the EARLY start and drew one on Lift B.
+    await expect(
+      page.locator('p[aria-hidden]', { hasText: /did not move any activity/i }),
+    ).toBeVisible();
+    await expect(page.locator('p.sr-only', { hasText: /nothing to show/i })).toHaveCount(1);
+    await expect(diagramList(page).getByRole('option', { name: /Lift B/ })).not.toContainText(
+      'levelled to',
+    );
   });
 
   test('a placement conflict is flagged, and the bar keeps its position (M-D)', async ({

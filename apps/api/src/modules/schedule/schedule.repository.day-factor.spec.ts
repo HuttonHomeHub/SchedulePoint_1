@@ -18,6 +18,8 @@ function result(
     lateFinish: '2026-01-09',
     earlyStartOffset: 0,
     earlyFinishOffset: 0,
+    placedStartOffset: 0,
+    placedFinishOffset: 0,
     lateStartOffset: 0,
     lateFinishOffset: 0,
     totalFloat: totalFloatMinutes,

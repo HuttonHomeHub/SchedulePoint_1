@@ -193,3 +193,34 @@ export function levellingPlan(): SeedSpec {
     ],
   });
 }
+
+/**
+ * **Levelling from where the bars are drawn** (#413, ADR-0166): `capability-levelling`'s three lifts
+ * on one crane, with **V3 placed after V2's levelled slot**. On the shared five-day week V1 levels to
+ * 4-6 Mar and V2 to 9-11 Mar, so V3's own levelled slot would be 12-16 Mar; it is placed on 23 Mar
+ * instead. That makes it a matched pair with the plan above, which has no placement: the difference
+ * between the two is the whole exhibit, so nothing else here may differ.
+ *
+ * V3's early start (4 Mar) is nowhere near its placed start, which is the point. A reader who sees
+ * V3 delayed, ghosted, or its crane load in the week of 4 Mar is reading the network's dates for a
+ * bar drawn a fortnight later.
+ */
+export function levellingPlacedPlan(): SeedSpec {
+  const base = levellingPlan();
+  return {
+    ...base,
+    seedName: 'capability-levelling-placed',
+    plan: {
+      ...base.plan,
+      name: 'Resources: levelling with one lift placed by hand',
+      description:
+        'The same three lifts on the same crane as the levelling plan, but V3 is dragged to 23 Mar, ' +
+        "after V2's levelled slot. Levelling starts from where each bar is drawn: V1 and V2 are still " +
+        "serialised, V3 is not delayed and has no levelled ghost, and V3's crane load sits in the " +
+        'week of 23 Mar in the resource histogram rather than in the week of 4 Mar.',
+    },
+    activities: base.activities.map((entry) =>
+      entry.key === 'V3' ? { ...entry, visualStart: '2026-03-23', testTags: [] } : entry,
+    ),
+  };
+}

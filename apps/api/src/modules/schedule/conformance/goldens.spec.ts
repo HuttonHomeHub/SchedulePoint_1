@@ -60,6 +60,7 @@ describe('engine resource-levelling goldens (first-principles)', () => {
           levelWithinFloatOnly: golden.levelWithinFloatOnly,
           dataDate: golden.options.dataDate,
           planCalendar: golden.options.calendar,
+          anchor: 'PLACED',
         },
       );
       const byId = new Map(leveled.results.map((r) => [r.activityId, r]));

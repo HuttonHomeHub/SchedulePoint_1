@@ -129,3 +129,75 @@ export async function assignResource(
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(dialog).toBeHidden();
 }
+
+/**
+ * Place a drawn activity on a day and recalculate, through the public REST API, then reload so the
+ * workspace reads the new schedule. The gesture that persists a placement is a canvas drag, which
+ * `e2e-workspace-chrome/placement.spec.ts` already drives; what this suite asks is what the resource
+ * histogram does with the stored placement, so the input is set exactly rather than approximated by
+ * pixels.
+ */
+export async function placeAndRecalculate(
+  page: Page,
+  orgSlug: string,
+  activityName: string,
+  day: string,
+): Promise<void> {
+  const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());
+  if (!match?.[1]) throw new Error(`no plan id in ${page.url()}`);
+  const error = await page.evaluate(
+    async ({
+      org,
+      planId,
+      name,
+      visualStart,
+    }: {
+      org: string;
+      planId: string;
+      name: string;
+      visualStart: string;
+    }) => {
+      const list = await fetch(
+        `/api/v1/organizations/${org}/plans/${planId}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      if (!list.ok) return `list ${String(list.status)} ${await list.text()}`;
+      const { data } = (await list.json()) as {
+        data: { id: string; name: string; version: number }[];
+      };
+      const row = data.find((a) => a.name === name);
+      if (!row) return `no activity named ${name}`;
+      const patch = await fetch(`/api/v1/organizations/${org}/activities/${row.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visualStart, version: row.version }),
+      });
+      if (!patch.ok) return `placement ${String(patch.status)} ${await patch.text()}`;
+      const recalc = await fetch(
+        `/api/v1/organizations/${org}/plans/${planId}/schedule/recalculate`,
+        { method: 'POST', credentials: 'include' },
+      );
+      return recalc.ok ? null : `recalculate ${String(recalc.status)} ${await recalc.text()}`;
+    },
+    { org: orgSlug, planId: match[1], name: activityName, visualStart: day },
+  );
+  if (error !== null) throw new Error(error);
+  await page.reload();
+}
+
+/**
+ * The bucket starts whose row of the open loading table carries units, read off the accessible
+ * table's cells (the strip canvas is `aria-hidden`). The Total column is a row's first `td`.
+ */
+export async function loadedBuckets(page: Page): Promise<string[]> {
+  const table = page.getByRole('region', { name: 'Resource loading' }).getByRole('table');
+  await expect(table).toBeVisible();
+  return table
+    .locator('tbody tr')
+    .evaluateAll((rows) =>
+      rows
+        .filter((row) => Number(row.querySelector('td')?.textContent ?? '0') > 0)
+        .map((row) => (row.querySelector('th')?.textContent ?? '').trim()),
+    );
+}

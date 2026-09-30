@@ -455,6 +455,14 @@ keep `main` releasable.
   activity may sit, and a placement that has overrun a deadline is now told apart from one placed
   earlier than logic allows — the diagram had been reporting the first as the second, in words and
   in the warning mark, pointing at the wrong end of the bar.
+- **Resource load and levelling start where the bar is drawn** (ADR-0166, amending ADR-0041/0071/0044/0035).
+  ADR-0148 moved the header, variance and Earned Value to the placed bar and left three resource readers
+  behind. Drag a crane lift three weeks later and the histogram still showed the crane busy in the week
+  the bar had left, and levelling reported (and drew a ghost for) a clash the planner had already
+  separated by hand, while missing one made by hand. The histogram, the canvas resource strip and
+  levelling now read where each bar is drawn; levelling is still an overlay that never moves a bar, and
+  the DCMA critical-path test still judges the logic network rather than the picture. Plans with no
+  placement read exactly as before. An "Apply levelled dates" command is a possible later step.
 - **A page has one measure, a column has a reason, and a fact belongs under its row** (ADR-0146).
   The product owner looked at the ADR-0145 result and said the pages were too narrow, too empty and
   too thin on information — _"this isn't a mobile app its a desktop app"_. Eleven screens shared a

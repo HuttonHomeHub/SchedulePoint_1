@@ -304,8 +304,10 @@ export class ScheduleController {
       '**It levels BOTH passes when the plan does** (docs/TECH_DEBT.md #248, product-owner-' +
       'approved 2026-09-28). On a plan with `levelResources` set, the control and the perturbed ' +
       'pass are each run through the same levelling rule a recalculation applies, so the ' +
-      'completion carrier and its movement are measured on the schedule the product actually ' +
-      'shows \u2014 never the pure-network baseline a levelled plan no longer persists. Off ' +
+      'completion carrier and its movement are measured on a levelled schedule. It levels on the ' +
+      'NETWORK span, not where bars are drawn (ADR-0166, #413): a recalculation levels from the drawn ' +
+      'bars, so on a plan with hand-placed bars the two levelled schedules can differ and this verdict ' +
+      'is the logic network\u2019s. Off ' +
       '`levelResources`, this is byte-identical to the pre-#248 route.',
   })
   @ApiOkResponse({ type: HealthMetricResultDto })
@@ -374,8 +376,9 @@ export class ScheduleController {
       'loading curveType and conserving units. This is SCHEDULE data (units), not cost, so it is ' +
       'schedule:read-gated — never cost:read (Q5). The per-resource series page in `data`; the shared ' +
       'time-bucket axis, the total series count, and the N29 `curveNormalisedCount` ride in `meta`. It ' +
-      'reads the persisted CPM dates only — no engine recompute, no CPM date moved, and (this rung) the ' +
-      'levelling pass is untouched (Q2).',
+      'reads persisted dates only — no engine recompute and no CPM date moved — and counts load where ' +
+      'each bar is drawn: the activity’s placed pair (visualEffectiveStart/Finish), or its early pair ' +
+      'as a whole when either placed end is null. An unplaced plan reads as before (ADR-0166, #413).',
   })
   @ApiOkResponse({ type: ResourceHistogramSeriesDto, isArray: true })
   @ApiNotFoundResponse({ description: 'Plan not found (or not a member).' })

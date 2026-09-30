@@ -275,3 +275,5 @@ cases, `docs/TECH_DEBT.md` #421).
   ADR-0126, ADR-0134, ADR-0140
 - Read alongside ADR-0025 Amendment 3 ([`docs/specs/placed-baseline-variance/`](../specs/placed-baseline-variance/feature-spec.md)) — variance measures
   the placed span this ADR made the plan's single answer, wherever the active baseline recorded one.
+- ADR-0166 makes true this ADR's Consequences sentence that "a placement shifts a span the levelling
+  pass reads": resource levelling and the resource histogram read the drawn span from that ADR.

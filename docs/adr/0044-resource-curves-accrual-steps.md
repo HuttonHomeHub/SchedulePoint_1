@@ -171,3 +171,19 @@ amendment, a hand-placed activity's cost is phased on its placed span while its 
 early span. That disagreement is recorded as its own register row rather than folded in here.
 
 **Steps (§2): unaffected.** Steps feed the physical % and read no date.
+
+### 2 — The histogram reads the placed span (ADR-0166, `docs/TECH_DEBT.md` #413, 2026-09-30)
+
+Amendment 1 recorded that a hand-placed activity's cost was phased on its placed span while its resource
+load stayed on its early span, and left that disagreement as its own register row. That row is #413 and
+it is closed by ADR-0166.
+
+- **§3 (resource curves):** `computeResourceHistogram` spreads each assignment's units, shaped by its
+  curve, over the activity's **placed** span (`visualEffectiveStart`/`visualEffectiveFinish`), falling
+  back to the early pair as a whole when either placed end is null. The curve profiles, the CDF maths and
+  N29's normalisation are unchanged. With nothing placed the two spans coincide and the histogram is
+  byte-identical.
+- **The sentence Amendment 1 corrected still stands:** curves never fed cost time-phasing. And curves
+  still do not feed levelling, which reads a flat `unitsPerHour` (ADR-0035 §31).
+- The disagreement Amendment 1 recorded (cost on the placed span, load on the early span) no longer
+  exists.

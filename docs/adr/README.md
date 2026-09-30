@@ -189,3 +189,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0163](0163-a-guest-sees-the-plan-as-placed.md)                                                 | A guest sees the plan as placed                                                   | Accepted           |
 | [0164](0164-a-lint-warning-is-a-failure.md)                                                     | A lint warning is a failure, and a gate has no pass-with-findings outcome         | Accepted           |
 | [0165](0165-a-long-table-renders-the-rows-in-view.md)                                           | A long table renders the rows in view                                             | Accepted           |
+| [0166](0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md)                        | Resource load and levelling start where the bar is drawn                          | Accepted           |

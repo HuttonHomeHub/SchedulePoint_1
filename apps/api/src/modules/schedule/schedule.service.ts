@@ -563,6 +563,9 @@ export class ScheduleService {
           levelWithinFloatOnly: plan.levelWithinFloatOnly,
           dataDate,
           planCalendar: graph.options.calendar,
+          // Levelling reads the bars as drawn (#413): a clash the planner separated by hand is not
+          // reported, one made by hand is.
+          anchor: 'PLACED',
         });
         // Float and drift are persisted IN DAYS by this write, so they take the same factor the
         // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
@@ -1058,8 +1061,14 @@ export class ScheduleService {
    * **Levels BOTH passes when the plan does** (`docs/TECH_DEBT.md` #248, product-owner-approved
    * 2026-09-28): `graph.leveling` is now carried through to `runCriticalPathTest`, which runs it
    * through the exact same `levelIfEnabled` rule {@link recalculateInLock} uses, so the what-if's
-   * verdict is measured against the schedule the product actually shows a levelled plan's planner —
-   * never the pure network dates a recalculation no longer persists once `levelResources` is on.
+   * verdict is measured against a levelled schedule rather than the pure network dates a
+   * recalculation no longer persists once `levelResources` is on.
+   *
+   * **That is the same schedule only where nothing is placed (#413).** The what-if anchors its
+   * levelling on the `NETWORK` span (`critical-path-test.ts`), because it tests the logic network —
+   * a drawn position is not logic, and measuring a placed carrier would fail a sound network. A
+   * recalculation anchors on the `PLACED` span, so on a plan with hand-placed bars the two levelled
+   * schedules can differ, and this verdict is about the network's, not the picture's.
    */
   async getCriticalPathTest(
     principal: Principal,
@@ -1314,21 +1323,28 @@ export class ScheduleService {
         ? planCalendar
         : (portByCalId.get(calId) ?? planCalendar);
 
-    const assignments: HistogramAssignmentInput[] = rows.map((r) => ({
-      resourceId: r.resourceId,
-      activityId: r.activityId,
-      budgetedUnits: r.budgetedUnits.toNumber(),
-      // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
-      profile: resolveCurveProfile(r.curveType),
-      start: r.earlyStart ? formatCalendarDate(r.earlyStart) : null,
-      finish: r.earlyFinish ? formatCalendarDate(r.earlyFinish) : null,
-      // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
-      // just above — so the lag walks the same working time the span does. Until M0 there was no
-      // column to read and this was pinned at 0 under a comment saying so; that comment outlived the
-      // column by one milestone, which is exactly the drift the surface audit exists to catch.
-      lagMinutes: r.lagMinutes,
-      calendar: portFor(r.calendarId),
-    }));
+    const assignments: HistogramAssignmentInput[] = rows.map((r) => {
+      // Load is counted where the bar is drawn (#413): the placed pair, or the early pair as a whole
+      // when either placed end is null (never half on each). Unplaced, the two are identical.
+      const placed = r.visualEffectiveStart != null && r.visualEffectiveFinish != null;
+      const start = placed ? r.visualEffectiveStart : r.earlyStart;
+      const finish = placed ? r.visualEffectiveFinish : r.earlyFinish;
+      return {
+        resourceId: r.resourceId,
+        activityId: r.activityId,
+        budgetedUnits: r.budgetedUnits.toNumber(),
+        // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
+        profile: resolveCurveProfile(r.curveType),
+        start: start ? formatCalendarDate(start) : null,
+        finish: finish ? formatCalendarDate(finish) : null,
+        // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
+        // just above — so the lag walks the same working time the span does. Until M0 there was no
+        // column to read and this was pinned at 0 under a comment saying so; that comment outlived the
+        // column by one milestone, which is exactly the drift the surface audit exists to catch.
+        lagMinutes: r.lagMinutes,
+        calendar: portFor(r.calendarId),
+      };
+    });
 
     let histogram;
     try {

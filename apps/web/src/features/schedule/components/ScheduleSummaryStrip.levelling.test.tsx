@@ -82,6 +82,20 @@ describe('ScheduleSummaryStrip — levelled overlay (flag on)', () => {
     expect(screen.getByText('2')).toHaveAttribute('aria-describedby', 'leveling-self-over-hint');
   });
 
+  it('measures the window-exceeded float from where the bars are drawn (#413)', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      summary({
+        leveledProjectFinish: '2026-01-20',
+        leveledActivityCount: 1,
+        levelingWindowExceededCount: 1,
+      }),
+    );
+    renderStrip();
+    const hint = await screen.findByText(/Window exceeded counts/);
+    expect(hint).toHaveTextContent('past the float left from where their bars are drawn');
+    expect(hint).not.toHaveTextContent('total float');
+  });
+
   it('hides the overlay when the plan has not levelled (levelled finish null)', async () => {
     vi.mocked(apiFetch).mockResolvedValue(summary());
     renderStrip();

@@ -156,6 +156,24 @@ pinned by a calendar-port **call-count** gate as well as the wall-clock assert, 
 that grew with the span rather than with the placed intervals would still be correct, still pass every
 behavioural test, and quietly reintroduce the per-minute scan.
 
+#### Amendment (ADR-0166, 2026-09-30) — levelling starts where the bar is drawn
+
+ADR-0148 made the drawn (placed) span the plan's single answer to "where is this bar?". This amendment
+carries that to levelling. Spec: [`docs/specs/placed-load-basis/`](../specs/placed-load-basis/feature-spec.md).
+
+- **§1 (the heuristic):** "each into the earliest capacity-feasible window at or after its early start"
+  reads "at or after its **anchor** start". `levelSchedule` takes a required `anchor` option. A
+  recalculation passes `PLACED`, the span the bar is drawn on; the DCMA critical-path test passes
+  `NETWORK`, the early span. The composite priority key's float term is `remainingFloatMinutes` under
+  `PLACED` and `totalFloat` under `NETWORK`; the rest of the key and the algorithm are unchanged.
+- **§3 (an overlay over an unchanged network):** unchanged and restated. The pass still never writes a
+  placement and never recomputes float. "Delays measured from early start" reads "from the anchor
+  start", and a placed activity that levelling does not move has `levelingDelay` 0 whatever its early
+  start is.
+- **§7 (the parity gate):** Gate A and Gate B are unchanged. **Gate C is added:** with levelling on and
+  nothing placed, the placed anchor equals the early anchor, so the output is byte-identical to before.
+  Proven by the unedited `level.parity.spec.ts` corpus, S10 and the product's unplaced twin (LV1).
+
 ### Invariants (the service/engine own them; recorded so they are not "simplified")
 
 - **(a) Determinism.** Same plan + priorities ⇒ same leveled dates, independent of input order (the

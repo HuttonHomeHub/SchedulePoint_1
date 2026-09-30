@@ -5,8 +5,10 @@ import {
   assignResource,
   createResource,
   drawTask,
+  loadedBuckets,
   onboard,
   openNewPlan,
+  placeAndRecalculate,
   startEditing,
 } from './support';
 
@@ -156,4 +158,62 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   await expect(resourceViewButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('region', { name: 'Resource loading' })).toHaveCount(0);
   await expect(page.locator('[data-testid="tsld-resource-strip"]')).toHaveCount(0);
+});
+
+/**
+ * **A placed activity's load sits where its bar is drawn** (#413, ADR-0148). The histogram used to be
+ * read from the EARLY dates, so a planner who dragged a bar four weeks right saw its resource still
+ * loaded in the week the bar had left. Asserted on the accessible table's cells rather than on the
+ * strip's copy, and on the placed week rather than on a total — a total is the same either way.
+ *
+ * The placement is written through the API (the drag has its own journey) and the workspace is
+ * reloaded to read it: writing behind the client's back does not invalidate its query cache, so an
+ * in-place refresh after a canvas drag is not something this case can drive.
+ */
+test('a placed activity loads its resource in the week it is drawn, and follows a second placement', async ({
+  page,
+}) => {
+  const stamp = Date.now() + 1;
+  const orgSlug = await onboard(page, stamp);
+  await createResource(page, 'Crew B');
+  await openNewPlan(page);
+  await startEditing(page);
+  await drawTask(page, 'Survey', { x: 260, y: 140 });
+  await expect(
+    page.getByRole('region', { name: 'Time-scaled logic diagram' }).getByRole('option'),
+  ).toHaveCount(1, { timeout: 15_000 });
+  await assignResource(page, 'Survey', 'Crew B', 8);
+
+  // Idempotent: both controls are toggles, so after a reload a blind click would CLOSE whatever
+  // the page restored open, and the test would fail on a state it never meant to set.
+  const revealTable = async (): Promise<void> => {
+    const stripPanel = page.getByRole('region', { name: 'Resource loading' });
+    if (!(await stripPanel.isVisible())) {
+      await page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: 'Resource view' })
+        .click();
+    }
+    await expect(stripPanel).toBeVisible();
+    if (!(await stripPanel.getByRole('table').isVisible())) {
+      await stripPanel.getByText(/Show data table/).click();
+    }
+  };
+
+  // A click-drawn task spans one working day and buckets are anchored on the earliest date, so the
+  // bucket's start is the placed day.
+  await placeAndRecalculate(page, orgSlug, 'Survey', '2026-02-02');
+  await revealTable();
+  await expect.poll(() => loadedBuckets(page)).toEqual(['2026-02-02']);
+
+  // `placeAndRecalculate` reloads, and leaving the page hands back the pen (the edit lock is
+  // released on unload), so the second write needs it taken again or the API answers 423.
+  const takePen = page.getByRole('button', { name: 'Start editing' });
+  await expect(takePen.or(page.getByRole('button', { name: 'Stop editing' }))).toBeVisible();
+  if (await takePen.isVisible()) {
+    await startEditing(page);
+  }
+  await placeAndRecalculate(page, orgSlug, 'Survey', '2026-03-02');
+  await revealTable();
+  await expect.poll(() => loadedBuckets(page)).toEqual(['2026-03-02']);
 });

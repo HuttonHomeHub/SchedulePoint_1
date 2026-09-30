@@ -1310,7 +1310,7 @@ export function TsldPanel({
         id: a.id,
         laneIndex: a.laneIndex,
         type: a.type,
-        earlyStart: a.earlyStart,
+        visualEffectiveStart: a.visualEffectiveStart,
         leveledStart: a.leveledStart,
         leveledFinish: a.leveledFinish,
       })),

@@ -66,6 +66,7 @@ function run(
     levelWithinFloatOnly,
     dataDate: DATA_DATE,
     planCalendar: CAL,
+    anchor: 'NETWORK',
   });
   return {
     output,
@@ -738,6 +739,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,
+      anchor: 'NETWORK',
     });
     const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
     // Measured: 477. Quadratic in N would be ~1,600 and a per-minute scan ~57,600, so the bound is set
@@ -764,6 +766,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,
+      anchor: 'NETWORK',
     });
     const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
     // Measured: 634 — the same order as the unlagged 477, not 720× it.
@@ -797,6 +800,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,
+      anchor: 'NETWORK',
     });
     const spent = counts.addWorkingTime + counts.workingTimeBetween - before;
     // Measured: 471. The span here reaches ~80 days ≈ 115,200 minutes, so a per-minute scan would be

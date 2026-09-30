@@ -404,7 +404,8 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: String,
     description:
-      'Resource-levelling delayed start (engine-owned, ADR-0041 §3), or null until levelled.',
+      'Resource-levelling delayed start (engine-owned, ADR-0041 §3), or null until levelled. ' +
+      'Levelling starts from where the bar is drawn (its early start when unplaced), so this is that start when nothing delays it.',
   })
   leveledStart!: string | null;
 
@@ -413,7 +414,8 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: String,
     description:
-      'Resource-levelling delayed finish (engine-owned, ADR-0041 §3), or null until levelled.',
+      'Resource-levelling delayed finish (engine-owned, ADR-0041 §3), or null until levelled. ' +
+      'Levelling starts from where the bar is drawn, so this is the drawn finish when nothing delays it.',
   })
   leveledFinish!: string | null;
 
@@ -422,7 +424,7 @@ export class ActivityResponseDto implements ActivitySummary {
     type: Number,
     description:
       'Resource-levelling applied delay in whole working days (engine-owned, ADR-0041 §3), or ' +
-      'null. A day is the ACTIVITY’S CALENDAR’S standard working day (ADR-0068).',
+      'null, measured from where the bar is drawn. A day is the ACTIVITY’S CALENDAR’S standard working day (ADR-0068).',
   })
   levelingDelayDays!: number | null;
 

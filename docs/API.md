@@ -351,7 +351,7 @@ the live-budget fallback always phases on something.
 `pv`, `sv` and `spi` follow the basis, and so do `eac`, `etc` and `vac` under
 `eacMethod = CPI_TIMES_SPI` (the only method that reads SPI). `bac`, `ev`, `ac`, `cv`, `cpi` and
 `tcpi` read no date and do not change. A plan with no placement reads byte-identically on either
-basis. The resource histogram is a different read and still spreads units over the early span.
+basis. The resource histogram reads the placed dates too (below).
 
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
@@ -1576,6 +1576,11 @@ controller's 30 / 60 s per handler.
 - `projectFinish` — on `GET …/schedule/summary`, the recalculate response and a share link's
   `GET /share/plan` alike — is the **placed** finish: the latest drawn finish, which a hand-placed
   bar can push past the network's earliest finish (ADR-0148, `docs/TECH_DEBT.md` #404).
+- With `levelResources` on, the levelled fields (`leveledStart` / `leveledFinish` on each activity,
+  and the summary's levelling roll-up) are computed from where each bar is **drawn**: levelling starts
+  every participant at its placed start, or its early start when it is unplaced, and a bar it does not
+  delay keeps its drawn start (ADR-0166, #413). Levelling never moves a bar; the levelled dates are a
+  ghost overlay. The Critical Path Test is the one reader that levels on the network span instead.
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a
@@ -1624,12 +1629,15 @@ controller's 30 / 60 s per handler.
   is **schedule data, not cost**, so it is **not** `cost:read`-gated). A
   `granularity` query param (`DAY` default / `WEEK` / `MONTH`) sets the shared
   time-bucket axis; `limit`/`offset` page over the **per-resource series** (`data`).
-  Each assignment's `budgetedUnits` is distributed across its effective span per its
+  Each assignment's `budgetedUnits` is distributed across its placed (else early) span per its
   `curveType`, **conserving units** (`Σ buckets === Σ budgetedUnits` per resource);
   the response `meta` carries the shared `buckets` axis, `granularity`, the total
   series count, `hasMore`, and **`curveNormalisedCount`** (N29 — assignments whose
   profile did not sum to 100 and were normalised to conserve units). It reads the
-  persisted CPM dates only — no recompute, no CPM date moved, no levelling. A
+  persisted dates only — no recompute, no CPM date moved, no levelling — and counts
+  the load where each bar is **drawn**: the activity's `visual_effective_start` /
+  `_finish` pair, or its early dates as a whole when either placed end is null
+  (#413). An unplaced plan reads exactly as before. A
   granularity too fine for the plan's span returns **422**
   (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 
@@ -1669,9 +1677,12 @@ controller's 30 / 60 s per handler.
   copy of the plan graph: a control pass, then a pass with 600 working days
   injected into the front of the critical path, and the verdict from whether
   the control run's completion carrier moved in step. On a plan that levels
-  resources each pass is also levelled, exactly as a recalculation would
+  resources each pass is also levelled by the same rule a recalculation uses
   (`docs/TECH_DEBT.md` #248, closed 2026-09-28), so up to four passes run and
-  the carrier is judged on the levelled finish. Its parity claim is
+  the carrier is judged on the levelled finish. It levels on the **network**
+  span, not the drawn one (#413): a recalculation levels from where each bar is
+  drawn, this test asks about the logic, so on a plan with hand-placed bars the
+  two levelled schedules can differ and the verdict is the network's. Its parity claim is
   deliberately the report route's WEAKER sibling (ADR-0116 D7): it computes
   **read-only and persists nothing** — no lock, no pen, no write path — proved
   by an e2e reading every engine-owned column back after the call. Returns the
