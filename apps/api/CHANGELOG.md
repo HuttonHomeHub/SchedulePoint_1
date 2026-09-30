@@ -1,5 +1,19 @@
 # @repo/api
 
+## 0.81.0
+
+### Minor Changes
+
+- [#737](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/737) [`e7f088c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e7f088c458a163ed8c66f93d80548ec1acc6dd94) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The resource histogram and the canvas resource strip now count load where each bar is drawn, so a
+  bar you drag later moves its load with it. An activity with no placed dates is counted on its
+  earliest dates, as before, and the total units per resource are unchanged.
+
+- [#737](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/737) [`e7f088c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e7f088c458a163ed8c66f93d80548ec1acc6dd94) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Resource levelling now works from where each bar is drawn; plans with hand-placed bars level
+  differently. A clash you have separated by hand is no longer reported, one you have made by hand is,
+  and the levelled start, finish and delay are measured from the drawn bar. Levelling order now
+  breaks ties on the float a placement has left. The critical-path health test still judges the logic
+  network. Plans with no placed bars level exactly as before.
+
 ## 0.80.3
 
 ### Patch Changes
