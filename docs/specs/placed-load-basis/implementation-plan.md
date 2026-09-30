@@ -55,6 +55,12 @@ against today's code.
 > decision on #421.
 >
 > **Resolved 2026-09-30: fixed first, #421 is closed** (ADR-0148 Amendment 1). T0.2 and T0.3 can resume.
+>
+> **T0.2 and T0.3 done, 2026-09-30, on `e83fc56`.** The references (H2, LV2, LV1's unplaced twin, L5)
+> and the red cases (L0-L4, H1, H3, LV1, each an `it.fails`) live where
+> [`m0-measurement.md`](./m0-measurement.md) lists them. M1 flips L0-L4 and LV1 to plain `it`; M2 flips
+> H1 and H3. One spec correction came out of it: H1's numbers (the histogram loads a bar's first four
+> days, not five).
 
 ##### Task T0.1: probe C5 (Pass 2 after a progressed predecessor)
 

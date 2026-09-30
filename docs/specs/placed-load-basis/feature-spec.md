@@ -256,8 +256,10 @@ pre-change code, recorded in the PR (ADR-0110 D5).
 **API e2e (`apps/api/test/`).**
 
 - **H1: histogram follows a drag (red today).** A (5 days, one assignment, 10 units, UNIFORM), placed at
-  D+10. `DAY` granularity. **Today:** load in D…D+4. **After:** load in D+10…D+14, and the total is
-  still 10 (units conserved).
+  D+10. `DAY` granularity. **Today:** load in D…D+3, 2.5 units a day (measured in M0: the histogram
+  spreads `[start, finish)` and is handed the inclusive display finish, so the last day carries none).
+  **After:** load in D+10…D+13 on the same convention, and the total is still 10 (units conserved).
+  This bullet said "D…D+4" and "D+10…D+14" until M0 read the response.
 - **H2: unplaced golden (characterisation).** A plan with no placement: plain tasks, a lagged assignment,
   a BELL curve, a started task and a complete task **with no successor** (C5 kept out). Record the whole
   histogram response against today's code and commit it as a literal. After the change it is `toEqual`.

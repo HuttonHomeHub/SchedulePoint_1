@@ -384,6 +384,16 @@ describe('computeSchedule — effective-Visual pass, the upper bound (M-D)', () 
   });
 });
 
+/**
+ * The drawn span as plan-frame offsets. `EngineResult` does not carry these yet (placed-load-basis M1
+ * adds them as required fields), so the L0 cases read them through this one seam; when M1 lands the
+ * intersection collapses into the real type and the helper reads plainly.
+ */
+const placedOffsets = (r: EngineResult) => {
+  const p = r as EngineResult & { placedStartOffset?: number; placedFinishOffset?: number };
+  return { start: p.placedStartOffset, finish: p.placedFinishOffset };
+};
+
 describe('computeSchedule — effective-Visual pass, Pass 1 parity where nothing is placed (FC-11)', () => {
   /**
    * **The epic's foundation, and the condition whose absence let a false premise ship.**
@@ -468,6 +478,25 @@ describe('computeSchedule — effective-Visual pass, Pass 1 parity where nothing
       expect(r.visualDriftMinutes, `${r.activityId} drift`).toBeNull();
     }
   });
+
+  // L0 (docs/specs/placed-load-basis/, #413 M0). RED until M1 adds `placedStartOffset` /
+  // `placedFinishOffset` to `EngineResult`: the resource readers and levelling need the drawn span as
+  // instants, and this is the instant-level twin of the date-level parity two cases above.
+  it.fails(
+    'placed{Start,Finish}Offset equal early{Start,Finish}Offset for every activity when nothing is placed',
+    () => {
+      const { results } = run(activities, edges);
+      expect(results).toHaveLength(9);
+      const actual = Object.fromEntries(results.map((r) => [r.activityId, placedOffsets(r)]));
+      const expected = Object.fromEntries(
+        results.map((r) => [
+          r.activityId,
+          { start: r.earlyStartOffset, finish: r.earlyFinishOffset },
+        ]),
+      );
+      expect(actual).toEqual(expected);
+    },
+  );
 });
 
 describe('computeSchedule — effective-Visual pass, a placement is inert against an actual (M-P)', () => {
@@ -700,22 +729,23 @@ describe('computeSchedule — Pass 2 propagates Pass 1 for progressed work, all 
 describe('computeSchedule — FC-11b, parity with a successor of every progress shape (#421)', () => {
   const DAY = 1440;
 
+  const activities: readonly EngineActivity[] = [
+    task('STARTED', 4, { actualStart: '2026-01-02', remainingMinutes: 2 * DAY }),
+    task('DONE', 4, { actualStart: '2026-01-02', actualFinish: '2026-01-05' }),
+    task('DONE_NO_START', 4, { actualFinish: '2026-01-05' }),
+    task('AFTER_STARTED', 1),
+    task('AFTER_DONE', 1),
+    task('AFTER_DONE_NO_START', 1),
+    task('SS_AFTER_STARTED', 1),
+  ];
+  const edges: readonly EngineEdge[] = [
+    edge('STARTED', 'AFTER_STARTED'),
+    edge('DONE', 'AFTER_DONE'),
+    edge('DONE_NO_START', 'AFTER_DONE_NO_START'),
+    edge('STARTED', 'SS_AFTER_STARTED', 'SS', 3),
+  ];
+
   it('visualEffective* equals early* over the whole map when nothing is placed', () => {
-    const activities: readonly EngineActivity[] = [
-      task('STARTED', 4, { actualStart: '2026-01-02', remainingMinutes: 2 * DAY }),
-      task('DONE', 4, { actualStart: '2026-01-02', actualFinish: '2026-01-05' }),
-      task('DONE_NO_START', 4, { actualFinish: '2026-01-05' }),
-      task('AFTER_STARTED', 1),
-      task('AFTER_DONE', 1),
-      task('AFTER_DONE_NO_START', 1),
-      task('SS_AFTER_STARTED', 1),
-    ];
-    const edges: readonly EngineEdge[] = [
-      edge('STARTED', 'AFTER_STARTED'),
-      edge('DONE', 'AFTER_DONE'),
-      edge('DONE_NO_START', 'AFTER_DONE_NO_START'),
-      edge('STARTED', 'SS_AFTER_STARTED', 'SS', 3),
-    ];
     const { results } = run(activities, edges);
     const actual = Object.fromEntries(
       results.map((r) => [
@@ -727,5 +757,50 @@ describe('computeSchedule — FC-11b, parity with a successor of every progress 
       results.map((r) => [r.activityId, { start: r.earlyStart, finish: r.earlyFinish }]),
     );
     expect(actual).toEqual(expected);
+  });
+
+  // L0 over the class #421 found and fixed: a successor of a progressed activity must have placed
+  // offsets equal to its early offsets. RED until M1 adds the fields.
+  it.fails(
+    'placed{Start,Finish}Offset equal early{Start,Finish}Offset for every progress shape',
+    () => {
+      const { results } = run(activities, edges);
+      expect(results).toHaveLength(7);
+      const actual = Object.fromEntries(results.map((r) => [r.activityId, placedOffsets(r)]));
+      const expected = Object.fromEntries(
+        results.map((r) => [
+          r.activityId,
+          { start: r.earlyStartOffset, finish: r.earlyFinishOffset },
+        ]),
+      );
+      expect(actual).toEqual(expected);
+    },
+  );
+});
+
+describe('computeSchedule — L0b, placed offsets follow a placement and its push', () => {
+  const DAY = 1440;
+
+  // A (3 days) is placed at D+5 and pushes its FS successor B; C is unplaced and unlinked. The
+  // placed offsets are the instants the drawn dates come from, so they must move with the bar.
+  const activities: readonly EngineActivity[] = [
+    task('A', 3, { visualStart: '2026-01-06' }),
+    task('B', 2),
+    task('C', 2),
+  ];
+
+  it('precondition: A and B are drawn away from their network starts, C is not', () => {
+    const { byId } = run(activities, [edge('A', 'B')]);
+    expect(byId.get('A')!.visualEffectiveStart).not.toBe(byId.get('A')!.earlyStart);
+    expect(byId.get('B')!.visualEffectiveStart).not.toBe(byId.get('B')!.earlyStart);
+    expect(byId.get('C')!.visualEffectiveStart).toBe(byId.get('C')!.earlyStart);
+  });
+
+  // RED until M1: the fields do not exist.
+  it.fails('reports the drawn span as offsets from the data date', () => {
+    const { byId } = run(activities, [edge('A', 'B')]);
+    expect(placedOffsets(byId.get('A')!)).toEqual({ start: 5 * DAY, finish: 8 * DAY });
+    expect(placedOffsets(byId.get('B')!)).toEqual({ start: 8 * DAY, finish: 10 * DAY });
+    expect(placedOffsets(byId.get('C')!)).toEqual({ start: 0, finish: 2 * DAY });
   });
 });
