@@ -1576,6 +1576,11 @@ controller's 30 / 60 s per handler.
 - `projectFinish` — on `GET …/schedule/summary`, the recalculate response and a share link's
   `GET /share/plan` alike — is the **placed** finish: the latest drawn finish, which a hand-placed
   bar can push past the network's earliest finish (ADR-0148, `docs/TECH_DEBT.md` #404).
+- With `levelResources` on, the levelled fields (`leveledStart` / `leveledFinish` on each activity,
+  and the summary's levelling roll-up) are computed from where each bar is **drawn**: levelling starts
+  every participant at its placed start, or its early start when it is unplaced, and a bar it does not
+  delay keeps its drawn start (ADR-0166, #413). Levelling never moves a bar; the levelled dates are a
+  ghost overlay. The Critical Path Test is the one reader that levels on the network span instead.
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a
@@ -1624,7 +1629,7 @@ controller's 30 / 60 s per handler.
   is **schedule data, not cost**, so it is **not** `cost:read`-gated). A
   `granularity` query param (`DAY` default / `WEEK` / `MONTH`) sets the shared
   time-bucket axis; `limit`/`offset` page over the **per-resource series** (`data`).
-  Each assignment's `budgetedUnits` is distributed across its effective span per its
+  Each assignment's `budgetedUnits` is distributed across its placed (else early) span per its
   `curveType`, **conserving units** (`Σ buckets === Σ budgetedUnits` per resource);
   the response `meta` carries the shared `buckets` axis, `granularity`, the total
   series count, `hasMore`, and **`curveNormalisedCount`** (N29 — assignments whose
