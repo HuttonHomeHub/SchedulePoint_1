@@ -1456,8 +1456,9 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     curveType: 'BELL' as const,
     lagMinutes: 0,
     // A 21-day span on the (null-calendar → all-days-work) plan calendar, DAY-aligned to the profile.
+    // The finish is the INCLUSIVE display date (ADR-0023): 1 Jan .. 21 Jan is 21 days.
     earlyStart: new Date('2026-01-01T00:00:00Z'),
-    earlyFinish: new Date('2026-01-22T00:00:00Z'),
+    earlyFinish: new Date('2026-01-21T00:00:00Z'),
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     calendarId: null,
@@ -1550,7 +1551,7 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
         curveType: 'UNIFORM',
         budgetedUnits: new Prisma.Decimal(210),
         visualEffectiveStart: new Date('2026-01-11T00:00:00Z'),
-        visualEffectiveFinish: new Date('2026-01-22T00:00:00Z'),
+        visualEffectiveFinish: new Date('2026-01-21T00:00:00Z'),
       }),
     ]);
     const result = await service.getResourceHistogram(
@@ -1568,7 +1569,7 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
   });
 
   it.each([
-    ['start', { visualEffectiveStart: null, visualEffectiveFinish: new Date('2026-01-22') }],
+    ['start', { visualEffectiveStart: null, visualEffectiveFinish: new Date('2026-01-21') }],
     ['finish', { visualEffectiveStart: new Date('2026-01-11'), visualEffectiveFinish: null }],
   ])('falls back to the early span as a whole when the placed %s is null (#413)', async (_e, o) => {
     schedule.loadResourceHistogramAssignments.mockResolvedValue([
@@ -1637,6 +1638,137 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
     expect(result.buckets).toHaveLength(10);
     expect(result.series[0]!.values.every((v) => v > 0)).toBe(true);
     expect(result.series[0]!.values.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 4);
+  });
+
+  // The row carries the INCLUSIVE display finish (ADR-0023), so the bar's last day must still carry
+  // load. These cases are red against the code that read that date as the exclusive end of the span.
+  describe('counts the last day of a bar (the finish is the inclusive display date)', () => {
+    const weekShifts = (startMinute: number, endMinute: number) => ({
+      shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute, endMinute })),
+      exceptions: [],
+    });
+    const at = (iso: string) => new Date(`${iso}T00:00:00Z`);
+    const days = (result: { buckets: { start: string }[]; series: { values: number[] }[] }) =>
+      Object.fromEntries(result.buckets.map((b, i) => [b.start, result.series[0]!.values[i]!]));
+    const read = () =>
+      service.getResourceHistogram(principalWith(READ), 'acme', PLAN_ID, 'DAY', 50, 0);
+
+    it.each([
+      ['a Monday-to-Friday day-granular calendar', weekShifts(0, 1440)],
+      ['an hour-granular 08:00-17:00 calendar', weekShifts(480, 1020)],
+    ])('a five-working-day UNIFORM bar loads all five days equally on %s', async (_n, cal) => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
+      schedule.loadPlanCalendar.mockResolvedValue(cal);
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(10),
+          earlyStart: at('2026-01-05'),
+          earlyFinish: at('2026-01-09'),
+        }),
+      ]);
+      const result = await read();
+      expect(days(result)).toEqual({
+        '2026-01-05': 2,
+        '2026-01-06': 2,
+        '2026-01-07': 2,
+        '2026-01-08': 2,
+        '2026-01-09': 2,
+      });
+      expect(result.series[0]!.total).toBe(10);
+    });
+
+    it('a bar that finishes on a Monday after a weekend loads both working days, none of the weekend', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
+      schedule.loadPlanCalendar.mockResolvedValue(weekShifts(480, 1020));
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(10),
+          earlyStart: at('2026-01-09'),
+          earlyFinish: at('2026-01-12'),
+        }),
+      ]);
+      expect(days(await read())).toEqual({
+        '2026-01-09': 5,
+        '2026-01-10': 0,
+        '2026-01-11': 0,
+        '2026-01-12': 5,
+      });
+    });
+
+    it('counts a completed activity’s actual-dated last day', async () => {
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(6),
+          earlyStart: at('2026-01-02'),
+          earlyFinish: at('2026-01-03'),
+        }),
+      ]);
+      expect(days(await read())).toEqual({ '2026-01-02': 3, '2026-01-03': 3 });
+    });
+
+    it('measures an assignment lag from the start and still counts the last day', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ calendarId: 'cal-1' }));
+      schedule.loadPlanCalendar.mockResolvedValue(weekShifts(0, 1440));
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(8),
+          lagMinutes: 1440,
+          earlyStart: at('2026-01-05'),
+          earlyFinish: at('2026-01-09'),
+        }),
+      ]);
+      expect(days(await read())).toEqual({
+        '2026-01-06': 2,
+        '2026-01-07': 2,
+        '2026-01-08': 2,
+        '2026-01-09': 2,
+      });
+    });
+
+    it('a zero-duration activity keeps its whole budget on its own day and adds no span', async () => {
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(6),
+          earlyStart: at('2026-01-07'),
+          earlyFinish: at('2026-01-07'),
+        }),
+      ]);
+      const result = await read();
+      expect(result.buckets).toEqual([{ start: '2026-01-07', end: '2026-01-08' }]);
+      expect(result.series[0]!.values).toEqual([6]);
+    });
+
+    it('puts a finish milestone’s load on the day it closes, not on the last bucket before it', async () => {
+      schedule.loadResourceHistogramAssignments.mockResolvedValue([
+        row({
+          resourceId: 'task',
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(4),
+          earlyStart: at('2026-01-05'),
+          earlyFinish: at('2026-01-06'),
+        }),
+        row({
+          resourceId: 'gate',
+          curveType: 'UNIFORM',
+          budgetedUnits: new Prisma.Decimal(3),
+          earlyStart: at('2026-01-07'),
+          earlyFinish: at('2026-01-07'),
+        }),
+      ]);
+      const result = await read();
+      const gate = result.series.find((x) => x.resourceId === 'gate')!;
+      expect(result.buckets.map((b) => b.start)).toEqual([
+        '2026-01-05',
+        '2026-01-06',
+        '2026-01-07',
+      ]);
+      expect(gate.values).toEqual([0, 0, 3]);
+    });
   });
 
   it('offset-pages the per-resource series', async () => {

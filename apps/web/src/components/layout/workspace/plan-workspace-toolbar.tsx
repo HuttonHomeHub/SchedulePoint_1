@@ -199,7 +199,7 @@ export function ToolbarPlanWorkspace({
   plan: LoadedPlan;
 }): React.ReactElement {
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
-  const canvasUi = useTsldCanvasUiState();
+  const canvasUi = useTsldCanvasUiState(plan.id);
   // The activities panel's narrowed, stable slice of the model (`docs/TECH_DEBT.md` #334, M2-F1): the
   // whole `model` is a new object every render, and this component renders on every canvas selection.
   const activityPanelModel = useActivityPanelModel(model);

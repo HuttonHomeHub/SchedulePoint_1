@@ -190,9 +190,22 @@ const DEFAULT_NAV_STATE: NavState = {
   selectSignal: null,
 };
 
-export function useTsldCanvasUiState(): TsldCanvasUiState {
+/**
+ * @param planId the plan the canvas is showing. View toggles are **per plan** (`docs/TECH_DEBT.md`
+ * #422): switching to a plan already opened in this session keeps the workspace mounted, so without
+ * it a Late overlay switched on in one plan would silently still be on in the next. Omitted by the
+ * uncontrolled `TsldPanel`, which has no plan switch to react to.
+ */
+export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
   const [mode, setMode] = useState<EditMode>('select');
   const [viewToggles, setViewToggles] = useState<TsldViewToggles>(DEFAULT_VIEW_TOGGLES);
+  // React's "adjust state while rendering" pattern: a reset on a prop change needs no effect, and
+  // so never paints one frame of the previous plan's toggles.
+  const [togglesPlanId, setTogglesPlanId] = useState(planId);
+  if (togglesPlanId !== planId) {
+    setTogglesPlanId(planId);
+    setViewToggles(DEFAULT_VIEW_TOGGLES);
+  }
   const [zoomPreset, setZoomPreset] = useState<ZoomLevel>('week');
   const [fitSignal, setFitSignal] = useState(0);
   const [autoArrangeSignal, setAutoArrangeSignal] = useState(0);

@@ -214,21 +214,23 @@ describe.skipIf(!hasDatabase)('Placed load basis — reference results and red c
     return { actor, planId, activityId: a.id, crew };
   }
 
-  // The histogram spreads a span `[start, finish)` and is handed the INCLUSIVE display finish, so a
-  // 5-day bar carries its 10 units over its first four days (2.5 each) and none on the fifth. That is
-  // today's convention, recorded here as found (the spec's H1 says five days at 2; see
-  // m0-measurement.md). M2 changes the BASIS of the span, not this convention, so H2 stays equal.
+  // The histogram spreads `[start, finish)` and the row carries the INCLUSIVE display finish, so the
+  // service hands it the boundary that closes the last day: a 5-day bar carries its 10 units as 2 a day
+  // over all five days (#423). Until 2026-09-30 it counted four days at 2.5 and none on the fifth; the
+  // spec's H1 always said five days at 2 (m0-measurement.md records the convention it was found in).
   const EARLY_SPAN = {
-    '2026-01-01': 2.5,
-    '2026-01-02': 2.5,
-    '2026-01-03': 2.5,
-    '2026-01-04': 2.5,
+    '2026-01-01': 2,
+    '2026-01-02': 2,
+    '2026-01-03': 2,
+    '2026-01-04': 2,
+    '2026-01-05': 2,
   };
   const PLACED_SPAN = {
-    '2026-01-11': 2.5,
-    '2026-01-12': 2.5,
-    '2026-01-13': 2.5,
-    '2026-01-14': 2.5,
+    '2026-01-11': 2,
+    '2026-01-12': 2,
+    '2026-01-13': 2,
+    '2026-01-14': 2,
+    '2026-01-15': 2,
   };
 
   it('H1 precondition: A is drawn 10 days after its network start', async () => {

@@ -21,6 +21,7 @@ export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
 export {
   computeResourceHistogram,
+  exclusiveFinishOfLastDay,
   resolveCurveProfile,
   RESOURCE_CURVE_PROFILES,
   MAX_HISTOGRAM_BUCKETS,

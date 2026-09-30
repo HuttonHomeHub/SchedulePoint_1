@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ProjectSummary } from '@repo/types';
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useCreateProject, useUpdateProject } from '../api/use-projects';
@@ -33,6 +32,45 @@ export function ProjectFormDialog({
   onCreated?: (created: ProjectSummary) => void;
 }): React.ReactElement {
   const isEdit = project !== undefined;
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={isEdit ? 'Edit project' : 'New project'}
+      {...(isEdit ? {} : { description: 'Add a project to hold this client’s plans.' })}
+    >
+      <ProjectForm
+        key={project?.id ?? 'new'}
+        orgSlug={orgSlug}
+        clientId={clientId}
+        project={project}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    </Dialog>
+  );
+}
+
+/**
+ * The form proper — seeded at mount, not by an effect; see `ClientForm` (`docs/TECH_DEBT.md` #420).
+ * The `key` must not change while the dialog is open: if a caller ever retargets a live dialog,
+ * focus must be restored to the first field (WCAG 2.4.3), because the remount drops it.
+ */
+function ProjectForm({
+  orgSlug,
+  clientId,
+  project,
+  onClose,
+  onCreated,
+}: {
+  orgSlug: string;
+  clientId: string;
+  // Required-but-`undefined` rather than optional: `exactOptionalPropertyTypes`.
+  project: ProjectSummary | undefined;
+  onClose: () => void;
+  onCreated: ((created: ProjectSummary) => void) | undefined;
+}): React.ReactElement {
+  const isEdit = project !== undefined;
   const create = useCreateProject(orgSlug, clientId);
   const update = useUpdateProject(orgSlug, clientId);
   const mutation = isEdit ? update : create;
@@ -41,20 +79,11 @@ export function ProjectFormDialog({
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors },
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { name: '', description: '' },
+    defaultValues: { name: project?.name ?? '', description: project?.description ?? '' },
   });
-
-  useEffect(() => {
-    if (open) {
-      reset({ name: project?.name ?? '', description: project?.description ?? '' });
-      mutation.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
-  }, [open, project?.id]);
 
   const onSubmit = handleSubmit((values) => {
     if (isEdit) {
@@ -79,47 +108,40 @@ export function ProjectFormDialog({
   });
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={isEdit ? 'Edit project' : 'New project'}
-      {...(isEdit ? {} : { description: 'Add a project to hold this client’s plans.' })}
-    >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {mutation.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
-          </p>
-        ) : null}
-        <TextField
-          label="Name"
-          autoComplete="off"
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        <TextareaField
-          label="Description (optional)"
-          error={errors.description?.message}
-          {...register('description')}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
-            aria-disabled={mutation.isPending}
-            aria-busy={mutation.isPending}
-            onClick={(event) => {
-              if (mutation.isPending) event.preventDefault();
-            }}
-          >
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+    <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
+      <FormErrorSummary errors={errors} />
+      {mutation.isError ? (
+        <p role="alert" className="text-destructive-text text-sm">
+          {mutation.error.message}
+        </p>
+      ) : null}
+      <TextField
+        label="Name"
+        autoComplete="off"
+        error={errors.name?.message}
+        {...register('name')}
+      />
+      <TextareaField
+        label="Description (optional)"
+        error={errors.description?.message}
+        {...register('description')}
+      />
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          aria-disabled={mutation.isPending}
+          aria-busy={mutation.isPending}
+          onClick={(event) => {
+            if (mutation.isPending) event.preventDefault();
+          }}
+        >
+          {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
+        </Button>
+      </div>
+    </form>
   );
 }

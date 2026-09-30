@@ -175,6 +175,18 @@ function advance(date: string, granularity: HistogramGranularity): string {
   return formatCalendarDate(new Date(d.getTime() + days * 86_400_000));
 }
 
+/**
+ * The exclusive end of a bar whose last occupied day is `inclusiveFinish` — the midnight that closes it.
+ * The persisted `early_finish` / `visual_effective_finish` are the INCLUSIVE display date (ADR-0023),
+ * while {@link computeResourceHistogram} spreads `[start, finish)`; handing it the display date leaves
+ * the bar's last day with no load. Midnight is the boundary on every calendar, day- or hour-granular,
+ * because it encloses all of that day's working time and none of the next day's. It cannot recover a
+ * finish part-way through a day: the row carries a date, not the instant.
+ */
+export function exclusiveFinishOfLastDay(inclusiveFinish: string): string {
+  return advance(inclusiveFinish, 'DAY');
+}
+
 /** Align a `YYYY-MM-DD` down to the start of its bucket for the granularity (MONTH → the 1st). */
 function alignDown(date: string, granularity: HistogramGranularity): string {
   if (granularity === 'MONTH') {

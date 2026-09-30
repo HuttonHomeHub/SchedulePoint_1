@@ -142,4 +142,28 @@ describe('useTsldCanvasUiState', () => {
     act(() => result.current.setMode('select'));
     expect(result.current.mode).toBe('select');
   });
+
+  // `docs/TECH_DEBT.md` #422: a cached-plan switch keeps the workspace (and this hook) mounted, so a
+  // view toggle set in plan A used to be silently still set in plan B. View toggles are per plan.
+  it('resets the view toggles when the plan changes', () => {
+    const { result, rerender } = renderHook(({ planId }) => useTsldCanvasUiState(planId), {
+      initialProps: { planId: 'plan-a' },
+    });
+    const defaults = result.current.viewToggles;
+    act(() => result.current.toggleView('labels'));
+    expect(result.current.viewToggles.labels).toBe(!defaults.labels);
+
+    rerender({ planId: 'plan-b' });
+    expect(result.current.viewToggles).toEqual(defaults);
+  });
+
+  it('keeps the view toggles across a re-render of the same plan', () => {
+    const { result, rerender } = renderHook(({ planId }) => useTsldCanvasUiState(planId), {
+      initialProps: { planId: 'plan-a' },
+    });
+    const defaults = result.current.viewToggles;
+    act(() => result.current.toggleView('labels'));
+    rerender({ planId: 'plan-a' });
+    expect(result.current.viewToggles.labels).toBe(!defaults.labels);
+  });
 });

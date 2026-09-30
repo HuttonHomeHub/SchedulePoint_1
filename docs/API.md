@@ -1637,7 +1637,9 @@ controller's 30 / 60 s per handler.
   persisted dates only — no recompute, no CPM date moved, no levelling — and counts
   the load where each bar is **drawn**: the activity's `visual_effective_start` /
   `_finish` pair, or its early dates as a whole when either placed end is null
-  (#413). An unplaced plan reads exactly as before. A
+  (#413). The bar's **last day carries load**: the persisted finish is the inclusive display
+  date, so the histogram spreads to the end of that day (a five-working-day bar of 10 units is 2
+  a day on all five, not 2.5 over four; `docs/TECH_DEBT.md` #423). A
   granularity too fine for the plan's span returns **422**
   (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 
