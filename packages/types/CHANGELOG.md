@@ -1,5 +1,11 @@
 # @repo/types
 
+## 0.38.0
+
+### Minor Changes
+
+- [#744](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/744) [`98e43c7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/98e43c7da342ec8dc8e33baac32ac96e528a7aff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - New read `GET …/plans/:planId/schedule/levelling-application` previews applying a plan's levelled positions as placements: the exact rows to send to the batch placement route, and what writing them would do. Nothing is written by the read. Each target is a working day on the activity's own calendar, and a target the plan's links refuse is left out and reported.
+
 ## 0.37.0
 
 ### Minor Changes
