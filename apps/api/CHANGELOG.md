@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.81.2
+
+### Patch Changes
+
+- [#742](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/742) [`6ea406e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6ea406e084b4cf3810d70940c369fe1b1e7cd7b4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Earned Value's planned value now counts each activity's last day.
+
 ## 0.81.1
 
 ### Patch Changes

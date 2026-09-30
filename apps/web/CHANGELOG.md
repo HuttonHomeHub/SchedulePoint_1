@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.154.2
+
+### Patch Changes
+
+- [#742](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/742) [`6ea406e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6ea406e084b4cf3810d70940c369fe1b1e7cd7b4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Switching to a plan you have already opened no longer carries over its overlays, highlights or an armed tool.
+
 ## 0.154.1
 
 ### Patch Changes
