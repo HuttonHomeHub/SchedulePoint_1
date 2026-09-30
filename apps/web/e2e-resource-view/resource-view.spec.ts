@@ -5,8 +5,10 @@ import {
   assignResource,
   createResource,
   drawTask,
+  loadedBuckets,
   onboard,
   openNewPlan,
+  placeAndRecalculate,
   startEditing,
 } from './support';
 
@@ -156,4 +158,48 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   await expect(resourceViewButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('region', { name: 'Resource loading' })).toHaveCount(0);
   await expect(page.locator('[data-testid="tsld-resource-strip"]')).toHaveCount(0);
+});
+
+/**
+ * **A placed activity's load sits where its bar is drawn** (#413, ADR-0148). The histogram used to be
+ * read from the EARLY dates, so a planner who dragged a bar four weeks right saw its resource still
+ * loaded in the week the bar had left. Asserted on the accessible table's cells rather than on the
+ * strip's copy, and on the placed week rather than on a total — a total is the same either way.
+ *
+ * The placement is written through the API (the drag has its own journey) and the workspace is
+ * reloaded to read it: writing behind the client's back does not invalidate its query cache, so an
+ * in-place refresh after a canvas drag is not something this case can drive.
+ */
+test('a placed activity loads its resource in the week it is drawn, and follows a second placement', async ({
+  page,
+}) => {
+  const stamp = Date.now() + 1;
+  const orgSlug = await onboard(page, stamp);
+  await createResource(page, 'Crew B');
+  await openNewPlan(page);
+  await startEditing(page);
+  await drawTask(page, 'Survey', { x: 260, y: 140 });
+  await expect(
+    page.getByRole('region', { name: 'Time-scaled logic diagram' }).getByRole('option'),
+  ).toHaveCount(1, { timeout: 15_000 });
+  await assignResource(page, 'Survey', 'Crew B', 8);
+
+  const revealTable = async (): Promise<void> => {
+    await page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Resource view' })
+      .click();
+    const stripPanel = page.getByRole('region', { name: 'Resource loading' });
+    await expect(stripPanel).toBeVisible();
+    await stripPanel.getByText(/Show data table/).click();
+  };
+
+  // Mondays, so the week bucket's start is the placed day whichever way weeks are anchored.
+  await placeAndRecalculate(page, orgSlug, 'Survey', '2026-02-02');
+  await revealTable();
+  await expect.poll(() => loadedBuckets(page)).toEqual(['2026-02-02']);
+
+  await placeAndRecalculate(page, orgSlug, 'Survey', '2026-03-02');
+  await revealTable();
+  await expect.poll(() => loadedBuckets(page)).toEqual(['2026-03-02']);
 });

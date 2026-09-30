@@ -501,13 +501,11 @@ export function levelledOverlaySummary(
  * this here" reaches a sighted planner and nobody else.
  *
  * **It states the ghost's START DATE rather than an offset, which is a deliberate departure from
- * both siblings.** The tempting field is `levelingDelayDays` — engine-owned, already in whole
- * working days, sitting on the same row — and it is `leveledStart - earlyStart`, while the bar is
- * drawn at the PLACED start. On an unplaced activity the two coincide, which is every plan in the
- * estate today (FC-1); on a placed one — the case this epic exists to create — it would report an
- * offset from a position the reader cannot see. Computing the true offset needs a working-day walk
- * a pure render leaf has no business doing, so the honest short answer is the date, which is exact
- * in every case.
+ * both siblings.** That was chosen while `levelingDelayDays` was `leveledStart - earlyStart` and the
+ * bar was drawn at the PLACED start, so an offset would have reported a distance from a position
+ * the reader cannot see. Levelling now anchors on the placed start (#413), so the two agree and the
+ * reason is historical — but the clause is unchanged, because a date is exact on both bases and a
+ * true offset would still need a working-day walk a pure render leaf has no business doing.
  *
  * **This is the ONLY clause the two M-E overlays need, and that was found by driving the product.**
  * It began as one member describing both — the feasible window and this ghost — on the reasoning

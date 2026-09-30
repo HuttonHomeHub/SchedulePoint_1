@@ -430,7 +430,8 @@ export interface LevellableActivity {
   id: string;
   laneIndex: number;
   type: ActivityType;
-  earlyStart: string | null;
+  /** Where the live bar is drawn — the placement if set, else the effective earliest (ADR-0033). */
+  visualEffectiveStart: string | null;
   leveledStart: string | null;
   leveledFinish: string | null;
 }
@@ -438,7 +439,11 @@ export interface LevellableActivity {
 /**
  * Build the levelled ghosts — one per activity the levelling pass MOVED.
  *
- * **The draw predicate is `leveledStart !== earlyStart`, and it was chosen rather than discovered.**
+ * **The draw predicate is `leveledStart !== visualEffectiveStart`, and it was chosen rather than
+ * discovered.** The comparison is with the DRAWN start, not the early one (#413): levelling anchors
+ * a placed activity at its placement, so a placed participant that levelling did not move has
+ * `leveledStart === visualEffectiveStart` while differing from `earlyStart`, and comparing with the
+ * early date would draw a ghost on top of the very bar it describes.
  * The obvious alternative is `levelingDelayDays > 0`, and at day granularity the two agree; the
  * reason to prefer the date test is this epic's own rule. The ghost is a rect positioned **from date
  * strings**, and `levelingDelayDays` is a **separately rounded** day quantity — deciding whether to
@@ -447,9 +452,8 @@ export interface LevellableActivity {
  *
  * It also collapses two rules into one: the draw predicate **is** the coincidence test, so there is
  * no separate withholding rule to keep in step. An UNDELAYED participant is not drawn because
- * `pinAtNetwork` sets `leveledStart: r.earlyStart` (`level.ts:174`), so its ghost would sit exactly
- * on the feasible window's **left cap** — not on the bar, which is the collision the previous
- * withholding rule was aimed at and the wrong one.
+ * `pinAtNetwork` pins it at the date its bar is drawn (`level.ts`, the anchor M1 moved to the
+ * placed start), so its ghost would sit exactly on the bar.
  *
  * **Three states, derived from `level.ts`'s exit paths rather than from a golden fixture**:
  *
@@ -463,7 +467,7 @@ export function buildLevelledGhosts(activities: readonly LevellableActivity[]): 
   const ghosts: LevelledGhost[] = [];
   for (const a of activities) {
     if (a.leveledStart === null || a.leveledFinish === null) continue; // not a participant
-    if (a.leveledStart === a.earlyStart) continue; // a participant levelling did not move
+    if (a.leveledStart === a.visualEffectiveStart) continue; // a participant levelling did not move
     ghosts.push({
       id: a.id,
       leveledStart: a.leveledStart,
