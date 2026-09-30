@@ -1096,7 +1096,7 @@ export interface PlanFloatPaths {
 
 /**
  * One row of the **levelling application** preview (`docs/specs/apply-levelled-dates/`): exactly the
- * shape `PATCH …/activities/placements` takes, so a client sends `rows` back **unchanged**. The
+ * shape `PATCH …/activities/placements` takes, so a client sends `rows` as the `placements` array (and sends nothing when `rows` is empty). The
  * constraint is carried as stored, because a row is a complete placement and a stale cache must not be
  * able to clear one; `laneIndex` is always null (the lane is left alone).
  */
@@ -1134,7 +1134,8 @@ export interface LevellingApplicationNamedActivity {
 
 /**
  * What applying the plan's levelled positions would do — a read-only preview over an in-memory solve.
- * Nothing in it is persisted; **the write is the existing batch placement route**, sent `rows`.
+ * Nothing in it is persisted; **the write is the existing batch placement route**, whose
+ * body is `{ placements }`: send `rows` as that array, and nothing when `rows` is empty.
  */
 export interface LevellingApplication {
   /** When the schedule this was derived from was last calculated, so a client can refuse a stale one. */

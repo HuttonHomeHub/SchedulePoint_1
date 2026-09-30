@@ -26,7 +26,7 @@
 import { performance } from 'node:perf_hooks';
 
 import { scaleSpec, type SeedSpec } from '@repo/seed';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 import {
   computeSchedule,
@@ -37,7 +37,22 @@ import {
 } from '../src/modules/schedule/engine/index.js';
 import { specToEngineInput } from '../test/pairwise/spec-to-engine.js';
 
-const RUNS = 15;
+// 50 so p95 is the 48th of 50 samples rather than the maximum it would be at 15.
+const RUNS = 50;
+
+// Counts the solves the preview really runs: `apply-levelling.ts` imports `computeSchedule` from
+// './compute', so wrapping that module counts its calls whatever the preview's own branches do.
+const solveCounter = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../src/modules/schedule/engine/compute', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/modules/schedule/engine/compute')>();
+  return {
+    ...original,
+    computeSchedule: (...args: Parameters<typeof original.computeSchedule>) => {
+      solveCounter.calls += 1;
+      return original.computeSchedule(...args);
+    },
+  };
+});
 
 function percentiles(samples: readonly number[]) {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -87,7 +102,9 @@ function measure(label: string, spec: SeedSpec, capacity: number) {
       options: { ...levelOptions, compute: options },
     });
 
+  solveCounter.calls = 0;
   const application = preview();
+  const solves = solveCounter.calls;
   const recalculation = percentiles(timed(recalculate));
   const previewing = percentiles(timed(preview));
   const row = {
@@ -100,7 +117,7 @@ function measure(label: string, spec: SeedSpec, capacity: number) {
     leftToLogic: application.leftToLogic.length,
     conflictingPlaced: application.conflictingPlaced.length,
     remainingAfterApply: application.remainingAfterApply,
-    solves: application.leftToLogic.length + application.conflictingPlaced.length > 0 ? 3 : 2,
+    solves,
     recalculateMs: recalculation,
     previewMs: previewing,
     ratioP50: previewing.p50 / recalculation.p50,
@@ -117,4 +134,7 @@ it('measures the preview against a recalculation at 2,000 activities', () => {
   // A preview of a plan levelling does not touch would time a no-op; refuse to report one.
   expect(asSeeded.rows + tight.rows).toBeGreaterThan(0);
   expect(tight.rows).toBeGreaterThan(0);
+  // The counted figure, not an inference from dropped activities, is what the record cites.
+  expect(asSeeded.solves).toBeGreaterThanOrEqual(2);
+  expect(tight.solves).toBeGreaterThanOrEqual(2);
 });

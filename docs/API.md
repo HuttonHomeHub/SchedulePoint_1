@@ -1518,7 +1518,8 @@ controller's 30 / 60 s per handler.
   activities, and a `WBS_SUMMARY` is `422 SUMMARY_NOT_BULK_ELIGIBLE` (a summary's dates are an
   engine rollup, so there is nothing on it to place). **Structural**, like `parents`. A caller
   that sends rows it did not author is `GET …/plans/:planId/schedule/levelling-application`
-  (under **Schedule**): its `rows` are this route's rows exactly and are sent back unchanged.
+  (under **Schedule**): its `rows` are this route's rows exactly: send `data.rows` as the `placements` array, and do not
+  send when `rows` is empty (the batch takes 1 to 2,000).
 - **A batch delete is a `POST`, not a `DELETE`.** `POST …/plans/:planId/activities/bulk-delete`
   with `{ activities: [{ id, version }] }` returns **200** with
   `{ deleteBatchId, activityCount, dependencyCount }`. `DELETE` on the collection has no body in
@@ -1709,8 +1710,9 @@ controller's 30 / 60 s per handler.
   placements** (`docs/specs/apply-levelled-dates/`, M1; `activity:update` — Planner and Org Admin,
   not `schedule:read`, because it exists to feed a write the caller must be able to make and it runs
   the engine up to **three** times). **Read-only: no lock, no pen, no write, no audit event**; the
-  write is `PATCH …/activities/placements`, sent `data.rows` unchanged. It derives what dragging
-  each levelled bar onto its ghost would write, at once, and the consequences of writing it. `rows`
+  write is `PATCH …/activities/placements`, whose body is `{ placements: [...] }`: send `data.rows`
+  as the `placements` array, and do not send when `rows` is empty (that route takes 1 to 2,000). It
+  derives what dragging each levelled bar onto its ghost would write, at once, and the consequences of writing it. `rows`
   are that route's exact row shape (`id`, `version`, `constraintType`, `constraintDate`,
   `visualStart`, `laneIndex: null`): **the stored constraint is carried verbatim**, because a row
   is a complete placement and the batch would otherwise clear it, and `version` is the one the
@@ -1725,13 +1727,14 @@ controller's 30 / 60 s per handler.
   arrays. `projectFinishBefore`/`After` are the **placed** finish (#404) from a real solve of each
   state. `computedFrom.scheduleComputedAt` lets a client refuse a preview older than the schedule it
   is showing. The array is not capped (the batch route takes 2,000). The response carries no cost
-  field, so it does not vary by `cost:read`. Own throttle, **10/60 s**, set from the engine-only
-  measurement in `docs/specs/apply-levelled-dates/m0-measurement.md` ("M1 — what the preview costs":
-  about three recalculations of engine work, p95 ~0.76 s at 2,000 activities) less a third for the
-  graph load that figure leaves out — a judgement, recorded as one; no whole-request figure has been
-  taken. Another organisation's plan, a deleted one and a foreign one are all `404`; a role
-  without `activity:update` is `403`; a plan with no start date is `422 PLAN_START_REQUIRED`, and
-  an unreachable calendar takes the recalculation's `422`s.
+  field, so it does not vary by `cost:read`. Own throttle, **10/60 s**.
+  - **Why 10:** a judgement, not a measurement. The engine-only figure in
+    `docs/specs/apply-levelled-dates/m0-measurement.md` ("M1 — what the preview costs": about three
+    solves, p95 ~0.78 s at 2,000 activities) gives 15 by the M6 formula, less a third for the graph
+    load that figure leaves out. No whole-request figure has been taken.
+  - **Status codes:** `200`; `403` without `activity:update`; `404` for another organisation's plan,
+    a deleted one or a foreign one; `422 PLAN_START_REQUIRED` for a plan with no start date, and the
+    recalculation's `422`s for an unreachable calendar; `429` past the throttle.
 
 - `GET …/schedule/revision-compare?from=<uuid>&to=<uuid|live>` reports **what
   entered and left the critical path** between two computed schedules of one

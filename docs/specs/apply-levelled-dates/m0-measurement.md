@@ -122,7 +122,7 @@ The summary's "Levelled finish" is 2 days early on this plan.
 Recorded 2026-09-30 by `apps/api/scripts/measure-levelling-application.mts`, run as
 `pnpm exec vitest run -c scripts/vitest.measure.config.mts scripts/measure-levelling-application.mts
 --silent=false --disable-console-intercept` from `apps/api`. Node 22.22.2, 4 vCPU Intel Xeon, 16 GB,
-a shared sandbox and not a planner's machine; n = 15 after one untimed warm-up, nearest-rank
+a shared sandbox and not a planner's machine; n = 50 after one untimed warm-up, nearest-rank
 percentiles, both routes timed alternately in the one run on the same plan.
 
 **What is and is not measured.** The harness is **pure: no database, no HTTP, no API.** It times the
@@ -139,12 +139,17 @@ The plan is `scaleSpec({ activities: 2000 })`, the generator behind `plan:scale-
 
 | Variant                        | Delayed, written, dropped         | Recalculate p50 / p95 | Preview p50 / p95 | Ratio p50 / p95 | Solves |
 | ------------------------------ | --------------------------------- | --------------------- | ----------------- | --------------- | ------ |
-| capacity 8 (as seeded)         | 10 delayed, 2 rows, 8 dropped     | 227.7 / 264.4 ms      | 645.4 / 759.2 ms  | 2.83x / 2.87x   | 3      |
-| capacity 2 (forced contention) | 236 delayed, 18 rows, 218 dropped | 209.3 / 217.8 ms      | 704.9 / 763.9 ms  | 3.37x / 3.51x   | 3      |
+| capacity 8 (as seeded)         | 10 delayed, 2 rows, 8 dropped     | 229.5 / 330.0 ms      | 647.7 / 777.2 ms  | 2.82x / 2.36x   | 3      |
+| capacity 2 (forced contention) | 236 delayed, 18 rows, 218 dropped | 206.4 / 215.5 ms      | 631.0 / 708.2 ms  | 3.06x / 3.29x   | 3      |
+
+With n = 50 the p95 is the 48th sample, not the maximum it was at n = 15. **Solves are counted, not
+inferred**: the script wraps `computeSchedule` (the module `apply-levelling.ts` imports) and reads the
+counter around one preview call; it read 3 in both variants. The recalculation's p95 in the first
+variant (330 ms against a 229 ms median) is a noisy shared-sandbox tail, which is why its ratio moved.
 
 Both variants took the three-solve path, so **the preview costs about three recalculations of engine
 work, not the "two" the spec's §3 estimated**: the tentative solve and the re-solve without the dropped
-targets are separate runs. p95 is about 0.76 s at 2,000 activities in both variants.
+targets are separate runs. p95 is about 0.71 to 0.78 s at 2,000 activities.
 
 **A finding the dialog has to be honest about.** On this chain-heavy plan most levelled ghosts are
 logically impossible (A5): 8 of 10 candidates in the seeded variant and 218 of 236 under contention are
@@ -155,7 +160,7 @@ is left"), and it is also the strongest argument for the follow-up the spec name
 logic-aware, so a delayed predecessor pushes its successors in the overlay).
 
 **The throttle.** The M6 precedent (`schedule-health-check/m6-measurement.md`) sizes a route by
-`clamp(floor(12_000 ms / p95), 3, 20)`. On the engine-only p95 of 764 ms that is 15. The route ships at
+`clamp(floor(12_000 ms / p95), 3, 20)`. On the engine-only p95 of 777 ms that is 15. The route ships at
 **10 per 60 s** instead: the figure excludes the graph load and serialisation, which the M6 run found to
 be a large share of a whole request, so a third was taken off rather than trusting the engine-only number.
-That reduction is a judgement and not a measurement; the orchestrator's HTTP run should confirm or move it.
+That reduction is a judgement and not a measurement; an HTTP measurement against a database is still owed and should confirm or move it.

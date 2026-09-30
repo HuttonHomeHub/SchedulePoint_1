@@ -70,11 +70,13 @@ const CRITICAL_PATH_TEST_THROTTLE = { default: { ttl: 60_000, limit: 14 } } as c
 /**
  * The levelling-application preview's budget: **10 requests / 60 s**. The route runs the engine's
  * network and levelling passes up to three times (read the plan, write every target, re-solve without
- * the targets the links refuse). Measured at 2,000 activities on the engine alone: p95 ~0.76 s, about
+ * the targets the links refuse). Measured at 2,000 activities on the engine alone: p95 ~0.78 s, about
  * three recalculations (`docs/specs/apply-levelled-dates/m0-measurement.md`, "M1 — what the preview
  * costs"). The M6 formula on that figure gives 15; 10 is one third lower because the figure leaves out
  * the graph load and serialisation, which make up much of a whole request. That reduction is a
- * judgement, not a measurement, and is recorded as one; an HTTP figure should replace it.
+ * judgement, not a measurement, and is recorded as one; an HTTP measurement against a database is
+ * still owed. **Its cost, stated plainly:** at most 10 × the measured p95 (~0.78 s) of synchronous CPU,
+ * about 8 s of event-loop time per client per minute, for this one route.
  */
 const LEVELLING_APPLICATION_THROTTLE = { default: { ttl: 60_000, limit: 10 } } as const;
 
@@ -358,7 +360,8 @@ export class ScheduleController {
       'Derives the `visualStart` rows that would put every bar levelling moved where its resource ' +
       'actually frees up — what dragging each bar onto its ghost would write, done at once — and the ' +
       'consequences of writing them. **Read-only: no lock, no pen, no write**; the write is ' +
-      '`PATCH …/activities/placements`, sent `rows` unchanged. Permission is `activity:update` ' +
+      '`PATCH …/activities/placements`: send `data.rows` as its `placements` array, and do not send when ' +
+      '`rows` is empty. Permission is `activity:update` ' +
       'rather than `schedule:read`: the read exists to feed a write the caller must be able to make, ' +
       'and it runs the engine up to three times. **Targets are whole working days**, because a ' +
       'placement is a date: a resource that frees up part-way through a day puts the bar on the next ' +

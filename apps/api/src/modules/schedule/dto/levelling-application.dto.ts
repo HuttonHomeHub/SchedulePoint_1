@@ -9,7 +9,7 @@ import type {
 
 /**
  * One row to write, in exactly the shape `PATCH …/activities/placements` takes — so the client sends
- * `rows` back unchanged. The constraint is the stored one, round-tripped: a row is a complete
+ * `rows` as the `placements` array. The constraint is the stored one, round-tripped: a row is a complete
  * placement and the batch would otherwise clear it.
  */
 export class LevellingApplicationRowDto implements LevellingApplicationRow {
@@ -117,8 +117,9 @@ export class LevellingApplicationDto implements LevellingApplication {
   @ApiProperty({
     type: [LevellingApplicationRowDto],
     description:
-      'The rows to send to PATCH …/activities/placements, unchanged, earliest target first. Empty ' +
-      'when levelling is off or has moved nothing. Not capped: the batch route takes 2,000 at most.',
+      'The rows to send as the `placements` array of PATCH …/activities/placements, earliest target ' +
+      'first. Empty when levelling is off or has moved nothing: do not send then (the batch route ' +
+      'takes 1 to 2,000). Not capped.',
   })
   rows!: LevellingApplicationRowDto[];
 
