@@ -1,12 +1,13 @@
 import { VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, type Request, type RequestHandler } from 'express';
+import { json, text, type Request, type RequestHandler } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
 import {
   DEFAULT_JSON_LIMIT,
+  DEFAULT_JSON_LIMIT_BYTES,
   ORG_SCOPED_JSON_LIMIT,
   ORG_SCOPED_PATH_PREFIX,
 } from './common/http/body-limits';
@@ -28,6 +29,36 @@ function presentsCredentials(req: Request): boolean {
 }
 
 /**
+ * Bounds the body Better Auth is about to read (TECH_DEBT #416). better-call's node adapter is
+ * called with no `bodySizeLimit` (`better-auth/dist/integrations/node.mjs` →
+ * `better-call/dist/node.mjs:3-8`), so with no limit `get_raw_body` trusts `Content-Length` as the
+ * ceiling and, with none (chunked transfer, `NaN`), `size > NaN` is never true
+ * (`better-call/dist/adapters/node/request.mjs:47-99`): an anonymous body was unbounded.
+ *
+ * **It reads only the two cases that need it, so an ordinary sign-up is untouched.** A request that
+ * declares a `Content-Length` within the cap is already bounded by that framing and goes straight
+ * to Better Auth as a raw stream, exactly as before — this is deliberate, because an earlier
+ * attempt that put a parser in front of every auth request broke the base journeys' sign-up in
+ * Firefox on CI for a reason nobody found (docs/DECISIONS.md, 2026-09-30). The two cases read
+ * here are a declared length OVER the cap (refused up front, nothing buffered) and chunked transfer
+ * with no length (read up to the cap). `text` with every type accepted leaves `req.body` a string,
+ * which better-call passes through verbatim (`request.mjs:102-121`); a failure goes to the same
+ * error handler as the JSON parsers', so it answers the fixed-message 413 rather than parser text.
+ */
+const authTextReader = text({ type: () => true, limit: DEFAULT_JSON_LIMIT });
+export const boundAuthBody: RequestHandler = (req, res, next) => {
+  const declared = req.headers['content-length'];
+  const chunked = declared === undefined && req.headers['transfer-encoding'] !== undefined;
+  // `!(x <= cap)` rather than `x > cap`, so an unparseable length is read (and refused) too.
+  const oversize = declared !== undefined && !(Number(declared) <= DEFAULT_JSON_LIMIT_BYTES);
+  if (chunked || oversize) {
+    authTextReader(req, res, next);
+  } else {
+    next();
+  }
+};
+
+/**
  * Applies the HTTP-layer wiring shared by production bootstrap (`main.ts`) and
  * the e2e tests, so both exercise identical middleware ordering.
  *
@@ -35,7 +66,8 @@ function presentsCredentials(req: Request): boolean {
  * route: this preserves the full request URL (a path-prefixed `app.use` would
  * strip `/api/auth`, breaking Better Auth's internal routing) and runs BEFORE
  * the JSON body parser so the handler receives the raw request body. It
- * terminates the response, so the parsers below never see auth requests.
+ * terminates the response, so the parsers below never see auth requests; their 64 KB cap reaches
+ * it through {@link boundAuthBody} instead.
  *
  * Requires the app to be created with `{ bodyParser: false }` (parsers are added
  * here, after the auth handler).
@@ -70,7 +102,7 @@ export function configureHttpApp(app: NestExpressApplication): void {
   app
     .getHttpAdapter()
     .getInstance()
-    .all(/^\/api\/auth(?:\/|$)/, toNodeHandler(auth));
+    .all(/^\/api\/auth(?:\/|$)/, boundAuthBody, toNodeHandler(auth));
 
   // **The extra two types are not decoration: without them the CSP sink records nothing.** A
   // browser posts a violation report as `application/csp-report` (the legacy `report-uri`
@@ -95,14 +127,12 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // The larger limit applies only under the org-scoped prefix (no `@Public()` handler lives there —
   // pinned by `public-routes-census.structural.spec.ts`) AND only when the request carries a session
   // cookie or an Authorization header. That bounds what an anonymous caller can make the process
-  // buffer to 64 KB on every route this app's own parsers read; it does NOT make the large cap safe against a caller who merely
+  // buffer to 64 KB on every route, `/api/auth/*` included; it does NOT make the large cap safe against a caller who merely
   // sends a junk cookie, because the parser precedes the guard and cannot validate one. That residue
   // is one 512 KB buffer per in-flight request from a caller who then gets a 401.
   //
-  // **JSON is the only body format parsed here, which is what makes "64 KB" a bound on every body
-  // this app's own parsers read.** It is NOT a bound on `/api/auth/*`: Better Auth is mounted above
-  // these parsers and reads its own bodies through better-call's node adapter, whose limit (if any)
-  // we do not set (TECH_DEBT #416). A `urlencoded` parser used to be mounted
+  // **JSON is the only body format parsed here.** `/api/auth/*` is mounted above these parsers and
+  // reads its own bodies, but is held to the same 64 KB by `boundAuthBody` (TECH_DEBT #416). A `urlencoded` parser used to be mounted
   // after these with no `limit`, so body-parser's 100 KB default applied on every route beside a
   // comment promising 64 (TECH_DEBT #415); no route reads a form body, so it was removed rather
   // than capped. A form-encoded body now reaches its handler unparsed (`req.body` undefined).
