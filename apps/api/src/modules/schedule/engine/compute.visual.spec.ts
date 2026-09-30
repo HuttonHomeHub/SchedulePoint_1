@@ -527,13 +527,13 @@ describe('computeSchedule — effective-Visual pass, a placement is inert agains
 });
 
 /**
- * `docs/TECH_DEBT.md` #421 — Pass 2 carries a progressed predecessor's FULL planned duration forward.
- * Pass 1 finishes an activity at its actual finish, or after its remaining work; Pass 2 reads only
- * `durationMinutes` (the `visualPropFinish` line in compute.ts), so an UNPLACED successor's drawn start
- * lands later than its early start — a plan nobody placed shifts. The cases below are the defect as
- * measured on 2026-09-30 (plan calendar Mon–Fri, data date Mon 2026-01-05, actuals BEFORE the data
- * date so they cannot coincide with it). `it.fails` keeps the suite green while the defect stands: the
- * fix flips each to an ordinary `it`.
+ * `docs/TECH_DEBT.md` #421 — the defect, fixed. Pass 2 used to carry a progressed predecessor's FULL
+ * planned duration forward, while Pass 1 finishes an activity at its actual finish or after its
+ * remaining work, so an UNPLACED successor was drawn later than its early start. It now propagates
+ * Pass 1's instants for a progressed activity (`docs/specs/progressed-predecessor-visual/`). The
+ * cases below are the defect as measured on 2026-09-30 (plan calendar Mon–Fri, data date Mon
+ * 2026-01-05, actuals BEFORE the data date so they cannot coincide with it); they were `it.fails`
+ * until the fix.
  */
 describe('computeSchedule — Pass 2 after a progressed predecessor (#421)', () => {
   const DAY = 1440;
@@ -548,29 +548,184 @@ describe('computeSchedule — Pass 2 after a progressed predecessor (#421)', () 
     return output.results.find((r) => r.activityId === 'B')!;
   }
 
-  it.fails('a complete predecessor: B draws at its early start (measured 01-12 vs 01-05)', () => {
+  it('a complete predecessor: B draws at its early start (measured 01-12 vs 01-05)', () => {
     const b = successorOf(task('A', 5, { actualStart: '2025-12-29', actualFinish: '2025-12-30' }));
     expect(b.earlyStart).toBe('2026-01-05');
     expect(b.visualEffectiveStart).toBe(b.earlyStart);
   });
 
-  it.fails(
-    'an in-progress predecessor: B draws at its early start (measured 01-19 vs 01-07)',
-    () => {
-      const b = successorOf(
-        task('A', 10, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY }),
-      );
-      expect(b.earlyStart).toBe('2026-01-07');
-      expect(b.visualEffectiveStart).toBe(b.earlyStart);
-    },
-  );
+  it('an in-progress predecessor: B draws at its early start (measured 01-19 vs 01-07)', () => {
+    const b = successorOf(task('A', 10, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY }));
+    expect(b.earlyStart).toBe('2026-01-07');
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+  });
 
-  it.fails(
-    'an expected-finish predecessor: B draws at its early start (measured 01-19 vs 01-07)',
-    () => {
-      const b = successorOf(task('A', 10, { expectedFinish: '2026-01-06' }), true);
-      expect(b.earlyStart).toBe('2026-01-07');
-      expect(b.visualEffectiveStart).toBe(b.earlyStart);
-    },
-  );
+  it('an expected-finish predecessor: B draws at its early start (measured 01-19 vs 01-07)', () => {
+    const b = successorOf(task('A', 10, { expectedFinish: '2026-01-06' }), true);
+    expect(b.earlyStart).toBe('2026-01-07');
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+  });
+});
+
+const EXPECTED_UNCHANGED = {
+  X: ['2026-01-12', '2026-01-14'],
+  Y: ['2026-01-15', '2026-01-16'],
+  Z: ['2026-01-16', '2026-01-16'],
+};
+
+describe('computeSchedule — Pass 2 propagates Pass 1 for progressed work, all shapes (#421)', () => {
+  const DAY = 1440;
+  const FIVE_DAY = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
+
+  function runFive(
+    activities: readonly EngineActivity[],
+    edges: readonly EngineEdge[],
+    options: {
+      progressMode?: 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE';
+      expectedFinish?: boolean;
+    } = {},
+  ) {
+    const output = computeSchedule(activities, edges, {
+      dataDate: '2026-01-05',
+      calendar: FIVE_DAY,
+      ...(options.progressMode ? { progressMode: options.progressMode } : {}),
+      useExpectedFinishDates: options.expectedFinish ?? false,
+    });
+    return new Map<string, EngineResult>(output.results.map((r) => [r.activityId, r]));
+  }
+
+  const started = (extra: Partial<EngineActivity> = {}) =>
+    task('A', 10, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY, ...extra });
+
+  it('SS: a started predecessor with SS +3 d draws B at its early start, not 01-08 (AC2)', () => {
+    const b = runFive([started(), task('B', 1)], [edge('A', 'B', 'SS', 3)]).get('B')!;
+    expect(b.earlyStart).toBe('2026-01-05');
+    expect(b.visualEffectiveStart).toBe('2026-01-05');
+  });
+
+  it('FF: a complete predecessor draws its FF successor at its early start (AC3)', () => {
+    const complete = task('A', 5, { actualStart: '2025-12-29', actualFinish: '2025-12-30' });
+    const b = runFive([complete, task('B', 1)], [edge('A', 'B', 'FF')]).get('B')!;
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+    expect(b.visualEffectiveFinish).toBe(b.earlyFinish);
+  });
+
+  it('SF: a started predecessor draws its SF +5 d successor at its early start (AC3)', () => {
+    const b = runFive([started(), task('B', 1)], [edge('A', 'B', 'SF', 5)]).get('B')!;
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+    expect(b.visualEffectiveFinish).toBe(b.earlyFinish);
+  });
+
+  it('a chain A (complete) -> B -> C corrects transitively (AC4)', () => {
+    const complete = task('A', 5, { actualStart: '2025-12-29', actualFinish: '2025-12-30' });
+    const byId = runFive([complete, task('B', 2), task('C', 1)], [edge('A', 'B'), edge('B', 'C')]);
+    for (const id of ['B', 'C']) {
+      const r = byId.get(id)!;
+      expect(r.visualEffectiveStart, `${id} start`).toBe(r.earlyStart);
+      expect(r.visualEffectiveFinish, `${id} finish`).toBe(r.earlyFinish);
+    }
+  });
+
+  it('a placement on a started predecessor does not push its successor (AC5)', () => {
+    const byId = runFive([started({ visualStart: '2026-01-20' }), task('B', 1)], [edge('A', 'B')]);
+    const b = byId.get('B')!;
+    expect(b.earlyStart).toBe('2026-01-07');
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+  });
+
+  it('a resume date after the data date moves B LATER than the old drawing (AC6)', () => {
+    // Planned 3 d but 2 d remaining from 02-02: Pass 1 finishes 02-03, so B starts 02-04. The old
+    // Pass 2 propagated 01-05 + 3 d and drew B on 01-08 — the fix goes both ways.
+    const a = task('A', 3, {
+      actualStart: '2025-12-29',
+      remainingMinutes: 2 * DAY,
+      resumeDate: '2026-02-02',
+    });
+    const b = runFive([a, task('B', 1)], [edge('A', 'B')]).get('B')!;
+    expect(b.earlyStart).toBe('2026-02-04');
+    expect(b.visualEffectiveStart).toBe('2026-02-04');
+  });
+
+  describe('out of sequence R1 -> R2 (started) -> R3 (AC7)', () => {
+    const activities = [
+      task('R1', 3),
+      task('R2', 5, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY }),
+      task('R3', 1),
+    ];
+    const edges = [edge('R1', 'R2'), edge('R2', 'R3')];
+
+    it('draws R3 at its early start under both recalc modes, and the modes still differ', () => {
+      const retained = runFive(activities, edges, { progressMode: 'RETAINED_LOGIC' }).get('R3')!;
+      const override = runFive(activities, edges, { progressMode: 'PROGRESS_OVERRIDE' }).get('R3')!;
+      expect(retained.visualEffectiveStart).toBe(retained.earlyStart);
+      expect(override.visualEffectiveStart).toBe(override.earlyStart);
+      expect(retained.earlyStart).not.toBe(override.earlyStart);
+    });
+  });
+
+  it('a placed successor of a complete predecessor is no longer in conflict (AC8)', () => {
+    const complete = task('A', 5, { actualStart: '2025-12-29', actualFinish: '2025-12-30' });
+    const byId = runFive([complete, task('B', 1, { visualStart: '2026-01-06' })], [edge('A', 'B')]);
+    const b = byId.get('B')!;
+    expect(b.visualConflict).toBe(false);
+    expect(b.visualConflictReason).toBeNull();
+  });
+
+  it('Expected Finish with a placement: B starts where the drawn A bar ends (AC9)', () => {
+    // A resizes to 2 d (01-05..01-06); placed 5 working days late it is drawn 01-12..01-13, and B
+    // follows on 01-14. The old Pass 2 propagated the full 10 d planned duration instead.
+    const a = task('A', 10, { expectedFinish: '2026-01-06', visualStart: '2026-01-12' });
+    const byId = runFive([a, task('B', 1)], [edge('A', 'B')], { expectedFinish: true });
+    expect(byId.get('A')!.visualEffectiveFinish).toBe('2026-01-13');
+    expect(byId.get('B')!.visualEffectiveStart).toBe('2026-01-14');
+  });
+
+  it('an unprogressed plan with Expected Finish off is drawn exactly as before (AC10)', () => {
+    // Captured from the unfixed engine, so the fix is shown not to touch this shape.
+    const byId = runFive(
+      [
+        task('X', 3, { visualStart: '2026-01-12', expectedFinish: '2026-01-06' }),
+        task('Y', 2),
+        task('Z', 1),
+      ],
+      [edge('X', 'Y'), edge('Y', 'Z', 'SS', 1)],
+    );
+    const drawn = Object.fromEntries(
+      [...byId].map(([id, r]) => [id, [r.visualEffectiveStart, r.visualEffectiveFinish]]),
+    );
+    expect(drawn).toEqual(EXPECTED_UNCHANGED);
+  });
+});
+
+describe('computeSchedule — FC-11b, parity with a successor of every progress shape (#421)', () => {
+  const DAY = 1440;
+
+  it('visualEffective* equals early* over the whole map when nothing is placed', () => {
+    const activities: readonly EngineActivity[] = [
+      task('STARTED', 4, { actualStart: '2026-01-02', remainingMinutes: 2 * DAY }),
+      task('DONE', 4, { actualStart: '2026-01-02', actualFinish: '2026-01-05' }),
+      task('DONE_NO_START', 4, { actualFinish: '2026-01-05' }),
+      task('AFTER_STARTED', 1),
+      task('AFTER_DONE', 1),
+      task('AFTER_DONE_NO_START', 1),
+      task('SS_AFTER_STARTED', 1),
+    ];
+    const edges: readonly EngineEdge[] = [
+      edge('STARTED', 'AFTER_STARTED'),
+      edge('DONE', 'AFTER_DONE'),
+      edge('DONE_NO_START', 'AFTER_DONE_NO_START'),
+      edge('STARTED', 'SS_AFTER_STARTED', 'SS', 3),
+    ];
+    const { results } = run(activities, edges);
+    const actual = Object.fromEntries(
+      results.map((r) => [
+        r.activityId,
+        { start: r.visualEffectiveStart, finish: r.visualEffectiveFinish },
+      ]),
+    );
+    const expected = Object.fromEntries(
+      results.map((r) => [r.activityId, { start: r.earlyStart, finish: r.earlyFinish }]),
+    );
+    expect(actual).toEqual(expected);
+  });
 });

@@ -103,6 +103,15 @@ export interface ComputeOptions {
 }
 
 /**
+ * An activity with any actual is drawn — and passes on to its successors — where Pass 1 puts it
+ * (M-P; #421). `actualStartInst` and a COMPLETE status are derived independently
+ * (`progress.ts:84-86`), so a finish with no start still counts.
+ */
+function isFrozenByActuals(progress: ResolvedProgress): boolean {
+  return progress.actualStartInst !== null || progress.status === 'COMPLETE';
+}
+
+/**
  * The calendar day of the working-minute at inclusive offset `index` on `calendar` (ADR-0023).
  * Take the instant one working-minute later (the exclusive boundary after `index`) and step back
  * a single real minute, so a start or finish that lands exactly on a **non-working gap** reads as
@@ -296,8 +305,9 @@ export function computeSchedule(
   }
 
   // Pass 2 — effective-Visual (ADR-0033, forward-only). Independent of the pure passes: it reads
-  // only `earlyStart` (for the drift baseline) and never writes back, so `early*`/`late*`/float stay
-  // a pure function of the network (golden-suite parity). Each activity's DISPLAY start is its
+  // `earlyStart` (for the drift baseline) and, for a progressed activity, Pass 1's instants (#421,
+  // `docs/specs/progressed-predecessor-visual/`), and never writes back, so `early*`/`late*`/float
+  // stay a pure function of the network (golden-suite parity). Each activity's DISPLAY start is its
   // hand-placed `visualStart` when set — honoured exactly, even if infeasible (stay-and-flag) — else
   // its logic-earliest. Successors are pushed from the FEASIBLE finish, so a conflicted bar never
   // implies an impossible downstream sequence. All on the activity's own calendar (ADR-0037).
@@ -347,8 +357,18 @@ export function computeSchedule(
     const display = placed ?? logicEarliest;
     const prop = placed !== null ? Math.max(placed, logicEarliest) : logicEarliest;
     visualDisplayStart.set(id, display);
-    visualPropStart.set(id, prop);
-    visualPropFinish.set(id, duration === 0 ? prop : advanceWorking(cal, prop, duration));
+    // What this activity passes to its successors (#421, ADR-0148 amendment 1). Reported progress
+    // is inert against a placement, so a progressed activity passes on Pass 1's instants — the ones
+    // its own bar is drawn on (`isFrozenByActuals`). A not-started one passes its placed start plus
+    // Pass 1's span, so Expected Finish's resize reaches the successor as it reaches the bar.
+    if (isFrozenByActuals(progressOf.get(id)!)) {
+      visualPropStart.set(id, earlyStart.get(id)!);
+      visualPropFinish.set(id, earlyFinish.get(id)!);
+    } else {
+      const span = effectiveDurationById.get(id)!;
+      visualPropStart.set(id, prop);
+      visualPropFinish.set(id, span === 0 ? prop : advanceWorking(cal, prop, span));
+    }
     // Conflict = a placement earlier than logic/lower-bound constraints allow (stay-and-flag).
     visualConflictMap.set(id, placed !== null && placed < logicEarliest);
     // Drift = placement − pure-network early start, measured on the activity's own calendar.
@@ -874,7 +894,7 @@ export function computeSchedule(
       : workingIndexDate(cal, dataDate, reportIndex(inclusiveLateFinishOwn));
     // Pass 2 defers to Pass 1 wherever an actual froze an endpoint (M-P) — see the two
     // `visualEffective*` fields below for why this is one predicate and not two.
-    const frozenByActuals = started || isComplete;
+    const frozenByActuals = isFrozenByActuals(progress);
 
     // Project finish = the latest inclusive finish INSTANT, displayed on its own calendar. A task's
     // last occupied minute is `efInst − 1` (one real minute before its exclusive end boundary); a
