@@ -26,10 +26,11 @@ export {
 export {
   APPLY_LEVELLING_CONFLICT,
   APPLY_LEVELLING_LIMIT,
-  APPLY_LEVELLING_TOO_MANY,
   applyLevellingAnnouncement,
   applyLevellingLabel,
   applyLevellingLines,
+  applyLevellingSummary,
+  applyLevellingTooMany,
   levellingApplicationSnapshots,
 } from './model/levelling-application';
 export { ApplyLevellingDialog } from './components/ApplyLevellingDialog';

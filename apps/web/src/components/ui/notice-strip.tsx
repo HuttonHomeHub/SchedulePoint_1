@@ -28,6 +28,7 @@ const noticeStripVariants = cva('flex gap-3 border px-3 text-sm', {
       muted: 'border-border bg-muted/60',
       info: 'border-info/40 bg-info/10 text-info-text',
       warning: 'border-warning/40 bg-warning/10 text-warning-text',
+      destructive: 'border-destructive/40 bg-destructive/10 text-destructive-text',
     },
     emphasis: {
       solid: 'rounded-md',

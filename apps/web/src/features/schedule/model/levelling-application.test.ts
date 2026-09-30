@@ -7,10 +7,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   APPLY_LEVELLING_LIMIT,
-  APPLY_LEVELLING_TOO_MANY,
   applyLevellingAnnouncement,
   applyLevellingLabel,
   applyLevellingLines,
+  applyLevellingSummary,
+  applyLevellingTooMany,
   levellingApplicationSnapshots,
 } from './levelling-application';
 
@@ -113,8 +114,8 @@ describe('labels', () => {
 
   it('states the limit as the batch route does', () => {
     expect(APPLY_LEVELLING_LIMIT).toBe(2000);
-    expect(APPLY_LEVELLING_TOO_MANY).toBe(
-      'More than 2,000 activities would move; the limit for one step is 2,000.',
+    expect(applyLevellingTooMany(2300)).toBe(
+      'Nothing was changed. Levelling would move 2,300 activities, and one step can apply at most 2,000.',
     );
   });
 });
@@ -136,9 +137,14 @@ describe('applyLevellingLines', () => {
 
   it('counts hand-placed bars only when there are some, at one and many', () => {
     expect(byKey(application())['hand-placed']).toBeUndefined();
-    expect(byKey(application({ items: [item('a', { wasPlaced: true })] }))['hand-placed']).toBe(
-      '1 of them was placed by hand. Its placement is replaced, and Undo puts it back.',
-    );
+    expect(
+      byKey(
+        application({
+          rows: [row('a'), row('b')],
+          items: [item('a', { wasPlaced: true }), item('b')],
+        }),
+      )['hand-placed'],
+    ).toBe('1 moves on its own and 1 was placed by hand.');
     expect(
       byKey(
         application({
@@ -146,48 +152,31 @@ describe('applyLevellingLines', () => {
           items: [item('a', { wasPlaced: true }), item('b', { wasPlaced: true })],
         }),
       )['hand-placed'],
-    ).toBe(
-      '2 of them were placed by hand. Their placements are replaced, and Undo puts them back.',
-    );
+    ).toBe('All 2 were placed by hand.');
   });
 
   it('counts the bars rounded to the next working day, and explains why', () => {
     expect(byKey(application())['next-day']).toBeUndefined();
     expect(byKey(application({ items: [item('a', { roundedToNextDay: true })] }))['next-day']).toBe(
-      '1 of them starts on the next working day, because the resource frees up part-way through a day and a bar can only start at the beginning of one.',
+      '1 of them starts on the next working day, because the resource is only free part-way through a day.',
     );
   });
 
-  it('names the bars left to logic, and why', () => {
-    expect(byKey(application())['left-to-logic']).toBeUndefined();
-    expect(byKey(application({ leftToLogic: [{ id: 'x', name: 'X' }] }))['left-to-logic']).toBe(
-      '1 activity is left where its links put it, because levelling would start it before its links allow.',
-    );
-    expect(
-      byKey(
-        application({
-          leftToLogic: [
-            { id: 'x', name: 'X' },
-            { id: 'y', name: 'Y' },
-          ],
-        }),
-      )['left-to-logic'],
-    ).toBe(
-      '2 activities are left where their links put them, because levelling would start them before their links allow.',
-    );
-  });
-
-  it('warns about hand-placed bars the apply leaves earlier than their links allow', () => {
-    expect(byKey(application())['conflicting-placed']).toBeUndefined();
-    expect(
-      byKey(application({ conflictingPlaced: [{ id: 'p', name: 'P' }] }))['conflicting-placed'],
-    ).toBe('1 hand-placed activity will start earlier than its links allow once the others move.');
+  it('leaves the bars left to logic and the hand-placed conflicts to their sections', () => {
+    const keys = applyLevellingLines(
+      application({
+        leftToLogic: [{ id: 'x', name: 'X' }],
+        conflictingPlaced: [{ id: 'p', name: 'P' }],
+      }),
+    ).map((l) => l.key);
+    expect(keys).not.toContain('left-to-logic');
+    expect(keys).not.toContain('conflicting-placed');
   });
 
   it('warns about date limits broken, only when some are', () => {
     expect(byKey(application())['later-than-bound']).toBeUndefined();
     expect(byKey(application({ laterThanBoundIntroduced: 3 }))['later-than-bound']).toBe(
-      '3 activities will end up past a date limit they met before.',
+      '3 activities will finish after a deadline they currently meet.',
     );
   });
 
@@ -210,10 +199,23 @@ describe('applyLevellingLines', () => {
       'Resource levelling will have nothing left to move.',
     );
     expect(byKey(application({ remainingAfterApply: 1 })).remaining).toBe(
-      '1 activity will still clash. You can apply again.',
+      '1 activity will still need the same resource at the same time. You can apply again to sort it out.',
     );
     expect(byKey(application({ remainingAfterApply: 5 })).remaining).toBe(
-      '5 activities will still clash. You can apply again.',
+      '5 activities will still need the same resource at the same time. You can apply again to sort them out.',
+    );
+  });
+});
+
+describe('applyLevellingLines order and applyLevellingSummary', () => {
+  it('puts the finish and what remains first', () => {
+    const keys = applyLevellingLines(application()).map((l) => l.key);
+    expect(keys.slice(0, 3)).toEqual(['finish', 'remaining', 'moves']);
+  });
+
+  it('announces what moves, then the finish, then what remains', () => {
+    expect(applyLevellingSummary(applyLevellingLines(application()))).toBe(
+      '1 activity will move to its levelled date. The plan finish moves from 01 Apr 2026 to 08 Apr 2026. Resource levelling will have nothing left to move.',
     );
   });
 });

@@ -1077,11 +1077,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       } finally {
         autoRecalc.release(holdToken);
       }
-      // The preview described a plan that has just changed, so it is dropped rather than left to be
-      // reopened; the recalculation's own sweep would do it later, and "later" is the window a
-      // planner could press the command again and read a list that no longer exists.
+      // The preview described a plan that has just changed, so it is marked stale rather than left
+      // to be reopened; the recalculation's own sweep would do it later, and "later" is the window a
+      // planner could press the command again and read a list that no longer exists. `refetchType:
+      // 'none'` because the dialog is still mounted when this runs and an immediate re-read would run
+      // the engine twice for a list nobody is going to see — the next opening fetches fresh.
       void queryClient.invalidateQueries({
         queryKey: scheduleKeys.levellingApplication(orgSlug, planId),
+        refetchType: 'none',
       });
       announce(applyLevellingAnnouncement(application.rows.length));
       autoRecalc.notify();

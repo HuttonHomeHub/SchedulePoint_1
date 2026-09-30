@@ -1,11 +1,12 @@
 import type { ActivitySummary, LevellingApplication } from '@repo/types';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { scheduleKeys } from '@/features/schedule';
 import { ApiFetchError } from '@/lib/api/client';
 
 /**
@@ -222,8 +223,24 @@ describe('applyLevelling — the write', () => {
     expect(h.notify).toHaveBeenCalledOnce();
     expect(spy).toHaveBeenCalledWith({
       queryKey: expect.arrayContaining(['levelling-application']) as unknown,
+      refetchType: 'none',
     });
     spy.mockRestore();
+  });
+
+  it('marks the preview stale without re-hitting its route while the dialog is still open', async () => {
+    const queryKey = scheduleKeys.levellingApplication('acme', 'p1');
+    const queryFn = vi.fn(() => Promise.resolve(preview()));
+    // An observer is what the open dialog is: an active subscriber is the only thing an invalidation
+    // refetches, so without one this test could not fail.
+    const observer = new QueryObserver(queryClient, { queryKey, queryFn });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledOnce());
+    await apply(preview());
+    await Promise.resolve();
+    expect(queryFn).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+    unsubscribe();
   });
 });
 

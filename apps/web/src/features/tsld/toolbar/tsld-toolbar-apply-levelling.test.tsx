@@ -94,13 +94,20 @@ describe('the Apply levelled dates… command', () => {
   it('says levelling is off when it is, and the plan setting outranks "moved nothing"', () => {
     renderRow(ctx({ levelResources: false, levelledMoveCount: 0 }));
     expect(command()).toHaveAttribute('aria-disabled', 'true');
+    expect(command()).toHaveAccessibleDescription(
+      'Resource levelling is off for this plan. Turn it on in Schedule settings.',
+    );
+  });
+
+  it('does not send a reader to a setting they cannot change', () => {
+    renderRow(ctx({ levelResources: false, canEditSchedule: false }));
     expect(command()).toHaveAccessibleDescription('Resource levelling is off for this plan');
   });
 
   it('says levelling moved nothing, and that outranks "waiting to recalculate"', () => {
     renderRow(ctx({ levelledMoveCount: 0, scheduleStale: true }));
     expect(command()).toHaveAttribute('aria-disabled', 'true');
-    expect(command()).toHaveAccessibleDescription('Levelling moved nothing');
+    expect(command()).toHaveAccessibleDescription('Levelling hasn’t moved any bars');
   });
 
   it('says it is waiting for the schedule when the dates on screen are behind the plan', () => {

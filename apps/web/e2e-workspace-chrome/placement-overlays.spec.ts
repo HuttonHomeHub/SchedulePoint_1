@@ -361,7 +361,7 @@ test.describe('the feasible window and the levelled lens', () => {
     ).toBeVisible({ timeout: 30_000 });
     // Nothing left to apply, and the command says so rather than opening an empty dialog.
     await expect(command).toHaveAttribute('aria-disabled', 'true');
-    await expect(command).toHaveAccessibleDescription('Levelling moved nothing');
+    await expect(command).toHaveAccessibleDescription('Levelling hasn’t moved any bars');
 
     // ── 4 · ONE undo step returns every bar, and the ghosts come back ─────────────────────────
     const undo = page.getByRole('button', { name: /^Undo\b/ });

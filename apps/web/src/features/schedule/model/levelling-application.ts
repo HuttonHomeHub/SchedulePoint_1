@@ -15,8 +15,14 @@ import { formatCalendarDate } from '@/lib/format-date';
 /** The batch route's cap (`@ArrayMaxSize(2000)`, `update-placements.dto.ts`); one step cannot exceed it. */
 export const APPLY_LEVELLING_LIMIT = 2000;
 
-/** The sentence shown instead of the list when the preview is over {@link APPLY_LEVELLING_LIMIT}. */
-export const APPLY_LEVELLING_TOO_MANY = `More than ${APPLY_LEVELLING_LIMIT.toLocaleString('en-GB')} activities would move; the limit for one step is ${APPLY_LEVELLING_LIMIT.toLocaleString('en-GB')}.`;
+/**
+ * The sentence shown instead of the list when the preview is over {@link APPLY_LEVELLING_LIMIT}.
+ * It states the real count against the limit and says nothing was written; no way forward is named
+ * because the product has none (there is no way to level part of a plan).
+ */
+export function applyLevellingTooMany(count: number): string {
+  return `Nothing was changed. Levelling would move ${count.toLocaleString()} activities, and one step can apply at most ${APPLY_LEVELLING_LIMIT.toLocaleString()}.`;
+}
 
 /**
  * The stale-version sentence for this write. The batch is all-or-nothing, so "nothing was moved" is
@@ -99,8 +105,12 @@ export interface ApplyLevellingLine {
 
 /**
  * The consequences the dialog states before it asks, **one preview field per sentence** so a line
- * cannot say more than the response does. The one the plan flags as the risk is the last: "no clashes
- * left" is only said when `remainingAfterApply` is 0.
+ * cannot say more than the response does. The plan finish and what remains come first because they
+ * are the answer to "what does this do to my plan"; the one the plan flags as the risk is
+ * `remaining`: "nothing left to move" is only said when `remainingAfterApply` is 0.
+ *
+ * The bars left to their links and the hand-placed bars in conflict are not sentences here: each has
+ * a section of its own whose header and count say the same thing, and a second wording drifts.
  *
  * Empty for a preview with nothing to write — the dialog has its own "nothing to apply" state and
  * says it once.
@@ -109,51 +119,6 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
   const lines: ApplyLevellingLine[] = [];
   const moving = application.items;
   if (moving.length === 0) return lines;
-
-  lines.push({
-    key: 'moves',
-    text: `${plural(moving.length, 'activity', 'activities')} will move to ${pick(moving.length, 'its', 'their')} levelled ${pick(moving.length, 'date', 'dates')}.`,
-  });
-
-  const placed = moving.filter((item) => item.wasPlaced).length;
-  if (placed > 0) {
-    lines.push({
-      key: 'hand-placed',
-      text: `${placed === 1 ? '1 of them was' : `${String(placed)} of them were`} placed by hand. ${pick(placed, 'Its placement is', 'Their placements are')} replaced, and Undo puts ${pick(placed, 'it', 'them')} back.`,
-    });
-  }
-
-  const rounded = moving.filter((item) => item.roundedToNextDay).length;
-  if (rounded > 0) {
-    lines.push({
-      key: 'next-day',
-      text: `${rounded === 1 ? '1 of them starts' : `${String(rounded)} of them start`} on the next working day, because the resource frees up part-way through a day and a bar can only start at the beginning of one.`,
-    });
-  }
-
-  const logic = application.leftToLogic.length;
-  if (logic > 0) {
-    lines.push({
-      key: 'left-to-logic',
-      text: `${plural(logic, 'activity', 'activities')} ${pick(logic, 'is', 'are')} left where ${pick(logic, 'its', 'their')} links put ${pick(logic, 'it', 'them')}, because levelling would start ${pick(logic, 'it', 'them')} before ${pick(logic, 'its', 'their')} links allow.`,
-    });
-  }
-
-  const conflicting = application.conflictingPlaced.length;
-  if (conflicting > 0) {
-    lines.push({
-      key: 'conflicting-placed',
-      text: `${plural(conflicting, 'hand-placed activity', 'hand-placed activities')} will start earlier than ${pick(conflicting, 'its', 'their')} links allow once the others move.`,
-    });
-  }
-
-  const bound = application.laterThanBoundIntroduced;
-  if (bound > 0) {
-    lines.push({
-      key: 'later-than-bound',
-      text: `${plural(bound, 'activity', 'activities')} will end up past a date limit ${pick(bound, 'it', 'they')} met before.`,
-    });
-  }
 
   const { projectFinishBefore: before, projectFinishAfter: after } = application;
   if (before !== null && after !== null) {
@@ -166,13 +131,58 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
     });
   }
 
+  const remaining = application.remainingAfterApply;
   lines.push({
     key: 'remaining',
     text:
-      application.remainingAfterApply === 0
+      remaining === 0
         ? 'Resource levelling will have nothing left to move.'
-        : `${plural(application.remainingAfterApply, 'activity', 'activities')} will still clash. You can apply again.`,
+        : `${plural(remaining, 'activity', 'activities')} will still need the same resource at the same time. You can apply again to sort ${pick(remaining, 'it', 'them')} out.`,
   });
 
+  lines.push({
+    key: 'moves',
+    text: `${plural(moving.length, 'activity', 'activities')} will move to ${pick(moving.length, 'its', 'their')} levelled ${pick(moving.length, 'date', 'dates')}.`,
+  });
+
+  // The two counts add up to the one above, so the section headers below read as its parts.
+  const placed = moving.filter((item) => item.wasPlaced).length;
+  if (placed > 0) {
+    const own = moving.length - placed;
+    lines.push({
+      key: 'hand-placed',
+      text:
+        own === 0
+          ? `${placed === 1 ? 'It was' : `All ${String(placed)} were`} placed by hand.`
+          : `${own === 1 ? '1 moves on its own' : `${String(own)} move on their own`} and ${placed === 1 ? '1 was' : `${String(placed)} were`} placed by hand.`,
+    });
+  }
+
+  const rounded = moving.filter((item) => item.roundedToNextDay).length;
+  if (rounded > 0) {
+    lines.push({
+      key: 'next-day',
+      text: `${rounded === 1 ? '1 of them starts' : `${String(rounded)} of them start`} on the next working day, because the resource is only free part-way through a day.`,
+    });
+  }
+
+  const bound = application.laterThanBoundIntroduced;
+  if (bound > 0) {
+    lines.push({
+      key: 'later-than-bound',
+      text: `${plural(bound, 'activity', 'activities')} will finish after a deadline ${pick(bound, 'it currently meets', 'they currently meet')}.`,
+    });
+  }
+
   return lines;
+}
+
+/**
+ * What a screen reader is told once the preview settles: what moves, then the two things a planner
+ * decides on. One sentence per line, so it cannot say more than the list does.
+ */
+export function applyLevellingSummary(lines: ApplyLevellingLine[]): string {
+  return ['moves', 'finish', 'remaining']
+    .flatMap((key) => lines.filter((line) => line.key === key).map((line) => line.text))
+    .join(' ');
 }

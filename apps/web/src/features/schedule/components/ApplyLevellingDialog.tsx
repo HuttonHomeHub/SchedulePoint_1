@@ -3,13 +3,15 @@ import type {
   LevellingApplicationItem,
   LevellingApplicationNamedActivity,
 } from '@repo/types';
-import { useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
 import { useLevellingApplication } from '../api/use-schedule';
 import {
   APPLY_LEVELLING_LIMIT,
-  APPLY_LEVELLING_TOO_MANY,
   applyLevellingLines,
+  applyLevellingSummary,
+  applyLevellingTooMany,
 } from '../model/levelling-application';
 
 import { Button } from '@/components/ui/button';
@@ -18,7 +20,6 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormSection } from '@/components/ui/form-layout';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { QueryErrorState } from '@/components/ui/query-error-state';
-import { Spinner } from '@/components/ui/spinner';
 import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -58,7 +59,9 @@ export interface ApplyLevellingDialogProps {
 /** A list longer than this is windowed inside a fixed-height region (ADR-0165); shorter ones are plain. */
 const WINDOWED_FROM = 8;
 
-const EMPTY_TITLE = 'Nothing to apply';
+const EMPTY_TITLE = 'Nothing left to apply.';
+const REFRESH_NOTE_ID = 'apply-levelling-refresh-note';
+const LOADING_TEXT = 'Working out what levelling would move…';
 
 function loadErrorLabel(error: unknown): string {
   if (error instanceof ApiFetchError) {
@@ -66,6 +69,10 @@ function loadErrorLabel(error: unknown): string {
     if (error.status === 422) return error.error.message;
   }
   return 'Couldn’t work out what levelling would move. Please try again.';
+}
+
+function activityCount(count: number): string {
+  return `${String(count)} ${count === 1 ? 'activity' : 'activities'}`;
 }
 
 function activityLabel(item: { name: string; code: string | null }): string {
@@ -141,7 +148,7 @@ function NameList({
   const shown = names.slice(0, NAMES_SHOWN);
   const more = names.length - shown.length;
   return (
-    <FormSection title={title} description={description} aside={String(names.length)}>
+    <FormSection title={title} description={description} aside={activityCount(names.length)}>
       <ul className="flex flex-col gap-1 text-sm">
         {shown.map((named) => (
           <li key={named.id}>{named.name}</li>
@@ -165,73 +172,21 @@ function ApplyLevellingBody({
   const query = useLevellingApplication(orgSlug, planId, true);
   const [pending, setPending] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-
-  const closeButton = (label: string): React.ReactElement => (
-    <Button type="button" variant="outline" onClick={onClose}>
-      {label}
-    </Button>
-  );
-
-  if (query.isPending) {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Spinner label="Working out what levelling would move…" />
-          <span aria-hidden="true">Working out what levelling would move…</span>
-        </p>
-        <div className="flex justify-end gap-2">{closeButton('Cancel')}</div>
-      </div>
-    );
-  }
-
-  if (query.isError) {
-    return (
-      <div className="flex flex-col gap-4">
-        <QueryErrorState label={loadErrorLabel(query.error)} onRetry={() => void query.refetch()} />
-        <div className="flex justify-end gap-2">{closeButton('Close')}</div>
-      </div>
-    );
-  }
+  // Where focus goes when the conflict strip (and the "Check again" button the planner was on) is
+  // removed: a stable container that outlives every state of the dialog (ADR-0135, WCAG 2.4.3).
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const application = query.data;
-  const count = application.rows.length;
-
-  if (count === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium">{EMPTY_TITLE}</p>
-          <p className="text-muted-foreground text-sm">
-            {application.leftToLogic.length > 0
-              ? 'Every bar levelling would move is left where its links put it, because moving it would start it before its links allow.'
-              : 'Resource levelling has no bar left to move.'}
-          </p>
-        </div>
-        <div className="flex justify-end gap-2">{closeButton('Close')}</div>
-      </div>
-    );
-  }
-
-  if (count > APPLY_LEVELLING_LIMIT) {
-    return (
-      <div className="flex flex-col gap-4">
-        <p role="alert" className="text-destructive-text text-sm">
-          {APPLY_LEVELLING_TOO_MANY}
-        </p>
-        <div className="flex justify-end gap-2">{closeButton('Close')}</div>
-      </div>
-    );
-  }
-
-  const lines = applyLevellingLines(application);
-  const byHand = application.items.filter((item) => item.wasPlaced);
-  const others = application.items.filter((item) => !item.wasPlaced);
+  const count = application?.rows.length ?? 0;
+  const lines = application ? applyLevellingLines(application) : [];
   // A recalculation that lands under the open dialog sweeps the preview's key; until the new list
   // arrives the one on screen is about to be replaced, so it is not offered for confirmation.
-  const refreshing = query.isFetching;
+  const refreshing = query.isFetching && !query.isPending;
 
   const apply = async (): Promise<void> => {
+    if (!application) return;
     setPending(true);
     setConflict(null);
     setFailure(null);
@@ -243,99 +198,191 @@ function ApplyLevellingBody({
       }
       setConflict(outcome.conflict);
     } catch {
+      // The batch is all-or-nothing on the server (`updatePlacements`, one transaction), so no bar
+      // has moved.
       setFailure(
-        'Couldn’t apply levelled dates. Nothing was changed that you can see — try again.',
+        'Couldn’t apply the new dates. Nothing was changed. Try again, and if it keeps failing, reload the page.',
       );
     } finally {
       setPending(false);
     }
   };
 
+  const checkAgain = async (): Promise<void> => {
+    setChecking(true);
+    try {
+      await query.refetch();
+    } finally {
+      // Focus moves off the button before the strip that holds it goes, so it is never dropped.
+      contentRef.current?.focus();
+      setConflict(null);
+      setChecking(false);
+    }
+  };
+
+  let status = '';
+  let content: React.ReactNode = null;
+  let closeLabel = 'Cancel';
+  if (query.isPending) {
+    status = LOADING_TEXT;
+    content = (
+      <p className="text-muted-foreground flex items-center gap-2 text-sm" aria-hidden="true">
+        <Loader2 className="size-5 animate-spin" />
+        {LOADING_TEXT}
+      </p>
+    );
+  } else if (query.isError || !application) {
+    closeLabel = 'Close';
+    content = (
+      <QueryErrorState label={loadErrorLabel(query.error)} onRetry={() => void query.refetch()} />
+    );
+  } else if (count === 0) {
+    closeLabel = 'Close';
+    const why =
+      application.leftToLogic.length > 0
+        ? 'Every bar levelling would move is left where its links put it, because moving it would start it before its links allow.'
+        : 'Resource levelling has no bar left to move.';
+    status = `${EMPTY_TITLE} ${why}`;
+    content = (
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{EMPTY_TITLE}</p>
+        <p className="text-muted-foreground text-sm">{why}</p>
+      </div>
+    );
+  } else if (count > APPLY_LEVELLING_LIMIT) {
+    closeLabel = 'Close';
+    status = applyLevellingTooMany(count);
+    content = (
+      <NoticeStrip tone="destructive" density="comfortable" messageFit="grow" message={status} />
+    );
+  } else {
+    const byHand = application.items.filter((item) => item.wasPlaced);
+    const others = application.items.filter((item) => !item.wasPlaced);
+    const conflicting = application.conflictingPlaced.length;
+    status = applyLevellingSummary(lines);
+    content = (
+      <>
+        <ul className="flex flex-col gap-1 text-sm">
+          {lines.map((line) => (
+            <li key={line.key} data-line={line.key}>
+              {line.text}
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex flex-col gap-5">
+          {byHand.length > 0 ? (
+            <FormSection
+              title="Placed by hand"
+              description="You placed these bars yourself. Applying replaces where you put them. Undo puts them back."
+              aside={activityCount(byHand.length)}
+            >
+              <MoveTable
+                caption="Hand-placed activities that will move"
+                columns={PLACED_COLUMNS}
+                items={byHand}
+              />
+            </FormSection>
+          ) : null}
+          {others.length > 0 ? (
+            <FormSection
+              title={byHand.length > 0 ? 'Other bars that will move' : 'Bars that will move'}
+              aside={activityCount(others.length)}
+            >
+              <MoveTable
+                caption="Activities that will move"
+                columns={MOVE_COLUMNS}
+                items={others}
+              />
+            </FormSection>
+          ) : null}
+          {application.leftToLogic.length > 0 ? (
+            <NameList
+              title="Left where their links put them"
+              description="Levelling would start these before their links allow. They are not moved."
+              names={application.leftToLogic}
+            />
+          ) : null}
+          {conflicting > 0 ? (
+            <NameList
+              title="Will start earlier than their links allow"
+              description={`${conflicting === 1 ? '1 bar you placed by hand will start earlier than its links allow' : `${String(conflicting)} bars you placed by hand will start earlier than their links allow`} once the others move.`}
+              names={application.conflictingPlaced}
+            />
+          ) : null}
+        </div>
+
+        <p className="text-muted-foreground text-sm">
+          One Undo puts every bar back. You can’t undo after reloading the page.
+        </p>
+      </>
+    );
+  }
+
+  const canApply = application !== undefined && count > 0 && count <= APPLY_LEVELLING_LIMIT;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Mounted before anything in it changes, so the settled result is announced (WCAG 4.1.3). */}
+      <p role="status" className="sr-only">
+        {status}
+      </p>
+
       {conflict ? (
         <NoticeStrip role="alert" tone="warning" density="comfortable" message={conflict}>
           <Button
             type="button"
             variant="outline"
             size="sm"
+            aria-disabled={checking}
             onClick={() => {
-              setConflict(null);
-              void query.refetch();
+              if (checking) return;
+              void checkAgain();
             }}
           >
-            Check again
+            {checking ? 'Checking…' : 'Check again'}
           </Button>
         </NoticeStrip>
       ) : null}
       {failure ? <NoticeStrip role="alert" tone="warning" message={failure} /> : null}
 
-      <ul className="flex flex-col gap-1 text-sm">
-        {lines.map((line) => (
-          <li key={line.key} data-line={line.key}>
-            {line.text}
-          </li>
-        ))}
-      </ul>
-
-      <div className="flex flex-col gap-5">
-        {others.length > 0 ? (
-          <FormSection title="Will move" aside={String(others.length)}>
-            <MoveTable caption="Activities that will move" columns={MOVE_COLUMNS} items={others} />
-          </FormSection>
-        ) : null}
-        {byHand.length > 0 ? (
-          <FormSection
-            title="Placed by hand"
-            description="You placed these bars yourself. Applying replaces that placement."
-            aside={String(byHand.length)}
-          >
-            <MoveTable
-              caption="Hand-placed activities that will move"
-              columns={PLACED_COLUMNS}
-              items={byHand}
-            />
-          </FormSection>
-        ) : null}
-        {application.leftToLogic.length > 0 ? (
-          <NameList
-            title="Left where their links put them"
-            description="Levelling would start these before their links allow, so they are not moved."
-            names={application.leftToLogic}
-          />
-        ) : null}
-        {application.conflictingPlaced.length > 0 ? (
-          <NameList
-            title="Will start earlier than their links allow"
-            description="You placed these by hand, and they will clash with their links once the others move."
-            names={application.conflictingPlaced}
-          />
-        ) : null}
+      <div
+        ref={contentRef}
+        tabIndex={-1}
+        role="group"
+        aria-label="Levelled dates"
+        className="focus-visible:ring-ring flex flex-col gap-4 rounded-md focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {content}
       </div>
 
-      <p className="text-muted-foreground text-sm">
-        Undo reverses all of it in one step. Undo is lost if you reload the page.
-      </p>
-
-      <div className="flex justify-end gap-2">
-        {closeButton('Cancel')}
-        <Button
-          type="button"
-          aria-disabled={pending || refreshing}
-          aria-busy={pending}
-          onClick={(event) => {
-            if (pending || refreshing) {
-              event.preventDefault();
-              return;
-            }
-            void apply();
-          }}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
-        >
-          {pending
-            ? 'Applying…'
-            : `Apply to ${String(count)} ${count === 1 ? 'activity' : 'activities'}`}
+      <div className="flex items-center justify-end gap-2">
+        {refreshing ? (
+          <p id={REFRESH_NOTE_ID} className="text-muted-foreground mr-auto text-sm">
+            Checking the list again…
+          </p>
+        ) : null}
+        <Button type="button" variant="outline" onClick={onClose}>
+          {closeLabel}
         </Button>
+        {canApply ? (
+          <Button
+            type="button"
+            aria-disabled={pending || refreshing}
+            aria-busy={pending}
+            aria-describedby={refreshing ? REFRESH_NOTE_ID : undefined}
+            onClick={(event) => {
+              if (pending || refreshing) {
+                event.preventDefault();
+                return;
+              }
+              void apply();
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          >
+            {pending ? 'Applying…' : `Apply to ${activityCount(count)}`}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

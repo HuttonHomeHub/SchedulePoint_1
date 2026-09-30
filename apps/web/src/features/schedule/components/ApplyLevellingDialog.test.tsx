@@ -3,7 +3,7 @@ import type {
   LevellingApplicationItem,
   LevellingApplicationRow,
 } from '@repo/types';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
@@ -115,6 +115,7 @@ describe('ApplyLevellingDialog — loading and error', () => {
     query.current = { isPending: true, isError: false, isFetching: true, data: undefined };
     renderDialog();
     expect(screen.getByRole('status')).toHaveTextContent('Working out what levelling would move…');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Apply to / })).not.toBeInTheDocument();
   });
@@ -184,8 +185,10 @@ describe('ApplyLevellingDialog — nothing to apply', () => {
   it('says so, and offers only Close', () => {
     loaded(application({ rows: [], items: [] }));
     renderDialog();
-    expect(screen.getByText('Nothing to apply')).toBeInTheDocument();
-    expect(screen.getByText('Resource levelling has no bar left to move.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing left to apply.')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Resource levelling has no bar left to move.')[0],
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Apply to / })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
@@ -193,8 +196,8 @@ describe('ApplyLevellingDialog — nothing to apply', () => {
   it('says why when everything levelling would move was left to logic', () => {
     loaded(application({ rows: [], items: [], leftToLogic: [{ id: 'x', name: 'X' }] }));
     renderDialog();
-    expect(screen.getByText('Nothing to apply')).toBeInTheDocument();
-    expect(screen.getByText(/left where its links put it/)).toBeInTheDocument();
+    expect(screen.getByText('Nothing left to apply.')).toBeInTheDocument();
+    expect(screen.getAllByText(/left where its links put it/)[0]).toBeInTheDocument();
   });
 });
 
@@ -249,11 +252,7 @@ describe('ApplyLevellingDialog — the populated preview', () => {
     expect(within(moves).queryByText('Lift p')).not.toBeInTheDocument();
     expect(within(placed).getByText('Lift p')).toBeInTheDocument();
     expect(within(placed).getByText('04 Mar 2026')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '1 of them was placed by hand. Its placement is replaced, and Undo puts it back.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('1 moves on its own and 1 was placed by hand.')).toBeInTheDocument();
   });
 
   it('names the bars skipped because they would break logic, and the hand-placed ones left in conflict', () => {
@@ -288,7 +287,9 @@ describe('ApplyLevellingDialog — the populated preview', () => {
     loaded(application({ remainingAfterApply: 2 }));
     renderDialog();
     expect(
-      screen.getByText('2 activities will still clash. You can apply again.'),
+      screen.getByText(
+        '2 activities will still need the same resource at the same time. You can apply again to sort them out.',
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText('Resource levelling will have nothing left to move.'),
@@ -307,7 +308,7 @@ describe('ApplyLevellingDialog — the populated preview', () => {
     loaded(application());
     renderDialog();
     expect(
-      screen.getByText('Undo reverses all of it in one step. Undo is lost if you reload the page.'),
+      screen.getByText('One Undo puts every bar back. You can’t undo after reloading the page.'),
     ).toBeInTheDocument();
   });
 
@@ -330,8 +331,11 @@ describe('ApplyLevellingDialog — over the limit', () => {
     const items = Array.from({ length: 2001 }, (_, i) => item(`m${String(i)}`));
     loaded(application({ rows: items.map((i) => row(i.id)), items }));
     renderDialog();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'More than 2,000 activities would move; the limit for one step is 2,000.',
+    const strip = screen
+      .getAllByText(/^Nothing was changed\./)
+      .find((el) => el.getAttribute('role') !== 'status');
+    expect(strip).toHaveTextContent(
+      'Nothing was changed. Levelling would move 2,001 activities, and one step can apply at most 2,000.',
     );
     expect(screen.queryByRole('button', { name: /^Apply to / })).not.toBeInTheDocument();
   });
@@ -379,7 +383,30 @@ describe('ApplyLevellingDialog — confirming', () => {
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     expect(refetch).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('keeps focus inside the dialog when Check again removes its own strip', async () => {
+    let settle: () => void = () => {};
+    const refetch = vi.fn(() => new Promise<void>((r) => (settle = r)));
+    loaded(application(), { refetch });
+    onApply.mockResolvedValue({ applied: false, conflict: 'This plan changed.', lostPen: false });
+    renderDialog();
+    fireEvent.click(applyButton());
+    const check = await screen.findByRole('button', { name: 'Check again' });
+    check.focus();
+    fireEvent.click(check);
+    // The strip stays until the re-read settles, so the focused button is not pulled out from under
+    // the planner while it runs.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checking…' })).toHaveFocus();
+    await act(() => {
+      settle();
+      return Promise.resolve();
+    });
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('group', { name: 'Levelled dates' })).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
   });
 
   it('closes when the pen was lost, because the pen’s own surface says why', async () => {
@@ -395,7 +422,9 @@ describe('ApplyLevellingDialog — confirming', () => {
     onApply.mockRejectedValue(new Error('network'));
     renderDialog();
     fireEvent.click(applyButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t apply levelled dates.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Couldn’t apply the new dates. Nothing was changed. Try again, and if it keeps failing, reload the page.',
+    );
     expect(onClose).not.toHaveBeenCalled();
     expect(applyButton()).toHaveTextContent('Apply to 2 activities');
   });
@@ -422,7 +451,63 @@ describe('ApplyLevellingDialog — confirming', () => {
     renderDialog();
     const button = applyButton();
     expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleDescription('Checking the list again…');
     fireEvent.click(button);
     expect(onApply).not.toHaveBeenCalled();
+  });
+});
+
+describe('ApplyLevellingDialog — focus and announcement', () => {
+  it('keeps focus on Cancel when the loading list is swapped for the loaded one', () => {
+    query.current = { isPending: true, isError: false, isFetching: true, data: undefined };
+    const view = renderDialog();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    loaded(application());
+    view.rerender(
+      <ApplyLevellingDialog open onClose={onClose} orgSlug="acme" planId="p1" onApply={onApply} />,
+    );
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBe(cancel);
+    expect(cancel).toHaveFocus();
+  });
+
+  it('puts the settled summary in one polite status region that was there while loading', () => {
+    query.current = { isPending: true, isError: false, isFetching: true, data: undefined };
+    const view = renderDialog();
+    const region = screen.getByRole('status');
+    loaded(application());
+    view.rerender(
+      <ApplyLevellingDialog open onClose={onClose} orgSlug="acme" planId="p1" onApply={onApply} />,
+    );
+    expect(screen.getAllByRole('status')).toEqual([region]);
+    expect(region).toHaveTextContent(
+      '2 activities will move to their levelled dates. The plan finish moves from 01 Apr 2026 to 08 Apr 2026. Resource levelling will have nothing left to move.',
+    );
+  });
+
+  it('announces the nothing-to-apply and too-many results too', () => {
+    loaded(application({ rows: [], items: [] }));
+    const view = renderDialog();
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing left to apply.');
+    const items = Array.from({ length: 2001 }, (_, i) => item(`m${String(i)}`));
+    loaded(application({ rows: items.map((i) => row(i.id)), items }));
+    view.rerender(
+      <ApplyLevellingDialog open onClose={onClose} orgSlug="acme" planId="p1" onApply={onApply} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing was changed.');
+  });
+
+  it('shows the hand-placed list first and counts that add up to the headline', () => {
+    loaded(
+      application({
+        rows: [row('a'), row('b'), row('p')],
+        items: [item('a'), item('b'), item('p', { wasPlaced: true })],
+      }),
+    );
+    renderDialog();
+    const placed = screen.getByRole('group', { name: 'Placed by hand' });
+    const others = screen.getByRole('group', { name: 'Other bars that will move' });
+    expect(placed.compareDocumentPosition(others) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('2 move on their own and 1 was placed by hand.')).toBeInTheDocument();
   });
 });

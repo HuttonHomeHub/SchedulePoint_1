@@ -345,18 +345,26 @@ export function useTsldToolbarContext({
   // The same rule the status bar publishes, so the two cannot disagree about whether the dates on
   // screen are current. `pending` (the rows have not loaded) is not stale: the move count is zero
   // then and the command says so.
+  const { isPending: isRecalculating, pendingEdits, failed: recalcFailed } = model.autoRecalc;
   const scheduleStale = useMemo(() => {
     const kind = deriveScheduleState({
-      isRecalculating: model.autoRecalc.isPending,
-      pendingEdits: model.autoRecalc.pendingEdits,
-      failed: model.autoRecalc.failed,
+      isRecalculating,
+      pendingEdits,
+      failed: recalcFailed,
       activities: model.activities.data,
       canRecalculate: canRecalc,
       refusalReason: null,
       hasDataDate: plan.plannedStart != null,
     }).kind;
     return kind === 'stale' || kind === 'recalculating';
-  }, [model.autoRecalc, model.activities.data, canRecalc, plan.plannedStart]);
+  }, [
+    isRecalculating,
+    pendingEdits,
+    recalcFailed,
+    model.activities.data,
+    canRecalc,
+    plan.plannedStart,
+  ]);
 
   // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
   // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),

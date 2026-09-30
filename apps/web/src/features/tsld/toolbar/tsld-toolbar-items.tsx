@@ -1066,13 +1066,35 @@ const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
 const LEVELLING_OFF_REASON = 'Resource levelling is off for this plan';
 
 /** Why **Apply levelled dates…** is shut when levelling is on and moved no bar (US-6). */
-const LEVELLING_MOVED_NOTHING_REASON = 'Levelling moved nothing';
+const LEVELLING_MOVED_NOTHING_REASON = 'Levelling hasn’t moved any bars';
+
+/** The same fact as {@link LEVELLING_OFF_REASON}, with where to change it for someone who can. */
+const LEVELLING_OFF_APPLY_REASON = `${LEVELLING_OFF_REASON}. Turn it on in Schedule settings.`;
 
 /**
  * Why it is shut while the computed dates are behind the plan: the preview reads the current inputs,
  * so it would list something other than the ghosts the planner is looking at.
  */
 const LEVELLING_STALE_REASON = 'Waiting for the schedule to recalculate';
+
+/**
+ * The plan-fact reasons **Apply levelled dates…** is shut, in the order they are reported: levelling
+ * off, then nothing moved, then the schedule behind. The settings pointer is offered only to someone
+ * who can change the setting.
+ */
+function applyLevellingPlanReason(
+  ctx: Pick<
+    TsldToolbarContext,
+    'levelResources' | 'levelledMoveCount' | 'scheduleStale' | 'canEditSchedule'
+  >,
+): string | undefined {
+  if (!ctx.levelResources) {
+    return ctx.canEditSchedule ? LEVELLING_OFF_APPLY_REASON : LEVELLING_OFF_REASON;
+  }
+  if (ctx.levelledMoveCount === 0) return LEVELLING_MOVED_NOTHING_REASON;
+  if (ctx.scheduleStale) return LEVELLING_STALE_REASON;
+  return undefined;
+}
 
 /**
  * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
@@ -2985,14 +3007,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       showLabel: { atLeast: 'comfortable' },
       penGated: true,
       disabledReason: (ctx) =>
-        ctx.scheduleRefusal('apply levelled dates') ??
-        (!ctx.levelResources
-          ? LEVELLING_OFF_REASON
-          : ctx.levelledMoveCount === 0
-            ? LEVELLING_MOVED_NOTHING_REASON
-            : ctx.scheduleStale
-              ? LEVELLING_STALE_REASON
-              : undefined),
+        ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),
       isEnabled: (ctx) =>
         ctx.canEditSchedule &&
         ctx.levelResources &&
