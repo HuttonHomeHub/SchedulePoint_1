@@ -24,6 +24,7 @@ import {
   PlanScheduleSettings,
 } from '@/features/plans';
 import { ResourceHistogram } from '@/features/resources';
+import { ApplyLevellingDialog } from '@/features/schedule';
 import { ShareLinksDialog } from '@/features/share';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -101,6 +102,16 @@ export function PlanChromeDialogs({
           ) : null}
         </dl>
       </Dialog>
+
+      {/* Mounted once, opened by the toolbar's Apply levelled dates… item. The dialog fetches its
+          preview only while open, because the route runs the engine twice. */}
+      <ApplyLevellingDialog
+        open={dialog === 'apply-levelling'}
+        onClose={onClose}
+        orgSlug={model.orgSlug}
+        planId={model.planId}
+        onApply={model.applyLevelling}
+      />
 
       <Dialog
         open={dialog === 'baselines'}
