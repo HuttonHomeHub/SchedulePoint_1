@@ -224,3 +224,45 @@ export function levellingPlacedPlan(): SeedSpec {
     ),
   };
 }
+
+/**
+ * **Levelling that frees a resource part-way through a day** (`docs/specs/apply-levelled-dates/`;
+ * M0 found no catalogue plan with this shape): a 4-hour lift and a 1-day lift share one crane on an
+ * 08:00-16:00 week. The crane is free at 12:00 on Monday, so P2's levelled start is noon, but a
+ * placement is stored as a DATE. Copying the ghost's date puts the bar at 08:00 and a half-day clash
+ * comes straight back; only the next working day clears it, which is what **Apply levelled dates**
+ * writes (ADR-0167, CQ-4). Durations are stated in minutes so the plan does not depend on any
+ * day-to-minute factor.
+ */
+export function levellingPartDayPlan(): SeedSpec {
+  return capabilityPlan({
+    seedName: 'capability-levelling-part-day',
+    name: 'Resources: levelling that frees the crane part-way through a day',
+    description:
+      'P1 is a four-hour lift and P2 a one-day lift, both wanting the single crane on Monday on an ' +
+      '08:00-16:00 week. With levelling ON the crane is free at 12:00, so P2 is levelled to start at ' +
+      'noon on Monday. A placement is a date, so applying the levelled dates puts P2 on Tuesday, the ' +
+      'next working day, and no clash remains. Copying the ghost date (Monday) leaves a half-day clash.',
+    options: { levelResources: true, levelWithinFloatOnly: false },
+    defaultCalendarKey: 'PD_CAL',
+    calendars: [
+      calendar('PD_CAL', 'Part-day 08:00-16:00 week', [], {
+        days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+          weekday,
+          windows: weekday >= 1 && weekday <= 5 ? [{ startMinute: 480, endMinute: 960 }] : [],
+        })),
+      }),
+    ],
+    resources: [resource('PD_CRANE', 'Part-day crane', { kind: 'EQUIPMENT', maxUnitsPerHour: 1 })],
+    activities: [
+      activity('P1', { name: 'Short lift', durationMinutes: 240, levelingPriority: 1 }),
+      activity('P2', { name: 'Day lift', durationMinutes: 480, levelingPriority: 2 }),
+      activity('P3', { name: 'Handover', durationMinutes: 480 }),
+    ],
+    dependencies: [link('P1', 'P3'), link('P2', 'P3')],
+    assignments: [
+      assignment('P1', 'PD_CRANE', { budgetedUnits: 4, unitsPerHour: 1, isDriving: true }),
+      assignment('P2', 'PD_CRANE', { budgetedUnits: 8, unitsPerHour: 1, isDriving: true }),
+    ],
+  });
+}
