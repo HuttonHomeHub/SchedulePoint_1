@@ -2,7 +2,7 @@ import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { planLevellingApplication, type LevellingApplicationInput } from './apply-levelling';
-import { computeSchedule } from './compute';
+import { computeSchedule, type ComputeOptions } from './compute';
 import { levelSchedule } from './level';
 import type {
   EngineActivity,
@@ -78,11 +78,14 @@ interface Scenario {
   assignments: EngineAssignment[];
   resources: EngineResource[];
   calendar: WorkingTimeCalendar;
+  /** The rest of the plan's network options, as the service passes them (`options.compute`). */
+  compute?: Partial<ComputeOptions>;
 }
 
 /** The plan as a recalculation leaves it: network pass, then levelling from where bars are drawn. */
 function solve(s: Scenario, activities: readonly EngineActivity[] = s.activities) {
   const output = computeSchedule(activities, s.edges, {
+    ...s.compute,
     dataDate: DATA_DATE,
     calendar: s.calendar,
   });
@@ -103,7 +106,12 @@ const input = (s: Scenario): LevellingApplicationInput => ({
   edges: s.edges,
   assignments: s.assignments,
   resources: s.resources,
-  options: { dataDate: DATA_DATE, planCalendar: s.calendar, levelWithinFloatOnly: false },
+  options: {
+    dataDate: DATA_DATE,
+    planCalendar: s.calendar,
+    levelWithinFloatOnly: false,
+    ...(s.compute ? { compute: s.compute } : {}),
+  },
 });
 
 /** The scenario with `rows` written as placements: what pressing Apply and recalculating leaves. */
@@ -461,4 +469,351 @@ describe('planLevellingApplication — P10: a bound the move newly breaches', ()
     expect(plan.leftToLogic).toEqual([]);
     expect(plan.conflictingPlaced).toEqual([]);
   });
+});
+
+// ── M1 test hardening ──────────────────────────────────────────────────────────────────────────────
+// Added after a test-engineer review of M0+M1. `m0-measurement.md` ("M1 test hardening") records, for
+// each case below, the wrong implementation it was run against and the assertion that failed.
+
+// ── P11: what is left clashing once the dropped candidate is not written ───────────────────────────
+
+/**
+ * P3's chain plus a third lift on the pump. R holds the pump for four days, S (FS after P) is levelled
+ * to day 4 and T to day 6. P moves to day 3 and finishes on day 6, so S's ghost is earlier than its
+ * logic and is dropped. Without S's ghost S runs at day 6 on logic, takes the pump from day 6 to 8 and
+ * pushes T, which was written at day 6, back again: one lift is still levelled after the apply.
+ *
+ * Reusing the solve that had every ghost written gets this wrong: S's written ghost is what frees T.
+ */
+const p11: Scenario = {
+  activities: [
+    task('Q', 3 * DAY, { levelingPriority: 1 }),
+    task('P', 3 * DAY, { levelingPriority: 2 }),
+    task('R', 4 * DAY, { levelingPriority: 1 }),
+    task('S', 2 * DAY, { levelingPriority: 2 }),
+    task('T', 2 * DAY, { levelingPriority: 3 }),
+  ],
+  edges: [fs('P', 'S')],
+  assignments: [
+    on('Q', 'CRANE'),
+    on('P', 'CRANE'),
+    on('R', 'PUMP'),
+    on('S', 'PUMP'),
+    on('T', 'PUMP'),
+  ],
+  resources: [CRANE, PUMP],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P11: a clash the dropped candidate leaves behind', () => {
+  it('precondition: every ghost written looks settled; only the kept ghosts written leaves T levelled', () => {
+    const { byId } = solve(p11);
+    expect(delayedIdsOf(byId)).toEqual(['P', 'S', 'T']);
+    const ghost = (id: string) => ({ activityId: id, visualStart: byId.get(id)!.leveledStart! });
+    const everyGhost = settle(p11, [ghost('P'), ghost('S'), ghost('T')]);
+    expect(everyGhost.leveled.summary.leveledActivityCount).toBe(0);
+    const keptOnly = settle(p11, [ghost('P'), ghost('T')]);
+    expect(keptOnly.leveled.summary.leveledActivityCount).toBe(1);
+    expect(delayedIdsOf(keptOnly.byId)).toEqual(['T']);
+  });
+
+  it('drops S, writes P and T, and reports the one lift still levelled, solved without S', () => {
+    const plan = planLevellingApplication(input(p11));
+    expect(plan.rows).toEqual([
+      { activityId: 'P', visualStart: '2026-01-08' },
+      { activityId: 'T', visualStart: '2026-01-11' },
+    ]);
+    expect(plan.leftToLogic).toEqual(['S']);
+    // The plan as it would stand, asked of the engine rather than of the function under test.
+    const settled = settle(p11, plan.rows);
+    expect(plan.remainingAfterApply).toBe(settled.leveled.summary.leveledActivityCount);
+    expect(plan.remainingAfterApply).toBe(1);
+    expect(delayedIdsOf(settled.byId)).toEqual(['T']);
+    expect(plan.after.filter((r) => (r.levelingDelay ?? 0) > 0).map((r) => r.activityId)).toEqual([
+      'T',
+    ]);
+    // S was dropped, not placed, so it is not a conflict the apply leaves behind.
+    expect(plan.conflictingPlaced).toEqual([]);
+  });
+});
+
+// ── P12: a milestone on a levelled chain ───────────────────────────────────────────────────────────
+
+/**
+ * A and B clash on the crane (B is delayed). M is a finish milestone assigned to the crane after B: it
+ * is never moved by levelling, so it cannot be a candidate and no row may name it.
+ */
+const p12: Scenario = {
+  activities: [
+    task('A', 3 * DAY, { levelingPriority: 1 }),
+    task('B', 3 * DAY, { levelingPriority: 2 }),
+    task('M', 0, { type: 'FINISH_MILESTONE' }),
+  ],
+  edges: [fs('B', 'M')],
+  assignments: [on('A', 'CRANE'), on('B', 'CRANE'), on('M', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P12: a milestone never yields a row', () => {
+  it('precondition: B is delayed and the milestone takes part in levelling without moving', () => {
+    const { byId } = solve(p12);
+    expect(delayedIdsOf(byId)).toEqual(['B']);
+    expect(byId.get('M')!.leveledStart).not.toBeNull();
+    expect(byId.get('M')!.levelingDelay).toBe(0);
+  });
+
+  it('writes B only', () => {
+    const plan = planLevellingApplication(input(p12));
+    expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
+    expect(plan.items.map((i) => i.activityId)).toEqual(['B']);
+  });
+});
+
+// ── P13: a started activity ────────────────────────────────────────────────────────────────────────
+
+/**
+ * B has the higher priority, but A started on the data date and keeps the crane (levelling never moves
+ * a progressed activity), so B waits for it. Without the actual, A would be the one pushed.
+ */
+const p13Activities = (aStarted: boolean): EngineActivity[] => [
+  task('A', 3 * DAY, { levelingPriority: 2, ...(aStarted ? { actualStart: DATA_DATE } : {}) }),
+  task('B', 3 * DAY, { levelingPriority: 1 }),
+];
+const p13: Scenario = {
+  activities: p13Activities(true),
+  edges: [],
+  assignments: [on('A', 'CRANE'), on('B', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P13: a started activity is the anchor, not a row', () => {
+  it('precondition: started, A holds the crane and B is delayed; not started, A is the delayed one', () => {
+    expect(delayedIdsOf(solve(p13).byId)).toEqual(['B']);
+    expect(delayedIdsOf(solve({ ...p13, activities: p13Activities(false) }).byId)).toEqual(['A']);
+  });
+
+  it('writes B behind A, and never writes A', () => {
+    const plan = planLevellingApplication(input(p13));
+    expect(delayedIdsOf(settle(p13, plan.rows).byId)).toEqual([]);
+    expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
+  });
+});
+
+// ── P14: the plan's network options reach the solve ────────────────────────────────────────────────
+
+/**
+ * P3's chain, with S carrying an external early start on 9 January (day 4). With the external bound
+ * applied S is drawn on day 4, which the pump is already free for: S is not levelled and not a
+ * candidate. Ignoring external relationships, the option a recalculation passes through `compute`,
+ * draws S on day 3 where R holds the pump, so S is levelled to day 4 and P's move then makes that
+ * earlier than its logic. One plan, two answers: the options must reach every solve the preview runs.
+ *
+ * (An external bound cannot make a target earlier than logic directly: it raises the drawn start the
+ * levelling delays from, so a target is never below it.)
+ */
+const p14: Scenario = followerBase(
+  task('S', 2 * DAY, { levelingPriority: 2, externalEarlyStart: '2026-01-09' }),
+);
+const p14Ignoring: Scenario = { ...p14, compute: { ignoreExternalRelationships: true } };
+
+describe("planLevellingApplication — P14: the plan's compute options reach the solve", () => {
+  it('precondition: external bound applied, S is not levelled; ignored, S is levelled and conflicts', () => {
+    expect(delayedIdsOf(solve(p14).byId)).toEqual(['P']);
+    const ignoring = solve(p14Ignoring).byId;
+    expect(delayedIdsOf(ignoring)).toEqual(['P', 'S']);
+    const everyGhost = ['P', 'S'].map((id) => ({
+      activityId: id,
+      visualStart: ignoring.get(id)!.leveledStart!,
+    }));
+    expect(conflictsOf(settle(p14Ignoring, everyGhost).byId)).toEqual(['S']);
+  });
+
+  it('applies the external bound by default: S is neither a row nor left to logic', () => {
+    const plan = planLevellingApplication(input(p14));
+    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
+    expect(plan.leftToLogic).toEqual([]);
+  });
+
+  it('honours ignore-external: S becomes a candidate, is earlier than its logic, and is reported', () => {
+    const plan = planLevellingApplication(input(p14Ignoring));
+    expect(conflictsOf(settle(p14Ignoring, plan.rows).byId)).toEqual([]);
+    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
+    expect(plan.leftToLogic).toEqual(['S']);
+  });
+});
+
+// ── P15 and P16: calendars that are not the simple case ────────────────────────────────────────────
+
+/** The crane works 10:00-18:00, the plan and both lifts 08:00-16:00. X frees it part-way through Monday. */
+const p15: Scenario = {
+  activities: [
+    task('X', WEEK_DAY / 2, { levelingPriority: 1 }),
+    task('Y', WEEK_DAY, { levelingPriority: 2 }),
+  ],
+  edges: [],
+  assignments: [on('X', 'CRANE'), on('Y', 'CRANE')],
+  resources: [{ ...CRANE, calendar: CAL_1000_1800 }],
+  calendar: CAL_0800_1600,
+};
+
+describe("planLevellingApplication — P15: a resource calendar that differs from the activity's", () => {
+  it('precondition: Y is levelled, and the date its ghost falls on does not clear the clash', () => {
+    const y = solve(p15).byId.get('Y')!;
+    expect(y.levelingDelay).toBeGreaterThan(0);
+    const onGhostDate = settle(p15, [{ activityId: 'Y', visualStart: y.leveledStart! }]);
+    expect(onGhostDate.byId.get('Y')!.levelingDelay).toBeGreaterThan(0);
+  });
+
+  it('writes a date that settles to no delay', () => {
+    const plan = planLevellingApplication(input(p15));
+    expect(delayedIdsOf(settle(p15, plan.rows).byId)).toEqual([]);
+    expect(plan.rows.map((r) => r.activityId)).toEqual(['Y']);
+    expect(plan.remainingAfterApply).toBe(0);
+  });
+});
+
+/**
+ * P8's Friday, with Monday 12 and Tuesday 13 January a holiday: the next working day is Wednesday the
+ * 14th, so the jump over a non-working stretch crosses more than a weekend.
+ */
+const CAL_HOLIDAY = buildWorkingTimeCalendar(
+  Array.from({ length: 7 }, (_, d) => (d < 5 ? [{ startMinute: 480, endMinute: 960 }] : [])),
+  [{ startDate: '2026-01-12', endDate: '2026-01-13', windows: [] }],
+);
+const p16: Scenario = { ...p8, calendar: CAL_HOLIDAY };
+
+describe('planLevellingApplication — P16: a multi-day holiday after a part-day start', () => {
+  it('precondition: Y is freed at 12:00 Friday; the Saturday clears it but is drawn on Wednesday', () => {
+    const settledOn = (date: string) =>
+      settle(p16, [{ activityId: 'Y', visualStart: date }]).byId.get('Y')!;
+    expect(solve(p16).byId.get('Y')!.leveledStart).toBe('2026-01-09');
+    expect(settledOn('2026-01-09').levelingDelay).toBeGreaterThan(0);
+    expect(settledOn('2026-01-10').levelingDelay).toBe(0);
+    expect(settledOn('2026-01-10').visualEffectiveStart).toBe('2026-01-14');
+    expect(settledOn('2026-01-14').levelingDelay).toBe(0);
+  });
+
+  it('stores Wednesday 14 January, the first working day after the holiday', () => {
+    const plan = planLevellingApplication(input(p16));
+    expect(delayedIdsOf(settle(p16, plan.rows).byId)).toEqual([]);
+    expect(plan.rows).toEqual([{ activityId: 'Y', visualStart: '2026-01-14' }]);
+    expect(plan.roundedToNextDay).toEqual(['Y']);
+  });
+});
+
+// ── P17: a bound the activity already breached ─────────────────────────────────────────────────────
+
+/** B is hand-placed on the 6th, which finishes past its FNLT of the 7th, and still does once it moves. */
+const p17: Scenario = {
+  ...p10,
+  activities: [
+    task('A', 3 * DAY, { levelingPriority: 1 }),
+    task('B', 3 * DAY, {
+      levelingPriority: 2,
+      constraintType: 'FNLT',
+      constraintDate: '2026-01-07',
+      visualStart: '2026-01-06',
+    }),
+  ],
+};
+
+describe('planLevellingApplication — P17: a bound already breached is not introduced', () => {
+  it('precondition: B breaches its bound before the apply and after it', () => {
+    const reasonOf = (s: ReturnType<typeof solve>) => s.byId.get('B')!.visualConflictReason;
+    expect(reasonOf(solve(p17))).toBe('LATER_THAN_BOUND');
+    expect(reasonOf(settle(p17, [{ activityId: 'B', visualStart: '2026-01-08' }]))).toBe(
+      'LATER_THAN_BOUND',
+    );
+  });
+
+  it('writes B and counts no bound as newly breached', () => {
+    const plan = planLevellingApplication(input(p17));
+    expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
+    expect(plan.laterThanBoundIntroduced).toBe(0);
+  });
+});
+
+// ── P18: the order of the input is not the order of the answer ─────────────────────────────────────
+
+/**
+ * Two resources, each with a clash that levels to the same day, and a third lift that levels later: B
+ * and D share a target date, so their order is decided by id alone. D is linked SS to B, so the engine
+ * hands D over before B: only the id tie-break puts B first, and the input order cannot.
+ */
+const p18: Scenario = {
+  activities: [
+    task('A', 3 * DAY, { levelingPriority: 1 }),
+    task('B', 3 * DAY, { levelingPriority: 2 }),
+    task('C', 3 * DAY, { levelingPriority: 1 }),
+    task('D', 3 * DAY, { levelingPriority: 2 }),
+    task('E', 3 * DAY, { levelingPriority: 3 }),
+  ],
+  edges: [{ id: 'D-B', predecessorId: 'D', successorId: 'B', type: 'SS', lagMinutes: 0 }],
+  assignments: [
+    on('A', 'CRANE'),
+    on('B', 'CRANE'),
+    on('E', 'CRANE'),
+    on('C', 'PUMP'),
+    on('D', 'PUMP'),
+  ],
+  resources: [CRANE, PUMP],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P18: row order does not depend on the input order', () => {
+  it('precondition: B and D level to the same day, E to a later one, and D is solved before B', () => {
+    const { byId, leveled } = solve(p18);
+    const solvedOrder = leveled.results.map((r) => r.activityId);
+    expect(solvedOrder.indexOf('D')).toBeLessThan(solvedOrder.indexOf('B'));
+    expect(byId.get('B')!.leveledStart).toBe(byId.get('D')!.leveledStart);
+    expect(byId.get('E')!.leveledStart! > byId.get('B')!.leveledStart!).toBe(true);
+  });
+
+  it('returns the same rows whichever way round the plan is handed over', () => {
+    const forward = planLevellingApplication(input(p18));
+    expect(forward.rows.map((r) => r.activityId)).toEqual(['B', 'D', 'E']);
+    const reversed = planLevellingApplication({
+      ...input(p18),
+      activities: [...p18.activities].reverse(),
+      edges: [...p18.edges].reverse(),
+      assignments: [...p18.assignments].reverse(),
+      resources: [...p18.resources].reverse(),
+    });
+    expect(reversed.rows).toEqual(forward.rows);
+    expect(reversed.items).toEqual(forward.items);
+  });
+});
+
+// ── P19: the preview is not capped ─────────────────────────────────────────────────────────────────
+
+/**
+ * The placements write accepts at most 2,000 rows (`update-placements.dto.ts`), but the preview's job is
+ * to say what levelling wants, so it never truncates: 2,001 delayed lifts give 2,001 rows. One crane per
+ * pair keeps the solve cheap.
+ */
+const PAIRS = 2001;
+const p19: Scenario = {
+  activities: Array.from({ length: PAIRS }, (_, i) => [
+    task(`a${i}`, DAY, { levelingPriority: 1 }),
+    task(`b${i}`, DAY, { levelingPriority: 2 }),
+  ]).flat(),
+  edges: [],
+  assignments: Array.from({ length: PAIRS }, (_, i) => [
+    on(`a${i}`, `R${i}`),
+    on(`b${i}`, `R${i}`),
+  ]).flat(),
+  resources: Array.from({ length: PAIRS }, (_, i) => ({ id: `R${i}`, capacity: 1 })),
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P19: every candidate is returned', () => {
+  it('returns one row per delayed lift past the 2,000-row write cap', () => {
+    const plan = planLevellingApplication(input(p19));
+    expect(plan.rows).toHaveLength(PAIRS);
+    expect(plan.items).toHaveLength(PAIRS);
+    expect(new Set(plan.rows.map((r) => r.visualStart))).toEqual(new Set(['2026-01-06']));
+    expect(plan.remainingAfterApply).toBe(0);
+  }, 60_000);
 });

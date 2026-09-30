@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * **`docs/specs/apply-levelled-dates/`: the API cases A1-A4 for `GET …/schedule/levelling-application`.**
@@ -50,6 +52,7 @@ interface PlacementRow {
 describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -63,9 +66,13 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   beforeEach(async () => {
+    // The preview route is throttled to 10 per 60 s; this file reads it more often than that. Emptying
+    // the store is isolation, not a weakened bound (`throttle-reset.ts`): nothing here asserts a 429.
+    resetThrottleCounters(throttlerStorage);
     await clearDomainData(prisma);
   });
 
@@ -89,8 +96,35 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     return { agent, userId: (res.body as { user: { id: string } }).user.id };
   }
 
+  interface Lift {
+    name: string;
+    days: number;
+    priority: number;
+    resource: 'Crane' | 'Pump';
+    constraint?: { type: string; date: string };
+  }
+
   /** Three 3-day lifts on one crane, levelling on. `bConstraint` is carried by the second lift. */
-  async function seedLevelledPlan(bConstraint?: { type: string; date: string }) {
+  function seedLevelledPlan(bConstraint?: { type: string; date: string }, levelResources = true) {
+    const lifts: Lift[] = ['A', 'B', 'C'].map((name, index) => ({
+      name,
+      days: 3,
+      priority: index + 1,
+      resource: 'Crane',
+      ...(name === 'B' && bConstraint ? { constraint: bConstraint } : {}),
+    }));
+    return seedPlan(lifts, [], levelResources);
+  }
+
+  /**
+   * The lifts on a crane and a pump, each resource capped at one unit, levelling per `levelResources`.
+   * `links` are finish-to-start pairs of lift names. `refs` is in lift order; `byName` finds one by name.
+   */
+  async function seedPlan(
+    lifts: readonly Lift[],
+    links: readonly (readonly [string, string])[],
+    levelResources: boolean,
+  ) {
     const actor = await signUp('planner@example.com');
     const org = await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
     const client = await actor.agent
@@ -110,49 +144,119 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
       .patch(`${orgBase}/plans/${planId}`)
       .send({ calendarId: null, version: 1 })
       .expect(200);
-    const crane = await actor.agent
-      .post(`${orgBase}/resources`)
-      .send({ name: 'Crane', kind: 'EQUIPMENT', maxUnitsPerHour: 1 })
-      .expect(201);
+    const resourceIds = new Map<string, string>();
+    for (const name of new Set(lifts.map((l) => l.resource))) {
+      const created = await actor.agent
+        .post(`${orgBase}/resources`)
+        .send({ name, kind: 'EQUIPMENT', maxUnitsPerHour: 1 })
+        .expect(201);
+      resourceIds.set(name, created.body.data.id as string);
+    }
     const refs: Ref[] = [];
-    for (const [index, name] of ['A', 'B', 'C'].entries()) {
-      const extra =
-        name === 'B' && bConstraint
-          ? { constraintType: bConstraint.type, constraintDate: bConstraint.date }
-          : {};
+    const byName = new Map<string, Ref>();
+    for (const lift of lifts) {
+      const extra = lift.constraint
+        ? { constraintType: lift.constraint.type, constraintDate: lift.constraint.date }
+        : {};
       const created = await actor.agent
         .post(`${orgBase}/plans/${planId}/activities`)
-        .send({ name, durationDays: 3, levelingPriority: index + 1, ...extra })
+        .send({
+          name: lift.name,
+          durationDays: lift.days,
+          levelingPriority: lift.priority,
+          ...extra,
+        })
         .expect(201);
       const id = created.body.data.id as string;
       await actor.agent
         .post(`${orgBase}/activities/${id}/assignments`)
-        .send({ resourceId: crane.body.data.id as string, unitsPerHour: 1 })
+        .send({ resourceId: resourceIds.get(lift.resource)!, unitsPerHour: 1 })
         .expect(201);
-      refs.push({ id, version: created.body.data.version as number });
+      const ref = { id, version: created.body.data.version as number };
+      refs.push(ref);
+      byName.set(lift.name, ref);
     }
+    for (const [from, to] of links) {
+      await actor.agent
+        .post(`${orgBase}/plans/${planId}/dependencies`)
+        .send({ predecessorId: byName.get(from)!.id, successorId: byName.get(to)!.id, type: 'FS' })
+        .expect(201);
+    }
+    if (levelResources) await setLevelling(actor, planId, true);
+    await actor.agent.post(`${orgBase}/plans/${planId}/schedule/recalculate`).send({}).expect(200);
+    return { actor, orgId: org.body.data.id as string, planId, refs, byName };
+  }
+
+  async function setLevelling(actor: Actor, planId: string, levelResources: boolean) {
     const current = await actor.agent.get(`${orgBase}/plans/${planId}`).expect(200);
     await actor.agent
       .patch(`${orgBase}/plans/${planId}`)
-      .send({ levelResources: true, version: current.body.data.version as number })
+      .send({ levelResources, version: current.body.data.version as number })
       .expect(200);
-    await actor.agent.post(`${orgBase}/plans/${planId}/schedule/recalculate`).send({}).expect(200);
-    return { actor, orgId: org.body.data.id as string, planId, refs };
   }
 
   it('A1: the rows the preview returns, written and recalculated, leave what it predicted', async () => {
-    const { actor, planId } = await seedLevelledPlan();
+    const { actor, planId, refs } = await seedLevelledPlan();
     const preview = await actor.agent.get(previewUrl(planId)).expect(200);
     const { rows, remainingAfterApply } = preview.body.data as {
       rows: PlacementRow[];
       remainingAfterApply: number;
     };
-    expect(rows.length).toBeGreaterThan(0);
+    // The plan starts Thursday 1 January on an all-days calendar; the three lifts take three days each
+    // in priority order, so B is freed on the 4th and C on the 7th. A is first and never moves (P5).
+    expect(rows.map((r) => [r.id, r.visualStart])).toEqual([
+      [refs[1]!.id, '2026-01-04'],
+      [refs[2]!.id, '2026-01-07'],
+    ]);
+    expect(rows.map((r) => r.id)).not.toContain(refs[0]!.id);
+    expect(remainingAfterApply).toBe(0);
     await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
     const recalculated = await actor.agent
       .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
       .send({})
       .expect(200);
+    expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
+  });
+
+  it('A1b: a preview that leaves a clash says so, and the recalculation agrees', async () => {
+    // Q and P share the crane, R, S and T the pump, and S follows P. P is levelled to day 3 and finishes
+    // on day 6, which is later than S's own ghost (day 4), so S is left to its logic: it then runs on
+    // day 6 and pushes T, which the apply wrote on day 6, back again. One lift is still levelled.
+    const lift = (name: string, days: number, priority: number, resource: 'Crane' | 'Pump') => ({
+      name,
+      days,
+      priority,
+      resource,
+    });
+    const { actor, planId, byName } = await seedPlan(
+      [
+        lift('Q', 3, 1, 'Crane'),
+        lift('P', 3, 2, 'Crane'),
+        lift('R', 4, 1, 'Pump'),
+        lift('S', 2, 2, 'Pump'),
+        lift('T', 2, 3, 'Pump'),
+      ],
+      [['P', 'S']],
+      true,
+    );
+    const preview = await actor.agent.get(previewUrl(planId)).expect(200);
+    const { rows, remainingAfterApply, leftToLogic } = preview.body.data as {
+      rows: PlacementRow[];
+      remainingAfterApply: number;
+      leftToLogic: { id: string; name: string }[];
+    };
+    expect(rows.map((r) => [r.id, r.visualStart])).toEqual([
+      [byName.get('P')!.id, '2026-01-04'],
+      [byName.get('T')!.id, '2026-01-07'],
+    ]);
+    expect(leftToLogic).toEqual([{ id: byName.get('S')!.id, name: 'S' }]);
+    expect(remainingAfterApply).toBe(1);
+    await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
+    const recalculated = await actor.agent
+      .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+    expect(recalculated.body.data.leveledActivityCount).toBe(1);
     expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
   });
 
@@ -199,10 +303,9 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
       constraintType: 'SNET',
       constraintDate: '2026-01-02',
     });
-    for (const other of [refs[0]!, refs[2]!]) {
-      const row = byId.get(other.id);
-      if (row) expect(row).toMatchObject({ constraintType: null, constraintDate: null });
-    }
+    // A is first in line and never moves, so it has no row; C is delayed and has no constraint to carry.
+    expect(byId.has(refs[0]!.id)).toBe(false);
+    expect(byId.get(refs[2]!.id)).toMatchObject({ constraintType: null, constraintDate: null });
     await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
     const stored = await prisma.activity.findUniqueOrThrow({
       where: { id: refs[1]!.id },
@@ -210,4 +313,34 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     });
     expect(stored.constraintType).toBe('SNET');
   });
+
+  it('a plan that does not level answers 200 with nothing to apply, and rows once it does', async () => {
+    const { actor, planId } = await seedLevelledPlan(undefined, false);
+    const off = await actor.agent.get(previewUrl(planId)).expect(200);
+    expect(off.body.data).toMatchObject({ rows: [], items: [], remainingAfterApply: 0 });
+
+    await setLevelling(actor, planId, true);
+    const on = await actor.agent.get(previewUrl(planId)).expect(200);
+    expect((on.body.data as { rows: unknown[] }).rows).toHaveLength(2);
+  });
+
+  it('a request with no session is 401, where a Planner gets 200', async () => {
+    const { actor, planId } = await seedLevelledPlan();
+    await actor.agent.get(previewUrl(planId)).expect(200);
+    await request(app.getHttpServer()).get(previewUrl(planId)).expect(401);
+  });
+
+  it('P7: applying the rows leaves a second preview with nothing to apply', async () => {
+    const { actor, planId } = await seedLevelledPlan();
+    const first = await actor.agent.get(previewUrl(planId)).expect(200);
+    const { rows } = first.body.data as { rows: PlacementRow[] };
+    expect(rows).toHaveLength(2);
+    await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
+    const second = await actor.agent.get(previewUrl(planId)).expect(200);
+    expect(second.body.data).toMatchObject({ rows: [], items: [], remainingAfterApply: 0 });
+  });
+
+  // A plan with no start date answers 422 PLAN_START_REQUIRED, and is not tested here: `plans.planned_start`
+  // is NOT NULL since ADR-0033 M1, so no plan without one can be built through the API or the database.
+  // `schedule.service.levelling-application.spec.ts` covers the guard with a mocked plan.
 });

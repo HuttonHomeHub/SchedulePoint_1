@@ -164,3 +164,60 @@ logic-aware, so a delayed predecessor pushes its successors in the overlay).
 **10 per 60 s** instead: the figure excludes the graph load and serialisation, which the M6 run found to
 be a large share of a whole request, so a third was taken off rather than trusting the engine-only number.
 That reduction is a judgement and not a measurement; an HTTP measurement against a database is still owed and should confirm or move it.
+
+## M1 test hardening
+
+Recorded 2026-09-30, after a test-engineer review of M0+M1. Every new or changed assertion was run
+against a deliberately wrong implementation (edited in place with a one-line `sed`, the spec run, the
+file restored) and the test that went red is named. Engine cases are in
+`apps/api/src/modules/schedule/engine/apply-levelling.spec.ts` (P11-P19, 37 cases in all, each with a
+precondition `it`); API cases are in `apps/api/test/apply-levelling.e2e-spec.ts`.
+
+| Case                                                          | Wrong implementation run against it                                                                                                      | What failed                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P11 (`remainingAfterApply` > 0; dropping S changes the count) | `remainingAfterApply: 0` hard-coded                                                                                                      | P11 "reports the one lift still levelled"                                                                                                            |
+| P11, and P3                                                   | `after = tentative` (reuse the every-target solve, `apply-levelling.ts` step 5)                                                          | P11 "reports the one lift still levelled" (count 0, and S wrongly named in `conflictingPlaced`), P3 "writes P only" (S named in `conflictingPlaced`) |
+| P12 milestone                                                 | candidate filter `levelingDelay <= 0` changed to `< 0` (zero-delay activities become candidates)                                         | P12 "writes B only", and 19 other cases                                                                                                              |
+| P13 started activity                                          | `level.ts` `isPinned`: the `actualStart` clause replaced with `false`                                                                    | P13 precondition and "writes B behind A"                                                                                                             |
+| P14 compute options                                           | `...compute,` deleted from `solve`                                                                                                       | P14 "honours ignore-external"                                                                                                                        |
+| P15, P2, P8, P16 rounding                                     | `if (placed >= levelled)` replaced with `if (true)` (first date, never rounded forward)                                                  | P2, P8, P15 "writes a date that settles", P16                                                                                                        |
+| P2, P8, P16 flag                                              | `rounded: placed > levelled` replaced with `rounded: false`                                                                              | P2, P8, P16 (`roundedToNextDay`)                                                                                                                     |
+| P16 multi-day holiday                                         | non-working-day jump `midnight = instantToAbsMinutes(placedDate)` replaced with `midnight += 3 * MINUTES_PER_DAY` (a weekend-sized jump) | P8 and P16                                                                                                                                           |
+| P17 already-breached bound                                    | the `beforeById` clause of `laterThanBoundIntroduced` replaced with `true`                                                               | P17 "counts no bound as newly breached"                                                                                                              |
+| P18 row order                                                 | the id tie-break in the row sort replaced with `0`                                                                                       | P18 "returns the same rows whichever way round"                                                                                                      |
+| P19 no cap                                                    | `ordered.slice(0, 2000)` in `rows`                                                                                                       | P19 "returns one row per delayed lift"                                                                                                               |
+
+What each new case pins, and what it cannot:
+
+- **P11** is the fixture the brief asked for: three lifts on the pump (R, S, T) behind P's move. The
+  precondition shows writing every ghost leaves `leveledActivityCount` 0 and writing only the kept ghosts
+  leaves 1 (T), so a preview that reuses the tentative solve is told apart from one that re-solves.
+  `levelWithinFloatOnly` with a capped residual was tried first and **cannot** give a non-zero count: the
+  capped activity is placed at its cap, which becomes its drawn start, so its delay after the apply is 0
+  while the overlap persists (level.ts header, "residual contract": the overlap is not signalled). A
+  four-lift plan with a ten-day unassigned task setting the plan finish gave rows B, D, E and `remainingAfterApply` 0. Not built.
+- **P12**: a milestone assigned to the crane is solved with `levelingDelay` 0. Removing the `isMilestone`
+  pin in `level.ts` does NOT move it either (a zero-duration activity takes no demand), so the `type`
+  branch of `targetDateFor` is unreachable for a milestone; the only guard is the delay filter above,
+  which is what the mutation removed.
+- **P14**: an external bound cannot make a target earlier than logic by itself: it raises the drawn start
+  the levelling delays from, so a target is never below it. The case instead uses the option the
+  service passes through `compute`: the same plan has S unlevelled with the bound applied and S levelled
+  and dropped with `ignoreExternalRelationships`, so a preview that drops `options.compute` is caught.
+- **P18's first form was vacuous.** Reversing the input did not change the order the engine hands
+  candidates over (Kahn's algorithm with a min-id ready set, `graph.ts:74`), so removing the tie-break
+  left it green. D is now linked SS to B, which makes the engine solve D first; only the tie-break puts B
+  first, and the precondition asserts the solve order.
+- **P19** ran in about 1.0 s (2,001 pairs, one resource per pair, 4,002 activities), so it carries no
+  special timeout beyond a 60 s ceiling.
+- **Not run: the API e2e.** The orchestrator runs it on the shared database. The wrong-implementation
+  column above is the engine function the route calls, so the A1, A1b and P7 assertions share those
+  proofs, but the e2e assertions themselves have not been seen red. The dates asserted in A1 (B 4 January,
+  C 7 January) and A1b (P 4 January, T 7 January, S left to logic, remaining 1) were derived by calling
+  `planLevellingApplication` with the same plan (data date 2026-01-01, 24/7 calendar, priorities as
+  seeded), not by trusting the review.
+- **A plan with no start (422 `PLAN_START_REQUIRED`) has no e2e.** `plans.planned_start` is NOT NULL
+  (`schema.prisma`, `plannedStart DateTime` with no `?`; `schedule.e2e-spec.ts:487-495` says the same), so
+  no such plan can be built; the guard is covered by `schedule.service.levelling-application.spec.ts`.
+- The e2e file now empties the throttle store in `beforeEach` (`throttle-reset.ts`): the route is capped
+  at 10 requests per 60 s and the file now reads it more often than that.
