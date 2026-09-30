@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.154.1
+
+### Patch Changes
+
+- [#740](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/740) [`36c1172`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/36c11720824fa3ab42e3fe5e4c6e8462c2d23c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Typing into a new client, project or plan form straight after it opens is no longer occasionally wiped.
+
+- [#740](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/740) [`36c1172`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/36c11720824fa3ab42e3fe5e4c6e8462c2d23c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - View toggles such as the Late overlay now reset when you switch to another plan instead of carrying over from the previous one.
+
 ## 0.154.0
 
 ### Minor Changes

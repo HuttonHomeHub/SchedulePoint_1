@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.81.1
+
+### Patch Changes
+
+- [#740](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/740) [`36c1172`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/36c11720824fa3ab42e3fe5e4c6e8462c2d23c5f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The resource histogram now counts the last day of every bar, so a five-working-day bar loads all five days instead of spreading its units over the first four.
+
 ## 0.81.0
 
 ### Minor Changes
