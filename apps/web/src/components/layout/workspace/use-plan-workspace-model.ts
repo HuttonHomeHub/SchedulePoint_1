@@ -1040,8 +1040,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * stalls every later recalculation for the session with no error and no surface (ADR-0064). The
    * recalculation itself is requested once the write has landed, and `visualStart` is in the
    * scheduling-input signature above, so the auto-recalc would fire regardless; the explicit notify
-   * only coalesces with it. Nothing is announced on a failure: a 409 or 423 is shown by the dialog or
-   * the pen, and "moved N" is a statement that is only true after the write.
+   * only coalesces with it. The 2,000-row cap is not checked here: the dialog offers no Apply above it
+   * and the route refuses it (`@ArrayMaxSize(2000)`), so this sends what it is given. Nothing is
+   * announced on a failure: a 409 or 423 is shown by the dialog or the pen, and "moved N" is a
+   * statement that is only true after the write.
    */
   const applyLevelling = useCallback(
     async (

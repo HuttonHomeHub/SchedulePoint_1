@@ -195,9 +195,8 @@ describe('applyLevelling — the write', () => {
     });
     expect(h.batch).toHaveBeenCalledOnce();
     const body = h.batch.mock.calls[0]?.[0] as { placements: unknown };
+    // Including the round-tripped constraint on `b`, which a client rebuilding rows would drop.
     expect(body).toEqual({ placements: application.rows });
-    // The same array, not a copy the client rebuilt: the round-tripped constraint on `b` is the proof.
-    expect(body.placements).toBe(application.rows);
   });
 
   it('never calls the batch for an empty preview, and takes no hold', async () => {
@@ -216,16 +215,10 @@ describe('applyLevelling — the write', () => {
     expect(h.order).toEqual(['hold', 'write', 'release']);
   });
 
-  it('announces what moved, asks for one recalculation, and drops the preview', async () => {
-    const spy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+  it('announces what moved and asks for one recalculation', async () => {
     await apply(preview());
     expect(h.announce).toHaveBeenCalledWith('Moved 2 activities to their levelled dates.');
     expect(h.notify).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith({
-      queryKey: expect.arrayContaining(['levelling-application']) as unknown,
-      refetchType: 'none',
-    });
-    spy.mockRestore();
   });
 
   it('marks the preview stale without re-hitting its route while the dialog is still open', async () => {
@@ -237,9 +230,10 @@ describe('applyLevelling — the write', () => {
     const unsubscribe = observer.subscribe(() => {});
     await vi.waitFor(() => expect(queryFn).toHaveBeenCalledOnce());
     await apply(preview());
-    await Promise.resolve();
+    await vi.waitFor(() => expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true));
+    // An invalidation that refetched would have started the second call by now.
     expect(queryFn).toHaveBeenCalledOnce();
-    expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('idle');
     unsubscribe();
   });
 });
@@ -298,6 +292,47 @@ describe('applyLevelling — one undo step', () => {
       ['b', '2026-03-16'],
     ]);
   });
+});
+
+describe('applyLevelling — undo and redo versions, and their failures', () => {
+  it('redoes at the versions the undo returned, not the ones the forward write did', async () => {
+    await apply(preview());
+    const command = h.record.mock.calls[0]?.[0] as {
+      undo: () => Promise<void>;
+      redo: () => Promise<void>;
+    };
+    h.batch.mockClear();
+    h.batch.mockResolvedValue([
+      { id: 'a', version: 6 },
+      { id: 'b', version: 8 },
+    ]);
+    await command.undo();
+    h.batch.mockClear();
+    h.batch.mockResolvedValue([]);
+    await command.redo();
+    const sent = (h.batch.mock.calls[0]?.[0] as { placements: { id: string; version: number }[] })
+      .placements;
+    expect(sent.map((p) => [p.id, p.version])).toEqual([
+      ['a', 6],
+      ['b', 8],
+    ]);
+  });
+
+  it.each(['undo', 'redo'] as const)(
+    'a rejected %s surfaces, takes no recalculation hold of its own, and records nothing',
+    async (direction) => {
+      await apply(preview());
+      const command = h.record.mock.calls[0]?.[0] as Record<typeof direction, () => Promise<void>>;
+      expect(h.hold).toHaveBeenCalledOnce();
+      expect(h.release).toHaveBeenCalledOnce();
+      h.batch.mockRejectedValue(new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }));
+      await expect(command[direction]()).rejects.toMatchObject({ status: 409 });
+      // The forward write's hold is the only one there ever is, and it was released.
+      expect(h.hold).toHaveBeenCalledOnce();
+      expect(h.release).toHaveBeenCalledOnce();
+      expect(h.record).toHaveBeenCalledOnce();
+    },
+  );
 });
 
 describe('applyLevelling — refusals', () => {

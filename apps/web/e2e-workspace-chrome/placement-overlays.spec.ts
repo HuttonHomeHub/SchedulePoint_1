@@ -309,7 +309,10 @@ test.describe('the feasible window and the levelled lens', () => {
 
     // **The fixture guard.** The lens speaks its count from the same array that draws the ghosts
     // (`levelledOverlaySummary`), so this is "levelling moved at least one bar" read off the screen.
-    const moved = page.locator('p.sr-only', { hasText: /moved by resource levelling/i });
+    const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+    const moved = diagram.getByText(
+      /Levelled placement: \d+ activit\w+ moved by resource levelling/i,
+    );
     await expect(moved).toHaveCount(1);
     const countIn = async (): Promise<number> =>
       Number(/(\d+) activit/.exec((await moved.textContent()) ?? '')?.[1]);
@@ -338,6 +341,7 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
     const planned = Number(/Apply to (\d+)/.exec((await confirm.textContent()) ?? '')?.[1]);
     expect(planned, 'the preview lists exactly what the lens draws').toBe(ghosts);
+    expect(planned, 'one crane, two lifts: exactly one waits').toBe(1);
     const list = dialog.getByRole('table', { name: 'Activities that will move' });
     await expect(list.getByRole('row')).toHaveCount(planned + 1);
     // The preview writes nothing.
@@ -356,9 +360,23 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect
       .poll(placedCount, { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] })
       .toBe(planned);
+    // The spoken sentence is the lens's only accessible account of itself (the visible strip is
+    // aria-hidden), and it is unique to the "nothing to show" state.
     await expect(
-      page.locator('p[aria-hidden]', { hasText: /did not move any activity/i }),
-    ).toBeVisible({ timeout: 30_000 });
+      diagram.getByText(/Levelled placement: nothing to show — resource levelling did not move/i),
+    ).toHaveCount(1, { timeout: 30_000 });
+    // **Where the lift lands, not just that a bar was written.** Both lifts want the crane from the
+    // data date (Mon 2026-01-05), each for three days, and the crane holds one. The winner runs
+    // Mon-Wed, so the crane frees at the end of Wednesday and the other lift's first possible
+    // start is Thursday 2026-01-08 — a day boundary on a Mon-Fri or a 24/7 calendar alike, so there
+    // is no part-day rounding to reason about here (that case is the unit and API suites').
+    // Exactly one lift moves; the winner keeps its early date and carries no placement.
+    const applied = await placements(page, orgSlug);
+    const landed = applied.filter((row) => row.visualStart !== null);
+    expect(landed.map((row) => isoDay(row.visualStart))).toEqual(['2026-01-08']);
+    expect(
+      applied.filter((row) => row.visualStart === null).map((row) => isoDay(row.earlyStart)),
+    ).toEqual(['2026-01-05']);
     // Nothing left to apply, and the command says so rather than opening an empty dialog.
     await expect(command).toHaveAttribute('aria-disabled', 'true');
     await expect(command).toHaveAccessibleDescription('Levelling hasn’t moved any bars');

@@ -297,11 +297,13 @@ describe('ApplyLevellingDialog — the populated preview', () => {
   });
 
   it('windows a long list inside a bounded region instead of rendering thousands of rows', () => {
-    const items = Array.from({ length: 60 }, (_, i) => item(`m${String(i)}`));
+    const items = Array.from({ length: 500 }, (_, i) => item(`m${String(i)}`));
     loaded(application({ rows: items.map((i) => row(i.id)), items }));
     renderDialog();
     const table = screen.getByRole('table', { name: 'Activities that will move' });
-    expect(table).toHaveAttribute('aria-rowcount', '61');
+    expect(table).toHaveAttribute('aria-rowcount', '501');
+    // Windowed (ADR-0165): the count above is the whole list, the rendered rows are only those in view.
+    expect(within(table).getAllByRole('row').length).toBeLessThan(60);
   });
 
   it('tells the planner Undo is one step and is lost on reload', () => {

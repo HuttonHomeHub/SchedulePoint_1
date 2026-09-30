@@ -7,6 +7,8 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { derivePlanGating, scheduleRefusal } from '@/features/plan-lock';
+import { canCalculateSchedule, canManageHierarchy, canReportProgress } from '@/lib/rbac';
 
 /**
  * **Apply levelled dates…** — the command's five shaded reasons, their order, and the one state in
@@ -143,4 +145,43 @@ describe('the Apply levelled dates… command', () => {
     const shaded = renderRow(ctx({ levelledMoveCount: 0 }));
     expect((await axe(shaded.container)).violations).toEqual([]);
   });
+});
+
+/**
+ * **The role gate with the real logic.** The tests above hand the item a `scheduleRefusal` and a
+ * `canEditSchedule`; these build both the way the workspace model does (`derivePlanGating` +
+ * `scheduleRefusal`), so a change to either fails here and not only in the model's own suite.
+ *
+ * The shaded item is the one guard on the dialog's entry: `requestApplyLevelling` is a bare
+ * `openDialog`, the toolbar refuses an activation on an `aria-disabled` item, and nothing else in
+ * the app opens `apply-levelling`. The write itself is refused by the server for these roles.
+ */
+describe('the Apply levelled dates… command — the role gate, with the real gating logic', () => {
+  function gated(role: 'VIEWER' | 'CONTRIBUTOR', requestApplyLevelling: () => void) {
+    const gating = derivePlanGating({
+      penManaged: true,
+      holdsPen: true,
+      canWrite: canManageHierarchy(role),
+      canProgress: canReportProgress(role),
+      canCalculate: canCalculateSchedule(role),
+    });
+    return ctx({
+      canEditSchedule: gating.canEditSchedule,
+      scheduleRefusal: (action) => scheduleRefusal(gating, null, action),
+      requestApplyLevelling,
+    });
+  }
+
+  it.each(['VIEWER', 'CONTRIBUTOR'] as const)(
+    'shades it for a %s with the role reason, and pressing it opens nothing',
+    (role) => {
+      const requestApplyLevelling = vi.fn();
+      renderRow(gated(role, requestApplyLevelling), false);
+      expect(command()).toHaveAttribute('aria-disabled', 'true');
+      expect(command()).toHaveAccessibleDescription('Your role cannot apply levelled dates.');
+      fireEvent.click(command());
+      fireEvent.keyDown(command(), { key: 'Enter' });
+      expect(requestApplyLevelling).not.toHaveBeenCalled();
+    },
+  );
 });
