@@ -11,7 +11,8 @@ import { TsldPanel } from './TsldPanel';
  * sentence fell back to `'visual'` while the painter drew late-dated bars: a member with the
  * overlay on saw one span and heard another.
  */
-vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
+const announceSpy = vi.fn();
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 const ACTIVITY: ActivitySummary = {
   drivingResourceCalendarId: null,
@@ -96,11 +97,45 @@ function rowText(barDateSource: 'visual' | 'late'): string {
 describe('the listbox sentence follows the drawn date source', () => {
   it('speaks the late dates while the Late overlay is on', () => {
     const text = rowText('late');
-    expect(text).toContain('10 Feb 2026 to 12 Feb 2026');
+    expect(text).toContain('late dates 10 Feb 2026 to 12 Feb 2026');
     expect(text).not.toContain('Jan 2026');
   });
 
   it('speaks the placed dates otherwise', () => {
-    expect(rowText('visual')).toContain('01 Jan 2026 to 03 Jan 2026');
+    const text = rowText('visual');
+    expect(text).toContain('01 Jan 2026 to 03 Jan 2026');
+    expect(text).not.toContain('late dates');
+  });
+});
+
+describe('switching the Late overlay is announced', () => {
+  const panel = (barDateSource: 'visual' | 'late') => (
+    <TsldPanel
+      activities={[ACTIVITY]}
+      dependencies={[]}
+      dataDate="2026-01-01"
+      barDateSource={barDateSource}
+      canEdit={false}
+      fill
+    />
+  );
+  const lateCalls = () =>
+    announceSpy.mock.calls.map((c) => c[0]).filter((m) => /dates shown/.test(String(m)));
+
+  it('says nothing on first render, then speaks each switch', () => {
+    announceSpy.mockClear();
+    const { rerender } = render(panel('visual'));
+    expect(lateCalls()).toEqual([]);
+    rerender(panel('late'));
+    expect(lateCalls()).toEqual(['Late dates shown.']);
+    rerender(panel('visual'));
+    expect(lateCalls()).toHaveLength(2);
+    expect(lateCalls()[1]).toBe('Placed dates shown.');
+  });
+
+  it('does not announce when opened with the overlay already on', () => {
+    announceSpy.mockClear();
+    render(panel('late'));
+    expect(lateCalls()).toEqual([]);
   });
 });

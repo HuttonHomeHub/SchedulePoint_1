@@ -87,7 +87,7 @@ every failure by `AllExceptionsFilter`:
   thrown `DomainError` subclass (`common/errors/domain-errors.ts`) or, for
   framework errors, from the status: `NOT_FOUND`, `CONFLICT`, `FORBIDDEN`,
   `VALIDATION_FAILED`, `GONE`, `LOCKED`, `UNAUTHENTICATED`, `BAD_REQUEST`,
-  `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`, `INTERNAL_ERROR`. That is the whole set —
+  `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `RATE_LIMITED`, `INTERNAL_ERROR`. That is the whole set —
   do not expect a per-resource code like `PLAN_NOT_FOUND` on the wire.
 - **The specific condition lives in `details.reason`.** This is the field a
   client branches on. Every named code elsewhere in this document —
@@ -121,13 +121,14 @@ every failure by `AllExceptionsFilter`:
 | 200  | Successful read/update                                     |
 | 201  | Resource created (include `Location`)                      |
 | 204  | Success, no body (delete, or a lifecycle-flag sub-action)  |
-| 400  | Malformed request                                          |
+| 400  | Malformed request (including an unreadable body, below)    |
 | 401  | Not authenticated                                          |
 | 403  | Authenticated but not authorised                           |
 | 404  | Resource not found                                         |
 | 409  | Conflict (e.g. duplicate, optimistic-lock version clash)   |
 | 410  | Gone — the resource existed but has expired (e.g. a token) |
 | 413  | Payload too large — body exceeds the boundary cap (below)  |
+| 415  | Unsupported charset or content encoding on a body (below)  |
 | 422  | Validation failed                                          |
 | 423  | Locked — the plan edit-lock precondition failed (ADR-0028) |
 | 429  | Rate limited                                               |
@@ -152,6 +153,19 @@ body answers `413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; bef
 an opaque 500. Because the parser cannot validate a credential, a junk cookie still buys the 512 KB
 read before the 401. Multipart uploads are a separate cap (the interchange upload cap, see
 Interchange below).
+
+**400 and 415 from the body parser.** A body the parser cannot read is the client's fault and
+answers so, in the standard envelope, before any guard: truncated or malformed JSON, a request
+aborted mid-body, a length that did not match `Content-Length`, or a corrupt `gzip`/`br`/`deflate`
+body is `400 BAD_REQUEST` with the fixed text "The request body could not be read."; a charset or `Content-Encoding` the parser does
+not support is `415 UNSUPPORTED_MEDIA_TYPE`. The parser's own message is never echoed (it carries
+byte counts and parse positions). Before #412, malformed JSON was already a 400 but **echoed the
+parser's message** (Nest turns the parser's `SyntaxError` into a `BadRequestException` carrying it),
+and every other case here was an opaque 500 logged as an incident. **JSON is the only body format parsed**: a `application/x-www-form-urlencoded` body is
+not read (`req.body` is undefined) — the form parser was removed in #415, having taken 100 KB from
+any caller beside the 64 KB promise above. The 64 KB figure bounds every body **this app's own
+parsers** read; `/api/auth/*` (Better Auth) is mounted before them and reads its own bodies, outside
+that cap (#416).
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and

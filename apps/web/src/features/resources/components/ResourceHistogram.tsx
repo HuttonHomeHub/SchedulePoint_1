@@ -33,6 +33,16 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 export const NO_RESOURCE_LOADING_MESSAGE =
   'No resource loading to show yet — assign resources with budgeted units and recalculate the schedule.';
 
+/**
+ * What the load chart is counted on (#413). The histogram reads each activity's EARLIEST dates
+ * (`loadResourceHistogramAssignments` selects only `earlyStart`/`earlyFinish`), while bars are drawn
+ * at their placed dates, so a bar dragged later still counts as load where it could earliest start.
+ * One constant for this dialog and the canvas strip, so the two cannot be reworded apart. The
+ * basis itself is decided with levelling; until then the chart says what it counts.
+ */
+export const RESOURCE_LOAD_BASIS_NOTE =
+  'Load is counted on each activity’s earliest dates, not where its bar is drawn.';
+
 export function ResourceHistogram({
   orgSlug,
   planId,
@@ -47,6 +57,7 @@ export function ResourceHistogram({
   const resources = useResources(orgSlug);
   const granularityId = useId();
   const tableCaptionId = useId();
+  const loadBasisId = useId();
 
   const nameById = new Map((resources.data ?? []).map((r) => [r.id, r.name]));
   const resourceName = (id: string): string => nameById.get(id) ?? 'Unknown resource';
@@ -89,11 +100,20 @@ export function ResourceHistogram({
   }, [series, buckets.length, stackBy, resources.data]);
 
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={tableCaptionId}>
+    <section
+      className="flex flex-col gap-4"
+      aria-labelledby={tableCaptionId}
+      aria-describedby={loadBasisId}
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h3 id={tableCaptionId} className="text-sm font-semibold">
-          Resource loading histogram
-        </h3>
+        <div className="flex flex-col gap-1">
+          <h3 id={tableCaptionId} className="text-sm font-semibold">
+            Resource loading histogram
+          </h3>
+          <p id={loadBasisId} className="text-muted-foreground text-sm">
+            {RESOURCE_LOAD_BASIS_NOTE}
+          </p>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <StackByControl
             id={stackById}

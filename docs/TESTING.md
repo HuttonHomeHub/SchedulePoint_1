@@ -436,6 +436,8 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 20  | `pnpm check:surface-contract`                               | you gave a scheduling field a storage or API half — the gate asks for its UI half                 |
 | 21  | `pnpm check:browser-safe`                                   | you changed a shared package's barrel, or imported a Node-only module into one                    |
 | 22  | `pnpm check:advisory-agreement`                             | you changed `prepush.sh`'s `ADVISORY_GATES`, or a gate's exit convention                          |
+| 23  | `pnpm check:format`                                         | always (`pnpm format` fixes it); CI runs the same command                                         |
+| 24  | `pnpm check:web-bundle`                                     | you changed anything the web bundle imports — a dependency, a route, a lazy boundary (ADR-0160)   |
 
 **Steps 17–22 were missing until 2026-09-13, and the reason is this table's own subject.** It calls
 itself the reference for what each step is, and it is **hand-maintained beside a roster
@@ -447,7 +449,10 @@ table to answer _"I filed an ADR, what should I run?"_ was told `check:counts` a
 `check:adr-coverage`, which is the narrower of the two. That is the failure the paragraph above
 the table already names: _assembling this list by hand at the call site is what actually fails_.
 Re-derived and reconciled: the table now lists **all 19** `check:*` gates
-(`docs/TECH_DEBT.md` #191).
+(`docs/TECH_DEBT.md` #191). **And it happened again:** `check:format` (#719) and `check:web-bundle` (#705)
+joined `prepush.sh`'s derived roster in the ADR-0160 week and not this table; the 2026-09-29
+reconciliation pass added them as steps 23–24. Two misses in two weeks is the argument for deriving
+the table's first column from `package.json`, which is not built.
 
 **Step 16 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
 exits **2**, not 1: the rule is that **exit 1 is for an obligation whose remedy is an edit to the
@@ -519,7 +524,8 @@ with no flag pin reaching the bundle. The script now probes 3000 and 5173 and ex
 running; `E2E_ALLOW_EXISTING_SERVER=1` overrides it, and is only ever right if you started that
 server with the suite's exact environment.
 
-**It is not a per-change step** — thirty-three suites is about forty minutes. Its trigger is a change
+**It is not a per-change step** — it runs every suite (`pnpm check:counts` owns the number; it was
+thirty-three when this said so), and at thirty-three it took about forty minutes. Its trigger is a change
 every journey passes through, and its first two runs say why:
 
 - ADR-0098 replaced the landing every journey signs in through. A `grep` for the deleted heading

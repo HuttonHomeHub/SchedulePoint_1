@@ -1,6 +1,7 @@
 # ADR-0033: Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date
 
-- **Status:** Accepted
+- **Status:** Accepted; **amended by [ADR-0148](0148-visual-is-the-plan.md)**, which removed
+  the two scheduling modes (D1's `EARLY`/`VISUAL` split) — read that ADR before this one's mode sections
 - **Date:** 2026-07-14
 - **Deciders:** James Ewbank (with Claude Code — feature-analyst)
 - **Related:** ADR-0021 (DAG invariant), ADR-0022 (CPM synchronous recalculate),

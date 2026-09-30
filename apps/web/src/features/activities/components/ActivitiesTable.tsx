@@ -1067,7 +1067,11 @@ export function ActivitiesTable({
       {/* `scroll="contained"`: this table is the ONE scroller inside a height-capped pane
           (`ActivityBottomPanel`), so its header pins while the rows scroll underneath it
           (TECH_DEBT #334, `docs/specs/activities-panel-scale/`). Every other `DataTable` consumer
-          stays on the default `'page'` scroll, which this table used before M1. */}
+          stays on the default `'page'` scroll, which this table used before M1.
+
+          `windowed`: only the rows in view are in the DOM (ADR-0165, #334 M3), so opening a long plan
+          costs the window and not the plan. Find-in-page cannot find a row that is not in view; the
+          diagram's listbox lists every activity. */}
       <DataTable
         caption="Activities"
         columns={columns}
@@ -1079,6 +1083,7 @@ export function ActivitiesTable({
           <>No activities yet.{canEditSchedule ? ' Add the first activity to this plan.' : ''}</>
         }
         scroll="contained"
+        windowed
       />
 
       {RESOURCES_ENABLED && !hostOwnsResources ? (

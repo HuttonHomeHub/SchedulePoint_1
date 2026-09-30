@@ -47,6 +47,12 @@ CHECKS_ONLY=0
 
 failed=()
 warned=()
+# One log per RUN, not one fixed path: two prepush gates running at once (builders do) used to share
+# `/tmp/prepush-last.log`, so a FAIL could print the other run's last 12 lines (docs/TECH_DEBT.md
+# #414). Removed on every exit; INT/TERM go through `exit` so the EXIT trap always runs.
+log="$(mktemp "${TMPDIR:-/tmp}/prepush.XXXXXX")"
+trap 'rm -f "$log"' EXIT
+trap 'exit 130' INT TERM
 # **Three result states, not two** (`docs/specs/drift-gates/`, product-owner decision 2026-08-30).
 #
 #   0  ok    — clean.
@@ -110,17 +116,17 @@ is_advisory() {
 
 run() {
   local label="$1"; shift
-  "$@" >/tmp/prepush-last.log 2>&1
+  "$@" >"$log" 2>&1
   local code=$?
   if [ $code -eq 0 ]; then
     printf '  \033[32mok\033[0m    %s\n' "$label"
   elif [ $code -eq 2 ] && is_advisory "$label"; then
     printf '  \033[33mWARN\033[0m  %s\n' "$label"
-    tail -12 /tmp/prepush-last.log | sed 's/^/        /'
+    tail -12 "$log" | sed 's/^/        /'
     warned+=("$label")
   else
     printf '  \033[31mFAIL\033[0m  %s\n' "$label"
-    tail -12 /tmp/prepush-last.log | sed 's/^/        /'
+    tail -12 "$log" | sed 's/^/        /'
     failed+=("$label")
   fi
 }

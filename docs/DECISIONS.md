@@ -10,6 +10,109 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-29 — Correction: malformed JSON was never a 500
+
+**What was decided.** The reconciliation pass entry below says `entity.parse.failed` "still reaches
+the opaque-500 branch", and `#412` was filed on that. **It was half wrong.** Nest's router error layer
+rewrites any `SyntaxError` into `new BadRequestException(err.message)` before a filter runs
+(`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON failure is a `SyntaxError`,
+so malformed JSON was always a **400, but one echoing the parser's text**. The other cases the pass
+named (charset, encoding, corrupt compression) really were 500s.
+
+**How it was found, which is the point.** The claim was established by reading the filter, not by
+sending a request. So was the first fix: it passed all 20 filter unit cases and still echoed the
+text, because a unit spec that calls `filter.catch()` directly never runs Nest's router.
+`body-limit.e2e-spec.ts` caught it on its first run. That is §19.8's e2e half doing exactly what it
+says it is for, and ADR-0076 Class 3 in the pass that exists to find Class 3. The entry below is
+left as written; `#412`'s closing note and `docs/API.md` now say what was true.
+
+---
+
+## 2026-09-29 — Reconciliation pass: the fix for one parser error left its siblings, and the one-line register dropped its qualifiers
+
+**What was decided.** The pass `docs/HANDOFF.md` said was due — ten ADRs since 2026-09-23
+(ADR-0155 … ADR-0164). `check:reconcile-due` could not count them here (this worktree is a shallow
+clone, and the gate says so rather than guessing); the ADR files were counted directly. Every
+computed gate was green before it started (`check:counts`, `check:claims` at 119 claims,
+`check:adr-coverage` 164 of 164, `check:spec-status`, `check:flags`, `check:doc-links`,
+`check:debt-status` 157 detailed rows), so every finding below is prose or a default those gates
+cannot read. Steps 1–7 were run by five read-only agents and **every finding recorded here was
+re-read at the cited line by the orchestrator** before it was written down.
+
+**The pass's shape: a fix made narrowly correct, with its siblings left as they were.**
+
+1. **`#407` taught the exception filter one body-parser error and left the others as 500s.**
+   `isBodyTooLarge` (`all-exceptions.filter.ts:30-36`) matches `entity.too.large` only. The installed
+   `body-parser@2.3.0` also throws `entity.parse.failed` (`lib/read.js:166`), `entity.verify.failed`,
+   `charset.unsupported` and `parameters.too.many`, and all of them still reach the opaque-500 branch.
+   So truncated JSON is logged as a server fault, the same shape `#407` was filed for. Filed as
+   **`#412`**.
+2. **The same file's comment promised 64 KB to anonymous callers, and the form parser takes 100.**
+   `app-setup.ts:114` mounts `urlencoded({ extended: true })` with no limit. body-parser's default is
+   `102400` (`lib/utils.js:61-63`), and no route reads a form body. `docs/API.md:148`'s "Everything
+   else is 64 KB" is true of JSON only. Filed as **`#415`**.
+3. **`#405` said the resource histogram "is not part of this row" and tracked it nowhere.**
+   `loadResourceHistogramAssignments` (`schedule.repository.ts:660-691`) still selects only early
+   dates. Every other reader moved to placed dates on 2026-09-29. Filed as **`#413`**, as a
+   product-owner question, because the leveller shares the basis (`engine/level.ts:165`).
+   `#405` itself had closed all three parts while its title and trigger still described them as
+   open. It is retitled to what is actually left: the breaking field rename.
+
+**The one-line §16 (#723) lost decision-bearing qualifiers.** The generator kept only the first word
+of each ADR's status line. So ADR-0071 rendered as `(?)`, and six more lost an "amended by" or
+"superseded" clause: ADR-0017, 0023, 0024, 0051, 0091 and 0092. The worst case is **ADR-0033**,
+whose one-liner still advertised "Early/Visual authoring" nine days after ADR-0148 removed the
+modes. Its own header did not say it was amended either, which is the ADR-0134 gap the 2026-09-23
+pass found, one ADR along. All seven are restored from the files' status lines, and ADR-0033's
+header now names ADR-0148.
+
+**The gate-list table missed two gates again.** `docs/TESTING.md`'s "Before you push" table lacked
+`check:format` (#719) and `check:web-bundle` (#705). It had been re-derived on 2026-09-13 for exactly
+this reason (`#191`). `docs/PROCESS.md`'s completion criteria still gave the pre-§19.8
+`pnpm lint && pnpm typecheck && pnpm test`, which is the wording that already cost a CI round. Both
+are corrected. Deriving the table from `package.json` is recorded there as the fix nobody has built.
+
+**Agents.** `security-reviewer.md` knew nothing of the body caps (#407) or ADR-0163's guest widening.
+`api-reviewer.md`'s status-code list omitted 413. Both are updated, including the two "not yet true"
+rows above, so the reviewers will catch them rather than assume them. Model pins match §19.14.
+
+**Smaller.**
+
+- `DESIGN_SYSTEM.md` and a `paint.ts` docblock described M5's fan-out and dashed lag-run in the
+  present tense. Both were retired: ADR-0151 D4 retired fan-out, and no link is dashed.
+- `ARCHITECTURE.md` §10 said "no user file uploads" beside an importer that takes multipart uploads.
+  They are parsed in memory and discarded.
+- `TESTING.md` quoted "thirty-three suites"; there are 46.
+- Four `dependency-claims.json` registrations were orphaned by #721's deletion of the reset-timing
+  row. They are removed (115 claims, then 118 once this pass registered its own three new citations). Every behaviour they backed is still covered by a live
+  claim.
+- `#336`'s line cite had moved and is now a symbol.
+- `#411`, the ESLint cache row, gains the observed instance: 14 spurious errors replayed from a cache
+  filled before `prisma generate`. It also gains the mechanism, read from `lint-result-cache.js:56`
+  and `:182`.
+- New row **`#414`**: `prepush.sh` writes every run's log to one fixed `/tmp` path, so concurrent
+  builders read each other's failures.
+
+**Negative results.**
+
+- The three `REFERENCE_FEATURE.md` exemplars exist and are representative. Its illustrative tree
+  names files `clients` does not have, but its own text already concedes this.
+- No manifest names an absent library, and the twelve `description` fields are true.
+- `ARCHITECTURE.md` §10's unbuilt ADRs are all still unbuilt, and ADR-0155–0164 are all built.
+- #724's API.md text matches the code on the placed-date readers.
+- ADR-0164's `--max-warnings=0` is in all nine lint scripts.
+- The register sample (about 55 of 157 detailed rows, 26 checked against code) found every
+  2026-09-28/29 closure true in code.
+
+**Could not be verified here.**
+
+- The rest of the register, by the sample's own count.
+- Step 5a's first-commit dates, which need a full clone. Its candidates were chosen by reading.
+- Whether Better Auth's node handler bounds its own request bodies. Nothing of ours caps `/api/auth/*`.
+- #334 M2's effect. Its M0-harness re-measurement is still owed.
+
+---
+
 ## 2026-09-29 — A per-instance external store is allowed to keep row state out of memoised columns
 
 **What.** A hand-rolled external store read through `useSyncExternalStore` is permitted in the

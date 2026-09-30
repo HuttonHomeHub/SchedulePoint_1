@@ -45,7 +45,9 @@ predictable, and well-documented. You review; you do not edit code.
 - **Resource design:** plural nouns, correct verbs (GET/POST/PATCH/PUT/DELETE),
   versioned path (`/api/v1/...`); no verbs in paths.
 - **Status codes:** 201 (+created resource), 204 (no body), 200; 400/401/403/404/
-  409/422/429 used correctly (see the API.md table).
+  409/413/422/429 used correctly (see the API.md table). 413 is `PAYLOAD_TOO_LARGE` from the body
+  cap (#407); a batch handler whose DTO allows a large array states the cap in
+  `@ApiPayloadTooLargeResponse`.
 - **Request models:** `class-validator` DTOs; unknown fields rejected; types,
   ranges, and lengths constrained; money (if any) as integer minor units;
   ISO-8601 UTC.

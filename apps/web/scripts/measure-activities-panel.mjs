@@ -329,10 +329,21 @@ function findsDevClient() {
   return [...document.scripts].some((s) => s.src.includes('/@vite/client'));
 }
 
-/** Non-vacuity: the table renders every row, and the schedule has actually run. */
+/**
+ * Non-vacuity: the table REPRESENTS every row, and the schedule has actually run.
+ *
+ * **Changed for M3 (ADR-0165), 2026-09-29.** Before windowing "represents" meant "renders": every
+ * activity was a `<tr>`. A windowed table renders ~50 rows and declares the rest through
+ * `aria-rowcount` (header + rows) with `aria-hidden` spacer rows around the window, so the check reads
+ * the declared count when present and excludes spacers from what it counts. The bars and the verdict
+ * rule are untouched; only this probe learnt the new shape, and without the change every M3 run would
+ * throw on repeat 0.
+ */
 function nonVacuityProbe() {
   const table = document.querySelector('table');
-  const rowsRendered = table ? table.querySelectorAll('tbody tr').length : 0;
+  const bodyRows = table ? [...table.querySelectorAll('tbody tr:not([aria-hidden="true"])')] : [];
+  const declared = Number(table?.getAttribute('aria-rowcount'));
+  const rowsRendered = Number.isFinite(declared) && declared > 0 ? declared - 1 : bodyRows.length;
   const headers = table
     ? [...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
     : [];
@@ -340,11 +351,10 @@ function nonVacuityProbe() {
   const floatCells =
     floatColumnIndex === -1
       ? []
-      : [...(table?.querySelectorAll('tbody tr') ?? [])].map((tr) =>
-          tr.children[floatColumnIndex]?.textContent?.trim(),
-        );
+      : bodyRows.map((tr) => tr.children[floatColumnIndex]?.textContent?.trim());
   return {
     rowsRendered,
+    rowsInDom: bodyRows.length,
     floatColumnFound: floatColumnIndex !== -1,
     allFloatCellsDash: floatCells.length > 0 && floatCells.every((c) => c === '—'),
   };
@@ -547,6 +557,27 @@ async function measurePlan({ browser, orgSlug, planId, expectedRowCount, viewpor
       await page.getByRole('table').waitFor({ timeout: 10_000 });
 
       if (repeat === 0) {
+        // Wait for the list to finish loading before judging it. At 4x CPU the probe used to run
+        // while the activity list was still arriving and counted 3 rows of 2,160, which aborted both
+        // the M0 run and the first M3 run before their 1920 passes (m0-measurement.md, "What stopped
+        // the run"). A timeout here still falls through to the probe, which then throws as before.
+        await page
+          .waitForFunction(
+            (expected) => {
+              // Runs in the PAGE, like the probes below (their `eslint-disable no-undef` blocks).
+              // eslint-disable-next-line no-undef
+              const table = document.querySelector('table');
+              const declared = Number(table?.getAttribute('aria-rowcount'));
+              const n =
+                Number.isFinite(declared) && declared > 0
+                  ? declared - 1
+                  : (table?.querySelectorAll('tbody tr:not([aria-hidden="true"])').length ?? 0);
+              return n === expected;
+            },
+            expectedRowCount,
+            { timeout: 120_000 },
+          )
+          .catch(() => undefined);
         const probe = await page.evaluate(nonVacuityProbe);
         rowsRendered = probe.rowsRendered;
         if (rowsRendered !== expectedRowCount) {
@@ -788,6 +819,9 @@ async function main() {
               `bar ${String(judged.bar)}${direction === 'max' ? 'ms' : 'fps'}  ${judged.verdict}` +
               (judged.indeterminateReason ? `\n      — ${judged.indeterminateReason}` : ''),
           );
+          // The repeats in order, so an outlier can be placed (repeat 0 also carries limb A's CDP
+          // capture). Printed, never judged.
+          console.log(`      repeats: ${values.map((v) => String(v)).join(', ')}`);
           return { label, ...judged, values };
         };
 

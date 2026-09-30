@@ -241,8 +241,9 @@ A feature is complete **only** when all hold:
 - ✓ **Code implemented** to the approved design
 - ✓ **Tests completed** (unit + integration/API + e2e/a11y as applicable; ≥ 80%
   on changed code; regression test for any bug fixed)
-- ✓ **The pre-push gate was run, not just written** — `pnpm lint && pnpm
-typecheck && pnpm test`, plus `scripts/e2e-local.sh api` for an `apps/api`
+- ✓ **The pre-push gate was run, not just written** — `pnpm prepush`
+  (one command: it derives every `check:*` gate, format and the web bundle budget included, from
+  `package.json` — `CLAUDE.md` §19.8), plus `scripts/e2e-local.sh api` for an `apps/api`
   change and `scripts/e2e-local.sh web:<suite>` for a new or changed flag-on
   journey (see [`docs/TESTING.md`](TESTING.md) "Before you push"). **CI is the
   second opinion, never the first.** A journey drives a real browser against a

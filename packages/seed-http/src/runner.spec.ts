@@ -173,6 +173,30 @@ describe('seedPlan', () => {
     expect(parentCalls).toHaveLength(1);
   });
 
+  it('splits WBS parentage into batches the endpoint accepts (at most 2,000 rows each)', async () => {
+    const fetchMock = acceptEverything();
+    globalThis.fetch = fetchMock;
+    const children = Array.from({ length: 2001 }, (_, i) => ({
+      ...activity(`A${String(i)}`),
+      key: `A${String(i)}`,
+      parentKey: 'W1',
+    }));
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({
+        activities: [
+          { ...activity('W1'), key: 'W1', type: 'WBS_SUMMARY', durationMinutes: 0 },
+          ...children,
+        ],
+      }),
+    );
+    const sizes = callsOf(fetchMock)
+      .filter((call) => call.url.endsWith('/activities/parents'))
+      .map((call) => (JSON.parse(call.body ?? '{}') as { parents: unknown[] }).parents.length);
+    expect(sizes).toEqual([2000, 1]);
+  });
+
   it('carries the plan-level scheduling options through', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;

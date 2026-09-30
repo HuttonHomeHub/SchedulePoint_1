@@ -752,6 +752,22 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   engine-independent answer for whose border wins. Do not reach for `'contained'` outside a bounded
   pane: for every other consumer it is exactly as inert as an unpinned header is here.
 
+  **`windowed` renders only the rows in view, and it is a trade, not a polish** (ADR-0165,
+  TECH_DEBT #334 M3). Opt-in, valid only with `scroll="contained"` and refused with `renderDetail`
+  (both enforced by the props' type, so a wrong combination does not compile). Only the activities
+  table uses it. The hook lives in a child (`data-table-windowed-body.tsx`) so the React Compiler
+  lint bail-out never covers `DataTable`'s 24 call sites. It keeps the native `<table>`, with
+  `aria-hidden` spacer rows above and below the window, `aria-rowcount` (rows + the header) on the
+  table and `aria-rowindex` on each rendered row. **Its costs:** find-in-page (Ctrl+F) cannot find
+  a row outside the window; a screen reader's table navigation reaches such a row only as the
+  window moves; and column widths are measured once from the first window and frozen (re-measured
+  only when the columns or the scroller's width change), so a longer value that scrolls into view
+  wraps inside its column instead of widening it. `width: 'fit'` therefore means "what the first
+  window needed" in this mode, which amends ADR-0146 for a windowed table. The announced size is
+  reasoned from ARIA 1.2, not observed with a screen reader. Do not switch it on for a table whose
+  rows people search with Ctrl+F. Tests that need more rows than the first window (about 29 in
+  jsdom) use `setWindowedRowBudgetForTests`, never a production flag.
+
   > **This entry claimed five features the component does not have** — sortable headers, pagination,
   > row selection, a sticky header and per-column alignment — and was corrected by reading
   > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
@@ -991,12 +1007,14 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   enters the canvas. Canvas palettes resolve once per theme bump
   (`use-theme-version.ts`), never per frame.
 - **TSLD canvas link refresh (ADR-0052 M5)** — the refreshed link layer adds
-  **no** palette entries: rounded elbows, fan-out and the dashed lag-run
-  depiction restyle shape only (the run strokes in the existing
-  `--color-muted-foreground` edge colour), and the incident-link
-  hover/selection highlight reuses the `--color-ring` selection colour at the
-  next line-weight step up, keeping each pass's dash state — the highlight and
-  the driving cue are weight + dash changes, never colour alone.
+  **no** palette entries: rounded elbows restyle shape only, in the existing
+  `--color-muted-foreground` edge colour, and the incident-link hover/selection
+  highlight reuses the `--color-ring` selection colour at the next line-weight
+  step up — a weight change, never colour alone. M5 also added fan-out and a
+  dashed lag-run; both are **since retired** (ADR-0151 D4 retired fan-out, and no
+  link is dashed any more — see the link grammar below). _Corrected by the
+  2026-09-29 reconciliation pass, which found this bullet still describing both
+  in the present tense._
 - **TSLD Today pill (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F6b, ADR-0056)** — one
   new token, `--color-destructive-foreground` reused as `todayInk` (no new CSS variable — every
   theme already defines it for its destructive-hue text), added to both palette resolvers as the

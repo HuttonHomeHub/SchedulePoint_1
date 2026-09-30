@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1400 web
+> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1403 web
 > source files with 46 Playwright suites beside the base journey, and
-> 164 ADRs.
+> 165 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -417,14 +417,14 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0014** _(Superseded by ADR-0057)_ — Reference feature as a non-shipping template → [`0014-reference-feature-as-non-shipping-template.md`](docs/adr/0014-reference-feature-as-non-shipping-template.md)
 - **ADR-0015** _(Superseded by ADR-0057)_ — Template-driven feature development → [`0015-template-driven-feature-development.md`](docs/adr/0015-template-driven-feature-development.md)
 - **ADR-0016** _(Accepted)_ — Core identity & tenancy model + organisation role set → [`0016-core-identity-tenancy-role-model.md`](docs/adr/0016-core-identity-tenancy-role-model.md)
-- **ADR-0017** _(Accepted)_ — Release tagging & image publishing via GitHub Actions → [`0017-release-tagging-and-image-publishing.md`](docs/adr/0017-release-tagging-and-image-publishing.md)
+- **ADR-0017** _(Accepted; single-aggregate-tag scheme superseded by ADR-0027)_ — Release tagging & image publishing via GitHub Actions → [`0017-release-tagging-and-image-publishing.md`](docs/adr/0017-release-tagging-and-image-publishing.md)
 - **ADR-0018** _(Accepted)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
 - **ADR-0019** _(Accepted)_ — Shared workspace packages ship compiled output → [`0019-shared-package-build-contract.md`](docs/adr/0019-shared-package-build-contract.md)
 - **ADR-0020** _(Accepted)_ — CI builds and smoke-boots the container images → [`0020-ci-image-smoke-boot.md`](docs/adr/0020-ci-image-smoke-boot.md)
 - **ADR-0021** _(Accepted)_ — Activity dependency graph — the DAG invariant & service-layer cycle prevention → [`0021-dependency-graph-dag-invariant.md`](docs/adr/0021-dependency-graph-dag-invariant.md)
 - **ADR-0022** _(Accepted)_ — CPM execution & persistence model (synchronous endpoint + engine-owned write) → [`0022-cpm-execution-and-persistence-model.md`](docs/adr/0022-cpm-execution-and-persistence-model.md)
-- **ADR-0023** _(Accepted)_ — CPM scheduling date convention (continuous-internal / inclusive-display) → [`0023-cpm-scheduling-date-convention.md`](docs/adr/0023-cpm-scheduling-date-convention.md)
-- **ADR-0024** _(Accepted)_ — Working-day calendars (model, engine integration & scope) → [`0024-working-day-calendars.md`](docs/adr/0024-working-day-calendars.md)
+- **ADR-0023** _(Accepted; amended by ADR-0036 and ADR-0155)_ — CPM scheduling date convention (continuous-internal / inclusive-display) → [`0023-cpm-scheduling-date-convention.md`](docs/adr/0023-cpm-scheduling-date-convention.md)
+- **ADR-0024** _(Accepted; amended by ADR-0036)_ — Working-day calendars (model, engine integration & scope) → [`0024-working-day-calendars.md`](docs/adr/0024-working-day-calendars.md)
 - **ADR-0025** _(Accepted)_ — Baselines — snapshot-copy model, one-active-per-plan invariant & server-side working-day variance → [`0025-baselines-snapshot-and-variance.md`](docs/adr/0025-baselines-snapshot-and-variance.md)
 - **ADR-0026** _(Accepted)_ — TSLD canvas — Canvas 2D rendering, coordinate/viewport model, interaction & accessibility architecture → [`0026-tsld-canvas-rendering-and-architecture.md`](docs/adr/0026-tsld-canvas-rendering-and-architecture.md)
 - **ADR-0027** _(Accepted)_ — Per-package release tagging & per-image versions → [`0027-per-package-release-tagging.md`](docs/adr/0027-per-package-release-tagging.md)
@@ -433,7 +433,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0030** _(Proposed)_ — Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel → [`0030-canvas-first-plan-workspace.md`](docs/adr/0030-canvas-first-plan-workspace.md)
 - **ADR-0031** _(Proposed)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
-- **ADR-0033** _(Accepted)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
+- **ADR-0033** _(Accepted; amended by ADR-0148 — the two scheduling modes are gone)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
 - **ADR-0034** _(Accepted)_ — Engine conformance & validation methodology → [`0034-engine-conformance-methodology.md`](docs/adr/0034-engine-conformance-methodology.md)
 - **ADR-0035** _(Proposed)_ — SchedulePoint CPM semantics (the golden contract) → [`0035-schedulepoint-cpm-semantics.md`](docs/adr/0035-schedulepoint-cpm-semantics.md)
 - **ADR-0036** _(Accepted)_ — Hour/shift-granular calendars & durations (engine rework) → [`0036-hour-granular-calendars-and-durations.md`](docs/adr/0036-hour-granular-calendars-and-durations.md)
@@ -451,7 +451,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0048** _(Accepted)_ — Client-side command-stack undo/redo for plan authoring → [`0048-undo-redo-command-stack.md`](docs/adr/0048-undo-redo-command-stack.md)
 - **ADR-0049** _(Proposed)_ — Canvas-axis-aligned resource strip — a shared-viewport sibling canvas layer → [`0049-canvas-axis-aligned-resource-strip.md`](docs/adr/0049-canvas-axis-aligned-resource-strip.md)
 - **ADR-0050** _(Accepted)_ — Schedule interchange — canonical model + import pipeline → [`0050-schedule-interchange-canonical-model.md`](docs/adr/0050-schedule-interchange-canonical-model.md)
-- **ADR-0051** _(Accepted)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
+- **ADR-0051** _(Accepted; amended by ADR-0163)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
 - **ADR-0052** _(Accepted)_ — TSLD direct manipulation & canvas visual refresh → [`0052-canvas-direct-manipulation-and-visual-refresh.md`](docs/adr/0052-canvas-direct-manipulation-and-visual-refresh.md)
 - **ADR-0053** _(Accepted)_ — Calendar scoping tiers & the resource management layer → [`0053-calendar-scoping-and-resource-management.md`](docs/adr/0053-calendar-scoping-and-resource-management.md)
 - **ADR-0054** _(Accepted)_ — Canvas live feedback & GPM float/drift visualisation → [`0054-canvas-live-feedback-and-float-visualisation.md`](docs/adr/0054-canvas-live-feedback-and-float-visualisation.md)
@@ -470,7 +470,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0068** _(Accepted)_ — A calendar carries an hours-per-day → [`0068-calendar-hours-per-day.md`](docs/adr/0068-calendar-hours-per-day.md)
 - **ADR-0069** _(Accepted)_ — A shared lane-layout package, and packing an imported programme → [`0069-shared-lane-layout-and-packing-at-import.md`](docs/adr/0069-shared-lane-layout-and-packing-at-import.md)
 - **ADR-0070** _(Accepted)_ — Sub-day durations and lags in the authoring surface → [`0070-sub-day-durations-and-lags-in-the-authoring-surface.md`](docs/adr/0070-sub-day-durations-and-lags-in-the-authoring-surface.md)
-- **ADR-0071** _(?)_ — Per-assignment lag, and what it costs the levelling and Earned-Value parity arguments → [`0071-per-assignment-lag.md`](docs/adr/0071-per-assignment-lag.md)
+- **ADR-0071** _(Accepted)_ — Per-assignment lag, and what it costs the levelling and Earned-Value parity arguments → [`0071-per-assignment-lag.md`](docs/adr/0071-per-assignment-lag.md)
 - **ADR-0072** _(Accepted)_ — The append-only audit log, and what "append-only" honestly means here → [`0072-append-only-audit-log.md`](docs/adr/0072-append-only-audit-log.md)
 - **ADR-0073** _(Accepted)_ — Which mutations earn an audit event, and who may read an actor-less one → [`0073-audit-coverage-and-actor-less-readability.md`](docs/adr/0073-audit-coverage-and-actor-less-readability.md)
 - **ADR-0074** _(Accepted)_ — Account recovery, verification enforcement, and the web origin's first Content-Security-Policy → [`0074-account-recovery-verification-enforcement-and-csp.md`](docs/adr/0074-account-recovery-verification-enforcement-and-csp.md)
@@ -487,8 +487,8 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0088** _(Accepted)_ — Feature flags are classified, not scheduled → [`0088-flag-classification.md`](docs/adr/0088-flag-classification.md)
 - **ADR-0089** _(Accepted)_ — One activity field vocabulary, and what a field group is → [`0089-activity-field-vocabulary.md`](docs/adr/0089-activity-field-vocabulary.md)
 - **ADR-0090** _(Accepted)_ — The plan-workspace command surface — a row is a budget, and `order` is not a priority → [`0090-the-plan-workspace-command-surface.md`](docs/adr/0090-the-plan-workspace-command-surface.md)
-- **ADR-0091** _(Proposed)_ — A mode is not a command — surface scopes for the plan workspace's command band → [`0091-modes-density-and-the-command-band.md`](docs/adr/0091-modes-density-and-the-command-band.md)
-- **ADR-0092** _(Accepted)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
+- **ADR-0091** _(Proposed D1–D5; D6 Accepted)_ — A mode is not a command — surface scopes for the plan workspace's command band → [`0091-modes-density-and-the-command-band.md`](docs/adr/0091-modes-density-and-the-command-band.md)
+- **ADR-0092** _(Accepted; M5 withdrawn)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
 - **ADR-0095** _(Accepted)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
@@ -562,6 +562,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0162** _(Accepted)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
 - **ADR-0163** _(Accepted)_ — A guest sees the plan as placed → [`0163-a-guest-sees-the-plan-as-placed.md`](docs/adr/0163-a-guest-sees-the-plan-as-placed.md)
 - **ADR-0164** _(Accepted)_ — A lint warning is a failure, and a gate has no pass-with-findings outcome → [`0164-a-lint-warning-is-a-failure.md`](docs/adr/0164-a-lint-warning-is-a-failure.md)
+- **ADR-0165** _(Accepted)_ — A long table renders the rows in view → [`0165-a-long-table-renders-the-rows-in-view.md`](docs/adr/0165-a-long-table-renders-the-rows-in-view.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

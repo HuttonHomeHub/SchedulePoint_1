@@ -1,7 +1,7 @@
 import { VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, urlencoded, type Request, type RequestHandler } from 'express';
+import { json, type Request, type RequestHandler } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
@@ -10,6 +10,7 @@ import {
   ORG_SCOPED_JSON_LIMIT,
   ORG_SCOPED_PATH_PREFIX,
 } from './common/http/body-limits';
+import { tagBodyParserErrors } from './common/http/body-parser-errors';
 import { AppConfigService } from './config/app-config.service';
 
 /**
@@ -94,9 +95,18 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // The larger limit applies only under the org-scoped prefix (no `@Public()` handler lives there —
   // pinned by `public-routes-census.structural.spec.ts`) AND only when the request carries a session
   // cookie or an Authorization header. That bounds what an anonymous caller can make the process
-  // buffer to 64 KB on every route; it does NOT make the large cap safe against a caller who merely
+  // buffer to 64 KB on every route this app's own parsers read; it does NOT make the large cap safe against a caller who merely
   // sends a junk cookie, because the parser precedes the guard and cannot validate one. That residue
   // is one 512 KB buffer per in-flight request from a caller who then gets a 401.
+  //
+  // **JSON is the only body format parsed here, which is what makes "64 KB" a bound on every body
+  // this app's own parsers read.** It is NOT a bound on `/api/auth/*`: Better Auth is mounted above
+  // these parsers and reads its own bodies through better-call's node adapter, whose limit (if any)
+  // we do not set (TECH_DEBT #416). A `urlencoded` parser used to be mounted
+  // after these with no `limit`, so body-parser's 100 KB default applied on every route beside a
+  // comment promising 64 (TECH_DEBT #415); no route reads a form body, so it was removed rather
+  // than capped. A form-encoded body now reaches its handler unparsed (`req.body` undefined).
+  // Multipart is multer's, capped per route.
   //
   // Mounted first: body-parser skips a request an earlier parser already read
   // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
@@ -111,7 +121,10 @@ export function configureHttpApp(app: NestExpressApplication): void {
   };
   app.use(ORG_SCOPED_PATH_PREFIX, orgScoped);
   app.use(json({ type: jsonTypes, limit: DEFAULT_JSON_LIMIT }));
-  app.use(urlencoded({ extended: true }));
+  // An error handler, so the exception filter can tell a parser's failure from any other error. It
+  // sees an org-scoped parser's error too, because Express skips the plain layer above when passing
+  // one. Only failing requests reach it (`common/http/body-parser-errors.ts`).
+  app.use(tagBodyParserErrors);
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).
   app.setGlobalPrefix('api');

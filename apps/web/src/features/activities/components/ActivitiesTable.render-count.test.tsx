@@ -1,11 +1,13 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
+
+import { setWindowedRowBudgetForTests } from '@/components/ui/data-table-windowed-body';
 
 /**
  * **Row-level isolation — one checkbox tick must not re-render the other rows**
@@ -39,6 +41,16 @@ vi.mock('@/features/notes', async (importOriginal) => ({
 }));
 
 const ROW_COUNT = 30;
+
+// The table is windowed (ADR-0165), and 31 rows are more than jsdom's first window holds (about
+// 29). This suite counts renders across EVERY row, so it takes the test-only row budget (D7) rather
+// than a smaller fixture: the isolation claim is about all rows of a table, not the ones in view.
+beforeEach(() => {
+  setWindowedRowBudgetForTests(ROW_COUNT + 1);
+});
+afterEach(() => {
+  setWindowedRowBudgetForTests(null);
+});
 
 function seed(): ActivitySummary[] {
   const rows: Partial<ActivitySummary>[] = [

@@ -20,7 +20,8 @@
     "@nestjs/common": "11.2.6",
     "eslint-plugin-react-hooks": "7.1.1",
     "@tanstack/react-query": "5.103.2",
-    "body-parser": "2.3.0"
+    "body-parser": "2.3.0",
+    "eslint": "9.39.5"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -1014,38 +1015,6 @@
       "citedBy": ["apps/web/src/config/zod-jitless.ts"]
     },
     {
-      "ref": "password.mjs:61-72",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "60-71",
-      "anchor": "if (!user) {",
-      "citedBy": ["docs/TECH_DEBT.md"]
-    },
-    {
-      "ref": "email-verification.mjs:104-116",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "104-116",
-      "anchor": "const MINIMUM_MS = 500;",
-      "citedBy": ["docs/TECH_DEBT.md"]
-    },
-    {
-      "ref": "index.mjs:305",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "305",
-      "anchor": "return path.startsWith(\"/sign-in\") || path.startsWith(\"/sign-up\") || path.startsWith(\"/cha",
-      "citedBy": ["docs/TECH_DEBT.md"]
-    },
-    {
-      "ref": "index.mjs:309-314",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "309-314",
-      "anchor": "\t}, {\n\t\tpathMatcher(path) {",
-      "citedBy": ["docs/TECH_DEBT.md"]
-    },
-    {
       "ref": "focusManager.js:11-13",
       "package": "@tanstack/query-core",
       "path": "build/modern/focusManager.js",
@@ -1214,6 +1183,62 @@
         "docs/specs/hook-deps-gate/feature-spec.md",
         "docs/specs/hook-deps-gate/m0-measurement.md",
         "apps/web/src/features/tsld/toolbar/use-tsld-toolbar-context.tsx"
+      ]
+    },
+    {
+      "ref": "lint-result-cache.js:56",
+      "package": "eslint",
+      "path": "lib/cli-engine/lint-result-cache.js",
+      "lines": "56",
+      "anchor": "hash(`${pkg.version}_${nodeVersion}_${stringify(config)}`)",
+      "citedBy": ["docs/DECISIONS.md", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "read.js:166",
+      "package": "body-parser",
+      "path": "lib/read.js",
+      "lines": "166",
+      "anchor": "type: err.type || 'entity.parse.failed'",
+      "citedBy": ["docs/DECISIONS.md"]
+    },
+    {
+      "ref": "utils.js:61-63",
+      "package": "body-parser",
+      "path": "lib/utils.js",
+      "lines": "61-63",
+      "anchor": "? 102400 // 100kb default",
+      "citedBy": ["docs/DECISIONS.md", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "read.js:125",
+      "package": "body-parser",
+      "path": "lib/read.js",
+      "lines": "125",
+      "anchor": "_error = createError(400, error)",
+      "citedBy": [
+        "apps/api/src/common/http/body-parser-errors.ts",
+        "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
+        "docs/TECH_DEBT.md"
+      ]
+    },
+    {
+      "ref": "request.mjs:47-55",
+      "package": "better-call",
+      "path": "dist/adapters/node/request.mjs",
+      "lines": "47-55",
+      "anchor": "function get_raw_body(req, body_size_limit)",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "routes-resolver.js:99-100",
+      "package": "@nestjs/core",
+      "path": "router/routes-resolver.js",
+      "lines": "99-100",
+      "anchor": "return new common_1.BadRequestException(err.message);",
+      "citedBy": [
+        "apps/api/src/common/http/body-parser-errors.ts",
+        "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
+        "docs/TECH_DEBT.md"
       ]
     }
   ]

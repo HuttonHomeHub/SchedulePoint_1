@@ -168,14 +168,14 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
  * Reuses the same `ActivitiesTable` (computed columns, variance, progress editor, CRUD) the
  * stacked page used, driven off the shared model so behaviour is identical to the legacy layout.
  *
- * **This claimed "virtualization" until `docs/TECH_DEBT.md` #334, and that was false.**
- * `ActivitiesTable` hands its whole row list to `DataTable`'s plain `rows.map`
- * (`components/ui/data-table.tsx:370`) — every activity mounts, however many the plan holds. Whether
- * that is actually slow at plan scale (ADR-0026's 2,000-activity ceiling) is a measured question,
- * not an assumed one: the committed conditions and bars are
- * `docs/specs/activities-panel-scale/m0-conditions.md`, and the reading against them —
- * `docs/specs/activities-panel-scale/m0-measurement.md`, once taken — decides whether this needs
- * render isolation, windowing, or neither.
+ * **This claimed "virtualization" until `docs/TECH_DEBT.md` #334, and that was false; the table is
+ * now windowed for real** (ADR-0165, #334 M3). `ActivitiesTable` opts into `DataTable`'s
+ * `windowed` mode, so only the rows in view (plus overscan) are in the DOM, however many the plan
+ * holds. The accepted costs: find-in-page cannot find a row outside the window, and a screen
+ * reader's table navigation reaches it only as the window moves (the diagram's listbox lists every
+ * activity). The committed conditions and bars are
+ * `docs/specs/activities-panel-scale/m0-conditions.md`, and the re-measure is `m3-measurement.md`:
+ * at 2,000 rows opening went from ~1,664 ms to 72–80 ms, and every armed limb passes.
  *
  * The pen read-only note is **not** shown here — the workspace shows a single consolidated note
  * above the whole body (ADR-0030 US-4).

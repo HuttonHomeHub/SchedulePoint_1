@@ -296,12 +296,12 @@ These ADRs record how we will do something when we need it. Nothing in the
 running system depends on them, and no dependency for them is installed. They
 are listed here so nobody reads an ADR and assumes the capability exists:
 
-| ADR      | Decision                                  | Reality                                                            |
-| -------- | ----------------------------------------- | ------------------------------------------------------------------ |
-| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. **Not "all work is synchronous"** — see below. |
-| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.                              |
-| ADR-0011 | File storage via an S3 abstraction        | No object store; no user file uploads.                             |
-| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.                           |
+| ADR      | Decision                                  | Reality                                                                                    |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. **Not "all work is synchronous"** — see below.                         |
+| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.                                                      |
+| ADR-0011 | File storage via an S3 abstraction        | No object store; no stored user files (import uploads are parsed in memory and discarded). |
+| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.                                                   |
 
 > **ADR-0009's row said "All work is synchronous" until 2026-08-18, and that has
 > been false since 2026-08-10.** ADR-0087 gave this application its first

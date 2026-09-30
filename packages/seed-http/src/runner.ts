@@ -4,6 +4,9 @@ import { SeedHttpError, type SeedClient } from './client.js';
 import { PenHolder } from './pen.js';
 import type { SeedApproximation, SeedFinding, SeedPlanResult } from './report.js';
 
+/** `UpdateParentsDto`'s `@ArrayMaxSize` (`apps/api/src/modules/activities/dto/update-parents.dto.ts`). */
+const PARENTS_BATCH_LIMIT = 2000;
+
 /**
  * Creates one {@link SeedSpec} as a real plan, entirely through the public REST API (ADR-0066).
  *
@@ -356,9 +359,16 @@ export async function seedPlan(
             version: activityVersionById.get(id) ?? 1,
           };
         });
-      if (parented.length > 0) {
+      //    Batched at the endpoint's own ceiling: `UpdateParentsDto` declares `@ArrayMaxSize(2000)`, so
+      //    `scale-2000` (2,159 parented rows) was refused as ONE request — first by the 64 KB body cap
+      //    as a 500, and after `#407` raised the cap, as a 422 on the array size (`docs/TECH_DEBT.md`
+      //    #418). Each batch is independent: every parent already exists, and each row carries its own
+      //    optimistic version.
+      for (let start = 0; start < parented.length; start += PARENTS_BATCH_LIMIT) {
         try {
-          await client.patch(`${planPath}/activities/parents`, { parents: parented });
+          await client.patch(`${planPath}/activities/parents`, {
+            parents: parented.slice(start, start + PARENTS_BATCH_LIMIT),
+          });
         } catch (error) {
           record('wbs-parents', spec.seedName, error);
         }

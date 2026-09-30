@@ -1,6 +1,8 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Children, Fragment, isValidElement, memo } from 'react';
 
+import { DataTableWindowedBody } from './data-table-windowed-body';
+
 import { Skeleton } from '@/components/ui/page/skeleton';
 import { QueryErrorState } from '@/components/ui/query-error-state';
 import { cn } from '@/lib/utils';
@@ -224,15 +226,28 @@ const DataTableRow = memo(function DataTableRow<T>({
   columns,
   contained,
   detail,
+  virtualIndex,
+  measureRef,
 }: {
   row: T;
   columns: Column<T>[];
   contained: boolean;
   detail: React.ReactNode;
+  virtualIndex?: number | undefined;
+  measureRef?: ((node: HTMLTableRowElement | null) => void) | undefined;
 }): React.ReactElement {
   return (
     <>
-      <tr className={contained ? '' : 'border-border border-b'}>
+      {/* `virtualIndex` and `measureRef` are set only by the windowed mode (ADR-0165): the row's
+        place in the table for `aria-rowindex` (the header is row 1) and the virtualizer's hook to
+        measure its real height. Both are `undefined` for every other table, and an `undefined`
+        attribute renders nothing, so their DOM is what it always was. */}
+      <tr
+        className={contained ? '' : 'border-border border-b'}
+        ref={measureRef}
+        data-index={virtualIndex}
+        aria-rowindex={virtualIndex === undefined ? undefined : virtualIndex + 2}
+      >
         {columns.map((column) => (
           <td
             key={column.header}
@@ -278,26 +293,12 @@ const DataTableRow = memo(function DataTableRow<T>({
   columns: Column<T>[];
   contained: boolean;
   detail: React.ReactNode;
+  virtualIndex?: number | undefined;
+  measureRef?: ((node: HTMLTableRowElement | null) => void) | undefined;
 }) => React.ReactElement;
 
-/**
- * The single table primitive (DESIGN_SYSTEM.md → Tables). Renders the shared
- * loading / error-with-retry / empty / populated states so every resource list
- * behaves identically. Pass a `react-query` result and column definitions; the
- * caller supplies its own empty state (icon + copy + optional action).
- */
-export function DataTable<T>({
-  caption,
-  columns,
-  query,
-  getRowKey,
-  renderDetail,
-  empty,
-  loadingLabel,
-  errorLabel = 'Couldn’t load this list. Please try again.',
-  describedById,
-  scroll = 'page',
-}: {
+/** What every {@link DataTable} takes, however it scrolls. */
+interface DataTableBaseProps<T> {
   caption: string;
   /**
    * Column definitions. Keep the array referentially stable to let unchanged rows skip rendering,
@@ -365,7 +366,65 @@ export function DataTable<T>({
    * caller's `headClassName`/`cellClassName` the way `width` already composes.
    */
   scroll?: 'page' | 'contained';
-}): React.ReactElement {
+}
+
+/**
+ * The windowed mode's contract, as a type (ADR-0165 D6). Intersected with
+ * {@link DataTableBaseProps}, so `windowed: true` narrows `scroll` to `'contained'` (windowing needs
+ * a bounded scroller) and `renderDetail` to `never` (variable-height detail rows defeat a row
+ * estimate). A caller who writes either wrong gets a compile error, not a runtime warning.
+ */
+type DataTableModeProps =
+  | {
+      /**
+       * Render only the rows in view (ADR-0165, `docs/TECH_DEBT.md` #334 M3). **Opt-in, and it
+       * carries costs, so the default is off.**
+       *
+       * - **Find-in-page cannot find a row that is not in view**, and a screen reader's table
+       *   navigation reaches it only as the window moves. The product owner accepted both for the
+       *   activities panel (ADR-0165, CQ-B), where the diagram's listbox stays the complete route.
+       *   Do not switch this on for a table whose rows people search with Ctrl+F.
+       * - **Column widths are measured from the first window and frozen** (D1), so a longer value
+       *   that scrolls into view wraps rather than widening its column. `width: 'fit'` means "the
+       *   first window's width" here, which amends ADR-0146 for a windowed table.
+       * - `aria-rowcount` and `aria-rowindex` say where each row is. That is reasoned from ARIA 1.2,
+       *   not observed with a screen reader.
+       *
+       * Valid only with `scroll="contained"`, and not with `renderDetail`.
+       *
+       * **It must be the literal `true`.** The type union that enforces the two rules above is
+       * discriminated on it, so a `boolean` variable does not compile, by design.
+       */
+      windowed?: false | undefined;
+    }
+  | {
+      windowed: true;
+      scroll: 'contained';
+      renderDetail?: never;
+    };
+
+/** {@link DataTable}'s props. */
+export type DataTableProps<T> = DataTableBaseProps<T> & DataTableModeProps;
+
+/**
+ * The single table primitive (DESIGN_SYSTEM.md → Tables). Renders the shared
+ * loading / error-with-retry / empty / populated states so every resource list
+ * behaves identically. Pass a `react-query` result and column definitions; the
+ * caller supplies its own empty state (icon + copy + optional action).
+ */
+export function DataTable<T>({
+  caption,
+  columns,
+  query,
+  getRowKey,
+  renderDetail,
+  empty,
+  loadingLabel,
+  errorLabel = 'Couldn’t load this list. Please try again.',
+  describedById,
+  scroll = 'page',
+  windowed = false,
+}: DataTableProps<T>): React.ReactElement {
   // `scroll` shapes only the populated table below. The loading, error and empty branches return
   // before it is read, and need no scroller of their own: each is a bounded, short block (a
   // three-row skeleton or a sentence) that fits inside the smallest open panel.
@@ -460,6 +519,47 @@ export function DataTable<T>({
   }
 
   const contained = scroll === 'contained';
+  const tableClassName = contained
+    ? 'w-full border-separate border-spacing-0 text-sm'
+    : 'w-full text-sm';
+  // Built once for both modes, so a windowed table's header is the one a plain table renders.
+  const head = (
+    <thead>
+      <tr
+        // Row 1 of the windowed table's `aria-rowcount` (ADR-0165 D2); no other table sets it.
+        aria-rowindex={windowed ? 1 : undefined}
+        className={
+          contained
+            ? 'text-muted-foreground text-left'
+            : 'border-border text-muted-foreground border-b text-left'
+        }
+      >
+        {columns.map((column) => (
+          <th
+            key={column.header}
+            scope="col"
+            className={
+              contained
+                ? cn(
+                    headClassesOf(column),
+                    'bg-background border-border sticky top-0 z-20 border-b',
+                  )
+                : headClassesOf(column)
+            }
+            data-col-width={column.width ?? 'undeclared'}
+          >
+            {column.headerCell ? (
+              column.headerCell()
+            ) : column.srHeader ? (
+              <span className="sr-only">{column.header}</span>
+            ) : (
+              column.header
+            )}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
 
   return (
     // Focusable + labelled so a keyboard-only user can scroll a wide table
@@ -486,55 +586,43 @@ export function DataTable<T>({
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
     >
-      <table
-        className={contained ? 'w-full border-separate border-spacing-0 text-sm' : 'w-full text-sm'}
-      >
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr
-            className={
-              contained
-                ? 'text-muted-foreground text-left'
-                : 'border-border text-muted-foreground border-b text-left'
-            }
-          >
-            {columns.map((column) => (
-              <th
-                key={column.header}
-                scope="col"
-                className={
-                  contained
-                    ? cn(
-                        headClassesOf(column),
-                        'bg-background border-border sticky top-0 z-20 border-b',
-                      )
-                    : headClassesOf(column)
-                }
-                data-col-width={column.width ?? 'undeclared'}
-              >
-                {column.headerCell ? (
-                  column.headerCell()
-                ) : column.srHeader ? (
-                  <span className="sr-only">{column.header}</span>
-                ) : (
-                  column.header
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
+      {windowed ? (
+        <DataTableWindowedBody
+          rows={rows}
+          columns={columns}
+          getRowKey={getRowKey}
+          caption={caption}
+          tableClassName={tableClassName}
+          head={head}
+          renderRow={(row, virtualIndex, measureRef) => (
             <DataTableRow
               key={getRowKey(row)}
               row={row}
               columns={columns}
               contained={contained}
-              detail={renderDetail?.(row)}
+              detail={undefined}
+              virtualIndex={virtualIndex}
+              measureRef={measureRef}
             />
-          ))}
-        </tbody>
-      </table>
+          )}
+        />
+      ) : (
+        <table className={tableClassName}>
+          <caption className="sr-only">{caption}</caption>
+          {head}
+          <tbody>
+            {rows.map((row) => (
+              <DataTableRow
+                key={getRowKey(row)}
+                row={row}
+                columns={columns}
+                contained={contained}
+                detail={renderDetail?.(row)}
+              />
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

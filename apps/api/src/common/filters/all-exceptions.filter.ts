@@ -19,6 +19,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../errors/domain-errors';
+import { isBodyParserError } from '../http/body-parser-errors';
 
 interface Mapped {
   status: number;
@@ -27,12 +28,50 @@ interface Mapped {
   details?: unknown;
 }
 
-function isBodyTooLarge(exception: unknown): boolean {
-  return (
-    typeof exception === 'object' &&
-    exception !== null &&
-    (exception as { type?: unknown }).type === 'entity.too.large'
-  );
+// Fixed texts: the parser's own message echoes the request (byte counts, the charset it named, the
+// JSON parse position), so none of it is passed on.
+const BAD_BODY: Mapped = {
+  status: HttpStatus.BAD_REQUEST,
+  code: 'BAD_REQUEST',
+  message: 'The request body could not be read.',
+};
+const UNSUPPORTED_BODY: Mapped = {
+  status: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+  code: 'UNSUPPORTED_MEDIA_TYPE',
+  message: 'The request body uses a charset or content encoding that is not supported.',
+};
+const BODY_TOO_LARGE: Mapped = {
+  status: HttpStatus.PAYLOAD_TOO_LARGE,
+  code: 'PAYLOAD_TOO_LARGE',
+  message: 'The request body is too large.',
+};
+
+/**
+ * The client errors `body-parser` and its `raw-body` reader throw, keyed on their own `type` tag
+ * (`body-parser/lib/read.js`, `raw-body/index.js`). An allow-list on purpose: the server-side tags
+ * (`stream.not.readable`, `stream.encoding.set`) stay opaque 500s. `entity.verify.failed` is a 403
+ * in body-parser, but no `verify` hook is mounted and a 403 here would read as an authorisation
+ * failure, so it is a plain bad body.
+ */
+const BODY_PARSER_ERRORS: ReadonlyMap<string, Mapped> = new Map([
+  ['entity.too.large', BODY_TOO_LARGE],
+  ['entity.parse.failed', BAD_BODY],
+  ['entity.verify.failed', BAD_BODY],
+  ['request.aborted', BAD_BODY],
+  ['request.size.invalid', BAD_BODY],
+  ['charset.unsupported', UNSUPPORTED_BODY],
+  ['encoding.unsupported', UNSUPPORTED_BODY],
+]);
+
+function mapBodyParserError(exception: unknown): Mapped | undefined {
+  if (typeof exception !== 'object' || exception === null) return undefined;
+  const { type, status } = exception as { type?: unknown; status?: unknown };
+  const known = typeof type === 'string' ? BODY_PARSER_ERRORS.get(type) : undefined;
+  if (known) return known;
+  // body-parser wraps a raw-body/zlib failure (a corrupt gzip body) as a bare 400 with no `type`.
+  // The status is only believed because our own error handler received it after the parsers
+  // (`isBodyParserError`) — never on the status alone. Any other status stays a 500.
+  return isBodyParserError(exception) && status === HttpStatus.BAD_REQUEST ? BAD_BODY : undefined;
 }
 
 /**
@@ -94,17 +133,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return this.mapHttp(exception);
     }
 
-    // The JSON body parser runs before Nest's router and throws a plain http-errors object, which
-    // is none of the above — so an over-cap body used to read as a server fault. Recognised by the
-    // parser's own `type` tag only: a bare `status` on an unknown error is not evidence of anything.
-    if (isBodyTooLarge(exception)) {
-      return {
-        status: HttpStatus.PAYLOAD_TOO_LARGE,
-        code: 'PAYLOAD_TOO_LARGE',
-        // Fixed text: the parser's message carries the request's byte counts.
-        message: 'The request body is too large.',
-      };
-    }
+    // The body parsers run before Nest's router and throw plain http-errors objects, which are none
+    // of the above — so a bad or over-cap body used to read as a server fault (and was logged as an
+    // incident). Recognised by the parser's own `type` tag only: a bare `status` on an unknown error
+    // is not evidence of anything.
+    const bodyError = mapBodyParserError(exception);
+    if (bodyError) return { ...bodyError };
 
     // Unknown/unexpected → opaque 500 (never leak internals).
     return {
@@ -173,6 +207,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
       [HttpStatus.CONFLICT]: 'CONFLICT',
       [HttpStatus.PAYLOAD_TOO_LARGE]: 'PAYLOAD_TOO_LARGE',
+      [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: 'UNSUPPORTED_MEDIA_TYPE',
       [HttpStatus.UNPROCESSABLE_ENTITY]: 'VALIDATION_FAILED',
       [HttpStatus.TOO_MANY_REQUESTS]: 'RATE_LIMITED',
     };
