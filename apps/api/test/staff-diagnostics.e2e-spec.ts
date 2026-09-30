@@ -1,7 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,6 +10,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * **The staff diagnostics route, against a real migrated Postgres (ADR-0140).**
@@ -96,7 +97,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
   beforeEach(async () => {
     // Per-handler throttle counters are shared mutable state across tests in one 60 s window —
     // `docs/TESTING.md` forbids that in as many words. The product bound is untouched.
-    (throttlerStorage as ThrottlerStorageService).storage.clear();
+    resetThrottleCounters(throttlerStorage);
     await resetDatabase();
   });
 

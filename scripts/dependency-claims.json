@@ -1,18 +1,18 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.7.5",
+    "better-auth": "1.7.6",
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.2",
-    "nodemailer": "10.0.9",
+    "nodemailer": "10.0.13",
     "zod": "4.6.5",
-    "@nestjs/throttler": "6.7.0",
+    "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.88.0",
     "lucide-react": "1.48.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
-    "@tanstack/react-router": "1.170.36",
+    "@tanstack/react-router": "1.170.40",
     "@tanstack/history": "1.162.4",
-    "@tanstack/router-core": "1.171.30",
+    "@tanstack/router-core": "1.171.33",
     "playwright-core": "1.63.0",
     "tailwindcss": "4.3.3",
     "@tanstack/query-core": "5.103.2",
@@ -63,7 +63,7 @@
       "ref": "throttler.guard.js:148-150",
       "package": "@nestjs/throttler",
       "path": "dist/throttler.guard.js",
-      "lines": "151-153",
+      "lines": "165-167",
       "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
       "citedBy": [
         "apps/api/src/modules/schedule/schedule.controller.ts",
@@ -214,8 +214,8 @@
       "ref": "link.js:290-297",
       "package": "@tanstack/react-router",
       "path": "dist/esm/link.js",
-      "lines": "71-78",
-      "anchor": "\tconst { activeOptions, to, preload: userPreload, preloadDelay: userPreloadDelay, hashScrollIntoView, replace, startTransition, resetScroll, viewTransition, ignoreBlocker, disabled, target, onClick, onBlur, onFocus, onMouseEnter, onMouseLeave, onTouchStart } = options;\n\tconst isHydrated = useHydrated();",
+      "lines": "53-60",
+      "anchor": "\tconst { activeOptions, to, preload: userPreload, preloadDelay: userPreloadDelay, hashScrollIntoView, replace, startTransition, resetScroll, viewTransition, ignoreBlocker, disabled, target, onClick, onBlur, onFocus, onMouseEnter, onMouseLeave, onTouchStart } = options;\n\tconst isHydrated = useHydrated(!!activeOptions?.includeHash);",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -384,7 +384,7 @@
       "ref": "router.js:183-194",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "183-194",
+      "lines": "178-189",
       "anchor": "\t\t\t\t\tconst parsedSearch = this.options.parseSearch(search);\n\t\t\t\t\tconst searchStr = this.options.stringifySearch(parsedSearch);",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -395,7 +395,7 @@
       "ref": "router.js:627-628",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "645-646",
+      "lines": "637-638",
       "anchor": "parseSearch: options.parseSearch ?? defaultParseSearch",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -406,7 +406,7 @@
       "ref": "router.js:678-689",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "691-702",
+      "lines": "683-694",
       "anchor": "const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch }) ?? void 0;",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -417,7 +417,7 @@
       "ref": "router.js:690-697",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "702-709",
+      "lines": "694-701",
       "anchor": "if (!(err instanceof SearchParamError)) searchParamError = new SearchParamError(err.message, { cause: err });",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
@@ -425,7 +425,7 @@
       "ref": "router.js:788-791",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "796-799",
+      "lines": "788-791",
       "anchor": "Object.assign(accumulatedSearch, validateSearch(route.options.validateSearch, accumulatedSearch));",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -636,7 +636,7 @@
       "ref": "password.mjs:172",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "170",
+      "lines": "168",
       "anchor": "if (ctx.context.options.emailAndPassword?.onPasswordReset) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request);",
       "citedBy": [
         "docs/specs/account-security/feature-spec.md",
@@ -647,7 +647,7 @@
       "ref": "password.mjs:173",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "171",
+      "lines": "169",
       "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
@@ -661,7 +661,7 @@
       "ref": "password.mjs:174",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "171-172",
+      "lines": "169-170",
       "anchor": "\tif (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context.internalAdapter.deleteUserSessions(userId);\n\treturn ctx.json({ status: true });",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
@@ -735,7 +735,7 @@
       "ref": "sign-in.mjs:264",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "262",
+      "lines": "263",
       "anchor": "rememberMe: z.boolean()",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -746,7 +746,7 @@
       "ref": "sign-in.mjs:339-351",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "339-351",
+      "lines": "341-353",
       "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.email, void 0, ctx.context.options.emailVerification?.expiresIn);",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
@@ -757,7 +757,7 @@
       "ref": "sign-in.mjs:353",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "350",
+      "lines": "352",
       "anchor": "const session = await ctx.context.internalAdapter.createSession(",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -768,7 +768,7 @@
       "ref": "sign-up.mjs:150",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "149",
+      "lines": "150",
       "anchor": "const { name, email, password, image, callbackURL: _callbackURL, rememberMe, ...rest } = b",
       "citedBy": ["apps/web/src/features/auth/api/use-session.ts"]
     },
@@ -776,7 +776,7 @@
       "ref": "sign-up.mjs:163",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "162",
+      "lines": "155",
       "anchor": "const shouldReturnGenericDuplicateResponse = ctx.context.options.emailAndPassword.requireE",
       "citedBy": [
         "apps/api/test/mail-failure.e2e-spec.ts",
@@ -792,7 +792,7 @@
       "ref": "sign-up.mjs:163-164",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "162-163",
+      "lines": "155-156",
       "anchor": "const shouldReturnGenericDuplicateResponse = ctx.context.options.emailAndPassword.requireE",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
@@ -804,7 +804,7 @@
       "ref": "sign-up.mjs:203-241",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "202-240",
+      "lines": "195-233",
       "anchor": "if (shouldReturnGenericDuplicateResponse) {",
       "citedBy": [
         "docs/adr/0075-mail-delivery-is-best-effort.md",
@@ -819,7 +819,7 @@
       "ref": "sign-up.mjs:252",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "250",
+      "lines": "243",
       "anchor": "const callbackURL = body.callbackURL ? encodeURIComponent(body.callbackURL) : encodeURICom",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
@@ -831,7 +831,7 @@
       "ref": "sign-up.mjs:254",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "252",
+      "lines": "245",
       "anchor": "if (ctx.context.options.emailVerification?.sendVerificationEmail) await ctx.context.runInB",
       "citedBy": [
         "apps/api/src/common/mail/smtp-mail.service.ts",
@@ -844,7 +844,7 @@
       "ref": "sign-up.mjs:260-262",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
-      "lines": "258-260",
+      "lines": "251-253",
       "anchor": "if (shouldSkipAutoSignIn) return ctx.json({",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.verification.test.ts",
@@ -937,7 +937,7 @@
       "ref": "index.js:932-957",
       "package": "nodemailer",
       "path": "dist/cjs/smtp-connection/index.js",
-      "lines": "768-790",
+      "lines": "859-881",
       "anchor": "_formatError(message, type, response, command) {",
       "citedBy": [
         "apps/api/src/common/mail/smtp-mail.service.spec.ts",
@@ -1240,6 +1240,14 @@
         "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
         "docs/TECH_DEBT.md"
       ]
+    },
+    {
+      "ref": "throttler.service.js:73-77",
+      "package": "@nestjs/throttler",
+      "path": "dist/throttler.service.js",
+      "lines": "73-77",
+      "anchor": "this.storage.get(key).totalHits.set(throttlerName, hits.length);",
+      "citedBy": ["apps/api/test/throttle-reset.ts"]
     }
   ]
 }

@@ -11592,3 +11592,18 @@ something expensive — not yet attributed (limb A reads it as script, ~0.37 s o
 rows it is 80–120 ms and passes. **Container only**: ADR-0128 says a canvas-heavy reading belongs on
 the product owner's machine before it moves anything. **Trigger:** the next epic touching canvas
 selection, or a reading on real hardware that confirms it.
+
+### 420. The csp suite's Arrange journey times out waiting for a new client's link
+
+**Status:** open · **Verified:** 2026-09-30 (CI) · **Raised:** 2026-09-30 (PR #729) · **Size:** S ·
+**Owner:** web
+
+`e2e-csp/csp.spec.ts` "the Arrange worker loads and runs with no CSP violation" failed on CI twice
+on PR #729, on two different heads (bisect step 1 `c388c67a`, and `487b7f0b`). The second time it
+passed on retry, so the shard was green. Both times it hit the 60 s test timeout inside
+`e2e-arrange/support.ts:35`: after "Create client", `getByRole('link', { name: 'Northgate' })`
+never appears. Step 1 ran main's `app-setup.ts`, so the body-parser change is not the cause.
+Whether it also fails on `main` has not been checked. **Next:** read the csp shard on the next few
+`main` runs. If it fails there, read the retry's trace (the artifact host is blocked in the cloud
+container, so it has to be read on a machine that can download it). **Trigger:** a third failure,
+or a red shard.

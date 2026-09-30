@@ -10,6 +10,28 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-30 — Body-parser failures are tagged by an error handler, and why the wrapper went
+
+**What.** `tagBodyParserErrors` (`apps/api/src/common/http/body-parser-errors.ts`) is a
+four-parameter Express error middleware mounted once after both JSON parsers, not a wrapper around
+each parser's `next`. Express calls a four-parameter layer only while an error is being passed, so a
+request whose body parses never runs this code.
+
+**Why.** With the wrapper, PR #729's base Playwright suite failed on CI, mostly in Firefox: after
+sign-up the onboarding heading never appeared, and `/` never redirected to sign-in. `main` passed
+the same suite. It did not reproduce locally in Chromium (34/34, twice), and this container has no
+Firefox. So it was bisected with temporary commits on the PR:
+
+- main's `app-setup.ts` → green;
+- the PR's `app-setup.ts` with only the removed `urlencoded` parser restored → still red;
+- the error-handler version → green on all ten checks.
+
+**What is not known.** How the wrapper broke the journey. Its success path passes `undefined`
+straight to the original `next`, and reading it finds no fault. The fix was chosen because it does
+not depend on that reading. The evidence is one CI run per step, which is enough to act on but not a
+mechanism. If a later change puts code on the request path of every call, the lesson is the same:
+prefer a shape that is not on the success path at all.
+
 ## 2026-09-29 — Correction: malformed JSON was never a 500
 
 **What was decided.** The reconciliation pass entry below says `entity.parse.failed` "still reaches
