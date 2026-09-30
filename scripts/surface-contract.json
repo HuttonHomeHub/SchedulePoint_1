@@ -461,6 +461,9 @@
   "engine/EngineResource.id": {
     "exempt": "identity"
   },
+  "engine/LevelingOptions.anchor": {
+    "exempt": "set by the caller, never by a planner: every recalculation levels from the drawn bars ('PLACED') and the Critical Path Test from the network ('NETWORK'), per ADR-0166 and the product owner's Q2 answer (#413)"
+  },
   "engine/LevelingOptions.dataDate": {
     "surface": "the plan data date (features/plans/) — not a levelling control"
   },
