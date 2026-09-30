@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
@@ -9,10 +9,9 @@ import { TsldPanel } from './TsldPanel';
  *
  * `optionDescriptions` called `describeActivity` without the panel's `barDateSource`, so the
  * sentence fell back to `'visual'` while the painter drew late-dated bars: a member with the
- * overlay on saw one span and heard another.
+ * overlay on saw one span and heard another. The overlay's on/off announcement moved to the host
+ * (`use-late-overlay-announcement.ts`, #417), so this suite no longer covers it.
  */
-const announceSpy = vi.fn();
-vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 const ACTIVITY: ActivitySummary = {
   drivingResourceCalendarId: null,
@@ -105,37 +104,5 @@ describe('the listbox sentence follows the drawn date source', () => {
     const text = rowText('visual');
     expect(text).toContain('01 Jan 2026 to 03 Jan 2026');
     expect(text).not.toContain('late dates');
-  });
-});
-
-describe('switching the Late overlay is announced', () => {
-  const panel = (barDateSource: 'visual' | 'late') => (
-    <TsldPanel
-      activities={[ACTIVITY]}
-      dependencies={[]}
-      dataDate="2026-01-01"
-      barDateSource={barDateSource}
-      canEdit={false}
-      fill
-    />
-  );
-  const lateCalls = () =>
-    announceSpy.mock.calls.map((c) => c[0]).filter((m) => /dates shown/.test(String(m)));
-
-  it('says nothing on first render, then speaks each switch', () => {
-    announceSpy.mockClear();
-    const { rerender } = render(panel('visual'));
-    expect(lateCalls()).toEqual([]);
-    rerender(panel('late'));
-    expect(lateCalls()).toEqual(['Late dates shown.']);
-    rerender(panel('visual'));
-    expect(lateCalls()).toHaveLength(2);
-    expect(lateCalls()[1]).toBe('Placed dates shown.');
-  });
-
-  it('does not announce when opened with the overlay already on', () => {
-    announceSpy.mockClear();
-    render(panel('late'));
-    expect(lateCalls()).toEqual([]);
   });
 });

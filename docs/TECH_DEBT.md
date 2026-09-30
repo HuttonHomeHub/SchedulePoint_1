@@ -11533,8 +11533,8 @@ levelling.
 
 ### 417. Switching the Late overlay in the Gantt view is not announced
 
-**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-29 (accessibility review of the
-`#402` follow-up) · **Size:** S · **Owner:** web
+**Status:** closed · **Verified:** 2026-09-30 · **Raised:** 2026-09-29 (accessibility review of the
+`#402` follow-up) · **Closed:** 2026-09-30 · **Size:** S · **Owner:** web
 
 The `#402` follow-up announces "Late dates shown." / "Placed dates shown." from `TsldPanel`, which is
 only mounted in the diagram view: `plan-workspace-toolbar.tsx:1378` renders `GanttPanel` **instead
@@ -11543,6 +11543,10 @@ screen-reader user toggling the overlay in the Gantt view hears nothing, unless 
 toolbar's `role="status"` "editing is paused" banner still speaks for them. **Remedy:** move the
 announcement up to the host that owns `lateOverlayActive` (the toolbar), so both views share one
 source, and drop the panel's copy. **Trigger:** next change to the overlay or the Gantt's speech.
+
+**Resolution (2026-09-30):** `useLateOverlayAnnouncement` runs in `ToolbarPlanWorkspace` beside
+`lateOverlayActive` and speaks in both views; the panel's copy is removed and the tests moved to
+`use-late-overlay-announcement.test.tsx`.
 
 ### 418. The seeder sent all WBS parentage in one request, past the endpoint's 2,000-row ceiling
 
