@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
-import { allMinutesWorkCalendar } from './working-time-calendar';
+import {
+  allMinutesWorkCalendar,
+  buildWorkingTimeCalendar,
+  fullDayWeek,
+} from './working-time-calendar';
 
 /**
  * ADR-0033 §Decision-4/5 — the effective-Visual (Pass 2) engine tests. Pass 1
@@ -520,4 +524,53 @@ describe('computeSchedule — effective-Visual pass, a placement is inert agains
     expect(h.visualEffectiveStart).toBe('2026-01-10');
     expect(spanDays(h.visualEffectiveStart, h.visualEffectiveFinish)).toBe(4);
   });
+});
+
+/**
+ * `docs/TECH_DEBT.md` #421 — Pass 2 carries a progressed predecessor's FULL planned duration forward.
+ * Pass 1 finishes an activity at its actual finish, or after its remaining work; Pass 2 reads only
+ * `durationMinutes` (the `visualPropFinish` line in compute.ts), so an UNPLACED successor's drawn start
+ * lands later than its early start — a plan nobody placed shifts. The cases below are the defect as
+ * measured on 2026-09-30 (plan calendar Mon–Fri, data date Mon 2026-01-05, actuals BEFORE the data
+ * date so they cannot coincide with it). `it.fails` keeps the suite green while the defect stands: the
+ * fix flips each to an ordinary `it`.
+ */
+describe('computeSchedule — Pass 2 after a progressed predecessor (#421)', () => {
+  const DAY = 1440;
+  const FIVE_DAY = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
+
+  function successorOf(predecessor: EngineActivity, useExpectedFinishDates = false) {
+    const output = computeSchedule([predecessor, task('B', 1)], [edge('A', 'B')], {
+      dataDate: '2026-01-05',
+      calendar: FIVE_DAY,
+      useExpectedFinishDates,
+    });
+    return output.results.find((r) => r.activityId === 'B')!;
+  }
+
+  it.fails('a complete predecessor: B draws at its early start (measured 01-12 vs 01-05)', () => {
+    const b = successorOf(task('A', 5, { actualStart: '2025-12-29', actualFinish: '2025-12-30' }));
+    expect(b.earlyStart).toBe('2026-01-05');
+    expect(b.visualEffectiveStart).toBe(b.earlyStart);
+  });
+
+  it.fails(
+    'an in-progress predecessor: B draws at its early start (measured 01-19 vs 01-07)',
+    () => {
+      const b = successorOf(
+        task('A', 10, { actualStart: '2025-12-29', remainingMinutes: 2 * DAY }),
+      );
+      expect(b.earlyStart).toBe('2026-01-07');
+      expect(b.visualEffectiveStart).toBe(b.earlyStart);
+    },
+  );
+
+  it.fails(
+    'an expected-finish predecessor: B draws at its early start (measured 01-19 vs 01-07)',
+    () => {
+      const b = successorOf(task('A', 10, { expectedFinish: '2026-01-06' }), true);
+      expect(b.earlyStart).toBe('2026-01-07');
+      expect(b.visualEffectiveStart).toBe(b.earlyStart);
+    },
+  );
 });

@@ -48,6 +48,12 @@ cases), which is why the rule exists.
 against today's code.
 **Entry point:** `Ships dark: tests and a measurement record only; M2 and M3 surface the change.`
 
+> **T0.1 result, 2026-09-30: C5 is REAL.** An unplaced successor of a complete, in-progress or
+> expected-finish predecessor is drawn 5-12 working days later than its early start. Filed as
+> `docs/TECH_DEBT.md` #421, pinned by three `it.fails` cases in `compute.visual.spec.ts`, numbers in
+> [`m0-measurement.md`](./m0-measurement.md). T0.2 and T0.3 are **paused** for the product owner's
+> decision on #421.
+
 ##### Task T0.1: probe C5 (Pass 2 after a progressed predecessor)
 
 - **Description:** Add a case to `compute.visual.spec.ts`: an unplaced successor (FS) of (i) a complete

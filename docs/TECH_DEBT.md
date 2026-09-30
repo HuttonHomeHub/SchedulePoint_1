@@ -11576,3 +11576,28 @@ Whether it also fails on `main` has not been checked. **Next:** read the csp sha
 `main` runs. If it fails there, read the retry's trace (the artifact host is blocked in the cloud
 container, so it has to be read on a machine that can download it). **Trigger:** a third failure,
 or a red shard.
+
+### 421. Pass 2 carries a progressed predecessor's full planned duration to its successors
+
+**Status:** open · **Verified:** 2026-09-30 (engine unit test) · **Raised:** 2026-09-30 (M0-T0.1 of
+`docs/specs/placed-load-basis/`) · **Size:** M · **Owner:** api
+
+The effective-Visual pass (`apps/api/src/modules/schedule/engine/compute.ts`, Pass 2, from ~`:298`)
+sets `visualPropFinish` from `activity.durationMinutes` alone (`:352`). The network pass finishes a
+complete activity at its actual finish and an in-progress one after its remaining work
+(`:283-295`). So an **unplaced** successor of a progressed activity is drawn later than its early
+start, and a plan nobody has placed shifts. No test had a successor of a started activity.
+
+Measured 2026-09-30, plan calendar Mon-Fri, data date Mon 2026-01-05, actuals before the data date,
+FS successor `B` of one day (`compute.visual.spec.ts`, `#421` describe):
+
+| Predecessor `A`                                              | `B` early start | `B` drawn start |
+| ------------------------------------------------------------ | --------------- | --------------- |
+| complete, 5 d planned, actuals 12-29 to 12-30                | 2026-01-05      | 2026-01-12      |
+| in progress, 10 d planned, 2 d remaining, started 12-29      | 2026-01-07      | 2026-01-19      |
+| not started, 10 d planned, expected finish 01-06 (option on) | 2026-01-07      | 2026-01-19      |
+
+The three cases are committed as `it.fails`; the fix flips them to ordinary `it`. It blocks the
+placed load basis epic (`#413`), whose parity claim ("an unplaced plan does not move") does not hold
+for plans with progress until this is settled. **Not fixed here:** it changes `compute.ts` and is its
+own spec. **Trigger:** the product owner's decision on `#413`.
