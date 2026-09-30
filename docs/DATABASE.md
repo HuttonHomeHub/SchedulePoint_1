@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 34
-> models across 71 committed migrations — is the single source of truth for the data model.
+> models across 72 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -48,6 +48,11 @@
   redeploying the previous image; destructive changes are gated and reviewed
   with extra care.
 - Migrations are deterministic and independent of application code state.
+- **A re-derivation marker may be a migration with no statement.** When a release changes
+  what the engine writes into engine-owned columns without changing any stored input, a boot
+  service recalculates the affected plans once, keyed on a migration's
+  `_prisma_migrations.finished_at`. If the release has no data migration to key on, the key
+  is a comment-only file of its own. See "Re-derivation markers" below.
 
 ## Indexes
 
@@ -1738,6 +1743,61 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
   Measured on the populated database: every link's `(id, lag_minutes)` restored exactly, and a
   second run refused at the lock.
 - **Non-scheduling.** Nothing in the application reads it.
+
+### Re-derivation markers: a migration whose only product is its `_prisma_migrations` row (#421)
+
+Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
+When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
+it as stale (ADR-0155 D9). Three boot services now recalculate such plans once, and each is
+keyed on a migration's `finished_at`:
+
+| Service                           | Marker migration                                        | Has DDL/data |
+| --------------------------------- | ------------------------------------------------------- | ------------ |
+| `FinishMilestoneRederiveService`  | `20260923120000_finish_milestone_end_of_day_placements` | yes          |
+| `CrossPlanRederiveService`        | `20260926120000_cross_plan_lag_working_minutes`         | yes          |
+| `ProgressedVisualRederiveService` | `20260930120000_progressed_predecessor_visual_marker`   | **no**       |
+
+- **Why `finished_at` is the right key.** `docker-entrypoint.sh` runs `prisma migrate deploy`
+  before `node dist/main.js`, in the image that carries the engine change (ADR-0018). So the row
+  appears at the moment the new engine takes over on that host. Any plan with
+  `schedule_computed_at` earlier than it was written by the old engine. Recalculating stamps
+  `schedule_computed_at`, so each plan leaves the set once it is done. A `NULL`
+  `schedule_computed_at` has no old dates and is never in the set.
+- **Fail-closed.** The services compare against a scalar subquery. With no row, or with a rolled-back
+  row, that subquery is `NULL`, and `x < NULL` admits no plan.
+- **Why a file of its own for #421.** The release changes Pass 2 of the engine and no stored
+  input, so there is no data migration to key on. Every alternative was checked, and the reasons
+  they fail are in the migration's header: an earlier migration's row misses plans recalculated
+  between releases, a constant in code differs per host, and a column on `plans` is DDL on the
+  hottest table to store what one `_prisma_migrations` row already records. The file has no
+  statement. `prisma migrate deploy` applies it and records it (measured on PostgreSQL 16.13).
+- **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
+  `finished_at`, and every matching plan computed before then would be recalculated again. That is
+  harmless but unrequested.
+- **The #421 pending read, measured** (PostgreSQL 16.13, all 72 migrations applied, 10
+  organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
+  plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
+  the fixture's arithmetic). The query is the one the M2 builder brief specifies: the marker as a
+  scalar subquery (the precedents' shape), and an `EXISTS` over `activities` keyed on `plan_id`
+  only. Five `EXPLAIN (ANALYZE, BUFFERS)` runs per state:
+  - **First boot:** 39–61 ms. The plan is a hash semi-join: one sequential scan of `activities`
+    hashed against the pending `plans`.
+  - **Steady state** (nothing pending): 0.51–0.91 ms. The `activities` scan is never executed,
+    because the `plans` scan returns nothing first.
+  - **A few plans left pending** (10, for example plans whose recalculation fails and is retried at
+    each boot): 38–45 ms. The planner cannot see the subquery's value at plan time, so it estimates
+    a third of `plans` and still scans `activities`. With the marker passed in as a parameter it
+    took 7 ms: a nested loop probing `idx_activities_plan_updated_at`, which is partial on
+    `deleted_at IS NULL` and leads with `plan_id`. That saving is not worth a second read and a second shape, because it
+    only arises while a plan keeps failing.
+  - **`a.organization_id = p.organization_id` is left out of the `EXISTS` on purpose.** With it,
+    the parameterised form made a `BitmapAnd` with `activities_organization_id_idx`, which read
+    20,200 index entries per plan and took 13.8 ms rather than 7.1 ms. It protects nothing here.
+    The output's organisation comes from the `plans` row, and `recalculateAsSystem` re-reads the
+    plan scoped to that organisation.
+  - **No index is added.** The read is bounded by one scan of `activities` once per host, and
+    under 1 ms after that. An index on `actual_start`/`actual_finish`/`expected_finish` would serve
+    only this once-per-release read, and every progress write would pay for it for ever.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 
