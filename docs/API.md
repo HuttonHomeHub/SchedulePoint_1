@@ -167,7 +167,10 @@ any caller beside the 64 KB promise above. **`/api/auth/*` (Better Auth) is held
 (#416)**, though it is mounted before the parsers and reads its own body: better-call's node adapter is given
 no size limit, so before #416 an anonymous body there was unbounded. A request declaring a
 `Content-Length` over 64 KB, or sending a chunked body that passes it, answers the same `413` envelope; a
-body within the cap reaches Better Auth as the raw stream it always did.
+body within the cap reaches Better Auth as the raw stream it always did. That last case is bounded by
+Node's HTTP framing (llhttp: the body ends at its declared `Content-Length`), not by our code; a chunked body is
+decoded with its declared charset and `Content-Encoding`, the cap applying to the decoded size, and an unknown
+charset is `415`, not a guess.
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and

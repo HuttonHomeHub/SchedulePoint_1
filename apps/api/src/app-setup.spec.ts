@@ -1,5 +1,6 @@
 import { request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { gzipSync } from 'node:zlib';
 
 import { toNodeHandler } from 'better-auth/node';
 import express, { type ErrorRequestHandler } from 'express';
@@ -49,7 +50,11 @@ describe('boundAuthBody', () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
-  function chunked(payload: string, chunks: number): Promise<number> {
+  function chunked(
+    payload: string | Buffer,
+    chunks: number,
+    headers: Record<string, string> = {},
+  ): Promise<number> {
     return new Promise((resolve, reject) => {
       // No Content-Length, so Node frames the body with `Transfer-Encoding: chunked`.
       const req = httpRequest(
@@ -57,7 +62,7 @@ describe('boundAuthBody', () => {
           port,
           method: 'POST',
           path: '/api/auth/sign-up/email',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...headers },
         },
         (res) => {
           res.resume();
@@ -87,6 +92,49 @@ describe('boundAuthBody', () => {
     const status = await chunked(JSON.stringify({ name: 'x'.repeat(OVER * 4) }), 8);
     expect(status).toBe(413);
     expect(lastError?.type).toBe('entity.too.large');
+    expect(reached).toHaveLength(0);
+  });
+
+  it('accepts a declared Content-Length of exactly the cap and refuses one byte more', async () => {
+    reached.length = 0;
+    const atCap = 'x'.repeat(DEFAULT_JSON_LIMIT_BYTES);
+    await request(server)
+      .post('/api/auth/sign-in/email')
+      .set('Content-Type', 'application/json')
+      .set('Content-Length', String(DEFAULT_JSON_LIMIT_BYTES))
+      .send(atCap)
+      .expect(200);
+    expect(reached).toEqual([atCap]);
+
+    reached.length = 0;
+    await request(server)
+      .post('/api/auth/sign-in/email')
+      .set('Content-Type', 'application/json')
+      .set('Content-Length', String(OVER))
+      .send('x'.repeat(OVER))
+      .expect(413);
+    expect(reached).toHaveLength(0);
+  });
+
+  it('bounds a chunked gzip body by its DECODED size', async () => {
+    reached.length = 0;
+    const small = JSON.stringify({ name: 'Zoë' });
+    expect(await chunked(gzipSync(small), 2, { 'Content-Encoding': 'gzip' })).toBe(200);
+    expect(reached).toEqual([small]);
+
+    // Compresses to a few hundred bytes, so only a cap on the inflated stream refuses it.
+    reached.length = 0;
+    const bomb = gzipSync(JSON.stringify({ name: 'x'.repeat(OVER * 4) }));
+    expect(bomb.length).toBeLessThan(DEFAULT_JSON_LIMIT_BYTES);
+    expect(await chunked(bomb, 2, { 'Content-Encoding': 'gzip' })).toBe(413);
+    expect(lastError?.type).toBe('entity.too.large');
+    expect(reached).toHaveLength(0);
+  });
+
+  it('refuses a chunked body in a charset it cannot decode with 415, not by guessing', async () => {
+    reached.length = 0;
+    const status = await chunked('{}', 1, { 'Content-Type': 'application/json; charset=nonsense' });
+    expect(status).toBe(415);
     expect(reached).toHaveLength(0);
   });
 
