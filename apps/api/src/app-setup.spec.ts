@@ -1,9 +1,9 @@
-import { request as httpRequest, type Server } from 'node:http';
+import { createServer, request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { gzipSync } from 'node:zlib';
 
 import { toNodeHandler } from 'better-auth/node';
-import express, { type ErrorRequestHandler } from 'express';
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -24,24 +24,29 @@ describe('boundAuthBody', () => {
   let lastError: { type?: unknown } | undefined;
 
   beforeAll(async () => {
-    const app = express();
-    app.all(
-      /^\/api\/auth(?:\/|$)/,
-      boundAuthBody,
-      toNodeHandler(async (req: Request) => {
-        const body = req.method === 'GET' || req.method === 'HEAD' ? '' : await req.text();
-        reached.push(body);
-        return new Response(JSON.stringify({ length: body.length }), {
-          headers: { 'content-type': 'application/json' },
-        });
-      }),
-    );
-    const failure: ErrorRequestHandler = (error, _req, res, _next) => {
-      lastError = error as { type?: unknown };
-      res.status((error as { status?: number }).status ?? 500).end();
-    };
-    app.use(failure);
-    server = app.listen(0);
+    const authHandler = toNodeHandler(async (req: Request) => {
+      const body = req.method === 'GET' || req.method === 'HEAD' ? '' : await req.text();
+      reached.push(body);
+      return new Response(JSON.stringify({ length: body.length }), {
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    // A plain node server running the guard then the handler, as `app-setup.ts` chains them on the
+    // auth route. It is deliberately not an Express route: every request here is an auth path, so
+    // route matching proves nothing, and a registered route reads to CodeQL's missing-rate-limiting
+    // query as a real endpoint (production's auth routes are limited by Better Auth itself).
+    server = createServer((req, res) => {
+      boundAuthBody(req as ExpressRequest, res as ExpressResponse, (error?: unknown) => {
+        if (error === undefined) {
+          void authHandler(req, res);
+          return;
+        }
+        lastError = error as { type?: unknown };
+        res.statusCode = (error as { status?: number }).status ?? 500;
+        res.end();
+      });
+    });
+    server.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     port = (server.address() as AddressInfo).port;
   });
