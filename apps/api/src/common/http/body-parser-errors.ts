@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 /**
  * Errors this app has seen a body parser pass to `next`. A positive marker set by OUR code in
@@ -15,7 +15,7 @@ export function isBodyParserError(error: unknown): boolean {
 }
 
 /**
- * What the wrapper hands on instead of the parser's own error. **It must not be a `SyntaxError`.**
+ * What {@link tagBodyParserErrors} hands on instead of the parser's own error. **It must not be a `SyntaxError`.**
  * body-parser's JSON failure IS one, and Nest's router error layer rewrites any `SyntaxError` into
  * `new BadRequestException(err.message)` before a filter sees it (`@nestjs/core`
  * `router/routes-resolver.js:99-100`, `mapExternalException`) — so the filter received an
@@ -35,17 +35,33 @@ class BodyParserFailure extends Error {
   }
 }
 
-/** Wrap a body-parser middleware so an error it hands to `next` is recorded as coming from it. */
-export function tagBodyParserErrors(parser: RequestHandler): RequestHandler {
-  return (req: Request, res: Response, next: NextFunction) => {
-    parser(req, res, (error?: unknown) => {
-      if (typeof error !== 'object' || error === null) {
-        next(error);
-        return;
-      }
-      const failure = new BodyParserFailure(error);
-      fromBodyParser.add(failure);
-      next(failure);
-    });
-  };
+/**
+ * An Express **error** middleware (four parameters), mounted directly after the body parsers, that
+ * records the error it receives as a parser failure and hands on a {@link BodyParserFailure}.
+ *
+ * **An error handler, not a wrapper around each parser, so a request whose body parses never
+ * passes through this code at all.** The first version wrapped each parser's `next`; its success
+ * path was a pass-through by reading, and yet with it mounted the base Playwright suite's sign-up
+ * journeys failed in Firefox on CI and passed with it removed (PR #729's bisect, 2026-09-30) —
+ * a mechanism nobody found. Express only calls a four-parameter layer when an error is being
+ * passed, so this shape keeps every successful request on exactly the path it took before.
+ *
+ * What it can see: an error from any layer before it, which is helmet, CORS and the two parsers
+ * (Better Auth terminates its own requests above them). helmet and CORS with a static origin list
+ * do not pass errors, so in practice this is the parsers' — and the filter still believes a bare
+ * `status` only for a 400.
+ */
+export function tagBodyParserErrors(
+  error: unknown,
+  _req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (typeof error !== 'object' || error === null) {
+    next(error);
+    return;
+  }
+  const failure = new BodyParserFailure(error);
+  fromBodyParser.add(failure);
+  next(failure);
 }

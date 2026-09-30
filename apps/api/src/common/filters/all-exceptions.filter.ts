@@ -69,7 +69,7 @@ function mapBodyParserError(exception: unknown): Mapped | undefined {
   const known = typeof type === 'string' ? BODY_PARSER_ERRORS.get(type) : undefined;
   if (known) return known;
   // body-parser wraps a raw-body/zlib failure (a corrupt gzip body) as a bare 400 with no `type`.
-  // The status is only believed because our own wrapper saw the parser pass the error to `next`
+  // The status is only believed because our own error handler received it after the parsers
   // (`isBodyParserError`) — never on the status alone. Any other status stays a 500.
   return isBodyParserError(exception) && status === HttpStatus.BAD_REQUEST ? BAD_BODY : undefined;
 }

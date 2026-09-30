@@ -128,11 +128,11 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
 
   // What body-parser does to a raw-body/zlib failure: `createError(400, error)` with NO `type`
   // (`lib/read.js:125`, `:136`) — a gzip body of junk bytes is `Z_DATA_ERROR`. Only the fact that
-  // OUR wrapper saw the parser hand it to `next` can tell it from any other error with a status.
-  /** Pass an error through `tagBodyParserErrors` the way `app-setup.ts` mounts the parsers. */
+  // OUR error handler received it from the parsers can tell it from any other error with a status.
+  /** Pass an error through `tagBodyParserErrors` the way Express does after a parser fails. */
   function fromParser(error: Error): Error {
     let seen: unknown;
-    tagBodyParserErrors((_req, _res, next) => next(error))({} as Request, {} as Response, (e) => {
+    tagBodyParserErrors(error, {} as Request, {} as Response, (e?: unknown) => {
       seen = e;
     });
     expect(seen).toBeInstanceOf(Error);
@@ -141,7 +141,7 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
 
   // Nest's router error layer turns any `SyntaxError` into `new BadRequestException(err.message)`
   // before a filter sees it (`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON
-  // failure IS a `SyntaxError`, so the wrapper must hand on something that is not one, or the filter
+  // failure IS a `SyntaxError`, so the handler must hand on something that is not one, or the filter
   // receives an HttpException carrying "Unexpected end of JSON input" and echoes it.
   it('hands on a parser SyntaxError as a non-SyntaxError that keeps only its type and status', () => {
     const parse = Object.assign(new SyntaxError('Unexpected end of JSON input'), {

@@ -1,7 +1,7 @@
 import { VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, urlencoded, type Request, type RequestHandler } from 'express';
+import { json, type Request, type RequestHandler } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
@@ -111,11 +111,7 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // Mounted first: body-parser skips a request an earlier parser already read
   // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
   // below never sees a body the large one handled.
-  // Both parsers are wrapped so the exception filter can tell a parser's failure from any other
-  // error (`common/http/body-parser-errors.ts`).
-  const orgScopedJson = tagBodyParserErrors(
-    json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT }),
-  );
+  const orgScopedJson = json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT });
   const orgScoped: RequestHandler = (req, res, next) => {
     if (presentsCredentials(req)) {
       orgScopedJson(req, res, next);
@@ -124,9 +120,11 @@ export function configureHttpApp(app: NestExpressApplication): void {
     }
   };
   app.use(ORG_SCOPED_PATH_PREFIX, orgScoped);
-  app.use(tagBodyParserErrors(json({ type: jsonTypes, limit: DEFAULT_JSON_LIMIT })));
-  // DIAGNOSTIC (bisect step 2, PR #729): main's form parser restored. Do not merge.
-  app.use(urlencoded({ extended: true }));
+  app.use(json({ type: jsonTypes, limit: DEFAULT_JSON_LIMIT }));
+  // An error handler, so the exception filter can tell a parser's failure from any other error. It
+  // sees an org-scoped parser's error too, because Express skips the plain layer above when passing
+  // one. Only failing requests reach it (`common/http/body-parser-errors.ts`).
+  app.use(tagBodyParserErrors);
 
   // All Nest routes under /api, URI-versioned (/api/v1/...).
   app.setGlobalPrefix('api');
