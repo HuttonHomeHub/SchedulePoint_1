@@ -365,7 +365,7 @@ test.describe('the feasible window and the levelled lens', () => {
 
     // ── 4 · ONE undo step returns every bar, and the ghosts come back ─────────────────────────
     const undo = page.getByRole('button', { name: /^Undo\b/ });
-    await expect(undo).toHaveAccessibleName(/Apply levelled dates/);
+    await expect(undo).toHaveAccessibleName(/apply levelled dates/i);
     await undo.click();
     await expect
       .poll(placedCount, { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] })
