@@ -14,6 +14,7 @@ import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
   fullDayWeek,
+  instantToAbsMinutes,
 } from './working-time-calendar';
 
 /**
@@ -105,6 +106,16 @@ describe('levelSchedule — two overlapping equal activities on a single-unit re
     expect(byId.get('A')!.earlyStartOffset).toBe(0);
     expect(byId.get('B')!.earlyStartOffset).toBe(0);
     expect(byId.get('A')!.totalFloat).toBe(byId.get('B')!.totalFloat);
+  });
+
+  it('carries the levelled start as an absolute instant, equal to the offset on a 24/7 plan', () => {
+    // The in-memory field `planLevellingApplication` reads (apply-levelled-dates T1.1): a participant
+    // and a delayed one both carry it, and on an all-minutes calendar it is the data date plus the
+    // offset, so the two quantities can be checked against each other without a calendar to trust.
+    const { byId } = run([A, B], [], assignments, resources);
+    const dataDateAbs = instantToAbsMinutes(DATA_DATE);
+    expect(byId.get('A')!.leveledStartInstant).toBe(dataDateAbs);
+    expect(byId.get('B')!.leveledStartInstant).toBe(dataDateAbs + 2 * DAY);
   });
 });
 

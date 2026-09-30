@@ -114,11 +114,9 @@ function census(): Call[] {
 describe('the re-expression rule covers every finish-milestone date input', () => {
   it('finds the five engine calls it expects (pinned positive case)', () => {
     expect(census()).toEqual([
-      {
-        file: 'compute.ts',
-        reader: 'finishMilestoneDateInstant',
-        argument: 'activity.visualStart',
-      },
+      // Pass 2 reads a placement through `startDateInstant`, the same reader the constraint clamps
+      // use, since apply-levelled-dates T1.1; it called `finishMilestoneDateInstant` inline before.
+      { file: 'compute.ts', reader: 'startDateInstant', argument: 'activity.visualStart' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'constraintDate' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'external' },
       {

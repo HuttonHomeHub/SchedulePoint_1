@@ -390,6 +390,13 @@ export interface EngineResult {
    * delayed); `leveledStart`/`leveledFinish` are the inclusive display dates (same mapping as `early*`).
    */
   leveledStartOffset?: number | null;
+  /**
+   * The levelled start as an absolute instant (minutes from the epoch, the engine's own axis), for
+   * `planLevellingApplication`. **In memory only** — never persisted and never on a response; the
+   * persisted and displayed figures are the offset and the date beside it. Present exactly where
+   * `leveledStartOffset` is.
+   */
+  leveledStartInstant?: number | null;
   leveledFinishOffset?: number | null;
   levelingDelay?: number;
   leveledStart?: string | null;

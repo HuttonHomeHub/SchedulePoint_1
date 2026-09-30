@@ -14,11 +14,11 @@ import { backwardUpperBound, forwardLowerBound } from './edge-bounds';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
-  finishMilestoneDateInstant,
   finishMilestoneDisplayIndex,
   offsetFromDataDate,
   rollBackwardToWorking,
   rollForwardToWorking,
+  startDateInstant,
 } from './instants';
 import {
   nextCalendarDay,
@@ -347,13 +347,13 @@ export function computeSchedule(
       ),
     );
     // A finish milestone's placement means the END of its day (#381): dropped on its predecessor's
-    // last day, it sits exactly where logic puts it rather than a day early.
+    // last day, it sits exactly where logic puts it rather than a day early. `startDateInstant` is
+    // the one reader of "a date given for a start", shared with `planLevellingApplication`, so the
+    // apply and this pass cannot disagree about what a placement date means.
     const placed =
       activity.visualStart == null
         ? null
-        : activity.type === 'FINISH_MILESTONE'
-          ? finishMilestoneDateInstant(cal, activity.visualStart)
-          : rollForwardToWorking(cal, instantToAbsMinutes(activity.visualStart));
+        : startDateInstant(cal, activity.visualStart, activity.type);
     const display = placed ?? logicEarliest;
     const prop = placed !== null ? Math.max(placed, logicEarliest) : logicEarliest;
     visualDisplayStart.set(id, display);
