@@ -21,3 +21,6 @@ the engine result already decides the question.
 
 Per the approval, work **stopped here** for a product-owner decision. T0.2 (goldens) and T0.3 (red
 cases) are not started: H2's fixture must exclude whatever class C5 finds, which depends on the decision.
+
+**Decided 2026-09-30: fixed first, #421.** #421 is closed (ADR-0148 Amendment 1), so the parity
+argument holds for plans with progress and T0.2 and T0.3 can resume.

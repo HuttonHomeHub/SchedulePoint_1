@@ -53,6 +53,8 @@ against today's code.
 > `docs/TECH_DEBT.md` #421, pinned by three `it.fails` cases in `compute.visual.spec.ts`, numbers in
 > [`m0-measurement.md`](./m0-measurement.md). T0.2 and T0.3 are **paused** for the product owner's
 > decision on #421.
+>
+> **Resolved 2026-09-30: fixed first, #421 is closed** (ADR-0148 Amendment 1). T0.2 and T0.3 can resume.
 
 ##### Task T0.1: probe C5 (Pass 2 after a progressed predecessor)
 

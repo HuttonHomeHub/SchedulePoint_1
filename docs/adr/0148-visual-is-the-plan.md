@@ -238,6 +238,34 @@ being deleted, which is when it is most wanted.
   plan carries a placement at 1 % density, long before the crossover — and the quantity that decides
   is the (baselines × placed activities) product.
 
+## Amendments
+
+### Amendment 1 — D0 reaches what an activity passes on (2026-09-30, #421)
+
+D0 taught Pass 2 Pass 1's branches for an activity's **own** dates. It did not reach the pair an
+activity **passes to its successors** (ADR-0033 D4's `propStart` / `propFinish`), which Pass 2 still
+derived from the planned duration alone. So an unplaced successor of complete, in-progress or
+Expected-Finish work was drawn 5–12 working days from its early start (measured 2026-09-30, three
+cases, `docs/TECH_DEBT.md` #421).
+
+- **The propagated pair follows D1 and D2.** An activity whose actuals freeze it (or whose Expected
+  Finish resizes it, when the plan applies it) passes on Pass 1's `earlyStart` / `earlyFinish`,
+  including a placed and progressed one, whose placement is inert for its successors as it already
+  was for its own bar. Any other activity passes on its placed start plus Pass 1's span, which is
+  `durationMinutes` unless Expected Finish resized it.
+- **ADR-0033 D4's formula** (`0033-…md:90-99`, where `propFinish` implicitly used `Dₐ`) reads that
+  span, not the planned duration, from this amendment.
+- **D2's fourth parity clause was false until now.** "A plan with no placement renders identically
+  under both bases, including progress" did not hold for the successors of progressed work. It holds
+  from this amendment. A plan with no actuals and no applied Expected Finish is byte-identical
+  before and after.
+- **Existing plans are corrected once.** A marker migration and a boot re-derivation service
+  recalculate every plan that has progress (or applied Expected Finish) and was last calculated
+  before the marker, upstream first, following ADR-0155 D9. A baseline taken before this shows the
+  correction as placed-basis variance.
+- **Not amended:** ADR-0035. Pass 1 does not change, and this makes Pass 2 conform to it.
+- Spec and plan: [`docs/specs/progressed-predecessor-visual/`](../specs/progressed-predecessor-visual/feature-spec.md).
+
 ## References
 
 - Spec, plan and falsification conditions: [`docs/specs/one-planning-surface/`](../specs/one-planning-surface/)
