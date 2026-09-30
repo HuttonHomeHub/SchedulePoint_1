@@ -583,3 +583,19 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
   first-principles unit goldens) and `apps/api/src/modules/schedule/conformance/earned-value-adapter.ts`
   / `earned-value-conformance.spec.ts` (the EV3 fixture-grounded golden + differentials this §29
   Accepts against).
+
+## Amendments
+
+### Amendment (ADR-0166, 2026-09-30) — levelling anchors on the drawn span; the histogram reads it too
+
+- **§28 (resource levelling), first bullet:** "into the earliest capacity-feasible working window at or
+  after its early start" reads "at or after its **anchor start**", where the anchor is the span the bar
+  is drawn on for a recalculation (`PLACED`) and the early span for the DCMA critical-path test
+  (`NETWORK`). Under `PLACED` the priority key's float term is remaining float. The exclusions,
+  capacity, within-float and window-conflict bullets are unchanged; a pinned activity occupies the
+  resource at its anchor span.
+- **§31 (resource-curve semantics), first bullet:** the histogram is a read-model over the activity's
+  **effective (drawn) span**, not its early span. `UNIFORM`/absent remains a flat load and the profile
+  constants are unchanged.
+- Neither section changes what `computeSchedule` returns for the network or placed dates: two in-memory
+  offsets are added to its result.

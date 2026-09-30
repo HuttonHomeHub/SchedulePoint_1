@@ -470,3 +470,12 @@ down because ADR-0041 §F's boundedness wording rules out span-dependence and re
 this out too.
 
 **The CPM engine is not modified and the ADR-0034 recalc parity gate is untouched.**
+
+## Amendment (ADR-0166, 2026-09-30) — Gate B's scope
+
+Gate B above ("every participating assignment at `lagMinutes === 0` ... byte-identical to the
+pre-change implementation") is now stated for a plan with **no placement**. Levelling anchors on the drawn
+span (ADR-0166 D2), so a plan with hand-placed bars levels differently by design, and Gate B's corpus
+(`level.parity.spec.ts`) runs the `PLACED` anchor (the production path) over unplaced inputs, where the
+placed and early spans coincide. The corpus and its snapshots are not edited. The lag arithmetic in §2 is unchanged: occupancy
+still begins at `anchor start ⊕ lag_j`, the anchor being the drawn start on a recalculation.

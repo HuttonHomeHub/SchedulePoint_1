@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-30 — The placed-load epic was decided in four cuts, and metric 12 kept the network
+
+**What.** #413 shipped as four commits (M0 reference results and red cases, M1 levelling, M2 the
+histogram, M3 the ghost), with ADR-0166 written last, once the spec was Approved. Levelling takes a
+required `anchor`; a recalculation passes `PLACED` and DCMA metric 12 passes `NETWORK`.
+
+**Why.** The product owner chose "Follow placed bars" for the histogram, the strip and levelling
+together. Metric 12 tests the logic, and a placement is stay-and-flag, so anchoring it on a placed
+carrier could FAIL a sound network (spec C6, Q2 answered "no"). M0 also found that the spec's own
+premise C5 was real (a successor of progressed work drawn late on an unplaced plan), so #421 was fixed
+first rather than narrowing the parity claim.
+
+**Consequences.** On a plan with hand-placed bars the what-if's levelled schedule and the
+recalculation's can differ, and the metric's verdict is about the network. An "Apply levelled dates"
+command remains a separate, unspecified feature (Q1 (c)). #422 records a Late-overlay carry-over
+found on the way.
+
+---
+
 ## 2026-09-30 — Body-parser failures are tagged by an error handler, and why the wrapper went
 
 **What.** `tagBodyParserErrors` (`apps/api/src/common/http/body-parser-errors.ts`) is a
