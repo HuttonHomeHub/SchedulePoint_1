@@ -17,4 +17,4 @@ catalog:
   vitest: ^5.0.0
   '@vitest/coverage-v8': ^5.0.0
   '@playwright/test': ^1.63.0
-  supertest: ^7.0.0
+  supertest: ^7.3.0
