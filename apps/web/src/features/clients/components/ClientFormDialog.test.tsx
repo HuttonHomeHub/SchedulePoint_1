@@ -1,6 +1,7 @@
 import type { ClientSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClientFormDialog } from './ClientFormDialog';
@@ -107,5 +108,70 @@ describe('ClientFormDialog', () => {
     const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(path).toBe('/organizations/acme/clients');
     expect(init?.method).toBe('POST');
+  });
+
+  /**
+   * **The structural property behind #420.** A passive `reset()` runs after the field is on screen,
+   * so a fast typist's text could be wiped by it. Layout effects run in the commit, before any
+   * passive effect, which makes a layout-phase probe the one place a test can see the value the
+   * field is *born* with — `act` flushes passive effects before `render` returns, so reading
+   * after it cannot tell a seeded form from a reset one.
+   */
+  it('is born holding the edited client’s name, not seeded by a later effect', () => {
+    const born: string[] = [];
+    function Probe(): null {
+      useLayoutEffect(() => {
+        const input = document.querySelector<HTMLInputElement>('input[name="name"]');
+        if (input) born.push(input.value);
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ClientFormDialog orgSlug="acme" open onClose={vi.fn()} client={CLIENT} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(born).toEqual(['Northgate']);
+  });
+
+  it('starts clean when reopened after a failed save', async () => {
+    vi.mocked(apiFetch).mockReset().mockRejectedValue(new Error('Name already taken'));
+    const queryClient = new QueryClient();
+    const tree = (open: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <ClientFormDialog orgSlug="acme" open={open} onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Harbour' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create client' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Name already taken');
+
+    view.rerender(tree(false));
+    view.rerender(tree(true));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('');
+  });
+
+  it('is blank when reopened after a successful create', async () => {
+    const onClose = vi.fn();
+    const queryClient = new QueryClient();
+    const tree = (open: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <ClientFormDialog orgSlug="acme" open={open} onClose={onClose} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Harbour' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create client' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+
+    view.rerender(tree(false));
+    view.rerender(tree(true));
+
+    expect(screen.getByLabelText('Name')).toHaveValue('');
   });
 });

@@ -11566,3 +11566,25 @@ the create request fails or the list fails to refresh decides the fix. **Trigger
 is now owed work.
 
 **Trace read, 2026-09-30** (the product owner downloaded `playwright-report-web-shard-1` of run `36710871625`, attempt 1; all three attempts' `error-context` snapshots agree). **The create request is never sent.** The trace's network log ends at `GET …/clients/:id/projects` (200); there is no `POST …/projects` after the "Create project" click. At failure the dialog is still open with the Name textbox **empty**, `[invalid]` and "Name is required.", although `fill('Riverside')` had completed; the DOM snapshot taken just before the click already reads `value=''`. So the form's own validation refused the submit, and the stall is a **lost keystroke in the create dialog, not the API and not the list refresh**. Timing from the trace: the projects list request started ~15 ms **after** the "New project" click and resolved while the dialog was opening; locally it resolves first. Not yet established: what clears the field. The form is reset on open by an effect (`ProjectFormDialog.tsx:51-57`, same shape in `ClientFormDialog.tsx`), and a remount of the dialog content would do the same. **Next:** reproduce locally by delaying the projects response in the csp suite, then fix the product if a real user can lose typed text this way, not the test.
+
+**Fix landed, 2026-09-30 — addresses the leading hypothesis; the row stays OPEN.** A local repro
+with a 400 ms delay on the projects GET passed, so the mechanism is **unproven**: the reset-on-open
+effect is the only thing found that is consistent with the trace, not something observed clearing the
+field. `ClientFormDialog`, `ProjectFormDialog` and `PlanFormDialog` no longer `reset()` in a passive
+effect. The Dialog mounts its children only while `open`, so each now renders an inner form
+component (keyed by the target's id, or `'new'`) whose `useForm` is given the target's values as
+`defaultValues` at mount, and whose mutation hooks live inside it, so a reopened dialog has no stale
+error. The component props are unchanged. One behaviour difference: closing the dialog while a save
+is in flight now unmounts its mutation observer, so the per-call `onSuccess` (announce, `onCreated`,
+`onClose`) no longer fires for that save; the write itself still completes.
+**Tests:** the "born with the seeded value" property is pinned for the client and project dialogs (the plan dialog has the same shape and only its existing tests) by a layout-effect probe in
+`ClientFormDialog.test.tsx` and `ProjectFormDialog.test.tsx` — layout effects run before any passive
+effect, so the probe sees the value the field is born with; it was verified red against the
+pre-fix client dialog (received `''`, expected `'Northgate'`). **A test of "text typed right after
+open survives a later effect" is not achievable under jsdom:** `act` flushes passive effects before
+`render` returns, so the old code passes it too, and no red was faked. **Close this row only when CI
+has passed the csp suite on several runs** — until then the fix is a structural removal of the
+suspected race, not a demonstrated cure.
+**Follow-up, not done here — same reset-on-open shape:** `CreateBaselineDialog`,
+`ResourceFormDialog`, `CalendarFormDialog`, `EditDependencyDialog`, `ShareLinksDialog`, `NoteItem`,
+`ActivityResourcesPanel`, `ActivityProgressPanels`.
