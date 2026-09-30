@@ -62,6 +62,8 @@ const WINDOWED_FROM = 8;
 const EMPTY_TITLE = 'Nothing left to apply.';
 const REFRESH_NOTE_ID = 'apply-levelling-refresh-note';
 const CHECKED_UNCHANGED_TEXT = 'List checked, no changes.';
+const STALE_TEXT =
+  'The plan was recalculated since this list was made. Here is the up-to-date list — check it and apply again.';
 const LOADING_TEXT = 'Working out what levelling would move…';
 
 function loadErrorLabel(error: unknown): string {
@@ -175,6 +177,8 @@ function ApplyLevellingBody({
   const [conflict, setConflict] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Set when confirming found the schedule recalculated since the list on screen was made.
+  const [stale, setStale] = useState(false);
   // Set only when a re-read returns the list unchanged: the summary sentence is then identical, so
   // the status region would stay silent and a screen-reader user could not tell the check finished.
   const [unchangedNote, setUnchangedNote] = useState('');
@@ -195,8 +199,27 @@ function ApplyLevellingBody({
     setUnchangedNote('');
     setConflict(null);
     setFailure(null);
+    setStale(false);
     try {
-      const outcome = await onApply(application);
+      // The client holds no copy of the plan's `scheduleComputedAt` (only this response carries it),
+      // so the list is re-read at the moment of confirming and compared with the one the planner
+      // checked. A recalculation by anybody else in between makes the list on screen a different
+      // answer, and it is shown again rather than written (plan T2.2).
+      const reread = await query.refetch();
+      if (reread.isError || !reread.data) {
+        setFailure(
+          'Couldn’t check the list is still up to date. Nothing was changed. Try again, and if it keeps failing, reload the page.',
+        );
+        return;
+      }
+      if (
+        reread.data.computedFrom.scheduleComputedAt !== application.computedFrom.scheduleComputedAt
+      ) {
+        setStale(true);
+        contentRef.current?.focus();
+        return;
+      }
+      const outcome = await onApply(reread.data);
       if (outcome.applied || outcome.lostPen) {
         onClose();
         return;
@@ -263,7 +286,14 @@ function ApplyLevellingBody({
     closeLabel = 'Close';
     status = applyLevellingTooMany(count);
     content = (
-      <NoticeStrip tone="destructive" density="comfortable" messageFit="grow" message={status} />
+      <NoticeStrip
+        role="alert"
+        aria-label="Too many activities"
+        tone="destructive"
+        density="comfortable"
+        messageFit="grow"
+        message={status}
+      />
     );
   } else {
     const byHand = application.items.filter((item) => item.wasPlaced);
@@ -356,6 +386,15 @@ function ApplyLevellingBody({
             {checking ? 'Checking…' : 'Check again'}
           </Button>
         </NoticeStrip>
+      ) : null}
+      {stale ? (
+        <NoticeStrip
+          role="alert"
+          tone="warning"
+          density="comfortable"
+          message={STALE_TEXT}
+          aria-label="List out of date"
+        />
       ) : null}
       {failure ? <NoticeStrip role="alert" tone="warning" message={failure} /> : null}
 

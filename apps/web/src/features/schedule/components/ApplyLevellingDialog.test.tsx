@@ -82,7 +82,7 @@ function loaded(data: LevellingApplication, extra: Record<string, unknown> = {})
     isError: false,
     isFetching: false,
     data,
-    refetch: vi.fn(),
+    refetch: vi.fn().mockResolvedValue({ data, isError: false }),
     ...extra,
   };
 }
@@ -331,9 +331,7 @@ describe('ApplyLevellingDialog — over the limit', () => {
     const items = Array.from({ length: 2001 }, (_, i) => item(`m${String(i)}`));
     loaded(application({ rows: items.map((i) => row(i.id)), items }));
     renderDialog();
-    const strip = screen
-      .getAllByText(/^Nothing was changed\./)
-      .find((el) => el.getAttribute('role') !== 'status');
+    const strip = screen.getByRole('alert', { name: 'Too many activities' });
     expect(strip).toHaveTextContent(
       'Nothing was changed. Levelling would move 2,001 activities, and one step can apply at most 2,000.',
     );
@@ -356,7 +354,79 @@ describe('ApplyLevellingDialog — confirming', () => {
     fireEvent.click(applyButton());
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(onApply).toHaveBeenCalledOnce();
-    expect(onApply.mock.calls[0]?.[0]).toBe(preview);
+    expect(onApply.mock.calls[0]?.[0]).toEqual(preview);
+  });
+
+  it('re-reads the preview before writing, and writes when the schedule is unchanged', async () => {
+    const data = application();
+    const refetch = vi.fn().mockResolvedValue({
+      data: application({ rows: [row('a', { version: 3 }), row('b', { version: 3 })] }),
+      isError: false,
+    });
+    loaded(data, { refetch });
+    renderDialog();
+    fireEvent.click(applyButton());
+    await waitFor(() => expect(onApply).toHaveBeenCalledOnce());
+    expect(refetch).toHaveBeenCalledOnce();
+    // What is sent is the list as just re-read, so the versions it carries are the current ones.
+    expect(onApply.mock.calls[0]?.[0].rows[0].version).toBe(3);
+  });
+
+  it('refuses to write a list older than the schedule, says so, and keeps focus in the dialog', async () => {
+    const data = application();
+    const refetch = vi.fn().mockResolvedValue({
+      data: application({
+        computedFrom: { scheduleComputedAt: '2026-03-02T00:00:00.000Z' },
+        rows: [row('a')],
+        items: [item('a')],
+      }),
+      isError: false,
+    });
+    loaded(data, { refetch });
+    renderDialog();
+    const button = applyButton();
+    button.focus();
+    fireEvent.click(button);
+    expect(await screen.findByRole('alert', { name: 'List out of date' })).toHaveTextContent(
+      'The plan was recalculated since this list was made. Here is the up-to-date list — check it and apply again.',
+    );
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('group', { name: 'Levelled dates' })).toHaveFocus();
+    expect(applyButton()).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('clears the out-of-date note on the next press, and writes once the list agrees', async () => {
+    const data = application();
+    const refetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: application({ computedFrom: { scheduleComputedAt: '2026-03-02T00:00:00.000Z' } }),
+        isError: false,
+      })
+      .mockResolvedValue({
+        data: application({ computedFrom: { scheduleComputedAt: '2026-03-01T00:00:00.000Z' } }),
+        isError: false,
+      });
+    loaded(data, { refetch });
+    renderDialog();
+    fireEvent.click(applyButton());
+    await screen.findByRole('alert', { name: 'List out of date' });
+    fireEvent.click(applyButton());
+    await waitFor(() => expect(onApply).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('alert', { name: 'List out of date' })).not.toBeInTheDocument();
+  });
+
+  it('does not write when the re-read itself fails', async () => {
+    loaded(application(), {
+      refetch: vi.fn().mockResolvedValue({ data: application(), isError: true }),
+    });
+    renderDialog();
+    fireEvent.click(applyButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Couldn’t check the list is still up to date. Nothing was changed.',
+    );
+    expect(onApply).not.toHaveBeenCalled();
   });
 
   it('does not apply when Cancel is pressed', () => {
@@ -383,14 +453,19 @@ describe('ApplyLevellingDialog — confirming', () => {
     );
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    expect(refetch).toHaveBeenCalledOnce();
+    // Once to confirm the list was still current when Apply was pressed, once for Check again.
+    expect(refetch).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
   it('keeps focus inside the dialog when Check again removes its own strip', async () => {
     let settle: () => void = () => {};
     const data = application();
-    const refetch = vi.fn(() => new Promise((r) => (settle = () => r({ data }))));
+    // The confirm-time re-read answers at once; only Check again's is held open.
+    const refetch = vi
+      .fn()
+      .mockResolvedValueOnce({ data, isError: false })
+      .mockImplementation(() => new Promise((r) => (settle = () => r({ data, isError: false }))));
     loaded(data, { refetch });
     onApply.mockResolvedValue({ applied: false, conflict: 'This plan changed.', lostPen: false });
     renderDialog();
@@ -463,7 +538,7 @@ describe('ApplyLevellingDialog — confirming', () => {
     button.focus();
     fireEvent.click(button);
     fireEvent.click(button);
-    expect(onApply).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onApply).toHaveBeenCalledOnce());
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveFocus();
     expect(button).toHaveTextContent('Applying…');
