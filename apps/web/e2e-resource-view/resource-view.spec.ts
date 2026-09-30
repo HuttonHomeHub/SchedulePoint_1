@@ -206,6 +206,13 @@ test('a placed activity loads its resource in the week it is drawn, and follows 
   await revealTable();
   await expect.poll(() => loadedBuckets(page)).toEqual(['2026-02-02']);
 
+  // `placeAndRecalculate` reloads, and leaving the page hands back the pen (the edit lock is
+  // released on unload), so the second write needs it taken again or the API answers 423.
+  const takePen = page.getByRole('button', { name: 'Start editing' });
+  await expect(takePen.or(page.getByRole('button', { name: 'Stop editing' }))).toBeVisible();
+  if (await takePen.isVisible()) {
+    await startEditing(page);
+  }
   await placeAndRecalculate(page, orgSlug, 'Survey', '2026-03-02');
   await revealTable();
   await expect.poll(() => loadedBuckets(page)).toEqual(['2026-03-02']);
