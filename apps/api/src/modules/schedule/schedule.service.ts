@@ -626,10 +626,11 @@ export class ScheduleService {
 
   /**
    * Recalculate one plan as the system rather than as a member (#381, ADR-0155). Used only by the
-   * two one-shot re-derivations at boot, `FinishMilestoneRederiveService` (#381) and
-   * `CrossPlanRederiveService` (#385 M3, which calls it upstream-first), before or while the API
+   * three one-shot re-derivations at boot, `FinishMilestoneRederiveService` (#381),
+   * `CrossPlanRederiveService` (#385 M3, which calls it upstream-first) and
+   * `ProgressedVisualRederiveService` (#421, likewise), before or while the API
    * serves; no pen is asserted because nobody is editing, and the advisory lock still serialises it
-   * with any user recalculation of the same plan (and with the other boot service). Returns false (and writes nothing) for a plan that has since
+   * with any user recalculation of the same plan (and with the other boot services). Returns false (and writes nothing) for a plan that has since
    * been deleted or lost its data date.
    */
   async recalculateAsSystem(organizationId: string, planId: string): Promise<boolean> {

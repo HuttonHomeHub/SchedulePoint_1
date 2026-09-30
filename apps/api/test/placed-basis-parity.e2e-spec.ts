@@ -231,6 +231,85 @@ describe.skipIf(!hasDatabase)('Placed-basis parity where nothing is placed (e2e)
     expect(by('DONE').earlyFinish).toBe('2026-01-03');
   });
   /**
+   * **The successors of a started and of a completed activity, drawn where Pass 1 puts them** (#421
+   * M2-T2.3 — the product half of the engine's FC-11b). Its own seed, so the case above and its code
+   * list stay exactly as M-P left them. Before #421 Pass 2 propagated a progressed predecessor's
+   * PLANNED duration from its own start, so a successor of progressed work was drawn away from its early
+   * date (the engine's FC-11b, `compute.visual.spec.ts`, holds the measured figures). Actuals sit before
+   * the data date for the reason the seed above states.
+   */
+  it('draws the successors of a started and a completed activity at their early dates', async () => {
+    const actor = await signUp('parity-successors@example.com');
+    await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+    const client = await actor.agent
+      .post('/api/v1/organizations/acme/clients')
+      .send({ name: 'Northgate' })
+      .expect(201);
+    const project = await actor.agent
+      .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+      .send({ name: 'Riverside' })
+      .expect(201);
+    const plan = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
+      .send({ name: 'Parity successors', plannedStart: '2026-01-05' })
+      .expect(201);
+    const planId = plan.body.data.id as string;
+    const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+    const create = async (body: object): Promise<{ id: string; version: number }> => {
+      const res = await actor.agent.post(base).send(body).expect(201);
+      return { id: res.body.data.id as string, version: res.body.data.version as number };
+    };
+    const started = await create({ name: 'Excavate', code: 'STARTED', durationDays: 4 });
+    const done = await create({ name: 'Survey', code: 'DONE', durationDays: 4 });
+    const afterStarted = await create({ name: 'Pour', code: 'AFTER_STARTED', durationDays: 2 });
+    const afterDone = await create({ name: 'Report', code: 'AFTER_DONE', durationDays: 2 });
+    for (const [predecessorId, successorId] of [
+      [started.id, afterStarted.id],
+      [done.id, afterDone.id],
+    ] as const) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId, successorId, type: 'FS' })
+        .expect(201);
+    }
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${started.id}/progress`)
+      .send({ percentComplete: 50, actualStart: '2026-01-02', version: started.version })
+      .expect(200);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${done.id}/progress`)
+      .send({
+        percentComplete: 100,
+        actualStart: '2026-01-02',
+        actualFinish: '2026-01-03',
+        version: done.version,
+      })
+      .expect(200);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+
+    const list = await actor.agent.get(`${base}?limit=100`).expect(200);
+    const rows = list.body.data as Row[];
+    expect(rows.map((r) => r.code).sort()).toEqual(
+      ['AFTER_DONE', 'AFTER_STARTED', 'DONE', 'STARTED'].sort(),
+    );
+    expect(rows.every((r) => r.earlyStart !== null && r.earlyFinish !== null)).toBe(true);
+    // Not vacuous: the completed activity finished BEFORE the data date, so its successor cannot start
+    // at the planned finish the old Pass 2 read.
+    expect(rows.find((r) => r.code === 'DONE')!.earlyFinish).toBe('2026-01-03');
+
+    const placed = Object.fromEntries(
+      rows.map((r) => [r.code, { s: r.visualEffectiveStart, f: r.visualEffectiveFinish }]),
+    );
+    const early = Object.fromEntries(
+      rows.map((r) => [r.code, { s: r.earlyStart, f: r.earlyFinish }]),
+    );
+    expect(placed).toEqual(early);
+  });
+
+  /**
    * **FC-4 — remaining float, over the real route, where the naive derivation is wrong** (M-D).
    *
    * `schedule.repository.day-factor.spec.ts` pins the arithmetic and states in its own docblock what

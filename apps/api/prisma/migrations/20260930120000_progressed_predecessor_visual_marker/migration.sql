@@ -1,0 +1,47 @@
+-- MARKER FOR THE PROGRESSED-PREDECESSOR VISUAL RE-DERIVATION — progressed-predecessor-visual M2-T2.1
+-- (docs/TECH_DEBT.md #421).
+--
+-- Spec: docs/specs/progressed-predecessor-visual/feature-spec.md §4.4 (D4) and §4.5; plan M2-T2.1.
+-- D4 confirmed by the product owner 2026-09-30 ("all at once on release"). Designed by the
+-- database-architect agent (CLAUDE.md §19.3).
+--
+-- THIS FILE CONTAINS NO STATEMENT, ON PURPOSE. Its only product is its own `_prisma_migrations`
+-- row. `finished_at` on that row is the instant this release's engine took over on the host, and
+-- `ProgressedVisualRederiveService` recalculates, once, every plan whose `schedule_computed_at` is
+-- earlier than it and which has progress (or an applied Expected Finish): those are the plans whose
+-- engine-owned `visual_effective_*` columns were written by the Pass 2 that propagated a progressed
+-- predecessor's PLANNED duration from its own start (compute.ts Pass 2, before #421). The two
+-- earlier re-derivations key the same way (FINISH_MILESTONE_DATE_MIGRATION,
+-- CROSS_PLAN_LAG_MIGRATION); they could reuse the migration that carried their data change, and
+-- this release has no data change, so the marker is a file of its own.
+--
+-- WHY A MIGRATION AND NOT SOMETHING ALREADY THERE. Each alternative was checked and is not
+-- equivalent:
+--   * An EARLIER migration's `finished_at` (e.g. 20260926120000_cross_plan_lag_working_minutes).
+--     Misses every plan recalculated between that release and this one, all of which the old
+--     Pass 2 wrote. Wrong in the unsafe direction: they would stay wrong indefinitely.
+--   * A timestamp constant in the service. The release instant differs per host and is unknown at
+--     build time. Earlier than a host's deploy: plans the OLD engine recalculated after it escape.
+--     Later: the service re-runs on every boot until the constant passes.
+--   * An engine-version column on `plans`. Real DDL on the hottest table in the schema to express
+--     what one row in `_prisma_migrations` already records, and a column that would have to be
+--     written by every recalculation for ever.
+--   * A boot-time row in an application table. No such key-value table exists, and adding one is
+--     more schema than this file, for the same information.
+-- The `_prisma_migrations` row is written by `prisma migrate deploy` in docker-entrypoint.sh before
+-- `node dist/main.js` starts, in the same image as the engine fix (ADR-0018), so no instant exists at
+-- which the new marker is visible to code that still runs the old Pass 2.
+--
+-- ORDERING AGAINST M1 (the engine fix). The error can only ever be over-inclusion: M1 lands before
+-- this file (plan M1 → M2), so if a release ever carried M1 without it, plans the fixed engine
+-- recalculated in between still read as earlier than the marker and are recalculated once more.
+-- That is idempotent, never wrong. The unsafe order (marker live before the fixed engine) cannot be
+-- produced by merging M1 then M2.
+--
+-- NOTHING TO REVERSE. No table, column, index, constraint or row of application data is touched.
+-- Do NOT delete the `_prisma_migrations` row as a "reset": the next `migrate deploy` would re-apply
+-- this file with a new `finished_at`, and every progressed plan computed before that moment would be
+-- recalculated again. Harmless, but a full re-derivation nobody asked for.
+--
+-- Cost: none at migrate time. The re-derivation's read cost is measured in docs/DATABASE.md
+-- "Re-derivation markers".

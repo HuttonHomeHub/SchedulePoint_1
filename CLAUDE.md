@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1405 web
+> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1405 web
 > source files with 46 Playwright suites beside the base journey, and
 > 165 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -115,7 +115,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   24 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (34 models) + 71 migrations
+│   │   ├── prisma/           #   Schema (34 models) + 72 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -545,7 +545,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0145** _(Accepted)_ — A screen is assembled from the archetypes, and a metric names what it measures → [`0145-a-screen-is-assembled-from-the-archetypes.md`](docs/adr/0145-a-screen-is-assembled-from-the-archetypes.md)
 - **ADR-0146** _(Accepted)_ — A page has one measure, a column has a reason, and a fact belongs under its row → [`0146-a-page-has-one-measure-and-a-column-has-a-reason.md`](docs/adr/0146-a-page-has-one-measure-and-a-column-has-a-reason.md)
 - **ADR-0147** _(Accepted)_ — The register a reader is briefed from is gated too → [`0147-the-register-a-reader-is-briefed-from-is-gated-too.md`](docs/adr/0147-the-register-a-reader-is-briefed-from-is-gated-too.md)
-- **ADR-0148** _(Accepted)_ — Visual is the plan; the feasible window and the levelled ghost are overlays → [`0148-visual-is-the-plan.md`](docs/adr/0148-visual-is-the-plan.md)
+- **ADR-0148** _(Accepted; amended by #421)_ — Visual is the plan; the feasible window and the levelled ghost are overlays → [`0148-visual-is-the-plan.md`](docs/adr/0148-visual-is-the-plan.md)
 - **ADR-0149** _(Accepted)_ — A corridor is chosen for what it crosses, and height was never the currency → [`0149-a-corridor-is-chosen-for-what-it-crosses.md`](docs/adr/0149-a-corridor-is-chosen-for-what-it-crosses.md)
 - **ADR-0150** _(Accepted)_ — A leg is an obstacle, and the gutter is a channel → [`0150-a-leg-is-an-obstacle-and-the-gutter-is-a-channel.md`](docs/adr/0150-a-leg-is-an-obstacle-and-the-gutter-is-a-channel.md)
 - **ADR-0151** _(Accepted)_ — The row is the unit, and a constant carries its justification → [`0151-the-row-is-the-unit.md`](docs/adr/0151-the-row-is-the-unit.md)
