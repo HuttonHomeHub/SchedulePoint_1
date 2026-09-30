@@ -24,6 +24,7 @@ import {
   PANEL_MIN_OPEN,
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
+import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
 import {
   CANVAS_MIN_WIDTH,
   NOTES_PANEL_MAX_WIDTH,
@@ -493,6 +494,7 @@ export function ToolbarPlanWorkspace({
    * exactly what the hoist above exists to prevent.
    */
   const barDateSource = barDateSourceFor(lateOverlayActive);
+  useLateOverlayAnnouncement(lateOverlayActive);
 
   /**
    * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in

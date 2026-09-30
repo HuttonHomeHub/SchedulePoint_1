@@ -163,9 +163,14 @@ byte counts and parse positions). Before #412, malformed JSON was already a 400 
 parser's message** (Nest turns the parser's `SyntaxError` into a `BadRequestException` carrying it),
 and every other case here was an opaque 500 logged as an incident. **JSON is the only body format parsed**: a `application/x-www-form-urlencoded` body is
 not read (`req.body` is undefined) — the form parser was removed in #415, having taken 100 KB from
-any caller beside the 64 KB promise above. The 64 KB figure bounds every body **this app's own
-parsers** read; `/api/auth/*` (Better Auth) is mounted before them and reads its own bodies, outside
-that cap (#416).
+any caller beside the 64 KB promise above. **`/api/auth/*` (Better Auth) is held to the same 64 KB
+(#416)**, though it is mounted before the parsers and reads its own body: better-call's node adapter is given
+no size limit, so before #416 an anonymous body there was unbounded. A request declaring a
+`Content-Length` over 64 KB, or sending a chunked body that passes it, answers the same `413` envelope; a
+body within the cap reaches Better Auth as the raw stream it always did. That last case is bounded by
+Node's HTTP framing (llhttp: the body ends at its declared `Content-Length`), not by our code; a chunked body is
+decoded with its declared charset and `Content-Encoding`, the cap applying to the decoded size, and an unknown
+charset is `415`, not a guess.
 
 **423 vs 409 — two distinct concurrency signals.** A **409** is a per-row
 lost-update / uniqueness clash (the optimistic `version` guard) — refetch and
@@ -1756,8 +1761,8 @@ controller's 30 / 60 s per handler.
 
 - Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.
 - The Better Auth handler is mounted at **`/api/auth/*`** (sign-up, sign-in,
-  sign-out, session). It is a raw Node handler, mounted before body parsing, and
-  sits outside the versioned `/api/v1` surface.
+  sign-out, session). It is a raw Node handler, mounted before body parsing (its 64 KB body cap
+  comes from `boundAuthBody`, #416), and sits outside the versioned `/api/v1` surface.
 - State-changing requests require CSRF protection: Better Auth rejects requests
   whose `Origin` is missing or not in the allow-list (`trustedOrigins`, wired to
   `CORS_ORIGINS`) — browsers send `Origin` automatically.

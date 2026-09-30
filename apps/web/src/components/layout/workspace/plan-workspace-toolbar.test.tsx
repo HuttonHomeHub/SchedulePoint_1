@@ -24,11 +24,14 @@ const h = vi.hoisted<{
   // is mocked rather than the fetch, because the subject here is the HOST's wiring and not the
   // query's.
   migrationCount: number;
+  // The `?view=` search the route mock answers, so a case can open the Gantt (ADR-0059).
+  search: Record<string, string>;
 }>(() => ({
   role: 'PLANNER',
   plannedStart: '2026-01-01',
   tsldProps: { current: null },
   migrationCount: 0,
+  search: {},
 }));
 
 vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
@@ -103,7 +106,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   useParams: () => ({ orgSlug: 'acme', planId: 'p1' }),
   // The workspace reads/writes the `?view=` projection (ADR-0059); these two keep the mock a
   // complete stand-in rather than a partial one that throws the moment the view switch renders.
-  useSearch: () => ({}),
+  useSearch: () => h.search,
   useNavigate: () => vi.fn(),
   Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
 }));
@@ -224,6 +227,13 @@ vi.mock('@/features/tsld', () => ({
   todayDayFraction: () => undefined,
 }));
 
+// The Gantt draws from activity fields the stubbed list above does not carry; the subject of the
+// announcement case is the HOST, so the panel is a marker (partial: the view-mode hook stays real).
+vi.mock('@/features/gantt', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  GanttPanel: () => <div data-testid="gantt-panel" />,
+}));
+
 // Schedule: stub the summary strip + the recalc/summary hooks the toolbar builder reads.
 vi.mock('@/features/schedule', () => ({
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,
@@ -253,6 +263,7 @@ vi.mock('@/features/schedule/api/use-schedule', () => ({
 }));
 
 const { formatCalendarDate } = await import('@/lib/format-date');
+const { AnnouncerProvider } = await import('@/components/ui/announcer');
 const { TestChromeHost } = await import('@/components/layout/chrome/test-chrome-host');
 const { PlanDetailScreen } = await import('@/routes/plan-detail');
 
@@ -262,9 +273,11 @@ function renderScreen() {
     <QueryClientProvider client={client}>
       {/* The screen's toolbar portals into the chrome band, which the shell mounts and a
           bare screen render does not — so the test supplies the portal target. */}
-      <TestChromeHost>
-        <PlanDetailScreen />
-      </TestChromeHost>
+      <AnnouncerProvider>
+        <TestChromeHost>
+          <PlanDetailScreen />
+        </TestChromeHost>
+      </AnnouncerProvider>
     </QueryClientProvider>,
   );
 }
@@ -274,6 +287,7 @@ beforeEach(() => {
   h.plannedStart = '2026-01-01';
   h.tsldProps.current = null;
   h.migrationCount = 0;
+  h.search = {};
 });
 
 /**
@@ -570,5 +584,34 @@ describe('the placement-migration notice (one-planning-surface M-I)', () => {
 
     await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
     expect(h.tsldProps.current?.placementMigrationNotice).toBeNull();
+  });
+});
+
+/**
+ * **The Late overlay is announced by the host, in the Gantt as well as the diagram** (#417).
+ *
+ * The hook that speaks it is unit-tested on its own; this is the seam the unit suite cannot see —
+ * that `ToolbarPlanWorkspace` actually calls it, inside the real announcer, with the Gantt mounted
+ * (where `TsldPanel`, which used to own the announcement, is not). Delete the hook call in the host
+ * and this goes red.
+ */
+describe('the Late-start overlay announcement (#417)', () => {
+  it('speaks the switch through the live region while the Gantt is the view', async () => {
+    h.search = { view: 'gantt' };
+    renderScreen();
+    expect(screen.getByTestId('gantt-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('tsld-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('announcer')).toHaveTextContent('');
+
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Late-start overlay' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent('Late dates shown.'),
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Late-start overlay' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent('Placed dates shown.'),
+    );
   });
 });
