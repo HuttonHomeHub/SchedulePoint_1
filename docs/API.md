@@ -1707,7 +1707,7 @@ controller's 30 / 60 s per handler.
   has not been re-taken with levelling added.
 
 - `GET …/schedule/levelling-application` **previews applying the plan's levelled positions as
-  placements** (`docs/specs/apply-levelled-dates/`, M1; `activity:update` — Planner and Org Admin,
+  placements** (ADR-0167, `docs/specs/apply-levelled-dates/`, M1; `activity:update` — Planner and Org Admin,
   not `schedule:read`, because it exists to feed a write the caller must be able to make and it runs
   the engine up to **three** times). **Read-only: no lock, no pen, no write, no audit event**; the
   write is `PATCH …/activities/placements`, whose body is `{ placements: [...] }`: send `data.rows`

@@ -1,6 +1,9 @@
 # Feature Spec: Apply levelled dates
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-09-30. CQ-1 **(a)** placed like a drag, not
+  pinned with SNET; CQ-2 **(a)** everything at once; CQ-3 **(a)** one step, then report what is left;
+  CQ-4 **(a)** the next working day, not part-day storage. D-1 to D-5 accepted as written. ADR-0167
+  records the decision.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-30
 - **Tracking issue / epic:** the "later" half of `docs/TECH_DEBT.md` #413 Q1 (c), recorded in

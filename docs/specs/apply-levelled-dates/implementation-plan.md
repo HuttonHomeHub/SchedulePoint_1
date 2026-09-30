@@ -1,7 +1,10 @@
 # Implementation Plan: Apply levelled dates
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-09-30. CQ-1 **(a)** placed like a drag, not
+  pinned with SNET; CQ-2 **(a)** everything at once; CQ-3 **(a)** one step, then report what is left;
+  CQ-4 **(a)** the next working day, not part-day storage. D-1 to D-5 accepted as written. ADR-0167
+  records the decision.
 - **Owner:** api (engine + schedule module), web (command, dialog, undo wiring)
 
 This plan assumes the recommended answers to CQ-1 to CQ-4 (placement, all at once, one step, round to the
