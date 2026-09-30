@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.153.3
+
+### Patch Changes
+
+- [#729](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/729) [`9853228`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9853228456c1c5786a4f8e8ee961348ff52006f1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activities panel now opens faster on plans with many activities, because it draws only the
+  rows you can see (plus a few either side) instead of every activity. One trade-off, agreed in
+  advance: your browser's find-in-page (Ctrl+F) can no longer find an activity that is scrolled out
+  of view, and a screen reader reaches such a row only as the list scrolls. The diagram's activity
+  list still holds every activity. Column widths are now set from the rows first shown, so an
+  unusually long value further down wraps onto a second line rather than widening its column.
+
+- [#729](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/729) [`9853228`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9853228456c1c5786a4f8e8ee961348ff52006f1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Screen readers now hear that the Late-start overlay is showing late dates: each activity's sentence says "late dates", and switching the overlay on or off is announced.
+
+- [#729](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/729) [`9853228`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9853228456c1c5786a4f8e8ee961348ff52006f1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The resource loading chart and the canvas resource strip now say that load is counted on each activity's earliest dates, not where its bar is drawn.
+
 ## 0.153.2
 
 ### Patch Changes
