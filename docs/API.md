@@ -348,6 +348,13 @@ the live-budget fallback always phases on something.
   live `earlyStart`/`earlyFinish`, exactly as before. A baseline that never recorded a placement cannot
   be backfilled with one.
 
+**An activity's last day is planned.** Every finish above is the inclusive display date (ADR-0023),
+so Planned Value phases to the end of that day: a Monday-to-Friday UNIFORM activity is 20% at the end
+of Monday, 80% at the end of Thursday and 100% only at the end of Friday, and a data date on the
+Friday itself reads 80%. END accrual likewise recognises the cost once the last day has closed
+(`docs/TECH_DEBT.md` #425). Before this, the read counted Monday to Thursday and reached 100% a day
+early.
+
 `pv`, `sv` and `spi` follow the basis, and so do `eac`, `etc` and `vac` under
 `eacMethod = CPI_TIMES_SPI` (the only method that reads SPI). `bac`, `ev`, `ac`, `cv`, `cpi` and
 `tcpi` read no date and do not change. A plan with no placement reads byte-identically on either

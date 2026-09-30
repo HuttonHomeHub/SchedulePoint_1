@@ -191,20 +191,45 @@ const DEFAULT_NAV_STATE: NavState = {
 };
 
 /**
- * @param planId the plan the canvas is showing. View toggles are **per plan** (`docs/TECH_DEBT.md`
- * #422): switching to a plan already opened in this session keeps the workspace mounted, so without
- * it a Late overlay switched on in one plan would silently still be on in the next. Omitted by the
+ * @param planId the plan the canvas is showing. Plan-specific state is **per plan**
+ * (`docs/TECH_DEBT.md` #422 and #424): switching to a plan already opened in this session keeps the
+ * workspace mounted, so without a reset a Late overlay or an armed tool from one plan would silently
+ * still be live in the next. Omitted by the
  * uncontrolled `TsldPanel`, which has no plan switch to react to.
  */
 export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
   const [mode, setMode] = useState<EditMode>('select');
   const [viewToggles, setViewToggles] = useState<TsldViewToggles>(DEFAULT_VIEW_TOGGLES);
+  const [loeStartId, setLoeStartId] = useState<string | null>(null);
+  const [lensState, setLensState] = useState<LensState>(DEFAULT_LENS_STATE);
+  const [navState, setNavState] = useState<NavState>(DEFAULT_NAV_STATE);
   // React's "adjust state while rendering" pattern: a reset on a prop change needs no effect, and
-  // so never paints one frame of the previous plan's toggles.
-  const [togglesPlanId, setTogglesPlanId] = useState(planId);
-  if (togglesPlanId !== planId) {
-    setTogglesPlanId(planId);
+  // so never paints one frame of the previous plan's state.
+  const [statePlanId, setStatePlanId] = useState(planId);
+  if (statePlanId !== planId) {
+    setStatePlanId(planId);
+    // PLAN-SPECIFIC state resets (product owner, 2026-09-30): the view toggles, the overlays, the
+    // find/conflict cursors, isolate, the pending select signal, the LOE pick and the armed tool.
+    // `mode` goes back to 'select' through an ordinary state change, so `TsldPanel`'s mode effects
+    // (disarm announcements, releasing the pick's recalculation hold, dropping the LOE start) run
+    // exactly as they do for any other disarm.
     setViewToggles(DEFAULT_VIEW_TOGGLES);
+    setMode('select');
+    setLoeStartId(null);
+    // PERSONAL PREFERENCES are kept: the filter query and attributes, the colour mode and the
+    // revision-comparison overlay describe how this planner likes to look at a plan, not the plan.
+    setLensState((s) => ({
+      ...s,
+      baselineOverlay: DEFAULT_LENS_STATE.baselineOverlay,
+      levelledOverlay: DEFAULT_LENS_STATE.levelledOverlay,
+      searchCursorId: DEFAULT_LENS_STATE.searchCursorId,
+    }));
+    setNavState((s) => ({
+      ...s,
+      isolateActive: DEFAULT_NAV_STATE.isolateActive,
+      conflictCursorId: DEFAULT_NAV_STATE.conflictCursorId,
+      selectSignal: DEFAULT_NAV_STATE.selectSignal,
+    }));
   }
   const [zoomPreset, setZoomPreset] = useState<ZoomLevel>('week');
   const [fitSignal, setFitSignal] = useState(0);
@@ -212,9 +237,6 @@ export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
   const [showHelp, setShowHelp] = useState(false);
   const [createType, setCreateType] = useState<ActivityType>('TASK');
   const [linkType, setLinkType] = useState<DependencyType>('FS');
-  const [loeStartId, setLoeStartId] = useState<string | null>(null);
-  const [lensState, setLensState] = useState<LensState>(DEFAULT_LENS_STATE);
-  const [navState, setNavState] = useState<NavState>(DEFAULT_NAV_STATE);
   const canvasControlRef = useRef<TsldCanvasHandle>(null);
 
   const toggleView = useCallback(

@@ -166,4 +166,75 @@ describe('useTsldCanvasUiState', () => {
     rerender({ planId: 'plan-a' });
     expect(result.current.viewToggles.labels).toBe(!defaults.labels);
   });
+
+  // `docs/TECH_DEBT.md` #424: the rest of the hook's state is split by the product owner's decision
+  // of 2026-09-30 — plan-specific state resets on a plan change, personal preferences are kept.
+  const renderOnPlanA = () =>
+    renderHook(({ planId }) => useTsldCanvasUiState(planId), {
+      initialProps: { planId: 'plan-a' },
+    });
+
+  /** Put every plan-specific and every preference field off its default, in plan A. */
+  const dirty = (result: ReturnType<typeof renderOnPlanA>['result']): void => {
+    act(() => {
+      result.current.toggleBaselineOverlay();
+      result.current.toggleLevelledOverlay();
+      result.current.toggleIsolate();
+      result.current.setConflictCursorId('act-2');
+      result.current.requestSelectActivity('act-3');
+      result.current.setLoeStartId('act-4');
+      result.current.setMode('link');
+      result.current.setFilterQuery('crane');
+      result.current.toggleFilterAttr('critical');
+      result.current.setColourMode('totalFloat');
+      result.current.toggleCompareOverlay();
+    });
+    // After the filter setters, which clear the find cursor.
+    act(() => result.current.setSearchCursorId('act-1'));
+  };
+
+  it('resets the plan-specific state when the plan changes', () => {
+    const { result, rerender } = renderOnPlanA();
+    dirty(result);
+    expect(result.current.lensState.baselineOverlay).toBe(true);
+
+    rerender({ planId: 'plan-b' });
+
+    const { lensState, navState } = result.current;
+    expect(lensState.baselineOverlay).toBe(false);
+    expect(lensState.levelledOverlay).toBe(false);
+    expect(lensState.searchCursorId).toBeNull();
+    expect(navState.isolateActive).toBe(false);
+    expect(navState.conflictCursorId).toBeNull();
+    expect(navState.selectSignal).toBeNull();
+    expect(result.current.loeStartId).toBeNull();
+    expect(result.current.mode).toBe('select');
+  });
+
+  it('keeps the personal preferences when the plan changes', () => {
+    const { result, rerender } = renderOnPlanA();
+    dirty(result);
+
+    rerender({ planId: 'plan-b' });
+
+    const { lensState } = result.current;
+    expect(lensState.filterQuery).toBe('crane');
+    expect(lensState.filterAttrs).toEqual(new Set(['critical']));
+    expect(lensState.colourMode).toBe('totalFloat');
+    expect(lensState.compareOverlay).toBe(false);
+  });
+
+  it('resets nothing on a re-render of the same plan', () => {
+    const { result, rerender } = renderOnPlanA();
+    dirty(result);
+    const before = result.current;
+
+    rerender({ planId: 'plan-a' });
+
+    expect(result.current).toBe(before);
+    expect(result.current.mode).toBe('link');
+    expect(result.current.loeStartId).toBe('act-4');
+    expect(result.current.lensState.baselineOverlay).toBe(true);
+    expect(result.current.navState.isolateActive).toBe(true);
+  });
 });

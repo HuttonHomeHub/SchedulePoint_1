@@ -144,6 +144,17 @@ function day(value: Date | null): string | null {
 }
 
 /**
+ * The midnight that closes an INCLUSIVE display finish (ADR-0023), or null. `computeEarnedValue` phases
+ * over `[start, finish)` and treats the data date reaching `finish` as 100%, so it must be handed the
+ * exclusive end: the persisted and baselined finishes are the last day worked, and read as exclusive
+ * they left that day out of PV and reached 100% a day early (docs/TECH_DEBT.md #425). The same
+ * conversion the resource histogram takes at its boundary (#423).
+ */
+function closesLastDay(inclusiveFinish: string | null): string | null {
+  return inclusiveFinish === null ? null : exclusiveFinishOfLastDay(inclusiveFinish);
+}
+
+/**
  * Group an active cost baseline's **frozen per-assignment** cost components by source activity, or
  * `null` when this baseline has none to give (ADR-0071 M3 / CQ-1 option B).
  *
@@ -1216,7 +1227,7 @@ export class ScheduleService {
           ? day(basis === 'PLACED' ? base.placedStart : base.baselineStart)
           : null,
         baselineFinish: base
-          ? day(basis === 'PLACED' ? base.placedFinish : base.baselineFinish)
+          ? closesLastDay(day(basis === 'PLACED' ? base.placedFinish : base.baselineFinish))
           : null,
         // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
         // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
@@ -1230,7 +1241,9 @@ export class ScheduleService {
         // EV read received before, and the live-share path is preserved rather than re-derived.
         ...(frozen ? { baselineCostComponents: frozen } : {}),
         liveStart: day(basis === 'PLACED' ? r.visualEffectiveStart : r.earlyStart),
-        liveFinish: day(basis === 'PLACED' ? r.visualEffectiveFinish : r.earlyFinish),
+        liveFinish: closesLastDay(
+          day(basis === 'PLACED' ? r.visualEffectiveFinish : r.earlyFinish),
+        ),
       };
     });
 
