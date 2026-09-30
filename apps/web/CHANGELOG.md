@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.154.0
+
+### Minor Changes
+
+- [#737](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/737) [`e7f088c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e7f088c458a163ed8c66f93d80548ec1acc6dd94) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The resource histogram and the canvas resource strip now count load where each bar is drawn, so a
+  bar you drag later moves its load with it. An activity with no placed dates is counted on its
+  earliest dates, as before, and the total units per resource are unchanged.
+
+### Patch Changes
+
+- [#737](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/737) [`e7f088c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e7f088c458a163ed8c66f93d80548ec1acc6dd94) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Levelled placement overlay now draws a ghost only for activities that resource levelling moved
+  away from where they are drawn. A bar you have placed and levelling left alone no longer gets a ghost
+  on top of it, and the summary's window-exceeded note measures float from where the bars are drawn.
+
 ## 0.153.4
 
 ### Patch Changes
