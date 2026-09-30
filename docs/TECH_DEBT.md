@@ -11542,7 +11542,7 @@ selection, or a reading on real hardware that confirms it.
 
 ### 420. The csp suite's Arrange journey times out waiting for a new client's link
 
-**Status:** open · **Verified:** 2026-09-30 (CI) · **Raised:** 2026-09-30 (PR #729) · **Size:** S ·
+**Status:** open · **Verified:** 2026-09-30 (CI, PR #737) · **Raised:** 2026-09-30 (PR #729) · **Size:** S ·
 **Owner:** web
 
 `e2e-csp/csp.spec.ts` "the Arrange worker loads and runs with no CSP violation" failed on CI twice
@@ -11550,10 +11550,18 @@ on PR #729, on two different heads (bisect step 1 `c388c67a`, and `487b7f0b`). T
 passed on retry, so the shard was green. Both times it hit the 60 s test timeout inside
 `e2e-arrange/support.ts:35`: after "Create client", `getByRole('link', { name: 'Northgate' })`
 never appears. Step 1 ran main's `app-setup.ts`, so the body-parser change is not the cause.
-Whether it also fails on `main` has not been checked. **Next:** read the csp shard on the next few
-`main` runs. If it fails there, read the retry's trace (the artifact host is blocked in the cloud
-container, so it has to be read on a machine that can download it). **Trigger:** a third failure,
-or a red shard.
+**Third occurrence, 2026-09-30 — the trigger has fired.** On PR #737 (head `92b1a3d`) the same test
+failed its first attempt and **both retries**, turning web shard 1 red. This time it timed out one
+line later, at `e2e-arrange/support.ts:39`: after "Create project", `getByRole('link', { name:
+'Riverside' })` never appeared. So the stall follows a create dialog, not one particular entity. It
+is not the PR's: #737 touches no client or project path, the same suite passed locally on that
+exact head (`scripts/e2e-local.sh web:csp`, 4/4, this test in 3.7 s), `e2e-arrange` uses the same
+helper and passed in the same CI run, and one re-run of the shard passed. What the three
+occurrences share is the csp suite's production build under the enforced policy. **Next:** read
+the retry trace in the `playwright-report-web-shard-1` artifact of run `36710871625` (attempt 1)
+on a machine that can download it. The cloud container cannot reach the artifact host. Whether
+the create request fails or the list fails to refresh decides the fix. **Trigger:** fired; this
+is now owed work.
 
 ### 422. The Late overlay stays on after switching to a plan already opened in this session
 
