@@ -152,6 +152,9 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
     levelWithinFloatOnly,
     dataDate: options.dataDate,
     planCalendar: options.calendar,
+    // The what-if tests the logic network, not the picture (#413 Q2): a drawn position is not logic,
+    // and the completion carrier the verdict reads must be measured where the network puts it.
+    anchor: 'NETWORK',
   };
   const control = levelIfEnabled(
     activities,

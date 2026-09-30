@@ -8,30 +8,26 @@ import type {
   EngineEdge,
   EngineResource,
   EngineResult,
+  LevelingOptions,
 } from './types';
 import { allMinutesWorkCalendar } from './working-time-calendar';
 
 /**
- * **Milestone M0 of `docs/specs/placed-load-basis/` (TECH_DEBT #413): the cases that must be RED
- * before levelling anchors on the placed span, and the reference results that must stay green.**
+ * **Levelling anchors on the placed span (`docs/specs/placed-load-basis/`, TECH_DEBT #413).**
  *
- * Today `levelSchedule` reads the network dates (`earlyStartOffset`, `totalFloat`, `earlyStart`) at
- * every one of the seven sites the spec's C2 lists, so a bar the planner has dragged is levelled as
- * if it were still where logic puts it. The spec's L1-L4 say what it must do instead. Each one is an
- * `it.fails`: it runs, asserts the PLACED behaviour, and is expected to fail today (docs/TESTING.md
- * forbids a skipped test, and a red suite would block `main`). M1 flips each to `it` in the same
- * change that moves the site it covers. A test that unexpectedly passes makes `it.fails` fail, so
- * the flip cannot be forgotten.
+ * Before M1, `levelSchedule` read the network dates (`earlyStartOffset`, `totalFloat`, `earlyStart`) at
+ * every one of the seven sites the spec's C2 lists, so a bar the planner had dragged was levelled as if
+ * it were still where logic puts it. L1-L4 say what it does instead under `anchor: 'PLACED'`; each was
+ * recorded red against that code (the "Red before" comments carry the numbers) and flipped by M1.
  *
  * **Every placed case is paired with a plain `it` that asserts the placed and network starts
- * differ** (ADR-0093): a fixture in which the two agree would pass for the wrong reason, and the
- * `it.fails` beside it would then fail for a reason nobody reads.
+ * differ** (ADR-0093): a fixture in which the two agree would pass for the wrong reason.
  *
  * The plan calendar is 24/7, so one working day is 1440 minutes and an offset equals the absolute
  * minute delta. Data date D = 2026-01-01 (offset 0); D+n is `2026-01-(1+n)`.
  *
- * The two L5 cases are NOT red and are the "nothing changes" reference: today's results on L1's
- * and L2's fixtures, which M1 must reproduce with `anchor: 'NETWORK'`.
+ * The two L5 cases are the "nothing changes" reference: the results recorded before M1 on L1's and
+ * L2's fixtures, which `anchor: 'NETWORK'` reproduces.
  */
 const DATA_DATE = '2026-01-01';
 const DAY = 1440;
@@ -61,12 +57,14 @@ function run(
   edges: readonly EngineEdge[],
   ids: readonly string[],
   levelWithinFloatOnly = false,
+  anchor: LevelingOptions['anchor'] = 'PLACED',
 ) {
   const output = computeSchedule(activities, edges, { dataDate: DATA_DATE, calendar: CAL });
   const leveled = levelSchedule(activities, output, onCrane(...ids), crane, {
     levelWithinFloatOnly,
     dataDate: DATA_DATE,
     planCalendar: CAL,
+    anchor,
   });
   return {
     output,
@@ -91,9 +89,9 @@ describe('levelSchedule — L1: a hand-separated clash disappears', () => {
     expect(byId.get('A')!.visualEffectiveStart).toBe('2026-01-01');
   });
 
-  // RED today: levelling reads B's early start, sees a clash, and delays B to D+3 (recorded: B
+  // Red before #413 M1: levelling reads B's early start, sees a clash, and delays B to D+3 (recorded: B
   // leveledStartOffset 3 days, levelingDelay 3 days, leveledStart 2026-01-04).
-  it.fails('delays neither bar and levels B at its drawn start', () => {
+  it('delays neither bar and levels B at its drawn start', () => {
     const { byId } = run([A, B], [], ['A', 'B']);
     expect(byId.get('A')!.levelingDelay).toBe(0);
     expect(byId.get('B')!.levelingDelay).toBe(0);
@@ -116,17 +114,14 @@ describe('levelSchedule — L2: a hand-made clash appears', () => {
     expect(drawnStartDay(byId.get('B')!)).toBe('2026-01-06');
   });
 
-  // RED today: A (D..D+3) and B (D+5..D+8) never meet on network dates, so nothing is delayed
+  // Red before #413 M1: A (D..D+3) and B (D+5..D+8) never meet on network dates, so nothing is delayed
   // (recorded: B levelingDelay 0, leveledStartOffset 5 days).
-  it.fails(
-    'delays the lower-priority bar behind the one it now overlaps, measured from its drawn start',
-    () => {
-      const { byId } = run([P, A, B], [fs('P', 'B')], ['A', 'B']);
-      expect(byId.get('A')!.levelingDelay).toBe(0);
-      expect(byId.get('B')!.leveledStartOffset).toBe(8 * DAY);
-      expect(byId.get('B')!.levelingDelay).toBe(3 * DAY);
-    },
-  );
+  it('delays the lower-priority bar behind the one it now overlaps, measured from its drawn start', () => {
+    const { byId } = run([P, A, B], [fs('P', 'B')], ['A', 'B']);
+    expect(byId.get('A')!.levelingDelay).toBe(0);
+    expect(byId.get('B')!.leveledStartOffset).toBe(8 * DAY);
+    expect(byId.get('B')!.levelingDelay).toBe(3 * DAY);
+  });
 });
 
 describe('levelSchedule — L3: each of the seven sites, one case per site', () => {
@@ -148,19 +143,16 @@ describe('levelSchedule — L3: each of the seven sites, one case per site', () 
       expect(byId.get('C')!.earlyStart).toBe('2026-01-01');
     });
 
-    // RED today (site: pinned occupancy): M occupies D..D+3 on network dates, so C is pushed to
+    // Red before #413 M1 (site: pinned occupancy): M occupies D..D+3 on network dates, so C is pushed to
     // D+3 (recorded: C levelingDelay 3 days).
-    it.fails(
-      'site 1: a pinned bar occupies its drawn span, so an unplaced bar is not pushed',
-      () => {
-        const { byId } = run([M, C], [], ['M', 'C']);
-        expect(byId.get('C')!.levelingDelay).toBe(0);
-        expect(byId.get('C')!.leveledStartOffset).toBe(0);
-      },
-    );
+    it('site 1: a pinned bar occupies its drawn span, so an unplaced bar is not pushed', () => {
+      const { byId } = run([M, C], [], ['M', 'C']);
+      expect(byId.get('C')!.levelingDelay).toBe(0);
+      expect(byId.get('C')!.leveledStartOffset).toBe(0);
+    });
 
-    // RED today (site: pinned levelled dates): M's overlay is its network dates.
-    it.fails('site 2: a pinned bar keeps its drawn dates as its levelled dates', () => {
+    // Red before #413 M1 (site: pinned levelled dates): M's overlay is its network dates.
+    it('site 2: a pinned bar keeps its drawn dates as its levelled dates', () => {
       const { byId } = run([M, C], [], ['M', 'C']);
       const m = byId.get('M')!;
       expect(m.leveledStart).toBe(m.visualEffectiveStart);
@@ -186,8 +178,8 @@ describe('levelSchedule — L3: each of the seven sites, one case per site', () 
       expect(drawnStartDay(byId.get('Y')!)).toBe('2026-01-04');
     });
 
-    // RED today: Y leveledStartOffset 4 days, levelingDelay 4 days.
-    it.fails('delays Y to the end of X, 3 days from where Y is drawn', () => {
+    // Red before #413 M1: Y leveledStartOffset 4 days, levelingDelay 4 days.
+    it('delays Y to the end of X, 3 days from where Y is drawn', () => {
       const { byId } = run([X, Y], [], ['X', 'Y']);
       expect(byId.get('X')!.levelingDelay).toBe(0);
       expect(byId.get('Y')!.leveledStartOffset).toBe(6 * DAY);
@@ -211,11 +203,11 @@ describe('levelSchedule — L3: each of the seven sites, one case per site', () 
       expect(byId.get('T')!.remainingFloatMinutes).toBeLessThan(0);
     });
 
-    // RED today: T's network finish (D+3) is inside its bound, so the cap never fires and T is
+    // Red before #413 M1: T's network finish (D+3) is inside its bound, so the cap never fires and T is
     // levelled at its network start (recorded: leveledStartOffset 0), 10 days before it is drawn.
     // Once anchored on the drawn span the cap does fire (D+13 is past the bound) and walks the start
     // to D+2, so this case is the guard's: it must clamp to the DRAWN start, not the early one.
-    it.fails('never levels T before its drawn start', () => {
+    it('never levels T before its drawn start', () => {
       const { byId } = run([T], [], ['T'], true);
       expect(byId.get('T')!.leveledStartOffset).toBe(10 * DAY);
     });
@@ -243,8 +235,8 @@ describe('levelSchedule — L3: each of the seven sites, one case per site', () 
       expect(byId.get('A')!.totalFloat).toBe(byId.get('B')!.totalFloat);
     });
 
-    // RED today: A is placed first at D+1, B is pushed behind it (recorded: B levelingDelay 4 days).
-    it.fails('places the bar that is drawn first, first', () => {
+    // Red before #413 M1: A is placed first at D+1, B is pushed behind it (recorded: B levelingDelay 4 days).
+    it('places the bar that is drawn first, first', () => {
       const { byId } = run(all, edges, ['A', 'B']);
       expect(byId.get('B')!.levelingDelay).toBe(0);
       expect(byId.get('B')!.leveledStartOffset).toBe(1 * DAY);
@@ -263,8 +255,8 @@ describe('levelSchedule — L3: each of the seven sites, one case per site', () 
       expect(drawnStartDay(byId.get('N')!)).toBe('2026-01-11');
     });
 
-    // RED today: N's network finish (D+3) is used, so the finish is D+3 (recorded: 3 days).
-    it.fails('reports the levelled project finish at N’s drawn finish', () => {
+    // Red before #413 M1: N's network finish (D+3) is used, so the finish is D+3 (recorded: 3 days).
+    it('reports the levelled project finish at N’s drawn finish', () => {
       const { leveled } = run([N, P], [], ['P']);
       expect(leveled.summary.leveledProjectFinishOffset).toBe(13 * DAY);
       expect(leveled.summary.leveledProjectFinish).toBe('2026-01-13');
@@ -289,9 +281,9 @@ describe('levelSchedule — L4: the priority key breaks a tie on remaining float
     expect(drawnStartDay(x)).toBe('2026-01-04');
   });
 
-  // RED today: Y (less total float) is placed first; X is pushed behind it (recorded: X
+  // Red before #413 M1: Y (less total float) is placed first; X is pushed behind it (recorded: X
   // levelingDelay 5 days).
-  it.fails('places X, the one with less remaining float, first', () => {
+  it('places X, the one with less remaining float, first', () => {
     const { byId } = run([X, Y, Z], [], ['X', 'Y']);
     expect(byId.get('X')!.levelingDelay).toBe(0);
     expect(byId.get('X')!.leveledStartOffset).toBe(3 * DAY);
@@ -299,8 +291,8 @@ describe('levelSchedule — L4: the priority key breaks a tie on remaining float
   });
 });
 
-describe('levelSchedule — L5: today’s results, which `anchor: NETWORK` must reproduce', () => {
-  // Green today and recorded BEFORE any change: the reference M1 has to keep byte-identical on the
+describe('levelSchedule — L5: the pre-M1 results, which `anchor: NETWORK` reproduces', () => {
+  // Recorded BEFORE any change and green throughout: the reference M1 keeps byte-identical on the
   // network anchor. The literals are the current output, not derived from the new code.
   const snapshot = (byId: Map<string, EngineResult>, ids: readonly string[]) =>
     Object.fromEntries(
@@ -322,7 +314,7 @@ describe('levelSchedule — L5: today’s results, which `anchor: NETWORK` must 
   it('L1’s fixture on the network basis: B is delayed behind A', () => {
     const A = task('A', 3, { levelingPriority: 1 });
     const B = task('B', 3, { levelingPriority: 2, visualStart: '2026-01-06' });
-    const { byId, leveled } = run([A, B], [], ['A', 'B']);
+    const { byId, leveled } = run([A, B], [], ['A', 'B'], false, 'NETWORK');
     expect(snapshot(byId, ['A', 'B'])).toEqual({
       A: {
         leveledStartOffset: 0,
@@ -350,7 +342,7 @@ describe('levelSchedule — L5: today’s results, which `anchor: NETWORK` must 
     const P = task('P', 5);
     const A = task('A', 3, { levelingPriority: 1, visualStart: '2026-01-06' });
     const B = task('B', 3, { levelingPriority: 2 });
-    const { byId, leveled } = run([P, A, B], [fs('P', 'B')], ['A', 'B']);
+    const { byId, leveled } = run([P, A, B], [fs('P', 'B')], ['A', 'B'], false, 'NETWORK');
     expect(snapshot(byId, ['A', 'B'])).toEqual({
       A: {
         leveledStartOffset: 0,

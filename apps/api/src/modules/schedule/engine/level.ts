@@ -18,28 +18,40 @@ import {
  * The resource-**levelling** pass (ADR-0041) — a **pure** second pass over an unchanged CPM network.
  *
  * `computeSchedule` runs first and unchanged, producing early/late/float/critical as a function of the
- * logic only. `levelSchedule` consumes that {@link EngineOutput} plus the resource-demand model and
+ * logic only, plus the span each bar is DRAWN on (`placed*Offset`, #413). `levelSchedule` consumes that {@link EngineOutput} plus the resource-demand model and
  * returns the SAME per-activity results with an **additive leveled overlay** merged on: `leveledStart`
  * / `leveledFinish` + `levelingDelay` + the produce-and-flag flags. The pure `early*`/`late*`/
  * `totalFloat`/`isCritical` are **never recomputed** (network float stays authoritative, ADR-0041 §3 /
  * Q2), so the overlay never changes the critical path and the parity gate holds trivially.
  *
+ * ## The anchor (#413)
+ *
+ * `options.anchor` names the span an activity occupies BEFORE levelling — its **anchor span** — and it
+ * is the only thing the two bases change. `PLACED` (a recalculation) anchors on where the bar is drawn,
+ * so a clash the planner has separated by hand is not reported and one made by hand is; its priority
+ * float is `remainingFloatMinutes` (the room the placement has not already spent). `NETWORK` (the DCMA
+ * critical-path test) anchors on the early span with total float, i.e. the logic as if nothing were
+ * placed. Unplaced, the two are identical, which is what keeps the corpus and S10 byte-for-byte. Seven
+ * places read the anchor (a pinned activity's occupancy and its overlay dates, the priority float and
+ * start tie-break, the earliest start a run may take, the negative-float clamp, the delay, and a
+ * non-participant's finish in the roll-up); they all go through one set of accessors.
+ *
  * ## Algorithm — deterministic serial priority-list heuristic (ADR-0041 §1–§6)
  *
  * 1. **Composite order.** Levellable activities are placed one at a time in the single total order
- *    `levelingPriority` asc (NULL sorts LAST as +∞) → `totalFloat` asc → `earlyStartOffset` asc →
- *    `id` asc. This makes the result independent of input order (the determinism invariant).
+ *    `levelingPriority` asc (NULL sorts LAST as +∞) → anchor float asc (`totalFloat`, or
+ *    `remainingFloatMinutes` when placed) → anchor start asc → `id` asc. This makes the result independent of input order (the determinism invariant).
  * 2. **Exclusions (never moved, §5).** Mandatory-constrained, Level-of-Effort, WBS-summary, milestone,
- *    and progressed (`actualStart` set) activities keep their network position and **occupy** the
+ *    and progressed (`actualStart` set) activities keep their anchor position and **occupy** the
  *    resource profile there so others level around them. A residual over-allocation a pinned activity
  *    causes is reported on the mover that can't fit (or left), never resolved by moving the pinned one.
- * 3. **Placement.** Each levellable activity is placed at the earliest working start ≥ its early start
+ * 3. **Placement.** Each levellable activity is placed at the earliest working start ≥ its anchor start
  *    at which every finite-capacity resource it assigns has spare capacity for the whole run — found by
  *    a **single blackout-gap sweep** ({@link earliestFeasibleStart}) that merges the already-placed
  *    intervals into feasible / blackout regions and returns the first region the run fits (O(k log k)
  *    over k placed intervals, never a per-minute scan and never a retry loop — termination is inherent,
  *    so it cannot hang; the final open region always fits, §6/§F).
- * 4. **`levelingDelay`** = working time between early start and leveled start on the activity's own
+ * 4. **`levelingDelay`** = working time between anchor start and leveled start on the activity's own
  *    calendar (0 when not delayed).
  * 5. **Float-first then extend (§4).** A within-total-float delay preserves the project finish; when
  *    float is exhausted the activity extends. Under `levelWithinFloatOnly` it may not extend — see the
@@ -49,7 +61,7 @@ import {
  *    still placed there and `levelingWindowExceeded` is set — never a hang.
  * 7. **Self-over-allocation (§2).** If a single activity's own demand on a resource exceeds that
  *    resource's capacity, a delay cannot fix it: `selfOverAllocated` is set, the activity is placed at
- *    its early start (not split), and the pass continues.
+ *    its anchor start (not split), and the pass continues.
  * 8. **Uncapped resources** (`capacity === null`) never constrain (skipped). A plan whose resources are
  *    all uncapped — or which has no assignments — levels to **byte-identical** network dates with every
  *    `leveledStart` left null and `levelingDelay` 0 (the parity path).
@@ -77,8 +89,40 @@ export function levelSchedule(
   resources: readonly EngineResource[],
   options: LevelingOptions,
 ): { results: EngineResult[]; summary: Partial<EngineSummary> } {
-  const { dataDate, planCalendar, levelWithinFloatOnly } = options;
+  const { dataDate, planCalendar, levelWithinFloatOnly, anchor } = options;
   const dataDateAbs = instantToAbsMinutes(dataDate);
+
+  // The anchor accessors (#413): the ONE place the two bases differ. Every site below reads the span an
+  // activity occupies before levelling, its priority float and its display dates through these, so no
+  // site can be left on the other basis. An exhaustive switch with no `default`, like `varianceBasisFor`,
+  // so a third anchor is a compile error here rather than a silent fall-through.
+  interface AnchorAccessors {
+    startOffset: (r: EngineResult) => number;
+    finishOffset: (r: EngineResult) => number;
+    startDate: (r: EngineResult) => string;
+    finishDate: (r: EngineResult) => string;
+    priorityFloat: (r: EngineResult) => number;
+  }
+  const accessors = ((): AnchorAccessors => {
+    switch (anchor) {
+      case 'PLACED':
+        return {
+          startOffset: (r) => r.placedStartOffset,
+          finishOffset: (r) => r.placedFinishOffset,
+          startDate: (r) => r.visualEffectiveStart,
+          finishDate: (r) => r.visualEffectiveFinish,
+          priorityFloat: (r) => r.remainingFloatMinutes,
+        };
+      case 'NETWORK':
+        return {
+          startOffset: (r) => r.earlyStartOffset,
+          finishOffset: (r) => r.earlyFinishOffset,
+          startDate: (r) => r.earlyStart,
+          finishDate: (r) => r.earlyFinish,
+          priorityFloat: (r) => r.totalFloat,
+        };
+    }
+  })();
 
   const resultById = new Map(output.results.map((r) => [r.activityId, r]));
   const activityById = new Map(activities.map((a) => [a.id, a]));
@@ -162,17 +206,17 @@ export function levelSchedule(
     const r = resultById.get(id)!;
     const a = activityById.get(id);
     const cal = a ? calendarOf(a) : planCalendar;
-    const startInst = instOfOffset(r.earlyStartOffset);
-    const finishInst = instOfOffset(r.earlyFinishOffset);
+    const startInst = instOfOffset(accessors.startOffset(r));
+    const finishInst = instOfOffset(accessors.finishOffset(r));
     for (const asg of finiteAsgs) {
       occupy(asg.resourceId, demandStart(cal, startInst, asg), finishInst, asg.unitsPerHour);
     }
     overlayById.set(id, {
-      leveledStartOffset: r.earlyStartOffset,
-      leveledFinishOffset: r.earlyFinishOffset,
+      leveledStartOffset: accessors.startOffset(r),
+      leveledFinishOffset: accessors.finishOffset(r),
       levelingDelay: 0,
-      leveledStart: r.earlyStart,
-      leveledFinish: r.earlyFinish,
+      leveledStart: accessors.startDate(r),
+      leveledFinish: accessors.finishDate(r),
       levelingWindowExceeded: false,
       selfOverAllocated: selfOver,
     });
@@ -188,7 +232,7 @@ export function levelSchedule(
       pinAtNetwork(a.id, finiteAsgs, selfOverOf(finiteAsgs));
     } else if (selfOverOf(finiteAsgs)) {
       // §7: a single activity whose own demand exceeds a capacity can't be fixed by delay — pin it at
-      // its early start (not split) and flag; it still occupies so others see the demand.
+      // its anchor start (not split) and flag; it still occupies so others see the demand.
       pinAtNetwork(a.id, finiteAsgs, true);
     } else {
       levellable.push(a);
@@ -202,9 +246,12 @@ export function levelSchedule(
     if (pa !== pb) return pa - pb;
     const ra = resultById.get(a.id)!;
     const rb = resultById.get(b.id)!;
-    if (ra.totalFloat !== rb.totalFloat) return ra.totalFloat - rb.totalFloat;
-    if (ra.earlyStartOffset !== rb.earlyStartOffset)
-      return ra.earlyStartOffset - rb.earlyStartOffset;
+    const fa = accessors.priorityFloat(ra);
+    const fb = accessors.priorityFloat(rb);
+    if (fa !== fb) return fa - fb;
+    const sa = accessors.startOffset(ra);
+    const sb = accessors.startOffset(rb);
+    if (sa !== sb) return sa - sb;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 
@@ -213,7 +260,7 @@ export function levelSchedule(
     const calA = calendarOf(a);
     const d = a.durationMinutes;
     const finiteAsgs = finiteAssignmentsOf(a.id);
-    const esInst = instOfOffset(r.earlyStartOffset);
+    const esInst = instOfOffset(accessors.startOffset(r));
 
     // Earliest capacity-feasible start via a single blackout-gap sweep over the already-placed
     // intervals on the resources this activity touches (§2). `need` is the spare headroom on each
@@ -261,10 +308,10 @@ export function levelSchedule(
     ) {
       leveledFinishInst = instOfOffset(r.lateFinishOffset);
       leveledStartInst = d === 0 ? leveledFinishInst : advanceWorking(calA, leveledFinishInst, -d);
-      // Negative-float guard: an over-constrained activity (late finish < early finish) has an
-      // unsatisfiable within-float cap, so the cap arithmetic can walk the start BEFORE the early
-      // start. Never place an activity before its early start — clamp to the early start (the
-      // earliest it can go) and let its finish follow, rather than underflow behind it.
+      // Negative-float guard: an over-constrained activity (late finish < anchor finish) has an
+      // unsatisfiable within-float cap, so the cap arithmetic can walk the start BEFORE the anchor
+      // start. Never place an activity before its anchor start (the drawn start under `PLACED`) —
+      // clamp to it (the earliest it can go) and let its finish follow, rather than underflow behind it.
       if (leveledStartInst < esInst) {
         leveledStartInst = esInst;
         leveledFinishInst = d === 0 ? esInst : advanceWorking(calA, esInst, d);
@@ -315,8 +362,8 @@ export function levelSchedule(
     // The leveled project finish is the latest finish under levelling — a summary/LOE never defines it
     // (mirrors the network project-finish exclusions).
     if (a && (isLoe(a.type) || isSummary(a.type))) continue;
-    const finishOffset = ov ? ov.leveledFinishOffset : r.earlyFinishOffset;
-    const finishDate = ov ? ov.leveledFinish : r.earlyFinish;
+    const finishOffset = ov ? ov.leveledFinishOffset : accessors.finishOffset(r);
+    const finishDate = ov ? ov.leveledFinish : accessors.finishDate(r);
     if (leveledProjectFinishOffset === null || finishOffset > leveledProjectFinishOffset) {
       leveledProjectFinishOffset = finishOffset;
       leveledProjectFinish = finishDate;

@@ -1669,9 +1669,12 @@ controller's 30 / 60 s per handler.
   copy of the plan graph: a control pass, then a pass with 600 working days
   injected into the front of the critical path, and the verdict from whether
   the control run's completion carrier moved in step. On a plan that levels
-  resources each pass is also levelled, exactly as a recalculation would
+  resources each pass is also levelled by the same rule a recalculation uses
   (`docs/TECH_DEBT.md` #248, closed 2026-09-28), so up to four passes run and
-  the carrier is judged on the levelled finish. Its parity claim is
+  the carrier is judged on the levelled finish. It levels on the **network**
+  span, not the drawn one (#413): a recalculation levels from where each bar is
+  drawn, this test asks about the logic, so on a plan with hand-placed bars the
+  two levelled schedules can differ and the verdict is the network's. Its parity claim is
   deliberately the report route's WEAKER sibling (ADR-0116 D7): it computes
   **read-only and persists nothing** — no lock, no pen, no write path — proved
   by an e2e reading every engine-owned column back after the call. Returns the

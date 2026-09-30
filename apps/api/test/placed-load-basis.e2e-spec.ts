@@ -19,12 +19,12 @@ import { HISTOGRAM_UNPLACED_GOLDEN } from './fixtures/placed-load-histogram-gold
  * both read the network dates today (`schedule.service.ts` builds the histogram input from
  * `earlyStart`/`earlyFinish`); the spec makes them read where the bar is drawn.
  *
- * H1, H3 and LV1 are `it.fails`: they assert the PLACED behaviour and fail today, and M2 (H1, H3) and
- * M1 (LV1) flip them. docs/TESTING.md forbids a skipped test and `main` cannot carry a red one. Each is
- * paired with a plain precondition asserting the placed and network dates differ (ADR-0093), so an
- * `it.fails` cannot be satisfied by a fixture in which the two happen to agree.
+ * H1 and H3 are `it.fails`: they assert the PLACED behaviour and fail today, and M2 flips them. LV1
+ * was flipped by M1. docs/TESTING.md forbids a skipped test and `main` cannot carry a red one. Each is
+ * paired with a plain precondition asserting the placed and network dates differ (ADR-0093), so a
+ * case cannot be satisfied by a fixture in which the two happen to agree.
  *
- * H2, LV1's unplaced twin and LV2 are green today and must stay green: they are literals recorded
+ * H2, LV1's unplaced twin and LV2 were green before M1 and stay green: they are literals recorded
  * against the code at the head of this commit's parent, not derived from anything M1/M2 will change.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -395,10 +395,10 @@ describe.skipIf(!hasDatabase)('Placed load basis — reference results and red c
     expect(ymd(b.visualEffectiveStart)).toBe('2026-01-06');
   });
 
-  // RED today: levelling reads B's network start, sees a clash with A, and delays B behind it
-  // (recorded: leveledStart 2026-01-04, levelingDelayMinutes 3 * 1440). After M1 B stays where it is
-  // drawn: no delay, and the levelled start is the drawn start.
-  it.fails('LV1: a clash the planner separated by hand is not levelled again', async () => {
+  // Red before #413 M1: levelling read B's network start, saw a clash with A, and delayed B behind it
+  // (recorded: leveledStart 2026-01-04, levelingDelayMinutes 3 * 1440). Now B stays where it is drawn:
+  // no delay, and the levelled start is the drawn start.
+  it('LV1: a clash the planner separated by hand is not levelled again', async () => {
     const { a, b } = await seedLevelledPair(true);
     expect(a.levelingDelayMinutes).toBe(0);
     expect(b.levelingDelayMinutes).toBe(0);

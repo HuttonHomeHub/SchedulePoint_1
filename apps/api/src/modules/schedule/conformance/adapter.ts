@@ -462,6 +462,8 @@ export function computeLeveledSchedule(network: AdaptedNetwork): EngineOutput {
       levelWithinFloatOnly: network.leveling.levelWithinFloatOnly,
       dataDate: network.options.dataDate,
       planCalendar: network.options.calendar,
+      // The production path (#413); the fixture places nothing, so this reads the same as NETWORK.
+      anchor: 'PLACED',
     },
   );
   return {

@@ -917,10 +917,19 @@ export function computeSchedule(
       projectFinishDate = earlyFinishDate;
     }
 
+    // The instants the drawn bar occupies — the SAME ones `visualEffectiveStart/Finish` are dated from,
+    // so an offset and its date cannot disagree (#413). A bar frozen by actuals, or an unplaced summary,
+    // is drawn on Pass 1's span; every other bar on Pass 2's.
+    const drawnOnPass1 = frozenByActuals || (activityIsSummary && activity.visualStart == null);
+    const placedStartInst = drawnOnPass1 ? esInst : vDisplayInst;
+    const placedFinishInst = drawnOnPass1 ? efInst : vPlacedFinishInst;
+
     results.push({
       activityId: id,
       earlyStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, esInst),
       earlyFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, efInst),
+      placedStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, placedStartInst),
+      placedFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, placedFinishInst),
       lateStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, lsInst),
       lateFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, lfInst),
       totalFloat,

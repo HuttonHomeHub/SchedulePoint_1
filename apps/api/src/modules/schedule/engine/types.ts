@@ -205,6 +205,15 @@ export interface LevelingOptions {
   dataDate: string;
   /** The **plan** working-time calendar — the frame the exposed `*Offset` fields project onto. */
   planCalendar: WorkingTimeCalendar;
+  /**
+   * Which span levelling treats as where an activity IS (#413). `PLACED` reads the bar as drawn
+   * (`placedStartOffset`/`placedFinishOffset`, remaining float, the drawn dates) and is what a
+   * recalculation uses, so the levelled figures answer "what does levelling do to THIS picture".
+   * `NETWORK` reads the early span and total float — the logic network as if nothing were placed —
+   * and is what the DCMA critical-path test uses (it tests the network, not the picture). Required, no
+   * default: every caller states its basis, and none can inherit one by accident.
+   */
+  anchor: 'PLACED' | 'NETWORK';
 }
 
 /** A typed, lagged logic edge from a predecessor to a successor activity. */
@@ -259,6 +268,15 @@ export interface EngineResult {
   activityId: string;
   earlyStartOffset: number;
   earlyFinishOffset: number;
+  /**
+   * Where the bar is DRAWN starts and ends (ADR-0148: Visual is the plan), as plan-frame working-minute
+   * offsets like the early pair (#413). In-memory only — never persisted, never on the wire; the dates
+   * beside them are `visualEffectiveStart/Finish`. Equal to the early pair wherever nothing is placed.
+   * Required rather than optional so a hand-built result cannot omit them and silently fall back to
+   * the network span. Consumed by {@link levelSchedule} under the `PLACED` anchor.
+   */
+  placedStartOffset: number;
+  placedFinishOffset: number;
   lateStartOffset: number;
   lateFinishOffset: number;
   totalFloat: number;

@@ -88,7 +88,7 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
     nullable: true,
     type: String,
     description:
-      'The inclusive leveled project finish — the latest finish under levelling; null when the plan does not level (ADR-0041).',
+      'The inclusive leveled project finish — the latest finish under levelling, from where bars are drawn; null when the plan does not level (ADR-0041).',
   })
   leveledProjectFinish!: string | null;
 
