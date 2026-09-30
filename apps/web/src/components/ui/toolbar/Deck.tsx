@@ -134,7 +134,18 @@ export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
  * Deliberately a small, closed set. Every addition trades discoverability for width, and the width
  * is no longer scarce now that the deck can wrap.
  */
-const ICON_ONLY = new Set(['zoom-in', 'zoom-out', 'fit', 'undo', 'redo', 'print']);
+const ICON_ONLY = new Set([
+  'zoom-in',
+  'zoom-out',
+  'fit',
+  'undo',
+  'redo',
+  'print',
+  // The one member that fails the test above on merit: a balance is not a universal glyph for
+  // "apply levelled dates". It is here because the deck's DO row has a budget of one line and this
+  // is the longest label in it (ADR-0090); the name and tooltip carry the words (ADR-0117).
+  'apply-levelling',
+]);
 
 export interface DeckProps<Ctx> {
   /** The registry (validated via `defineToolbar`). */

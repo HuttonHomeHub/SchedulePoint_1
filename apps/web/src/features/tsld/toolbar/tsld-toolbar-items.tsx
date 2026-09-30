@@ -5,7 +5,6 @@ import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BookOpen,
-  CalendarCheck,
   CalendarDays,
   ChartArea,
   ChartGantt,
@@ -31,6 +30,7 @@ import {
   Printer,
   Redo2,
   Rows3,
+  Scale,
   Search,
   Share2,
   SlidersHorizontal,
@@ -2999,12 +2999,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 4,
       label: 'Apply levelled dates…',
       description: 'Move every bar that resource levelling moves onto its levelled date',
-      icon: <CalendarCheck className="size-4" />,
-      // The longest label on the strip, and tier 3. Labelled only where the row is at its widest,
-      // like the other long-labelled controls beside it; below that it is an icon whose accessible
-      // name and tooltip still carry the words (ADR-0117). Nothing demotes on width (ADR-0109 D1),
-      // so this is the only lever on how much row the item costs.
-      showLabel: { atLeast: 'comfortable' },
+      icon: <Scale className="size-4" />,
+      // Icon-only at every width, and the deck is what decides that: it ignores `showLabel` and
+      // withholds a label only for `ICON_ONLY` (`Deck.tsx`), where this item is listed. The longest
+      // label on the strip cost the DO row its single line at 1280 (`command-surface.spec.ts` LINES),
+      // and a band rule here could not have helped, because the deck is fixed at `comfortable`. The
+      // accessible name and tooltip still carry the words (ADR-0117). `Scale` (balance) and not
+      // `CalendarCheck`, which read as the `calendar` item's `CalendarDays` once the word was gone.
+      showLabel: 'never',
       penGated: true,
       disabledReason: (ctx) =>
         ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),
