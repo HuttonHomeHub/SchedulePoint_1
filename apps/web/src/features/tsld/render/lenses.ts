@@ -430,7 +430,7 @@ export interface LevellableActivity {
   id: string;
   laneIndex: number;
   type: ActivityType;
-  /** Where the live bar is drawn — the placement if set, else the effective earliest (ADR-0033). */
+  /** The placed / effective start — the placement if set, else the effective earliest (ADR-0033). The Late overlay draws bars elsewhere; the ghost still compares with this. */
   visualEffectiveStart: string | null;
   leveledStart: string | null;
   leveledFinish: string | null;

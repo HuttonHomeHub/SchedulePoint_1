@@ -184,17 +184,24 @@ test('a placed activity loads its resource in the week it is drawn, and follows 
   ).toHaveCount(1, { timeout: 15_000 });
   await assignResource(page, 'Survey', 'Crew B', 8);
 
+  // Idempotent: both controls are toggles, so after a reload a blind click would CLOSE whatever
+  // the page restored open, and the test would fail on a state it never meant to set.
   const revealTable = async (): Promise<void> => {
-    await page
-      .getByRole('toolbar', { name: 'Plan commands' })
-      .getByRole('button', { name: 'Resource view' })
-      .click();
     const stripPanel = page.getByRole('region', { name: 'Resource loading' });
+    if (!(await stripPanel.isVisible())) {
+      await page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: 'Resource view' })
+        .click();
+    }
     await expect(stripPanel).toBeVisible();
-    await stripPanel.getByText(/Show data table/).click();
+    if (!(await stripPanel.getByRole('table').isVisible())) {
+      await stripPanel.getByText(/Show data table/).click();
+    }
   };
 
-  // Mondays, so the week bucket's start is the placed day whichever way weeks are anchored.
+  // A click-drawn task spans one working day and buckets are anchored on the earliest date, so the
+  // bucket's start is the placed day.
   await placeAndRecalculate(page, orgSlug, 'Survey', '2026-02-02');
   await revealTable();
   await expect.poll(() => loadedBuckets(page)).toEqual(['2026-02-02']);

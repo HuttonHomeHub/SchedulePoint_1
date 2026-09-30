@@ -14,8 +14,8 @@ import { makeTsldToolbarContext } from '@/features/tsld/toolbar/test-helpers';
  *    placement, and the sentence names the setting a planner can change;
  * 2. it ran and this activity had **no finite assignments** (`level.ts:186` — not a participant):
  *    `leveledStart` is null, no ghost, **and no shading**;
- * 3. it ran and **left this one where the network put it** (`pinAtNetwork` sets
- *    `leveledStart: r.earlyStart`): no ghost, **and no shading**.
+ * 3. it ran and **left this one where its bar is drawn** (`leveledStart` equals
+ *    `visualEffectiveStart`, #413): no ghost, **and no shading**.
  *
  * **States 2 and 3 are the ones worth a gate, because shading for them is the plausible mistake.**
  * A reviewer looking at a lens that draws nothing reaches for a reason, and "Nothing has been
