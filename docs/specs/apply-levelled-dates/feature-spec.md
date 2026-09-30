@@ -548,7 +548,7 @@ write, undo command and recalculation.
 ### Critical (the answer changes what gets built)
 
 > **Answered by the product owner, 2026-09-30: CQ-1 (a), CQ-2 (a), CQ-3 (a), CQ-4 (a)** — every
-> recommended answer. The defaults below stand. Approval to start building is asked separately.
+> recommended answer. The defaults below stand. **Build approved 2026-09-30**, to start once the #420/#422/histogram PR is published.
 
 **CQ-1. When a bar is moved to its levelled date, should it be moved like a drag, or pinned with a "start
 no earlier than" date?**
