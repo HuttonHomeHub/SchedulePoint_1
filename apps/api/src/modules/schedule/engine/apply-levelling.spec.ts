@@ -1,6 +1,7 @@
 import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
+import { planLevellingApplication, type LevellingApplicationInput } from './apply-levelling';
 import { computeSchedule } from './compute';
 import { levelSchedule } from './level';
 import type {
@@ -17,14 +18,11 @@ import {
 } from './working-time-calendar';
 
 /**
- * **M0 of `docs/specs/apply-levelled-dates/`: the proving cases, red until M1.**
+ * **`docs/specs/apply-levelled-dates/`: the proving cases for `planLevellingApplication`** (spec §2).
  *
- * P1-P7 are the spec's §2 cases for `planLevellingApplication`, the pure function that turns a levelled
- * plan into the `visualStart` rows an Apply would write. The function does not exist yet, so the
- * binding below is a stub that throws and every case is `it.fails`: the suite is green because each
- * case fails, and M1 flips them to plain `it` by replacing the stub with an import of the real thing.
- * docs/TESTING.md forbids a skipped test and `main` cannot carry a red one, which is why this is
- * `it.fails` and not a skip (the `placed-load-basis` M0 did the same).
+ * P1-P7 were written red in M0, as `it.fails` against a stub that threw, and M1 flipped them to plain
+ * `it` by replacing the stub with the real import; none of their assertions changed. P8 was added in
+ * M1 for the one thing M0 found that they do not cover: a target that would be a non-working date.
  *
  * **A case that is red only because the function is missing proves nothing** (ADR-0110). Each case
  * therefore asserts the behaviour FIRST (what the plan looks like after the rows are written, solved
@@ -32,44 +30,13 @@ import {
  * the fixture tells the right answer from the wrong one. `m0-measurement.md` records each case run
  * against the deliberately wrong implementation it names, and the assertion that failed.
  *
- * The contract the stub fixes for M1 is the shape below. M1 may add fields; it should not rename these
- * without editing the cases. The rows carry no `version`, `constraintType` or `constraintDate`: those
- * come from the stored activity, which is the service's to attach (spec §4.6 step 7), and the engine
- * never sees a version.
+ * The rows carry no `version`, `constraintType` or `constraintDate`: those come from the stored
+ * activity, which is the service's to attach (spec §4.6 step 7), and the engine never sees a version.
  *
  * The data date is Monday 2026-01-05 throughout. Cases on the 24/7 calendar use one day = 1440
  * minutes; the working-week calendar is Monday-Friday 08:00-16:00, one day = 480.
  */
 const DATA_DATE = '2026-01-05';
-
-interface LevellingInput {
-  activities: readonly EngineActivity[];
-  edges: readonly EngineEdge[];
-  assignments: readonly EngineAssignment[];
-  resources: readonly EngineResource[];
-  options: {
-    dataDate: string;
-    planCalendar: WorkingTimeCalendar;
-    levelWithinFloatOnly: boolean;
-  };
-}
-
-interface LevellingApplication {
-  /** One row per activity to move, in a stable order; `visualStart` is a `YYYY-MM-DD` date. */
-  rows: { activityId: string; visualStart: string }[];
-  /** Rows whose levelled instant fell part-way through a day and was rounded to the next one. */
-  roundedToNextDay: string[];
-  /** Candidates dropped because the engine said earlier than logic, that carried no placement. */
-  leftToLogic: string[];
-  /** The same, for candidates that carried a hand placement of their own. */
-  conflictingPlaced: string[];
-  /** `leveledActivityCount` of the plan once the rows are written. */
-  remainingAfterApply: number;
-}
-
-const planLevellingApplication: (input: LevellingInput) => LevellingApplication = () => {
-  throw new Error('planLevellingApplication is not implemented until M1 of apply-levelled-dates');
-};
 
 const DAY = 1440;
 const WEEK_DAY = 480;
@@ -131,7 +98,7 @@ function solve(s: Scenario, activities: readonly EngineActivity[] = s.activities
   };
 }
 
-const input = (s: Scenario): LevellingInput => ({
+const input = (s: Scenario): LevellingApplicationInput => ({
   activities: s.activities,
   edges: s.edges,
   assignments: s.assignments,
@@ -184,7 +151,7 @@ describe('planLevellingApplication — P1: whole days', () => {
     expect(delayedIdsOf(byId)).toEqual(['B']);
   });
 
-  it.fails('writes the levelled date for the delayed lift and nothing else', () => {
+  it('writes the levelled date for the delayed lift and nothing else', () => {
     const plan = planLevellingApplication(input(p1));
     expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
     expect(plan.roundedToNextDay).toEqual([]);
@@ -223,7 +190,7 @@ describe('planLevellingApplication — P2: the resource frees part-way through a
     ).toBe(0);
   });
 
-  it.fails('rounds Y forward to Tuesday, leaving no clash', () => {
+  it('rounds Y forward to Tuesday, leaving no clash', () => {
     const plan = planLevellingApplication(input(p2));
     // Behaviour first: the engine, run on the rows, finds nothing left to level.
     expect(delayedIdsOf(settle(p2, plan.rows).byId)).toEqual([]);
@@ -270,7 +237,7 @@ describe('planLevellingApplication — P3: an unplaced follower levelled less th
     expect(conflictsOf(settle(p3, [everyGhost[0]!]).byId)).toEqual([]);
   });
 
-  it.fails('writes P only, drops S to logic, and plants no earlier-than-logic conflict', () => {
+  it('writes P only, drops S to logic, and plants no earlier-than-logic conflict', () => {
     const plan = planLevellingApplication(input(p3));
     expect(conflictsOf(settle(p3, plan.rows).byId)).toEqual([]);
     expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
@@ -287,7 +254,7 @@ describe('planLevellingApplication — P4: a hand-placed follower', () => {
     expect(byId.get('S')!.leveledStart).toBe('2026-01-09');
   });
 
-  it.fails('keeps S where it was placed and names it as now conflicting', () => {
+  it('keeps S where it was placed and names it as now conflicting', () => {
     const plan = planLevellingApplication(input(p4));
     expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
     expect(plan.conflictingPlaced).toEqual(['S']);
@@ -320,7 +287,7 @@ describe('planLevellingApplication — P5: a participant levelling did not move'
     expect(delayedIdsOf(byId)).toEqual(['B']);
   });
 
-  it.fails('writes B only: writing A or C would turn an unplaced bar into a placed one', () => {
+  it('writes B only: writing A or C would turn an unplaced bar into a placed one', () => {
     const plan = planLevellingApplication(input(p5));
     expect(plan.rows.map((r) => r.activityId)).toEqual(['B']);
   });
@@ -360,7 +327,7 @@ describe('planLevellingApplication — P6: an activity on its own calendar', () 
     expect(delayOn('2026-01-07')).toBe(0);
   });
 
-  it.fails('lands Y on Tuesday, derived on its own calendar, not a day later', () => {
+  it('lands Y on Tuesday, derived on its own calendar, not a day later', () => {
     const plan = planLevellingApplication(input(p6));
     expect(delayedIdsOf(settle(p6, plan.rows).byId)).toEqual([]);
     expect(plan.rows).toEqual([{ activityId: 'Y', visualStart: '2026-01-06' }]);
@@ -371,7 +338,7 @@ describe('planLevellingApplication — P6: an activity on its own calendar', () 
 // ── P7: idempotence ────────────────────────────────────────────────────────────────────────────────
 
 describe('planLevellingApplication — P7: applying twice is applying once', () => {
-  it.fails('after P1 is applied nothing is left to level and a second preview has no rows', () => {
+  it('after P1 is applied nothing is left to level and a second preview has no rows', () => {
     const first = planLevellingApplication(input(p1));
     const settled = settle(p1, first.rows);
     expect(settled.leveled.summary.leveledActivityCount).toBe(0);
@@ -383,5 +350,45 @@ describe('planLevellingApplication — P7: applying twice is applying once', () 
       }),
     };
     expect(planLevellingApplication(input(placed)).rows).toEqual([]);
+  });
+});
+
+// ── P8: a part-day start on a Friday must not be stored as the weekend ─────────────────────────────
+
+/**
+ * X holds the crane until 12:00 on Friday 9 January, so Y is freed part-way through Friday. The next
+ * day start is Monday 12 January. The smallest DATE whose placement is at or after 12:00 Friday is
+ * Saturday the 10th (Pass 2 draws it on Monday), which clears the clash and is not a working day.
+ * The product owner asked for "the next working day": the stored date is the Monday.
+ */
+const p8: Scenario = {
+  activities: [
+    task('X', 4 * WEEK_DAY + WEEK_DAY / 2, { levelingPriority: 1 }),
+    task('Y', WEEK_DAY, { levelingPriority: 2 }),
+  ],
+  edges: [],
+  assignments: [on('X', 'CRANE'), on('Y', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL_0800_1600,
+};
+
+describe('planLevellingApplication — P8: the stored date is a working day', () => {
+  it('precondition: Y is freed at 12:00 Friday; Saturday and Monday both clear it, Friday does not', () => {
+    const delayOn = (date: string) =>
+      settle(p8, [{ activityId: 'Y', visualStart: date }]).byId.get('Y')!.levelingDelay;
+    const y = solve(p8).byId.get('Y')!;
+    expect(y.leveledStart).toBe('2026-01-09');
+    expect(y.leveledStartOffset).toBe(4 * WEEK_DAY + WEEK_DAY / 2);
+    expect(delayOn('2026-01-09')).toBeGreaterThan(0);
+    expect(delayOn('2026-01-10')).toBe(0);
+    expect(delayOn('2026-01-12')).toBe(0);
+  });
+
+  it('stores Monday 12 January, not the Saturday that would be drawn there', () => {
+    const plan = planLevellingApplication(input(p8));
+    expect(delayedIdsOf(settle(p8, plan.rows).byId)).toEqual([]);
+    expect(plan.rows).toEqual([{ activityId: 'Y', visualStart: '2026-01-12' }]);
+    expect(plan.roundedToNextDay).toEqual(['Y']);
+    expect(plan.remainingAfterApply).toBe(0);
   });
 });

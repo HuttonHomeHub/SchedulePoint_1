@@ -103,6 +103,10 @@ function census(): Call[] {
       const argument = args[DATE_ARGUMENT[reader]!] ?? '';
       // A reader delegating its own `date` parameter is the convention, not a caller of it.
       if (file === 'instants.ts' && argument === 'date') continue;
+      // `planLevellingApplication` asks what a date it DERIVED (a levelled target) would place at, so
+      // that it and Pass 2 agree about what a placement date means. The date is an output of the
+      // levelling pass, not a stored activity field, so there is nothing for the rule to re-express.
+      if (file === 'apply-levelling.ts' && argument === 'date') continue;
       calls.push({ file, reader, argument });
     }
   }

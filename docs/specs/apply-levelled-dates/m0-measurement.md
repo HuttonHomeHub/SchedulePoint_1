@@ -71,6 +71,10 @@ drawn `2026-01-09`, while `P` now finishes on the 11th. So a blind apply does pl
    instant", which yields that Saturday; CQ-4 (a) says "the next working day". The two agree on what
    is drawn and disagree on what is stored. **A decision for M1, not made here**: whether the row
    carries the Saturday or the Monday (P1-P7 use working days only, so none of them fixes it).
+   **Decided in M1 (product owner's CQ-4 (a), "the next working day"): the row carries the Monday.**
+   The stored date is the earliest working date whose own placement is at or after the levelled
+   instant, so nothing rests on Pass 2's roll-forward; case P8 pins it and is red (Saturday) against
+   the plain "smallest date" rule.
 3. **Copying the ghost date is wrong in both directions, not only early.** On that same Saturday
    fixture the ghost date is Monday 2026-01-12 against an earliest clearing date of the 10th: a copy
    lands a bar later than it needs to be as well as, in P2's case, earlier.
