@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.153.4
+
+### Patch Changes
+
+- [#733](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/733) [`a60e14f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a60e14f9c84b3722e0629959e3264bcb9d247000) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Switching the Late-start overlay is now announced to screen readers in the Gantt view as well as the
+  diagram: "Late dates shown." when it goes on and "Placed dates shown." when it goes off.
+
 ## 0.153.3
 
 ### Patch Changes

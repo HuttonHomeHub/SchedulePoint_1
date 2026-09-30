@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.80.2
+
+### Patch Changes
+
+- [#733](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/733) [`a60e14f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a60e14f9c84b3722e0629959e3264bcb9d247000) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Sign-in, sign-up and the other account routes now refuse a request body larger than 64 KB with the same "too large" error as the rest of the API. Before, an anonymous caller could make the server read a body of any size on those routes.
+
 ## 0.80.1
 
 ### Patch Changes
