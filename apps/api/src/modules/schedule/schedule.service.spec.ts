@@ -1236,8 +1236,101 @@ describe('ScheduleService.getEarnedValue', () => {
     expect(result.costBaselineMissing).toBe(false);
   });
 
+  describe('PV counts an activity’s last day (docs/TECH_DEBT.md #425)', () => {
+    // The persisted finish is the INCLUSIVE display date (ADR-0023); PV phases over `[start, finish)`,
+    // so the read must hand it the midnight that closes the last day. A Monday–Friday task of 10
+    // minor units is Mon 5 Jan to Fri 9 Jan; a data date is the START of its day, so "end of Monday"
+    // is a data date of Tue 6 Jan.
+    const d = (iso: string) => new Date(`${iso}T00:00:00Z`);
+    const task = (over: Record<string, unknown> = {}) => ({
+      id: 'act-1',
+      type: 'TASK',
+      parentId: null,
+      percentCompleteType: 'DURATION',
+      percentComplete: 0,
+      physicalPercentComplete: null,
+      accrualType: 'UNIFORM',
+      steps: [],
+      budgetedExpense: 10n,
+      actualExpense: null,
+      earlyStart: d('2026-01-05'),
+      earlyFinish: d('2026-01-09'),
+      visualEffectiveStart: d('2026-01-05'),
+      visualEffectiveFinish: d('2026-01-09'),
+      assignments: [],
+      ...over,
+    });
+    const pvAt = async (dataDate: string) => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan({ plannedStart: d(dataDate) }));
+      return (await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID)).total.pv;
+    };
+
+    it('P1: a UNIFORM Mon–Fri bar is 20% at end of Monday, 80% at end of Thursday, 100% at end of Friday', async () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([task()]);
+      expect(await pvAt('2026-01-06')).toBe(2);
+      expect(await pvAt('2026-01-09')).toBe(8);
+      expect(await pvAt('2026-01-10')).toBe(10);
+    });
+
+    it('P2: a data date on the last day reads 80%, never the whole budget', async () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([task()]);
+      expect(await pvAt('2026-01-09')).not.toBe(10);
+    });
+
+    it('P3: END accrual recognises the cost once the last day has closed, not on it', async () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([task({ accrualType: 'END' })]);
+      expect(await pvAt('2026-01-09')).toBe(0);
+      expect(await pvAt('2026-01-10')).toBe(10);
+    });
+
+    it('P4: a baseline’s frozen finish is the inclusive date too, and phases the same way', async () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([task({ earlyStart: null })]);
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+        costSnapshotLevel: 'ACTIVITY',
+        placementSnapshotLevel: 'NONE',
+        activities: [
+          {
+            sourceActivityId: 'act-1',
+            budgetedCost: 10n,
+            budgetedExpense: 10n,
+            baselineStart: d('2026-01-05'),
+            baselineFinish: d('2026-01-09'),
+          },
+        ],
+        assignments: [],
+      });
+      expect(await pvAt('2026-01-09')).toBe(8);
+      expect(await pvAt('2026-01-10')).toBe(10);
+    });
+
+    it('P5: a milestone and a one-day task keep their answers', async () => {
+      schedule.loadEarnedValueActivities.mockResolvedValue([
+        task({
+          id: 'ms',
+          type: 'FINISH_MILESTONE',
+          earlyStart: d('2026-01-09'),
+          earlyFinish: d('2026-01-09'),
+          visualEffectiveStart: d('2026-01-09'),
+          visualEffectiveFinish: d('2026-01-09'),
+        }),
+      ]);
+      expect(await pvAt('2026-01-08')).toBe(0);
+      expect(await pvAt('2026-01-09')).toBe(10);
+      schedule.loadEarnedValueActivities.mockResolvedValue([
+        task({
+          earlyStart: d('2026-01-05'),
+          earlyFinish: d('2026-01-05'),
+          visualEffectiveStart: d('2026-01-05'),
+          visualEffectiveFinish: d('2026-01-05'),
+        }),
+      ]);
+      expect(await pvAt('2026-01-05')).toBe(0);
+      expect(await pvAt('2026-01-06')).toBe(10);
+    });
+  });
+
   describe('PV phases on one basis per read, chosen from the baseline’s placement level (#405 (c))', () => {
-    // UNIFORM, £10,000.00 over ten-day spans, data date D+10, with the four anchors set eight, six,
+    // UNIFORM, £10,000.00 over ten-day spans (first day to last day inclusive, ADR-0023), data date D+10, with the four anchors set eight, six,
     // four and two days before it: frozen early D+2, frozen placed D+4, live early D+6, live placed
     // D+8. Each anchor gives a different PV, so a read that switches only one of them, or the wrong
     // one, lands on a different number.
@@ -1262,9 +1355,9 @@ describe('ScheduleService.getEarnedValue', () => {
           budgetedExpense: 1000000n,
           actualExpense: null,
           earlyStart: at(6),
-          earlyFinish: at(16),
+          earlyFinish: at(15),
           visualEffectiveStart: at(8),
-          visualEffectiveFinish: at(18),
+          visualEffectiveFinish: at(17),
           assignments: [],
         },
       ]);
@@ -1274,7 +1367,7 @@ describe('ScheduleService.getEarnedValue', () => {
       placementSnapshotLevel: 'FULL' | 'NONE',
       placed: { placedStart: Date | null; placedFinish: Date | null } = {
         placedStart: at(4),
-        placedFinish: at(14),
+        placedFinish: at(13),
       },
     ) => ({
       costSnapshotLevel: 'ACTIVITY',
@@ -1285,7 +1378,7 @@ describe('ScheduleService.getEarnedValue', () => {
           budgetedCost: 1000000n,
           budgetedExpense: 1000000n,
           baselineStart: at(2),
-          baselineFinish: at(12),
+          baselineFinish: at(11),
           ...placed,
         },
       ],
@@ -1310,7 +1403,7 @@ describe('ScheduleService.getEarnedValue', () => {
     });
 
     it.each([
-      ['start', { placedStart: null, placedFinish: at(14) }],
+      ['start', { placedStart: null, placedFinish: at(13) }],
       ['finish', { placedStart: at(4), placedFinish: null }],
     ])(
       'U2b: a FULL row missing only its placed %s falls back to the live PLACED span, not a mix',
@@ -1389,7 +1482,7 @@ describe('ScheduleService.getEarnedValue', () => {
           budgetedCost: 100000n,
           budgetedExpense: 0n,
           baselineStart: new Date('2026-01-01T00:00:00Z'),
-          baselineFinish: new Date('2026-01-11T00:00:00Z'),
+          baselineFinish: new Date('2026-01-10T00:00:00Z'),
         },
       ],
       assignments,

@@ -105,6 +105,10 @@ export function rollupPhysicalPercent(
  * **The function does not know which span it was handed** (ADR-0042 amendment): the caller chooses one
  * basis for the whole read — placed or early — and maps both the frozen and the live anchor onto it.
  * The names say so, because a field called "early" holding a placed date is a silent redefinition.
+ *
+ * **Both finishes are EXCLUSIVE here** — the midnight that closes the last day worked, the same
+ * `[start, finish)` contract as `computeResourceHistogram`. The persisted dates are the inclusive
+ * display date (ADR-0023); the service converts with `exclusiveFinishOfLastDay` before calling.
  */
 export interface EvActivityInput {
   activityId: string;
