@@ -316,6 +316,12 @@ export const scheduleKeys = {
       targetActivityId,
       maxPaths,
     ] as const,
+  // The **Apply levelled dates** preview (`docs/specs/apply-levelled-dates/`). Like `floatPaths` it is
+  // not a persisted read-model: the service runs the engine twice per request, so its answer is a
+  // function of the live plan and a recalculation's `scheduleKeys.all(orgSlug)` sweep must cover it.
+  // That sweep is also what re-fetches an open dialog when the schedule moves under it.
+  levellingApplication: (orgSlug: string, planId: string) =>
+    [...scheduleKeys.all(orgSlug), 'plan', planId, 'levelling-application'] as const,
 };
 
 export const shareKeys = {

@@ -1,0 +1,219 @@
+import type {
+  LevellingApplication,
+  LevellingApplicationItem,
+  LevellingApplicationRow,
+} from '@repo/types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  APPLY_LEVELLING_LIMIT,
+  APPLY_LEVELLING_TOO_MANY,
+  applyLevellingAnnouncement,
+  applyLevellingLabel,
+  applyLevellingLines,
+  levellingApplicationSnapshots,
+} from './levelling-application';
+
+function row(id: string, over: Partial<LevellingApplicationRow> = {}): LevellingApplicationRow {
+  return {
+    id,
+    version: 3,
+    constraintType: null,
+    constraintDate: null,
+    visualStart: '2026-03-09',
+    laneIndex: null,
+    ...over,
+  };
+}
+
+function item(id: string, over: Partial<LevellingApplicationItem> = {}): LevellingApplicationItem {
+  return {
+    id,
+    name: `Activity ${id}`,
+    code: null,
+    beforeVisualStart: null,
+    beforeDrawnStart: '2026-03-02',
+    targetStart: '2026-03-09',
+    wasPlaced: false,
+    roundedToNextDay: false,
+    ...over,
+  };
+}
+
+function application(over: Partial<LevellingApplication> = {}): LevellingApplication {
+  return {
+    computedFrom: { scheduleComputedAt: '2026-03-01T00:00:00.000Z' },
+    rows: [row('a')],
+    items: [item('a')],
+    leftToLogic: [],
+    conflictingPlaced: [],
+    laterThanBoundIntroduced: 0,
+    projectFinishBefore: '2026-04-01',
+    projectFinishAfter: '2026-04-08',
+    remainingAfterApply: 0,
+    ...over,
+  };
+}
+
+describe('levellingApplicationSnapshots', () => {
+  it('builds before from the preview items, keeping a null prior placement null', () => {
+    const { before, after, versions } = levellingApplicationSnapshots(
+      application({
+        rows: [row('a'), row('b', { version: 9, visualStart: '2026-03-16' })],
+        items: [
+          item('a', { beforeVisualStart: null }),
+          item('b', { beforeVisualStart: '2026-03-04', wasPlaced: true }),
+        ],
+      }),
+    );
+    expect(before.map((p) => [p.id, p.visualStart])).toEqual([
+      ['a', null],
+      ['b', '2026-03-04'],
+    ]);
+    expect(after.map((p) => [p.id, p.visualStart])).toEqual([
+      ['a', '2026-03-09'],
+      ['b', '2026-03-16'],
+    ]);
+    expect([...versions]).toEqual([
+      ['a', 3],
+      ['b', 9],
+    ]);
+  });
+
+  it('carries the stored constraint unchanged in both directions, and never touches the lane', () => {
+    const { before, after } = levellingApplicationSnapshots(
+      application({
+        rows: [row('a', { constraintType: 'SNET', constraintDate: '2026-03-01' })],
+      }),
+    );
+    for (const placement of [...before, ...after]) {
+      expect(placement.constraintType).toBe('SNET');
+      expect(placement.constraintDate).toBe('2026-03-01');
+      expect(placement.laneIndex).toBeNull();
+    }
+  });
+
+  it('refuses a row it cannot describe, because guessing a prior placement restores the wrong one', () => {
+    expect(() =>
+      levellingApplicationSnapshots(application({ rows: [row('a'), row('ghost')] })),
+    ).toThrow(/ghost/);
+  });
+});
+
+describe('labels', () => {
+  it('names the undo step with the count and its plural', () => {
+    expect(applyLevellingLabel(1)).toBe('Apply levelled dates (1 activity)');
+    expect(applyLevellingLabel(12)).toBe('Apply levelled dates (12 activities)');
+  });
+
+  it('announces what moved', () => {
+    expect(applyLevellingAnnouncement(1)).toBe('Moved 1 activity to its levelled date.');
+    expect(applyLevellingAnnouncement(4)).toBe('Moved 4 activities to their levelled dates.');
+  });
+
+  it('states the limit as the batch route does', () => {
+    expect(APPLY_LEVELLING_LIMIT).toBe(2000);
+    expect(APPLY_LEVELLING_TOO_MANY).toBe(
+      'More than 2,000 activities would move; the limit for one step is 2,000.',
+    );
+  });
+});
+
+describe('applyLevellingLines', () => {
+  const byKey = (app: LevellingApplication) =>
+    Object.fromEntries(applyLevellingLines(app).map((l) => [l.key, l.text]));
+
+  it('says nothing for a preview with nothing to write', () => {
+    expect(applyLevellingLines(application({ rows: [], items: [] }))).toEqual([]);
+  });
+
+  it('states the count in the singular and the plural', () => {
+    expect(byKey(application()).moves).toBe('1 activity will move to its levelled date.');
+    expect(
+      byKey(application({ rows: [row('a'), row('b')], items: [item('a'), item('b')] })).moves,
+    ).toBe('2 activities will move to their levelled dates.');
+  });
+
+  it('counts hand-placed bars only when there are some, at one and many', () => {
+    expect(byKey(application())['hand-placed']).toBeUndefined();
+    expect(byKey(application({ items: [item('a', { wasPlaced: true })] }))['hand-placed']).toBe(
+      '1 of them was placed by hand. Its placement is replaced, and Undo puts it back.',
+    );
+    expect(
+      byKey(
+        application({
+          rows: [row('a'), row('b')],
+          items: [item('a', { wasPlaced: true }), item('b', { wasPlaced: true })],
+        }),
+      )['hand-placed'],
+    ).toBe(
+      '2 of them were placed by hand. Their placements are replaced, and Undo puts them back.',
+    );
+  });
+
+  it('counts the bars rounded to the next working day, and explains why', () => {
+    expect(byKey(application())['next-day']).toBeUndefined();
+    expect(byKey(application({ items: [item('a', { roundedToNextDay: true })] }))['next-day']).toBe(
+      '1 of them starts on the next working day, because the resource frees up part-way through a day and a bar can only start at the beginning of one.',
+    );
+  });
+
+  it('names the bars left to logic, and why', () => {
+    expect(byKey(application())['left-to-logic']).toBeUndefined();
+    expect(byKey(application({ leftToLogic: [{ id: 'x', name: 'X' }] }))['left-to-logic']).toBe(
+      '1 activity is left where its links put it, because levelling would start it before its links allow.',
+    );
+    expect(
+      byKey(
+        application({
+          leftToLogic: [
+            { id: 'x', name: 'X' },
+            { id: 'y', name: 'Y' },
+          ],
+        }),
+      )['left-to-logic'],
+    ).toBe(
+      '2 activities are left where their links put them, because levelling would start them before their links allow.',
+    );
+  });
+
+  it('warns about hand-placed bars the apply leaves earlier than their links allow', () => {
+    expect(byKey(application())['conflicting-placed']).toBeUndefined();
+    expect(
+      byKey(application({ conflictingPlaced: [{ id: 'p', name: 'P' }] }))['conflicting-placed'],
+    ).toBe('1 hand-placed activity will start earlier than its links allow once the others move.');
+  });
+
+  it('warns about date limits broken, only when some are', () => {
+    expect(byKey(application())['later-than-bound']).toBeUndefined();
+    expect(byKey(application({ laterThanBoundIntroduced: 3 }))['later-than-bound']).toBe(
+      '3 activities will end up past a date limit they met before.',
+    );
+  });
+
+  it('states the plan finish before and after, or that it stays', () => {
+    expect(byKey(application()).finish).toBe(
+      'The plan finish moves from 01 Apr 2026 to 08 Apr 2026.',
+    );
+    expect(byKey(application({ projectFinishAfter: '2026-04-01' })).finish).toBe(
+      'The plan finish stays 01 Apr 2026.',
+    );
+  });
+
+  it('leaves the finish out when the preview has none to compare', () => {
+    expect(byKey(application({ projectFinishBefore: null }))).not.toHaveProperty('finish');
+    expect(byKey(application({ projectFinishAfter: null }))).not.toHaveProperty('finish');
+  });
+
+  it('says nothing is left to move only when remainingAfterApply is 0 — at 0, 1 and many', () => {
+    expect(byKey(application({ remainingAfterApply: 0 })).remaining).toBe(
+      'Resource levelling will have nothing left to move.',
+    );
+    expect(byKey(application({ remainingAfterApply: 1 })).remaining).toBe(
+      '1 activity will still clash. You can apply again.',
+    );
+    expect(byKey(application({ remainingAfterApply: 5 })).remaining).toBe(
+      '5 activities will still clash. You can apply again.',
+    );
+  });
+});

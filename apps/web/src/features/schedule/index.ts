@@ -20,8 +20,19 @@ export {
   useRecalculateCommand,
   scheduleKeys,
   scheduleSummaryQueryOptions,
+  useLevellingApplication,
   PLAN_START_REQUIRED,
 } from './api/use-schedule';
+export {
+  APPLY_LEVELLING_CONFLICT,
+  APPLY_LEVELLING_LIMIT,
+  APPLY_LEVELLING_TOO_MANY,
+  applyLevellingAnnouncement,
+  applyLevellingLabel,
+  applyLevellingLines,
+  levellingApplicationSnapshots,
+} from './model/levelling-application';
+export { ApplyLevellingDialog } from './components/ApplyLevellingDialog';
 export {
   usePlanAutoRecalc,
   AUTO_RECALC_DEBOUNCE_MS,
