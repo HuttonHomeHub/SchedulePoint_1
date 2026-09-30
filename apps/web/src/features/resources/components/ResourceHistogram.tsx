@@ -34,14 +34,11 @@ export const NO_RESOURCE_LOADING_MESSAGE =
   'No resource loading to show yet — assign resources with budgeted units and recalculate the schedule.';
 
 /**
- * What the load chart is counted on (#413). The histogram reads each activity's EARLIEST dates
- * (`loadResourceHistogramAssignments` selects only `earlyStart`/`earlyFinish`), while bars are drawn
- * at their placed dates, so a bar dragged later still counts as load where it could earliest start.
- * One constant for this dialog and the canvas strip, so the two cannot be reworded apart. The
- * basis itself is decided with levelling; until then the chart says what it counts.
+ * What the load chart is counted on (#413): each activity's PLACED dates, where its bar is drawn
+ * (the server falls back to the early dates for an activity with no placement). One constant for
+ * this dialog and the canvas strip, so the two cannot be reworded apart.
  */
-export const RESOURCE_LOAD_BASIS_NOTE =
-  'Load is counted on each activity’s earliest dates, not where its bar is drawn.';
+export const RESOURCE_LOAD_BASIS_NOTE = 'Load is counted where each bar is drawn.';
 
 export function ResourceHistogram({
   orgSlug,

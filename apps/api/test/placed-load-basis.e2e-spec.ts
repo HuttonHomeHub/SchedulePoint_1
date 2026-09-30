@@ -16,11 +16,10 @@ import { HISTOGRAM_UNPLACED_GOLDEN } from './fixtures/placed-load-histogram-gold
  *
  * Every plan is built through the public REST API (ADR-0066): the engine suites prove the arithmetic
  * and cannot see a DTO, a write path or a read serialisation. The resource histogram and levelling
- * both read the network dates today (`schedule.service.ts` builds the histogram input from
- * `earlyStart`/`earlyFinish`); the spec makes them read where the bar is drawn.
+ * both read where the bar is drawn (the histogram from `visualEffectiveStart`/`Finish`, falling back
+ * to the early pair as a whole).
  *
- * H1 and H3 are `it.fails`: they assert the PLACED behaviour and fail today, and M2 flips them. LV1
- * was flipped by M1. docs/TESTING.md forbids a skipped test and `main` cannot carry a red one. Each is
+ * H1 and H3 assert the PLACED behaviour; they were `it.fails` until M2 flipped them, as M1 did LV1. docs/TESTING.md forbids a skipped test and `main` cannot carry a red one. Each is
  * paired with a plain precondition asserting the placed and network dates differ (ADR-0093), so a
  * case cannot be satisfied by a fixture in which the two happen to agree.
  *
@@ -243,20 +242,20 @@ describe.skipIf(!hasDatabase)('Placed load basis — reference results and red c
     expect(ymd(row.visualEffectiveFinish)).toBe('2026-01-15');
   });
 
-  // RED today: the histogram is built from `earlyStart`/`earlyFinish`, so the load sits on
-  // D..D+3 (recorded: EARLY_SPAN) while the bar is drawn from D+10. After M2 it follows the
-  // bar and the total is still 10 (units are conserved).
-  it.fails('H1: the load sits where the bar is drawn, and the total is still 10', async () => {
+  // Red before #413 M2: the histogram was built from `earlyStart`/`earlyFinish`, so the load sat on
+  // D..D+3 (recorded: EARLY_SPAN) while the bar is drawn from D+10. It now follows the bar and the
+  // total is still 10 (units are conserved).
+  it('H1: the load sits where the bar is drawn, and the total is still 10', async () => {
     const { actor, planId, crew } = await seedDraggedActivity();
     const h = await histogram(actor, planId);
     expect(loadedDays(h, crew)).toEqual(PLACED_SPAN);
     expect(h.series.find((s) => s.resourceId === crew)!.total).toBe(10);
   });
 
-  // RED today for the same reason as H1 (its first assertion). Once the placed half holds, nulling
+  // Red before M2 for the same reason as H1 (its first assertion). Once the placed half holds, nulling
   // either end of the pair must send the WHOLE span back to the network dates, never half on each
   // (US-1 pair fallback).
-  it.fails('H3: a null placed pair falls back to the network span as a whole', async () => {
+  it('H3: a null placed pair falls back to the network span as a whole', async () => {
     const { actor, planId, activityId, crew } = await seedDraggedActivity();
     expect(loadedDays(await histogram(actor, planId), crew)).toEqual(PLACED_SPAN);
     await prisma.activity.update({

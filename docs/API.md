@@ -351,7 +351,7 @@ the live-budget fallback always phases on something.
 `pv`, `sv` and `spi` follow the basis, and so do `eac`, `etc` and `vac` under
 `eacMethod = CPI_TIMES_SPI` (the only method that reads SPI). `bac`, `ev`, `ac`, `cv`, `cpi` and
 `tcpi` read no date and do not change. A plan with no placement reads byte-identically on either
-basis. The resource histogram is a different read and still spreads units over the early span.
+basis. The resource histogram reads the placed dates too (below).
 
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
@@ -1629,7 +1629,10 @@ controller's 30 / 60 s per handler.
   the response `meta` carries the shared `buckets` axis, `granularity`, the total
   series count, `hasMore`, and **`curveNormalisedCount`** (N29 — assignments whose
   profile did not sum to 100 and were normalised to conserve units). It reads the
-  persisted CPM dates only — no recompute, no CPM date moved, no levelling. A
+  persisted dates only — no recompute, no CPM date moved, no levelling — and counts
+  the load where each bar is **drawn**: the activity's `visual_effective_start` /
+  `_finish` pair, or its early dates as a whole when either placed end is null
+  (#413). An unplaced plan reads exactly as before. A
   granularity too fine for the plan's span returns **422**
   (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 

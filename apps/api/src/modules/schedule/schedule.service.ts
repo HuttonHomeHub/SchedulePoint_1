@@ -1323,21 +1323,28 @@ export class ScheduleService {
         ? planCalendar
         : (portByCalId.get(calId) ?? planCalendar);
 
-    const assignments: HistogramAssignmentInput[] = rows.map((r) => ({
-      resourceId: r.resourceId,
-      activityId: r.activityId,
-      budgetedUnits: r.budgetedUnits.toNumber(),
-      // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
-      profile: resolveCurveProfile(r.curveType),
-      start: r.earlyStart ? formatCalendarDate(r.earlyStart) : null,
-      finish: r.earlyFinish ? formatCalendarDate(r.earlyFinish) : null,
-      // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
-      // just above — so the lag walks the same working time the span does. Until M0 there was no
-      // column to read and this was pinned at 0 under a comment saying so; that comment outlived the
-      // column by one milestone, which is exactly the drift the surface audit exists to catch.
-      lagMinutes: r.lagMinutes,
-      calendar: portFor(r.calendarId),
-    }));
+    const assignments: HistogramAssignmentInput[] = rows.map((r) => {
+      // Load is counted where the bar is drawn (#413): the placed pair, or the early pair as a whole
+      // when either placed end is null (never half on each). Unplaced, the two are identical.
+      const placed = r.visualEffectiveStart != null && r.visualEffectiveFinish != null;
+      const start = placed ? r.visualEffectiveStart : r.earlyStart;
+      const finish = placed ? r.visualEffectiveFinish : r.earlyFinish;
+      return {
+        resourceId: r.resourceId,
+        activityId: r.activityId,
+        budgetedUnits: r.budgetedUnits.toNumber(),
+        // Resolve the named curve to its built-in P6 profile; UNIFORM → null → a flat load (parity).
+        profile: resolveCurveProfile(r.curveType),
+        start: start ? formatCalendarDate(start) : null,
+        finish: finish ? formatCalendarDate(finish) : null,
+        // The assignment's own join delay (ADR-0071 §1), measured on the activity's calendar resolved
+        // just above — so the lag walks the same working time the span does. Until M0 there was no
+        // column to read and this was pinned at 0 under a comment saying so; that comment outlived the
+        // column by one milestone, which is exactly the drift the surface audit exists to catch.
+        lagMinutes: r.lagMinutes,
+        calendar: portFor(r.calendarId),
+      };
+    });
 
     let histogram;
     try {

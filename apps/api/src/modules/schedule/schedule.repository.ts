@@ -176,9 +176,15 @@ export interface ResourceHistogramAssignmentRow {
    * resource starts. 0 = joins with it, which is every row that predates the column.
    */
   lagMinutes: number;
-  /** The owning activity's persisted early start / finish (the span); null = never-calculated ⇒ off-axis. */
+  /** The owning activity's persisted early start / finish (the network span); null = never-calculated ⇒ off-axis. */
   earlyStart: Date | null;
   earlyFinish: Date | null;
+  /**
+   * Where the bar is DRAWN (`visual_effective_*`, #413): the span the load is counted on. Read as a
+   * pair — the service falls back to the early pair as a whole when either end is null.
+   */
+  visualEffectiveStart: Date | null;
+  visualEffectiveFinish: Date | null;
   /** The owning activity's own calendar (ADR-0037); null = inherit the plan default. */
   calendarId: string | null;
 }
@@ -676,7 +682,15 @@ export class ScheduleRepository {
         budgetedUnits: true,
         curveType: true,
         lagMinutes: true,
-        activity: { select: { earlyStart: true, earlyFinish: true, calendarId: true } },
+        activity: {
+          select: {
+            earlyStart: true,
+            earlyFinish: true,
+            visualEffectiveStart: true,
+            visualEffectiveFinish: true,
+            calendarId: true,
+          },
+        },
       },
     });
     return rows.map((r) => ({
@@ -687,6 +701,8 @@ export class ScheduleRepository {
       lagMinutes: r.lagMinutes,
       earlyStart: r.activity.earlyStart,
       earlyFinish: r.activity.earlyFinish,
+      visualEffectiveStart: r.activity.visualEffectiveStart,
+      visualEffectiveFinish: r.activity.visualEffectiveFinish,
       calendarId: r.activity.calendarId,
     }));
   }
