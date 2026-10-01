@@ -7,6 +7,7 @@
     "zod": "4.6.5",
     "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.88.0",
+    "react-dom": "19.3.0",
     "lucide-react": "1.48.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
@@ -1264,6 +1265,54 @@
       "lines": "73-77",
       "anchor": "this.storage.get(key).totalHits.set(throttlerName, hits.length);",
       "citedBy": ["apps/api/test/throttle-reset.ts"]
+    },
+    {
+      "ref": "react-dom-client.production.js:13204",
+      "package": "react-dom",
+      "path": "cjs/react-dom-client.production.js",
+      "lines": "13204",
+      "anchor": "0 !== (pendingEffectsLanes & 3) && flushPendingEffects();",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "react-dom-client.production.js:13238",
+      "package": "react-dom",
+      "path": "cjs/react-dom-client.production.js",
+      "lines": "13238",
+      "anchor": "ReactDOMSharedInternals.p = 32 > renderPriority ? 32 : renderPriority;",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "index.esm.mjs:3320-3327",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "3320-3327",
+      "anchor": "_fields = {};",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "index.esm.mjs:2710-2717",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "2710-2717",
+      "anchor": "const field = get(_fields, name);",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "index.esm.mjs:2285-2297",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "2285-2297",
+      "anchor": ": setFieldValue(name, defaultValue);",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "coreBundle.js:20396",
+      "package": "playwright-core",
+      "path": "lib/coreBundle.js",
+      "lines": "20396",
+      "anchor": "injected.checkElementStates(node, [\"visible\", \"enabled\", \"editable\"])",
+      "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
     }
   ]
 }
