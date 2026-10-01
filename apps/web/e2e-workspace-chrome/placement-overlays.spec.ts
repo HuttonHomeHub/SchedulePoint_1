@@ -538,9 +538,12 @@ test.describe('the feasible window and the levelled lens', () => {
     // The slab is named in a list of its own, a real list with a name, and the sentence says why.
     const follows = dialog.getByRole('list', { name: 'Will move with their links' });
     await expect(follows.getByRole('listitem')).toHaveText(['Pour slab']);
+    // `exact` keeps to the visible line: the dialog's sr-only status summary repeats the sentence
+    // inside a longer one, and a substring match would find both.
     await expect(
       dialog.getByText(
         '1 other activity will move with the work before it; no date is set for it.',
+        { exact: true },
       ),
     ).toBeVisible();
     // axe on the open dialog with a follower on screen: the named list is the new structure.
