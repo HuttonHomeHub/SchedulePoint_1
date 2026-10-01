@@ -127,6 +127,11 @@ unchanged and passes. If J2 or J4 reports "expected to fail but passed", that fi
 reproduce in a browser and its unit test should be re-read. J2 attaches a screenshot of the reopened
 editor as `j2-reopened-editor` — the evidence of the stacking.
 
+**Run afterwards (2026-10-01), by the orchestrator, not by this record's author:**
+`scripts/e2e-local.sh web:activity-editor` in the M0 worktree reported **13 passed, with J2 and J4 as
+expected failures** — so F1 and F4 reproduce in real Chromium as well as in units. The product owner then
+chose to continue the epic with the plan corrected to this record (spec §0.4).
+
 ## Where the red tests flip
 
 | Test                                        | Marker                    | Flips in            |

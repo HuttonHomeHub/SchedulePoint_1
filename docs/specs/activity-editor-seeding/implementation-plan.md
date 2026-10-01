@@ -6,14 +6,19 @@
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) (spec §1 "Open questions"). Starts **after the logic-aware levelling
   work** (`docs/specs/logic-aware-levelling`). Do not read the `Draft` token above as unapproved.
+- **M0 correction (2026-10-01):** M0's stop gate fired (window red on the editor and New activity only;
+  [`./m0-measurement.md`](./m0-measurement.md)). The product owner decided on **2026-10-01**
+  (AskUserQuestion) to **continue** with the four answers unchanged and this plan corrected: M1 is a
+  cleanup with no behaviour fix; M4 fixes F4, not a window; M2 and M3b keep the window fix for their
+  hosts. Spec §0.4 is the record.
 - **Owner:** web
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
-  E[Epic: Activity editor seeding] --> M0[M0 Measure<br/>red probes, stop gate]
-  E --> M1[M1 Resources reset + ADR-0169]
+  E[Epic: Activity editor seeding] --> M0[M0 Measure<br/>done: gate fired, PO continued]
+  E --> M1[M1 Resources reset cleanup + ADR-0169]
   E --> M2[M2 New activity per opening]
   E --> M3a[M3a Retire the shell and the subject guard]
   E --> M3b[M3b Editor per opening]
@@ -24,7 +29,7 @@ flowchart LR
   M2 --> T21[T2.1 frame + form split] --> T22[T2.2 J5, axe]
   M3a --> T3a1[T3a.1 hard-wire the modal, delete exports] --> T3a2[T3a.2 remove the subject guard] --> T3a3[T3a.3 rewrite and retire the four suites, J2]
   M3b --> T3b1[T3b.1 useScopeForm without open] --> T3b2[T3b.2 frame + session + handle] --> T3b3[T3b.3 J1 J3, undo across close]
-  M4 --> T41[T4.1 progress + measure forms to session] --> T42[T4.2 steps form, field array, query] --> T43[T4.3 Remaining re-seed] --> T44[T4.4 J4 + panel suites]
+  M4 --> T41[T4.1 progress + measure forms to session, fixes F4] --> T42[T4.2 steps form, field array, query] --> T43[T4.3 Remaining re-seed] --> T44[T4.4 J4 + panel suites]
   M5 --> T51[T5.1 ADR Accepted, register, docs] --> T52[T5.2 final review pass]
 ```
 
@@ -44,9 +49,14 @@ longer has a shell or a guard to carry across the seam.
 
 ---
 
-### Milestone M0: Measure (no product change) — S
+### Milestone M0: Measure (no product change) — S — **done, 2026-10-01**
 
 **Outcome:** the design's premises are observed or withdrawn before anything is built.
+**Result** ([`./m0-measurement.md`](./m0-measurement.md), spec §0.4): window **red** on the editor and New
+activity, **not red** on the Progress and Resources tab reveal; F1–F4 reproduce in units; J2 and J4 fail
+as intended in Chromium (`scripts/e2e-local.sh web:activity-editor`, run by the orchestrator in the M0
+worktree: 13 passed, J2 and J4 expected failures). The stop gate fired; the product owner chose to
+continue on 2026-10-01 with this plan corrected. The tab-reveal premise is withdrawn; nothing else is.
 **Entry point:** `Ships dark: test files and m0-measurement.md only.`
 **Journey:** J2 (F1) and J4 (F4) written **red** here and kept.
 **Reviewers:** test-engineer (probe design).
@@ -85,21 +95,28 @@ longer has a shell or a guard to carry across the seam.
 
 ---
 
-### Milestone M1: Resources reset and the ADR — S
+### Milestone M1: Resources reset cleanup and the ADR — S
 
-**Outcome:** typing the instant the Resources tab appears is kept.
-**Entry point:** row menu **Actions for <activity> → Resources** (existing).
-**Journey:** the Resources leg of J1 (open on Resources, `fill` Budgeted units at once, Assign, row
-appears).
+**Outcome:** `ActivityResourcesPanel` loses a redundant reset-to-its-own-defaults; **no behaviour
+changes** — a cleanup, not a fix. M0 found typing the instant the Resources tab appears already kept
+(the probe held `12`), so there is nothing for this milestone to turn green.
+**Entry point:** `Ships dark: no user-visible change` (internal cleanup and an ADR). The panel's
+existing entry point, row menu **Actions for <activity> → Resources**, is unchanged.
+**Journey:** none new; the existing `activity-editor.spec.ts` journeys pass unchanged. (The "Resources
+leg of J1" is dropped: it would guard a window M0 found absent; the plain-`it` probe already guards it.)
 **Reviewers:** component-reviewer. accessibility-reviewer not required — no focus or keyboard path
 changes.
+**Changeset:** none for T1.1 (D-2 covers milestones that change behaviour; this one does not).
 
 ##### Task T1.1 — Delete `ActivityResourcesPanel`'s mount reset (CQ-3 (a))
 
 - **Description:** remove the `[enabled, activityId]` effect (`ActivityResourcesPanel.tsx:216-228`); a
   one-line comment at `useForm` says why no seed effect exists. The post-assign reset stays.
-- **Complexity:** S. **Testing:** T0.2's Resources probe green; `ActivityResourcesPanel*.test.tsx`
-  unchanged; journey leg above.
+- **Complexity:** S. **Testing:** M0's Resources probe (plain `it`, green at M0) **stays green** — the
+  evidence that removing the reset changed nothing; `ActivityResourcesPanel*.test.tsx` unchanged.
+- **Risks:** the effect turns out not to be redundant (some path changes `activityId` while mounted) →
+  re-read `:207-213` against `:218-224` and both hosts' mount conditions before deleting; the unchanged
+  suites are the check.
 
 ##### Task T1.2 — File ADR-0169 `Proposed`; flip spec and plan to `Approved`
 
@@ -131,7 +148,8 @@ also ux-reviewer.
 - **Risks:** `useScopeForm` still takes `open` until M3b → land T3b.1 first if M3b's start allows;
   otherwise the form passes a constant `true` for one milestone, documented. `initialParentId` must seed
   at mount → `ActivityCreateDialog.scope.test.tsx`.
-- **Testing:** T0.2 create probe green; F3 green; all `ActivityCreateDialog.*` suites unchanged; a test
+- **Testing:** T0.2 create probe (red at M0, `it.fails`, both the flushSync and click cases) flips to
+  `it` and is green; F3 green; all `ActivityCreateDialog.*` suites unchanged; a test
   that a previous opening's mutation error is not shown.
 
 ##### Task T2.2 — Journey J5, axe
@@ -148,7 +166,7 @@ On today's mounted-once editor, before any state moves.
 opening (F1). Nothing else a planner sees changes.
 **Entry point:** row menu **Actions for <activity> → Edit / Progress / Logic / Resources**, canvas
 selection bar, toolbar **Update progress…** (existing).
-**Journey:** **J2** turns green (red since M0); the existing `activity-editor.spec.ts` journeys pass
+**Journey:** **J2** turns green (`test.fail()` since M0, confirmed failing in Chromium); the existing `activity-editor.spec.ts` journeys pass
 unchanged; axe on the reopened editor.
 **Reviewers (mandatory before release, §19.13):** **accessibility-reviewer** (the only chrome is now the
 modal: Escape, both Close buttons, the confirmation's copy and labels, the rail-or-strip choice now by
@@ -217,7 +235,8 @@ frame/session contract, the handle, `useScopeForm`'s signature); also ux-reviewe
     the undo test with the session gone.
   - Focus → the `<dialog>` stays in the frame; J1–J3 and axe; accessibility-reviewer drives it in a
     real browser.
-- **Testing:** F2 green; the editor probe green; every `ActivityEditorDialog.*` suite and the two
+- **Testing:** F2 green; the editor probe (red at M0, flushSync and click cases) flips from `it.fails`
+  to `it` and is green; every `ActivityEditorDialog.*` suite and the two
   rewritten in M3a unchanged.
 
 ##### Task T3b.3 — Journeys J1, J3; axe
@@ -229,9 +248,12 @@ frame/session contract, the handle, `useScopeForm`'s signature); also ux-reviewe
 ### Milestone M4: Progress drafts survive tab switches — M–L
 
 **Outcome:** a Progress, measure or steps draft survives visiting other tabs, is marked while away, and
-saves; the editor never claims a draft that does not exist.
+saves; the editor never claims a draft that does not exist. **This fixes F4** (reproduced at M0 in a
+unit and in J4). It does **not** close a typed-input window on tab reveal — M0 found none there; the
+Progress probe is green before this milestone and must stay green after it.
 **Entry point:** row menu **Actions for <activity> → Progress**, toolbar **Update progress…**.
-**Journey:** **J4** (red since M0 → green); axe on the Progress tab with a draft.
+**Journey:** **J4** (`test.fail()` since M0, confirmed failing in Chromium → green); axe on the Progress
+tab with a draft.
 **Reviewers (mandatory before release, §19.13):** **accessibility-reviewer** (Steps heading focus,
 row-move focus fall-through, the `aria-live` roll-up, all with a form owned elsewhere) and
 **component-reviewer** (the panels' presentational contract); also ux-reviewer.
@@ -241,7 +263,8 @@ row-move focus fall-through, the `aria-live` roll-up, all with a form owned else
 - **Description:** both panels take `form`; drop `open`, `onDirtyChange`, `useReportDirty` and
   `progressDirty` — the report and the tab marker read `isDirty` directly.
 - **Complexity:** M. **Dependencies:** M3b.
-- **Testing:** F4 (progress/measure half) green; `ActivityEditor.unsaved-scopes.test.tsx` (as rewritten
+- **Testing:** F4 (progress/measure half) green; M0's Progress probe (plain `it`) still green — the
+  moved form opens no window; `ActivityEditor.unsaved-scopes.test.tsx` (as rewritten
   in M3a) unchanged; `ActivityProgressPanels.error-presentation.test.tsx` rewritten through a harness.
 
 ##### Task T4.2 — Steps form, field array and query in the session
@@ -281,9 +304,9 @@ row-move focus fall-through, the `aria-live` roll-up, all with a form owned else
 
 ## Sequencing & slices
 
-After logic-aware levelling: M0 → M1 → M2 → M3a → M3b → M4 → M5. Each milestone keeps `main` releasable
-and ships its own fix: M1 the Resources window, M2 New activity, M3a F1 and the shell, M3b the editor's
-window and F2, M4 F4. **No flag** (ADR-0088 D1); the rollback is the commit boundary. T3b.1 may land
+After logic-aware levelling: M0 (done) → M1 → M2 → M3a → M3b → M4 → M5. Each milestone keeps `main`
+releasable: M1 is a cleanup plus the ADR (no behaviour change), M2 fixes New activity's window and F3,
+M3a F1 and the shell, M3b the editor's window and F2, M4 F4. **No flag** (ADR-0088 D1); the rollback is the commit boundary. T3b.1 may land
 ahead of M2 to spare M2's temporary `open: true`.
 
 ## Reviewers per milestone
@@ -310,15 +333,17 @@ accessibility, Docker build, CI read per CLAUDE.md §19.9, changeset, version im
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                          | Likelihood | Impact | Mitigation                                                                         |
-| -------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------- |
-| The window does not reproduce in the probe                                 | low        | high   | M0 stop gate                                                                       |
-| An undo record is lost when the editor closes mid-save                     | med        | high   | mutations in the frame (D-10); deferred-PATCH unit                                 |
-| Focus on open/close changes                                                | low        | high   | `<dialog>` stays in the frame; J1–J3; accessibility-reviewer per milestone         |
-| An assertion is silently dropped while rewriting the four no-chrome suites | med        | med    | before/after assertion lists diffed by component-reviewer; drops justified         |
-| Removing the guard loses a draft if a future host changes the subject      | low        | med    | session keyed by id (no mixing); ADR-0169 D5 obliges such a host to design a guard |
-| A missed caller of a deleted export                                        | low        | low    | compile errors are the inventory (D-11)                                            |
-| Steps field-array behaviour changes when moved                             | med        | med    | panel suite rewritten with every assertion kept                                    |
-| Remaining seeded at open shows whole days before the factor lands          | med        | low    | T4.3 re-seed                                                                       |
-| D-9 narrows today's steps re-seed                                          | low        | low    | stated in ADR-0169; consistent with ADR-0108 D5                                    |
-| A react-dom or RHF bump breaks `check:claims`                              | med        | low    | intended — re-read, not re-pinned blind                                            |
+| Risk / assumption                                                          | Likelihood | Impact | Mitigation                                                                               |
+| -------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------- |
+| The window does not reproduce in the probe                                 | occurred   | high   | M0 stop gate fired for the tab reveals only; premise withdrawn, PO continued (spec §0.4) |
+| The editor/create window is real in jsdom but never reached by a driver    | unknown    | low    | the fix is justified by construction and by F1–F3; J1 is a guard, not the proof          |
+| Moving Progress forms into the session opens a window M0 found absent      | low        | med    | M0's Progress probe kept as plain `it`; must stay green in M4                            |
+| An undo record is lost when the editor closes mid-save                     | med        | high   | mutations in the frame (D-10); deferred-PATCH unit                                       |
+| Focus on open/close changes                                                | low        | high   | `<dialog>` stays in the frame; J1–J3; accessibility-reviewer per milestone               |
+| An assertion is silently dropped while rewriting the four no-chrome suites | med        | med    | before/after assertion lists diffed by component-reviewer; drops justified               |
+| Removing the guard loses a draft if a future host changes the subject      | low        | med    | session keyed by id (no mixing); ADR-0169 D5 obliges such a host to design a guard       |
+| A missed caller of a deleted export                                        | low        | low    | compile errors are the inventory (D-11)                                                  |
+| Steps field-array behaviour changes when moved                             | med        | med    | panel suite rewritten with every assertion kept                                          |
+| Remaining seeded at open shows whole days before the factor lands          | med        | low    | T4.3 re-seed                                                                             |
+| D-9 narrows today's steps re-seed                                          | low        | low    | stated in ADR-0169; consistent with ADR-0108 D5                                          |
+| A react-dom or RHF bump breaks `check:claims`                              | med        | low    | intended — re-read, not re-pinned blind                                                  |
