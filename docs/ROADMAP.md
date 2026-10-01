@@ -463,6 +463,16 @@ keep `main` releasable.
   levelling now read where each bar is drawn; levelling is still an overlay that never moves a bar, and
   the DCMA critical-path test still judges the logic network rather than the picture. Plans with no
   placement read exactly as before. The **Apply levelled dates…** command (ADR-0167) is the step that followed: it moves every levelled bar to its levelled date as one placement, with one Undo.
+- **Levelling follows the links** (ADR-0168, amending ADR-0041/0035/0167). Levelling delayed a crane lift
+  and left the work after it where it was drawn, so a follower's ghost could start before the lift had
+  finished, one press of **Apply levelled dates…** left most of a busy plan clashing, and the summary's
+  Levelled finish was early (two days on a three-activity plan, five working days on the seeded
+  levelling plan). Work that follows a delayed activity now moves with it, in the diagram, in the Levelled
+  finish and in one press of Apply, which lets an unplaced follower keep following its links instead of
+  pinning it to a date. **Existing levelled plans show new ghosts and a later finish the first time they
+  recalculate.** On the 2,000-activity plan the links levelling broke went from 10 and 187 to none, and
+  the worst case (1,910 activities on one crane) was made 4.7x faster before shipping. Levelling is still
+  an overlay that never moves a bar by itself.
 - **A page has one measure, a column has a reason, and a fact belongs under its row** (ADR-0146).
   The product owner looked at the ADR-0145 result and said the pages were too narrow, too empty and
   too thin on information — _"this isn't a mobile app its a desktop app"_. Eleven screens shared a

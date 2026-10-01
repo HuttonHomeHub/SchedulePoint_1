@@ -1,6 +1,7 @@
 # Feature Spec: Logic-aware levelling
 
-- **Status:** Approved — by the product owner, 2026-10-01 (AskUserQuestion in the session). CQ-1 **(a)**
+- **Status:** Accepted — shipped (ADR-0168). Approved by the product owner, 2026-10-01 (AskUserQuestion in the
+  session). CQ-1 **(a)**
   a hand-placed follower moves too; CQ-2 **(a)** one count, no schema change; CQ-3 **(a)** no back-fill,
   M0 counts the gaps.
 - **Author(s):** feature-analyst (for the product owner)

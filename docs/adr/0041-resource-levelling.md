@@ -1,6 +1,6 @@
 # ADR-0041: Resource levelling — the opt-in resource-constrained pass
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0071, ADR-0166 and ADR-0168
 - **Date:** 2026-07-17
 - **Deciders:** James Ewbank (with Claude Code)
 
@@ -173,6 +173,31 @@ carries that to levelling. Spec: [`docs/specs/placed-load-basis/`](../specs/plac
 - **§7 (the parity gate):** Gate A and Gate B are unchanged. **Gate C is added:** with levelling on and
   nothing placed, the placed anchor equals the early anchor, so the output is byte-identical to before.
   Proven by the unedited `level.parity.spec.ts` corpus, S10 and the product's unplaced twin (LV1).
+
+#### Amendment (ADR-0168, 2026-10-01) — levelling follows the links
+
+Levelling used to read no link, so a delayed activity's followers stayed where they were drawn. Spec:
+[`docs/specs/logic-aware-levelling/`](../specs/logic-aware-levelling/feature-spec.md).
+
+- **§1 (the heuristic):** "at or after its anchor start" gains "**and no earlier than its levelled
+  predecessors' links allow**". `levelSchedule` takes a required `edges` argument. Passes A (pin) and B
+  (priority placement) are unchanged; a new **Pass C** walks the activities in topological order and moves
+  a follower only where a predecessor's levelled pass-on is later than its unlevelled one. The link
+  arithmetic is `forwardLowerBound` (`edge-bounds.ts`), never restated in `level.ts`. Never moved by links:
+  mandatory-constrained, started, Level-of-Effort and WBS-summary activities. A milestone is not moved by
+  a resource (§5) but **is** moved by its links.
+- **§3 (an overlay over an unchanged network):** the overlay may now cover an activity **with no capped
+  resource**, because a predecessor moved. It uses the same `leveled_start` / `leveled_finish` /
+  `leveling_delay_minutes` columns, so there is no schema change. The pass still never writes a placement
+  and never recomputes float: "delays measured from the anchor start" is unchanged, and `levelingDelay` of
+  a follower is its knock-on plus any delay its own resource adds.
+- **§7 (the parity gate):** Gates A, B and C are unchanged. **Gate D is added:** with levelling on, an
+  activity's overlay differs from what it was before Pass C only if it is downstream, by links, of an
+  activity whose levelled pass-on differs from its unlevelled pass-on. By construction (a move needs
+  `floorL > floorU`, computed by one function over inputs that are identical when nothing moved) and held
+  by a property test and two guard cases in `level.links.parity.spec.ts`.
+- **Invariants (a) to (f) are unchanged.** (c) reads "never moved **by a resource**"; Pass C moves an
+  activity only by its links. A gap left behind by a re-placed participant is not back-filled (ADR-0168 D9).
 
 ### Invariants (the service/engine own them; recorded so they are not "simplified")
 
