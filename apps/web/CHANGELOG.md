@@ -1,5 +1,14 @@
 # @repo/web
 
+## 0.155.1
+
+### Patch Changes
+
+- [#749](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/749) [`faa18c3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/faa18c3ec296178ed84a075f8798980902f1168d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Text typed into a dialog the moment it opens is no longer lost: the baseline, resource, calendar, dependency, share-link, cross-plan link and note-edit forms now start from their values instead of resetting after they appear.
+
+- [#749](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/749) [`faa18c3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/faa18c3ec296178ed84a075f8798980902f1168d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The schedule summary now says how many levelled activities moved by less than a day and so have no
+  ghost on the diagram, instead of counting them over a canvas that shows none.
+
 ## 0.155.0
 
 ### Minor Changes
