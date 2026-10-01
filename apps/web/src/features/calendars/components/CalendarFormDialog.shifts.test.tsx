@@ -2,6 +2,7 @@ import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarFormDialog } from './CalendarFormDialog';
@@ -58,6 +59,48 @@ describe('CalendarFormDialog — the working week', () => {
     vi.mocked(apiFetch)
       .mockReset()
       .mockResolvedValue({ ...SPLIT_SHIFT, exceptions: [] });
+  });
+
+  /**
+   * **The structural property behind #420.** A passive `reset()` runs after the field is on screen,
+   * so a fast typist's text could be wiped by it. Layout effects run before any passive effect,
+   * which makes a layout-phase probe the one place a test can see the value the field is *born*
+   * with, and a value placed there stands in for a keystroke that beat the effect.
+   */
+  it('is born holding the edited calendar’s name, not seeded by a later effect', () => {
+    const born: string[] = [];
+    function Probe(): null {
+      useLayoutEffect(() => {
+        const input = document.querySelector<HTMLInputElement>('input[name="name"]');
+        if (input) born.push(input.value);
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CalendarFormDialog orgSlug="acme" open onClose={vi.fn()} calendar={SPLIT_SHIFT} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(born).toEqual(['Two shift']);
+  });
+
+  it('keeps text entered before the first passive effects run in create mode', () => {
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLInputElement>('input[name="name"]')!.value = 'Typed early';
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CalendarFormDialog orgSlug="acme" open onClose={vi.fn()} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Typed early');
   });
 
   /**
