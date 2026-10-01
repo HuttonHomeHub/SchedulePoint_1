@@ -226,3 +226,107 @@ or verified); C11 (corrected: the delayed crane activity is `A6100`; `A7740` is 
 predecessor today); C17 (the clamp's reach); new C20 (six apply cases move, and a milestone follower
 must be decided first) and C21 (the five shapes catch none of the wrong implementations alone); §4.5's S10
 bullet; M0-T2's S10 line; M2-T4's revised-cases list; and an "M0 outcome" paragraph.
+
+# M2 measurement record: levelling follows the links
+
+Recorded 2026-10-01 on the real Pass C (`engine/level.ts`) and the real apply rule
+(`engine/apply-levelling.ts`), in the same sitting as the "before" figures below. Commands run from
+`apps/api`.
+
+## SC-5: engine cost (the hard stop is 1.5x)
+
+```text
+pnpm exec vitest run -c scripts/vitest.measure.config.mts scripts/measure-levelling-application.mts \
+  --silent=false --disable-console-intercept
+```
+
+n = 50 after one untimed warm-up, nearest-rank, both routes alternated in one run (the script is the one
+the first record used, now passing `edges` to `levelSchedule`). **Three readings in one sitting, because
+this machine drifts by about 30%:** the code as it stood before M2 (taken at the start of the sitting),
+Pass C switched off (the real tree with the link walk given no edges, so it carries every other M2 cost),
+and Pass C on.
+
+| Variant    | Before M2 p50 / p95 | Pass C off p50 / p95 | **Pass C on p50 / p95** | On / off (p50, p95) |
+| ---------- | ------------------- | -------------------- | ----------------------- | ------------------- |
+| capacity 8 | 303.5 / 344.0 ms    | 297.8 / 322.2 ms     | **361.2 / 400.8 ms**    | 1.21x, 1.24x        |
+| capacity 2 | 305.9 / 365.8 ms    | 314.8 / 337.2 ms     | **419.7 / 457.6 ms**    | 1.33x, 1.36x        |
+
+Against the pre-M2 figures the recalculation is 1.19x / 1.16x (capacity 8) and 1.37x / 1.25x (capacity 2).
+**Under the 1.5x stop on every pairing, so there was no stop**, but capacity 2 is the one to watch: it
+re-places far more activities than capacity 8 (the cost is one `earliestFeasibleStart` per re-placed
+participant, plus the lift out of the profile). The preview got cheaper, not dearer, because it no longer
+needs a third solve.
+
+| Variant    | Preview p50 / p95 before | Preview p50 / p95 after | Solves before / after |
+| ---------- | ------------------------ | ----------------------- | --------------------- |
+| capacity 8 | 893.9 / 982.0 ms         | 670.8 / 730.9 ms        | 3 / **2**             |
+| capacity 2 | 948.7 / 1,034.1 ms       | 740.4 / 793.5 ms        | 3 / **2**             |
+
+## SC-2: what the apply drops, and what is left after one press
+
+| Variant    | Rows before / after | `leftToLogic` before / **after** | `remainingAfterApply` before / **after** |
+| ---------- | ------------------- | -------------------------------- | ---------------------------------------- |
+| capacity 8 | 2 / 2               | 8 / **0**                        | 0 / **0**                                |
+| capacity 2 | 18 / 151            | 218 / **0**                      | 236 / **0**                              |
+
+**SC-2 holds with no exception to investigate.** The row count at capacity 2 rises from 18 to 151 because
+a follower that its own resource delays beyond its link now gets a row where it used to be dropped, while
+the activities that only follow get none.
+
+## SC-1: links the overlay breaks
+
+A scratch spec (deleted), the M0 definition: for every link except an LOE, summary, mandatory or started
+end, the successor's levelled start is before `forwardLowerBound` of its predecessor's levelled position.
+`levelSchedule` with `edges = []` is Passes A and B alone, i.e. the answer before Pass C.
+
+| Plan                   | Broken, Passes A+B only | **Broken, with Pass C** | Delayed, A+B / with C | `leveledProjectFinish`, A+B / with C |
+| ---------------------- | ----------------------- | ----------------------- | --------------------- | ------------------------------------ |
+| scale-2000, capacity 8 | 10                      | **0**                   | 10 / 883              | 2037-05-05 / 2037-06-10              |
+| scale-2000, capacity 2 | 187                     | **0**                   | 236 / 1,716           | 2037-05-05 / 2045-11-02              |
+
+Identical, figure for figure, to what the M0 reference measured (883, 1,716 and both finishes), so the
+reference and the shipped Pass C agree on the scale plan. The finish moving by five weeks at capacity 8 and
+by eight years at capacity 2 is the knock-on of a chain-heavy plan, and is what the changeset's first
+sentence warns of. **CQ-3's gap count was not re-measured**: the reference's 2 of 315 and 143 of 571 stand
+for the same algorithm, and the product owner decided (a) on them.
+
+## T3 again, on the real implementation (ADR-0110)
+
+The four wrong implementations, each applied to the real `level.ts` in turn and the whole
+`src/modules/schedule` suite run against it (a script, deleted):
+
+| Wrong implementation                                | Fails                                                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| (i) floors from the early dates, not the pass-on    | Gate D: "a hand-placed predecessor binds S: its placement, not its early date, is what it passes on"     |
+| (ii) push without the `floorL > floorU` guard       | Gate D: that case **and** "an unmoved long predecessor binds S: its floors are equal"                    |
+| (iii) cap clamped to the anchor, not the link floor | "the within-float cap never puts a follower before its link floor > keeps C finishing no earlier than B" |
+| (iv) an LOE predecessor that pushes                 | "an LOE predecessor pushes nothing, but a real predecessor still does > levels D to 3 January"           |
+
+Each fails exactly the case(s) named and nothing else. **Two Gate D guards were added in M2 because the
+M0 ones stopped discriminating (i) and (ii):** Pass C skips an activity none of whose predecessors was
+delayed (the floors would be computed from identical inputs, so skipping is the same answer), and
+"delayed" is `levelingDelay > 0`, so a hand-placed predecessor that levelling leaves where it is is never
+a move at all. Both M0 guards then pass under (i) and (ii) for a reason that has nothing to do with the
+floors, which a run against the real code showed. The two new fixtures (`level.links.parity.spec.ts`, "a
+predecessor that moved does not repair a follower another predecessor binds") have a predecessor that
+really moved and a second, unmoved one that binds the follower, so only the floor comparison can leave
+the follower alone.
+
+**With Pass C switched off, 37 tests fail** (every case written red in M0, the M2 apply cases, and the new
+`level.links.spec.ts` shapes, Gate D corpus and cost gate), which is the red-first evidence for the lot.
+
+## What moved in the committed suites
+
+- `level.parity.spec.ts` (eight snapshots), `compute.spec.ts`, `goldens.spec.ts`, `scenarios.spec.ts`,
+  `level.spec.ts` and `level.placed.spec.ts` pass **unedited** apart from the extra `edges` argument.
+- `level.links.parity.spec.ts`: five snapshots moved once. Every line is a follower moving later because
+  its predecessor did: the SS/FF pair (`S` to 5 Jan, `F` to 6-7 Jan), the second-resource follower (`S`
+  from 5-6 to 7-8 Jan), the priority inversion (`S` from 4-5 to 8-9 Jan, behind `P`), the FS chain (`C`
+  to 7-8 Jan, `D` to 9 Jan) and the within-float chain (`C` and `E` two days later). The
+  `leveledProjectFinish` of each moved with them. No unmoved activity's snapshot changed.
+- `apply-levelling.spec.ts`: P3, P4, P9, P11, P12 and P14 revised on purpose, each saying in its comment
+  what it asserted before and why that no longer holds; P20, P21 and a placed-milestone case added.
+- A finish milestone's row (spec C20): an UNPLACED milestone follower gets no row and is named in
+  `followingLinks`; a PLACED one gets a `LINKS` row dated on the day it closes. `targetDateFor` walked a
+  finish milestone forever, because the date of a finish milestone means the end of its day, which its
+  loop read as "a non-working day, try the next"; it now has its own search.

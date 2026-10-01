@@ -63,6 +63,14 @@ claims, unchanged). **C7, C8 and C10 hold; C11 and C17 were wrong or over-stated
 C20 and C21 are new.** The two numbers that decide CQ-3 (gap-leaving re-placements) are in
 `m0-measurement.md` T1.5: 2 of 315 pushed participants at capacity 8 and 143 of 571 at capacity 2.
 
+**M2 outcome (2026-10-01, `m0-measurement.md` "M2 measurement record").** Pass C and the apply rule landed
+together. SC-1 (0 broken links, from 10 and 187), SC-2 (`leftToLogic` 8 and 218 to 0, `remainingAfterApply`
+0 and 236 to 0), SC-5 (recalculation 1.2x to 1.4x of Pass C off, under the 1.5x stop; preview 3 solves to 2)
+and SC-6 (the eight parity snapshots, S10's old assertions and the golden unedited) hold. C20 is decided: an
+unplaced milestone follower gets no row and a placed one a `LINKS` row. C21 stands, and two more Gate D
+guards were needed because the M0 ones stopped discriminating once Pass C skipped activities with no
+delayed predecessor.
+
 **One finding about the problem statement itself (CLAUDE.md §19.11, "re-verify the problem").** The
 handoff says "most ghosts are dropped". That is true at capacity 2 (218 of 236) and also at capacity 8
 (8 of 10), but at capacity 8 one press still left **0** clashes (`m0-measurement.md:142`, `:156-157`).
