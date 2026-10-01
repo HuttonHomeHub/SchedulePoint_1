@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLevelledGhosts, type LevellableActivity } from './lenses';
+import { buildLevelledGhosts, countLevelledWithoutGhost, type LevellableActivity } from './lenses';
 
 /**
  * **The levelled lens's three states** (one-planning-surface M-E-T3, spec §4.8).
@@ -111,5 +111,29 @@ describe('the levelled ghost', () => {
       ['a', 3],
       ['b', 7],
     ]);
+  });
+});
+
+describe('countLevelledWithoutGhost (#426)', () => {
+  const moved = row({ id: 'm', leveledStart: '2026-01-12', leveledFinish: '2026-01-16' });
+  // M0: the second lift is delayed 240 minutes but its levelled start is its drawn start.
+  const partDay = row({ id: 'p', leveledStart: '2026-01-05', leveledFinish: '2026-01-05' });
+
+  it('counts the M0 case: one delayed, no ghost drawn, one without a ghost', () => {
+    expect(buildLevelledGhosts([partDay])).toEqual([]);
+    expect(countLevelledWithoutGhost(1, [partDay])).toBe(1);
+  });
+
+  it('is zero when every delayed activity has a ghost', () => {
+    expect(countLevelledWithoutGhost(1, [moved])).toBe(0);
+  });
+
+  it('subtracts exactly the ghosts buildLevelledGhosts draws', () => {
+    const all = [moved, partDay, row({ id: 'n' })];
+    expect(countLevelledWithoutGhost(2, all)).toBe(2 - buildLevelledGhosts(all).length);
+  });
+
+  it('never goes negative', () => {
+    expect(countLevelledWithoutGhost(0, [moved])).toBe(0);
   });
 });

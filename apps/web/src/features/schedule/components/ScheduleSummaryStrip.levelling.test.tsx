@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduleSummaryStrip } from './ScheduleSummaryStrip';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 /**
  * The levelled-overlay figures (ADR-0041) with `VITE_RESOURCE_LEVELLING` forced ON — the surface ships
@@ -18,7 +18,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   RESOURCE_LEVELLING_ENABLED: true,
 }));
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 
 function renderStrip() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -50,6 +50,7 @@ const summary = (overrides: Partial<PlanScheduleSummary> = {}): PlanScheduleSumm
 describe('ScheduleSummaryStrip — levelled overlay (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset().mockResolvedValue([]);
   });
 
   it('shows the levelled finish and delayed count once the plan has levelled', async () => {
@@ -102,5 +103,42 @@ describe('ScheduleSummaryStrip — levelled overlay (flag on)', () => {
     await waitFor(() => expect(screen.getByText('Project finish')).toBeInTheDocument());
     expect(screen.queryByText('Levelled finish')).not.toBeInTheDocument();
     expect(screen.queryByText('Levelled activities')).not.toBeInTheDocument();
+  });
+  // The M0 case (docs/specs/apply-levelled-dates/m0-measurement.md): a 4-hour lift then a 1-day lift on
+  // one crane, Monday-Friday 08:00-16:00. The engine counts the second lift (240 minutes) and its
+  // levelled start equals its drawn start, so the lens draws no ghost for it.
+  const partDayActivity = {
+    id: 'y',
+    laneIndex: 1,
+    type: 'TASK',
+    visualEffectiveStart: '2026-01-05',
+    leveledStart: '2026-01-05',
+    leveledFinish: '2026-01-05',
+  };
+
+  it('says how many levelled activities moved by under a day and have no ghost', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      summary({ leveledProjectFinish: '2026-01-20', leveledActivityCount: 1 }),
+    );
+    vi.mocked(apiFetchAllPages).mockResolvedValue([partDayActivity]);
+    renderStrip();
+    // In the figure's own <dd>, so it is in the accessible text and not only beside it.
+    const qualifier = await screen.findByText('1 under a day, not drawn');
+    expect(qualifier.closest('dd')).toHaveTextContent('1 under a day, not drawn');
+    expect(screen.getByText(/1 moved by less than a day, so it has no ghost/)).toBeInTheDocument();
+  });
+
+  it('adds nothing when every levelled activity has a ghost', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      summary({ leveledProjectFinish: '2026-01-20', leveledActivityCount: 1 }),
+    );
+    vi.mocked(apiFetchAllPages).mockResolvedValue([
+      { ...partDayActivity, leveledStart: '2026-01-06', leveledFinish: '2026-01-06' },
+    ]);
+    renderStrip();
+    await waitFor(() => expect(apiFetchAllPages).toHaveBeenCalled());
+    await screen.findByText(/Levelling delayed 1 activity/);
+    expect(screen.queryByText(/not drawn/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no ghost on the diagram/)).not.toBeInTheDocument();
   });
 });

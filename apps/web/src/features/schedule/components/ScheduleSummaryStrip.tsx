@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+
 import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
@@ -7,16 +9,21 @@ import {
   INTER_PROJECT_DATES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
+import { activitiesQueryOptions } from '@/features/activities';
+import { countLevelledWithoutGhost } from '@/features/tsld/render/lenses';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
 function Stat({
   label,
   value,
+  qualifier,
   hintId,
 }: {
   label: string;
   value: React.ReactNode;
+  /** A short note beside the figure, inside the same `<dd>` so a screen reader hears it with the value. */
+  qualifier?: string | undefined;
   hintId?: string;
 }): React.ReactElement {
   return (
@@ -24,6 +31,9 @@ function Stat({
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd className="text-sm font-medium tabular-nums" aria-describedby={hintId}>
         {value}
+        {qualifier ? (
+          <span className="text-muted-foreground ml-1.5 text-xs font-normal">{qualifier}</span>
+        ) : null}
       </dd>
     </div>
   );
@@ -44,6 +54,12 @@ export function ScheduleSummaryStrip({
   planId: string;
 }): React.ReactElement {
   const summary = useScheduleSummary(orgSlug, planId);
+  // The activities are read only to say how many levelled activities have no ghost (#426), so the
+  // fetch waits until there is a levelled count to explain; the plan workspace has them cached already.
+  const activities = useQuery({
+    ...activitiesQueryOptions(orgSlug, planId),
+    enabled: RESOURCE_LEVELLING_ENABLED && (summary.data?.leveledActivityCount ?? 0) > 0,
+  });
 
   const shell = (children: React.ReactNode) => (
     <section aria-label="Schedule summary" className="border-border rounded-lg border p-4">
@@ -87,6 +103,12 @@ export function ScheduleSummaryStrip({
   // recalculation has run). Off / never-levelled leaves it null, so the whole overlay stays hidden
   // even with the flag on — nothing to show until a levelled recalculation exists.
   const hasLevelled = RESOURCE_LEVELLING_ENABLED && leveledProjectFinish !== null;
+  // Delays inside one day are counted by the engine and drawn by nothing (the ghost needs a date to
+  // differ), so the strip says so. Unknown — still loading, or the read failed — says nothing.
+  const levelledWithoutGhost =
+    hasLevelled && activities.data
+      ? countLevelledWithoutGhost(leveledActivityCount, activities.data)
+      : 0;
 
   // No computed finish yet → the plan has never been recalculated (or is empty).
   if (projectFinish === null) {
@@ -141,7 +163,15 @@ export function ScheduleSummaryStrip({
         {hasLevelled ? (
           <>
             <Stat label="Levelled finish" value={formatCalendarDate(leveledProjectFinish)} />
-            <Stat label="Levelled activities" value={leveledActivityCount} />
+            <Stat
+              label="Levelled activities"
+              value={leveledActivityCount}
+              qualifier={
+                levelledWithoutGhost > 0
+                  ? `${levelledWithoutGhost} under a day, not drawn`
+                  : undefined
+              }
+            />
             {levelingWindowExceededCount > 0 ? (
               <Stat
                 label="Window exceeded"
@@ -188,8 +218,13 @@ export function ScheduleSummaryStrip({
         <p className="text-muted-foreground text-xs">
           Levelling delayed {leveledActivityCount}{' '}
           {leveledActivityCount === 1 ? 'activity' : 'activities'} so resource demand stays within
-          capacity; the levelled finish is the latest finish under levelling. The critical path and
-          floats above stay the pure-network result.
+          capacity; the levelled finish is the latest finish under levelling.
+          {levelledWithoutGhost > 0
+            ? ` ${levelledWithoutGhost} moved by less than a day, so ${
+                levelledWithoutGhost === 1 ? 'it has' : 'they have'
+              } no ghost on the diagram.`
+            : ''}{' '}
+          The critical path and floats above stay the pure-network result.
         </p>
       ) : null}
       {hasLevelled && levelingWindowExceededCount > 0 ? (
