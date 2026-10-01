@@ -11603,7 +11603,7 @@ runs (hook-level, pinned by a test in `ClientFormDialog.test.tsx`).
 ### 426. A part-day levelling delay is counted and never drawn
 
 **Status:** open · **Verified:** 2026-09-30 (`docs/specs/apply-levelled-dates/m0-measurement.md`) ·
-**Raised:** 2026-09-30 (Apply levelled dates M0) · **Size:** S · **Owner:** web
+**Raised:** 2026-09-30 (Apply levelled dates M0; ADR-0167) · **Size:** S · **Owner:** web
 
 `leveledActivityCount` counts every participant with `levelingDelay > 0` working minutes
 (`apps/api/src/modules/schedule/engine/level.ts:358`), but the ghost is withheld when `leveledStart ===
@@ -11621,7 +11621,7 @@ open. **Trigger:** the next change to the levelled lens or the summary strip.
 ### 427. `leveledProjectFinish` ignores the push a delayed activity gives its followers
 
 **Status:** open · **Verified:** 2026-09-30 (`docs/specs/apply-levelled-dates/m0-measurement.md`) ·
-**Raised:** 2026-09-30 (Apply levelled dates M0) · **Size:** S · **Owner:** api
+**Raised:** 2026-09-30 (Apply levelled dates M0; ADR-0167) · **Size:** S · **Owner:** api
 
 `levelSchedule` takes no edges, so a follower of a delayed activity is never pushed in the overlay (the
 "A5" finding), and a non-participant counts at its own anchor finish

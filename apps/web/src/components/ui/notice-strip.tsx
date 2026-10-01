@@ -16,6 +16,9 @@ import { cn } from '@/lib/utils';
  * yet"; a solid one says "here is something". That is orthogonal to whether the thing is neutral,
  * a warning, or the tool you currently have armed — and collapsing them into one `variant` list is
  * how a fifth caller ends up adding `neutralDashed`.
+ *
+ * `destructive` is for a condition that blocks the action, never a transient message; multi-sentence
+ * errors use `Alert tone="error"` (ADR-0132).
  */
 const noticeStripVariants = cva('flex gap-3 border px-3 text-sm', {
   variants: {
@@ -28,6 +31,7 @@ const noticeStripVariants = cva('flex gap-3 border px-3 text-sm', {
       muted: 'border-border bg-muted/60',
       info: 'border-info/40 bg-info/10 text-info-text',
       warning: 'border-warning/40 bg-warning/10 text-warning-text',
+      destructive: 'border-destructive/40 bg-destructive/10 text-destructive-text',
     },
     emphasis: {
       solid: 'rounded-md',

@@ -1,4 +1,4 @@
-import type { PlanScheduleSummary } from '@repo/types';
+import type { LevellingApplication, PlanScheduleSummary } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -54,6 +54,51 @@ export function useScheduleSummary(
   planId: string,
 ): UseQueryResult<PlanScheduleSummary> {
   return useQuery(scheduleSummaryQueryOptions(orgSlug, planId));
+}
+
+/**
+ * What applying the plan's levelled dates would do (`GET …/schedule/levelling-application`) — the
+ * rows the batch placement route takes, and the consequences the dialog reads out before anything is
+ * written. A pure read over an in-memory solve: it writes nothing and needs no pen.
+ *
+ * **`enabled` is the whole of the cost story**, as it is for the float paths: the service runs the
+ * engine twice per request, so a hook that fetched on mount would run two solves for every plan a
+ * planner opens, whether or not they ever pressed the command. The dialog passes its own `open`.
+ *
+ * **Zero freshness and no retained copy.** The answer is a function of the live plan, so a stale one
+ * is a wrong list, not an old one. A recalculation sweeps `scheduleKeys.all(orgSlug)`, which covers
+ * this key by construction and re-fetches an open dialog under the planner; `gcTime: 0` drops the
+ * result the moment the dialog closes, so reopening never flashes the last opening's list.
+ *
+ * 422 (no data date, or a calendar horizon exceeded) and 404 are stable statements about the plan,
+ * and 429 is the route's own throttle: retrying any of them only delays the sentence that explains it.
+ */
+export function levellingApplicationQueryOptions(
+  orgSlug: string,
+  planId: string,
+  enabled: boolean,
+) {
+  return queryOptions({
+    queryKey: scheduleKeys.levellingApplication(orgSlug, planId),
+    queryFn: () =>
+      apiFetch<LevellingApplication>(
+        `/organizations/${orgSlug}/plans/${planId}/schedule/levelling-application`,
+      ),
+    enabled: enabled && orgSlug !== '' && planId !== '',
+    staleTime: 0,
+    gcTime: 0,
+    retry: (failureCount, error) =>
+      !(error instanceof ApiFetchError && [404, 422, 429].includes(error.status)) &&
+      failureCount < 2,
+  });
+}
+
+export function useLevellingApplication(
+  orgSlug: string,
+  planId: string,
+  enabled: boolean,
+): UseQueryResult<LevellingApplication> {
+  return useQuery(levellingApplicationQueryOptions(orgSlug, planId, enabled));
 }
 
 /**

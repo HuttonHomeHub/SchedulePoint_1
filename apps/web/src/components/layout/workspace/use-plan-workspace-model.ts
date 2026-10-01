@@ -1,4 +1,9 @@
-import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
+import type {
+  ActivitySummary,
+  BaselineVarianceRow,
+  DependencySummary,
+  LevellingApplication,
+} from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -72,7 +77,15 @@ import type { MilestoneChoice } from '@/features/plan-actions/make-milestone-gat
 import { derivePlanGating, scheduleRefusal, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
-import { useRecalculate, usePlanAutoRecalc } from '@/features/schedule';
+import {
+  APPLY_LEVELLING_CONFLICT,
+  applyLevellingAnnouncement,
+  applyLevellingLabel,
+  levellingApplicationSnapshots,
+  scheduleKeys,
+  useRecalculate,
+  usePlanAutoRecalc,
+} from '@/features/schedule';
 import {
   addCalendarDays,
   todayDayFraction,
@@ -1010,6 +1023,85 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // `[acknowledgeLost, queryClient, orgSlug, planId]`, checked rather than assumed.
       batchPlacements,
       onWriteRejected,
+    ],
+  );
+
+  /**
+   * **Apply levelled dates** (`docs/specs/apply-levelled-dates/` T2.3) — write the preview's rows as
+   * ONE batch and record ONE undo step, through the parts `moveMany` already uses.
+   *
+   * The rows go to `PATCH …/activities/placements` **unchanged**, as `{ placements: rows }` and never
+   * with an empty list: the preview carries each row's constraint as stored so a stale cache cannot
+   * clear one, and the client has no rule about which bars move to second-guess it. The undo step's
+   * `before` is built from the preview's `items` (`levellingApplicationSnapshots`), which is the one
+   * place a prior placement survives as null.
+   *
+   * The recalculation hold is released in `finally`, on every path including a throw — a leaked hold
+   * stalls every later recalculation for the session with no error and no surface (ADR-0064). The
+   * recalculation itself is requested once the write has landed, and `visualStart` is in the
+   * scheduling-input signature above, so the auto-recalc would fire regardless; the explicit notify
+   * only coalesces with it. The 2,000-row cap is not checked here: the dialog offers no Apply above it
+   * and the route refuses it (`@ArrayMaxSize(2000)`), so this sends what it is given. Nothing is
+   * announced on a failure: a 409 or 423 is shown by the dialog or the pen, and "moved N" is a
+   * statement that is only true after the write.
+   */
+  const applyLevelling = useCallback(
+    async (
+      application: LevellingApplication,
+    ): Promise<{ applied: boolean; conflict: string | null; lostPen: boolean }> => {
+      if (application.rows.length === 0) return { applied: false, conflict: null, lostPen: false };
+      const { before, after, versions } = levellingApplicationSnapshots(application);
+      const holdToken = Symbol('apply-levelling');
+      autoRecalc.hold(holdToken);
+      beginLayoutEdit(application.rows.map((row) => row.id));
+      try {
+        const saved = await batchPlacements({ placements: application.rows });
+        for (const row of saved) versions.set(row.id, row.version);
+        if (UNDO_REDO_ENABLED) {
+          editHistory.record(
+            bulkPlacementCommand({
+              batchPlacements,
+              before,
+              after,
+              versions,
+              label: applyLevellingLabel(application.rows.length),
+            }),
+          );
+        }
+      } catch (err) {
+        if (onWriteRejected(err).kind === 'lock') {
+          return { applied: false, conflict: null, lostPen: true };
+        }
+        if (err instanceof ApiFetchError && err.status === 409) {
+          return { applied: false, conflict: APPLY_LEVELLING_CONFLICT, lostPen: false };
+        }
+        throw err;
+      } finally {
+        autoRecalc.release(holdToken);
+      }
+      // The preview described a plan that has just changed, so it is marked stale rather than left
+      // to be reopened; the recalculation's own sweep would do it later, and "later" is the window a
+      // planner could press the command again and read a list that no longer exists. `refetchType:
+      // 'none'` because the dialog is still mounted when this runs and an immediate re-read would run
+      // the engine twice for a list nobody is going to see — the next opening fetches fresh.
+      void queryClient.invalidateQueries({
+        queryKey: scheduleKeys.levellingApplication(orgSlug, planId),
+        refetchType: 'none',
+      });
+      announce(applyLevellingAnnouncement(application.rows.length));
+      autoRecalc.notify();
+      return { applied: true, conflict: null, lostPen: false };
+    },
+    [
+      autoRecalc,
+      beginLayoutEdit,
+      batchPlacements,
+      editHistory,
+      onWriteRejected,
+      queryClient,
+      orgSlug,
+      planId,
+      announce,
     ],
   );
 
@@ -2467,6 +2559,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     dismissLayoutResolved: autoResolve.dismissNotice,
     /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
     bulkOperations,
+    applyLevelling,
     /** The ADR-0064 T7 quiescence seam + its drop signal, handed to the canvas by the workspace. */
     autoRecalcHold: { hold: autoRecalc.hold, release: autoRecalc.release },
     dropLinkPickSignal,

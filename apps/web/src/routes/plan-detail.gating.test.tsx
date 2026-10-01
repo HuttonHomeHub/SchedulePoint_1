@@ -199,6 +199,8 @@ vi.mock('@/features/schedule', () => ({
     pendingEdits: 0,
     failed: false,
   }),
+  // Mounted by `PlanChromeDialogs`; its own suite covers it, and this one never opens it.
+  ApplyLevellingDialog: () => null,
   RecalculateButton: ({ canCalculate }: { canCalculate: boolean }) => (
     <div data-testid="recalculate" data-can-calc={String(canCalculate)} />
   ),

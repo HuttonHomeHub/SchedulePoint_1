@@ -1,6 +1,9 @@
 # Feature Spec: Apply levelled dates
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-09-30. CQ-1 **(a)** placed like a drag, not
+  pinned with SNET; CQ-2 **(a)** everything at once; CQ-3 **(a)** one step, then report what is left;
+  CQ-4 **(a)** the next working day, not part-day storage. D-1 to D-5 accepted as written. ADR-0167
+  records the decision.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-30
 - **Tracking issue / epic:** the "later" half of `docs/TECH_DEBT.md` #413 Q1 (c), recorded in
@@ -185,7 +188,7 @@ Four are critical (CQ-1 to CQ-4) and five have defaults (D-1 to D-5). See §6.
 >   "Take the edit lock to change this plan." / "You don't have permission to change this plan." (the two
 >   sentences `bulkOperations.gate` already uses, `use-plan-workspace-model.ts:825-832`) /
 >   "Resource levelling is off for this plan" (the lens's existing reason, `tsld-toolbar-items.tsx:1065`) /
->   "Levelling moved nothing" / "Waiting for the schedule to recalculate".
+>   "Levelling hasn’t moved any bars" / "Waiting for the schedule to recalculate".
 
 ### Workflows
 
@@ -204,7 +207,7 @@ Four are critical (CQ-1 to CQ-4) and five have defaults (D-1 to D-5). See §6.
 
 | Case                                                                         | Behaviour                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Levelling moved nothing                                                      | Command shaded: "Levelling moved nothing". The preview is never called.                                                                                                                                                                            |
+| Levelling moved nothing                                                      | Command shaded: "Levelling hasn’t moved any bars". The preview is never called.                                                                                                                                                                    |
 | Levelling off                                                                | Shaded with the lens's existing reason.                                                                                                                                                                                                            |
 | Schedule stale (pending edits, `schedule-state.ts:59`)                       | Shaded: "Waiting for the schedule to recalculate". The preview reads current inputs, so it would otherwise list something other than the ghosts on screen.                                                                                         |
 | The plan changes between preview and confirm (a row's version moved)         | The batch refuses the whole write with 409 (A8). The dialog shows the existing conflict sentence and offers to preview again. Nothing moves.                                                                                                       |

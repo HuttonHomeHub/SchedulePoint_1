@@ -65,6 +65,9 @@ describe('toolbar labels — the `…` convention', () => {
     // `update-progress` stood beside it until ADR-0093 removed that item from the command surface.
     // The set is down to one and stays pinned as a set: a lone member is exactly when a count would
     // start looking like a good enough assertion.
-    expect(withEllipsis).toEqual(['calendar']);
+    //
+    // `apply-levelling` joined it with `docs/specs/apply-levelled-dates/` T2.1: activating it opens a
+    // dialog that lists what will move and waits for a confirmation, which is the rule's own case.
+    expect(withEllipsis).toEqual(['apply-levelling', 'calendar']);
   });
 });

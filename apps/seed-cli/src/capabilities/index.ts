@@ -6,7 +6,12 @@ import { costPlan, externalIgnoredPlan, externalPlan } from './cost.js';
 import { logicFfSfPlan, logicFsSsPlan } from './logic.js';
 import { floatPlan, networkShapePlan } from './network.js';
 import { progressOverridePlan, progressPlan, retainedLogicPlan } from './progress.js';
-import { levellingPlacedPlan, levellingPlan, resourcesPlan } from './resources.js';
+import {
+  levellingPartDayPlan,
+  levellingPlacedPlan,
+  levellingPlan,
+  resourcesPlan,
+} from './resources.js';
 import { shiftCalendarsPlan } from './shift-calendars.js';
 import { typesAndWbsPlan } from './types-wbs.js';
 import { placementOnEarlyPlan, visualPlacementsPlan } from './visual-placements.js';
@@ -64,6 +69,7 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'resources', label: 'Resources, curves and duration types', build: resourcesPlan },
   { key: 'resources', label: 'Levelling', build: levellingPlan },
   { key: 'resources', label: 'Levelling from placed bars', build: levellingPlacedPlan },
+  { key: 'resources', label: 'Levelling a part-day start', build: levellingPartDayPlan },
   { key: 'cost', label: 'Cost, accrual and earned value', build: costPlan },
   { key: 'external', label: 'External inter-project dates', build: externalPlan },
   { key: 'external', label: 'External dates ignored', build: externalIgnoredPlan },

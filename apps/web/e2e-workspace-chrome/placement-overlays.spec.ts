@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -260,6 +261,135 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect(diagramList(page).getByRole('option', { name: /Lift B/ })).not.toContainText(
       'levelled to',
     );
+  });
+
+  /**
+   * **Apply levelled dates…, driven end to end** (`docs/specs/apply-levelled-dates/` T2.4, ADR-0081).
+   *
+   * The command is the capability this milestone claims, so the journey is its gate: a unit suite
+   * mounts the dialog and the model separately and can say nothing about the seam between the
+   * toolbar item, the dialog, the batch write, the recalculation and the undo stack.
+   *
+   * It runs on two lifts booked on one crane (the fixture the case above uses), so levelling really
+   * does delay one of them. **The first assertion is that the lens reports something moved**, so a
+   * plan on which levelling moved nothing cannot pass the rest vacuously.
+   */
+  test('Apply levelled dates…: review the list, confirm as one step, then undo it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 5);
+    await createHierarchy(page);
+    await newPlan(page, 'Apply levelled');
+    await ensurePen(page);
+
+    const lifts = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+    ]);
+    await bookOnCrane(
+      page,
+      orgSlug,
+      lifts.map((lift) => lift.id),
+      { capacity: 1, units: 24 },
+    );
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // Nothing is hand-placed to begin with, so every `visualStart` read below is the apply's own.
+    const placedCount = async (): Promise<number> =>
+      (await placements(page, orgSlug)).filter((row) => row.visualStart !== null).length;
+    expect(await placedCount()).toBe(0);
+
+    await openViewMenu(page);
+    await expect(levelledToggle(page)).toBeEnabled();
+    await levelledToggle(page).check();
+    await page.keyboard.press('Escape');
+
+    // **The fixture guard.** The lens speaks its count from the same array that draws the ghosts
+    // (`levelledOverlaySummary`), so this is "levelling moved at least one bar" read off the screen.
+    const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+    const moved = diagram.getByText(
+      /Levelled placement: \d+ activit\w+ moved by resource levelling/i,
+    );
+    await expect(moved).toHaveCount(1);
+    const countIn = async (): Promise<number> =>
+      Number(/(\d+) activit/.exec((await moved.textContent()) ?? '')?.[1]);
+    const ghosts = await countIn();
+    expect(ghosts).toBeGreaterThan(0);
+
+    // ── 1 · Shaded WITH ITS REASON when the pen is not held ───────────────────────────────────
+    const command = page.locator('[data-toolbar-item="apply-levelling"]');
+    await expect(command).toBeVisible();
+    await expect(command).not.toHaveAttribute('aria-disabled', 'true');
+    await page.getByRole('button', { name: 'Stop editing' }).click();
+    await expect(command).toHaveAttribute('aria-disabled', 'true');
+    // Resolved as a screen reader resolves it: a shaded control whose reason is unreachable is the
+    // same defect as an absent one (ADR-0082).
+    await expect(command).toHaveAccessibleDescription(/Start editing to apply levelled dates/);
+    await ensurePen(page);
+    await expect(command).not.toHaveAttribute('aria-disabled', 'true');
+
+    // ── 2 · The dialog lists every move before anything is written ────────────────────────────
+    await command.click();
+    const dialog = page.getByRole('dialog', { name: 'Apply levelled dates' });
+    await expect(dialog).toBeVisible();
+    const confirm = dialog.getByRole('button', { name: /^Apply to \d+ activit/ });
+    await expect(confirm).toBeVisible();
+    // Not refused while the preview is still being re-read.
+    await expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
+    const planned = Number(/Apply to (\d+)/.exec((await confirm.textContent()) ?? '')?.[1]);
+    expect(planned, 'the preview lists exactly what the lens draws').toBe(ghosts);
+    expect(planned, 'one crane, two lifts: exactly one waits').toBe(1);
+    const list = dialog.getByRole('table', { name: 'Activities that will move' });
+    await expect(list.getByRole('row')).toHaveCount(planned + 1);
+    // The preview writes nothing.
+    expect(await placedCount()).toBe(0);
+
+    // axe on the OPEN dialog, which the unit suite's scan cannot do in a real top layer.
+    const scan = await new AxeBuilder({ page })
+      .include('dialog[open]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(scan.violations).toEqual([]);
+
+    // ── 3 · Confirm: one write, the bars land, the lens reports nothing moved ─────────────────
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(placedCount, { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] })
+      .toBe(planned);
+    // The spoken sentence is the lens's only accessible account of itself (the visible strip is
+    // aria-hidden), and it is unique to the "nothing to show" state.
+    await expect(
+      diagram.getByText(/Levelled placement: nothing to show — resource levelling did not move/i),
+    ).toHaveCount(1, { timeout: 30_000 });
+    // **Where the lift lands, not just that a bar was written.** Both lifts want the crane from the
+    // data date (Mon 2026-01-05), each for three days, and the crane holds one. The winner runs
+    // Mon-Wed, so the crane frees at the end of Wednesday and the other lift's first possible
+    // start is Thursday 2026-01-08 — a day boundary on a Mon-Fri or a 24/7 calendar alike, so there
+    // is no part-day rounding to reason about here (that case is the unit and API suites').
+    // Exactly one lift moves; the winner keeps its early date and carries no placement.
+    const applied = await placements(page, orgSlug);
+    const landed = applied.filter((row) => row.visualStart !== null);
+    expect(landed.map((row) => isoDay(row.visualStart))).toEqual(['2026-01-08']);
+    expect(
+      applied.filter((row) => row.visualStart === null).map((row) => isoDay(row.earlyStart)),
+    ).toEqual(['2026-01-05']);
+    // Nothing left to apply, and the command says so rather than opening an empty dialog.
+    await expect(command).toHaveAttribute('aria-disabled', 'true');
+    await expect(command).toHaveAccessibleDescription('Levelling hasn’t moved any bars');
+
+    // ── 4 · ONE undo step returns every bar, and the ghosts come back ─────────────────────────
+    const undo = page.getByRole('button', { name: /^Undo\b/ });
+    await expect(undo).toHaveAccessibleName(/apply levelled dates/i);
+    await undo.click();
+    await expect
+      .poll(placedCount, { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] })
+      .toBe(0);
+    await expect(moved).toHaveCount(1, { timeout: 30_000 });
+    expect(await countIn()).toBe(ghosts);
   });
 
   test('a placement conflict is flagged, and the bar keeps its position (M-D)', async ({

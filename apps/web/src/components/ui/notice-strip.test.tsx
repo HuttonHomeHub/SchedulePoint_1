@@ -40,6 +40,13 @@ describe('NoticeStrip', () => {
     expect(strip?.className).toContain('bg-warning/10');
   });
 
+  it('gives the destructive tone its own fill and text pair', () => {
+    const { container } = render(<NoticeStrip tone="destructive" message="x" />);
+    const strip = container.firstElementChild;
+    expect(strip?.className).toContain('bg-destructive/10');
+    expect(strip?.className).toContain('text-destructive-text');
+  });
+
   it('renders nothing extra when there are no actions', () => {
     render(<NoticeStrip message="Linked A → B (FS)." />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();

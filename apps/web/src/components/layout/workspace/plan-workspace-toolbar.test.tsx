@@ -238,6 +238,8 @@ vi.mock('@/features/gantt', async (importOriginal) => ({
 vi.mock('@/features/schedule', () => ({
   ScheduleSummaryStrip: () => <div data-testid="summary-strip" />,
   RecalculateButton: () => <div data-testid="recalculate-button" />,
+  // Mounted by `PlanChromeDialogs`; its own suite covers it, and these suites never open it.
+  ApplyLevellingDialog: () => null,
   // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({

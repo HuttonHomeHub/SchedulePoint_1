@@ -30,6 +30,7 @@ import {
   Printer,
   Redo2,
   Rows3,
+  Scale,
   Search,
   Share2,
   SlidersHorizontal,
@@ -1063,6 +1064,37 @@ const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
  * moved nothing.
  */
 const LEVELLING_OFF_REASON = 'Resource levelling is off for this plan';
+
+/** Why **Apply levelled dates…** is shut when levelling is on and moved no bar (US-6). */
+const LEVELLING_MOVED_NOTHING_REASON = 'Levelling hasn’t moved any bars';
+
+/** The same fact as {@link LEVELLING_OFF_REASON}, with where to change it for someone who can. */
+const LEVELLING_OFF_APPLY_REASON = `${LEVELLING_OFF_REASON}. Turn it on in Schedule settings.`;
+
+/**
+ * Why it is shut while the computed dates are behind the plan: the preview reads the current inputs,
+ * so it would list something other than the ghosts the planner is looking at.
+ */
+const LEVELLING_STALE_REASON = 'Waiting for the schedule to recalculate';
+
+/**
+ * The plan-fact reasons **Apply levelled dates…** is shut, in the order they are reported: levelling
+ * off, then nothing moved, then the schedule behind. The settings pointer is offered only to someone
+ * who can change the setting.
+ */
+function applyLevellingPlanReason(
+  ctx: Pick<
+    TsldToolbarContext,
+    'levelResources' | 'levelledMoveCount' | 'scheduleStale' | 'canEditSchedule'
+  >,
+): string | undefined {
+  if (!ctx.levelResources) {
+    return ctx.canEditSchedule ? LEVELLING_OFF_APPLY_REASON : LEVELLING_OFF_REASON;
+  }
+  if (ctx.levelledMoveCount === 0) return LEVELLING_MOVED_NOTHING_REASON;
+  if (ctx.scheduleStale) return LEVELLING_STALE_REASON;
+  return undefined;
+}
 
 /**
  * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
@@ -2944,6 +2976,46 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // view↔edit. `canAutoArrange` gates it as enabled (via isEnabled), penGating greys it.
       isEnabled: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
+    },
+    /*
+     * **Apply levelled dates…** (`docs/specs/apply-levelled-dates/` T2.1) — the plan-wide rearrangement
+     * that accepts every ghost at once, so it sits beside `auto-arrange`, its nearest precedent, and
+     * not in the Analysis menu, which is for measuring (ADR-0090). Its subject is the plan, not a
+     * selection, so it is a command-surface item and not a dock item (ADR-0093 D1).
+     *
+     * **Tier 3**, which is prominence and nothing else: the overflow the plan's "tier 3" assumed was
+     * deleted at ADR-0109 D1, so this is an inline control that wraps like its neighbours. The
+     * ellipsis is the `calendar` item's: activating it opens a dialog that needs a confirmation.
+     *
+     * **Five reasons, in the spec's order**, and the order is the decision: what the reader can fix
+     * by acting (take the pen) comes before what is a fact about the plan (levelling off, nothing
+     * moved), which comes before what passes by itself (a recalculation in flight).
+     */
+    {
+      id: 'apply-levelling',
+      group: 'tools',
+      row: 'strip',
+      tier: 3,
+      order: 4,
+      label: 'Apply levelled dates…',
+      description: 'Move every bar that resource levelling moves onto its levelled date',
+      icon: <Scale className="size-4" />,
+      // Icon-only at every width, and the deck is what decides that: it ignores `showLabel` and
+      // withholds a label only for `ICON_ONLY` (`Deck.tsx`), where this item is listed. The longest
+      // label on the strip cost the DO row its single line at 1280 (`command-surface.spec.ts` LINES),
+      // and a band rule here could not have helped, because the deck is fixed at `comfortable`. The
+      // accessible name and tooltip still carry the words (ADR-0117). `Scale` (balance) and not
+      // `CalendarCheck`, which read as the `calendar` item's `CalendarDays` once the word was gone.
+      showLabel: 'never',
+      penGated: true,
+      disabledReason: (ctx) =>
+        ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),
+      isEnabled: (ctx) =>
+        ctx.canEditSchedule &&
+        ctx.levelResources &&
+        ctx.levelledMoveCount > 0 &&
+        !ctx.scheduleStale,
+      onActivate: (ctx) => ctx.requestApplyLevelling(),
     },
     // **`add-note` MOVED to the object bar** (`docs/specs/object-bar-defects/` M2), as `Notes`.
     //

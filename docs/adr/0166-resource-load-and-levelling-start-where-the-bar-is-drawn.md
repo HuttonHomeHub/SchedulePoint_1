@@ -79,7 +79,7 @@ The table is spec §4.9; in short, each was rejected for the reason given there.
   reversing ADR-0148 D9 and ADR-0041 §3, and could overwrite a placement made on purpose. Q1 (b).
 - **An explicit "Apply levelled dates" command:** a real feature that adds a surface, a bulk structural
   write, undo and audit, so it needs its own spec. The product owner chose the ghost now and this later
-  (Q1 (c)).
+  (Q1 (c)). **Built since: ADR-0167** (a preview, a confirmation and one batch placement write).
 - **Move the histogram only:** the chart would show load levelling does not see.
 - **Rebuild the placed instant in `level.ts` from the date string:** day-granular, it loses sub-day
   pushes (ADR-0070) and is a second derivation of one fact.

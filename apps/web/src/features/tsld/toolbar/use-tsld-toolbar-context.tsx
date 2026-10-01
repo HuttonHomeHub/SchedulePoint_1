@@ -7,7 +7,12 @@ import type { ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
 import { exportDiagramToPdf } from '../export/pdf';
 import { printDiagramImage } from '../export/PrintSurface';
-import { isFilterActive, isOverAllocated, matchesActivityFilter } from '../render/lenses';
+import {
+  buildLevelledGhosts,
+  isFilterActive,
+  isOverAllocated,
+  matchesActivityFilter,
+} from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 
 import { useConflictNavigation } from './commands/use-conflict-navigation';
@@ -20,6 +25,7 @@ import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { UseMinimapPanelPrefs } from './use-minimap-panel-prefs';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
+import { deriveScheduleState } from '@/components/layout/status/schedule-state';
 import type {
   LoadedPlan,
   PlanWorkspaceModel,
@@ -52,7 +58,13 @@ import { formatCalendarDate } from '@/lib/format-date';
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
 export type PlanDialogKind =
-  'baselines' | 'calendar' | 'details' | 'earned-value' | 'resource-histogram' | 'share';
+  | 'apply-levelling'
+  | 'baselines'
+  | 'calendar'
+  | 'details'
+  | 'earned-value'
+  | 'resource-histogram'
+  | 'share';
 
 /**
  * Assemble the {@link TsldToolbarContext} the TSLD registry drives (ADR-0031), from the route model,
@@ -313,6 +325,47 @@ export function useTsldToolbarContext({
     announce,
   });
 
+  // Apply levelled dates… (`docs/specs/apply-levelled-dates/` T2.1). The count is the lens's own: the
+  // ghosts it would draw, read off the activities already loaded, so the command's "Levelling moved
+  // nothing" refusal and the lens's "nothing to show" cannot disagree.
+  const levelledMoveCount = useMemo(
+    () =>
+      buildLevelledGhosts(
+        activities.map((a) => ({
+          id: a.id,
+          laneIndex: a.laneIndex,
+          type: a.type,
+          visualEffectiveStart: a.visualEffectiveStart,
+          leveledStart: a.leveledStart,
+          leveledFinish: a.leveledFinish,
+        })),
+      ).length,
+    [activities],
+  );
+  // The same rule the status bar publishes, so the two cannot disagree about whether the dates on
+  // screen are current. `pending` (the rows have not loaded) is not stale: the move count is zero
+  // then and the command says so.
+  const { isPending: isRecalculating, pendingEdits, failed: recalcFailed } = model.autoRecalc;
+  const scheduleStale = useMemo(() => {
+    const kind = deriveScheduleState({
+      isRecalculating,
+      pendingEdits,
+      failed: recalcFailed,
+      activities: model.activities.data,
+      canRecalculate: canRecalc,
+      refusalReason: null,
+      hasDataDate: plan.plannedStart != null,
+    }).kind;
+    return kind === 'stale' || kind === 'recalculating';
+  }, [
+    isRecalculating,
+    pendingEdits,
+    recalcFailed,
+    model.activities.data,
+    canRecalc,
+    plan.plannedStart,
+  ]);
+
   // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
   // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),
   // read straight off the already-loaded activities — no new fetch, no client re-derivation of
@@ -490,6 +543,9 @@ export function useTsldToolbarContext({
       toggleMarqueeMode: () => setMode((m) => (m === 'marquee' ? 'select' : 'marquee')),
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
+      levelledMoveCount,
+      scheduleStale,
+      requestApplyLevelling: () => openDialog('apply-levelling'),
 
       // Undo / redo (ADR-0048 M3): the model's wrapped store (conflict contract + announcements),
       // shared with the workspace keybindings. Pen-gated as part of the authoring cluster at the
@@ -897,6 +953,8 @@ export function useTsldToolbarContext({
     setLinkType,
     loeStartId,
     requestAutoArrange,
+    levelledMoveCount,
+    scheduleStale,
     model.undoRedo,
     setShowHelp,
     canRecalc,

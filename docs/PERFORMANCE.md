@@ -68,7 +68,8 @@ The standard for when it lands:
 (`GET …/schedule/levelling-application`): about three engine solves in one event-loop turn, measured
 at **p50 ~0.63-0.65 s, p95 ~0.71-0.78 s at ~2,000 activities** (n = 50, engine only, three solves
 counted; `docs/specs/apply-levelled-dates/m0-measurement.md`), with its 10/60 s throttle allowing up
-to ~8 s of such CPU per client per minute. It is the concrete case that would justify revisiting a
+to ~8 s of such CPU per client per minute. The dialog reads it once more when the planner confirms, to
+refuse a list older than the schedule, so one apply costs two such reads. It is the concrete case that would justify revisiting a
 worker or queue; until then ADR-0009 stays unimplemented and ADR-0022's synchronous model stands.
 
 ## CPM recalculation (M6, ADR-0022)
