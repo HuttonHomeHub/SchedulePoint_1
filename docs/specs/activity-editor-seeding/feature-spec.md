@@ -1,7 +1,10 @@
 # Feature Spec: Activity editor seeding — the editor's working state lives for one opening
 
-- **Status:** Draft — revised 2026-10-01 for the product owner's answers (CQ-1 (b), CQ-2 (b), CQ-3 (a));
-  approval of this revised design and plan is separate, and NQ-1 is open (§1, "Open questions").
+- **Status:** Draft — kept as the token until ADR-0169 is filed in M1 (plan T1.2), which flips it to
+  `Approved` in the same commit (`check:spec-status` S3).
+- **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
+  CQ-2 (b), CQ-3 (a) and NQ-1 (b) as recorded in §1 "Open questions". To start after the logic-aware
+  levelling work (`docs/specs/logic-aware-levelling`). Do not read the `Draft` token above as unapproved.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-01 (first draft and revision)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #420, "Left, and why — not converted", items 1–3; plus
@@ -10,7 +13,7 @@
 - **Related ADR(s):** **a new ADR is required — ADR-0169** (outline in §4.9; 0168 is reserved by
   `docs/specs/logic-aware-levelling`). It amends ADR-0060 §4 (who owns a scope's form) and ADR-0108 D2
   (the Progress panels report their dirtiness upward). Also: ADR-0061, ADR-0062, ADR-0101 (the editor is
-  a dialog, not a drawer), ADR-0108 D5/D7, ADR-0135 (focus hand-back), ADR-0048 (undo), ADR-0088 D1 (no
+  a dialog, not a drawer — ADR-0169 D5 completes its reversal by retiring the shell), ADR-0108 D5/D7, ADR-0135 (focus hand-back), ADR-0048 (undo), ADR-0088 D1 (no
   flag), ADR-0081 (entry point and journey), ADR-0105 (when a row needs a spec), ADR-0111 / CLAUDE.md
   §19.13 (keyboard and focus contracts reviewed before release).
 
@@ -20,21 +23,33 @@
   every opening, as PR #749 did for the eight sibling dialogs.
 - **CQ-2 → (b)** fold the Progress-tab draft loss (F4) into this work.
 - **CQ-3 → (a)** delete `ActivityResourcesPanel`'s redundant reset.
+- **NQ-1 → (b)** remove the editor's `shell` hook-in and hard-wire the modal; rewrite the four test files
+  that use the no-chrome version; remove the subject-change guard, which only a non-modal host could
+  reach.
 
-**ADR-0105: this is a spec-level change, and the trigger is named.** Under (b) three component
-contracts change, which is ADR-0105's "a component's public contract" trigger:
+**ADR-0105: this is a spec-level change, and the trigger is named.** Three component contracts change,
+which is ADR-0105's "a component's public contract" trigger:
 
-1. **`ActivityEditor`** (exported from `features/activities/index.ts:38-41`): its props are unchanged,
-   but what `open` _means_ changes — today closing keeps every scope's draft, the confirmation state,
-   "Saved." and the error alive for the next opening; after this, closing ends them. The `shell`
-   render-prop contract (`ActivityEditorDialog.tsx:96-102`) keeps its signature, but the `requestClose`
-   it is handed becomes a forwarder through a seam (§4.5), because the state it reads no longer lives in
-   the component that calls the shell.
+1. **The editor's public surface** (`features/activities/index.ts:38-41`). `ActivityEditor`,
+   `ActivityEditorShell` and `modalShell` are **removed from the feature's exports**; the editor is
+   `ActivityEditorDialog`, a modal, and nothing else. Its props lose `tabRailAllowed` (only the drawer
+   passed `false`) and `onSubjectHeld` (the subject guard's hook). And what `open` _means_ changes —
+   today closing keeps every scope's draft, the confirmation state, "Saved." and the error alive for the
+   next opening; after this, closing ends them. The close guard is reached through an internal handle
+   (§4.5), because the state it reads no longer lives in the component that renders the `Dialog`.
 2. **The three Progress panels** (`ActivityProgressPanels.tsx`): they stop owning their forms and their
    `open`/`onDirtyChange` props go; they receive the forms instead (§4.6). Two suites mount them
    directly (`ActivityProgressPanels.error-presentation.test.tsx`, `WeightedStepsPanel.test.tsx`) and
    **cannot pass unchanged** — that is the contract change, stated rather than discovered.
-3. **`useScopeForm`**: it loses its `open` parameter and its open-reset.
+3. **`useScopeForm`**: it loses its `open` parameter, its open-reset and its subject-change re-seed —
+   with the guard gone, a form's subject is fixed for its lifetime.
+
+Four editor suites use the no-chrome shell today and are rewritten or retired (NQ-1 (b)):
+`ActivityEditor.registers-unsaved-work.test.tsx` and `ActivityEditor.unsaved-scopes.test.tsx` move to
+`ActivityEditorDialog` with every assertion kept; `ActivityEditor.drawer-chrome.test.tsx` is deleted with
+the drawer-only `tabRailAllowed` it tests (any assertion about the rail at a viewport moves to an
+`ActivityEditorDialog` suite); `ActivityEditor.subject-guard.test.tsx` is deleted with the guard and
+replaced by one test of the new rule (§4.5, "A changed subject").
 
 **Evidence convention (CLAUDE.md §19.11).** Decision-bearing claims name the file and line read.
 Dependency internals cite only the six claims registered in `scripts/dependency-claims.json` (react-dom
@@ -72,7 +87,8 @@ task. That matches the csp trace in #420 — a hypothesis consistent with it, **
 Two consequences carried into the design: a value placed in the field in the **layout phase** (#749's
 test shape) models a moment nobody can reach, so M0 builds a probe that types inside the real window;
 and **resets in event handlers are safe** (sync lane, no gap), which is why the design below may reset
-in a click handler but never in a passive effect or a network callback, except where §4.5 says so.
+in a click handler but never in a passive effect or a network callback, except the steps form's
+first-data seed, which uses `keepFieldsRef` so it opens no window (§4.6).
 
 ### 0.2 Per site
 
@@ -88,7 +104,8 @@ in a click handler but never in a passive effect or a network callback, except w
 editor cannot be open without its subject (`activity-crud-dialogs.tsx:92-94`, `:184` — `open` is
 `intended !== undefined`), the subject cannot change under a modal (ADR-0101, ADR-0108 D7), and the
 Resources body is already dropped on every hide (`tabs.tsx:210`). The late-subject and subject-change
-paths remain **tested contracts** (`ActivityEditor.subject-guard.test.tsx`) and are kept (§4.5).
+paths were **tested contracts** (`ActivityEditor.subject-guard.test.tsx`) reachable only through a
+non-modal shell; NQ-1 (b) removes them with the shell (§4.5, ADR-0169 D5).
 
 ### 0.3 State that carries between openings — fixed by construction under (b)
 
@@ -100,7 +117,9 @@ paths remain **tested contracts** (`ActivityEditor.subject-guard.test.tsx`) and 
   **while closed** and sets `confirming = 'subject'`, invisibly, because the `ConfirmDialog` is inside
   children a closed `Dialog` does not render (`dialog.tsx:96`). Reopening the same activity shows it;
   child-first effects predict it opens **beneath** the editor. The discard journey
-  (`activity-editor.spec.ts:180-212`) never reopens.
+  (`activity-editor.spec.ts:180-212`) never reopens. **Removing the subject guard (NQ-1 (b)) removes
+  F1's trigger on its own**, so M3a fixes F1 before M3b rebuilds anything; the per-opening session then
+  makes it impossible by construction as well.
 - **F2 — "Saved." and a scope's save error survive into the next opening** (`:255-257`; cleared only at
   `:513`, `:546`, `:556`, `:560`; printed by `scope-save-bar.tsx:92-97`).
 - **F3 — New activity's hidden-field alert survives into the next opening** (`ActivityCreateDialog.tsx:454`,
@@ -155,8 +174,9 @@ canvas selection bar, toolbar **Update progress…**, **New activity**. User flo
 - Progress, measure and steps drafts survive tab switches until saved, discarded or closed.
 - Every opening starts with no confirmation, no "Saved.", no stale error or alert.
 - Unchanged: per-scope save and version-at-submit (ADR-0060); the six-scope unsaved-work report and its
-  navigation guard (ADR-0108); the pen-lost "unsavable" confirmation (ADR-0108 D5); the subject guard;
-  the intent's landing tab and Steps focus; undo recording of a save (ADR-0048) **even when the editor
+  navigation guard (ADR-0108); the pen-lost "unsavable" confirmation (ADR-0108 D5); the rail-or-strip
+  choice by viewport (`ActivityEditorDialog.tsx:636-637`, now without the drawer's override); the
+  intent's landing tab and Steps focus; undo recording of a save (ADR-0048) **even when the editor
   is closed mid-save** (§4.5, D-10); focus into the dialog on open and back on close.
 
 ### Success criteria
@@ -164,35 +184,40 @@ canvas selection bar, toolbar **Update progress…**, **New activity**. User flo
 - M0's window probe is red on today's code (editor, create, Progress panel at reveal, Resources panel
   at mount) and green after the milestone that owns each.
 - F1–F4 red at M0, green after; journeys J1–J4 green locally (`scripts/e2e-local.sh`) and in CI.
-- Every editor and create suite that does not mount a panel directly passes **unchanged**; the two
-  panel suites are rewritten through a harness, and the rewrite is reviewed as a contract change.
+- Every editor and create suite that does not mount a panel directly or use the no-chrome shell passes
+  **unchanged**; the two panel suites are rewritten through a harness and the four shell suites are
+  rewritten or retired as listed above — each rewrite reviewed as a contract change, with every
+  assertion that still has a subject carried over.
 - `pnpm prepush` green. accessibility-reviewer and component-reviewer have run before each release
   that changes the close path or the panels (CLAUDE.md §19.13).
 
 ### Open questions
 
-**Answered (2026-10-01):** CQ-1 (b), CQ-2 (b), CQ-3 (a) — above.
+**All answered by the product owner on 2026-10-01 (AskUserQuestion); the plan is approved to build.**
 
-**New critical question:**
+| Question                                                           | Answer                                                                                              |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| CQ-1 — how to fix the editor and New activity                      | **(b)** rebuild so working state is created fresh on every opening (#749's pattern)                 |
+| CQ-2 — Progress-tab drafts lost on a tab switch (F4)               | **(b)** fold into this work                                                                         |
+| CQ-3 — the Resources panel's redundant reset                       | **(a)** delete it                                                                                   |
+| NQ-1 — the `shell` hook-in built for the retired drawer (ADR-0101) | **(b)** remove it, hard-wire the modal, rewrite the four no-chrome suites, remove the subject guard |
 
-- **NQ-1 — The `shell` hook-in was built for a side drawer that no longer exists (ADR-0101). Keep it,
-  or remove it while the editor is being rebuilt?**
-  - **(a) Recommended — keep it.** The modal is plugged in through it today, and it is also what keeps
-    the dialog element in one place across openings, which is what keeps focus behaviour unchanged.
-    Four test files use a "no chrome" version of it to test the editor's inside; they keep working.
-  - **(b) Remove it and hard-wire the modal.** Less indirection, but those four test files must be
-    rewritten to drive a real dialog, and the subject-change guard — only reachable without a modal —
-    would then have no way to be tested, so it should be removed too. A bigger, separate decision.
+The recommendations were CQ-1 (a), CQ-2 (a), CQ-3 (a) and NQ-1 (a); the design below follows the
+answers, not the recommendations.
 
 **Defaults (proceeding unless told otherwise):**
 
 - **D-1 — No flag** (ADR-0088 D1); the rollback is the commit boundary.
 - **D-2 — Patch changeset for `@repo/web`** per milestone that changes behaviour.
-- **D-3 — ADR-0169 is filed `Proposed` when this spec is approved, `Accepted` at the close-out.**
+- **D-3 — ADR-0169 is filed `Proposed` in M1 (plan T1.2), `Accepted` at the close-out.**
 - **D-4 — F5 is filed as a register row**, not fixed (it changes what a post-save reset keeps).
 - **D-5 — Docblocks corrected as each file is rebuilt**: `useScopeForm` trap 2; the stale "not
-  represented here" comment (`ActivityEditorDialog.tsx:395-399`); the shell docblocks' drawer wording
-  (`:79-95`, `:161-166`).
+  represented here" comment (`ActivityEditorDialog.tsx:395-399`); the shell docblocks (`:79-95`,
+  `:161-166`, `:1056-1090`) go with the shell; the `activity-crud-dialogs.tsx` docblocks that describe the
+  drawer and `onSubjectHeld` (`:40-62`, `:186-198`) are rewritten.
+- **D-11 — Retired exports are deleted, not deprecated.** `ActivityEditor`, `ActivityEditorShell` and
+  `modalShell` have one production caller (`activity-crud-dialogs.tsx:64-78`) and the four suites; the
+  compiler is the inventory.
 - **D-6 — #420 closed with evidence** at the close-out; item 2's verdict recorded.
 - **D-7 — M0 re-reads the pre-#740 `ProjectFormDialog`/`ClientFormDialog`** (`git show`).
 - **D-8 — The steps list is fetched on the first visit to Progress in an opening**, not at open — as
@@ -245,17 +270,17 @@ Unchanged except: closing ends the editor's working state; tab switches no longe
 
 ### Edge cases
 
-| Case                                                    | Expected                                                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Calendar list lands after open                          | Duration and Remaining re-seed once if untouched (the `useDurationSeed` shape, now for both).                |
-| Intent lands on Progress or asks for Steps focus        | Unchanged: landing tab from the intent; heading focused when `focusSteps`.                                   |
-| 409 → **Refresh this section**                          | Unchanged: event-time reset, no window.                                                                      |
-| Subject change while open (non-modal shell, tests only) | Unchanged: hold and ask when dirty, adopt when clean; re-seed via `keepFieldsRef` (§4.5).                    |
-| Closed mid-save                                         | Write completes; undo recorded; announcement made (D-10). Form state is gone, by design.                     |
-| Reopened while that save is still in flight             | Save bars show pending until it lands (the mutation is the frame's) — prevents a stale-version second write. |
-| Pen lost with a Progress-side steps draft               | Reported unsavable (ADR-0108 D5); a steps refetch does not wipe it (D-9).                                    |
-| Escape while the confirmation is open                   | Unchanged: the confirmation is topmost and handles it.                                                       |
-| Save in flight, then typing (F5)                        | Unchanged (D-4).                                                                                             |
+| Case                                             | Expected                                                                                                                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar list lands after open                   | Duration and Remaining re-seed once if untouched (the `useDurationSeed` shape, now for both).                                                                                 |
+| Intent lands on Progress or asks for Steps focus | Unchanged: landing tab from the intent; heading focused when `focusSteps`.                                                                                                    |
+| 409 → **Refresh this section**                   | Unchanged: event-time reset, no window.                                                                                                                                       |
+| The `activity` prop changes id while open        | Unreachable under a modal (ADR-0108 D7). If it ever happens, the session remounts on the new subject (keyed by id) — never one activity's draft under another's title (§4.5). |
+| Closed mid-save                                  | Write completes; undo recorded; announcement made (D-10). Form state is gone, by design.                                                                                      |
+| Reopened while that save is still in flight      | Save bars show pending until it lands (the mutation is the frame's) — prevents a stale-version second write.                                                                  |
+| Pen lost with a Progress-side steps draft        | Reported unsavable (ADR-0108 D5); a steps refetch does not wipe it (D-9).                                                                                                     |
+| Escape while the confirmation is open            | Unchanged: the confirmation is topmost and handles it.                                                                                                                        |
+| Save in flight, then typing (F5)                 | Unchanged (D-4).                                                                                                                                                              |
 
 ### Permissions
 
@@ -280,7 +305,7 @@ are untouched; they move with their forms.
 
 | Area           | Impact | Notes                                                                                                                                                                                                                                                                |
 | -------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | high   | `ActivityEditor` → frame + session; `ActivityCreateDialog` → frame + form; Progress panels become presentational; `useScopeForm` loses `open`.                                                                                                                       |
+| Frontend       | high   | Shell, `modalShell`, `ActivityEditor` export, `tabRailAllowed`, `onSubjectHeld` and the subject guard removed; `ActivityEditorDialog` → frame + session; `ActivityCreateDialog` → frame + form; Progress panels presentational; `useScopeForm` loses `open`.         |
 | Backend        | none   | Same requests, same bodies.                                                                                                                                                                                                                                          |
 | Database       | none   | No schema; database-architect not engaged because there is nothing to design.                                                                                                                                                                                        |
 | API            | none   |                                                                                                                                                                                                                                                                      |
@@ -288,7 +313,7 @@ are untouched; they move with their forms.
 | Performance    | low    | The session's hooks are created per opening. `Dialog` already mounts its children per opening (`dialog.tsx:96`), so the added cost is three-to-seven `useForm` instances, not a subtree. The steps query moves from panel mount to "Progress visited" — same timing. |
 | Infrastructure | none   | Tests join an existing suite; no Playwright config or CI step.                                                                                                                                                                                                       |
 | Observability  | none   |                                                                                                                                                                                                                                                                      |
-| Testing        | high   | Window probe; F1–F4 red-first units; journeys J1–J4; ~20 editor/create suites must pass unchanged; two panel suites rewritten through a harness.                                                                                                                     |
+| Testing        | high   | Window probe; F1–F4 red-first units; journeys J1–J4; ~16 editor/create suites must pass unchanged; two panel suites rewritten through a harness; four no-chrome suites rewritten (2) or retired (2).                                                                 |
 
 **Scheduling engine.** No scheduling input changes — `computeSchedule` is byte-identical by
 construction. **Pen.** No new write; structural writes (definition, steps, Logic, Resources) and the
@@ -296,8 +321,9 @@ non-structural progress write are unchanged.
 
 ### Dependencies
 
-- react-hook-form 7.88.0's public `reset` option `keepFieldsRef` — used only on the subject-change
-  re-seed (§4.5); its behaviour is the registered `index.esm.mjs:3320-3327` claim.
+- react-hook-form 7.88.0's public `reset` option `keepFieldsRef` — used only for the steps form's
+  first-data seed (§4.6), the one remaining reset outside an event handler; its behaviour is the
+  registered `index.esm.mjs:3320-3327` claim.
 - Nothing must land first. The eight converted dialogs are not touched.
 
 ## 4. Solution design
@@ -309,18 +335,17 @@ flowchart TB
   subgraph Host["activity-crud-dialogs.tsx (mounted once)"]
     PAE["PlanActivityEditor<br/>open = intended !== undefined"]
   end
-  subgraph Frame["ActivityEditor = frame (mounted once)"]
+  subgraph Frame["ActivityEditorDialog = frame (mounted once)"]
     MUT["mutations: update fields, progress, steps<br/>(D-10: survive close)"]
     REF["sessionRef: { requestClose }"]
-    TTL["title / description from the incoming row"]
-    SH["shell({ requestClose: forward, title, children })"]
+    TTL["title / description from the row"]
   end
-  subgraph Dlg["Dialog - one dialog element for the frame's life"]
+  subgraph Dlg["Dialog xl flush confirmBeforeClose - hard-wired, one dialog element"]
     CH["children only while open"]
   end
-  subgraph Session["ActivityEditorSession (mounted per opening)"]
+  subgraph Session["ActivityEditorSession key=activity.id (mounted per opening)"]
     SF["six forms, born with the seed<br/>general, scheduling, cost, progress, measure, steps"]
-    ST["confirming, savedScope, saveError, seededId, active tab"]
+    ST["confirming, savedScope, saveError, active tab"]
     UR["useRegisterUnsavedWork(report)"]
     CD["ConfirmDialog"]
     TB["Tabs - active panel only"]
@@ -329,7 +354,7 @@ flowchart TB
     PP["ReportedProgress / ValueMeasure / WeightedSteps<br/>take a form, own no state that outlives a visit"]
   end
   PAE --> Frame
-  SH --> Dlg
+  Frame --> Dlg
   CH --> Session
   REF -. useImperativeHandle .-> Session
   MUT --> Session
@@ -389,39 +414,53 @@ None.
 
 ### 4.5 Component changes — the editor and New activity per opening
 
-**Frame (`ActivityEditor`, props unchanged).** Owns: `useUpdateActivityFields`, and — moved up from
-the panels — `useUpdateActivityProgress` and `useReplaceActivitySteps` (D-10); a
-`sessionRef = useRef<ActivityEditorSessionHandle>(null)`; the title and description, computed from the
-incoming row; and the single `shell({...})` call with
-`requestClose: () => (sessionRef.current?.requestClose ?? onClose)()` and
-`children: open ? <ActivityEditorSession ref={sessionRef} … /> : null`.
+**Retiring the shell (NQ-1 (b)) — done first, on today's mounted-once editor (plan M3a).** The
+`ActivityEditorShell` type, `modalShell`, the `shell` prop and the exported `ActivityEditor` are
+deleted; `ActivityEditorDialog` renders the `Dialog` directly with exactly the props `modalShell`
+passes today (`ActivityEditorDialog.tsx:1075-1084`: `open`, `onClose={requestClose}`,
+`confirmBeforeClose`, `size="xl"`, `body="flush"`, title, description). `PlanActivityEditor`
+(`activity-crud-dialogs.tsx:64-78`) becomes a plain use of `ActivityEditorDialog`. `tabRailAllowed`
+(drawer-only) and `onSubjectHeld` (`activity-crud-dialogs.tsx:196-198`) are removed. The subject guard
+(`seededId`, the render-phase adopt/hold at `ActivityEditorDialog.tsx:280-284` and `:488-495`, the
+`'subject'` branch of `confirming` and of the confirmation's copy and labels at `:1003-1027`) is
+removed; the editor edits the row it is given. This step changes no rendered output for any modal
+opening — it is the chrome every production opening already gets — and on its own removes F1's trigger.
 
-- **Why the dialog element stays in the frame.** If the session called the shell, the `<dialog>`
+**Frame (`ActivityEditorDialog`, props as above).** Owns: `useUpdateActivityFields`, and — moved up
+from the panels — `useUpdateActivityProgress` and `useReplaceActivitySteps` (D-10); a
+`sessionRef = useRef<ActivityEditorSessionHandle>(null)`; the title and description from the row; and
+the `Dialog`, with `onClose={() => (sessionRef.current?.requestClose ?? onClose)()}` and children
+`open && activity ? <ActivityEditorSession key={activity.id} ref={sessionRef} … /> : null`. The footer
+**Close** button and the header **Close dialog** button both reach the same forwarder (the header one
+through `Dialog`'s own `onClose`, `dialog.tsx:125`).
+
+- **Why the dialog element stays in the frame.** If the session rendered the `Dialog`, the `<dialog>`
   would be created and destroyed with each opening and removed from the document while modal, which
   bypasses `close()` and its focus return. Kept in the frame, the element, its `showModal()`/`close()`
-  effect (`dialog.tsx:67-72`) and therefore focus on open and on close are **byte-for-byte today's** —
-  `Dialog` already unmounts its children before `close()` runs (`:96`), so the session unmounting
-  changes nothing about where focus goes. This is the ADR-0135 question answered: no control is
-  removed from under focus that is not removed today.
+  effect (`dialog.tsx:67-72`) and therefore focus on open and on close are **today's** — `Dialog`
+  already unmounts its children before `close()` runs (`:96`), so the session unmounting changes
+  nothing about where focus goes. This is the ADR-0135 question answered: no control is removed from
+  under focus that is not removed today.
 - **Why a ref and not lifted state.** A guard fed by a child reporting `isDirty` through an effect is
   one render late by construction (the ADR-0108 D2 reporting shape, which is how F4 hid). The handle
   is read at the moment of the click, from the component that owns the forms.
-- **The title.** Today it shows the _held_ subject; the frame shows the _incoming_ one. They differ
-  only while a subject confirmation is pending, which a modal cannot reach (ADR-0108 D7); the
-  passthrough shells that can reach it render no title. Stated as a narrowing in ADR-0169.
+- **A changed subject.** With the guard gone, the session is keyed by `activity.id`. A modal cannot
+  change its subject while open (ADR-0108 D7), so this is unreachable; if a future host ever does it,
+  the session remounts on the new row — its drafts end, which is the honest outcome without a guard,
+  and the title and the forms can never disagree about which activity they describe. One test pins
+  this rule in place of `ActivityEditor.subject-guard.test.tsx`. **A non-modal host that needs a guard
+  must bring one back with its own design** (ADR-0169 D5).
 
 **Session (`ActivityEditorSession`, new, file-private to `features/activities`).** Today's body, moved:
-the six forms (§4.6), `useDurationSeed` (and its twin for Remaining), `confirming`, `savedScope`,
-`saveError`, `seededId` + the subject guard, `seenIntent` + `active`, the unsaved-work report and
+the six forms (§4.6), `useDurationSeed` (and its twin for Remaining), `confirming` (`'close'` only),
+`savedScope`, `saveError`, `seenIntent` + `active`, the unsaved-work report and
 `useRegisterUnsavedWork(report)` (no `open ? … : null` — it is mounted only while open), the tab body,
 the footer Close and the `ConfirmDialog`. `useImperativeHandle(ref, () => ({ requestClose }))`.
 
-**`useScopeForm(schema, seed, activity, options)`** — no `open`. `useForm` takes `seed(activity)` as
-`defaultValues` at mount; **no effect runs at mount**. One effect remains, for the subject-change path
-only: when `activity?.id` differs from the id the form was seeded with, `reset(seed(activity), {
-keepFieldsRef: true })` — the option that keeps the registry and writes the DOM at once
-(`index.esm.mjs:3320-3327`), so even this production-unreachable path has no window. Trap 2 (a sibling
-save must not re-seed) holds: the key is still the id, never the row.
+**`useScopeForm(schema, seed, activity, options)`** — no `open`, and **no effect at all**. `useForm`
+takes `seed(activity)` as `defaultValues` at mount; a form's subject is fixed for its lifetime, so
+there is nothing to re-seed. Trap 2 (a sibling save must not re-seed) is now true structurally: there
+is no seed path for a refetch to trigger. The docblock is rewritten to say so.
 
 **New activity.** `ActivityCreateDialog` (props unchanged) keeps `Dialog`, `useCreateActivity` (D-10's
 reasoning: the announcement survives a close mid-save) and a `formRef`; `ActivityCreateForm` holds the
@@ -471,9 +510,13 @@ needs `isDirty` computed against a seed the panel no longer holds, which is owne
   value and `getValues`. Hosts: the editor (Name), New activity (Name), Progress via a tab click
   (% complete), Resources via a tab click (Budgeted units). Positive control: the same input after the
   yield passes today. Turns green in the milestone that owns each host.
-- **F1–F4 red-first units**, mounted through `modalShell` with a host that toggles `open` and clears
-  its intent on close the way `activity-crud-dialogs.tsx` does — the current suites hold `onClose` as a
-  mock, which is why none could see F1.
+- **F1–F4 red-first units**, mounted through `ActivityEditorDialog` (today: `modalShell`) with a host
+  that toggles `open` and clears its intent on close the way `activity-crud-dialogs.tsx` does — the
+  current suites hold `onClose` as a mock, which is why none could see F1.
+- **The four no-chrome suites** (listed under the ADR-0105 note): two rewritten against
+  `ActivityEditorDialog`, every assertion kept; two retired with what they tested; one new test for
+  the keyed-session rule. jsdom's `<dialog>` support is whatever the existing `ActivityEditorDialog.*`
+  suites already rely on — no new setup.
 - **Journeys** in `apps/web/e2e-activity-editor/activity-editor.spec.ts` (ADR-0081): **J1** open from
   the row menu and `fill` Name at once, save, assert the cell (a regression guard; the probe is the
   proof). **J2** dirty → Escape → Discard → reopen the same activity → no visible `alertdialog` → dirty
@@ -506,15 +549,20 @@ None.
 - **D4 — A scope's form is owned by the editor session, never by the panel that renders it.** Amends
   ADR-0060 §4 (forms per scope — unchanged in number, changed in owner) and **supersedes ADR-0108 D2's
   reporting mechanism** (the dirtiness is read, not reported). Panels are presentational.
-- **D5 — The subject guard is kept**, though only a non-modal shell can reach it (ADR-0101); its
-  re-seed uses `keepFieldsRef` so it has no window either. Title follows the incoming row; the narrowing
-  is stated.
+- **D5 — The shell and the subject guard are retired; the editor is a modal, hard-wired.** Completes
+  ADR-0101's reversal of the Graphite M6 drawer: the `shell` render prop, `modalShell`,
+  `tabRailAllowed` and `onSubjectHeld` existed for a non-modal host that no longer exists, and the
+  subject guard was reachable only through one (ADR-0108 D7). The session is keyed by the activity id,
+  so a subject change — unreachable — remounts rather than mixing two activities. A future non-modal
+  editor host must design its own guard; this ADR does not pre-build it.
 - **D6 — No flag** (ADR-0088 D1).
-- **Consequences:** two panel suites rewritten through a harness; `useScopeForm` loses `open`; future
-  editor state is per-opening by default, and anything that must persist across openings has to be put
-  in the frame on purpose.
+- **Consequences:** two panel suites rewritten through a harness; four no-chrome suites rewritten or
+  retired; `ActivityEditor`, `ActivityEditorShell` and `modalShell` leave the feature's exports;
+  `useScopeForm` loses `open` and every effect; future editor state is per-opening by default, and
+  anything that must persist across openings has to be put in the frame on purpose.
 - **Alternatives:** the hook-only fix (`keepFieldsRef` on the open reset) — closes the window, leaves
-  F1–F4; keeping panels mounted while hidden (§4.6); retiring the shell (NQ-1).
+  F1–F4; keeping panels mounted while hidden (§4.6); keeping the shell and the guard (NQ-1 (a)) —
+  smaller, preserves a tested path no production host can reach.
 
 ### 4.10 Out of scope
 
