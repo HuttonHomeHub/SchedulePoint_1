@@ -72,7 +72,7 @@ lift becomes zero days; it proves nothing about levelling and is listed only bec
 "every seeded levelling plan". Pairwise: 14 of the 63 pairwise cases level (`levelResources` on) and
 none has a delayed activity (4 activities, no contention), so none can move.
 
-## T1.3: C7, the two levelled finishes: TRUE at the formula level, database read OWED
+## T1.3: C7, the two levelled finishes: TRUE at the formula level and at the database
 
 **Owed: the orchestrator runs `scripts/e2e-local.sh api`.** I may not run it (shared database and ports).
 What was established without it, and how it differs from the real thing:
@@ -102,6 +102,11 @@ summary activities, which the engine excludes; no seeded plan separates them.
   before `projectFinish`). **It has not been run**: lint and typecheck pass, nothing more. The orchestrator
   should run it and, if the precondition fails, report which figure differs before anything is changed.
   If the `it.fails` unexpectedly passes, C7 is false at the database level and M1 is not needed.
+- **Database read, taken (2026-10-01).** The orchestrator ran `scripts/e2e-local.sh api` at `31c54d3`: 77
+  files, 815 tests passed, **1 expected fail**. `test/levelled-finish.e2e-spec.ts`'s precondition `it`
+  passed and its `it.fails` stayed red, so **C7 holds at the database level**: the summary read disagrees
+  with the recalculation response on the C7 fixture. M1 is therefore needed, and it turns that `it.fails`
+  into a plain `it`.
 
 ## T1.4: C8, the seeded plan already shows #427: TRUE
 

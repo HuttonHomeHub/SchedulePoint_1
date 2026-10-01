@@ -23,9 +23,9 @@ import { clearDomainData } from './audit-reset';
  * resource and is hand-placed on 20 January, so it is drawn 20-21 January while its early finish is 2
  * January. The engine says the levelled plan finishes on the 21st; the SQL says the 6th.
  *
- * **Written in M0 and not yet run against a database by its author** (the shared database belongs to the
- * orchestrator): the precondition `it` is the claim that its numbers are right, and the `it.fails` is red
- * until M1 aligns the SQL with the engine, when it becomes a plain `it`.
+ * The precondition `it` is the claim that its numbers are right. The second `it` was an `it.fails`,
+ * recorded red by the orchestrator's `e2e-local.sh api` run on 2026-10-01 at 31c54d3, until M1 aligned
+ * the SQL with the engine (`placed-finish.ts`, `leveledFinishSql`).
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -129,13 +129,10 @@ describe.skipIf(!hasDatabase)('Levelled finish — the response and the summary 
     expect(recalculated.leveledProjectFinish).toBe('2026-01-21');
   });
 
-  it.fails(
-    'the summary read states the same levelled finish as the recalculation, and never before Finish',
-    async () => {
-      const { agent, planId, recalculated } = await seedPlacedLastBarPlan();
-      const summary = await summaryOf(agent, planId);
-      expect(summary.leveledProjectFinish).toBe(recalculated.leveledProjectFinish);
-      expect(String(summary.leveledProjectFinish) >= String(summary.projectFinish)).toBe(true);
-    },
-  );
+  it('the summary read states the same levelled finish as the recalculation, and never before Finish', async () => {
+    const { agent, planId, recalculated } = await seedPlacedLastBarPlan();
+    const summary = await summaryOf(agent, planId);
+    expect(summary.leveledProjectFinish).toBe(recalculated.leveledProjectFinish);
+    expect(String(summary.leveledProjectFinish) >= String(summary.projectFinish)).toBe(true);
+  });
 });

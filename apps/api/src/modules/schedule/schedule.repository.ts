@@ -20,7 +20,11 @@ import { liveAssignmentWhere } from '../activities/live-assignment';
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import type { EngineEdgeResult, EngineResult } from './engine';
-import { placedFinishSql } from './placed-finish';
+import {
+  LEVELLED_FINISH_EXCLUDED_TYPES_SQL,
+  leveledFinishSql,
+  placedFinishSql,
+} from './placed-finish';
 
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
@@ -417,11 +421,15 @@ export class ScheduleRepository {
         COUNT(*) FILTER (WHERE leveling_window_exceeded) AS leveling_window_exceeded_count,
         COUNT(*) FILTER (WHERE self_over_allocated) AS self_over_allocated_count,
         -- The leveled project finish is the latest finish under levelling (a participant's leveled
-        -- finish, else its network early finish). Null unless at least one activity carries a leveled
+        -- finish, else where its bar is DRAWN), over non-LOE, non-summary activities — the engine's own
+        -- roll-up (placed-finish.ts, C7). Null unless at least one activity carries a leveled
         -- overlay, so a non-levelled plan reports null (distinct from the pure-network project_finish).
         CASE
           WHEN COUNT(*) FILTER (WHERE leveled_finish IS NOT NULL) > 0
-          THEN to_char(MAX(COALESCE(leveled_finish, early_finish)), 'YYYY-MM-DD')
+          THEN to_char(
+            MAX(${leveledFinishSql()}) FILTER (WHERE type NOT IN (${LEVELLED_FINISH_EXCLUDED_TYPES_SQL})),
+            'YYYY-MM-DD'
+          )
           ELSE NULL
         END AS leveled_project_finish,
         -- The PLACED finish (ADR-0148, #404): where the last bar is drawn, which a hand-placed bar can

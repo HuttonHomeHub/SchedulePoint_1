@@ -1591,6 +1591,13 @@ controller's 30 / 60 s per handler.
   every participant at its placed start, or its early start when it is unplaced, and a bar it does not
   delay keeps its drawn start (ADR-0166, #413). Levelling never moves a bar; the levelled dates are a
   ghost overlay. The Critical Path Test is the one reader that levels on the network span instead.
+- `leveledProjectFinish` — on `GET …/schedule/summary` and the recalculate response alike — is one
+  definition: the latest of each activity's levelled finish, else its **drawn** finish, over
+  non-level-of-effort, non-summary activities (`placed-finish.ts`). So a hand-placed bar that holds no
+  capped resource counts where it is drawn and the figure is never earlier than `projectFinish`. It is
+  `null` unless at least one activity carries a levelled finish. The summary read took `early_finish`
+  as the fallback and counted every activity until the logic-aware levelling M1 (`docs/TECH_DEBT.md`
+  #427 stays open for the follower knock-on).
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a

@@ -264,6 +264,58 @@ test.describe('the feasible window and the levelled lens', () => {
   });
 
   /**
+   * **The strip's "Levelled finish" counts a hand-placed last bar** (`docs/specs/logic-aware-levelling/`
+   * M1, C7).
+   *
+   * `GET …/schedule/summary` used to take `MAX(COALESCE(leveled_finish, early_finish))`, so a bar that
+   * holds no capped resource was counted where logic puts it, and a plan whose last bar was dragged
+   * late read a "Levelled finish" EARLIER than its own "Finish". The API e2e proves the number; this
+   * proves it is the number a planner reads, in the popover the strip lives in.
+   */
+  test('the strip’s Levelled finish reads the hand-placed last bar, and never before Finish', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 6);
+    await createHierarchy(page);
+    await newPlan(page, 'Levelled finish');
+    await ensurePen(page);
+
+    const [liftA, liftB] = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+      { name: 'Late slab', laneIndex: 2 },
+    ]);
+    if (!liftA || !liftB) throw new Error('seeding returned too few activities');
+    // The slab holds no resource, so levelling never touches it; only the lifts share the crane.
+    await bookOnCrane(page, orgSlug, [liftA.id, liftB.id], { capacity: 1, units: 24 });
+    await placeViaApi(page, orgSlug, 'Late slab', '2026-03-02');
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // The fixture is what it claims: the slab is drawn at its placement, well after its early date
+    // and after both lifts. Without this the case passes on a plan where nothing had been placed.
+    const slab = requirePlacement(await placements(page, orgSlug), 'Late slab');
+    expect(isoDay(slab.visualEffectiveStart)).toBe('2026-03-02');
+    expect(isoDay(slab.earlyStart)).not.toBe('2026-03-02');
+
+    await page.getByRole('button', { name: /Summary/ }).click();
+    const summary = page.getByRole('dialog', { name: 'Summary' });
+    const statValue = (label: string) =>
+      summary
+        .locator('dt', { hasText: new RegExp(`^${label}$`) })
+        .locator('xpath=following-sibling::dd');
+    const finish = statValue('Project finish');
+    const levelledFinish = statValue('Levelled finish');
+    await expect(levelledFinish).toHaveCount(1);
+    // The slab's drawn finish is in March; the lifts' levelled finishes are in January.
+    await expect(finish).toContainText('Mar 2026');
+    await expect(levelledFinish).toHaveText((await finish.textContent()) ?? '');
+    await page.keyboard.press('Escape');
+  });
+
+  /**
    * **Apply levelled dates…, driven end to end** (`docs/specs/apply-levelled-dates/` T2.4, ADR-0081).
    *
    * The command is the capability this milestone claims, so the journey is its gate: a unit suite
