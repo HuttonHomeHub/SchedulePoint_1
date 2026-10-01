@@ -1,6 +1,7 @@
 import type { NoteSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Profiler } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteItem } from './NoteItem';
@@ -62,6 +63,47 @@ function renderItem(props: Partial<Parameters<typeof NoteItem>[0]> = {}): {
 describe('NoteItem', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+  });
+
+  /**
+   * **#420's structural property.** A passive `reset()` on opening the editor wipes whatever a fast
+   * typist has already entered. A `Profiler`'s `onRender` runs in the commit's layout phase, before
+   * any passive effect, so text placed in the textarea the moment it first exists stands in for
+   * that keystroke — and `act` flushes the passive effects before `fireEvent` returns.
+   */
+  it('keeps text entered before the editor’s first passive effects run', () => {
+    let typed = false;
+    const typeEarly = (): void => {
+      const textarea = document.querySelector('textarea');
+      if (textarea && !typed) {
+        textarea.value = 'Typed early';
+        typed = true;
+      }
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnouncerProvider>
+          <Profiler id="note" onRender={typeEarly}>
+            <ul>
+              <NoteItem
+                orgSlug="acme"
+                target={{ planId: 'pl1', activityId: null }}
+                note={note()}
+                position={1}
+                currentUserId="u1"
+                onThreadStale={vi.fn()}
+                onFocusRegion={vi.fn()}
+              />
+            </ul>
+          </Profiler>
+        </AnnouncerProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit note 1/ }));
+
+    expect(typed).toBe(true);
+    expect(screen.getByLabelText('Edit note')).toHaveValue('Typed early');
   });
 
   it('deletes on confirm: announces, and hands focus to the region sink (the row unmounts)', async () => {
