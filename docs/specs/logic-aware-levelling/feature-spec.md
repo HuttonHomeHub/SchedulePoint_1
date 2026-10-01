@@ -132,7 +132,10 @@ predicted.
 
 ### Open questions
 
-See §6. Three are critical, and each comes with a recommended default.
+See §6. Three were critical. **The product owner answered all three on 2026-10-01, through
+AskUserQuestion in the session, each choosing the recommended option:** CQ-1 (a), a hand-placed
+follower moves too and is listed as "the work before it moved"; CQ-2 (a), one count with no schema
+change; CQ-3 (a), no back-fill, and M0 counts the gaps. Approval to build is a separate decision.
 
 ---
 
