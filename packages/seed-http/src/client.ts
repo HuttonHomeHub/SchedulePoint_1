@@ -185,6 +185,14 @@ export class SeedClient {
     return this.envelope<T>('PUT', path, body);
   }
 
+  /**
+   * POST a body to a route that answers `204` (archive, restore): there is no `{ data }` to unwrap,
+   * and {@link post} would report the success as a MALFORMED_ENVELOPE.
+   */
+  async postNoContent(path: string, body?: unknown): Promise<void> {
+    await this.raw('POST', path, body);
+  }
+
   /** DELETE; the API's deletes return `204`, so there is nothing to unwrap. */
   async del(path: string): Promise<void> {
     await this.raw('DELETE', path);

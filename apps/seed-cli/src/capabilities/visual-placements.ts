@@ -10,6 +10,13 @@ import { activity, calendar, capabilityPlan, DAY, link } from './builders.js';
  * depends on a Saturday and Sunday being non-working, so it is stated rather than assumed.
  */
 const PLACEMENT_CAL = calendar('VP_CAL', 'Visual placement five-day week', [1, 2, 3, 4, 5]);
+// Its own key and name: a PROJECT calendar's name is unique within its project, so the two plans
+// that follow could not both be seeded into one project while sharing PLACEMENT_CAL (#428).
+const PLACEMENT_EARLY_CAL = calendar(
+  'VPE_CAL',
+  'Placement on EARLY five-day week',
+  [1, 2, 3, 4, 5],
+);
 
 /**
  * **Visual placement** (ADR-0033; the one-planning-surface epic, M-B-T3).
@@ -119,8 +126,8 @@ export function placementOnEarlyPlan(): SeedSpec {
   return capabilityPlan({
     seedName: 'capability-placement-on-early',
     name: 'A placement left behind on an Early plan',
-    defaultCalendarKey: PLACEMENT_CAL.key,
-    calendars: [PLACEMENT_CAL],
+    defaultCalendarKey: PLACEMENT_EARLY_CAL.key,
+    calendars: [PLACEMENT_EARLY_CAL],
     description:
       'PE_PLACED carries a visual_start of 16 Mar on a plan whose stored scheduling_mode is ' +
       'EARLY — a placement written once and left behind. Before the one-planning-surface collapse ' +

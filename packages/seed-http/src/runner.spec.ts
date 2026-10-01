@@ -104,6 +104,47 @@ describe('seedPlan', () => {
     expect(released).toBeGreaterThan(acquired);
   });
 
+  it('archives a resource through the 204 route without recording a finding (#428)', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      if (method === 'GET') return Promise.resolve(json(200, { data: [] }));
+      // The real archive route answers 204 with no body at all.
+      if (url.endsWith('/archive')) {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          headers: { getSetCookie: () => [] },
+          text: () => Promise.resolve(''),
+        } as unknown as Response);
+      }
+      return Promise.resolve(json(method === 'POST' ? 201 : 200, { data: { id: 'id-1' } }));
+    }) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    const result = await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({
+        resources: [
+          {
+            key: 'R_OLD',
+            name: 'Retired hoist',
+            code: 'R_OLD',
+            kind: 'EQUIPMENT',
+            calendarKey: null,
+            maxUnitsPerHour: null,
+            costPerUnit: null,
+            parentKey: null,
+            archived: true,
+          },
+        ],
+      }),
+    );
+
+    expect(callsOf(fetchMock).some((c) => c.url.endsWith('/archive'))).toBe(true);
+    expect(result.findings).toEqual([]);
+  });
+
   it('releases the pen even when a structural write fails', async () => {
     let calls = 0;
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
