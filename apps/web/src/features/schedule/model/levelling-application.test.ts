@@ -12,7 +12,9 @@ import {
   applyLevellingLines,
   applyLevellingSummary,
   applyLevellingTooMany,
+  followingLinksText,
   levellingApplicationSnapshots,
+  levellingReasonText,
 } from './levelling-application';
 
 function row(id: string, over: Partial<LevellingApplicationRow> = {}): LevellingApplicationRow {
@@ -37,6 +39,7 @@ function item(id: string, over: Partial<LevellingApplicationItem> = {}): Levelli
     targetStart: '2026-03-09',
     wasPlaced: false,
     roundedToNextDay: false,
+    reason: 'RESOURCE',
     ...over,
   };
 }
@@ -47,6 +50,7 @@ function application(over: Partial<LevellingApplication> = {}): LevellingApplica
     rows: [row('a')],
     items: [item('a')],
     leftToLogic: [],
+    followingLinks: [],
     conflictingPlaced: [],
     laterThanBoundIntroduced: 0,
     projectFinishBefore: '2026-04-01',
@@ -162,6 +166,23 @@ describe('applyLevellingLines', () => {
     );
   });
 
+  it('says how many activities will follow their links, and is silent when none do', () => {
+    expect(byKey(application()).following).toBeUndefined();
+    expect(byKey(application({ followingLinks: [{ id: 's', name: 'S' }] })).following).toBe(
+      '1 other activity will move with the work before it; no date is set for it.',
+    );
+    expect(
+      byKey(
+        application({
+          followingLinks: [
+            { id: 's', name: 'S' },
+            { id: 't', name: 'T' },
+          ],
+        }),
+      ).following,
+    ).toBe('2 other activities will move with the work before them; no dates are set for them.');
+  });
+
   it('leaves the bars left to logic and the hand-placed conflicts to their sections', () => {
     const keys = applyLevellingLines(
       application({
@@ -213,9 +234,53 @@ describe('applyLevellingLines order and applyLevellingSummary', () => {
     expect(keys.slice(0, 3)).toEqual(['finish', 'remaining', 'moves']);
   });
 
+  it('puts the followers straight after the moves, before the deadline warning', () => {
+    const keys = applyLevellingLines(
+      application({
+        followingLinks: [{ id: 's', name: 'S' }],
+        items: [item('a', { wasPlaced: true, beforeVisualStart: '2026-03-04' })],
+        laterThanBoundIntroduced: 1,
+      }),
+    ).map((l) => l.key);
+    expect(keys).toEqual([
+      'finish',
+      'remaining',
+      'moves',
+      'hand-placed',
+      'following',
+      'later-than-bound',
+    ]);
+  });
+
+  it('speaks the followers right after the moves and before the finish', () => {
+    expect(
+      applyLevellingSummary(
+        applyLevellingLines(application({ followingLinks: [{ id: 's', name: 'S' }] })),
+      ),
+    ).toBe(
+      '1 activity will move to its levelled date. 1 other activity will move with the work before it; no date is set for it. The plan finish moves from 01 Apr 2026 to 08 Apr 2026. Resource levelling will have nothing left to move.',
+    );
+  });
+
   it('announces what moves, then the finish, then what remains', () => {
     expect(applyLevellingSummary(applyLevellingLines(application()))).toBe(
       '1 activity will move to its levelled date. The plan finish moves from 01 Apr 2026 to 08 Apr 2026. Resource levelling will have nothing left to move.',
     );
+  });
+});
+
+describe('followingLinksText and levellingReasonText', () => {
+  it('agrees in number', () => {
+    expect(followingLinksText(1)).toBe(
+      '1 other activity will move with the work before it; no date is set for it.',
+    );
+    expect(followingLinksText(3)).toBe(
+      '3 other activities will move with the work before them; no dates are set for them.',
+    );
+  });
+
+  it('says the reason in words', () => {
+    expect(levellingReasonText('RESOURCE')).toBe('A resource delays it');
+    expect(levellingReasonText('LINKS')).toBe('The work before it moved');
   });
 });

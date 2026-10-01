@@ -191,3 +191,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0165](0165-a-long-table-renders-the-rows-in-view.md)                                           | A long table renders the rows in view                                             | Accepted           |
 | [0166](0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md)                        | Resource load and levelling start where the bar is drawn                          | Accepted           |
 | [0167](0167-applying-levelling-is-a-placement-the-planner-makes.md)                             | Applying levelling is a placement the planner makes                               | Accepted           |
+| [0168](0168-levelling-follows-the-links.md)                                                     | Levelling follows the links                                                       | Accepted           |

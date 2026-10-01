@@ -230,6 +230,66 @@ export function levellingPlacedPlan(): SeedSpec {
 }
 
 /**
+ * **Levelling follows the links** (`docs/specs/logic-aware-levelling/`): a lift that levelling delays
+ * pushes the work behind it, and **Apply levelled dates…** treats each kind of follower differently.
+ * Two lifts share one crane (CL2 waits, so it is pushed from Mon 2 Mar to Thu 5 Mar and finishes
+ * Mon 9 Mar), and three activities follow CL2:
+ *
+ * - CL3 holds no resource and follows by FS. It is pushed to Tue 10 Mar (finishing Wed 11 Mar) and
+ *   gets a ghost, but the
+ *   apply writes **no row** for it: it is listed under "Will move with their links".
+ * - CL5 follows by SS with a one-day lag and holds a second capped resource that CL4 occupies until
+ *   Fri 6 Mar, so its own resource delays it to Mon 9 Mar, past the knock-on (Fri 6 Mar). It gets a row.
+ * - CL6 follows by FS and is **placed by hand** on Fri 6 Mar. The work before it moves, so the
+ *   placement is now too early: it is listed as moving, "the work before it moved", to Tue 10 Mar.
+ *
+ * The calendar is stated at full days, so every date is a whole working day and no part-day rounding
+ * enters the exhibit.
+ */
+export function levellingChainPlan(): SeedSpec {
+  return capabilityPlan({
+    seedName: 'capability-levelling-chain',
+    name: 'Resources: levelling pushes the work behind a delayed lift',
+    description:
+      'CL1 and CL2 want the single crane together; CL2 waits and levels to Thu 5 - Mon 9 Mar. CL3 ' +
+      '(no resource, finish-to-start after CL2) is pushed to 10 - 11 Mar and has a ghost, but Apply ' +
+      'levelled dates writes no row for it: it is listed as following the bars before it. CL5 ' +
+      '(start-to-start, one day lag) also needs the pump that CL4 holds until Fri 6 Mar, so its own ' +
+      'resource delays it to 9 Mar, past the knock-on, and it gets a row. CL6 is placed by hand on ' +
+      'Fri 6 Mar, which is now too early, so it is listed as moving to 10 Mar because the work ' +
+      "before it moved. The levelled finish is CL3's, 11 Mar, not CL2's 9 Mar.",
+    options: { levelResources: true, levelWithinFloatOnly: false },
+    defaultCalendarKey: 'LVC_CAL',
+    // Its own PROJECT calendar: the name is unique within a project, so it must not share the other
+    // levelling plans' (#428).
+    calendars: [calendar('LVC_CAL', 'Levelling chain five-day week', [1, 2, 3, 4, 5])],
+    resources: [
+      resource('LC_CRANE', 'Chain crane', { kind: 'EQUIPMENT', maxUnitsPerHour: 1 }),
+      resource('LC_PUMP', 'Chain pump', { kind: 'EQUIPMENT', maxUnitsPerHour: 1 }),
+    ],
+    activities: [
+      activity('CL1', { name: 'Lift A', durationMinutes: 3 * DAY, levelingPriority: 1 }),
+      activity('CL2', { name: 'Lift B', durationMinutes: 3 * DAY, levelingPriority: 2 }),
+      activity('CL3', { name: 'Pour slab', durationMinutes: 2 * DAY }),
+      activity('CL4', { name: 'Pump test', durationMinutes: 5 * DAY, levelingPriority: 1 }),
+      activity('CL5', { name: 'Pump fit-out', durationMinutes: 2 * DAY, levelingPriority: 2 }),
+      activity('CL6', { name: 'Snag survey', durationMinutes: DAY, visualStart: '2026-03-06' }),
+    ],
+    dependencies: [
+      link('CL2', 'CL3'),
+      link('CL2', 'CL5', { type: 'SS', lagMinutes: DAY }),
+      link('CL2', 'CL6'),
+    ],
+    assignments: [
+      assignment('CL1', 'LC_CRANE', { budgetedUnits: 24, unitsPerHour: 1, isDriving: true }),
+      assignment('CL2', 'LC_CRANE', { budgetedUnits: 24, unitsPerHour: 1, isDriving: true }),
+      assignment('CL4', 'LC_PUMP', { budgetedUnits: 40, unitsPerHour: 1, isDriving: true }),
+      assignment('CL5', 'LC_PUMP', { budgetedUnits: 16, unitsPerHour: 1, isDriving: true }),
+    ],
+  });
+}
+
+/**
  * **Levelling that frees a resource part-way through a day** (`docs/specs/apply-levelled-dates/`;
  * M0 found no catalogue plan with this shape): a 4-hour lift and a 1-day lift share one crane on an
  * 08:00-16:00 week. The crane is free at 12:00 on Monday, so P2's levelled start is noon, but a

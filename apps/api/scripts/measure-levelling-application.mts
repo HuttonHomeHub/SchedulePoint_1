@@ -88,7 +88,7 @@ function measure(label: string, spec: SeedSpec, capacity: number) {
 
   const recalculate = () => {
     const output = computeSchedule(activities, edges, options);
-    levelSchedule(activities, output, assignments, resources, {
+    levelSchedule(activities, output, edges, assignments, resources, {
       ...levelOptions,
       anchor: 'PLACED',
     });

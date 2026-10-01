@@ -1591,6 +1591,21 @@ controller's 30 / 60 s per handler.
   every participant at its placed start, or its early start when it is unplaced, and a bar it does not
   delay keeps its drawn start (ADR-0166, #413). Levelling never moves a bar; the levelled dates are a
   ghost overlay. The Critical Path Test is the one reader that levels on the network span instead.
+- **Levelling follows the links** (`docs/specs/logic-aware-levelling/`): a follower of a delayed
+  activity is levelled no earlier than its links allow from where the predecessor is levelled. So
+  `leveledStart` / `leveledFinish` / `levelingDelayDays` are non-null where levelling moved the
+  activity **for a resource or because a predecessor moved**: an activity that holds no capped
+  resource, and a milestone, can now carry them. A mandatory-constrained, started, level-of-effort or
+  summary activity is never moved by a link, and an LOE predecessor pushes nothing. Nothing is
+  filled back in behind a re-placed activity. **Existing levelled plans show new ghosts and a later
+  levelled finish at the first recalculation after release.**
+- `leveledProjectFinish` — on `GET …/schedule/summary` and the recalculate response alike — is one
+  definition: the latest of each activity's levelled finish, else its **drawn** finish, over
+  non-level-of-effort, non-summary activities (`placed-finish.ts`). So a hand-placed bar that holds no
+  capped resource counts where it is drawn and the figure is never earlier than `projectFinish`. It is
+  `null` unless at least one activity carries a levelled finish. The summary read took `early_finish`
+  as the fallback and counted every activity until the logic-aware levelling M1, and it ignored the
+  follower knock-on until the engine change above (`docs/TECH_DEBT.md` #427).
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a
@@ -1709,11 +1724,11 @@ controller's 30 / 60 s per handler.
 - `GET …/schedule/levelling-application` **previews applying the plan's levelled positions as
   placements** (ADR-0167, `docs/specs/apply-levelled-dates/`, M1; `activity:update` — Planner and Org Admin,
   not `schedule:read`, because it exists to feed a write the caller must be able to make and it runs
-  the engine up to **three** times). **Read-only: no lock, no pen, no write, no audit event**; the
+  the engine twice as a rule, three times when it has to drop a candidate). **Read-only: no lock, no pen, no write, no audit event**; the
   write is `PATCH …/activities/placements`, whose body is `{ placements: [...] }`: send `data.rows`
   as the `placements` array, and do not send when `rows` is empty (that route takes 1 to 2,000). It
-  derives what dragging each levelled bar onto its ghost would write, at once, and the consequences of writing it. `rows`
-  are that route's exact row shape (`id`, `version`, `constraintType`, `constraintDate`,
+  derives what dragging each levelled bar onto its ghost would write, at once, and the consequences
+  of writing it. `rows` are that route's exact row shape (`id`, `version`, `constraintType`, `constraintDate`,
   `visualStart`, `laneIndex: null`): **the stored constraint is carried verbatim**, because a row
   is a complete placement and the batch would otherwise clear it, and `version` is the one the
   preview solved, so a later change fails the write with `409` and nothing moves. `visualStart` is
@@ -1722,16 +1737,25 @@ controller's 30 / 60 s per handler.
   **A target the plan's links refuse is not written** — the engine is asked, this route holds no
   rule about links — and is reported in `leftToLogic`, or in `conflictingPlaced` when the bar
   carries a placement of its own (also named there: a placed bar a written row pushes past its own
-  placement). **One press is one step:** `remainingAfterApply` is how many bars levelling would
-  still move afterwards, and is reported, not chased. A plan that does not level returns empty
+  placement). **A bar that moved only because the work before it moved gets no row** when it has no
+  placement of its own: it follows its links once the rows are written, so a row would pin it to a
+  date. It is named in `followingLinks` instead (an additive field; not a conflict, and empty on a
+  plan without chains). A **hand-placed** one does get a row, because its own placement is what the
+  knock-on made too early, and `items[].reason` says why each row is written: `RESOURCE` (a resource
+  delays it, possibly as well as the work before it), or `LINKS` ("the work before it moved").
+  **`rows.length` therefore need not equal the number of bars levelling moved**: followers move
+  without rows. `leftToLogic` and `conflictingPlaced` are expected to stay near empty.
+  **One press is one step:** `remainingAfterApply` is how many bars levelling would still move
+  afterwards, and is reported, not chased. A plan that does not level returns empty
   arrays. `projectFinishBefore`/`After` are the **placed** finish (#404) from a real solve of each
   state. `computedFrom.scheduleComputedAt` lets a client refuse a preview older than the schedule it
   is showing. The array is not capped (the batch route takes 2,000). The response carries no cost
   field, so it does not vary by `cost:read`. Own throttle, **10/60 s**.
-  - **Why 10:** a judgement, not a measurement. The engine-only figure in
-    `docs/specs/apply-levelled-dates/m0-measurement.md` ("M1 — what the preview costs": about three
-    solves, p95 ~0.78 s at 2,000 activities) gives 15 by the M6 formula, less a third for the graph
-    load that figure leaves out. No whole-request figure has been taken.
+  - **Why 10:** a judgement, not a measurement. The engine-only figure after logic-aware levelling M2
+    (`docs/specs/logic-aware-levelling/m0-measurement.md`, "M2 measurement record": two solves, p95
+    ~0.73 s at capacity 8 and ~0.79 s at capacity 2, at 2,000 activities; a third solve when a
+    candidate is dropped) gives 15 by the M6 formula, less a third for the graph load that figure
+    leaves out and for the dropped-candidate case. No whole-request figure has been taken.
   - **Status codes:** `200`; `403` without `activity:update`; `404` for another organisation's plan,
     a deleted one or a foreign one; `422 PLAN_START_REQUIRED` for a plan with no start date, and the
     recalculation's `422`s for an unreachable calendar; `429` past the throttle.

@@ -19,12 +19,21 @@ import {
  * spec §4.6): the pure derivation of the `visualStart` rows that would put every levelled bar where
  * the resource actually frees up — what dragging each bar onto its ghost would write, done at once.
  *
- * It **writes nothing and holds no rule about links.** Levelling reads no edges (A5), so its ghosts can
- * start before a delayed predecessor finishes; rather than re-implementing logic here, the function
- * asks the engine. It solves a copy of the plan with every target written, and any target Pass 2
- * reports `EARLIER_THAN_LOGIC` is left out of the rows. That is safe in one pass because a conflicted
- * placement passes on its logic-earliest (`compute.ts`, `prop`), exactly what leaving it alone passes
- * on, so no other activity's result depends on whether it was dropped.
+ * It **writes nothing and holds no rule about links.** Levelling now pushes a follower no earlier than
+ * its links allow (`docs/specs/logic-aware-levelling/`), but a ghost can still start before a link
+ * allows (a rounded predecessor, a hand placement), so rather than re-implementing logic here the
+ * function asks the engine. It solves a copy of the plan with every target written, and any target
+ * Pass 2 reports `EARLIER_THAN_LOGIC` is left out of the rows. That is safe in one pass because a
+ * conflicted placement passes on its logic-earliest (`compute.ts`, `prop`), exactly what leaving it
+ * alone passes on, so no other activity's result depends on whether it was dropped.
+ *
+ * ## Who gets a row
+ *
+ * A bar levelling moved gets a row, **except an unplaced one that moved only because the work before it
+ * moved** (`leveledFollowsLinks`): it follows its links, so a placement would pin it to a date and
+ * detach it from them. It is reported in `followingLinks` instead. A **hand-placed** one has a
+ * placement the knock-on has made too early, so it does get a row, with reason `LINKS` (CQ-1 (a)): the
+ * same thing the apply already did for a hand-placed bar a resource delays.
  *
  * ## The target date
  *
@@ -70,6 +79,11 @@ export interface LevellingApplicationItem {
   wasPlaced: boolean;
   /** The levelled instant fell part-way through a day and the target is the next day start. */
   roundedToNextDay: boolean;
+  /**
+   * Why the bar moves: `RESOURCE` (a resource delays it, possibly as well as the work before it) or
+   * `LINKS` (only the work before it moved, and its own placement is now too early).
+   */
+  reason: 'RESOURCE' | 'LINKS';
 }
 
 export interface LevellingApplication {
@@ -80,6 +94,11 @@ export interface LevellingApplication {
   roundedToNextDay: string[];
   /** Candidates dropped because the engine said earlier than logic, that carried no placement. */
   leftToLogic: string[];
+  /**
+   * Unplaced activities that will move only because the bars before them move: they get no row, and
+   * follow their links once the rows are written.
+   */
+  followingLinks: string[];
   /**
    * Hand-placed activities the apply leaves earlier than their logic allows: candidates dropped for
    * that reason, and any placed activity a kept move newly pushes past its own placement. The one
@@ -97,6 +116,25 @@ export interface LevellingApplication {
 
 const MINUTES_PER_DAY = 1440;
 
+/**
+ * How many days `targetDateFor` may step before it gives up: about ten years. Every real calendar answers
+ * in a step or two (a shutdown is one jump), so this is not a limit anything reaches. It exists because
+ * the loops below are unbounded by argument rather than by construction, and a calendar they cannot
+ * satisfy would otherwise hold the request thread for ever, on a route that is not cheap already.
+ */
+const MAX_TARGET_DATE_STEPS = 3660;
+
+/** The next step count, or a clear error once a date search has gone on past any plausible answer. */
+function stepOrThrow(steps: number, levelled: number): number {
+  if (steps >= MAX_TARGET_DATE_STEPS) {
+    throw new Error(
+      `targetDateFor: no working date found within ${MAX_TARGET_DATE_STEPS} steps of ${dateOf(levelled)}; ` +
+        'the calendar does not yield a placement.',
+    );
+  }
+  return steps + 1;
+}
+
 /** The calendar day (`YYYY-MM-DD`) an absolute instant falls on. */
 const dateOf = (abs: number): string => absMinutesToInstant(abs).slice(0, 10);
 
@@ -104,17 +142,41 @@ const dateOf = (abs: number): string => absMinutesToInstant(abs).slice(0, 10);
  * The earliest working date on `cal` whose placement instant is at or after `levelled`, and whether
  * that placement is later than `levelled` (the bar starts part of a day after the resource frees up).
  *
- * Terminates without a bound: every pass moves to a strictly later day, and the placement of a day
- * grows without limit, so some day is at or after `levelled`; a non-working day jumps straight to the
- * next working one, so a long shutdown costs one step, not one per day.
+ * Terminates by argument: every pass moves to a strictly later day, and the placement of a day grows
+ * without limit, so some day is at or after `levelled`; a non-working day jumps straight to the next
+ * working one, so a long shutdown costs one step, not one per day. {@link MAX_TARGET_DATE_STEPS} backs
+ * the argument with a bound and throws a clear error rather than spinning. Exported for its unit test.
  */
-function targetDateFor(
+export function targetDateFor(
   cal: WorkingTimeCalendar,
   type: EngineActivity['type'],
   levelled: number,
 ): { date: string; rounded: boolean } {
+  if (type === 'FINISH_MILESTONE') {
+    // A finish milestone's date means the END of that day (#381), so the placement of day D is the
+    // working minute after D's midnight-to-midnight span: always on a LATER day than D. The loop below
+    // reads "the placement landed on another day" as a non-working day and chases it forever, so a
+    // milestone is dated by walking back to the earliest day whose end is at or after the instant.
+    const placementOf = (date: string): number => startDateInstant(cal, date, type);
+    const shifted = (date: string, days: number): string =>
+      dateOf(instantToAbsMinutes(date) + days * MINUTES_PER_DAY);
+    let date = dateOf(levelled);
+    let steps = 0;
+    while (placementOf(shifted(date, -1)) >= levelled) {
+      date = shifted(date, -1);
+      steps = stepOrThrow(steps, levelled);
+    }
+    for (;;) {
+      const placed = placementOf(date);
+      if (placed >= levelled) return { date, rounded: placed > levelled };
+      date = shifted(date, 1);
+      steps = stepOrThrow(steps, levelled);
+    }
+  }
   let midnight = instantToAbsMinutes(dateOf(levelled));
+  let steps = 0;
   for (;;) {
+    steps = stepOrThrow(steps, levelled);
     const date = dateOf(midnight);
     const placed = startDateInstant(cal, date, type);
     const placedDate = dateOf(placed);
@@ -139,12 +201,19 @@ function solve(
     dataDate,
     calendar: planCalendar,
   });
-  const leveled = levelSchedule(activities, output, input.assignments, input.resources, {
-    levelWithinFloatOnly,
-    dataDate,
-    planCalendar,
-    anchor: 'PLACED',
-  });
+  const leveled = levelSchedule(
+    activities,
+    output,
+    input.edges,
+    input.assignments,
+    input.resources,
+    {
+      levelWithinFloatOnly,
+      dataDate,
+      planCalendar,
+      anchor: 'PLACED',
+    },
+  );
   return {
     results: leveled.results,
     leveledActivityCount: leveled.summary.leveledActivityCount ?? 0,
@@ -168,11 +237,20 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
     result: EngineResult;
     target: string;
     rounded: boolean;
+    reason: 'RESOURCE' | 'LINKS';
   }
   const candidates: Candidate[] = [];
+  const followCandidates: string[] = [];
   for (const result of before.results) {
     const activity = activityById.get(result.activityId);
     if (!activity || (result.levelingDelay ?? 0) <= 0 || result.leveledStartInstant == null) {
+      continue;
+    }
+    // A knock-on only (`leveledFollowsLinks`): no resource keeps it from where its links put it, so an
+    // unplaced bar follows them and a row would only pin it. A placed one needs the row (CQ-1 (a)).
+    const knockOn = result.leveledFollowsLinks === true;
+    if (knockOn && activity.visualStart == null) {
+      followCandidates.push(result.activityId);
       continue;
     }
     const { date, rounded } = targetDateFor(
@@ -180,7 +258,13 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       activity.type,
       result.leveledStartInstant,
     );
-    candidates.push({ activity, result, target: date, rounded });
+    candidates.push({
+      activity,
+      result,
+      target: date,
+      rounded,
+      reason: knockOn ? 'LINKS' : 'RESOURCE',
+    });
   }
 
   if (candidates.length === 0) {
@@ -189,6 +273,7 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       items: [],
       roundedToNextDay: [],
       leftToLogic: [],
+      followingLinks: followCandidates.sort(),
       conflictingPlaced: [],
       laterThanBoundIntroduced: 0,
       remainingAfterApply: before.leveledActivityCount,
@@ -230,6 +315,16 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       beforeById.get(c.activity.id)?.visualConflictReason !== 'LATER_THAN_BOUND',
   ).length;
 
+  // Levelling named every unplaced knock-on before the left-to-logic filter ran, so a follower whose
+  // only moving source was dropped above is still on that list and will not move. What the planner is
+  // promised is "moves with its links once the rows are written", and the only thing that answers
+  // that is the solve the apply produces: keep a follower exactly when it is drawn on a different day
+  // there than it is today. Read off `after`, not predicted from which sources survived, so a follower
+  // that still moves through a different route (a second moving predecessor) stays named.
+  const followingLinks = followCandidates.filter(
+    (id) => afterById.get(id)?.visualEffectiveStart !== beforeById.get(id)?.visualEffectiveStart,
+  );
+
   // Step 7: the rows, earliest target first, then by id so the order never depends on the input's.
   const ordered = [...kept].sort(
     (a, b) =>
@@ -245,9 +340,11 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       targetStart: c.target,
       wasPlaced: c.activity.visualStart != null,
       roundedToNextDay: c.rounded,
+      reason: c.reason,
     })),
     roundedToNextDay: ordered.filter((c) => c.rounded).map((c) => c.activity.id),
     leftToLogic: dropped.filter((c) => c.activity.visualStart == null).map((c) => c.activity.id),
+    followingLinks: followingLinks.sort(),
     conflictingPlaced: [...conflictingPlaced].sort(),
     laterThanBoundIntroduced,
     remainingAfterApply: after.leveledActivityCount,

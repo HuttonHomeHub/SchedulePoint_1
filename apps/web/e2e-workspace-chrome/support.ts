@@ -299,6 +299,10 @@ export interface PlacementRow {
   earlyStart: string | null;
   /** The engine's own verdict on the placement — read rather than inferred from the two dates. */
   visualConflict: boolean;
+  /** The levelling overlay (ADR-0041): null until levelled; a follower of a delayed bar carries it too. */
+  leveledStart: string | null;
+  leveledFinish: string | null;
+  levelingDelayDays: number | null;
 }
 
 /** Every activity in the open plan, with its placement fields. Paged; every response checked. */

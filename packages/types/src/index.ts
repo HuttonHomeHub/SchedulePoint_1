@@ -711,11 +711,17 @@ export interface ActivitySummary {
   // the pure early/late/float/critical are NOT recomputed on the leveled dates (network float stays
   // authoritative). Response-echo only — NEVER accepted from a create/update DTO. All null/false until
   // the plan opts in AND is first levelled.
-  /** Engine-owned (ADR-0041 §3): the delayed start the levelling pass placed this activity at, or null. */
+  /**
+   * Engine-owned (ADR-0041 §3): the start the levelling pass placed this activity at, or null. Set for a
+   * bar a resource delays and for one that moved only because a predecessor did.
+   */
   leveledStart: string | null;
-  /** Engine-owned (ADR-0041 §3): the delayed finish the levelling pass placed this activity at, or null. */
+  /** Engine-owned (ADR-0041 §3): the finish the levelling pass placed this activity at, or null. */
   leveledFinish: string | null;
-  /** Engine-owned (ADR-0041 §3): the applied delay in whole working days (leveledStart − earlyStart), or null. */
+  /**
+   * Engine-owned (ADR-0041 §3): the applied delay in whole working days, measured from where the bar is
+   * DRAWN to `leveledStart` (not from `earlyStart`), or null. Also set when only a predecessor moved.
+   */
   levelingDelayDays: number | null;
   /**
    * Engine-owned produce-and-flag (ADR-0041 §6, Q1): true when serialising pushed this activity PAST a
@@ -986,8 +992,9 @@ export interface PlanScheduleSummary {
   selfOverAllocatedCount: number;
   /**
    * The inclusive leveled project finish (`YYYY-MM-DD`) — the latest finish under levelling — or **null**
-   * when the plan does not level (ADR-0041). Independent of `projectFinish`, which stays the pure-network
-   * finish (the network layer is never recomputed, Q2).
+   * when the plan does not level (ADR-0041). Levelling only moves a bar later, so it is never earlier than
+   * `projectFinish` (the placed finish; the network layer is never recomputed, Q2). Level-of-effort and
+   * summary activities never define it.
    */
   leveledProjectFinish: string | null;
   /**
@@ -1124,6 +1131,12 @@ export interface LevellingApplicationItem {
   wasPlaced: boolean;
   /** The resource frees up part-way through a day, so the bar lands on the next day start. */
   roundedToNextDay: boolean;
+  /**
+   * Why the bar moves. `RESOURCE`: a resource delays it, possibly as well as the work before it. `LINKS`:
+   * only the work before it moved, and its hand placement is now too early, so it moves with it ("the
+   * work before it moved").
+   */
+  reason: 'RESOURCE' | 'LINKS';
 }
 
 /** An activity named in the preview without being moved by it. */
@@ -1144,6 +1157,11 @@ export interface LevellingApplication {
   items: LevellingApplicationItem[];
   /** Levelling moved these, but their new position would be earlier than their links allow; logic carries them. */
   leftToLogic: LevellingApplicationNamedActivity[];
+  /**
+   * Activities with no placement of their own that will move only because the bars before them move:
+   * they get no row and follow their links once the rows are written.
+   */
+  followingLinks: LevellingApplicationNamedActivity[];
   /** Hand-placed activities the apply leaves earlier than their logic allows. */
   conflictingPlaced: LevellingApplicationNamedActivity[];
   /** Rows whose new position breaches a start or finish bound they did not breach before. */

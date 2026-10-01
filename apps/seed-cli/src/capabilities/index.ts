@@ -7,6 +7,7 @@ import { logicFfSfPlan, logicFsSsPlan } from './logic.js';
 import { floatPlan, networkShapePlan } from './network.js';
 import { progressOverridePlan, progressPlan, retainedLogicPlan } from './progress.js';
 import {
+  levellingChainPlan,
   levellingPartDayPlan,
   levellingPlacedPlan,
   levellingPlan,
@@ -70,6 +71,7 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'resources', label: 'Levelling', build: levellingPlan },
   { key: 'resources', label: 'Levelling from placed bars', build: levellingPlacedPlan },
   { key: 'resources', label: 'Levelling a part-day start', build: levellingPartDayPlan },
+  { key: 'resources', label: 'Levelling follows the links', build: levellingChainPlan },
   { key: 'cost', label: 'Cost, accrual and earned value', build: costPlan },
   { key: 'external', label: 'External inter-project dates', build: externalPlan },
   { key: 'external', label: 'External dates ignored', build: externalIgnoredPlan },

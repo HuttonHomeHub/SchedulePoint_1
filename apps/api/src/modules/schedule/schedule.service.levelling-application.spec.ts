@@ -208,15 +208,53 @@ describe('ScheduleService.getLevellingApplication', () => {
         targetStart: '2026-01-03',
         wasPlaced: false,
         roundedToNextDay: false,
+        reason: 'RESOURCE',
       },
     ]);
     expect(result.remainingAfterApply).toBe(0);
     expect(result.leftToLogic).toEqual([]);
+    expect(result.followingLinks).toEqual([]);
     expect(result.conflictingPlaced).toEqual([]);
     expect(result.computedFrom.scheduleComputedAt).toBe('2026-01-01T09:30:00.000Z');
     // The placed finish before and after comes from a real solve of each: B moves from days 1-2 to 3-4.
     expect(result.projectFinishBefore).toBe('2026-01-02');
     expect(result.projectFinishAfter).toBe('2026-01-04');
+  });
+
+  it('names a follower that will follow its links, and stamps the hand-placed one with a LINKS row', async () => {
+    // B is delayed behind A by the crane. C (no resource) follows B and is unplaced, so it gets no row
+    // and is named in `followingLinks`; D follows B too and is hand-placed, so it is a row with the
+    // reason LINKS (`docs/specs/logic-aware-levelling/` CQ-1 (a)).
+    schedule.loadActivities.mockResolvedValue([
+      activityRow('A', 2, { levelingPriority: 1 }),
+      activityRow('B', 2, { levelingPriority: 2 }),
+      activityRow('C', 1),
+      activityRow('D', 1, { visualStart: new Date('2026-01-03T00:00:00.000Z') }),
+    ]);
+    schedule.loadEdges.mockResolvedValue(
+      ['C', 'D'].map((successorId) => ({
+        id: `B-${successorId}`,
+        predecessorId: 'B',
+        successorId,
+        type: 'FS',
+        lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+      })),
+    );
+    schedule.loadPlacementIdentities.mockResolvedValue([
+      { id: 'A', code: null, name: 'Lift one', version: 1 },
+      { id: 'B', code: null, name: 'Lift two', version: 1 },
+      { id: 'C', code: null, name: 'Fit-out', version: 1 },
+      { id: 'D', code: null, name: 'Handover', version: 1 },
+    ]);
+    const result = await service.getLevellingApplication(principalWith(CAN), 'acme', PLAN_ID);
+    expect(result.followingLinks).toEqual([{ id: 'C', name: 'Fit-out' }]);
+    expect(result.items.map((i) => [i.id, i.reason])).toEqual([
+      ['B', 'RESOURCE'],
+      ['D', 'LINKS'],
+    ]);
+    expect(result.leftToLogic).toEqual([]);
+    expect(result.conflictingPlaced).toEqual([]);
   });
 
   it('writes nothing: no lock, no engine-owned write, no freshness stamp', async () => {

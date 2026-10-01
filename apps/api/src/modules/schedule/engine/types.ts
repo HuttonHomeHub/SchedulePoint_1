@@ -277,6 +277,17 @@ export interface EngineResult {
    */
   placedStartOffset: number;
   placedFinishOffset: number;
+  /**
+   * What this activity PASSES ON to its successors in the effective-Visual pass (Pass 2): the instants
+   * its successors' links are measured from, as absolute instants on the engine's own axis. A placed
+   * activity passes on `max(placement, logic-earliest)`, never a conflicted placement; one frozen by
+   * actuals passes on Pass 1's span. In memory only — never persisted and never on a response — and
+   * required like the pair above, so {@link levelSchedule} cannot fall back to re-deriving Pass 2's rule
+   * (`docs/specs/logic-aware-levelling/` §4.6). Not read under the `NETWORK` anchor, which has no
+   * placements and reads the early span.
+   */
+  passOnStartInstant: number;
+  passOnFinishInstant: number;
   lateStartOffset: number;
   lateFinishOffset: number;
   totalFloat: number;
@@ -405,6 +416,13 @@ export interface EngineResult {
   levelingWindowExceeded?: boolean;
   /** Produce-and-flag (ADR-0041 §2): this activity's own single-activity demand exceeds a capacity. */
   selfOverAllocated?: boolean;
+  /**
+   * In memory only (`docs/specs/logic-aware-levelling/` §4.6). `true` when the "follow the links" pass
+   * set this activity's levelled position and it equals where its links alone put it, so no resource
+   * delay lies beyond the knock-on. `planLevellingApplication` reads it: such a bar needs no placement
+   * of its own, because it follows the bars before it. Absent where that pass did not move the activity.
+   */
+  leveledFollowsLinks?: boolean;
 }
 
 /** Plan-level roll-up of an engine run. */

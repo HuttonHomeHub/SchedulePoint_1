@@ -573,14 +573,20 @@ export class ScheduleService {
         // `levelIfEnabled` (`docs/TECH_DEBT.md` #248) is the ONE rule for this — the DCMA metric-12
         // what-if runs the identical call over its own control and perturbed passes, so the two can
         // never again disagree about what "levelled" means.
-        const { results, summary } = levelIfEnabled(graph.activities, output, graph.leveling, {
-          levelWithinFloatOnly: plan.levelWithinFloatOnly,
-          dataDate,
-          planCalendar: graph.options.calendar,
-          // Levelling reads the bars as drawn (#413): a clash the planner separated by hand is not
-          // reported, one made by hand is.
-          anchor: 'PLACED',
-        });
+        const { results, summary } = levelIfEnabled(
+          graph.activities,
+          output,
+          graph.edges,
+          graph.leveling,
+          {
+            levelWithinFloatOnly: plan.levelWithinFloatOnly,
+            dataDate,
+            planCalendar: graph.options.calendar,
+            // Levelling reads the bars as drawn (#413): a clash the planner separated by hand is not
+            // reported, one made by hand is.
+            anchor: 'PLACED',
+          },
+        );
         // Float and drift are persisted IN DAYS by this write, so they take the same factor the
         // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
         // float" for one span — not a smaller change than converting them, an incoherent one.
@@ -1255,6 +1261,7 @@ export class ScheduleService {
         targetStart: item.targetStart,
         wasPlaced: item.wasPlaced,
         roundedToNextDay: item.roundedToNextDay,
+        reason: item.reason,
       });
     }
 
@@ -1267,6 +1274,7 @@ export class ScheduleService {
         rowCount: rows.length,
         roundedToNextDayCount: application.roundedToNextDay.length,
         leftToLogicCount: application.leftToLogic.length,
+        followingLinksCount: application.followingLinks.length,
         conflictingPlacedCount: application.conflictingPlaced.length,
         remainingAfterApply: application.remainingAfterApply,
         durationMs: Date.now() - startedAt,
@@ -1279,6 +1287,7 @@ export class ScheduleService {
       rows,
       items,
       leftToLogic: application.leftToLogic.map(named),
+      followingLinks: application.followingLinks.map(named),
       conflictingPlaced: application.conflictingPlaced.map(named),
       laterThanBoundIntroduced: application.laterThanBoundIntroduced,
       projectFinishBefore: placedProjectFinishOf(application.before),

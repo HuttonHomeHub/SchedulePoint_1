@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1414 web
 > source files with 46 Playwright suites beside the base journey, and
-> 167 ADRs.
+> 168 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -435,13 +435,13 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
 - **ADR-0033** _(Accepted; amended by ADR-0148 — the two scheduling modes are gone)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
 - **ADR-0034** _(Accepted)_ — Engine conformance & validation methodology → [`0034-engine-conformance-methodology.md`](docs/adr/0034-engine-conformance-methodology.md)
-- **ADR-0035** _(Proposed; §28 and §31 amended by ADR-0166)_ — SchedulePoint CPM semantics (the golden contract) → [`0035-schedulepoint-cpm-semantics.md`](docs/adr/0035-schedulepoint-cpm-semantics.md)
+- **ADR-0035** _(Proposed; §28 and §31 amended by ADR-0166, §28 again by ADR-0168)_ — SchedulePoint CPM semantics (the golden contract) → [`0035-schedulepoint-cpm-semantics.md`](docs/adr/0035-schedulepoint-cpm-semantics.md)
 - **ADR-0036** _(Accepted)_ — Hour/shift-granular calendars & durations (engine rework) → [`0036-hour-granular-calendars-and-durations.md`](docs/adr/0036-hour-granular-calendars-and-durations.md)
 - **ADR-0037** _(Accepted)_ — Per-activity calendars & the engine's absolute-instant axis → [`0037-per-activity-calendars-and-instant-axis.md`](docs/adr/0037-per-activity-calendars-and-instant-axis.md)
 - **ADR-0038** _(Accepted)_ — WBS activity hierarchy — adjacency-list parent tree & the WBS_SUMMARY type → [`0038-wbs-activity-hierarchy.md`](docs/adr/0038-wbs-activity-hierarchy.md)
 - **ADR-0039** _(Accepted)_ — Resource model & resource-calendar scheduling → [`0039-resource-model-and-resource-calendar-scheduling.md`](docs/adr/0039-resource-model-and-resource-calendar-scheduling.md)
 - **ADR-0040** _(Accepted)_ — Duration types & the resource-units model → [`0040-duration-types-and-resource-units.md`](docs/adr/0040-duration-types-and-resource-units.md)
-- **ADR-0041** _(Accepted; amended by ADR-0071 and ADR-0166)_ — Resource levelling — the opt-in resource-constrained pass → [`0041-resource-levelling.md`](docs/adr/0041-resource-levelling.md)
+- **ADR-0041** _(Accepted; amended by ADR-0071, ADR-0166 and ADR-0168)_ — Resource levelling — the opt-in resource-constrained pass → [`0041-resource-levelling.md`](docs/adr/0041-resource-levelling.md)
 - **ADR-0042** _(Accepted)_ — Percent-complete types & Earned Value — the cost/EV read-model → [`0042-percent-complete-types-and-earned-value.md`](docs/adr/0042-percent-complete-types-and-earned-value.md)
 - **ADR-0043** _(Accepted)_ — Inter-project external dates (activity-level external early-start / late-finish + ignore-external) → [`0043-inter-project-external-dates.md`](docs/adr/0043-inter-project-external-dates.md)
 - **ADR-0044** _(Proposed; amended by ADR-0166)_ — Resource loading curves, cost accrual & weighted activity steps (the final resource-side rung) → [`0044-resource-curves-accrual-steps.md`](docs/adr/0044-resource-curves-accrual-steps.md)
@@ -564,7 +564,8 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0164** _(Accepted)_ — A lint warning is a failure, and a gate has no pass-with-findings outcome → [`0164-a-lint-warning-is-a-failure.md`](docs/adr/0164-a-lint-warning-is-a-failure.md)
 - **ADR-0165** _(Accepted)_ — A long table renders the rows in view → [`0165-a-long-table-renders-the-rows-in-view.md`](docs/adr/0165-a-long-table-renders-the-rows-in-view.md)
 - **ADR-0166** _(Accepted)_ — Resource load and levelling start where the bar is drawn → [`0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md`](docs/adr/0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md)
-- **ADR-0167** _(Accepted)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
+- **ADR-0167** _(Accepted; D1 and D3 amended by ADR-0168)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
+- **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

@@ -1,7 +1,8 @@
 # Implementation Plan: Logic-aware levelling
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-01 (AskUserQuestion in the session). CQ-1 **(a)**
+- **Status:** Accepted — shipped (ADR-0168). Approved by the product owner, 2026-10-01 (AskUserQuestion in the
+  session). CQ-1 **(a)**
   a hand-placed follower moves too; CQ-2 **(a)** one count, no schema change; CQ-3 **(a)** no back-fill,
   M0 counts the gaps.
 - **Owner:** product owner (approval); builder agent (implementation)
@@ -82,7 +83,8 @@ C11) confirmed or withdrawn, and the new tests in place as `it.fails` or capture
     in M2**, unlike `level.parity.spec.ts`.
   - `it.fails` cases, red today and green after M2:
     - the chain golden (spec §4.5, C at 2026-01-11 to 2026-01-12, finish 2026-01-12);
-    - S10's `A6500` and `A7740` assertions;
+    - S10's follower assertions (as corrected in M0: `A6200` follows the delayed `A6100`, and
+      `A6500`/`A7740` gain a levelled position, in `scenarios.levelling-links.spec.ts`);
     - SC-1's "no ghost earlier than its links", over the new corpus;
     - an API e2e asserting recalculation response = `GET …/summary` for `leveledProjectFinish` (red for
       M1 if M0-T1 confirms C7).
@@ -165,7 +167,7 @@ handles hand-placed followers per CQ-1.
 **"Apply levelled dates…"** (ADR-0167 D7).
 **Journey:** `placement-overlays.spec.ts` on `plan:capability-levelling`. Turn on Levelled placement and
 assert **V4 has a ghost** after V3's (C8). Read the strip's Levelled finish (V4's levelled finish). Open
-**Apply levelled dates…** and assert V4 is listed under "Will follow the bars before them" (M3 adds that
+**Apply levelled dates…** and assert V4 is listed under "Will move with their links" (M3 adds that
 list; in M2 the journey asserts V4 is **not** among the rows). Apply, and assert V4 is drawn after V3
 with no placement.
 
@@ -242,8 +244,10 @@ with no placement.
 > **Risks:** after the rows are written, rounding a predecessor to the next day pushes an unplaced
 > follower later than its levelled slot, and it clashes. **Mitigation:** `remainingAfterApply` reports it
 > (it is already solved, not predicted); add a case; SC-2 measures it.
-> **Testing requirements:** P3 and P4 revised **on purpose**: P3 becomes `rows: [P]`,
-> `followingLinks: ['S']`, `leftToLogic: []`, with a comment citing this spec. P4 per CQ-1. New cases: a
+> **Testing requirements:** P3, P4, P9, P11, P12 and P14 revised **on purpose** (M0 measured six, not two:
+> spec C20): P3 becomes `rows: [P]`,
+> `followingLinks: ['S']`, `leftToLogic: []`, with a comment citing this spec. P4 per CQ-1. P12 first
+> decides a milestone follower's row (spec C20). New cases: a
 > follower that is also resource-delayed beyond the knock-on (gets a row); a chain of three (one row).
 > Wrong-implementation runs: write rows for followers (fails "S has no placement after settle"); drop the
 > follower silently (fails `followingLinks`). API e2e: response shape (api-reviewer).
@@ -264,12 +268,34 @@ with no placement.
 
 ---
 
+### Milestone M2.5: Make the hot-resource worst case fit the budget
+
+**Added 2026-10-01 by the product owner's decision** (AskUserQuestion), after M2's SC-5 measurement
+showed the hot-resource worst case (1,910 of 2,000 activities on one resource, capacity 8) at **1.97x**
+p50 against the epic's 1.5x stop (`m0-measurement.md`, "SC-5"). The choice put to the owner was to ship
+with the finding recorded or to speed it up first; they chose **speed it up before shipping**.
+
+**Scope:** a pure optimisation of the engine, no change in any output, no schema, no new surface, so it
+needs no spec (ADR-0105). `level.ts` and a new `level-profile.ts`, plus the calendar's instant conversions
+in `working-time-calendar.ts`, which a profile showed to be the largest cost.
+**Outcome (measured, `m0-measurement.md`, "M2.5"):** hot resource capacity 8 is **1.32x p50 / 1.27x p95**
+(was 1.97x / 1.91x); the pass is 4.7x faster with Pass C and 3.3x without; Pass B and the ordinary scale
+plan are faster, not slower. The stop condition ("cannot reach 1.5x without changing outputs") was **not**
+reached.
+**Evidence it changed nothing:** every existing engine snapshot, golden and conformance test unedited,
+plus three differentials (the profile against the frozen sort-per-call function over random sequences
+with fractional demands; the calendar's arithmetic against the `Date` conversions; a frozen SHA-256 of the
+whole hot-resource and scale-plan output).
+**Dependencies:** M2-T3. M2-T3 and M2-T4 still ship together.
+
+---
+
 ### Milestone M3: Say it on screen
 
 **Outcome:** the dialog names followers; the strip's copy matches CQ-2; the playbook, the catalogue and
 the docs are true.
 **Entry point:** **"Apply levelled dates…"**, and the summary strip.
-**Journey:** `placement-overlays.spec.ts` asserts the "Will follow the bars before them" list contains
+**Journey:** `placement-overlays.spec.ts` asserts the "Will move with their links" list contains
 V4, and that the strip's hint sentence is present.
 
 #### Feature: Copy and lists
@@ -358,7 +384,7 @@ build, CI, changelog, version impact). That includes `pnpm prepush`, `scripts/e2
 | -------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | C10 (corpus unchanged) is false                                                  | low        | high   | M0-T3 runs it before any change; stop if false.                                                                                                            |
 | Pass C leaves many gaps on real plans (quality)                                  | med        | med    | M0-T1 item 5 counts them. CQ-3 is revisited with the number.                                                                                               |
-| Engine cost above 1.5× (SC-5)                                                    | low        | med    | Measured in M2-T3; stop and report.                                                                                                                        |
+| Engine cost above 1.5× (SC-5)                                                    | low        | med    | Measured in M2-T3; stop and report. Exceeded on the hot-resource shape (1.97x), fixed in M2.5 (1.32x).                                                     |
 | Planners see ghosts appear on existing levelled plans after release              | high       | low    | That is the feature. The changeset's first sentence says so; Watchtower means it is live on release (CLAUDE.md §17).                                       |
 | Knock-on part-day pushes make #426 more visible                                  | med        | low    | D-7. #426 is annotated, and its trigger ("the next change to the levelled lens or the summary strip") fires in M3, so it is put to the product owner then. |
 | Metric 12 verdict changes on a levelled plan                                     | low        | low    | C18. A pinned case and an ADR consequence.                                                                                                                 |

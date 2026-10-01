@@ -49,8 +49,14 @@ interface HistogramBody {
  * LV2's reference: the metric-12 row for `seedLevelledPlanWithPlacedCarrier`, recorded against the
  * code before any #413 change (`e83fc56`) by writing the response to a scratch file and pasting it
  * here, with the three random activity ids replaced by their names. The carrier is C, drawn at
- * 2026-01-11 but measured on the NETWORK: the control completion is 2026-01-07 (B levelled behind A,
+ * 2026-01-11 but measured on the NETWORK: the control completion is 2026-01-10 (B levelled behind A,
  * then C after it), not the 2026-01-14 the bar is drawn at. Q2 keeps it that way.
+ *
+ * **Two dates moved when levelling began to follow the links** (`docs/specs/logic-aware-levelling/`
+ * M2): the golden recorded 2026-01-07 and 2027-08-30, which were C's EARLY finishes, because C held no
+ * resource and so had no levelled position behind the delayed B. C is now levelled to start where B's
+ * levelled finish puts it, three days later in both runs. The verdict, the carrier and the 600-day
+ * movement are unchanged, which is what this case is for.
  */
 const CRITICAL_PATH_TEST_PLACED_CARRIER_GOLDEN = {
   id: 'CRITICAL_PATH_TEST',
@@ -69,8 +75,8 @@ const CRITICAL_PATH_TEST_PLACED_CARRIER_GOLDEN = {
     perturbedActivityName: 'B',
     completionActivityId: 'C',
     completionActivityName: 'C',
-    controlCompletionFinish: '2026-01-07',
-    perturbedCompletionFinish: '2027-08-30',
+    controlCompletionFinish: '2026-01-10',
+    perturbedCompletionFinish: '2027-09-02',
   },
   offenderCount: 0,
   offendersTruncated: false,

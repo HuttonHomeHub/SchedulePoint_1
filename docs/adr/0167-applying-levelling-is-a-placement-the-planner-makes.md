@@ -1,12 +1,12 @@
 # ADR-0167: Applying levelling is a placement the planner makes
 
-- **Status:** Accepted
+- **Status:** Accepted; D1 and D3 amended by ADR-0168
 - **Date:** 2026-09-30
 - **Deciders:** James Ewbank (product owner — CQ-1 to CQ-4 answered (a), build approved 2026-09-30),
   with Claude Code
 - **Extends:** ADR-0166 (levelling anchors on the drawn span — this is the "later" command its
   Alternatives named), ADR-0148 D9 (levelled is a lens, never an authority)
-- **Does not amend:** ADR-0041, ADR-0166 or ADR-0148 D9. Levelling still never writes anything by
+- **Does not amend:** ADR-0041, ADR-0166 or ADR-0148 D9. (ADR-0168 later amends D1 and D3 below.) Levelling still never writes anything by
   itself; the planner presses a command, and what is written is a placement.
 - **Spec:** [`docs/specs/apply-levelled-dates/`](../specs/apply-levelled-dates/feature-spec.md)
   (§4.9 is this ADR's outline). Register row: `docs/TECH_DEBT.md` #413 Q1 (c). Follow-ups: #426, #427.
@@ -121,3 +121,26 @@ whole-request figure against a database is still owed.
 - Spec, plan and measurement: [`docs/specs/apply-levelled-dates/`](../specs/apply-levelled-dates/feature-spec.md).
 - ADR-0166, ADR-0148 (D9), ADR-0134, ADR-0041, ADR-0088, ADR-0081, ADR-0133, ADR-0048, ADR-0073.
 - Route: `docs/API.md`, "`GET …/schedule/levelling-application`".
+
+## Amendments
+
+### Amendment (ADR-0168, 2026-10-01) — a follower follows, and the oracle finds nothing to drop
+
+Levelling now moves the followers of a delayed activity (ADR-0168), which is the "logic-aware levelling
+(#427)" the Alternatives above called for. Spec: [`docs/specs/logic-aware-levelling/`](../specs/logic-aware-levelling/feature-spec.md).
+
+- **D1 (a placement, moved like a drag):** unchanged for a bar a resource delays. **An unplaced activity
+  whose only move is the knock-on gets no row**, because a placement would detach it from its links. The
+  preview names it in `followingLinks` and the dialog says it will follow the bars before it. **A
+  hand-placed activity whose only move is the knock-on does get a row**, with `reason: 'LINKS'` (CQ-1 (a)),
+  listed as "the work before it moved"; Undo puts it back. A row's `reason` is `'RESOURCE'` when its own
+  resource delays it. A placed finish milestone gets a `LINKS` row dated on the day it closes.
+- **D3 (a target the links refuse is not written):** unchanged and **kept as the oracle**: the engine
+  still solves a copy and drops what it reports `EARLIER_THAN_LOGIC`. With the knock-on in the overlay it
+  is expected to find nothing, and measured it found nothing: `leftToLogic` 8 and 218 to 0 and
+  `remainingAfterApply` 0 and 236 to 0 on the scale plan at capacity 8 and 2. The preview therefore takes
+  2 solves, not 3, when nothing is dropped. A non-empty `leftToLogic` is investigated, not accepted.
+- **Cost:** the "What it costs" figures above are the pre-ADR-0168 ones. After it the preview is p50
+  670.8 ms and p95 730.9 ms at capacity 8 (was 893.9 and 982.0) and p50 740.4 ms and p95 793.5 ms at
+  capacity 2 (was 948.7 and 1,034.1), measured in `m0-measurement.md`, "M2 measurement record".
+- **Follow-ups:** #426 and #427 are both closed. D2, D4 to D7 are unchanged.

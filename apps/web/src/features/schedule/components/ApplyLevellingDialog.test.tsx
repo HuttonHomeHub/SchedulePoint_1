@@ -57,6 +57,7 @@ function item(id: string, over: Partial<LevellingApplicationItem> = {}): Levelli
     targetStart: '2026-03-09',
     wasPlaced: false,
     roundedToNextDay: false,
+    reason: 'RESOURCE',
     ...over,
   };
 }
@@ -67,6 +68,7 @@ function application(over: Partial<LevellingApplication> = {}): LevellingApplica
     rows: [row('a'), row('b')],
     items: [item('a'), item('b')],
     leftToLogic: [],
+    followingLinks: [],
     conflictingPlaced: [],
     laterThanBoundIntroduced: 0,
     projectFinishBefore: '2026-04-01',
@@ -271,6 +273,85 @@ describe('ApplyLevellingDialog — the populated preview', () => {
     ).toHaveTextContent('Fix pump');
   });
 
+  it('lists the bars that will follow their links, by name, as a named list with no row of their own', () => {
+    loaded(application({ followingLinks: [{ id: 's', name: 'Pour slab' }] }));
+    renderDialog();
+    const group = screen.getByRole('group', { name: 'Will move with their links' });
+    expect(
+      within(screen.getByRole('table', { name: 'Activities that will move' })).queryByText(
+        'Pour slab',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(group).getByRole('list', { name: 'Will move with their links' }),
+    ).toHaveTextContent('Pour slab');
+    expect(
+      screen.getByText(
+        '1 other activity will move with the work before it; no date is set for it.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('will move with the work before it');
+  });
+
+  it('names the follower list by its heading, so one name is announced and not two', () => {
+    loaded(application({ followingLinks: [{ id: 's', name: 'Pour slab' }] }));
+    renderDialog();
+    const list = screen.getByRole('list', { name: 'Will move with their links' });
+    const labelledBy = list.getAttribute('aria-labelledby');
+    expect(labelledBy).not.toBeNull();
+    expect(document.getElementById(labelledBy ?? '')).toHaveTextContent(
+      'Will move with their links',
+    );
+    expect(list).not.toHaveAttribute('aria-label');
+  });
+
+  it('shows no follower section when the only bar levelling would move was left to its links', () => {
+    // Nothing is written, so the bar a follower follows does not move and nothing moves with it.
+    loaded(
+      application({
+        rows: [],
+        items: [],
+        leftToLogic: [{ id: 'x', name: 'Lift x' }],
+        followingLinks: [{ id: 's', name: 'Pour slab' }],
+      }),
+    );
+    renderDialog();
+    expect(screen.getByText('Nothing left to apply.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: 'Will move with their links' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/will move with the work before/)).not.toBeInTheDocument();
+  });
+
+  it('says in words, not colour, why a hand-placed bar moves', () => {
+    loaded(
+      application({
+        rows: [row('p'), row('q')],
+        items: [
+          item('p', { wasPlaced: true, beforeVisualStart: '2026-03-04', reason: 'LINKS' }),
+          item('q', { wasPlaced: true, beforeVisualStart: '2026-03-05', reason: 'RESOURCE' }),
+        ],
+      }),
+    );
+    renderDialog();
+    const placed = screen.getByRole('table', { name: 'Hand-placed activities that will move' });
+    expect(within(placed).getByRole('columnheader', { name: 'Why it moves' })).toBeInTheDocument();
+    expect(within(placed).getByRole('row', { name: /Lift p/ })).toHaveTextContent(
+      'The work before it moved',
+    );
+    expect(within(placed).getByRole('row', { name: /Lift q/ })).toHaveTextContent(
+      'A resource delays it',
+    );
+  });
+
+  it('shows no followers section when nobody follows', () => {
+    loaded(application());
+    renderDialog();
+    expect(
+      screen.queryByRole('group', { name: 'Will move with their links' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('caps a long named list and says how many more there are', () => {
     const names = Array.from({ length: 13 }, (_, i) => ({
       id: `n${String(i)}`,
@@ -321,6 +402,21 @@ describe('ApplyLevellingDialog — the populated preview', () => {
         items: [item('a'), item('p', { wasPlaced: true, beforeVisualStart: '2026-03-04' })],
         leftToLogic: [{ id: 'x', name: 'Pour slab' }],
         conflictingPlaced: [{ id: 'q', name: 'Fix pump' }],
+      }),
+    );
+    const { baseElement } = renderDialog();
+    expect((await axe(baseElement)).violations).toEqual([]);
+  });
+
+  it('has no axe violations open with a follower and a hand-placed table', async () => {
+    loaded(
+      application({
+        rows: [row('a'), row('p')],
+        items: [
+          item('a'),
+          item('p', { wasPlaced: true, beforeVisualStart: '2026-03-04', reason: 'LINKS' }),
+        ],
+        followingLinks: [{ id: 's', name: 'Pour slab' }],
       }),
     );
     const { baseElement } = renderDialog();

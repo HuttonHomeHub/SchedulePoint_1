@@ -162,6 +162,7 @@ describe('levelSchedule — pre-ADR-0071 parity corpus (zero lag)', () => {
       const leveled = levelSchedule(
         scenario.activities,
         output,
+        scenario.edges,
         scenario.assignments,
         scenario.resources,
         {

@@ -456,6 +456,7 @@ export function computeLeveledSchedule(network: AdaptedNetwork): EngineOutput {
   const leveled = levelSchedule(
     network.activities,
     output,
+    network.edges,
     network.leveling.assignments,
     network.leveling.resources,
     {

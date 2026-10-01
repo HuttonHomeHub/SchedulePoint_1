@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-01 — Levelling follows the links, and the product owner chose to make the worst case fast before shipping
+
+**What.** The logic-aware levelling epic (`docs/specs/logic-aware-levelling/`, ADR-0168) shipped as M0 (measure
+and pin), M1 (one levelled finish), M2 (Pass C and the apply rule), M2.5 (a speed-up) and M3 (copy, catalogue
+and journey). Levelling still places each activity from its anchor, then a new pass moves followers by their
+links. CQ-1 (a): a hand-placed follower moves too. CQ-2 (a): one count, no schema change. CQ-3 (a): no
+back-fill of the gaps the pass leaves.
+
+**Why.** Measured on the shipped engine before any change, the ghosts of followers could start before their
+predecessors finished, one press of Apply left 236 of 236 clashes on the 2,000-activity plan at capacity 2,
+and the strip's Levelled finish was early by two days on the M0 fixture and five working days on the seeded
+`plan:capability-levelling`. Full re-levelling in link order was rejected (CQ-3) because it changes plans
+where nothing is pushed, so no structural gate could prove what had not moved. M0 counted what that costs:
+2 of 315 pushed participants leave a gap at the seeded capacity, 143 of 571 at capacity 2.
+
+**Consequences.** Existing levelled plans show new ghosts and a later levelled finish at their first
+recalculation after release. Pass C cost 1.2x to 1.4x on the scale plan but **1.97x on a plan with 1,910
+activities on one resource**, over the epic's own 1.5x stop. The choice put to the product owner was to ship
+with the finding recorded or to speed it up first, and the owner chose to speed it up (M2.5): 1.32x after,
+with no output changed and three differentials against the frozen old code. A profile showed the cost was
+mostly the calendar's `Date` round trip rather than the sort the review had suspected, which is why the
+change touched `working-time-calendar.ts` and not only the profile. Two claims in the spec were corrected by
+the measurement (C11 and C17) and two were added (C20, C21).
+
+---
+
 ## 2026-09-30 — The placed-load epic was decided in four cuts, and metric 12 kept the network
 
 **What.** #413 shipped as four commits (M0 reference results and red cases, M1 levelling, M2 the

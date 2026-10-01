@@ -1,0 +1,201 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`levelSchedule: followers of a delayed activity follow it > SS and FF followers, each with a lag 1`] = `
+{
+  "activities": [
+    {
+      "id": "F",
+      "leveledFinish": "2026-01-07",
+      "leveledStart": "2026-01-06",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "P",
+      "leveledFinish": "2026-01-06",
+      "leveledStart": "2026-01-04",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "Q",
+      "leveledFinish": "2026-01-03",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "S",
+      "leveledFinish": "2026-01-06",
+      "leveledStart": "2026-01-05",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+  ],
+  "leveledProjectFinish": "2026-01-07",
+}
+`;
+
+exports[`levelSchedule: followers of a delayed activity follow it > a follower that needs a second resource of its own 1`] = `
+{
+  "activities": [
+    {
+      "id": "P",
+      "leveledFinish": "2026-01-06",
+      "leveledStart": "2026-01-04",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "Q",
+      "leveledFinish": "2026-01-03",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "R",
+      "leveledFinish": "2026-01-04",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "S",
+      "leveledFinish": "2026-01-08",
+      "leveledStart": "2026-01-07",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+  ],
+  "leveledProjectFinish": "2026-01-08",
+}
+`;
+
+exports[`levelSchedule: followers of a delayed activity follow it > a priority inversion: the follower is placed before the predecessor it follows 1`] = `
+{
+  "activities": [
+    {
+      "id": "P",
+      "leveledFinish": "2026-01-07",
+      "leveledStart": "2026-01-06",
+      "levelingDelay": 7200,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "S",
+      "leveledFinish": "2026-01-09",
+      "leveledStart": "2026-01-08",
+      "levelingDelay": 7200,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "X",
+      "leveledFinish": "2026-01-03",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+  ],
+  "leveledProjectFinish": "2026-01-09",
+}
+`;
+
+exports[`levelSchedule: followers of a delayed activity follow it > an FS chain through activities that hold no resource 1`] = `
+{
+  "activities": [
+    {
+      "id": "C",
+      "leveledFinish": "2026-01-08",
+      "leveledStart": "2026-01-07",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "D",
+      "leveledFinish": "2026-01-09",
+      "leveledStart": "2026-01-09",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "P",
+      "leveledFinish": "2026-01-06",
+      "leveledStart": "2026-01-04",
+      "levelingDelay": 4320,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "Q",
+      "leveledFinish": "2026-01-03",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+  ],
+  "leveledProjectFinish": "2026-01-09",
+}
+`;
+
+exports[`levelSchedule: followers of a delayed activity follow it > levelWithinFloatOnly with a chain behind the delayed activity 1`] = `
+{
+  "activities": [
+    {
+      "id": "A",
+      "leveledFinish": "2026-01-02",
+      "leveledStart": "2026-01-01",
+      "levelingDelay": 0,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "B",
+      "leveledFinish": "2026-01-04",
+      "leveledStart": "2026-01-03",
+      "levelingDelay": 2880,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "C",
+      "leveledFinish": "2026-01-05",
+      "leveledStart": "2026-01-05",
+      "levelingDelay": 2880,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "D",
+      "leveledFinish": null,
+      "leveledStart": null,
+      "levelingDelay": null,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+    {
+      "id": "E",
+      "leveledFinish": "2026-01-06",
+      "leveledStart": "2026-01-06",
+      "levelingDelay": 2880,
+      "levelingWindowExceeded": false,
+      "selfOverAllocated": false,
+    },
+  ],
+  "leveledProjectFinish": "2026-01-10",
+}
+`;

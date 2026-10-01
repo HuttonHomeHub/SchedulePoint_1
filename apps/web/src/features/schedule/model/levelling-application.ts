@@ -1,4 +1,4 @@
-import type { LevellingApplication } from '@repo/types';
+import type { LevellingApplication, LevellingApplicationItem } from '@repo/types';
 
 import type { ActivityPlacement } from '@/features/undo-redo';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -43,12 +43,35 @@ export function applyLevellingAnnouncement(count: number): string {
     : `Moved ${String(count)} activities to their levelled dates.`;
 }
 
-function plural(count: number, one: string, many: string): string {
+/** Counts and agrees a noun: `plural(2, 'activity', 'activities')` is "2 activities". */
+export function plural(count: number, one: string, many: string): string {
   return `${String(count)} ${count === 1 ? one : many}`;
 }
 
 function pick(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
+}
+
+/** The section that names the bars which follow their links, and the read-out line beside it. */
+export const FOLLOWING_SECTION_TITLE = 'Will move with their links';
+export const FOLLOWING_SECTION_DESCRIPTION =
+  'These have no date of their own, so nothing is saved for them. They move with their links once the bars above are applied.';
+
+/**
+ * One wording source for the follower sentence, so the read-out line and the section's own copy
+ * cannot drift: "1 other activity will move with the work before it; no date is set for it."
+ */
+export function followingLinksText(count: number): string {
+  return `${plural(count, 'other activity', 'other activities')} will move with the work before ${pick(count, 'it', 'them')}; no ${pick(count, 'date is', 'dates are')} set for ${pick(count, 'it', 'them')}.`;
+}
+
+/**
+ * Why a bar moves, as words: the reason is the one thing that tells a planner whether the move is the
+ * resource's doing or a consequence of an earlier move, so it is a column of text and not a colour or
+ * an icon (WCAG 1.4.1).
+ */
+export function levellingReasonText(reason: LevellingApplicationItem['reason']): string {
+  return reason === 'RESOURCE' ? 'A resource delays it' : 'The work before it moved';
 }
 
 /**
@@ -96,10 +119,13 @@ export function levellingApplicationSnapshots(application: LevellingApplication)
   return { before, after, versions };
 }
 
+export type ApplyLevellingLineKey =
+  'finish' | 'following' | 'remaining' | 'moves' | 'hand-placed' | 'next-day' | 'later-than-bound';
+
 /** One sentence of the dialog's read-out, with the preview field that drives it. */
 export interface ApplyLevellingLine {
   /** Stable, for the tests and the journey to find the sentence without matching prose. */
-  readonly key: string;
+  readonly key: ApplyLevellingLineKey;
   readonly text: string;
 }
 
@@ -108,6 +134,9 @@ export interface ApplyLevellingLine {
  * cannot say more than the response does. The plan finish and what remains come first because they
  * are the answer to "what does this do to my plan"; the one the plan flags as the risk is
  * `remaining`: "nothing left to move" is only said when `remainingAfterApply` is 0.
+ *
+ * The bars that follow their links get a sentence as well as a section: they are not in the count
+ * above, so without it the total would read as the whole of what changes.
  *
  * The bars left to their links and the hand-placed bars in conflict are not sentences here: each has
  * a section of its own whose header and count say the same thing, and a second wording drifts.
@@ -166,6 +195,13 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
     });
   }
 
+  // Straight after the moves it is counted beside: these bars are not in that count, so the line reads
+  // as what else changes. Before the deadline warning, matching the spoken order (moves, then this).
+  const following = application.followingLinks.length;
+  if (following > 0) {
+    lines.push({ key: 'following', text: followingLinksText(following) });
+  }
+
   const bound = application.laterThanBoundIntroduced;
   if (bound > 0) {
     lines.push({
@@ -182,7 +218,8 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
  * decides on. One sentence per line, so it cannot say more than the list does.
  */
 export function applyLevellingSummary(lines: ApplyLevellingLine[]): string {
-  return ['moves', 'finish', 'remaining']
+  const order: ApplyLevellingLineKey[] = ['moves', 'following', 'finish', 'remaining'];
+  return order
     .flatMap((key) => lines.filter((line) => line.key === key).map((line) => line.text))
     .join(' ');
 }

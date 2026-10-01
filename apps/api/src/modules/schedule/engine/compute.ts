@@ -930,6 +930,9 @@ export function computeSchedule(
       earlyFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, efInst),
       placedStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, placedStartInst),
       placedFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, placedFinishInst),
+      // Pass 2's own pass-on, exposed rather than re-derived by levelling (in memory only).
+      passOnStartInstant: visualPropStart.get(id)!,
+      passOnFinishInstant: visualPropFinish.get(id)!,
       lateStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, lsInst),
       lateFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, lfInst),
       totalFloat,

@@ -228,6 +228,43 @@ describe('health M6 — the critical-path what-if', () => {
     expect(levelledFinish! > unlevelledFinish!).toBe(true);
   });
 
+  /**
+   * **Levelling follows the links, so metric 12's verdict can change on a levelled plan** (`docs/specs/
+   * logic-aware-levelling/` C18): the completion carrier is read from LEVELLED results on both sides, and
+   * a follower of a delayed activity now carries the knock-on in its levelled finish.
+   *
+   * `a → b` is the critical chain (10 days). `c1` and `c2` share one resource and `c1` has the priority, so
+   * `c2` is levelled to days 4 to 8, and `d` (four days, no resource) follows `c2`. Before Pass C `d` had no levelled position and
+   * finished on day 8, inside `b`'s day 10, so the carrier was `b` and the verdict PASS. Now `d` finishes
+   * on day 12, after `b`: it is the carrier, shares no logic with `a`, and the verdict is FAIL.
+   */
+  it('LEVELLED: a follower pushed past the chain becomes the completion carrier (C18)', () => {
+    const activities = [
+      task('a', 5 * DAY),
+      task('b', 5 * DAY),
+      task('c1', 4 * DAY, { levelingPriority: 1 }),
+      task('c2', 4 * DAY, { levelingPriority: 2 }),
+      task('d', 4 * DAY),
+    ];
+    const edges = [edge('a', 'b'), edge('c2', 'd')];
+    const demand: LevelingDemand = {
+      assignments: (['c1', 'c2'] as const).map((activityId) => ({
+        activityId,
+        resourceId: 'r',
+        unitsPerHour: 1,
+      })),
+      resources: [RESOURCE],
+    };
+    const unlevelled = run(activities, edges, { demand: null });
+    expect(unlevelled.verdict).toBe('PASS');
+    expect(unlevelled.detail?.completionActivityId).toBe('b');
+
+    const result = run(activities, edges, { demand, levelWithinFloatOnly: false });
+    expect(result.detail?.completionActivityId).toBe('d');
+    expect(result.detail?.deltaDays).toBe(0);
+    expect(result.verdict).toBe('FAIL');
+  });
+
   it('LEVELLED with a plan that does not opt in stays byte-identical (control)', () => {
     // Same topology, `plan.levelResources` off in spirit (`leveling: null`, exactly what
     // `buildEngineGraph` returns for an opted-out or assignment-free plan) — must read identically

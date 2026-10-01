@@ -599,3 +599,21 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
   constants are unchanged.
 - Neither section changes what `computeSchedule` returns for the network or placed dates: two in-memory
   offsets are added to its result.
+
+### Amendment (ADR-0168, 2026-10-01) — levelling follows the links
+
+- **§28 (resource levelling), first bullet:** after "into the earliest capacity-feasible working window at
+  or after its anchor start" add "**and no earlier than its levelled predecessors' links allow**". The
+  composite priority key and the determinism claim are unchanged.
+- **§28, a new bullet — follows its links.** After the priority placement, a second walk in topological
+  order moves a follower later wherever a predecessor's levelled pass-on is later than its unlevelled one,
+  to the earliest start the link type and lag allow (the same arithmetic as Pass 2). A resourced follower
+  is re-placed by the same sweep from there; an activity with no capped resource carries an overlay at
+  that point. Mandatory-constrained, started, Level-of-Effort and WBS-summary activities are not moved by
+  links, a Level-of-Effort predecessor pushes nothing, and a milestone follower is moved. No link is
+  followed across plans.
+- **§28, the summary:** "levelled finish" is the latest of every non-LOE, non-summary activity's levelled
+  finish, or its drawn finish where it has none. It is therefore never earlier than the project finish, and
+  it includes the knock-on.
+- The exclusions bullet is unchanged for **resource** delays. The network float, the critical path and
+  the fixture JSON are untouched.

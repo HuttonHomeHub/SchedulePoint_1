@@ -8,6 +8,7 @@ import {
   diagramList,
   ensurePen,
   isoDay,
+  linkActivities,
   newPlan,
   onboard,
   openViewMenu,
@@ -264,6 +265,58 @@ test.describe('the feasible window and the levelled lens', () => {
   });
 
   /**
+   * **The strip's "Levelled finish" counts a hand-placed last bar** (`docs/specs/logic-aware-levelling/`
+   * M1, C7).
+   *
+   * `GET …/schedule/summary` used to take `MAX(COALESCE(leveled_finish, early_finish))`, so a bar that
+   * holds no capped resource was counted where logic puts it, and a plan whose last bar was dragged
+   * late read a "Levelled finish" EARLIER than its own "Finish". The API e2e proves the number; this
+   * proves it is the number a planner reads, in the popover the strip lives in.
+   */
+  test('the strip’s Levelled finish reads the hand-placed last bar, and never before Finish', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 6);
+    await createHierarchy(page);
+    await newPlan(page, 'Levelled finish');
+    await ensurePen(page);
+
+    const [liftA, liftB] = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+      { name: 'Late slab', laneIndex: 2 },
+    ]);
+    if (!liftA || !liftB) throw new Error('seeding returned too few activities');
+    // The slab holds no resource, so levelling never touches it; only the lifts share the crane.
+    await bookOnCrane(page, orgSlug, [liftA.id, liftB.id], { capacity: 1, units: 24 });
+    await placeViaApi(page, orgSlug, 'Late slab', '2026-03-02');
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // The fixture is what it claims: the slab is drawn at its placement, well after its early date
+    // and after both lifts. Without this the case passes on a plan where nothing had been placed.
+    const slab = requirePlacement(await placements(page, orgSlug), 'Late slab');
+    expect(isoDay(slab.visualEffectiveStart)).toBe('2026-03-02');
+    expect(isoDay(slab.earlyStart)).not.toBe('2026-03-02');
+
+    await page.getByRole('button', { name: /Summary/ }).click();
+    const summary = page.getByRole('dialog', { name: 'Summary' });
+    const statValue = (label: string) =>
+      summary
+        .locator('dt', { hasText: new RegExp(`^${label}$`) })
+        .locator('xpath=following-sibling::dd');
+    const finish = statValue('Project finish');
+    const levelledFinish = statValue('Levelled finish');
+    await expect(levelledFinish).toHaveCount(1);
+    // The slab's drawn finish is in March; the lifts' levelled finishes are in January.
+    await expect(finish).toContainText('Mar 2026');
+    await expect(levelledFinish).toHaveText((await finish.textContent()) ?? '');
+    await page.keyboard.press('Escape');
+  });
+
+  /**
    * **Apply levelled dates…, driven end to end** (`docs/specs/apply-levelled-dates/` T2.4, ADR-0081).
    *
    * The command is the capability this milestone claims, so the journey is its gate: a unit suite
@@ -390,6 +443,142 @@ test.describe('the feasible window and the levelled lens', () => {
       .toBe(0);
     await expect(moved).toHaveCount(1, { timeout: 30_000 });
     expect(await countIn()).toBe(ghosts);
+  });
+
+  /**
+   * **Levelling follows the links** (`docs/specs/logic-aware-levelling/` M2).
+   *
+   * A delay now pushes the work behind it, so a bar with no resource at all can carry a ghost, and the
+   * apply must not turn that knock-on into a hand placement. Three things only a browser can say: that
+   * the follower's ghost reaches the screen, that the strip's "Levelled finish" is the follower's
+   * rather than the lift's, and that **Apply levelled dates…** lists the lift and not the slab behind it.
+   *
+   * Two lifts share one crane; "Pour slab" holds nothing and follows both of them. Which lift waits is
+   * the engine's call (a tie), so the slab is linked behind both and the assertions are relations, not
+   * dates: the calendar is the plan's own, and the days differ between a Mon-Fri and a 24/7 plan.
+   */
+  test('a follower of a levelled lift is ghosted after it, counted in the finish, and not applied', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 7);
+    await createHierarchy(page);
+    await newPlan(page, 'Follower levelled');
+    await ensurePen(page);
+
+    const [liftA, liftB, slab] = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+      { name: 'Pour slab', laneIndex: 2, durationDays: 2 },
+    ]);
+    if (!liftA || !liftB || !slab) throw new Error('seeding returned too few activities');
+    await bookOnCrane(page, orgSlug, [liftA.id, liftB.id], { capacity: 1, units: 24 });
+    await linkActivities(page, orgSlug, liftA.id, slab.id);
+    await linkActivities(page, orgSlug, liftB.id, slab.id);
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // ── The fixture guard, read from the API so a plan where nothing moved cannot pass vacuously ──
+    const before = await placements(page, orgSlug);
+    const slabBefore = requirePlacement(before, 'Pour slab');
+    const lifts = ['Lift A', 'Lift B'].map((name) => requirePlacement(before, name));
+    const waiting = lifts.filter((lift) => (lift.levelingDelayDays ?? 0) > 0);
+    expect(waiting, 'one crane, two lifts: exactly one waits').toHaveLength(1);
+    // The slab holds no resource, yet it carries a ghost, later than where it is drawn, after the lift.
+    expect(slabBefore.leveledStart).not.toBeNull();
+    expect(isoDay(slabBefore.leveledStart)! > isoDay(slabBefore.earlyStart)!).toBe(true);
+    expect(isoDay(slabBefore.leveledStart)! >= isoDay(waiting[0]!.leveledFinish)!).toBe(true);
+    const movedByApi = before.filter((row) => (row.levelingDelayDays ?? 0) > 0).length;
+    expect(movedByApi, 'the waiting lift and the slab behind it').toBe(2);
+
+    // ── 1 · The lens draws the follower's ghost: it counts both moved bars ────────────────────
+    await openViewMenu(page);
+    await levelledToggle(page).check();
+    await page.keyboard.press('Escape');
+    const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+    const moved = diagram.getByText(
+      /Levelled placement: \d+ activit\w+ moved by resource levelling/i,
+    );
+    await expect(moved).toHaveCount(1);
+    expect(Number(/(\d+) activit/.exec((await moved.textContent()) ?? '')?.[1])).toBe(movedByApi);
+
+    // ── 2 · The strip's Levelled finish is the slab's levelled finish, not the lift's ─────────────
+    await page.getByRole('button', { name: /Summary/ }).click();
+    const summary = page.getByRole('dialog', { name: 'Summary' });
+    const levelledFinish = summary
+      .locator('dt', { hasText: /^Levelled finish$/ })
+      .locator('xpath=following-sibling::dd');
+    await expect(levelledFinish).toHaveCount(1);
+    const slabFinish = new Date(`${isoDay(slabBefore.leveledFinish)!}T00:00:00Z`);
+    const month = slabFinish.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' });
+    const day = String(slabFinish.getUTCDate());
+    await expect(levelledFinish).toContainText(
+      new RegExp(`\\b${day}\\b.*${month}|${month}.*\\b${day}\\b`),
+    );
+    // …and it says what "levelled" now means: a move can be a knock-on, not only a resource.
+    await expect(
+      summary.getByText(
+        /Levelling moved \d+ activit\w+, either to keep resource demand within capacity or because the work before (it|them) moved/,
+      ),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // ── 3 · Apply levelled dates… lists the lift, and not the slab that follows it ────────────────
+    const command = page.locator('[data-toolbar-item="apply-levelling"]');
+    await command.click();
+    const dialog = page.getByRole('dialog', { name: 'Apply levelled dates' });
+    await expect(dialog).toBeVisible();
+    const confirm = dialog.getByRole('button', { name: /^Apply to \d+ activit/ });
+    await expect(confirm).toBeVisible();
+    expect(Number(/Apply to (\d+)/.exec((await confirm.textContent()) ?? '')?.[1])).toBe(1);
+    const list = dialog.getByRole('table', { name: 'Activities that will move' });
+    await expect(list.getByRole('row')).toHaveCount(2);
+    await expect(list.getByRole('row', { name: /Pour slab/ })).toHaveCount(0);
+    // The slab is named in a list of its own, a real list with a name, and the sentence says why.
+    const follows = dialog.getByRole('list', { name: 'Will move with their links' });
+    await expect(follows.getByRole('listitem')).toHaveText(['Pour slab']);
+    // `exact` keeps to the visible line: the dialog's sr-only status summary repeats the sentence
+    // inside a longer one, and a substring match would find both.
+    await expect(
+      dialog.getByText(
+        '1 other activity will move with the work before it; no date is set for it.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    // axe on the open dialog with a follower on screen: the named list is the new structure.
+    const scan = await new AxeBuilder({ page })
+      .include('dialog[open]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(scan.violations).toEqual([]);
+
+    // ── 4 · Confirm: the slab is not pinned, and it lands where its ghost was ─────────────────────
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(
+        async () => (await placements(page, orgSlug)).filter((r) => r.visualStart !== null).length,
+        { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] },
+      )
+      .toBe(1);
+    // The placement lands first and the coalesced recalculation follows it (ADR-0064), so the slab's
+    // drawn start is polled rather than read once: a single read can fall between the two. A
+    // recalculation that never moves the slab still fails here, at the poll's timeout.
+    await expect
+      .poll(
+        async () =>
+          isoDay(
+            requirePlacement(await placements(page, orgSlug), 'Pour slab').visualEffectiveStart,
+          ),
+        { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] },
+      )
+      .toBe(isoDay(slabBefore.leveledStart));
+    const after = requirePlacement(await placements(page, orgSlug), 'Pour slab');
+    expect(
+      after.visualStart,
+      'the slab follows its links, with no placement of its own',
+    ).toBeNull();
   });
 
   test('a placement conflict is flagged, and the bar keeps its position (M-D)', async ({

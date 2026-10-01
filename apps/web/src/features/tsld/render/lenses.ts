@@ -437,7 +437,9 @@ export interface LevellableActivity {
 }
 
 /**
- * Build the levelled ghosts — one per activity the levelling pass MOVED.
+ * Build the levelled ghosts — one per activity the levelling pass MOVED: delayed by a resource, or
+ * pushed by the work before it (`docs/specs/logic-aware-levelling/`), so a bar that holds no resource
+ * at all can carry one.
  *
  * **The draw predicate is `leveledStart !== visualEffectiveStart`, and it was chosen rather than
  * discovered.** The comparison is with the DRAWN start, not the early one (#413): levelling anchors

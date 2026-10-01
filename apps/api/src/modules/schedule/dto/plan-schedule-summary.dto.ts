@@ -88,7 +88,7 @@ export class PlanScheduleSummaryDto implements PlanScheduleSummary {
     nullable: true,
     type: String,
     description:
-      'The inclusive leveled project finish — the latest finish under levelling, from where bars are drawn (early dates for unplaced bars); null when the plan does not level (ADR-0041).',
+      'The inclusive leveled project finish — the latest finish under levelling: a levelled activity’s levelled finish, else where its bar is drawn. Level-of-effort and summary activities never define it. One definition, shared by recalculate and this read, so the two agree. Levelling only moves a bar later, so it is never earlier than `projectFinish` (the placed finish). Null when the plan does not level (ADR-0041).',
   })
   leveledProjectFinish!: string | null;
 

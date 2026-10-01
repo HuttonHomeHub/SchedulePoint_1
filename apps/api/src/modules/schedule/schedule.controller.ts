@@ -69,13 +69,16 @@ const CRITICAL_PATH_TEST_THROTTLE = { default: { ttl: 60_000, limit: 14 } } as c
 
 /**
  * The levelling-application preview's budget: **10 requests / 60 s**. The route runs the engine's
- * network and levelling passes up to three times (read the plan, write every target, re-solve without
- * the targets the links refuse). Measured at 2,000 activities on the engine alone: p95 ~0.78 s, about
- * three recalculations (`docs/specs/apply-levelled-dates/m0-measurement.md`, "M1 — what the preview
- * costs"). The M6 formula on that figure gives 15; 10 is one third lower because the figure leaves out
- * the graph load and serialisation, which make up much of a whole request. That reduction is a
+ * network and levelling passes twice as a rule (read the plan, write every target and re-solve), and a
+ * third time when the re-solve shows a candidate the links refuse and it has to be dropped. Measured at
+ * 2,000 activities on the engine alone, after logic-aware levelling M2 (Pass C follows the links): p95
+ * ~0.73 s at capacity 8 and ~0.79 s at capacity 2, two solves, where it was ~0.98 s and ~1.03 s with
+ * three (`docs/specs/logic-aware-levelling/m0-measurement.md`, "M2 measurement record"; earlier
+ * figures in `docs/specs/apply-levelled-dates/m0-measurement.md`). The M6 formula on ~0.79 s gives 15; 10
+ * is one third lower because the figure leaves out the graph load and serialisation, which make up much
+ * of a whole request, and because a dropped candidate costs the third solve back. That reduction is a
  * judgement, not a measurement, and is recorded as one; an HTTP measurement against a database is
- * still owed. **Its cost, stated plainly:** at most 10 × the measured p95 (~0.78 s) of synchronous CPU,
+ * still owed. **Its cost, stated plainly:** at most 10 × the measured p95 (~0.8 s) of synchronous CPU,
  * about 8 s of event-loop time per client per minute, for this one route.
  */
 const LEVELLING_APPLICATION_THROTTLE = { default: { ttl: 60_000, limit: 10 } } as const;
@@ -367,7 +370,11 @@ export class ScheduleController {
       'placement is a date: a resource that frees up part-way through a day puts the bar on the next ' +
       'working day’s start (`items[].roundedToNextDay`). **A target the links refuse is not written** ' +
       '(the engine is asked, this route holds no rule about links): it is reported in `leftToLogic`, ' +
-      'or in `conflictingPlaced` when the bar carries a placement of its own. One press is one step: ' +
+      'or in `conflictingPlaced` when the bar carries a placement of its own. **A bar that moved only ' +
+      'because the work before it moved gets no row** when it carries no placement of its own: it ' +
+      'follows its links, and is named in `followingLinks`; a hand-placed one gets a row with ' +
+      '`items[].reason` `LINKS`. So `rows.length` need not equal the number of bars levelling moved: ' +
+      'followers move without rows. One press is one step: ' +
       '`remainingAfterApply` says how many bars levelling would still move afterwards, and is ' +
       'reported, not chased. A plan that does not level returns no rows. **It writes exactly the ' +
       'constraint each activity already has** in `rows`; nothing here sets or clears one. The response ' +

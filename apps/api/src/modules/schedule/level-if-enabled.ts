@@ -2,6 +2,7 @@ import { levelSchedule } from './engine/level';
 import type {
   EngineActivity,
   EngineAssignment,
+  EngineEdge,
   EngineResource,
   EngineResult,
   EngineSummary,
@@ -34,11 +35,14 @@ export interface LevelingDemand {
  * comparison it always was (the control below).
  *
  * Pure, like {@link levelSchedule} itself: no lock, no read, no write. The caller owns building
- * `activities`/`output`/`leveling` and owns what it does with the merged result.
+ * `activities`/`output`/`edges`/`leveling` and owns what it does with the merged result. `edges` are the
+ * links `output` was computed from: levelling now pushes a follower no earlier than they allow
+ * (`docs/specs/logic-aware-levelling/`), so a caller cannot level a network it did not solve.
  */
 export function levelIfEnabled(
   activities: readonly EngineActivity[],
   output: { readonly results: readonly EngineResult[]; readonly summary: EngineSummary },
+  edges: readonly EngineEdge[],
   leveling: LevelingDemand | null,
   options: LevelingOptions,
 ): { results: readonly EngineResult[]; summary: EngineSummary } {
@@ -46,6 +50,7 @@ export function levelIfEnabled(
   const leveled = levelSchedule(
     activities,
     output,
+    edges,
     leveling.assignments,
     leveling.resources,
     options,

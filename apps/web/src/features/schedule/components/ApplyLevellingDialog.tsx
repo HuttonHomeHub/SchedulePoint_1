@@ -4,7 +4,7 @@ import type {
   LevellingApplicationNamedActivity,
 } from '@repo/types';
 import { Loader2 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { useLevellingApplication } from '../api/use-schedule';
 import {
@@ -12,6 +12,9 @@ import {
   applyLevellingLines,
   applyLevellingSummary,
   applyLevellingTooMany,
+  FOLLOWING_SECTION_DESCRIPTION,
+  FOLLOWING_SECTION_TITLE,
+  levellingReasonText,
 } from '../model/levelling-application';
 
 import { Button } from '@/components/ui/button';
@@ -95,6 +98,11 @@ const MOVE_COLUMNS: Column<LevellingApplicationItem>[] = [
   },
 ];
 
+/**
+ * Only this table carries "Why it moves", and that is not an omission: an unplaced bar's reason is
+ * always RESOURCE (a knock-on with no placement of its own is a follower and gets no row, CQ-1 (a)),
+ * so a column of identical cells would say nothing. The model's tests assert that invariant.
+ */
 const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
   ...MOVE_COLUMNS.slice(0, 1),
   {
@@ -103,6 +111,7 @@ const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
     width: 'fit',
   },
   ...MOVE_COLUMNS.slice(1),
+  { header: 'Why it moves', cell: (item) => levellingReasonText(item.reason), width: 'bounded' },
 ];
 
 function MoveTable({
@@ -148,11 +157,17 @@ function NameList({
   description: string;
   names: LevellingApplicationNamedActivity[];
 }): React.ReactElement {
+  const titleId = useId();
   const shown = names.slice(0, NAMES_SHOWN);
   const more = names.length - shown.length;
   return (
-    <FormSection title={title} description={description} aside={activityCount(names.length)}>
-      <ul className="flex flex-col gap-1 text-sm">
+    <FormSection
+      title={title}
+      description={description}
+      aside={activityCount(names.length)}
+      titleId={titleId}
+    >
+      <ul aria-labelledby={titleId} className="flex flex-col gap-1 text-sm">
         {shown.map((named) => (
           <li key={named.id}>{named.name}</li>
         ))}
@@ -335,6 +350,13 @@ function ApplyLevellingBody({
                 items={others}
               />
             </FormSection>
+          ) : null}
+          {application.followingLinks.length > 0 ? (
+            <NameList
+              title={FOLLOWING_SECTION_TITLE}
+              description={FOLLOWING_SECTION_DESCRIPTION}
+              names={application.followingLinks}
+            />
           ) : null}
           {application.leftToLogic.length > 0 ? (
             <NameList
