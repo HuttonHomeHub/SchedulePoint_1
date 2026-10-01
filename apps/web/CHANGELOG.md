@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.155.0
+
+### Minor Changes
+
+- [#746](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/746) [`fb7b15b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fb7b15b8cb747dc9f65cb62d6fdb7b7671fb9793) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - New **Apply levelled dates…** command beside Arrange. It lists every bar resource levelling would move, the bars you placed by hand that it would replace, the bars it leaves to their links, and how many clashes would remain. Confirming moves them all in one step, and one Undo puts every bar back. It needs the edit lock, is for Planners and Org Admins, and explains why when it is unavailable.
+
 ## 0.154.3
 
 ### Patch Changes
