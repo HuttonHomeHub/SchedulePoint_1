@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CreateBaselineDialog } from './CreateBaselineDialog';
@@ -37,6 +38,29 @@ describe('CreateBaselineDialog', () => {
     expect(path).toBe('/organizations/acme/plans/plan-1/baselines');
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({ name: 'Contract Baseline' });
+  });
+
+  /**
+   * **#420's structural property.** A passive `reset()` on open wipes whatever a fast typist has
+   * already entered. Layout effects run before any passive effect, so text placed in the field at
+   * layout time stands in for that keystroke — and `act` flushes passive effects before `render`
+   * returns, so the survival is read afterwards.
+   */
+  it('keeps text entered before the first passive effects run', () => {
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLInputElement>('input[name="name"]')!.value = 'Typed early';
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CreateBaselineDialog orgSlug="acme" planId="plan-1" open onClose={() => {}} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Typed early');
   });
 
   it('validates that a name is required (no request sent)', async () => {
