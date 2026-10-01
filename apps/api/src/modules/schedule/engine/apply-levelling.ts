@@ -240,7 +240,7 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
     reason: 'RESOURCE' | 'LINKS';
   }
   const candidates: Candidate[] = [];
-  const followingLinks: string[] = [];
+  const followCandidates: string[] = [];
   for (const result of before.results) {
     const activity = activityById.get(result.activityId);
     if (!activity || (result.levelingDelay ?? 0) <= 0 || result.leveledStartInstant == null) {
@@ -250,7 +250,7 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
     // unplaced bar follows them and a row would only pin it. A placed one needs the row (CQ-1 (a)).
     const knockOn = result.leveledFollowsLinks === true;
     if (knockOn && activity.visualStart == null) {
-      followingLinks.push(result.activityId);
+      followCandidates.push(result.activityId);
       continue;
     }
     const { date, rounded } = targetDateFor(
@@ -273,7 +273,7 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       items: [],
       roundedToNextDay: [],
       leftToLogic: [],
-      followingLinks: followingLinks.sort(),
+      followingLinks: followCandidates.sort(),
       conflictingPlaced: [],
       laterThanBoundIntroduced: 0,
       remainingAfterApply: before.leveledActivityCount,
@@ -314,6 +314,16 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       afterById.get(c.activity.id)?.visualConflictReason === 'LATER_THAN_BOUND' &&
       beforeById.get(c.activity.id)?.visualConflictReason !== 'LATER_THAN_BOUND',
   ).length;
+
+  // Levelling named every unplaced knock-on before the left-to-logic filter ran, so a follower whose
+  // only moving source was dropped above is still on that list and will not move. What the planner is
+  // promised is "moves with its links once the rows are written", and the only thing that answers
+  // that is the solve the apply produces: keep a follower exactly when it is drawn on a different day
+  // there than it is today. Read off `after`, not predicted from which sources survived, so a follower
+  // that still moves through a different route (a second moving predecessor) stays named.
+  const followingLinks = followCandidates.filter(
+    (id) => afterById.get(id)?.visualEffectiveStart !== beforeById.get(id)?.visualEffectiveStart,
+  );
 
   // Step 7: the rows, earliest target first, then by id so the order never depends on the input's.
   const ordered = [...kept].sort(
