@@ -315,6 +315,29 @@ the follower alone.
 **With Pass C switched off, 37 tests fail** (every case written red in M0, the M2 apply cases, and the new
 `level.links.spec.ts` shapes, Gate D corpus and cost gate), which is the red-first evidence for the lot.
 
+## SC-5, the worst case the review asked for: one hot resource across a long chain
+
+`apps/api/scripts/measure-hot-resource.mts` (run as the SC-5 command above, with that file). The scale
+plan with **every** working activity (1,910 of 2,000) assigned to one shared resource, so every follower of
+a delayed bar is a resourced participant that Pass C releases and re-places. "Off" is the real tree with the
+link walk given no edges; "on" is Pass C; alternated in one loop of n = 30 after two warm-up runs, so
+drift cancels. Recorded 2026-10-01, engine only (`computeSchedule` then `levelSchedule`).
+
+| Hot resource | Delayed off / on | Off p50 / p95    | On p50 / p95     | On / off (p50, p95) |
+| ------------ | ---------------- | ---------------- | ---------------- | ------------------- |
+| capacity 8   | 26 / 1,750       | 445.9 / 488.5 ms | 877.4 / 933.8 ms | **1.97x, 1.91x**    |
+| capacity 2   | 1,282 / 1,750    | 1,700 / 1,851 ms | 1,826 / 1,966 ms | 1.07x, 1.06x        |
+| capacity 1   | 1,686 / 1,750    | 2,268 / 2,494 ms | 2,400 / 2,593 ms | 1.06x, 1.04x        |
+
+**Capacity 8 exceeds the 1.5x stop (1.97x at p50).** Nothing was optimised and nothing was changed in
+response: the finding goes to the product owner. What the table shows about it: the ratio is large only
+where Pass C does the most NEW work. At capacity 8 the unlevelled passes delay 26 activities and Pass C
+re-places about 1,700 more (each a release, a feasibility search and an occupy), about 0.25 ms each, which
+is the whole 430 ms. Where levelling already delays most of the plan (capacity 2 and 1) Pass C adds 5-7 %.
+The absolute figure is a 2,000-activity plan whose every activity wants one resource, with the
+recalculation going from about 0.45 s to 0.88 s: inside the < 2 s target at 2,000 activities, and a
+shape the seeded scale plans do not have (they assign a fraction of the activities).
+
 ## What moved in the committed suites
 
 - `level.parity.spec.ts` (eight snapshots), `compute.spec.ts`, `goldens.spec.ts`, `scenarios.spec.ts`,
