@@ -8,6 +8,7 @@ import {
   diagramList,
   ensurePen,
   isoDay,
+  linkActivities,
   newPlan,
   onboard,
   openViewMenu,
@@ -442,6 +443,108 @@ test.describe('the feasible window and the levelled lens', () => {
       .toBe(0);
     await expect(moved).toHaveCount(1, { timeout: 30_000 });
     expect(await countIn()).toBe(ghosts);
+  });
+
+  /**
+   * **Levelling follows the links** (`docs/specs/logic-aware-levelling/` M2).
+   *
+   * A delay now pushes the work behind it, so a bar with no resource at all can carry a ghost, and the
+   * apply must not turn that knock-on into a hand placement. Three things only a browser can say: that
+   * the follower's ghost reaches the screen, that the strip's "Levelled finish" is the follower's
+   * rather than the lift's, and that **Apply levelled dates…** lists the lift and not the slab behind it.
+   *
+   * Two lifts share one crane; "Pour slab" holds nothing and follows both of them. Which lift waits is
+   * the engine's call (a tie), so the slab is linked behind both and the assertions are relations, not
+   * dates: the calendar is the plan's own, and the days differ between a Mon-Fri and a 24/7 plan.
+   */
+  test('a follower of a levelled lift is ghosted after it, counted in the finish, and not applied', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 7);
+    await createHierarchy(page);
+    await newPlan(page, 'Follower levelled');
+    await ensurePen(page);
+
+    const [liftA, liftB, slab] = await seedActivities(page, orgSlug, [
+      { name: 'Lift A', laneIndex: 0 },
+      { name: 'Lift B', laneIndex: 1 },
+      { name: 'Pour slab', laneIndex: 2, durationDays: 2 },
+    ]);
+    if (!liftA || !liftB || !slab) throw new Error('seeding returned too few activities');
+    await bookOnCrane(page, orgSlug, [liftA.id, liftB.id], { capacity: 1, units: 24 });
+    await linkActivities(page, orgSlug, liftA.id, slab.id);
+    await linkActivities(page, orgSlug, liftB.id, slab.id);
+    await setLevelResources(page, orgSlug, true);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // ── The fixture guard, read from the API so a plan where nothing moved cannot pass vacuously ──
+    const before = await placements(page, orgSlug);
+    const slabBefore = requirePlacement(before, 'Pour slab');
+    const lifts = ['Lift A', 'Lift B'].map((name) => requirePlacement(before, name));
+    const waiting = lifts.filter((lift) => (lift.levelingDelayDays ?? 0) > 0);
+    expect(waiting, 'one crane, two lifts: exactly one waits').toHaveLength(1);
+    // The slab holds no resource, yet it carries a ghost, later than where it is drawn, after the lift.
+    expect(slabBefore.leveledStart).not.toBeNull();
+    expect(isoDay(slabBefore.leveledStart)! > isoDay(slabBefore.earlyStart)!).toBe(true);
+    expect(isoDay(slabBefore.leveledStart)! >= isoDay(waiting[0]!.leveledFinish)!).toBe(true);
+    const movedByApi = before.filter((row) => (row.levelingDelayDays ?? 0) > 0).length;
+    expect(movedByApi, 'the waiting lift and the slab behind it').toBe(2);
+
+    // ── 1 · The lens draws the follower's ghost: it counts both moved bars ────────────────────
+    await openViewMenu(page);
+    await levelledToggle(page).check();
+    await page.keyboard.press('Escape');
+    const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+    const moved = diagram.getByText(
+      /Levelled placement: \d+ activit\w+ moved by resource levelling/i,
+    );
+    await expect(moved).toHaveCount(1);
+    expect(Number(/(\d+) activit/.exec((await moved.textContent()) ?? '')?.[1])).toBe(movedByApi);
+
+    // ── 2 · The strip's Levelled finish is the slab's levelled finish, not the lift's ─────────────
+    await page.getByRole('button', { name: /Summary/ }).click();
+    const summary = page.getByRole('dialog', { name: 'Summary' });
+    const levelledFinish = summary
+      .locator('dt', { hasText: /^Levelled finish$/ })
+      .locator('xpath=following-sibling::dd');
+    await expect(levelledFinish).toHaveCount(1);
+    const slabFinish = new Date(`${isoDay(slabBefore.leveledFinish)!}T00:00:00Z`);
+    const month = slabFinish.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' });
+    const day = String(slabFinish.getUTCDate());
+    await expect(levelledFinish).toContainText(
+      new RegExp(`\\b${day}\\b.*${month}|${month}.*\\b${day}\\b`),
+    );
+    await page.keyboard.press('Escape');
+
+    // ── 3 · Apply levelled dates… lists the lift, and not the slab that follows it ────────────────
+    const command = page.locator('[data-toolbar-item="apply-levelling"]');
+    await command.click();
+    const dialog = page.getByRole('dialog', { name: 'Apply levelled dates' });
+    await expect(dialog).toBeVisible();
+    const confirm = dialog.getByRole('button', { name: /^Apply to \d+ activit/ });
+    await expect(confirm).toBeVisible();
+    expect(Number(/Apply to (\d+)/.exec((await confirm.textContent()) ?? '')?.[1])).toBe(1);
+    const list = dialog.getByRole('table', { name: 'Activities that will move' });
+    await expect(list.getByRole('row')).toHaveCount(2);
+    await expect(list.getByRole('row', { name: /Pour slab/ })).toHaveCount(0);
+
+    // ── 4 · Confirm: the slab is not pinned, and it lands where its ghost was ─────────────────────
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(
+        async () => (await placements(page, orgSlug)).filter((r) => r.visualStart !== null).length,
+        { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] },
+      )
+      .toBe(1);
+    const after = requirePlacement(await placements(page, orgSlug), 'Pour slab');
+    expect(
+      after.visualStart,
+      'the slab follows its links, with no placement of its own',
+    ).toBeNull();
+    expect(isoDay(after.visualEffectiveStart)).toBe(isoDay(slabBefore.leveledStart));
   });
 
   test('a placement conflict is flagged, and the bar keeps its position (M-D)', async ({
