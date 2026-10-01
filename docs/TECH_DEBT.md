@@ -11635,3 +11635,19 @@ a change to ADR-0041 §1 and ADR-0035 §28 with conformance consequences, so it 
 `docs/specs/apply-levelled-dates/` computes the real figure for its own preview (spec §4.6 step 6) and
 does not change this one. **Trigger:** the Apply levelled dates epic shipping, since its dialog will show
 the real finish beside this figure.
+
+### 428. Two seed-catalogue faults: a re-declared project calendar, and a 204 read as a failure
+
+**Status:** open · **Verified:** 2026-09-30 (reproduced on `main` in a fresh organisation) ·
+**Raised:** 2026-09-30 (Apply levelled dates M3) · **Size:** S · **Owner:** repo
+
+Neither fault touches the product; both make the seeder report failures that are not there.
+**(a)** `capability-levelling-placed` is built from `levellingPlan()` and inherits its PROJECT calendar
+`calendar('LV_CAL', 'Levelling five-day week', …)` (`apps/seed-cli/src/capabilities/resources.ts:167`).
+When both plans are seeded into one project, the second create is a 409 on the calendar name. **(b)**
+Archiving a resource goes through `client.post` (`packages/seed-http/src/runner.ts:176-179`), and `post`
+reads the response through `envelope`, which throws `MALFORMED_ENVELOPE` when there is no `data`
+(`packages/seed-http/src/client.ts:211-216`). The archive route answers 204 with no body, so a successful
+archive is recorded as an error and the report shows UNKNOWN. **Remedy:** give the placed plan its own
+calendar key and name, and send the archive through a no-content request. **Trigger:** the next change to
+the seed catalogue or `seed-http`.
