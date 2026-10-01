@@ -1,5 +1,28 @@
 # @repo/api
 
+## 0.83.0
+
+### Minor Changes
+
+- [#751](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/751) [`73f1aa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73f1aa0d79cbe1db7e55388a998874d4cc269624) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Levelling now pushes the work that follows a delayed activity: followers have levelled ghosts, the
+  levelled finish includes them, and Apply levelled dates lets them follow by their links. Existing
+  levelled plans will show new ghosts and a later levelled finish at their first recalculation after this
+  release. Apply levelled dates writes no row for a bar that only moved because the work before it moved
+  (it follows its links), and a hand-placed one moves with it; the preview reports the first as
+  `followingLinks` and each row's `reason`.
+
+### Patch Changes
+
+- [#751](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/751) [`73f1aa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73f1aa0d79cbe1db7e55388a998874d4cc269624) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The summary's "Levelled finish" now counts a hand-placed bar where it is drawn and ignores
+  level-of-effort and summary activities, so it is never earlier than "Finish". A plan whose last bar was
+  dragged late will read a later levelled finish than before.
+
+- [#751](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/751) [`73f1aa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73f1aa0d79cbe1db7e55388a998874d4cc269624) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Recalculating a plan with levelling on is faster, most of all when one resource carries most of the plan:
+  the worst case at 2,000 activities (one resource on every activity, capacity 8) drops from about 0.87 s to
+  0.18 s, and an ordinary levelled plan recalculates about 2.5 times faster. Every date is unchanged.
+- Updated dependencies [[`73f1aa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73f1aa0d79cbe1db7e55388a998874d4cc269624)]:
+  - @repo/types@0.39.0
+
 ## 0.82.0
 
 ### Minor Changes
