@@ -1124,6 +1124,11 @@ export interface LevellingApplicationItem {
   wasPlaced: boolean;
   /** The resource frees up part-way through a day, so the bar lands on the next day start. */
   roundedToNextDay: boolean;
+  /**
+   * Why the bar moves. `RESOURCE`: a resource delays it. `LINKS`: only the work before it moved, and its
+   * hand placement is now too early, so it moves with it ("the work before it moved").
+   */
+  reason: 'RESOURCE' | 'LINKS';
 }
 
 /** An activity named in the preview without being moved by it. */
@@ -1144,6 +1149,11 @@ export interface LevellingApplication {
   items: LevellingApplicationItem[];
   /** Levelling moved these, but their new position would be earlier than their links allow; logic carries them. */
   leftToLogic: LevellingApplicationNamedActivity[];
+  /**
+   * Activities with no placement of their own that will move only because the bars before them move:
+   * they get no row and follow their links once the rows are written.
+   */
+  followingLinks: LevellingApplicationNamedActivity[];
   /** Hand-placed activities the apply leaves earlier than their logic allows. */
   conflictingPlaced: LevellingApplicationNamedActivity[];
   /** Rows whose new position breaches a start or finish bound they did not breach before. */

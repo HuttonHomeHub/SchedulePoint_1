@@ -21,26 +21,26 @@ import {
 } from './working-time-calendar';
 
 /**
- * **`docs/specs/logic-aware-levelling/` M0: what `levelSchedule` does TODAY to a plan whose delayed
- * activities have followers, captured before `level.ts` is touched.**
+ * **`docs/specs/logic-aware-levelling/`: what `levelSchedule` does to a plan whose delayed activities
+ * have followers.**
  *
  * It is the sibling of {@link ./level.parity.spec.ts} and it is the opposite kind of file. That corpus
  * is the Gate B/C parity argument: none of its eight scenarios has a delayed activity with a
  * successor (spec §0 C10, measured in `m0-measurement.md`), so its snapshots must **never** move. These
- * snapshots are of shapes that DO have a follower of a delayed activity, so they record today's
- * answer, which is the defect, and **they are expected to move exactly once, in M2**, when Pass C
- * lands. That diff is the review artefact for the whole epic: every line of it should be a follower
- * moving later because a predecessor did, and nothing else.
+ * snapshots are of shapes that DO have a follower of a delayed activity. M0 captured them as the engine
+ * answered before it read links (the defect) and they moved exactly once, in M2, when Pass C landed:
+ * every line of that diff is a follower moving later because a predecessor did, and nothing else.
  *
  * Three groups, in the order a reader should trust them:
  *
- * 1. **Snapshots** (the five propagation shapes) — what is current, not what is correct.
- * 2. **Gate D guards**, plain `it`, which hold today **and after M2**: a plan that has a conflicted or
+ * 1. **Snapshots** (the five propagation shapes) — the answer with Pass C, so a later change shows.
+ * 2. **Gate D guards**, which held before Pass C and hold after it: a plan that has a conflicted or
  *    hand-placed bar but no predecessor that levelling moved must not change (spec §4.5, Gate D).
- * 3. **`it.fails`**, red today and flipped to `it` by M2, each paired with a plain-`it` precondition
- *    that asserts the fixture's numbers, so a case cannot be red for the wrong reason (ADR-0110, the
- *    `apply-levelling.spec.ts` pattern). `m0-measurement.md` records each one run green against a
- *    reference Pass C and the wrong implementations it was built to catch.
+ * 3. **Cases written red in M0** (`it.fails`, then flipped by M2). Each is paired with a plain-`it`
+ *    precondition that asserts the fixture's numbers WITHOUT reading the overlay of the activity under
+ *    test, so a case cannot be green for the wrong reason (ADR-0110, the `apply-levelling.spec.ts`
+ *    pattern). `m0-measurement.md` records each run against the wrong implementations it was built to
+ *    catch.
  */
 
 const DAY = 1440;
@@ -87,12 +87,19 @@ function solve(shape: Shape) {
   const dataDate = shape.dataDate ?? '2026-01-01';
   const calendar = shape.calendar ?? allMinutesWorkCalendar;
   const output = computeSchedule(shape.activities, shape.edges, { dataDate, calendar });
-  const leveled = levelSchedule(shape.activities, output, shape.assignments, shape.resources, {
-    levelWithinFloatOnly: shape.levelWithinFloatOnly ?? false,
-    dataDate,
-    planCalendar: calendar,
-    anchor: 'PLACED',
-  });
+  const leveled = levelSchedule(
+    shape.activities,
+    output,
+    shape.edges,
+    shape.assignments,
+    shape.resources,
+    {
+      levelWithinFloatOnly: shape.levelWithinFloatOnly ?? false,
+      dataDate,
+      planCalendar: calendar,
+      anchor: 'PLACED',
+    },
+  );
   return {
     ...leveled,
     dataDate,
@@ -107,13 +114,22 @@ function solve(shape: Shape) {
  * the one `forwardLowerBound` states, so this reads the rule and does not restate it. A level-of-effort
  * predecessor pushes nothing and a mandatory or started successor is never moved (spec D-2).
  */
-function violatedLinks(shape: Shape, solved: ReturnType<typeof solve>): string[] {
+function violatedLinks(
+  shape: Shape,
+  solved: ReturnType<typeof solve>,
+  /** `drawn` reads every SUCCESSOR where it is drawn, ignoring its overlay: what Pass C exists to repair. */
+  successors: 'levelled' | 'drawn' = 'levelled',
+): string[] {
   const activityById = new Map(shape.activities.map((a) => [a.id, a]));
   const dataDateAbs = instantToAbsMinutes(solved.dataDate);
   const at = (offset: number) => advanceWorking(solved.calendar, dataDateAbs, offset);
   const start = (r: EngineResult) =>
     rollForwardToWorking(solved.calendar, at(r.leveledStartOffset ?? r.placedStartOffset));
   const finish = (r: EngineResult) => at(r.leveledFinishOffset ?? r.placedFinishOffset);
+  const successorStart = (r: EngineResult) =>
+    successors === 'drawn'
+      ? rollForwardToWorking(solved.calendar, at(r.placedStartOffset))
+      : start(r);
   return shape.edges
     .filter((e) => {
       const pred = activityById.get(e.predecessorId)!;
@@ -132,7 +148,7 @@ function violatedLinks(shape: Shape, solved: ReturnType<typeof solve>): string[]
         succ.durationMinutes,
         solved.calendar,
       );
-      return rollForwardToWorking(cal, bound) > start(solved.byId.get(e.successorId)!);
+      return rollForwardToWorking(cal, bound) > successorStart(solved.byId.get(e.successorId)!);
     })
     .map((e) => e.id)
     .sort();
@@ -205,7 +221,7 @@ const SHAPES: Record<string, Shape> = {
   },
 };
 
-describe('levelSchedule: followers of a delayed activity, as the engine answers today', () => {
+describe('levelSchedule: followers of a delayed activity follow it', () => {
   for (const [name, shape] of Object.entries(SHAPES)) {
     it(name, () => {
       const { results, summary } = solve(shape);
@@ -228,7 +244,7 @@ describe('levelSchedule: followers of a delayed activity, as the engine answers 
   }
 });
 
-// ── Gate D guards: hold today and after M2 ────────────────────────────────────────────────────────
+// ── Gate D guards: held before Pass C and hold after it ────────────────────────────────────────────────────────
 
 describe('Gate D: an activity levelling did not move behind keeps the answer it has today', () => {
   it('a hand-placed predecessor that levelling leaves where it is does not push a follower already earlier than its links', () => {
@@ -264,15 +280,57 @@ describe('Gate D: an activity levelling did not move behind keeps the answer it 
   });
 });
 
-// ── Red until M2 ──────────────────────────────────────────────────────────────────────────────────
+describe('Gate D: a predecessor that moved does not repair a follower another predecessor binds', () => {
+  // Both fixtures: Q holds the crane for three days, so P is levelled to 4-6 January (a real move), and S
+  // is hand-placed on a date earlier than its links allow. A SECOND predecessor X binds S later than P's
+  // move reaches, so P's delay changes nothing for S and S must stay exactly where it is drawn. They
+  // differ in HOW X binds, which is what tells the two wrong implementations apart (m0-measurement.md
+  // T3, and the follow-up recorded with M2): one that does not compare the two floors repairs S in the
+  // first; one that reads the early dates rather than what a bar passes on repairs it in the second.
+  const crane = [on('Q', 'CRANE'), on('P', 'CRANE')];
+  const heads = [task('Q', 3, { levelingPriority: 1 }), task('P', 3, { levelingPriority: 2 })];
+
+  it('an unmoved long predecessor binds S: its floors are equal, so S is not repaired', () => {
+    const shape: Shape = {
+      activities: [...heads, task('X', 6), task('S', 1, { visualStart: '2026-01-02' })],
+      edges: [edge('X', 'S'), edge('P', 'S', 'SS')],
+      assignments: crane,
+      resources: [CRANE],
+    };
+    const { byId } = solve(shape);
+    expect(byId.get('P')!.leveledStart).toBe('2026-01-04');
+    expect(byId.get('S')!.visualConflict).toBe(true);
+    expect(startOf(byId.get('S'))).toBeNull();
+  });
+
+  it('a hand-placed predecessor binds S: its placement, not its early date, is what it passes on', () => {
+    const shape: Shape = {
+      activities: [
+        ...heads,
+        task('X', 2, { visualStart: '2026-01-20' }),
+        task('S', 1, { visualStart: '2026-01-03' }),
+      ],
+      edges: [edge('X', 'S'), edge('P', 'S')],
+      assignments: crane,
+      resources: [CRANE],
+    };
+    const { byId } = solve(shape);
+    expect(byId.get('P')!.leveledStart).toBe('2026-01-04');
+    expect(byId.get('S')!.visualConflict).toBe(true);
+    expect(startOf(byId.get('S'))).toBeNull();
+  });
+});
+
+// ── Written red in M0, green with Pass C ──────────────────────────────────────────────────────────────────────────────────
 
 describe('SC-1: no ghost starts earlier than its links allow', () => {
   for (const [name, shape] of Object.entries(SHAPES)) {
-    it(`precondition: ${name} has a link its overlay breaks today`, () => {
-      expect(violatedLinks(shape, solve(shape)).length).toBeGreaterThan(0);
+    it(`precondition: ${name} has a link that the follower's DRAWN position breaks`, () => {
+      // Independent of Pass C: were the followers left where they are drawn, a link would not hold.
+      expect(violatedLinks(shape, solve(shape), 'drawn').length).toBeGreaterThan(0);
     });
 
-    it.fails(`holds for ${name}`, () => {
+    it(`holds for ${name}`, () => {
       expect(violatedLinks(shape, solve(shape))).toEqual([]);
     });
   }
@@ -283,7 +341,7 @@ describe('SC-1: no ghost starts earlier than its links allow', () => {
  * no links): the M0 S2 fixture. `Q` and `P` share a crane for three days each, `C` follows `P`, the
  * calendar is 24/7 and the data date is Monday 5 January. `Q` takes the crane first (priority 1), so `P`
  * is levelled to 8-10 January, and `C` cannot start before `P` finishes, so it runs 11-12 January. The
- * levelled finish is therefore 12 January: today's figure is 10 January, two days early (#427).
+ * levelled finish is therefore 12 January: the figure before Pass C was 10 January, two days early (#427).
  */
 describe('the chain golden (spec §4.5)', () => {
   const golden: Shape = {
@@ -298,18 +356,16 @@ describe('the chain golden (spec §4.5)', () => {
     dataDate: '2026-01-05',
   };
 
-  it('precondition: P is levelled to 8-10 January, C has no overlay, and the levelled finish is 10 January', () => {
-    const { byId, summary } = solve(golden);
+  it('precondition: P is levelled to 8-10 January while C is drawn 8-9 January, before P finishes', () => {
+    const { byId } = solve(golden);
     expect([byId.get('P')!.leveledStart, byId.get('P')!.leveledFinish]).toEqual([
       '2026-01-08',
       '2026-01-10',
     ]);
-    expect(startOf(byId.get('C'))).toBeNull();
-    expect(byId.get('C')!.earlyFinish).toBe('2026-01-09');
-    expect(summary.leveledProjectFinish).toBe('2026-01-10');
+    expect(byId.get('C')!.visualEffectiveFinish).toBe('2026-01-09');
   });
 
-  it.fails('levels C to 11-12 January and finishes the plan on 12 January', () => {
+  it('levels C to 11-12 January and finishes the plan on 12 January', () => {
     const { byId, summary } = solve(golden);
     expect([byId.get('C')!.leveledStart, byId.get('C')!.leveledFinish]).toEqual([
       '2026-01-11',
@@ -341,14 +397,14 @@ describe('an LOE predecessor pushes nothing, but a real predecessor still does',
     levelWithinFloatOnly: true,
   };
 
-  it('precondition: C is levelled to 3 January and D, which follows it, starts on 1 January with no overlay', () => {
+  it('precondition: C is levelled to 3 January and D, which follows it, is drawn on 1 January', () => {
     const { byId } = solve(shape);
     expect(byId.get('C')!.leveledStart).toBe('2026-01-03');
     expect(byId.get('D')!.earlyStart).toBe('2026-01-01');
-    expect(startOf(byId.get('D'))).toBeNull();
+    expect(byId.get('D')!.visualEffectiveStart).toBe('2026-01-01');
   });
 
-  it.fails('levels D to 3 January, behind C', () => {
+  it('levels D to 3 January, behind C', () => {
     expect(startOf(solve(shape).byId.get('D'))).toBe('2026-01-03');
   });
 });
@@ -383,20 +439,26 @@ describe('the within-float cap never puts a follower before its link floor', () 
     levelWithinFloatOnly: true,
   };
 
-  it('precondition: B is levelled to 4-5 January and C sits at 1-3 January, finishing before the activity it must finish with', () => {
+  it('precondition: B is levelled to 4-5 January while C is drawn 1-3 January, finishing before B', () => {
     const { byId } = solve(shape);
     expect([byId.get('B')!.leveledStart, byId.get('B')!.leveledFinish]).toEqual([
       '2026-01-04',
       '2026-01-05',
     ]);
-    expect([byId.get('C')!.leveledStart, byId.get('C')!.leveledFinish]).toEqual([
+    expect([byId.get('C')!.visualEffectiveStart, byId.get('C')!.visualEffectiveFinish]).toEqual([
       '2026-01-01',
       '2026-01-03',
     ]);
   });
 
-  it.fails('keeps C finishing no earlier than B', () => {
+  it('keeps C finishing no earlier than B', () => {
     const { byId } = solve(shape);
     expect(byId.get('C')!.leveledFinish! >= byId.get('B')!.leveledFinish!).toBe(true);
+    // The clamp lands C on its link floor (B's finish), so it runs 3-5 January; clamped to the anchor
+    // instead (the wrong implementation) it ran 1-3 January.
+    expect([byId.get('C')!.leveledStart, byId.get('C')!.leveledFinish]).toEqual([
+      '2026-01-03',
+      '2026-01-05',
+    ]);
   });
 });

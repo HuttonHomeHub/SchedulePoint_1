@@ -9,15 +9,12 @@ import { runScenario } from './scenarios';
  * are: those say the two serialised pairs serialise and the mandatory activities do not move, and they
  * pass before and after this epic unedited.
  *
- * What the fixture does today (`m0-measurement.md`, M0-T1): the crane pair that levelling serialises is
+ * What the fixture does (`m0-measurement.md`, M0-T1): the crane pair that levelling serialises is
  * `A6100` and `A6200`, and the one it DELAYS is `A6100` (4,800 minutes), not `A6200` as the spec's C11
  * assumed. `A6100 → A6200` is SS+0, so `A6200` must start no earlier than `A6100`'s ghost does, and the
- * chain behind them (`A6500`, and through the rest of the network `A7740`) must follow. Today none of
- * them has an overlay at all.
- *
- * The `it.fails` cases are red until M2. The last two are plain `it`: they hold today (nothing behind
- * the delayed activities moves, so their predecessors' positions are unchanged) and must still hold
- * once those followers have moved, which is the part of "follows its links" a wrong push would break.
+ * chain behind them (`A6500`, and through the rest of the network `A7740`) must follow. Before Pass C
+ * none of them had an overlay at all; those cases were `it.fails` in M0 and are plain `it` now. The last
+ * two held both before and after: they say a follower is never left before the predecessor it follows.
  */
 describe('S10: what follows the delayed crane activity follows it', () => {
   const run = runScenario(loadFixture(), 'S10_LEVELLED');
@@ -30,18 +27,17 @@ describe('S10: what follows the delayed crane activity follows it', () => {
   const finishOf = (id: string) =>
     byId.get(id)!.leveledFinishOffset ?? byId.get(id)!.placedFinishOffset;
 
-  it('precondition: A6100 is delayed, A6200 starts before A6100 does, and neither A6500 nor A7740 has an overlay', () => {
+  it('precondition: A6100 is delayed, and A6200 is DRAWN before A6100 starts', () => {
     expect(byId.get('A6100')!.levelingDelay ?? 0).toBeGreaterThan(0);
-    expect(startOf('A6200')).toBeLessThan(startOf('A6100'));
-    expect(byId.get('A6500')!.leveledStartOffset ?? null).toBeNull();
-    expect(byId.get('A7740')!.leveledStartOffset ?? null).toBeNull();
+    // Read from where the bar is drawn, not from its overlay, so the case is about the fixture.
+    expect(byId.get('A6200')!.placedStartOffset).toBeLessThan(startOf('A6100'));
   });
 
-  it.fails('A6200 starts no earlier than A6100 does (SS+0)', () => {
+  it('A6200 starts no earlier than A6100 does (SS+0)', () => {
     expect(startOf('A6200')).toBeGreaterThanOrEqual(startOf('A6100'));
   });
 
-  it.fails('A6500 and A7740 have a levelled position of their own', () => {
+  it('A6500 and A7740 have a levelled position of their own', () => {
     expect(byId.get('A6500')!.leveledStartOffset ?? null).not.toBeNull();
     expect(byId.get('A7740')!.leveledStartOffset ?? null).not.toBeNull();
   });

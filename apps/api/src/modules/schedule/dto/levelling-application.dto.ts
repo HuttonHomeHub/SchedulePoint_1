@@ -84,6 +84,14 @@ export class LevellingApplicationItemDto implements LevellingApplicationItem {
       'on the next working day’s start.',
   })
   roundedToNextDay!: boolean;
+
+  @ApiProperty({
+    enum: ['RESOURCE', 'LINKS'],
+    description:
+      '`RESOURCE`: a resource delays the bar. `LINKS`: only the work before it moved and its own hand ' +
+      'placement is now too early, so it moves with it.',
+  })
+  reason!: 'RESOURCE' | 'LINKS';
 }
 
 export class LevellingApplicationNamedActivityDto implements LevellingApplicationNamedActivity {
@@ -139,6 +147,13 @@ export class LevellingApplicationDto implements LevellingApplication {
   @ApiProperty({
     type: [LevellingApplicationNamedActivityDto],
     description:
+      'Activities with no placement of their own that levelling moved only because the work before them moved: they get no row and follow their links once the rows are written. Not a conflict.',
+  })
+  followingLinks!: LevellingApplicationNamedActivityDto[];
+
+  @ApiProperty({
+    type: [LevellingApplicationNamedActivityDto],
+    description:
       'Hand-placed activities the apply leaves earlier than their logic allows: the one kind of conflict it is allowed to leave, named.',
   })
   conflictingPlaced!: LevellingApplicationNamedActivityDto[];
@@ -184,6 +199,7 @@ export class LevellingApplicationDto implements LevellingApplication {
       })),
       items: result.items.map((i) => ({ ...i })),
       leftToLogic: result.leftToLogic.map((a) => ({ id: a.id, name: a.name })),
+      followingLinks: result.followingLinks.map((a) => ({ id: a.id, name: a.name })),
       conflictingPlaced: result.conflictingPlaced.map((a) => ({ id: a.id, name: a.name })),
       laterThanBoundIntroduced: result.laterThanBoundIntroduced,
       projectFinishBefore: result.projectFinishBefore,

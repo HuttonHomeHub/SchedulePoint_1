@@ -19,12 +19,21 @@ import {
  * spec §4.6): the pure derivation of the `visualStart` rows that would put every levelled bar where
  * the resource actually frees up — what dragging each bar onto its ghost would write, done at once.
  *
- * It **writes nothing and holds no rule about links.** Levelling reads no edges (A5), so its ghosts can
- * start before a delayed predecessor finishes; rather than re-implementing logic here, the function
- * asks the engine. It solves a copy of the plan with every target written, and any target Pass 2
- * reports `EARLIER_THAN_LOGIC` is left out of the rows. That is safe in one pass because a conflicted
- * placement passes on its logic-earliest (`compute.ts`, `prop`), exactly what leaving it alone passes
- * on, so no other activity's result depends on whether it was dropped.
+ * It **writes nothing and holds no rule about links.** Levelling now pushes a follower no earlier than
+ * its links allow (`docs/specs/logic-aware-levelling/`), but a ghost can still start before a link
+ * allows (a rounded predecessor, a hand placement), so rather than re-implementing logic here the
+ * function asks the engine. It solves a copy of the plan with every target written, and any target
+ * Pass 2 reports `EARLIER_THAN_LOGIC` is left out of the rows. That is safe in one pass because a
+ * conflicted placement passes on its logic-earliest (`compute.ts`, `prop`), exactly what leaving it
+ * alone passes on, so no other activity's result depends on whether it was dropped.
+ *
+ * ## Who gets a row
+ *
+ * A bar levelling moved gets a row, **except an unplaced one that moved only because the work before it
+ * moved** (`leveledFollowsLinks`): it follows its links, so a placement would pin it to a date and
+ * detach it from them. It is reported in `followingLinks` instead. A **hand-placed** one has a
+ * placement the knock-on has made too early, so it does get a row, with reason `LINKS` (CQ-1 (a)): the
+ * same thing the apply already did for a hand-placed bar a resource delays.
  *
  * ## The target date
  *
@@ -70,6 +79,11 @@ export interface LevellingApplicationItem {
   wasPlaced: boolean;
   /** The levelled instant fell part-way through a day and the target is the next day start. */
   roundedToNextDay: boolean;
+  /**
+   * Why the bar moves: `RESOURCE` (a resource delays it, possibly as well as the work before it) or
+   * `LINKS` (only the work before it moved, and its own placement is now too early).
+   */
+  reason: 'RESOURCE' | 'LINKS';
 }
 
 export interface LevellingApplication {
@@ -80,6 +94,11 @@ export interface LevellingApplication {
   roundedToNextDay: string[];
   /** Candidates dropped because the engine said earlier than logic, that carried no placement. */
   leftToLogic: string[];
+  /**
+   * Unplaced activities that will move only because the bars before them move: they get no row, and
+   * follow their links once the rows are written.
+   */
+  followingLinks: string[];
   /**
    * Hand-placed activities the apply leaves earlier than their logic allows: candidates dropped for
    * that reason, and any placed activity a kept move newly pushes past its own placement. The one
@@ -113,6 +132,22 @@ function targetDateFor(
   type: EngineActivity['type'],
   levelled: number,
 ): { date: string; rounded: boolean } {
+  if (type === 'FINISH_MILESTONE') {
+    // A finish milestone's date means the END of that day (#381), so the placement of day D is the
+    // working minute after D's midnight-to-midnight span: always on a LATER day than D. The loop below
+    // reads "the placement landed on another day" as a non-working day and chases it forever, so a
+    // milestone is dated by walking back to the earliest day whose end is at or after the instant.
+    const placementOf = (date: string): number => startDateInstant(cal, date, type);
+    const shifted = (date: string, days: number): string =>
+      dateOf(instantToAbsMinutes(date) + days * MINUTES_PER_DAY);
+    let date = dateOf(levelled);
+    while (placementOf(shifted(date, -1)) >= levelled) date = shifted(date, -1);
+    for (;;) {
+      const placed = placementOf(date);
+      if (placed >= levelled) return { date, rounded: placed > levelled };
+      date = shifted(date, 1);
+    }
+  }
   let midnight = instantToAbsMinutes(dateOf(levelled));
   for (;;) {
     const date = dateOf(midnight);
@@ -139,12 +174,19 @@ function solve(
     dataDate,
     calendar: planCalendar,
   });
-  const leveled = levelSchedule(activities, output, input.assignments, input.resources, {
-    levelWithinFloatOnly,
-    dataDate,
-    planCalendar,
-    anchor: 'PLACED',
-  });
+  const leveled = levelSchedule(
+    activities,
+    output,
+    input.edges,
+    input.assignments,
+    input.resources,
+    {
+      levelWithinFloatOnly,
+      dataDate,
+      planCalendar,
+      anchor: 'PLACED',
+    },
+  );
   return {
     results: leveled.results,
     leveledActivityCount: leveled.summary.leveledActivityCount ?? 0,
@@ -168,11 +210,20 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
     result: EngineResult;
     target: string;
     rounded: boolean;
+    reason: 'RESOURCE' | 'LINKS';
   }
   const candidates: Candidate[] = [];
+  const followingLinks: string[] = [];
   for (const result of before.results) {
     const activity = activityById.get(result.activityId);
     if (!activity || (result.levelingDelay ?? 0) <= 0 || result.leveledStartInstant == null) {
+      continue;
+    }
+    // A knock-on only (`leveledFollowsLinks`): no resource keeps it from where its links put it, so an
+    // unplaced bar follows them and a row would only pin it. A placed one needs the row (CQ-1 (a)).
+    const knockOn = result.leveledFollowsLinks === true;
+    if (knockOn && activity.visualStart == null) {
+      followingLinks.push(result.activityId);
       continue;
     }
     const { date, rounded } = targetDateFor(
@@ -180,7 +231,13 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       activity.type,
       result.leveledStartInstant,
     );
-    candidates.push({ activity, result, target: date, rounded });
+    candidates.push({
+      activity,
+      result,
+      target: date,
+      rounded,
+      reason: knockOn ? 'LINKS' : 'RESOURCE',
+    });
   }
 
   if (candidates.length === 0) {
@@ -189,6 +246,7 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       items: [],
       roundedToNextDay: [],
       leftToLogic: [],
+      followingLinks: followingLinks.sort(),
       conflictingPlaced: [],
       laterThanBoundIntroduced: 0,
       remainingAfterApply: before.leveledActivityCount,
@@ -245,9 +303,11 @@ export function planLevellingApplication(input: LevellingApplicationInput): Leve
       targetStart: c.target,
       wasPlaced: c.activity.visualStart != null,
       roundedToNextDay: c.rounded,
+      reason: c.reason,
     })),
     roundedToNextDay: ordered.filter((c) => c.rounded).map((c) => c.activity.id),
     leftToLogic: dropped.filter((c) => c.activity.visualStart == null).map((c) => c.activity.id),
+    followingLinks: followingLinks.sort(),
     conflictingPlaced: [...conflictingPlaced].sort(),
     laterThanBoundIntroduced,
     remainingAfterApply: after.leveledActivityCount,

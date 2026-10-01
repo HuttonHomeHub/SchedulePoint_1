@@ -63,7 +63,7 @@ function run(
   levelWithinFloatOnly = false,
 ) {
   const output = computeSchedule(activities, edges, { dataDate: DATA_DATE, calendar: CAL });
-  const leveled = levelSchedule(activities, output, assignments, resources, {
+  const leveled = levelSchedule(activities, output, edges, assignments, resources, {
     levelWithinFloatOnly,
     dataDate: DATA_DATE,
     planCalendar: CAL,
@@ -746,7 +746,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
     }
     const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
     const before = counts.addWorkingTime + counts.workingTimeBetween;
-    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 1 }], {
+    levelSchedule(activities, output, [], assignments, [{ id: 'R', capacity: 1 }], {
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,
@@ -773,7 +773,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
     }
     const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
     const before = counts.addWorkingTime + counts.workingTimeBetween;
-    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 1 }], {
+    levelSchedule(activities, output, [], assignments, [{ id: 'R', capacity: 1 }], {
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,
@@ -807,7 +807,7 @@ describe('levelSchedule — placement-search cost is bounded by placements, not 
     }
     const output = computeSchedule(activities, [], { dataDate: DATA_DATE, calendar });
     const before = counts.addWorkingTime + counts.workingTimeBetween;
-    levelSchedule(activities, output, assignments, [{ id: 'R', capacity: 6 }], {
+    levelSchedule(activities, output, [], assignments, [{ id: 'R', capacity: 6 }], {
       levelWithinFloatOnly: false,
       dataDate: DATA_DATE,
       planCalendar: calendar,

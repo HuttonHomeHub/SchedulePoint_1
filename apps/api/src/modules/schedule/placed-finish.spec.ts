@@ -110,6 +110,7 @@ describe('leveledProjectFinishOf', () => {
     const leveled = levelSchedule(
       activities,
       output,
+      [],
       [
         { activityId: 'X', resourceId: 'R', unitsPerHour: 1 },
         { activityId: 'Y', resourceId: 'R', unitsPerHour: 1 },

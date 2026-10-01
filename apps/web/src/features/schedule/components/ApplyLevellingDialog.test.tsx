@@ -57,6 +57,7 @@ function item(id: string, over: Partial<LevellingApplicationItem> = {}): Levelli
     targetStart: '2026-03-09',
     wasPlaced: false,
     roundedToNextDay: false,
+    reason: 'RESOURCE',
     ...over,
   };
 }
@@ -67,6 +68,7 @@ function application(over: Partial<LevellingApplication> = {}): LevellingApplica
     rows: [row('a'), row('b')],
     items: [item('a'), item('b')],
     leftToLogic: [],
+    followingLinks: [],
     conflictingPlaced: [],
     laterThanBoundIntroduced: 0,
     projectFinishBefore: '2026-04-01',

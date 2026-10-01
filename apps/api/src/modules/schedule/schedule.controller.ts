@@ -367,7 +367,10 @@ export class ScheduleController {
       'placement is a date: a resource that frees up part-way through a day puts the bar on the next ' +
       'working day’s start (`items[].roundedToNextDay`). **A target the links refuse is not written** ' +
       '(the engine is asked, this route holds no rule about links): it is reported in `leftToLogic`, ' +
-      'or in `conflictingPlaced` when the bar carries a placement of its own. One press is one step: ' +
+      'or in `conflictingPlaced` when the bar carries a placement of its own. **A bar that moved only ' +
+      'because the work before it moved gets no row** when it carries no placement of its own: it ' +
+      'follows its links, and is named in `followingLinks`; a hand-placed one gets a row with ' +
+      '`items[].reason` `LINKS`. One press is one step: ' +
       '`remainingAfterApply` says how many bars levelling would still move afterwards, and is ' +
       'reported, not chased. A plan that does not level returns no rows. **It writes exactly the ' +
       'constraint each activity already has** in `rows`; nothing here sets or clears one. The response ' +

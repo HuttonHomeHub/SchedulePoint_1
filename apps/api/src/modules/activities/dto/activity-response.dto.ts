@@ -405,7 +405,8 @@ export class ActivityResponseDto implements ActivitySummary {
     type: String,
     description:
       'Resource-levelling delayed start (engine-owned, ADR-0041 §3), or null until levelled. ' +
-      'Levelling starts from where the bar is drawn (its early start when unplaced), so this is that start when nothing delays it.',
+      'Levelling starts from where the bar is drawn (its early start when unplaced), so this is that start when nothing delays it. ' +
+      'It is also set for an activity with no capped resource that levelling moved only because a predecessor moved.',
   })
   leveledStart!: string | null;
 

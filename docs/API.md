@@ -1591,13 +1591,21 @@ controller's 30 / 60 s per handler.
   every participant at its placed start, or its early start when it is unplaced, and a bar it does not
   delay keeps its drawn start (ADR-0166, #413). Levelling never moves a bar; the levelled dates are a
   ghost overlay. The Critical Path Test is the one reader that levels on the network span instead.
+- **Levelling follows the links** (`docs/specs/logic-aware-levelling/`): a follower of a delayed
+  activity is levelled no earlier than its links allow from where the predecessor is levelled. So
+  `leveledStart` / `leveledFinish` / `levelingDelayDays` are non-null where levelling moved the
+  activity **for a resource or because a predecessor moved**: an activity that holds no capped
+  resource, and a milestone, can now carry them. A mandatory-constrained, started, level-of-effort or
+  summary activity is never moved by a link, and an LOE predecessor pushes nothing. Nothing is
+  filled back in behind a re-placed activity. **Existing levelled plans show new ghosts and a later
+  levelled finish at the first recalculation after release.**
 - `leveledProjectFinish` — on `GET …/schedule/summary` and the recalculate response alike — is one
   definition: the latest of each activity's levelled finish, else its **drawn** finish, over
   non-level-of-effort, non-summary activities (`placed-finish.ts`). So a hand-placed bar that holds no
   capped resource counts where it is drawn and the figure is never earlier than `projectFinish`. It is
   `null` unless at least one activity carries a levelled finish. The summary read took `early_finish`
-  as the fallback and counted every activity until the logic-aware levelling M1 (`docs/TECH_DEBT.md`
-  #427 stays open for the follower knock-on).
+  as the fallback and counted every activity until the logic-aware levelling M1, and it ignored the
+  follower knock-on until the engine change above (`docs/TECH_DEBT.md` #427).
 - The `GET …/schedule/summary` roll-up also surfaces **cross-plan staleness**
   (ADR-0045 §5 / ADR-0035 §30.7): `scheduleStale` (a boolean — true when an
   upstream cross-plan plan was recalculated more recently than this plan, so a
@@ -1729,7 +1737,12 @@ controller's 30 / 60 s per handler.
   **A target the plan's links refuse is not written** — the engine is asked, this route holds no
   rule about links — and is reported in `leftToLogic`, or in `conflictingPlaced` when the bar
   carries a placement of its own (also named there: a placed bar a written row pushes past its own
-  placement). **One press is one step:** `remainingAfterApply` is how many bars levelling would
+  placement). **A bar that moved only because the work before it moved gets no row** when it has no
+  placement of its own: it follows its links once the rows are written, so a row would pin it to a
+  date. It is named in `followingLinks` instead (an additive field; not a conflict, and empty on a
+  plan without chains). A **hand-placed** one does get a row, because its own placement is what the
+  knock-on made too early, and `items[].reason` says why each row is written: `RESOURCE`, or `LINKS`
+  ("the work before it moved"). `leftToLogic` and `conflictingPlaced` are expected to stay near empty. **One press is one step:** `remainingAfterApply` is how many bars levelling would
   still move afterwards, and is reported, not chased. A plan that does not level returns empty
   arrays. `projectFinishBefore`/`After` are the **placed** finish (#404) from a real solve of each
   state. `computedFrom.scheduleComputedAt` lets a client refuse a preview older than the schedule it

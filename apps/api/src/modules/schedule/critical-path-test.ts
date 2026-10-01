@@ -159,6 +159,7 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   const control = levelIfEnabled(
     activities,
     computeSchedule(activities, edges, options),
+    edges,
     leveling,
     levelOptions,
   );
@@ -201,6 +202,7 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   const perturbed = levelIfEnabled(
     perturbedActivities,
     computeSchedule(perturbedActivities, edges, options),
+    edges,
     leveling,
     levelOptions,
   );

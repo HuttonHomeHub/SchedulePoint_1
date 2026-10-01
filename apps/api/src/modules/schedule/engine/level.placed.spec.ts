@@ -60,7 +60,7 @@ function run(
   anchor: LevelingOptions['anchor'] = 'PLACED',
 ) {
   const output = computeSchedule(activities, edges, { dataDate: DATA_DATE, calendar: CAL });
-  const leveled = levelSchedule(activities, output, onCrane(...ids), crane, {
+  const leveled = levelSchedule(activities, output, edges, onCrane(...ids), crane, {
     levelWithinFloatOnly,
     dataDate: DATA_DATE,
     planCalendar: CAL,

@@ -100,7 +100,8 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     name: string;
     days: number;
     priority: number;
-    resource: 'Crane' | 'Pump';
+    /** Absent for a lift that holds no capped resource (a follower the knock-on moves). */
+    resource?: 'Crane' | 'Pump';
     constraint?: { type: string; date: string };
   }
 
@@ -145,7 +146,7 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
       .send({ calendarId: null, version: 1 })
       .expect(200);
     const resourceIds = new Map<string, string>();
-    for (const name of new Set(lifts.map((l) => l.resource))) {
+    for (const name of new Set(lifts.flatMap((l) => (l.resource ? [l.resource] : [])))) {
       const created = await actor.agent
         .post(`${orgBase}/resources`)
         .send({ name, kind: 'EQUIPMENT', maxUnitsPerHour: 1 })
@@ -168,10 +169,12 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
         })
         .expect(201);
       const id = created.body.data.id as string;
-      await actor.agent
-        .post(`${orgBase}/activities/${id}/assignments`)
-        .send({ resourceId: resourceIds.get(lift.resource)!, unitsPerHour: 1 })
-        .expect(201);
+      if (lift.resource) {
+        await actor.agent
+          .post(`${orgBase}/activities/${id}/assignments`)
+          .send({ resourceId: resourceIds.get(lift.resource)!, unitsPerHour: 1 })
+          .expect(201);
+      }
       const ref = { id, version: created.body.data.version as number };
       refs.push(ref);
       byName.set(lift.name, ref);
@@ -218,10 +221,12 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
     expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
   });
 
-  it('A1b: a preview that leaves a clash says so, and the recalculation agrees', async () => {
+  it('A1b: a follower the pump holds behind another lift is a row of its own, and one press settles', async () => {
     // Q and P share the crane, R, S and T the pump, and S follows P. P is levelled to day 3 and finishes
-    // on day 6, which is later than S's own ghost (day 4), so S is left to its logic: it then runs on
-    // day 6 and pushes T, which the apply wrote on day 6, back again. One lift is still levelled.
+    // on day 6, so S cannot start before day 6; T already holds the pump from day 6, so S waits for it
+    // until day 8. That is a delay its own resource causes beyond its link, so S gets a row (reason
+    // RESOURCE), nothing is dropped and nothing is left. (Before `docs/specs/logic-aware-levelling/`
+    // S's ghost was earlier than its logic, was dropped, and left T clashing: one lift still levelled.)
     const lift = (name: string, days: number, priority: number, resource: 'Crane' | 'Pump') => ({
       name,
       days,
@@ -240,24 +245,63 @@ describe.skipIf(!hasDatabase)('Apply levelled dates — the preview read (e2e)',
       true,
     );
     const preview = await actor.agent.get(previewUrl(planId)).expect(200);
-    const { rows, remainingAfterApply, leftToLogic } = preview.body.data as {
+    const { rows, remainingAfterApply, leftToLogic, followingLinks } = preview.body.data as {
       rows: PlacementRow[];
       remainingAfterApply: number;
       leftToLogic: { id: string; name: string }[];
+      followingLinks: { id: string; name: string }[];
     };
     expect(rows.map((r) => [r.id, r.visualStart])).toEqual([
       [byName.get('P')!.id, '2026-01-04'],
       [byName.get('T')!.id, '2026-01-07'],
+      [byName.get('S')!.id, '2026-01-09'],
     ]);
-    expect(leftToLogic).toEqual([{ id: byName.get('S')!.id, name: 'S' }]);
-    expect(remainingAfterApply).toBe(1);
+    expect(leftToLogic).toEqual([]);
+    expect(followingLinks).toEqual([]);
+    expect(remainingAfterApply).toBe(0);
     await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
     const recalculated = await actor.agent
       .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
       .send({})
       .expect(200);
-    expect(recalculated.body.data.leveledActivityCount).toBe(1);
-    expect(recalculated.body.data.leveledActivityCount).toBe(remainingAfterApply);
+    expect(recalculated.body.data.leveledActivityCount).toBe(0);
+  });
+
+  it('A1c: a follower with no resource gets no row, is named, and follows its link after the apply', async () => {
+    const { actor, planId, byName } = await seedPlan(
+      [
+        { name: 'Q', days: 3, priority: 1, resource: 'Crane' },
+        { name: 'P', days: 3, priority: 2, resource: 'Crane' },
+        { name: 'S', days: 2, priority: 3 },
+      ],
+      [['P', 'S']],
+      true,
+    );
+    const preview = await actor.agent.get(previewUrl(planId)).expect(200);
+    const { rows, items, followingLinks, remainingAfterApply } = preview.body.data as {
+      rows: PlacementRow[];
+      items: { id: string; reason: string }[];
+      followingLinks: { id: string; name: string }[];
+      remainingAfterApply: number;
+    };
+    // P is delayed three days by the crane and finishes on day 6; S, which follows it, moves with it.
+    expect(rows.map((r) => [r.id, r.visualStart])).toEqual([[byName.get('P')!.id, '2026-01-04']]);
+    expect(items.map((i) => [i.id, i.reason])).toEqual([[byName.get('P')!.id, 'RESOURCE']]);
+    expect(followingLinks).toEqual([{ id: byName.get('S')!.id, name: 'S' }]);
+    expect(remainingAfterApply).toBe(0);
+
+    await actor.agent.patch(placementsUrl(planId)).send({ placements: rows }).expect(200);
+    const recalculated = await actor.agent
+      .post(`${orgBase}/plans/${planId}/schedule/recalculate`)
+      .send({})
+      .expect(200);
+    expect(recalculated.body.data.leveledActivityCount).toBe(0);
+    // S was never written a placement: it is drawn after P by its link alone.
+    const stored = await prisma.activity.findUniqueOrThrow({
+      where: { id: byName.get('S')!.id },
+      select: { visualStart: true },
+    });
+    expect(stored.visualStart).toBeNull();
   });
 
   it('A2: the preview writes nothing', async () => {

@@ -54,6 +54,7 @@ describe('engine resource-levelling goldens (first-principles)', () => {
       const leveled = levelSchedule(
         golden.activities,
         network,
+        golden.edges,
         golden.assignments,
         golden.resources,
         {

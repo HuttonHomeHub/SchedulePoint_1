@@ -89,7 +89,7 @@ function solve(s: Scenario, activities: readonly EngineActivity[] = s.activities
     dataDate: DATA_DATE,
     calendar: s.calendar,
   });
-  const leveled = levelSchedule(activities, output, s.assignments, s.resources, {
+  const leveled = levelSchedule(activities, output, s.edges, s.assignments, s.resources, {
     levelWithinFloatOnly: false,
     dataDate: DATA_DATE,
     planCalendar: s.calendar,
@@ -212,8 +212,12 @@ describe('planLevellingApplication — P2: the resource frees part-way through a
 
 /**
  * Q (crane, 3 days, first) holds the crane, so P (crane, 3 days, FS to S) is pushed three days. S is on
- * the pump behind R (4 days), so it is pushed one day only. Levelling reads no links (A5), so S's ghost
- * (Thursday) starts before P's levelled finish (Sunday 11 January).
+ * the pump behind R (4 days), so Pass B pushes it one day only, to Thursday: before P's levelled finish
+ * (Sunday 11 January). Levelling then follows the links (`docs/specs/logic-aware-levelling/`), so S is
+ * pushed on to the 11th, where its link puts it and the pump is free.
+ *
+ * **P3, P4, P9, P11, P12 and P14 were revised deliberately for that spec** (C20: it named two, M0
+ * measured six). Each says in its own comment what it asserted before and why that no longer holds.
  */
 const followerBase = (s: EngineActivity): Scenario => ({
   activities: [
@@ -231,45 +235,66 @@ const p3 = followerBase(task('S', 2 * DAY, { levelingPriority: 2 }));
 const p4 = followerBase(task('S', 2 * DAY, { levelingPriority: 2, visualStart: '2026-01-08' }));
 
 describe('planLevellingApplication — P3: an unplaced follower levelled less than its predecessor', () => {
-  it('precondition: S starts before P finishes in the overlay, and writing every ghost is a conflict', () => {
+  it('precondition: S is drawn before P finishes; its ghost follows P, and a row for it would pin it', () => {
     const { byId } = solve(p3);
     expect(byId.get('P')!.leveledStartOffset).toBe(3 * DAY);
     expect(byId.get('P')!.leveledFinishOffset).toBe(6 * DAY);
-    expect(byId.get('S')!.leveledStartOffset).toBe(4 * DAY);
-    expect(byId.get('S')!.leveledStart).not.toBe(byId.get('S')!.visualEffectiveStart);
+    // Read from where S is drawn, so the case is about the fixture and not about Pass C.
+    expect(byId.get('S')!.placedStartOffset).toBeLessThan(6 * DAY);
+    expect(byId.get('S')!.leveledStartOffset).toBe(6 * DAY);
+    expect(byId.get('S')!.leveledFollowsLinks).toBe(true);
+    // Writing S's ghost too is harmless to the logic but detaches S from it: it would be a placement.
     const everyGhost = [
       { activityId: 'P', visualStart: byId.get('P')!.leveledStart! },
       { activityId: 'S', visualStart: byId.get('S')!.leveledStart! },
     ];
-    expect(conflictsOf(settle(p3, everyGhost).byId)).toEqual(['S']);
-    expect(conflictsOf(settle(p3, [everyGhost[0]!]).byId)).toEqual([]);
+    expect(settle(p3, everyGhost).byId.get('S')!.visualDriftMinutes).not.toBeNull();
+    expect(settle(p3, [everyGhost[0]!]).byId.get('S')!.visualDriftMinutes).toBeNull();
   });
 
-  it('writes P only, drops S to logic, and plants no earlier-than-logic conflict', () => {
+  it('writes P only: S follows it by its link and has no placement after the settle', () => {
+    // Was `leftToLogic: ['S']` (levelling read no links, so S's ghost was earlier than logic and was
+    // dropped). Now S's ghost IS where its link puts it, so S is not a candidate at all: it is named in
+    // `followingLinks` (spec §4.7, CQ-1 (a)).
     const plan = planLevellingApplication(input(p3));
-    expect(conflictsOf(settle(p3, plan.rows).byId)).toEqual([]);
     expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
-    expect(plan.leftToLogic).toEqual(['S']);
+    expect(plan.followingLinks).toEqual(['S']);
+    expect(plan.leftToLogic).toEqual([]);
     expect(plan.conflictingPlaced).toEqual([]);
+    const settled = settle(p3, plan.rows);
+    expect(conflictsOf(settled.byId)).toEqual([]);
+    expect(settled.byId.get('S')!.visualDriftMinutes).toBeNull();
+    expect(settled.byId.get('S')!.visualEffectiveStart).toBe('2026-01-11');
     expect(plan.remainingAfterApply).toBe(0);
   });
 });
 
 describe('planLevellingApplication — P4: a hand-placed follower', () => {
-  it('precondition: S is hand-placed on 8 January and its ghost is a day later', () => {
+  it('precondition: S is hand-placed on 8 January and its ghost is on the 11th, where P finishes', () => {
     const { byId } = solve(p4);
     expect(byId.get('S')!.visualEffectiveStart).toBe('2026-01-08');
-    expect(byId.get('S')!.leveledStart).toBe('2026-01-09');
+    expect(byId.get('S')!.leveledStart).toBe('2026-01-11');
+    expect(byId.get('S')!.leveledFollowsLinks).toBe(true);
   });
 
-  it('keeps S where it was placed and names it as now conflicting', () => {
+  it('moves S with P, for the reason "the work before it moved" (CQ-1 (a))', () => {
+    // Was: keep S on the 8th and name it in `conflictingPlaced`, because its ghost (the 9th) was earlier
+    // than P's finish and so was dropped. Now S's ghost is the 11th, a placement its link allows, so it
+    // is written like any hand-placed bar a resource delays, with the reason LINKS.
     const plan = planLevellingApplication(input(p4));
-    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
-    expect(plan.conflictingPlaced).toEqual(['S']);
+    expect(plan.rows).toEqual([
+      { activityId: 'P', visualStart: '2026-01-08' },
+      { activityId: 'S', visualStart: '2026-01-11' },
+    ]);
+    expect(plan.items.map((i) => [i.activityId, i.reason, i.wasPlaced])).toEqual([
+      ['P', 'RESOURCE', false],
+      ['S', 'LINKS', true],
+    ]);
+    expect(plan.conflictingPlaced).toEqual([]);
     expect(plan.leftToLogic).toEqual([]);
-    // S keeps its own placement, which P's move has now made earlier than logic allows: the dialog
-    // names it, and it is the one conflict the apply is allowed to leave (US-3).
-    expect(conflictsOf(settle(p4, plan.rows).byId)).toEqual(['S']);
+    expect(plan.followingLinks).toEqual([]);
+    expect(conflictsOf(settle(p4, plan.rows).byId)).toEqual([]);
+    expect(plan.remainingAfterApply).toBe(0);
   });
 });
 
@@ -405,8 +430,9 @@ describe('planLevellingApplication — P8: the stored date is a working day', ()
 
 /**
  * Q holds the crane for three days, so P (FS to S) is moved to Thursday 8 January and finishes on the
- * 11th. S has no resource, so levelling never moves it and it is not a candidate; it was hand-placed
- * on the 8th, which was fine while P finished on the 8th and is earlier than logic once P moves.
+ * 11th. S has no resource; it was hand-placed on the 8th, which was fine while P finished on the 8th and
+ * is earlier than logic once P moves. Levelling now pushes S to the 11th with P (it was never a
+ * candidate before, because it had no overlay), so S is a LINKS row.
  */
 const p9: Scenario = {
   activities: [
@@ -444,12 +470,18 @@ describe('planLevellingApplication — P9: a placed bar a kept move pushes past 
     ]);
   });
 
-  it('writes P, and names S, which is not a candidate, as now conflicting', () => {
+  it('writes P and moves S with it, so no placement is left earlier than its logic', () => {
+    // Was: write P only and name S, which was not a candidate, in `conflictingPlaced`. S now carries a
+    // levelled position of its own (the knock-on), so it is a LINKS row and nothing is left conflicting.
     const plan = planLevellingApplication(input(p9));
-    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
-    expect(plan.conflictingPlaced).toEqual(['S']);
+    expect(plan.rows).toEqual([
+      { activityId: 'P', visualStart: '2026-01-08' },
+      { activityId: 'S', visualStart: '2026-01-11' },
+    ]);
+    expect(plan.items.find((i) => i.activityId === 'S')!.reason).toBe('LINKS');
+    expect(plan.conflictingPlaced).toEqual([]);
     expect(plan.leftToLogic).toEqual([]);
-    expect(conflictsOf(settle(p9, plan.rows).byId)).toEqual(['S']);
+    expect(conflictsOf(settle(p9, plan.rows).byId)).toEqual([]);
   });
 });
 
@@ -479,11 +511,15 @@ describe('planLevellingApplication — P10: a bound the move newly breaches', ()
 
 /**
  * P3's chain plus a third lift on the pump. R holds the pump for four days, S (FS after P) is levelled
- * to day 4 and T to day 6. P moves to day 3 and finishes on day 6, so S's ghost is earlier than its
- * logic and is dropped. Without S's ghost S runs at day 6 on logic, takes the pump from day 6 to 8 and
- * pushes T, which was written at day 6, back again: one lift is still levelled after the apply.
+ * to day 4 by Pass B and T to day 6. P moves to day 3 and finishes on day 6, so S cannot start before day
+ * 6: Pass C lifts it out of day 4 and re-places it from day 6, where T now holds the pump, so S lands on
+ * day 8 (the 13th) and needs a row of its own: its resource delays it beyond the knock-on.
  *
- * Reusing the solve that had every ghost written gets this wrong: S's written ghost is what frees T.
+ * **Revised deliberately.** This case used to be the one where S's ghost was earlier than its logic and
+ * was dropped, leaving T clashing when only the kept rows were written ("reusing the solve that had every
+ * ghost written gets this wrong"). With S's ghost now on its links nothing is dropped, so the clash it
+ * guarded is gone from this fixture; the dropped-candidate path is held by P20 below, on the one kind of
+ * candidate that can still be dropped.
  */
 const p11: Scenario = {
   activities: [
@@ -505,43 +541,45 @@ const p11: Scenario = {
   calendar: CAL24,
 };
 
-describe('planLevellingApplication — P11: a clash the dropped candidate leaves behind', () => {
-  it('precondition: every ghost written looks settled; only the kept ghosts written leaves T levelled', () => {
+describe('planLevellingApplication — P11: a follower that has to wait behind another lift', () => {
+  it('precondition: S is pushed past P by its link and then past T by the pump, and is not a knock-on only', () => {
     const { byId } = solve(p11);
     expect(delayedIdsOf(byId)).toEqual(['P', 'S', 'T']);
-    const ghost = (id: string) => ({ activityId: id, visualStart: byId.get(id)!.leveledStart! });
-    const everyGhost = settle(p11, [ghost('P'), ghost('S'), ghost('T')]);
-    expect(everyGhost.leveled.summary.leveledActivityCount).toBe(0);
-    const keptOnly = settle(p11, [ghost('P'), ghost('T')]);
-    expect(keptOnly.leveled.summary.leveledActivityCount).toBe(1);
-    expect(delayedIdsOf(keptOnly.byId)).toEqual(['T']);
+    // S is drawn on day 3, before P finishes on day 6, and lands on day 8: later than its link alone.
+    expect(byId.get('S')!.placedStartOffset).toBeLessThan(6 * DAY);
+    expect(byId.get('S')!.leveledStartOffset).toBe(8 * DAY);
+    expect(byId.get('S')!.leveledFollowsLinks).toBe(false);
   });
 
-  it('drops S, writes P and T, and reports the one lift still levelled, solved without S', () => {
+  it('writes P, T and S, drops nothing, and leaves nothing levelled', () => {
     const plan = planLevellingApplication(input(p11));
     expect(plan.rows).toEqual([
       { activityId: 'P', visualStart: '2026-01-08' },
       { activityId: 'T', visualStart: '2026-01-11' },
+      { activityId: 'S', visualStart: '2026-01-13' },
     ]);
-    expect(plan.leftToLogic).toEqual(['S']);
-    // The plan as it would stand, asked of the engine rather than of the function under test.
-    const settled = settle(p11, plan.rows);
-    expect(plan.remainingAfterApply).toBe(settled.leveled.summary.leveledActivityCount);
-    expect(plan.remainingAfterApply).toBe(1);
-    expect(delayedIdsOf(settled.byId)).toEqual(['T']);
-    expect(plan.after.filter((r) => (r.levelingDelay ?? 0) > 0).map((r) => r.activityId)).toEqual([
-      'T',
-    ]);
-    // S was dropped, not placed, so it is not a conflict the apply leaves behind.
+    expect(plan.leftToLogic).toEqual([]);
+    expect(plan.followingLinks).toEqual([]);
     expect(plan.conflictingPlaced).toEqual([]);
+    const settled = settle(p11, plan.rows);
+    expect(delayedIdsOf(settled.byId)).toEqual([]);
+    expect(conflictsOf(settled.byId)).toEqual([]);
+    expect(plan.remainingAfterApply).toBe(0);
   });
 });
 
 // ── P12: a milestone on a levelled chain ───────────────────────────────────────────────────────────
 
 /**
- * A and B clash on the crane (B is delayed). M is a finish milestone assigned to the crane after B: it
- * is never moved by levelling, so it cannot be a candidate and no row may name it.
+ * A and B clash on the crane (B is delayed). M is a finish milestone assigned to the crane after B.
+ * A milestone is never moved by a RESOURCE, but it IS moved by its links (spec D-2): a finish milestone
+ * that follows a delayed lift is the plan's levelled finish, so it carries the knock-on (C20).
+ *
+ * **Revised deliberately.** This asserted "a milestone never yields a row" with M delayed by nothing.
+ * M is now delayed with B, and `targetDateFor` threw (`windows is not iterable`) for a finish milestone
+ * under the M0 reference, because a finish milestone's date means the END of its day, which the loop read
+ * as a non-working day and chased past the calendar's horizon. The decision (CQ-1 (a)): an UNPLACED
+ * milestone follows its link and gets no row; a PLACED one gets a row like any hand-placed follower.
  */
 const p12: Scenario = {
   activities: [
@@ -554,19 +592,40 @@ const p12: Scenario = {
   resources: [CRANE],
   calendar: CAL24,
 };
+/** M dropped on B's last day before levelling (a finish milestone's date is the day it closes). */
+const p12Placed: Scenario = {
+  ...p12,
+  activities: p12.activities.map((a) => (a.id === 'M' ? { ...a, visualStart: '2026-01-07' } : a)),
+};
 
-describe('planLevellingApplication — P12: a milestone never yields a row', () => {
-  it('precondition: B is delayed and the milestone takes part in levelling without moving', () => {
+describe('planLevellingApplication — P12: a finish milestone that follows a delayed lift', () => {
+  it('precondition: B is delayed, and M, drawn before B finishes, is levelled to B’s finish', () => {
     const { byId } = solve(p12);
-    expect(delayedIdsOf(byId)).toEqual(['B']);
-    expect(byId.get('M')!.leveledStart).not.toBeNull();
-    expect(byId.get('M')!.levelingDelay).toBe(0);
+    expect(delayedIdsOf(byId)).toEqual(['B', 'M']);
+    expect(byId.get('M')!.placedStartOffset).toBeLessThan(byId.get('B')!.leveledFinishOffset!);
+    expect(byId.get('M')!.leveledStartOffset).toBe(byId.get('B')!.leveledFinishOffset);
+    // The day it closes (#381): B's last day, not the one after.
+    expect(byId.get('M')!.leveledStart).toBe('2026-01-10');
+    expect(byId.get('M')!.leveledFollowsLinks).toBe(true);
   });
 
-  it('writes B only', () => {
+  it('writes B only: the milestone follows it by its link and gets no row', () => {
     const plan = planLevellingApplication(input(p12));
     expect(plan.rows).toEqual([{ activityId: 'B', visualStart: '2026-01-08' }]);
     expect(plan.items.map((i) => i.activityId)).toEqual(['B']);
+    expect(plan.followingLinks).toEqual(['M']);
+    expect(plan.remainingAfterApply).toBe(0);
+  });
+
+  it('a PLACED milestone is moved with B, dated on the day it closes, and does not throw', () => {
+    const plan = planLevellingApplication(input(p12Placed));
+    expect(plan.rows).toEqual([
+      { activityId: 'B', visualStart: '2026-01-08' },
+      { activityId: 'M', visualStart: '2026-01-10' },
+    ]);
+    expect(plan.items.find((i) => i.activityId === 'M')!.reason).toBe('LINKS');
+    expect(conflictsOf(settle(p12Placed, plan.rows).byId)).toEqual([]);
+    expect(plan.remainingAfterApply).toBe(0);
   });
 });
 
@@ -604,43 +663,40 @@ describe('planLevellingApplication — P13: a started activity is the anchor, no
 // ── P14: the plan's network options reach the solve ────────────────────────────────────────────────
 
 /**
- * P3's chain, with S carrying an external early start on 9 January (day 4). With the external bound
- * applied S is drawn on day 4, which the pump is already free for: S is not levelled and not a
- * candidate. Ignoring external relationships, the option a recalculation passes through `compute`,
- * draws S on day 3 where R holds the pump, so S is levelled to day 4 and P's move then makes that
- * earlier than its logic. One plan, two answers: the options must reach every solve the preview runs.
+ * P3's chain, with S carrying an external early start on 15 January, after everything else. With the
+ * external bound applied S is drawn on the 15th, after P finishes on the 11th, so levelling has nothing
+ * to push: only P is delayed. Ignoring external relationships, the option a recalculation passes through
+ * `compute`, draws S on day 3 where R holds the pump, and P's move now pushes it: S is delayed and follows
+ * its link. One plan, two answers: the options must reach every solve the preview runs.
  *
- * (An external bound cannot make a target earlier than logic directly: it raises the drawn start the
- * levelling delays from, so a target is never below it.)
+ * **Revised deliberately.** This once asserted that ignoring the bound made S "earlier than its logic" and
+ * `leftToLogic`. Levelling now pushes S to where its link allows, so the observable difference is whether
+ * S follows (`followingLinks`) at all.
  */
 const p14: Scenario = followerBase(
-  task('S', 2 * DAY, { levelingPriority: 2, externalEarlyStart: '2026-01-09' }),
+  task('S', 2 * DAY, { levelingPriority: 2, externalEarlyStart: '2026-01-15' }),
 );
 const p14Ignoring: Scenario = { ...p14, compute: { ignoreExternalRelationships: true } };
 
 describe("planLevellingApplication — P14: the plan's compute options reach the solve", () => {
-  it('precondition: external bound applied, S is not levelled; ignored, S is levelled and conflicts', () => {
+  it('precondition: external bound applied, only P is delayed; ignored, S is delayed too', () => {
     expect(delayedIdsOf(solve(p14).byId)).toEqual(['P']);
-    const ignoring = solve(p14Ignoring).byId;
-    expect(delayedIdsOf(ignoring)).toEqual(['P', 'S']);
-    const everyGhost = ['P', 'S'].map((id) => ({
-      activityId: id,
-      visualStart: ignoring.get(id)!.leveledStart!,
-    }));
-    expect(conflictsOf(settle(p14Ignoring, everyGhost).byId)).toEqual(['S']);
+    expect(delayedIdsOf(solve(p14Ignoring).byId)).toEqual(['P', 'S']);
   });
 
-  it('applies the external bound by default: S is neither a row nor left to logic', () => {
+  it('applies the external bound by default: S is neither a row nor following', () => {
     const plan = planLevellingApplication(input(p14));
     expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
+    expect(plan.followingLinks).toEqual([]);
     expect(plan.leftToLogic).toEqual([]);
   });
 
-  it('honours ignore-external: S becomes a candidate, is earlier than its logic, and is reported', () => {
+  it('honours ignore-external: S is pushed behind P and follows it, with no row', () => {
     const plan = planLevellingApplication(input(p14Ignoring));
-    expect(conflictsOf(settle(p14Ignoring, plan.rows).byId)).toEqual([]);
     expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
-    expect(plan.leftToLogic).toEqual(['S']);
+    expect(plan.followingLinks).toEqual(['S']);
+    expect(plan.leftToLogic).toEqual([]);
+    expect(conflictsOf(settle(p14Ignoring, plan.rows).byId)).toEqual([]);
   });
 });
 
@@ -783,6 +839,94 @@ describe('planLevellingApplication — P18: row order does not depend on the inp
     });
     expect(reversed.rows).toEqual(forward.rows);
     expect(reversed.items).toEqual(forward.items);
+  });
+});
+
+// ── P20: the dropped-candidate path, now reachable only by a hand-placed bar ───────────────────────
+
+/**
+ * U (no resource) finishes on the 10th and S, which follows it, was hand-placed on the 6th: already
+ * earlier than its logic. Z holds the crane, so S is delayed by the RESOURCE to the 8th, still before
+ * U's finish. No predecessor moved, so levelling leaves S on the conflict it has (spec D-3), and S's
+ * target (the 8th) is earlier than its logic: it is dropped and named, as before. T waits behind S.
+ *
+ * Dropping S leaves it on the 6th, clashing with Z, so ONE bar is still levelled after the apply; the
+ * count has to come from a solve without S, which is what the second solve exists for (the case P11 held
+ * until Pass C stopped producing dropped candidates).
+ */
+const p20: Scenario = {
+  activities: [
+    task('U', 5 * DAY),
+    task('Z', 3 * DAY, { levelingPriority: 1 }),
+    task('S', 2 * DAY, { levelingPriority: 2, visualStart: '2026-01-06' }),
+    task('T', 2 * DAY, { levelingPriority: 3 }),
+  ],
+  edges: [fs('U', 'S')],
+  assignments: [on('Z', 'CRANE'), on('S', 'CRANE'), on('T', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P20: a hand-placed bar whose target is earlier than its logic', () => {
+  it('precondition: S already conflicts, no predecessor moved, and writing its ghost is a conflict', () => {
+    const { byId } = solve(p20);
+    expect(byId.get('S')!.visualConflictReason).toBe('EARLIER_THAN_LOGIC');
+    expect(byId.get('S')!.leveledFollowsLinks).toBeUndefined();
+    expect(byId.get('S')!.leveledStart).toBe('2026-01-08');
+    const everyGhost = ['S', 'T'].map((id) => ({
+      activityId: id,
+      visualStart: byId.get(id)!.leveledStart!,
+    }));
+    expect(conflictsOf(settle(p20, everyGhost).byId)).toEqual(['S']);
+  });
+
+  it('drops S and names it, writes T, and counts what is left from a solve without S', () => {
+    const plan = planLevellingApplication(input(p20));
+    expect(plan.rows).toEqual([{ activityId: 'T', visualStart: '2026-01-10' }]);
+    expect(plan.conflictingPlaced).toEqual(['S']);
+    expect(plan.leftToLogic).toEqual([]);
+    const settled = settle(p20, plan.rows);
+    expect(plan.remainingAfterApply).toBe(settled.leveled.summary.leveledActivityCount);
+    expect(plan.remainingAfterApply).toBe(1);
+    expect(delayedIdsOf(settled.byId)).toEqual(['S']);
+  });
+});
+
+// ── P21: a chain of three followers behind one delayed lift ────────────────────────────────────────
+
+/** Q holds the crane, so P is delayed; C1, C2 and C3 follow it in a chain and hold no resource. */
+const p21: Scenario = {
+  activities: [
+    task('Q', 3 * DAY, { levelingPriority: 1 }),
+    task('P', 3 * DAY, { levelingPriority: 2 }),
+    task('C1', 2 * DAY),
+    task('C2', 2 * DAY),
+    task('C3', DAY),
+  ],
+  edges: [fs('P', 'C1'), fs('C1', 'C2'), fs('C2', 'C3')],
+  assignments: [on('Q', 'CRANE'), on('P', 'CRANE')],
+  resources: [CRANE],
+  calendar: CAL24,
+};
+
+describe('planLevellingApplication — P21: a chain of three followers is one row', () => {
+  it('precondition: all three are drawn before P finishes and are levelled behind it, each by its link', () => {
+    const { byId } = solve(p21);
+    expect(delayedIdsOf(byId)).toEqual(['C1', 'C2', 'C3', 'P']);
+    for (const id of ['C1', 'C2', 'C3']) {
+      expect(byId.get(id)!.leveledFollowsLinks).toBe(true);
+    }
+    expect(byId.get('C3')!.leveledStart).toBe('2026-01-15');
+  });
+
+  it('writes P only and names the three followers, which then follow by their links', () => {
+    const plan = planLevellingApplication(input(p21));
+    expect(plan.rows).toEqual([{ activityId: 'P', visualStart: '2026-01-08' }]);
+    expect(plan.followingLinks).toEqual(['C1', 'C2', 'C3']);
+    const settled = settle(p21, plan.rows);
+    expect(settled.byId.get('C3')!.visualEffectiveStart).toBe('2026-01-15');
+    expect(delayedIdsOf(settled.byId)).toEqual([]);
+    expect(plan.remainingAfterApply).toBe(0);
   });
 });
 

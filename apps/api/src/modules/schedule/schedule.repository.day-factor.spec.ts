@@ -20,6 +20,8 @@ function result(
     earlyFinishOffset: 0,
     placedStartOffset: 0,
     placedFinishOffset: 0,
+    passOnStartInstant: 0,
+    passOnFinishInstant: 0,
     lateStartOffset: 0,
     lateFinishOffset: 0,
     totalFloat: totalFloatMinutes,
