@@ -65,6 +65,11 @@ export interface FormSectionProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * told them what is inside it.
    */
   aside?: React.ReactNode;
+  /**
+   * The id to give the title heading, for a consumer that must name something inside the section
+   * (a list) by it with `aria-labelledby`. Defaults to a generated one.
+   */
+  titleId?: string;
 }
 
 /**
@@ -91,6 +96,7 @@ export function FormSection({
   description,
   aside,
   headingLevel = 3,
+  titleId: titleIdProp,
   className,
   children,
   ...rest
@@ -105,7 +111,7 @@ export function FormSection({
   }
   const base = useId();
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
-  const titleId = `${base}-title`;
+  const titleId = titleIdProp ?? `${base}-title`;
   const descriptionId = `${base}-description`;
 
   return (

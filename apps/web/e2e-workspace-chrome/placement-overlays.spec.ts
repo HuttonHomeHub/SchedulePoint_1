@@ -536,13 +536,19 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect(list.getByRole('row')).toHaveCount(2);
     await expect(list.getByRole('row', { name: /Pour slab/ })).toHaveCount(0);
     // The slab is named in a list of its own, a real list with a name, and the sentence says why.
-    const follows = dialog.getByRole('list', { name: 'Will follow the bars before them' });
+    const follows = dialog.getByRole('list', { name: 'Will move with their links' });
     await expect(follows.getByRole('listitem')).toHaveText(['Pour slab']);
     await expect(
       dialog.getByText(
-        '1 more activity will follow the bars before it, with nothing written for it.',
+        '1 other activity will move with the work before it; no date is set for it.',
       ),
     ).toBeVisible();
+    // axe on the open dialog with a follower on screen: the named list is the new structure.
+    const scan = await new AxeBuilder({ page })
+      .include('dialog[open]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(scan.violations).toEqual([]);
 
     // ── 4 · Confirm: the slab is not pinned, and it lands where its ghost was ─────────────────────
     await confirm.click();

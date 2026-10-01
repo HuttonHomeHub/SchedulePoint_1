@@ -2999,7 +2999,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 3,
       order: 4,
       label: 'Apply levelled dates…',
-      description: 'Move every bar that resource levelling moves onto its levelled date',
+      description:
+        'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
       icon: <Scale className="size-4" />,
       // Icon-only at every width, and the deck is what decides that: it ignores `showLabel` and
       // withholds a label only for `ICON_ONLY` (`Deck.tsx`), where this item is listed. The longest

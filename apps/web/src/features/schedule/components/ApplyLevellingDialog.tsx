@@ -4,7 +4,7 @@ import type {
   LevellingApplicationNamedActivity,
 } from '@repo/types';
 import { Loader2 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { useLevellingApplication } from '../api/use-schedule';
 import {
@@ -12,6 +12,9 @@ import {
   applyLevellingLines,
   applyLevellingSummary,
   applyLevellingTooMany,
+  FOLLOWING_SECTION_DESCRIPTION,
+  FOLLOWING_SECTION_TITLE,
+  levellingReasonText,
 } from '../model/levelling-application';
 
 import { Button } from '@/components/ui/button';
@@ -96,15 +99,10 @@ const MOVE_COLUMNS: Column<LevellingApplicationItem>[] = [
 ];
 
 /**
- * Why a bar moves, as words: the reason is the one thing that tells a planner whether the move is the
- * resource's doing or a consequence of an earlier move, so it is a column of text and not a colour or
- * an icon (WCAG 1.4.1).
+ * Only this table carries "Why it moves", and that is not an omission: an unplaced bar's reason is
+ * always RESOURCE (a knock-on with no placement of its own is a follower and gets no row, CQ-1 (a)),
+ * so a column of identical cells would say nothing. The model's tests assert that invariant.
  */
-const REASON_TEXT: Record<LevellingApplicationItem['reason'], string> = {
-  RESOURCE: 'A resource delays it',
-  LINKS: 'The work before it moved',
-};
-
 const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
   ...MOVE_COLUMNS.slice(0, 1),
   {
@@ -113,7 +111,7 @@ const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
     width: 'fit',
   },
   ...MOVE_COLUMNS.slice(1),
-  { header: 'Why it moves', cell: (item) => REASON_TEXT[item.reason], width: 'bounded' },
+  { header: 'Why it moves', cell: (item) => levellingReasonText(item.reason), width: 'bounded' },
 ];
 
 function MoveTable({
@@ -159,11 +157,17 @@ function NameList({
   description: string;
   names: LevellingApplicationNamedActivity[];
 }): React.ReactElement {
+  const titleId = useId();
   const shown = names.slice(0, NAMES_SHOWN);
   const more = names.length - shown.length;
   return (
-    <FormSection title={title} description={description} aside={activityCount(names.length)}>
-      <ul aria-label={title} className="flex flex-col gap-1 text-sm">
+    <FormSection
+      title={title}
+      description={description}
+      aside={activityCount(names.length)}
+      titleId={titleId}
+    >
+      <ul aria-labelledby={titleId} className="flex flex-col gap-1 text-sm">
         {shown.map((named) => (
           <li key={named.id}>{named.name}</li>
         ))}
@@ -349,8 +353,8 @@ function ApplyLevellingBody({
           ) : null}
           {application.followingLinks.length > 0 ? (
             <NameList
-              title="Will follow the bars before them"
-              description="These have no placement of their own, so nothing is written for them. They move with their links once the bars above are applied."
+              title={FOLLOWING_SECTION_TITLE}
+              description={FOLLOWING_SECTION_DESCRIPTION}
               names={application.followingLinks}
             />
           ) : null}

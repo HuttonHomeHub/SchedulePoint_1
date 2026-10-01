@@ -166,7 +166,7 @@ handles hand-placed followers per CQ-1.
 **"Apply levelled dates…"** (ADR-0167 D7).
 **Journey:** `placement-overlays.spec.ts` on `plan:capability-levelling`. Turn on Levelled placement and
 assert **V4 has a ghost** after V3's (C8). Read the strip's Levelled finish (V4's levelled finish). Open
-**Apply levelled dates…** and assert V4 is listed under "Will follow the bars before them" (M3 adds that
+**Apply levelled dates…** and assert V4 is listed under "Will move with their links" (M3 adds that
 list; in M2 the journey asserts V4 is **not** among the rows). Apply, and assert V4 is drawn after V3
 with no placement.
 
@@ -272,7 +272,7 @@ with no placement.
 **Outcome:** the dialog names followers; the strip's copy matches CQ-2; the playbook, the catalogue and
 the docs are true.
 **Entry point:** **"Apply levelled dates…"**, and the summary strip.
-**Journey:** `placement-overlays.spec.ts` asserts the "Will follow the bars before them" list contains
+**Journey:** `placement-overlays.spec.ts` asserts the "Will move with their links" list contains
 V4, and that the strip's hint sentence is present.
 
 #### Feature: Copy and lists

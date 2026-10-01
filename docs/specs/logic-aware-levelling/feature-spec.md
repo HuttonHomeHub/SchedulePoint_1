@@ -431,7 +431,7 @@ interval out only frees capacity.
 
 **Web (`web` minor):**
 
-- `ApplyLevellingDialog.tsx`: a `NameList` "Will follow the bars before them" (the content of
+- `ApplyLevellingDialog.tsx`: a `NameList` "Will move with their links" (the content of
   `followingLinks`). Under CQ-1 (a), the "Placed by hand" table shows the reason. No prop or contract
   change.
 - `ScheduleSummaryStrip.tsx:187-194`: "Levelling moved N activities, either to keep resource demand

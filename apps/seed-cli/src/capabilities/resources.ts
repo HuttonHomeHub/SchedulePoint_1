@@ -237,7 +237,7 @@ export function levellingPlacedPlan(): SeedSpec {
  *
  * - CL3 holds no resource and follows by FS. It is pushed to Tue 10 Mar (finishing Wed 11 Mar) and
  *   gets a ghost, but the
- *   apply writes **no row** for it: it is listed under "Will follow the bars before them".
+ *   apply writes **no row** for it: it is listed under "Will move with their links".
  * - CL5 follows by SS with a one-day lag and holds a second capped resource that CL4 occupies until
  *   Fri 6 Mar, so its own resource delays it to Mon 9 Mar, past the knock-on (Fri 6 Mar). It gets a row.
  * - CL6 follows by FS and is **placed by hand** on Fri 6 Mar. The work before it moves, so the
