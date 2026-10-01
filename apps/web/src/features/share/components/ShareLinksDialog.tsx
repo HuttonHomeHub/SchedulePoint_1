@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -121,19 +121,46 @@ export function ShareLinksDialog({
   open: boolean;
   onClose: () => void;
 }): React.ReactElement {
-  const shares = useShares(orgSlug, planId, open);
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      size="lg"
+      title="Share links"
+      description="Create revocable, read-only links so people outside your organisation can view this plan. Anyone with a link can see the schedule until you revoke it."
+    >
+      <ShareLinksBody orgSlug={orgSlug} planId={planId} />
+    </Dialog>
+  );
+}
+
+/**
+ * Everything inside the dialog. The Dialog mounts its children only while open, so the form, the
+ * one-time URL, the revoke state and the mutations are all born fresh on each open — no passive
+ * `reset()` that could wipe text typed right after the dialog appears (`docs/TECH_DEBT.md` #420),
+ * and no hand-written clearing on close.
+ */
+function ShareLinksBody({
+  orgSlug,
+  planId,
+}: {
+  orgSlug: string;
+  planId: string;
+}): React.ReactElement {
+  const shares = useShares(orgSlug, planId);
   const create = useCreateShare(orgSlug, planId);
   const revoke = useRevokeShare(orgSlug, planId);
   const announce = useAnnounce();
 
-  // The just-created link (its one-time URL), shown until the dialog closes or another is created.
+  // The just-created link (its one-time URL), shown until the dialog closes or another is created
+  // (closing unmounts this body, which is what clears it).
   const [created, setCreated] = useState<CreatedShare | null>(null);
   const [revoking, setRevoking] = useState<ShareLink | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
   // Bound the expiry picker + schema to today … +1yr (ADR-0051 §5 / F-M2 CQ-4: no forced server max TTL,
   // but the picker still bounds absurd values so an effectively-permanent bearer credential isn't a
-  // one-click mistake). Recomputed only while the dialog is open (a fresh Date on each open is fine).
+  // one-click mistake). Computed once per mount, so each open gets a fresh Date.
   const { schema, minDate, maxDate } = useMemo(() => {
     const now = new Date();
     return {
@@ -141,7 +168,7 @@ export function ShareLinksDialog({
       minDate: isoDaysFromToday(1, now),
       maxDate: isoDaysFromToday(MAX_EXPIRY_DAYS, now),
     };
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- recompute the bounds on each open
+  }, []);
 
   const {
     register,
@@ -152,25 +179,6 @@ export function ShareLinksDialog({
     resolver: zodResolver(schema),
     defaultValues: { label: '', expiryDate: '' },
   });
-
-  // Reset the form + the create-mutation error on each open (RHF/mutation resets are external-store
-  // updates, so they belong in the effect). The one-time-URL + revoke-error React state is cleared in
-  // {@link handleClose} instead — clearing it here would be a setState-synchronously-in-effect smell.
-  useEffect(() => {
-    if (open) {
-      reset({ label: '', expiryDate: '' });
-      create.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open
-  }, [open]);
-
-  // Closing clears the transient React state (the shown one-time URL + any revoke error) so the next
-  // open starts clean, then delegates to the parent's `onClose`.
-  const handleClose = (): void => {
-    setCreated(null);
-    setRevokeError(null);
-    onClose();
-  };
 
   const onSubmit = handleSubmit((values) => {
     // Build the request with only the keys that carry a value (`exactOptionalPropertyTypes`): an empty
@@ -249,100 +257,86 @@ export function ShareLinksDialog({
   ];
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      size="lg"
-      title="Share links"
-      description="Create revocable, read-only links so people outside your organisation can view this plan. Anyone with a link can see the schedule until you revoke it."
-    >
-      <FieldGridContainer className="flex flex-col gap-5">
-        {/* Existing links first, then the form that adds one (ADR-0061, the list/manage shape). The
-            previous order put a creation form above a table of what already existed, so the first
-            thing a planner saw was a way to make another link rather than the ones already live. */}
-        <FormSection title="Existing links">
-          <DataTable
-            caption="Share links"
-            columns={columns}
-            query={shares}
-            getRowKey={(s) => s.id}
-            loadingLabel="Loading share links…"
-            errorLabel="Couldn’t load share links. Please try again."
-            empty={
-              <>No share links yet. Create one to give someone read-only access to this plan.</>
-            }
-          />
-        </FormSection>
-
-        {created ? <CreatedLinkPanel key={created.share.id} created={created} /> : null}
-
-        <FormSection
-          title="New link"
-          description="A label is for your own reference; it is never shown to the guest."
-        >
-          <form
-            noValidate
-            onSubmit={(event) => void onSubmit(event)}
-            className="flex flex-col gap-4"
-          >
-            {create.isError ? (
-              <p role="alert" className="text-destructive-text text-sm">
-                {createShareErrorMessage(create.error)}
-              </p>
-            ) : null}
-            <FieldGrid columns="lead">
-              <TextField
-                label="Label"
-                autoComplete="off"
-                placeholder="e.g. Client review – Acme"
-                error={errors.label?.message}
-                {...register('label')}
-              />
-              <TextField
-                label="Expires"
-                type="date"
-                min={minDate}
-                max={maxDate}
-                hint={`Leave blank for no expiry. Up to a year out (by ${formatCalendarDate(maxDate)}).`}
-                error={errors.expiryDate?.message}
-                {...register('expiryDate')}
-              />
-            </FieldGrid>
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
-                aria-disabled={create.isPending}
-                aria-busy={create.isPending}
-                onClick={(event) => {
-                  if (create.isPending) event.preventDefault();
-                }}
-              >
-                {create.isPending ? 'Creating…' : 'Create link'}
-              </Button>
-            </div>
-          </form>
-        </FormSection>
-
-        <ConfirmDialog
-          open={revoking !== null}
-          onClose={() => {
-            setRevoking(null);
-            setRevokeError(null);
-          }}
-          onConfirm={confirmRevoke}
-          title="Revoke share link"
-          description={
-            revoking
-              ? `Revoke “${revoking.label ?? 'this link'}”? Anyone using it will immediately lose access, and it can’t be restored.`
-              : ''
-          }
-          confirmLabel="Revoke"
-          pending={revoke.isPending}
-          pendingLabel="Revoking…"
-          error={revokeError}
+    <FieldGridContainer className="flex flex-col gap-5">
+      {/* Existing links first, then the form that adds one (ADR-0061, the list/manage shape). The
+          previous order put a creation form above a table of what already existed, so the first
+          thing a planner saw was a way to make another link rather than the ones already live. */}
+      <FormSection title="Existing links">
+        <DataTable
+          caption="Share links"
+          columns={columns}
+          query={shares}
+          getRowKey={(s) => s.id}
+          loadingLabel="Loading share links…"
+          errorLabel="Couldn’t load share links. Please try again."
+          empty={<>No share links yet. Create one to give someone read-only access to this plan.</>}
         />
-      </FieldGridContainer>
-    </Dialog>
+      </FormSection>
+
+      {created ? <CreatedLinkPanel key={created.share.id} created={created} /> : null}
+
+      <FormSection
+        title="New link"
+        description="A label is for your own reference; it is never shown to the guest."
+      >
+        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
+          {create.isError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {createShareErrorMessage(create.error)}
+            </p>
+          ) : null}
+          <FieldGrid columns="lead">
+            <TextField
+              label="Label"
+              autoComplete="off"
+              placeholder="e.g. Client review – Acme"
+              error={errors.label?.message}
+              {...register('label')}
+            />
+            <TextField
+              label="Expires"
+              type="date"
+              min={minDate}
+              max={maxDate}
+              hint={`Leave blank for no expiry. Up to a year out (by ${formatCalendarDate(maxDate)}).`}
+              error={errors.expiryDate?.message}
+              {...register('expiryDate')}
+            />
+          </FieldGrid>
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              aria-disabled={create.isPending}
+              aria-busy={create.isPending}
+              onClick={(event) => {
+                if (create.isPending) event.preventDefault();
+              }}
+            >
+              {create.isPending ? 'Creating…' : 'Create link'}
+            </Button>
+          </div>
+        </form>
+      </FormSection>
+
+      <ConfirmDialog
+        open={revoking !== null}
+        onClose={() => {
+          setRevoking(null);
+          setRevokeError(null);
+        }}
+        onConfirm={confirmRevoke}
+        title="Revoke share link"
+        description={
+          revoking
+            ? `Revoke “${revoking.label ?? 'this link'}”? Anyone using it will immediately lose access, and it can’t be restored.`
+            : ''
+        }
+        confirmLabel="Revoke"
+        pending={revoke.isPending}
+        pendingLabel="Revoking…"
+        error={revokeError}
+      />
+    </FieldGridContainer>
   );
 }

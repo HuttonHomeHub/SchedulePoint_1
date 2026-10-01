@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreatedShare, ShareLink } from '../api/use-shares';
@@ -63,6 +64,31 @@ describe('ShareLinksDialog', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  /**
+   * **#420's structural property.** A passive `reset()` on open wipes whatever a fast typist has
+   * already entered. Layout effects run before any passive effect, so text placed in the field at
+   * layout time stands in for that keystroke — and `act` flushes passive effects before `render`
+   * returns, so the survival is read afterwards.
+   */
+  it('keeps text entered before the first passive effects run', () => {
+    mockApi({ list: () => [] });
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLInputElement>('input[name="label"]')!.value = 'Typed early';
+      }, []);
+      return null;
+    }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ShareLinksDialog orgSlug="acme" planId="plan-1" open onClose={() => {}} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText('Label')).toHaveValue('Typed early');
   });
 
   it('shows the empty state when a plan has no links', async () => {
