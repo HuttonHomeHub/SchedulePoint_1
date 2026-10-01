@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1417 web
 > source files with 46 Playwright suites beside the base journey, and
-> 168 ADRs.
+> 169 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -566,6 +566,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0166** _(Accepted)_ — Resource load and levelling start where the bar is drawn → [`0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md`](docs/adr/0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md)
 - **ADR-0167** _(Accepted; D1 and D3 amended by ADR-0168)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
 - **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
+- **ADR-0169** _(Proposed)_ — An editor's working state lives for one opening → [`0169-an-editors-working-state-lives-for-one-opening.md`](docs/adr/0169-an-editors-working-state-lives-for-one-opening.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

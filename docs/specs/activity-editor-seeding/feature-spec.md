@@ -1,10 +1,10 @@
 # Feature Spec: Activity editor seeding — the editor's working state lives for one opening
 
-- **Status:** Draft — kept as the token until ADR-0169 is filed in M1 (plan T1.2), which flips it to
-  `Approved` in the same commit (`check:spec-status` S3).
+- **Status:** Approved — by the product owner, 2026-10-01 (ADR-0169 filed `Proposed` in M1, plan T1.2;
+  the spec closes as `Accepted — shipped (ADR-0169)` at M5).
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) as recorded in §1 "Open questions". To start after the logic-aware
-  levelling work (`docs/specs/logic-aware-levelling`). Do not read the `Draft` token above as unapproved.
+  levelling work (`docs/specs/logic-aware-levelling`).
 - **M0 correction (2026-10-01):** M0's stop gate fired — the typed-input window is red on the editor and
   New activity only, not on a Progress or Resources tab reveal ([`./m0-measurement.md`](./m0-measurement.md)).
   The product owner decided on **2026-10-01** (AskUserQuestion) to **continue the approved rebuild** with

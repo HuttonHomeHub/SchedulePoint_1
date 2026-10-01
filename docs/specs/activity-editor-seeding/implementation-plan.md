@@ -1,11 +1,11 @@
 # Implementation Plan: Activity editor seeding — the editor's working state lives for one opening
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — kept as the token until ADR-0169 is filed in M1 (T1.2), which flips spec and plan
-  to `Approved` in the same commit (`check:spec-status` S3).
+- **Status:** Approved — by the product owner, 2026-10-01 (flipped with ADR-0169's filing in M1, T1.2;
+  `check:spec-status` S3).
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) (spec §1 "Open questions"). Starts **after the logic-aware levelling
-  work** (`docs/specs/logic-aware-levelling`). Do not read the `Draft` token above as unapproved.
+  work** (`docs/specs/logic-aware-levelling`).
 - **M0 correction (2026-10-01):** M0's stop gate fired (window red on the editor and New activity only;
   [`./m0-measurement.md`](./m0-measurement.md)). The product owner decided on **2026-10-01**
   (AskUserQuestion) to **continue** with the four answers unchanged and this plan corrected: M1 is a
