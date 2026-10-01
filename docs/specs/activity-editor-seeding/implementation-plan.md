@@ -1,284 +1,286 @@
-# Implementation Plan: Activity editor seeding — the last three #420 sites
+# Implementation Plan: Activity editor seeding — the editor's working state lives for one opening
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting the product owner's answers to CQ-1 to CQ-3.
+- **Status:** Draft — revised 2026-10-01 for CQ-1 (b), CQ-2 (b), CQ-3 (a); awaiting approval and NQ-1.
 - **Owner:** web
 
-This plan assumes the recommended answers: **CQ-1 (a)** fix the hook, then the carried-over state point by
-point; **CQ-2 (a)** Progress-tab draft loss (F4) filed separately; **CQ-3 (a)** delete the Resources
-panel's redundant reset. §"If the answers differ" says what changes.
+This plan assumes NQ-1 (a): the `shell` hook-in is kept. §"If NQ-1 is (b)" says what changes.
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
-  E[Epic: Activity editor seeding] --> M0[M0 Measure<br/>no product change]
-  E --> M1[M1 Close the window<br/>useScopeForm + Resources panel]
-  E --> M2[M2 Start every opening clean<br/>F1 F2 F3]
-  E --> M3[M3 Close-out]
-  M0 --> T01[T0.1 read pre-740 dialogs] & T02[T0.2 window probe, red] & T03[T0.3 F1-F4 red cases] --> T04[T0.4 m0-measurement.md + gate]
-  M1 --> T11[T1.1 keepFieldsRef in useScopeForm] --> T12[T1.2 delete Resources reset] --> T13[T1.3 journey J1]
-  M2 --> T21[T2.1 editor: close-edge reset, open-edge clear, guard while open] --> T22[T2.2 create: hiddenProblem] --> T23[T2.3 journeys J2 J3 + axe]
-  M3 --> T31[T3.1 docs, register rows, changeset] --> T32[T3.2 reviews, prepush, e2e-local]
+  E[Epic: Activity editor seeding] --> M0[M0 Measure<br/>red probes, stop gate]
+  E --> M1[M1 Resources reset + ADR-0169]
+  E --> M2[M2 New activity per opening]
+  E --> M3[M3 Editor per opening]
+  E --> M4[M4 Progress drafts survive tabs]
+  E --> M5[M5 Close-out]
+  M0 --> T01[T0.1 pre-740 read] & T02[T0.2 window probe] & T03[T0.3 F1-F4 red, J2 J4 red] --> T04[T0.4 record + gate]
+  M1 --> T11[T1.1 delete Resources reset] & T12[T1.2 file ADR-0169 Proposed]
+  M2 --> T21[T2.1 frame + form split] --> T22[T2.2 F3, mutation error, journey]
+  M3 --> T31[T3.1 useScopeForm without open] --> T32[T3.2 frame + session + handle] --> T33[T3.3 J1 J2 J3, undo-across-close]
+  M4 --> T41[T4.1 progress + measure forms to session] --> T42[T4.2 steps form, field array, query] --> T43[T4.3 Remaining re-seed] --> T44[T4.4 J4 + panel suites]
+  M5 --> T51[T5.1 ADR Accepted, register, docs] --> T52[T5.2 final review pass]
 ```
 
 ### Epic
 
-**Activity editor seeding** — the activity editor, **New activity** and the editor's Progress and
-Resources tabs never discard typed input, and every opening starts clean. Closes `docs/TECH_DEBT.md` #420.
+**Activity editor seeding** — the activity editor and New activity create their working state per
+opening; nothing typed is discarded by seeding or by a tab switch; every opening starts clean. Closes
+`docs/TECH_DEBT.md` #420 and findings F1–F4. **Rough size: L** — six milestones, about eight to ten PRs,
+most of the weight in M3 and M4.
 
 ---
 
-### Milestone M0: Measure (no product change)
+### Milestone M0: Measure (no product change) — S
 
-**Outcome:** the four claims the design rests on are reproduced or withdrawn before anything is built.
-**Entry point:** `Ships dark: measurement only — test files and m0-measurement.md; nothing a user reaches changes.`
-**Journey:** J2 is written here **red** (F1) and kept; it turns green in M2.
+**Outcome:** the design's premises are observed or withdrawn before anything is built.
+**Entry point:** `Ships dark: test files and m0-measurement.md only.`
+**Journey:** J2 (F1) and J4 (F4) written **red** here and kept.
 
 #### Feature: Reproduce, then decide
 
-> **Description:** turn spec §0.1 and §0.3 from "read" into "observed", or withdraw them.
-> **Complexity:** S
-> **Dependencies:** spec approved.
-> **Risks:** a probe that cannot discriminate (passes on today's code) → each is required to be red on
-> `main` before it is kept, and the run that showed red is recorded.
-> **Testing requirements:** the probes ARE the tests; they stay in the tree.
+> **Complexity:** S · **Dependencies:** this revision approved.
+> **Risks:** a probe that cannot discriminate → each must be red on `main`, with a positive control
+> that passes, before it is kept.
 
-##### Task T0.1 — Read the original site's effect (D-7)
+##### Task T0.1 — Read the original site (D-7)
 
-- **Description:** `git show` the parent of PR #740's commit for `ProjectFormDialog.tsx` and
-  `ClientFormDialog.tsx`; record each `useEffect`'s dependency list and whether anything other than
-  `open` could re-fire it while open.
-- **Complexity:** S · **Dependencies:** none · **Risks:** none.
-- **Testing:** none — a reading, recorded verbatim with the SHA.
-- **Development steps:**
-  1. `git log --oneline -- apps/web/src/features/projects/components/ProjectFormDialog.tsx`; find #740.
-  2. `git show <sha>^:<path>` for both files; copy the effects into `m0-measurement.md`.
-  3. State whether §0.1's window alone explains the csp trace, or a late trigger existed too.
+- `git show` the parent of #740's commit for `ProjectFormDialog.tsx` and `ClientFormDialog.tsx`; record
+  each effect's dependencies and whether anything besides `open` could re-fire it. Complexity S.
 
-##### Task T0.2 — The window probe (red on `main`)
+##### Task T0.2 — The window probe (spec §4.7)
 
-- **Description:** spec §4.6. `apps/web/src/features/activities/components/useScopeForm.window.test.tsx`
-  and a sibling for `ActivityResourcesPanel`: `createRoot`, `IS_REACT_ACT_ENVIRONMENT = false`, open
-  inside `flushSync`, dispatch a native `input` event before yielding, yield one macrotask, assert DOM
-  value **and** `getValues`.
-- **Complexity:** S · **Dependencies:** none.
-- **Risks:** jsdom's scheduler path differs from Chrome's (no input-priority reordering) → the probe
-  does not need reordering: it dispatches the event deterministically inside the window, which is the
-  point. Run it three times to show it is not timing-dependent.
-- **Testing:** must be **red** on `useScopeForm` (minimal host), `ActivityCreateDialog` and
-  `ActivityResourcesPanel` at mount; record the failure output.
-- **Development steps:**
-  1. Minimal host component around `useScopeForm` with a toggled `open`.
-  2. The same probe against `ActivityCreateDialog` (Name) and `ActivityResourcesPanel` (Budgeted units).
-  3. A positive control: the same probe with the input dispatched **after** the yield must pass today
-     (proves the probe measures the window, not the field).
+- **Description:** `createRoot`, `IS_REACT_ACT_ENVIRONMENT = false`, open inside `flushSync`, native
+  `input` before yielding, one macrotask, assert DOM value and `getValues`. Hosts: editor (Name), New
+  activity (Name), Progress tab click (% complete), Resources tab click (Budgeted units).
+- **Complexity:** S. **Testing:** red ×4 on `main`, run three times each; positive control green.
 
-##### Task T0.3 — F1 to F4, red
+##### Task T0.3 — F1–F4 red
 
-- **Description:** one red test per finding, mounting through the real `modalShell` with a host that
-  toggles `open` and clears its intent on close, the way `activity-crud-dialogs.tsx` does.
-- **Complexity:** S–M · **Dependencies:** none.
-- **Risks:** jsdom has no top layer, so F1's stacking is unobservable there → the unit test asserts
-  only that `confirming` is armed on reopen (an `alertdialog` in the tree); J2 (journey) observes the
-  real stacking.
-- **Testing:**
-  - F1 unit: dirty → Close → Discard → reopen same id → expect no `alertdialog`.
-  - F1 journey **J2** in `apps/web/e2e-activity-editor/activity-editor.spec.ts`: dirty → Escape →
-    Discard → `openEditor(… 'Edit')` → expect no visible `alertdialog` → edit Name → Escape → the
-    confirmation is visible and **Discard** closes the editor. Run via `scripts/e2e-local.sh`; screenshot
-    the reopened state into `m0-measurement.md`.
-  - F2 unit: save General → close → open another activity → expect no "Saved.".
-  - F3 unit: hidden-field submit failure → close → open → expect no alert.
-  - F4 unit (record only, CQ-2 (a)): dirty `% complete` → switch to General → back to Progress → the
-    typed value is gone while the tab carried a dot. Marked `it.fails` or kept out of the suite per the
-    product owner's CQ-2 answer; it seeds the new register row.
+- **Description:** units through `modalShell` with a host that toggles `open` and clears its intent on
+  close (as `activity-crud-dialogs.tsx` does): F1 reopen-after-Discard, F2 "Saved." after reopen, F3
+  hidden-field alert after reopen, F4 Progress draft after a tab switch. Journeys **J2** (F1, real top
+  layer, screenshot) and **J4** (F4) in `apps/web/e2e-activity-editor/activity-editor.spec.ts`, run with
+  `scripts/e2e-local.sh web:<suite>`.
+- **Complexity:** S–M. **Risks:** jsdom has no top layer → the F1 unit asserts only that a confirmation
+  is armed; J2 observes stacking.
 
-##### Task T0.4 — Record and decide
+##### Task T0.4 — Record and gate
 
-- **Description:** `docs/specs/activity-editor-seeding/m0-measurement.md`: each claim, the command, red/
-  green, verdict. **Gate:** any finding that does not reproduce is withdrawn from the spec in the same
-  commit, and its M2 task is dropped. If T0.2 does not go red, M1 stops and the spec returns to the
-  product owner — the design's premise would be wrong.
-- **Complexity:** S · **Dependencies:** T0.1–T0.3.
+- `docs/specs/activity-editor-seeding/m0-measurement.md`. **Stop gate:** if T0.2 is not red the spec
+  returns to the product owner; any F-finding that does not reproduce is withdrawn from the spec and its
+  tests are dropped, in the same commit.
 
 ---
 
-### Milestone M1: Close the window
+### Milestone M1: Resources reset and the ADR — S
 
-**Outcome:** text typed the instant the editor, **New activity**, the Progress tab or the Resources tab
-appears is kept.
-**Entry point:** the existing ones — row menu **Actions for <activity> → Edit / Progress / Resources**,
-and **New activity**. No new control.
-**Journey:** J1 in `apps/web/e2e-activity-editor/activity-editor.spec.ts`.
+**Outcome:** typing the instant the Resources tab appears is kept.
+**Entry point:** row menu **Actions for <activity> → Resources** (existing).
+**Journey:** the Resources leg of J1 (open on Resources, `fill` Budgeted units at once, Assign, row
+appears) — added in T1.1.
+**Reviewers:** component-reviewer (a component's lifecycle behaviour); accessibility-reviewer is not
+required here — no focus or keyboard path changes.
 
-#### Feature: `keepFieldsRef` at the one shared seam
+##### Task T1.1 — Delete `ActivityResourcesPanel`'s mount reset (CQ-3 (a))
 
-> **Description:** spec §4.5 items 1 (open edge) and 4.
-> **Complexity:** S
-> **Dependencies:** M0 gate passed.
-> **Risks:** `keepFieldsRef` is a less-travelled RHF path → the edge-case tests below; the dependency
-> claims are already registered (`scripts/dependency-claims.json`), so an RHF bump forces a re-read.
-> **Testing requirements:** T0.2 probes green; every existing suite under
-> `apps/web/src/features/activities/components/` and `apps/web/src/features/resources/components/`
-> passes **unchanged**.
+- **Description:** remove the `[enabled, activityId]` effect (`ActivityResourcesPanel.tsx:216-228`); a
+  one-line comment at `useForm` says why no seed effect exists (mounted per reveal; defaults are the
+  seed). The post-assign reset stays.
+- **Complexity:** S. **Testing:** T0.2's Resources probe green; `ActivityResourcesPanel*.test.tsx`
+  unchanged; journey leg above.
 
-##### Task T1.1 — `useScopeForm` resets with `keepFieldsRef`
+##### Task T1.2 — File ADR-0169 `Proposed`
 
-- **Description:** `reset(seed(activity), { keepFieldsRef: true })`; keys unchanged (trap 2). Rewrite
-  the effect comment to say why the option is load-bearing, citing the registered claims.
-- **Complexity:** S · **Dependencies:** T0.4.
-- **Risks:** a tab never visited in the previous opening shows a stale value → test: open A, visit
-  General only, close, open B, visit Scheduling and Cost → B's values. A 409 **Refresh this section**
-  regression → existing test plus one on a tab revisited after refresh. Duration re-seed ordering
-  (`use-duration-seed.ts` records its baseline after the reset in the same flush) → its existing suite.
-- **Testing:** probe green; `useScopeForm.test.ts`; all `ActivityEditorDialog.*`, `ActivityEditor.*`,
-  `ActivityCreateDialog.*` suites unchanged; the new unvisited-tab test.
-- **Development steps:**
-  1. Change the call; update the docblock and the effect comment.
-  2. Add the unvisited-tab and refresh-then-revisit tests.
-  3. Update `citedBy` in `scripts/dependency-claims.json` to include `useScopeForm.ts`.
-
-##### Task T1.2 — Delete `ActivityResourcesPanel`'s mount reset (CQ-3 (a))
-
-- **Description:** remove the `[enabled, activityId]` effect (`ActivityResourcesPanel.tsx:216-228`) and
-  its now-unused bindings; say in a one-line comment at the `useForm` call why there is no seed effect
-  (the panel mounts per reveal; defaults are the seed).
-- **Complexity:** S · **Dependencies:** none (independent of T1.1).
-- **Risks:** a host that mounts the panel with `enabled={false}` and flips it later would lose the
-  reset → none exists (spec §0.2, both hosts); a structural test asserts the panel is only rendered
-  where it is shown, or the docblock records the assumption.
-- **Testing:** the T0.2 sibling probe green; `ActivityResourcesPanel*.test.tsx` unchanged.
-
-##### Task T1.3 — Journey J1
-
-- **Description:** open via the row menu and `fill` Name with no intervening wait; **Save general**;
-  assert the table cell. Same for **New activity** is already `addActivity` in every suite — note that
-  in the test's comment rather than duplicating it.
-- **Complexity:** S · **Dependencies:** T1.1.
-- **Risks:** read as proof → its comment says it is a regression guard; the probe is the proof.
-- **Testing:** `scripts/e2e-local.sh web:<activity-editor suite>` green locally before push.
+- From spec §4.9; one line in `CLAUDE.md` §16 (`check:adr-coverage`). Flip this spec and plan to
+  `Approved` in the same commit — once an ADR cites the directory, `check:spec-status` S3 refuses `Draft`.
+- **Complexity:** S.
 
 ---
 
-### Milestone M2: Start every opening clean
+### Milestone M2: New activity per opening — M
 
-**Outcome:** after a **Discard**, a save or a failed create, the next opening shows no confirmation, no
-"Saved.", no stale error, no stale alert.
-**Entry point:** the same row menu **Edit** and **New activity**.
-**Journey:** J2 (red since M0) and J3, in `apps/web/e2e-activity-editor/activity-editor.spec.ts`, plus an
-axe pass on the reopened editor.
+The smaller of the two rebuilds goes first: it proves the frame/inner/handle shape on one form host
+before the editor uses it.
 
-#### Feature: per-opening state is cleared at the opening
+**Outcome:** typing the instant New activity opens is kept; no alert or error from a previous opening.
+**Entry point:** **New activity** (activities panel) and Gantt row menu **Insert activity below**.
+**Journey:** `addActivity` already fills at once in every suite; T2.2 adds **J5**: submit with an error
+on a field the type hides → close (Discard) → reopen → no alert → create succeeds.
+**Reviewers (mandatory before release, §19.13):** **component-reviewer** and **accessibility-reviewer**
+— the Escape/backdrop/Cancel path now crosses a component boundary through a handle.
 
-> **Description:** spec §4.5 items 1 (close edge), 2 and 3.
-> **Complexity:** S–M
-> **Dependencies:** M1.
-> **Risks:** the subject-guard contract → `ActivityEditor.subject-guard.test.tsx` must pass unchanged
-> (it mounts with `open` fixed true, so gating the guard on `open` is invisible to it); a render-phase
-> state adjustment loop → the `seenIntent` precedent compares against a held previous value, so it
-> settles in one extra render.
-> **Testing requirements:** T0.3's F1–F3 tests green; J2 and J3 green; axe clean.
+##### Task T2.1 — `ActivityCreateDialog` frame + `ActivityCreateForm`
 
-##### Task T2.1 — Editor: close-edge reset, open-edge clear, guard only while open
+- **Description:** frame keeps `Dialog`, `useCreateActivity`, `formRef` and the forwarder; the form
+  holds the four forms (born with the seed, no `open`), `hiddenProblem`, `confirmingClose`, the report
+  and its registration, `focusFirstProblem`, submit, and `submittedThisOpening`. Delete the
+  `mutation.reset()` effect. Props unchanged.
+- **Complexity:** M. **Dependencies:** M0.
+- **Risks:** `useScopeForm` still has `open` until M3 → the form passes `open: true` constant for one
+  milestone (documented), or T3.1 lands first; choose T3.1-first if M3 starts before M2 merges.
+  `initialParentId` must seed at mount → covered by `ActivityCreateDialog.scope.test.tsx`.
+- **Testing:** T0.2 create probe green; F3 green; all `ActivityCreateDialog.*` suites unchanged; a new
+  test that a stale mutation error from the previous opening is not shown.
 
-- **Description:** `useScopeForm` also resets on the close edge; `ActivityEditor` holds `seenOpen` and,
-  on the false→true edge, clears `confirming`, `savedScope`, `saveError`; the subject guard runs only
-  while `open` and adopts silently otherwise.
-- **Complexity:** M · **Dependencies:** T1.1.
-- **Risks:** clearing `confirming` on open could swallow a legitimate confirmation → none can exist at
-  the open edge (a confirmation needs an open editor); the F1 unit test plus the existing
-  `asks before discarding` tests cover both directions.
-- **Testing:** F1 and F2 units green; every editor suite unchanged.
+##### Task T2.2 — Journey J5 and axe on the reopened dialog
 
-##### Task T2.2 — Create: clear `hiddenProblem` at the opening
-
-- **Description:** same render-phase pattern in `ActivityCreateDialog`.
-- **Complexity:** S · **Dependencies:** none.
-- **Testing:** F3 unit green; `ActivityCreateDialog.*` unchanged.
-
-##### Task T2.3 — Journeys J2, J3, axe
-
-- **Description:** J2 (M0) turns green; add J3 (save → close → open another → no "Saved."); an axe
-  `wcag2a/wcag2aa` pass on the reopened editor.
-- **Complexity:** S · **Dependencies:** T2.1.
-- **Testing:** `scripts/e2e-local.sh web:<activity-editor suite>` green, three consecutive local runs.
+- **Complexity:** S. **Testing:** `scripts/e2e-local.sh web:<suite>` green three runs.
 
 ---
 
-### Milestone M3: Close-out
+### Milestone M3: The editor per opening — L
 
-**Outcome:** the register says what is true. **Entry point:** `Ships dark: documentation only.`
-**Journey:** none new.
+**Outcome:** typing the instant the editor opens is kept; each opening starts clean; a save that
+completes after close is still undoable.
+**Entry point:** row menu **Actions for <activity> → Edit / Progress / Logic / Resources**, canvas
+selection bar, toolbar **Update progress…** (existing).
+**Journey:** **J1** (open → `fill` Name at once → Save general → cell), **J2** (red since M0 → green),
+**J3** (save → close → open another → no "Saved."); axe on the reopened editor.
+**Reviewers (mandatory before release, §19.13):** **accessibility-reviewer** (Escape, Close, the
+confirmation's stacking and focus, focus on open/close unchanged) and **component-reviewer** (the
+frame/session contract, the handle, `useScopeForm`'s signature); **ux-reviewer** (nothing a planner
+relied on across openings is now cleared).
 
-##### Task T3.1 — Docs, register, changeset
+##### Task T3.1 — `useScopeForm` without `open`
 
-- **Description:** D-5 docblocks; close #420 with the M0 evidence and this spec's per-site verdicts
-  (item 2 closed unchanged, item 3 deleted); new rows for **F4** (Progress drafts lost on tab switch,
-  trigger: next change to `ActivityProgressPanels` or a report) and **F5** (post-save reset wipes text
-  typed during the save); patch changeset for `@repo/web`; flip this spec and plan to
-  `Accepted — shipped` only if an ADR is filed (none is planned — leave `Approved` per
-  `check:spec-status`).
-- **Complexity:** S · **Dependencies:** M1, M2.
+- **Description:** seed at mount via `defaultValues`; the only effect re-seeds on a subject **change**
+  (id differs from the seeded id), with `reset(…, { keepFieldsRef: true })`. Update `citedBy` in
+  `scripts/dependency-claims.json` for `index.esm.mjs:3320-3327` to include `useScopeForm.ts`.
+- **Complexity:** S. **Risks:** call sites still pass `open` → the type change makes each one a compile
+  error, which is the inventory.
+- **Testing:** `useScopeForm.test.ts` updated for the signature (the seed-on-open cases become
+  seed-at-mount); a subject-change probe through the passthrough shell with an input dispatched in the
+  window — green.
 
-##### Task T3.2 — Reviews and gates
+##### Task T3.2 — Frame + `ActivityEditorSession` + the close handle
 
-- **Description:** run the reviewers below; fold blocking findings; `pnpm prepush`;
+- **Description:** spec §4.5. Frame: mutations (D-10), `sessionRef`, title/description from the
+  incoming row, `shell({ requestClose: forward, … children: open ? <Session/> : null })`. Session: the
+  rest of today's body, `useImperativeHandle(ref, () => ({ requestClose }))`, `useRegisterUnsavedWork`
+  without the `open` ternary. Docblocks per D-5.
+- **Complexity:** L. **Dependencies:** T3.1.
+- **Risks:**
+  - The undo record lost on close mid-save → mutations in the frame; unit with a deferred PATCH
+    (US-5).
+  - The subject-guard contract → `ActivityEditor.subject-guard.test.tsx` unchanged (it mounts with
+    `open` true throughout and a passthrough shell).
+  - A per-call callback calling a setter of an unmounted session → harmless no-op in React 19; asserted
+    by the undo test running with the session gone.
+  - Focus → the `<dialog>` stays in the frame; J2 and the axe pass check it; accessibility-reviewer
+    drives it in a real browser.
+- **Testing:** F1, F2 green; the editor probe green; every `ActivityEditorDialog.*` and `ActivityEditor.*`
+  suite unchanged.
+
+##### Task T3.3 — Journeys J1–J3, axe
+
+- **Complexity:** S. **Testing:** local e2e three runs; CI read per CLAUDE.md §19.9.
+
+---
+
+### Milestone M4: Progress drafts survive tab switches — M–L
+
+**Outcome:** a Progress, measure or steps draft survives visiting other tabs, is marked while away, and
+saves; the editor never claims a draft that does not exist.
+**Entry point:** row menu **Actions for <activity> → Progress**, toolbar **Update progress…**.
+**Journey:** **J4** (red since M0 → green): % complete → General → Progress → value present → Save
+progress → reopen → persisted; add a weighted step → away and back → row present → Save steps. Axe on
+the Progress tab with a draft.
+**Reviewers (mandatory before release, §19.13):** **accessibility-reviewer** (Steps heading focus,
+row-move focus fall-through, `aria-live` roll-up, all now with a form owned elsewhere) and
+**component-reviewer** (the panels' new presentational contract); **ux-reviewer**.
+
+##### Task T4.1 — Progress and measure forms owned by the session
+
+- **Description:** both panels take `form`; drop `open`, `onDirtyChange`, `useReportDirty` and the
+  session's `progressDirty` state — the report and the tab marker read `isDirty` directly.
+- **Complexity:** M. **Dependencies:** M3.
+- **Testing:** F4 (progress/measure half) green; `ActivityEditor.unsaved-scopes.test.tsx` unchanged;
+  `ActivityProgressPanels.error-presentation.test.tsx` rewritten through a small harness that supplies
+  the form — reviewed as a contract change.
+
+##### Task T4.2 — Steps form, field array and query in the session
+
+- **Description:** spec §4.6: `useForm` + `useFieldArray` in the session; `useActivitySteps` enabled once
+  Progress is visited (D-8); first data → `reset(…, { keepFieldsRef: true })`; later data only when
+  clean (D-9). Panel keeps focus management and `autoFocusHeading`.
+- **Complexity:** M. **Risks:** field-array keys survive the move → the existing move/remove focus
+  tests in `WeightedStepsPanel.test.tsx`, rewritten through the harness, must keep every assertion.
+- **Testing:** F4 (steps half) green; a D-9 test (refetch with changed data does not wipe a draft, does
+  re-seed a clean form).
+
+##### Task T4.3 — Remaining re-seed when the factor arrives
+
+- **Description:** generalise `useDurationSeed`'s seed function so the same once-per-opening,
+  value-compared hook seeds Remaining; Remaining is now seeded at open rather than at panel mount.
+- **Complexity:** S. **Testing:** `use-duration-seed.test.ts` extended; a Remaining sub-day case.
+
+##### Task T4.4 — Journey J4, axe
+
+- **Complexity:** S.
+
+---
+
+### Milestone M5: Close-out — S
+
+**Entry point:** `Ships dark: documentation only.`
+
+##### Task T5.1 — ADR, register, docs, changesets
+
+- ADR-0169 → `Accepted`; spec and plan → `Accepted — shipped (ADR-0169)`; close #420 with M0 evidence
+  and per-site verdicts; file **F5**; patch changesets per behavioural milestone (D-2).
+
+##### Task T5.2 — Final review pass and gates
+
+- accessibility-reviewer and component-reviewer over the whole epic; `pnpm prepush`;
   `scripts/e2e-local.sh web:<activity-editor suite>`.
-- **Complexity:** S · **Dependencies:** T3.1.
 
 ## Sequencing & slices
 
-M0 → M1 → M2 → M3, each a separate PR (or a commit-per-task series) that keeps `main` releasable: M1
-and M2 are each complete fixes on their own, and M2 does not depend on M1's journey. **No flag**
-(ADR-0088 D1); the rollback is the commit boundary. T1.2 and T2.2 are independent and can land in
-either order.
+M0 → M1 → M2 → M3 → M4 → M5. Each milestone keeps `main` releasable and ships its own fix: M1 the
+Resources window, M2 New activity, M3 the editor (F1, F2, the open window), M4 F4. **No flag**
+(ADR-0088 D1); the rollback is the commit boundary. T3.1 may land before M2 to avoid the temporary
+`open: true` in M2's form.
 
-## If the answers differ
+## If NQ-1 is (b) — retire the shell
 
-- **CQ-1 (b) — rebuild per opening.** M1 keeps T1.1 (the subject-change path still needs it) and T1.2;
-  M2 becomes: T2.1 split `ActivityEditor` into frame + `ActivityEditorSession` with the
-  `useImperativeHandle` close seam (spec §4.5); T2.2 `ActivityCreateDialog` to the #749 inner-form shape
-  with the same seam; T2.3 unchanged. Complexity M2 → **L**. Add a `docs/DECISIONS.md` entry.
-  **accessibility-reviewer and component-reviewer become mandatory before release** (CLAUDE.md §19.13):
-  the close path's ownership moves across a component boundary.
-- **CQ-1 (c) — close without change.** Only M0 and M3 run; M3 files F1–F3 as rows with M0's evidence.
-- **CQ-2 (b) — fold in F4.** Add **M2b**: design pass (ui-architect) on keeping the three panels
-  mounted-but-hidden vs lifting their forms to the editor, then build; complexity **M–L**; its own
-  journey (dirty % → switch tab → back → value present → save).
-- **CQ-2 (c) — stop claiming the lost work.** Add one task to M2: `useReportDirty` reports `false` on
-  unmount; a test that the dot and the confirmation clear after a tab switch.
-- **CQ-3 (b) — keep the Resources reset.** Drop T1.2; record the verdict in T3.1.
+M3 grows: `modalShell` is inlined, the four passthrough-shell suites are rewritten against the real
+dialog, and the subject guard and its suite are removed with a written reason (no remaining path can
+reach it). ADR-0169 gains a D7 recording the retirement. M3 → **XL**; consider splitting the retirement
+into its own milestone after M4.
 
-## Reviewers
+## Reviewers per milestone
 
-| When     | Agent                                                              | Why                                                                                  |
-| -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| M0       | **test-engineer**                                                  | the window probe's design and its positive control                                   |
-| M1       | **component-reviewer**                                             | a shared hook's reset semantics change for four hosts                                |
-| M2       | **accessibility-reviewer**                                         | F1 changes which dialog is open on reopen and where Escape lands; J2 is the evidence |
-| M2       | **ux-reviewer**                                                    | "every opening starts clean" — confirm no state a planner relied on is now cleared   |
-| (b) only | **component-reviewer** + **accessibility-reviewer** before release | §19.13 — the close path crosses a component boundary                                 |
+| Milestone | Mandatory before release                                    | Also                         |
+| --------- | ----------------------------------------------------------- | ---------------------------- |
+| M0        | —                                                           | test-engineer (probe design) |
+| M1        | component-reviewer                                          | —                            |
+| M2        | **accessibility-reviewer**, **component-reviewer** (§19.13) | ux-reviewer                  |
+| M3        | **accessibility-reviewer**, **component-reviewer** (§19.13) | ux-reviewer, test-engineer   |
+| M4        | **accessibility-reviewer**, **component-reviewer** (§19.13) | ux-reviewer                  |
+| M5        | accessibility-reviewer, component-reviewer (whole epic)     | —                            |
 
-Not engaged, and why: **database-architect** (no schema), **security-reviewer** / **api-reviewer** (no
-request, guard or contract changes), **backend-performance-reviewer** (no backend), **performance-reviewer**
-(no bundle or render-cost change of note).
+Not engaged: database-architect (no schema), security-reviewer and api-reviewer (no request, guard or
+contract changes on the server), backend-performance-reviewer (no backend). performance-reviewer only
+if M3's per-opening mount measures as a visible open delay.
 
 ## Definition of Done (per task)
 
-Each task's PR satisfies the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md):
-code, tests (run, not merely present — `pnpm prepush`, plus `scripts/e2e-local.sh web:<suite>` for the
-journey cases), docs, security, performance, accessibility, Docker build, CI read per CLAUDE.md §19.9,
-changeset, version impact (patch, `@repo/web`).
+The Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md): code, tests **run**
+(`pnpm prepush`; `scripts/e2e-local.sh web:<suite>` for journey changes), docs, security, performance,
+accessibility, Docker build, CI read per CLAUDE.md §19.9, changeset, version impact (patch, `@repo/web`).
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                            | Likelihood | Impact | Mitigation                                                                           |
-| ------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------ |
-| §0.1's window does not reproduce in the probe                | low        | high   | M0 gate stops the plan and returns to the product owner                              |
-| `keepFieldsRef` mis-seeds a field not mounted at reset time  | low        | med    | unvisited-tab test (T1.1); registered dependency claims force a re-read on RHF bumps |
-| F1's stacking is not what reading predicts                   | med        | low    | J2 observes it; the fix (no stale confirmation) is right whichever way it stacks     |
-| Gating the subject guard on `open` changes a tested contract | low        | med    | the guard's suite mounts with `open` true throughout; it must pass unchanged         |
-| The journey J1 is read as proof of a race's absence          | med        | low    | its comment names the probe as the proof                                             |
-| A react-dom or RHF bump breaks `check:claims`                | med        | low    | intended — the six registered claims are re-read, not re-pinned blind                |
-| The original csp site had a different cause (D-7)            | med        | low    | recorded in M0; the editor's verdict does not depend on it                           |
+| Risk / assumption                                                 | Likelihood | Impact | Mitigation                                                              |
+| ----------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------- |
+| The window does not reproduce in the probe                        | low        | high   | M0 stop gate                                                            |
+| An undo record is lost when the editor closes mid-save            | med        | high   | mutations in the frame (D-10); deferred-PATCH unit                      |
+| Focus on open/close changes                                       | low        | high   | `<dialog>` stays in the frame; J2; accessibility-reviewer per milestone |
+| ~20 editor/create suites need edits beyond the panel two          | med        | med    | props unchanged by design; any edit beyond the two is a review flag     |
+| Steps field-array behaviour changes when moved                    | med        | med    | panel suite rewritten with every assertion kept                         |
+| Remaining seeded at open shows whole days before the factor lands | med        | low    | T4.3 re-seed                                                            |
+| D-9 narrows today's steps re-seed                                 | low        | low    | stated in ADR-0169; consistent with ADR-0108 D5                         |
+| A react-dom or RHF bump breaks `check:claims`                     | med        | low    | intended — re-read, not re-pinned blind                                 |
