@@ -527,7 +527,10 @@ export function levelSchedule(
     let overlay: Overlay;
     if (finiteAsgs.length === 0) {
       // No capped resource: nothing to wait for but the link, so the overlay is the link floor. The
-      // span is the one the bar is drawn on (what it passes on), not the input duration.
+      // span is the one the bar is drawn on (what it passes on), not the input duration. The window
+      // flag stays false on purpose: it reports a finite RESOURCE's own availability window (§6), which
+      // this activity does not have. Running past its late finish is a float question the plan's own
+      // constraint reporting answers, not a resource window being exceeded.
       const drawn = passOnOf(id);
       const span = cal.workingTimeBetween(
         absMinutesToInstant(drawn.start),

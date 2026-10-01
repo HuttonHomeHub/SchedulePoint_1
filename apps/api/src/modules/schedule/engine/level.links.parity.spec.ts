@@ -244,9 +244,9 @@ describe('levelSchedule: followers of a delayed activity follow it', () => {
   }
 });
 
-// ── Gate D guards: held before Pass C and hold after it ────────────────────────────────────────────────────────
+// ── Gate D guards: held before Pass C and hold after it ───────────────────────────────────────────
 
-describe('Gate D: an activity levelling did not move behind keeps the answer it has today', () => {
+describe('Gate D: an activity with no moved predecessor keeps the answer it had before Pass C', () => {
   it('a hand-placed predecessor that levelling leaves where it is does not push a follower already earlier than its links', () => {
     // P is drawn on 6 January, five days after its early start, on a crane nobody else wants. S has no
     // resource and is hand-placed on 3 January, before P finishes: a conflict the planner made. Nothing
