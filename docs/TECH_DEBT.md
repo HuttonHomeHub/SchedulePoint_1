@@ -11639,3 +11639,18 @@ a change to ADR-0041 §1 and ADR-0035 §28 with conformance consequences, so it 
 `docs/specs/apply-levelled-dates/` computes the real figure for its own preview (spec §4.6 step 6) and
 does not change this one. **Trigger:** the Apply levelled dates epic shipping, since its dialog will show
 the real finish beside this figure.
+
+### 429. The plan-calendar picker's popup closed between "visible" and the click, once on CI
+
+**Status:** open · **Verified:** 2026-10-01 (CI log, run `36823079172`, web shard 1) ·
+**Raised:** 2026-10-01 (reading the csp evidence for #420) · **Size:** S · **Owner:** web
+
+`e2e/schedule.spec.ts:124` "a planner picks the plan calendar and recalculates on it (accessible)" failed
+its first attempt and passed on retry, so the shard was green (the base suite reported "1 flaky").
+It timed out inside `e2e/combobox.ts:51`: the `Standard` option resolved and was asserted visible, the
+click found it "not stable", then "not visible" for the rest of the 30 s — so the listbox **closed after
+it was shown**, without the click landing. The helper's own comment (`combobox.ts:43-44`) records that
+a picker which commits to the server disables itself while saving; a re-render or a refetch closing the
+popup is consistent with the log, and nothing has established which. Not #420's shape: no text was
+typed and nothing was reset. Seen once in the five shard-1 runs read on 2026-10-01. **Next:** read the
+trace of a recurrence before changing the product or the helper. **Trigger:** a second occurrence.
