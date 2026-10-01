@@ -1,5 +1,16 @@
 # @repo/types
 
+## 0.39.0
+
+### Minor Changes
+
+- [#751](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/751) [`73f1aa0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73f1aa0d79cbe1db7e55388a998874d4cc269624) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Levelling now pushes the work that follows a delayed activity: followers have levelled ghosts, the
+  levelled finish includes them, and Apply levelled dates lets them follow by their links. Existing
+  levelled plans will show new ghosts and a later levelled finish at their first recalculation after this
+  release. Apply levelled dates writes no row for a bar that only moved because the work before it moved
+  (it follows its links), and a hand-placed one moves with it; the preview reports the first as
+  `followingLinks` and each row's `reason`.
+
 ## 0.38.0
 
 ### Minor Changes
