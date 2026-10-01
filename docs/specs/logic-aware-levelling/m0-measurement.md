@@ -329,14 +329,79 @@ drift cancels. Recorded 2026-10-01, engine only (`computeSchedule` then `levelSc
 | capacity 2   | 1,282 / 1,750    | 1,700 / 1,851 ms | 1,826 / 1,966 ms | 1.07x, 1.06x        |
 | capacity 1   | 1,686 / 1,750    | 2,268 / 2,494 ms | 2,400 / 2,593 ms | 1.06x, 1.04x        |
 
-**Capacity 8 exceeds the 1.5x stop (1.97x at p50).** Nothing was optimised and nothing was changed in
-response: the finding goes to the product owner. What the table shows about it: the ratio is large only
+**Capacity 8 exceeded the 1.5x stop (1.97x at p50).** Nothing was optimised in M2 and nothing was changed
+in response: the finding went to the product owner, who chose to speed it up before shipping (M2.5 below). What the table shows about it: the ratio is large only
 where Pass C does the most NEW work. At capacity 8 the unlevelled passes delay 26 activities and Pass C
 re-places about 1,700 more (each a release, a feasibility search and an occupy), about 0.25 ms each, which
 is the whole 430 ms. Where levelling already delays most of the plan (capacity 2 and 1) Pass C adds 5-7 %.
 The absolute figure is a 2,000-activity plan whose every activity wants one resource, with the
 recalculation going from about 0.45 s to 0.88 s: inside the < 2 s target at 2,000 activities, and a
 shape the seeded scale plans do not have (they assign a fraction of the activities).
+
+## M2.5, making the hot-resource worst case fit the budget
+
+The product owner decided on 2026-10-01 to speed the worst case up **before** shipping rather than ship
+over the 1.5x stop. Backend-performance review had located the cost in `earliestFeasibleStart`:
+`blackoutsOf` rebuilt and sorted a `±demand` event list over the whole per-resource interval list on every
+call, and Pass C re-places about 1,700 extra participants. A CPU profile of the hot-resource, capacity 8,
+"on" run (in-process `Profiler`, 40 recalculations, engine only) then showed the sort was NOT the only
+cost, and not the largest: before any change, `formatCalendarDate` + `parseCalendarDate` (the `Date` round
+trip inside the calendar's instant conversions) were 39 % of self time, `countWorking` 11 %, `blackoutsOf`
+10 %. Three changes, none of which alters an output:
+
+1. **`ResourceProfile` (`level-profile.ts`)** keeps each resource's events incrementally sorted (binary
+   search plus `splice`, identity removal preserved) and reads them with no sort and no allocation. It
+   reproduces the old sort's order exactly (time, then delta; a straddler clamped to the search start),
+   because the blackouts are thresholds on a running float sum and `unitsPerHour` is fractional. When no
+   assignment carries a lag the walk also stops at the first instant past the run's finish where no
+   blackout is open, and widens only if the run does not fit in what it read.
+2. **The calendar's instant conversions are arithmetic** (`toAbsMinutes` / `fromAbsMinutes` in
+   `working-time-calendar.ts`: days-from-civil, no `Date`, no `split().map(Number)`). Anything that is not
+   a well-formed real day (`2026-02-30`, a year before 1000, a malformed time) takes the original `Date`
+   path. This is the largest single saving and it is shared by every calendar operation, so it also
+   speeds `computeSchedule`.
+3. **An overlay's two display dates are written once, at the merge**, not on every `overlayAt`. Pass B's
+   overlay for an activity Pass C then re-places was overwritten without ever being read, and each carried
+   two calendar walks over date strings.
+
+**Measured in one sitting, alternated** (before and after built into the same loop, each with its own
+engine tree and its own calendar, so "before" is the genuine 0b584a9 engine; n = 25 per cell, after an
+untimed check that `JSON.stringify` of the full output was equal for off and on). p50 / p95 milliseconds,
+engine only (`computeSchedule` then `levelSchedule`), 2,000 activities, recorded 2026-10-01. The ratio is
+on / off.
+
+| Plan                     | Before off    | Before on     | Before ratio | After off     | After on      | After ratio      |
+| ------------------------ | ------------- | ------------- | ------------ | ------------- | ------------- | ---------------- |
+| Hot resource, capacity 8 | 456 / 513     | 873 / 922     | 1.92x, 1.80x | 139 / 172     | 184 / 218     | **1.32x, 1.27x** |
+| Hot resource, capacity 2 | 1,783 / 1,909 | 1,897 / 2,076 | 1.06x, 1.09x | 1,396 / 1,452 | 1,467 / 1,535 | 1.05x, 1.06x     |
+| Hot resource, capacity 1 | 2,350 / 2,477 | 2,491 / 2,637 | 1.06x, 1.06x | 2,098 / 2,257 | 2,177 / 2,316 | 1.04x, 1.03x     |
+| Scale plan, capacity 8   | 301 / 335     | 376 / 420     | 1.25x, 1.25x | 119 / 139     | 135 / 155     | 1.14x, 1.12x     |
+| Scale plan, capacity 2   | 316 / 342     | 432 / 458     | 1.37x, 1.34x | 127 / 140     | 174 / 212     | 1.37x, 1.52x     |
+
+**The hot resource at capacity 8 is now 1.32x at p50 (1.27x at p95), under the 1.5x stop**, and the pass
+is 4.7x faster with Pass C (873 to 184 ms) and 3.3x faster without it. Nothing got slower: Pass B (the
+"off" columns) fell 3.3x at hot capacity 8 and 2.5x on the scale plan. Two caveats, stated rather than
+left to be found. (a) **The ratio moved less than the absolute time**, because the cost shared by both
+runs fell along with Pass C's: the scale plan at capacity 2 reads 1.37x at p50 before and after, and 1.52x
+at p95 after against 1.34x, while both its absolute figures fell by 2.5x. The stop is on the
+hot-resource worst case; the figure that decides what a request costs is the "on" column. (b) **Capacity 2
+and 1 on the hot resource improved by only about 22 % and 12 %**: almost every activity is delayed there, the
+blackout lists are long, and the cost is the candidate loop and the calendar's `countWorking` binary
+search, which this change did not touch. Their ratios were already 1.05x. What remains at capacity 8 is
+mostly `countWorking` (about 29 % of self time) and the straddler scan in `ResourceProfile.blackoutsOf`; a
+closed-form `addWorkingTime` is the next lever and was not attempted, because it changes the calendar's
+algorithm rather than its representation.
+
+**No output changed.** The `level.parity.spec.ts` and `level.links.parity.spec.ts` snapshots, the goldens,
+the conformance tests and the seeded corpus pass **unedited**. Three new differentials hold the change to
+the old code: `level-profile.spec.ts` (200 seeded random occupy/release sequences with fractional
+demands, `ResourceProfile.blackoutsOf` against the frozen sort-per-call function, exact spans, plus the
+finite-horizon contract), `working-time-calendar.fast-path.spec.ts` (every day 1950-2150 at three times
+of day and the whole 1000-9999 range sampled, against the frozen `Date` conversions, plus the inputs that
+must fall back), and `level.hot-resource.parity.spec.ts` (SHA-256 of the complete `levelSchedule` output
+for the hot resource at capacities 8 and 3 and the seeded scale plan at 8 and 2, Pass C off and on,
+frozen from the 0b584a9 engine). The first was run red against a deliberately wrong profile (a finish
+event at the search start no longer skipped): 193 of its 201 cases fail.
 
 ## What moved in the committed suites
 

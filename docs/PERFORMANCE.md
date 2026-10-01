@@ -79,8 +79,12 @@ unimplemented and ADR-0022's synchronous model stands.
 adds p50 +63 ms (capacity 8) to +105 ms (capacity 2) to the engine pass at 2,000 activities, p95 +78 to
 +120 ms, which is how much longer the plan-scoped lock is held on a recalculation of such a plan. The
 critical-path test and the programme recalculation run the same pass, so they inherit it. The worst case
-(one resource shared by every activity, capacity 8) roughly doubles the pass, 0.45 s to 0.88 s; see the
-hot-resource table in that record.
+(one resource shared by every activity, capacity 8) doubled the pass, 0.46 s to 0.87 s, until logic-aware
+levelling M2.5 (2026-10-01): an incrementally sorted resource profile, arithmetic instant conversions in
+the calendar and deferred display dates took it to 0.14 s without and **0.18 s with** Pass C (1.32x, under
+the 1.5x stop), measured alternated against the old engine in one sitting. The figures above this
+paragraph (+63 to +105 ms, and the preview's 0.67-0.74 s) pre-date M2.5 and were not re-taken; the engine
+is faster than they say, never slower. See "M2.5" in that record.
 
 ## CPM recalculation (M6, ADR-0022)
 

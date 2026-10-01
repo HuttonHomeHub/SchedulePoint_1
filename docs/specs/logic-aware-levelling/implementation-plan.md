@@ -267,6 +267,28 @@ with no placement.
 
 ---
 
+### Milestone M2.5: Make the hot-resource worst case fit the budget
+
+**Added 2026-10-01 by the product owner's decision** (AskUserQuestion), after M2's SC-5 measurement
+showed the hot-resource worst case (1,910 of 2,000 activities on one resource, capacity 8) at **1.97x**
+p50 against the epic's 1.5x stop (`m0-measurement.md`, "SC-5"). The choice put to the owner was to ship
+with the finding recorded or to speed it up first; they chose **speed it up before shipping**.
+
+**Scope:** a pure optimisation of the engine, no change in any output, no schema, no new surface, so it
+needs no spec (ADR-0105). `level.ts` and a new `level-profile.ts`, plus the calendar's instant conversions
+in `working-time-calendar.ts`, which a profile showed to be the largest cost.
+**Outcome (measured, `m0-measurement.md`, "M2.5"):** hot resource capacity 8 is **1.32x p50 / 1.27x p95**
+(was 1.97x / 1.91x); the pass is 4.7x faster with Pass C and 3.3x without; Pass B and the ordinary scale
+plan are faster, not slower. The stop condition ("cannot reach 1.5x without changing outputs") was **not**
+reached.
+**Evidence it changed nothing:** every existing engine snapshot, golden and conformance test unedited,
+plus three differentials (the profile against the frozen sort-per-call function over random sequences
+with fractional demands; the calendar's arithmetic against the `Date` conversions; a frozen SHA-256 of the
+whole hot-resource and scale-plan output).
+**Dependencies:** M2-T3. M2-T3 and M2-T4 still ship together.
+
+---
+
 ### Milestone M3: Say it on screen
 
 **Outcome:** the dialog names followers; the strip's copy matches CQ-2; the playbook, the catalogue and
@@ -361,7 +383,7 @@ build, CI, changelog, version impact). That includes `pnpm prepush`, `scripts/e2
 | -------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | C10 (corpus unchanged) is false                                                  | low        | high   | M0-T3 runs it before any change; stop if false.                                                                                                            |
 | Pass C leaves many gaps on real plans (quality)                                  | med        | med    | M0-T1 item 5 counts them. CQ-3 is revisited with the number.                                                                                               |
-| Engine cost above 1.5× (SC-5)                                                    | low        | med    | Measured in M2-T3; stop and report.                                                                                                                        |
+| Engine cost above 1.5× (SC-5)                                                    | low        | med    | Measured in M2-T3; stop and report. Exceeded on the hot-resource shape (1.97x), fixed in M2.5 (1.32x).                                                     |
 | Planners see ghosts appear on existing levelled plans after release              | high       | low    | That is the feature. The changeset's first sentence says so; Watchtower means it is live on release (CLAUDE.md §17).                                       |
 | Knock-on part-day pushes make #426 more visible                                  | med        | low    | D-7. #426 is annotated, and its trigger ("the next change to the levelled lens or the summary strip") fires in M3, so it is put to the product owner then. |
 | Metric 12 verdict changes on a levelled plan                                     | low        | low    | C18. A pinned case and an ADR consequence.                                                                                                                 |
