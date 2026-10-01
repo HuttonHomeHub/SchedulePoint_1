@@ -216,9 +216,10 @@ export function ScheduleSummaryStrip({
       ) : null}
       {hasLevelled ? (
         <p className="text-muted-foreground text-xs">
-          Levelling delayed {leveledActivityCount}{' '}
-          {leveledActivityCount === 1 ? 'activity' : 'activities'} so resource demand stays within
-          capacity; the levelled finish is the latest finish under levelling.
+          Levelling moved {leveledActivityCount}{' '}
+          {leveledActivityCount === 1 ? 'activity' : 'activities'}, either to keep resource demand
+          within capacity or because the work before {leveledActivityCount === 1 ? 'it' : 'them'}{' '}
+          moved; the levelled finish is when the plan finishes once levelled.
           {levelledWithoutGhost > 0
             ? ` ${levelledWithoutGhost} moved by less than a day, so ${
                 levelledWithoutGhost === 1 ? 'it has' : 'they have'

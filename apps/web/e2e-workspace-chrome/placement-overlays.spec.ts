@@ -516,6 +516,12 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect(levelledFinish).toContainText(
       new RegExp(`\\b${day}\\b.*${month}|${month}.*\\b${day}\\b`),
     );
+    // …and it says what "levelled" now means: a move can be a knock-on, not only a resource.
+    await expect(
+      summary.getByText(
+        /Levelling moved \d+ activit\w+, either to keep resource demand within capacity or because the work before (it|them) moved/,
+      ),
+    ).toBeVisible();
     await page.keyboard.press('Escape');
 
     // ── 3 · Apply levelled dates… lists the lift, and not the slab that follows it ────────────────
@@ -529,6 +535,14 @@ test.describe('the feasible window and the levelled lens', () => {
     const list = dialog.getByRole('table', { name: 'Activities that will move' });
     await expect(list.getByRole('row')).toHaveCount(2);
     await expect(list.getByRole('row', { name: /Pour slab/ })).toHaveCount(0);
+    // The slab is named in a list of its own, a real list with a name, and the sentence says why.
+    const follows = dialog.getByRole('list', { name: 'Will follow the bars before them' });
+    await expect(follows.getByRole('listitem')).toHaveText(['Pour slab']);
+    await expect(
+      dialog.getByText(
+        '1 more activity will follow the bars before it, with nothing written for it.',
+      ),
+    ).toBeVisible();
 
     // ── 4 · Confirm: the slab is not pinned, and it lands where its ghost was ─────────────────────
     await confirm.click();

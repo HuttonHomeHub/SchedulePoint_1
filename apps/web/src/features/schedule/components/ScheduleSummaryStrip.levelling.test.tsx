@@ -61,7 +61,7 @@ describe('ScheduleSummaryStrip — levelled overlay (flag on)', () => {
     await waitFor(() => expect(screen.getByText('Levelled finish')).toBeInTheDocument());
     expect(screen.getByText('20 Jan 2026')).toBeInTheDocument();
     expect(screen.getByText('Levelled activities')).toBeInTheDocument();
-    expect(screen.getByText(/Levelling delayed 2 activities/)).toBeInTheDocument();
+    expect(screen.getByText(/Levelling moved 2 activities/)).toBeInTheDocument();
   });
 
   it('surfaces the window-exceeded and over-capacity figures with AT hints when non-zero', async () => {
@@ -137,7 +137,7 @@ describe('ScheduleSummaryStrip — levelled overlay (flag on)', () => {
     ]);
     renderStrip();
     await waitFor(() => expect(apiFetchAllPages).toHaveBeenCalled());
-    await screen.findByText(/Levelling delayed 1 activity/);
+    await screen.findByText(/Levelling moved 1 activity/);
     expect(screen.queryByText(/not drawn/)).not.toBeInTheDocument();
     expect(screen.queryByText(/no ghost on the diagram/)).not.toBeInTheDocument();
   });

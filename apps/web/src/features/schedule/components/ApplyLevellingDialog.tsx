@@ -95,6 +95,16 @@ const MOVE_COLUMNS: Column<LevellingApplicationItem>[] = [
   },
 ];
 
+/**
+ * Why a bar moves, as words: the reason is the one thing that tells a planner whether the move is the
+ * resource's doing or a consequence of an earlier move, so it is a column of text and not a colour or
+ * an icon (WCAG 1.4.1).
+ */
+const REASON_TEXT: Record<LevellingApplicationItem['reason'], string> = {
+  RESOURCE: 'A resource delays it',
+  LINKS: 'The work before it moved',
+};
+
 const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
   ...MOVE_COLUMNS.slice(0, 1),
   {
@@ -103,6 +113,7 @@ const PLACED_COLUMNS: Column<LevellingApplicationItem>[] = [
     width: 'fit',
   },
   ...MOVE_COLUMNS.slice(1),
+  { header: 'Why it moves', cell: (item) => REASON_TEXT[item.reason], width: 'bounded' },
 ];
 
 function MoveTable({
@@ -152,7 +163,7 @@ function NameList({
   const more = names.length - shown.length;
   return (
     <FormSection title={title} description={description} aside={activityCount(names.length)}>
-      <ul className="flex flex-col gap-1 text-sm">
+      <ul aria-label={title} className="flex flex-col gap-1 text-sm">
         {shown.map((named) => (
           <li key={named.id}>{named.name}</li>
         ))}
@@ -335,6 +346,13 @@ function ApplyLevellingBody({
                 items={others}
               />
             </FormSection>
+          ) : null}
+          {application.followingLinks.length > 0 ? (
+            <NameList
+              title="Will follow the bars before them"
+              description="These have no placement of their own, so nothing is written for them. They move with their links once the bars above are applied."
+              names={application.followingLinks}
+            />
           ) : null}
           {application.leftToLogic.length > 0 ? (
             <NameList

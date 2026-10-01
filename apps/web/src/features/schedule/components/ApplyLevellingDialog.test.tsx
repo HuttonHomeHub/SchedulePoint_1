@@ -273,6 +273,55 @@ describe('ApplyLevellingDialog — the populated preview', () => {
     ).toHaveTextContent('Fix pump');
   });
 
+  it('lists the bars that will follow their links, by name, as a named list with no row of their own', () => {
+    loaded(application({ followingLinks: [{ id: 's', name: 'Pour slab' }] }));
+    renderDialog();
+    const group = screen.getByRole('group', { name: 'Will follow the bars before them' });
+    expect(
+      within(screen.getByRole('table', { name: 'Activities that will move' })).queryByText(
+        'Pour slab',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(group).getByRole('list', { name: 'Will follow the bars before them' }),
+    ).toHaveTextContent('Pour slab');
+    expect(
+      screen.getByText(
+        '1 more activity will follow the bars before it, with nothing written for it.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('will follow the bars before it');
+  });
+
+  it('says in words, not colour, why a hand-placed bar moves', () => {
+    loaded(
+      application({
+        rows: [row('p'), row('q')],
+        items: [
+          item('p', { wasPlaced: true, beforeVisualStart: '2026-03-04', reason: 'LINKS' }),
+          item('q', { wasPlaced: true, beforeVisualStart: '2026-03-05', reason: 'RESOURCE' }),
+        ],
+      }),
+    );
+    renderDialog();
+    const placed = screen.getByRole('table', { name: 'Hand-placed activities that will move' });
+    expect(within(placed).getByRole('columnheader', { name: 'Why it moves' })).toBeInTheDocument();
+    expect(within(placed).getByRole('row', { name: /Lift p/ })).toHaveTextContent(
+      'The work before it moved',
+    );
+    expect(within(placed).getByRole('row', { name: /Lift q/ })).toHaveTextContent(
+      'A resource delays it',
+    );
+  });
+
+  it('shows no followers section when nobody follows', () => {
+    loaded(application());
+    renderDialog();
+    expect(
+      screen.queryByRole('group', { name: 'Will follow the bars before them' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('caps a long named list and says how many more there are', () => {
     const names = Array.from({ length: 13 }, (_, i) => ({
       id: `n${String(i)}`,

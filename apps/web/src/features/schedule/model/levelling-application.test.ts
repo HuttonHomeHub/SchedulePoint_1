@@ -164,6 +164,23 @@ describe('applyLevellingLines', () => {
     );
   });
 
+  it('says how many activities will follow their links, and is silent when none do', () => {
+    expect(byKey(application()).following).toBeUndefined();
+    expect(byKey(application({ followingLinks: [{ id: 's', name: 'S' }] })).following).toBe(
+      '1 more activity will follow the bars before it, with nothing written for it.',
+    );
+    expect(
+      byKey(
+        application({
+          followingLinks: [
+            { id: 's', name: 'S' },
+            { id: 't', name: 'T' },
+          ],
+        }),
+      ).following,
+    ).toBe('2 more activities will follow the bars before them, with nothing written for them.');
+  });
+
   it('leaves the bars left to logic and the hand-placed conflicts to their sections', () => {
     const keys = applyLevellingLines(
       application({

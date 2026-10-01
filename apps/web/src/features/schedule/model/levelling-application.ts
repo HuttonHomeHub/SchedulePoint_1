@@ -109,6 +109,9 @@ export interface ApplyLevellingLine {
  * are the answer to "what does this do to my plan"; the one the plan flags as the risk is
  * `remaining`: "nothing left to move" is only said when `remainingAfterApply` is 0.
  *
+ * The bars that follow their links get a sentence as well as a section: they are not in the count
+ * above, so without it the total would read as the whole of what changes.
+ *
  * The bars left to their links and the hand-placed bars in conflict are not sentences here: each has
  * a section of its own whose header and count say the same thing, and a second wording drifts.
  *
@@ -128,6 +131,14 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
         before === after
           ? `The plan finish stays ${formatCalendarDate(after)}.`
           : `The plan finish moves from ${formatCalendarDate(before)} to ${formatCalendarDate(after)}.`,
+    });
+  }
+
+  const following = application.followingLinks.length;
+  if (following > 0) {
+    lines.push({
+      key: 'following',
+      text: `${plural(following, 'more activity', 'more activities')} will follow the bars before ${pick(following, 'it', 'them')}, with nothing written for ${pick(following, 'it', 'them')}.`,
     });
   }
 
@@ -182,7 +193,7 @@ export function applyLevellingLines(application: LevellingApplication): ApplyLev
  * decides on. One sentence per line, so it cannot say more than the list does.
  */
 export function applyLevellingSummary(lines: ApplyLevellingLine[]): string {
-  return ['moves', 'finish', 'remaining']
+  return ['moves', 'following', 'finish', 'remaining']
     .flatMap((key) => lines.filter((line) => line.key === key).map((line) => line.text))
     .join(' ');
 }

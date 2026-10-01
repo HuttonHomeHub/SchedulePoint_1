@@ -334,7 +334,8 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
   },
   {
     /**
-     * The levelled-placement ghosts (one-planning-surface M-E). `insight`, beside the other two
+     * The levelled-placement ghosts (one-planning-surface M-E): one per activity levelling moved, for
+     * a resource or because the work before it moved. `insight`, beside the other two
      * overlays that draw a second position for a bar the planner can already see.
      *
      * **Only ONE of the lens's three states shades, and that is the decision rather than an
