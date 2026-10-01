@@ -127,7 +127,7 @@ changes.
 
 ---
 
-### Milestone M2: New activity per opening — M
+### Milestone M2: New activity per opening — M — **built, 2026-10-01**
 
 The smaller rebuild goes first: it proves the frame / inner form / handle shape on one host.
 

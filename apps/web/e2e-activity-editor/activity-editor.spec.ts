@@ -11,6 +11,7 @@ import {
   openEditor,
   openProject,
   releasePen,
+  showActivities,
 } from './support';
 
 /**
@@ -432,4 +433,49 @@ test('J4 — a Progress draft and a weighted step survive a visit to another tab
   await expect(editor.getByLabel('Step 1 name')).toHaveValue('Frames in');
   await editor.getByRole('button', { name: 'Save steps' }).click();
   await expect(editor.getByLabel('Step 1 name')).toHaveValue('Frames in');
+});
+
+/**
+ * **New activity starts clean on every opening** (`docs/specs/activity-editor-seeding/`, J5).
+ *
+ * A negative levelling priority is invalid and a milestone then hides the only field that holds it,
+ * so the submit fails with nothing on screen to carry the message and the form says so itself in an
+ * alert. That alert used to survive Cancel, Discard and the next opening; the form is now built per
+ * opening, so the reopened dialog is clean and creating from it succeeds.
+ */
+test('J5 — New activity opens clean after a failed submit was discarded', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await showActivities(page);
+
+  await page.getByRole('button', { name: 'New activity' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New activity' });
+  await dialog.getByLabel('Name').fill('Pour slab');
+  await dialog.getByLabel('Levelling priority').fill('-1');
+  await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
+  await dialog.getByRole('button', { name: 'Create activity' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('the field holding it is one this');
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Discard unsaved changes?' })
+    .getByRole('button', { name: 'Discard' })
+    .click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'New activity' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Name')).toHaveValue('');
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+
+  await dialog.getByLabel('Name').fill('Pour slab');
+  await dialog.getByLabel(/^Duration( \(working days\))?$/).fill('5');
+  await dialog.getByRole('button', { name: 'Create activity' }).click();
+  await expect(page.getByRole('cell', { name: 'Pour slab', exact: true })).toBeVisible();
 });

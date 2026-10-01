@@ -19,10 +19,10 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  * does: `open` is "an intent exists", closing clears the intent, and the next click builds a fresh
  * one. The dialogs stay mounted across openings; that is the whole defect.
  *
- * **All four are `it.fails`, and that is a statement about today's code.** Each asserts the
+ * **F1, F2 and F4 are `it.fails`, and that is a statement about today's code.** Each asserts the
  * behaviour the epic delivers, so each FAILS on this tree and `it.fails` keeps the suite green
- * while recording that. The milestone that fixes a finding (M2 F3, M3a F1, M3b F2, M4 F4) turns its
- * case into a plain `it` — vitest reports an `it.fails` that starts passing as a failure, so the
+ * while recording that. F3 was flipped to a plain `it` by M2. The milestone that fixes a finding (M3a F1, M3b F2, M4 F4)
+ * turns its case into a plain `it` — vitest reports an `it.fails` that starts passing as a failure, so the
  * flip cannot be forgotten.
  *
  * jsdom has no top layer, so F1 asserts only that a confirmation is ARMED for the next opening;
@@ -156,7 +156,7 @@ describe('F2 — "Saved." survives into the next opening', () => {
 });
 
 describe('F3 — New activity’s hidden-field alert survives into the next opening', () => {
-  it.fails('shows no alert when the dialog is opened again', async () => {
+  it('shows no alert when the dialog is opened again', async () => {
     mount(<CreateHost />);
     fireEvent.click(screen.getByRole('button', { name: 'open create' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
@@ -168,6 +168,36 @@ describe('F3 — New activity’s hidden-field alert survives into the next open
     // The control: the alert is real in the opening that caused it.
     expect(await screen.findByRole('alert')).toHaveTextContent(/field holding it is one this/);
 
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'open create' }));
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('New activity — a failed create does not greet the next opening', () => {
+  it('shows no server error when the dialog is opened again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: { code: 'BOOM', message: 'The server refused.' } }),
+        } as unknown as Response),
+      ),
+    );
+    mount(<CreateHost />);
+    fireEvent.click(screen.getByRole('button', { name: 'open create' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+    // The control: the error is real in the opening that caused it.
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server refused.');
+
+    // The form is now dirty, so closing asks first; the mutation outlives the form it was made by.
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());

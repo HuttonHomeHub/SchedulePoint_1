@@ -137,9 +137,9 @@ chose to continue the epic with the plan corrected to this record (spec §0.4).
 | Test                                        | Marker                    | Flips in            |
 | ------------------------------------------- | ------------------------- | ------------------- |
 | window — editor (flushSync and click)       | `it.fails`                | M3b                 |
-| window — New activity (flushSync and click) | `it.fails`                | M2                  |
+| window — New activity (flushSync and click) | `it.fails`                | M2 — flipped, done  |
 | window — Progress, Resources                | plain `it`                | n/a — already green |
 | F1, J2                                      | `it.fails`, `test.fail()` | M3a                 |
 | F2                                          | `it.fails`                | M3b                 |
-| F3                                          | `it.fails`                | M2                  |
+| F3                                          | `it.fails`                | M2 — flipped, done  |
 | F4, J4                                      | `it.fails`, `test.fail()` | M4                  |

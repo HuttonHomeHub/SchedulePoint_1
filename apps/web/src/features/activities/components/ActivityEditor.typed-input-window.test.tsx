@@ -22,10 +22,11 @@ import { fieldByLabel, nextTask, startProbe, typeNow, type Probe } from '@/test/
  *
  * **Two hosts are red and two are not, and the difference is the finding.**
  *
- * - The editor and New activity are `it.fails`: they assert the property the epic delivers (typed
- *   text survives), FAIL on this tree, and `it.fails` keeps the suite green while recording it. The
- *   milestone that fixes a host (M2 New activity, M3b the editor) turns its case into a plain `it`;
- *   vitest reports an `it.fails` that starts passing as a failure, so the flip cannot be forgotten.
+ * - The editor was `it.fails` and still is: it asserts the property the epic delivers (typed text
+ *   survives), FAILS on this tree, and `it.fails` keeps the suite green while recording it. M3b turns
+ *   it into a plain `it`; vitest reports an `it.fails` that starts passing as a failure, so the
+ *   flip cannot be forgotten. New activity was flipped by M2 (its form is born per opening) and is
+ *   a plain `it`.
  * - The Progress and Resources panels are plain `it` and PASS. A panel mounted by a click re-renders
  *   itself again inside the click's own microtask flush (render, effect, render — measured with a
  *   render log), so the field is registered again before any later task can type. The spec's
@@ -176,7 +177,7 @@ describe('the typed-input window — editor (Name)', () => {
 });
 
 describe('the typed-input window — New activity (Name)', () => {
-  it.fails('keeps text typed in the task the dialog opens', async () => {
+  it('keeps text typed in the task the dialog opens', async () => {
     probe.renderNow(creator(false));
     probe.renderNow(creator(true));
     const name = fieldByLabel(probe.container, 'Name');
@@ -258,21 +259,22 @@ function ClickHost({ kind }: { kind: 'editor' | 'create' }): React.ReactElement 
 }
 
 describe('the typed-input window — opened by a click', () => {
-  it.fails.each(['editor', 'create'] as const)(
-    'keeps text typed in the task the %s opens',
-    async (kind) => {
-      probe.renderNow(<ClickHost kind={kind} />);
-      await nextTask();
-      probe.container
-        .querySelector('button')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      // The microtask checkpoint that flushes the click's sync-lane commit and its passive effects.
-      await Promise.resolve();
-      const name = fieldByLabel(probe.container, 'Name');
-      expect(name).not.toBeNull();
-      typeNow(name!, 'Typed at once');
-      await nextTask();
-      expect(fieldByLabel(probe.container, 'Name')?.value).toBe('Typed at once');
-    },
-  );
+  // The editor stays `it.fails` until M3b; New activity is per-opening since M2 and is plain `it`.
+  const keepsTextTypedAtOnce = async (kind: 'editor' | 'create'): Promise<void> => {
+    probe.renderNow(<ClickHost kind={kind} />);
+    await nextTask();
+    probe.container
+      .querySelector('button')!
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // The microtask checkpoint that flushes the click's sync-lane commit and its passive effects.
+    await Promise.resolve();
+    const name = fieldByLabel(probe.container, 'Name');
+    expect(name).not.toBeNull();
+    typeNow(name!, 'Typed at once');
+    await nextTask();
+    expect(fieldByLabel(probe.container, 'Name')?.value).toBe('Typed at once');
+  };
+
+  it.fails('keeps text typed in the task the editor opens', () => keepsTextTypedAtOnce('editor'));
+  it('keeps text typed in the task New activity opens', () => keepsTextTypedAtOnce('create'));
 });

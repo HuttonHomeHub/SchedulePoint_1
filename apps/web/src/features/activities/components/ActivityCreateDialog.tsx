@@ -1,5 +1,5 @@
 import { type ActivitySummary, type CalendarSummary } from '@repo/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import {
   useWatch,
   type FieldErrors,
@@ -132,6 +132,14 @@ const SUBMIT_FIELD_ORDER = [
 const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
 
 /**
+ * `useScopeForm` still takes `open` until the editor's own per-opening rebuild (spec M3b) removes
+ * it. This form is mounted only while the dialog is open, so the honest value is a constant `true`:
+ * the hook's seed-on-open effect then runs once, at mount, against the seed the form was just born
+ * with — a no-op reset, kept only until the parameter goes.
+ */
+const ALWAYS_OPEN = true;
+
+/**
  * Validate ONE scope form, returning whether it passed — through that form's own `handleSubmit`.
  *
  * **`handleSubmit`, not `trigger`, and that is a behaviour fix rather than a style choice.**
@@ -162,47 +170,8 @@ async function validateScope<TValues extends FieldValues>(
   return valid;
 }
 
-/**
- * The **New activity** dialog — an activity DEFINITION, created (ADR-0089).
- *
- * **A host, not a form.** It owns four scope forms, one submit, one ordered focus decision and the
- * ADR-0070 whole-days check; every field on it is rendered by a group in `fields/`, each of which
- * the tabbed {@link ActivityEditorDialog} renders too. That is the point of the dialog-unification
- * epic: the two surfaces a planner meets one activity through had drifted in ten places precisely
- * because they shared no code, and a group cannot drift from itself.
- *
- * **Create-only, and that is recent.** This was `ActivityFormDialog`, a create-or-edit component
- * whose edit half served the activities table and the workspace until `VITE_ACTIVITY_EDITOR_TABS`
- * retired and the tabbed editor became the only edit surface. Deleting that half was the last step
- * of the epic rather than the first: while it existed, every field group had to satisfy two hosts
- * *and* two modes.
- *
- * Progress (status / % / actual dates) is changed elsewhere and is not here. Which fields a given
- * activity type shows is each group's own rule, stated where the field is.
- *
- * The org calendar library (for the per-activity calendar picker, ADR-0037) is **supplied by the
- * composing route/workspace**, not fetched here — so the activities feature stays dependency-free of
- * the calendars feature (like {@link ActivitiesTable}'s `varianceByActivityId`). `CalendarSummary`
- * is a shared `@repo/types` shape.
- */
-export function ActivityCreateDialog({
-  orgSlug,
-  planId,
-  open,
-  onClose,
-  calendars = [],
-  calendarsLoading = false,
-  calendarsError = false,
-  planCalendarId,
-  planActivities = [],
-  planActivitiesLoading = false,
-  planActivitiesError = false,
-  initialParentId,
-}: {
-  orgSlug: string;
-  planId: string;
-  open: boolean;
-  onClose: () => void;
+/** The route-composed inputs the dialog passes straight through to the form of each opening. */
+interface ActivityCreateOptions {
   /** The org's calendars, for the calendar picker's options (route-composed). */
   calendars?: CalendarSummary[];
   /** The calendars list is still loading (its options aren't complete yet). */
@@ -239,8 +208,108 @@ export function ActivityCreateDialog({
    * Undefined leaves the seed exactly as it was, so every existing caller is unchanged.
    */
   initialParentId?: string | null;
-}): React.ReactElement {
+}
+
+interface ActivityCreateFormProps extends ActivityCreateOptions {
+  mutation: ReturnType<typeof useCreateActivity>;
+  onClose: () => void;
+  handleRef: Ref<ActivityCreateFormHandle>;
+}
+
+interface ActivityCreateDialogProps extends ActivityCreateOptions {
+  orgSlug: string;
+  planId: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+/** What the frame may ask of a mounted form. */
+interface ActivityCreateFormHandle {
+  requestClose: () => void;
+}
+
+/**
+ * The **New activity** dialog — an activity DEFINITION, created (ADR-0089).
+ *
+ * **A host, not a form.** It owns four scope forms, one submit, one ordered focus decision and the
+ * ADR-0070 whole-days check; every field on it is rendered by a group in `fields/`, each of which
+ * the tabbed {@link ActivityEditorDialog} renders too. That is the point of the dialog-unification
+ * epic: the two surfaces a planner meets one activity through had drifted in ten places precisely
+ * because they shared no code, and a group cannot drift from itself.
+ *
+ * **Create-only, and that is recent.** This was `ActivityFormDialog`, a create-or-edit component
+ * whose edit half served the activities table and the workspace until `VITE_ACTIVITY_EDITOR_TABS`
+ * retired and the tabbed editor became the only edit surface. Deleting that half was the last step
+ * of the epic rather than the first: while it existed, every field group had to satisfy two hosts
+ * *and* two modes.
+ *
+ * Progress (status / % / actual dates) is changed elsewhere and is not here. Which fields a given
+ * activity type shows is each group's own rule, stated where the field is.
+ *
+ * The org calendar library (for the per-activity calendar picker, ADR-0037) is **supplied by the
+ * composing route/workspace**, not fetched here — so the activities feature stays dependency-free of
+ * the calendars feature (like {@link ActivitiesTable}'s `varianceByActivityId`). `CalendarSummary`
+ * is a shared `@repo/types` shape.
+ */
+export function ActivityCreateDialog({
+  orgSlug,
+  planId,
+  open,
+  onClose,
+  ...formProps
+}: ActivityCreateDialogProps): React.ReactElement {
+  // The mutation lives here, not in the form: a create still in flight when the dialog closes must
+  // still announce, and the form that started it is gone by then (ADR-0169 D2).
   const mutation = useCreateActivity(orgSlug, planId);
+  // Escape, the backdrop and the header Close reach the form's guard through this handle at the
+  // moment of the press (ADR-0169 D3). No form mounted means the dialog is closed, so the fallback
+  // is the host's own `onClose`.
+  const formRef = useRef<ActivityCreateFormHandle>(null);
+
+  return (
+    <Dialog
+      open={open}
+      // Escape and the backdrop route through the same guard as Cancel — an Escape reflex is
+      // exactly the case the confirmation exists for.
+      onClose={() => (formRef.current ? formRef.current.requestClose() : onClose())}
+      confirmBeforeClose
+      title="New activity"
+      size="lg"
+      description="Add an activity to this plan."
+    >
+      {/* Mounted only while open, so every opening builds its forms, its alert and its confirmation
+        from nothing — there is no reset-on-open effect to race a keystroke or to forget one of
+        them (ADR-0169 D1). */}
+      {open ? (
+        <ActivityCreateForm
+          {...formProps}
+          mutation={mutation}
+          onClose={onClose}
+          handleRef={formRef}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+/**
+ * One opening of **New activity** — the four scope forms, the ordered focus decision and the submit.
+ * Mounted by {@link ActivityCreateDialog} only while the dialog is open, so everything here is born
+ * with the opening and ends with it (ADR-0169 D1).
+ */
+function ActivityCreateForm({
+  calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
+  planCalendarId,
+  planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
+  initialParentId,
+  mutation,
+  onClose,
+  handleRef,
+}: ActivityCreateFormProps): React.ReactElement {
   const announce = useAnnounce();
 
   // The valid WBS parents: every summary in the plan, derived from the unfiltered pool. Nothing is
@@ -278,18 +347,24 @@ export function ActivityCreateDialog({
       ...(initialParentId == null ? {} : { parentId: initialParentId }),
     }),
     undefined,
-    open,
+    ALWAYS_OPEN,
     NO_SCOPE_FOCUS,
   );
   const scheduling = useScopeForm(
     activitySchedulingSchema,
     seedScheduling,
     undefined,
-    open,
+    ALWAYS_OPEN,
     NO_SCOPE_FOCUS,
   );
-  const measure = useScopeForm(activityMeasureSchema, seedMeasure, undefined, open, NO_SCOPE_FOCUS);
-  const cost = useScopeForm(activityCostSchema, seedCost, undefined, open, NO_SCOPE_FOCUS);
+  const measure = useScopeForm(
+    activityMeasureSchema,
+    seedMeasure,
+    undefined,
+    ALWAYS_OPEN,
+    NO_SCOPE_FOCUS,
+  );
+  const cost = useScopeForm(activityCostSchema, seedCost, undefined, ALWAYS_OPEN, NO_SCOPE_FOCUS);
 
   /**
    * Creation had **no unsaved-work guard at all** — around twenty fields across four scope forms,
@@ -299,7 +374,7 @@ export function ActivityCreateDialog({
    */
   const unsavedReport = useMemo<UnsavedWorkReport | null>(
     () =>
-      open && (general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty)
+      general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty
         ? buildReport('The new activity', [
             { when: general.isDirty, key: 'general', label: 'General', savable: true },
             { when: scheduling.isDirty, key: 'scheduling', label: 'Scheduling', savable: true },
@@ -307,7 +382,7 @@ export function ActivityCreateDialog({
             { when: cost.isDirty, key: 'cost', label: 'Cost', savable: true },
           ])
         : null,
-    [open, general.isDirty, scheduling.isDirty, measure.isDirty, cost.isDirty],
+    [general.isDirty, scheduling.isDirty, measure.isDirty, cost.isDirty],
   );
   useRegisterUnsavedWork(unsavedReport);
 
@@ -331,13 +406,16 @@ export function ActivityCreateDialog({
     onClose();
   }, [unsavedReport, onClose]);
 
-  // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
-  // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into
-  // the next open of a dialog these hosts keep mounted and merely toggle.
-  useEffect(() => {
-    if (open) mutation.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear only on open/target change
-  }, [open]);
+  useImperativeHandle(handleRef, () => ({ requestClose }), [requestClose]);
+
+  /**
+   * Whether THIS opening has submitted. The mutation lives in the frame and outlives the opening, so
+   * its error would otherwise greet the next one; reading it only after this opening's own submit
+   * replaces the effect that used to `reset()` it on open. A `useState` set by the submit handler —
+   * no effect, and no `mutation.reset()` during render, which would notify the mutation's
+   * subscribers mid-render.
+   */
+  const [submittedThisOpening, setSubmittedThisOpening] = useState(false);
 
   // Per scope, so a field reads its OWN form's errors and reaching for a neighbour's is a compile
   // error (`schedulingErrors.name` does not exist) — the same seam `register` gets.
@@ -382,7 +460,7 @@ export function ActivityCreateDialog({
   );
   const readDuration = useCallback(() => generalGetValues('duration'), [generalGetValues]);
   useDurationSeed({
-    open,
+    open: ALWAYS_OPEN,
     hoursPerDay,
     // No stored row to re-seed from — this is a create.
     activity: undefined,
@@ -499,6 +577,7 @@ export function ActivityCreateDialog({
       );
       return;
     }
+    setSubmittedThisOpening(true);
     mutation.mutate(
       { ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) },
       {
@@ -511,16 +590,7 @@ export function ActivityCreateDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      // Escape and the backdrop route through the same guard as Cancel — an Escape reflex is
-      // exactly the case the confirmation exists for.
-      onClose={requestClose}
-      confirmBeforeClose
-      title="New activity"
-      size="lg"
-      description="Add an activity to this plan."
-    >
+    <>
       <FieldGridContainer>
         <form
           noValidate
@@ -540,7 +610,7 @@ export function ActivityCreateDialog({
             </p>
           ) : null}
 
-          {mutation.isError ? (
+          {submittedThisOpening && mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {/* A calendar-scope rejection (ADR-0053 §2) reads as its own actionable sentence;
                 every other failure keeps the server's message verbatim, exactly as before. */}
@@ -685,6 +755,6 @@ export function ActivityCreateDialog({
           }}
         />
       ) : null}
-    </Dialog>
+    </>
   );
 }
