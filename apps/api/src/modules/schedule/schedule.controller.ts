@@ -373,7 +373,8 @@ export class ScheduleController {
       'or in `conflictingPlaced` when the bar carries a placement of its own. **A bar that moved only ' +
       'because the work before it moved gets no row** when it carries no placement of its own: it ' +
       'follows its links, and is named in `followingLinks`; a hand-placed one gets a row with ' +
-      '`items[].reason` `LINKS`. One press is one step: ' +
+      '`items[].reason` `LINKS`. So `rows.length` need not equal the number of bars levelling moved: ' +
+      'followers move without rows. One press is one step: ' +
       '`remainingAfterApply` says how many bars levelling would still move afterwards, and is ' +
       'reported, not chased. A plan that does not level returns no rows. **It writes exactly the ' +
       'constraint each activity already has** in `rows`; nothing here sets or clears one. The response ' +

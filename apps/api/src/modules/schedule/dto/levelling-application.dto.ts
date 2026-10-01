@@ -88,7 +88,7 @@ export class LevellingApplicationItemDto implements LevellingApplicationItem {
   @ApiProperty({
     enum: ['RESOURCE', 'LINKS'],
     description:
-      '`RESOURCE`: a resource delays the bar. `LINKS`: only the work before it moved and its own hand ' +
+      '`RESOURCE`: a resource delays the bar, possibly as well as the work before it. `LINKS`: only the work before it moved and its own hand ' +
       'placement is now too early, so it moves with it.',
   })
   reason!: 'RESOURCE' | 'LINKS';
@@ -127,7 +127,8 @@ export class LevellingApplicationDto implements LevellingApplication {
     description:
       'The rows to send as the `placements` array of PATCH …/activities/placements, earliest target ' +
       'first. Empty when levelling is off or has moved nothing: do not send then (the batch route ' +
-      'takes 1 to 2,000). Not capped.',
+      'takes 1 to 2,000). Not capped. The number of rows need not equal the number of bars levelling ' +
+      'moved: a bar that follows only its links moves without a row (`followingLinks`).',
   })
   rows!: LevellingApplicationRowDto[];
 
