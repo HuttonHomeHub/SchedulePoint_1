@@ -539,12 +539,23 @@ test.describe('the feasible window and the levelled lens', () => {
         { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] },
       )
       .toBe(1);
+    // The placement lands first and the coalesced recalculation follows it (ADR-0064), so the slab's
+    // drawn start is polled rather than read once: a single read can fall between the two. A
+    // recalculation that never moves the slab still fails here, at the poll's timeout.
+    await expect
+      .poll(
+        async () =>
+          isoDay(
+            requirePlacement(await placements(page, orgSlug), 'Pour slab').visualEffectiveStart,
+          ),
+        { timeout: 15_000, intervals: [250, 500, 1_000, 2_000] },
+      )
+      .toBe(isoDay(slabBefore.leveledStart));
     const after = requirePlacement(await placements(page, orgSlug), 'Pour slab');
     expect(
       after.visualStart,
       'the slab follows its links, with no placement of its own',
     ).toBeNull();
-    expect(isoDay(after.visualEffectiveStart)).toBe(isoDay(slabBefore.leveledStart));
   });
 
   test('a placement conflict is flagged, and the bar keeps its position (M-D)', async ({
