@@ -457,7 +457,9 @@ test('J5 — New activity opens clean after a failed submit was discarded', asyn
   await dialog.getByLabel('Levelling priority').fill('-1');
   await dialog.getByLabel('Type', { exact: true }).selectOption('START_MILESTONE');
   await dialog.getByRole('button', { name: 'Create activity' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('the field holding it is one this');
+  await expect(dialog.getByRole('alert')).toContainText(
+    'Change the type back to see and correct it',
+  );
 
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await page

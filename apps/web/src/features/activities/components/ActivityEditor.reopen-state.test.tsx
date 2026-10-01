@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityCreateDialog } from './ActivityCreateDialog';
 import { ActivityEditorDialog } from './ActivityEditorDialog';
 
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import type { ActivityEditorIntent } from '@/features/activities/lib/activity-editor-intent';
 
@@ -218,5 +219,73 @@ describe('F4 — a Progress draft dies on a tab switch', () => {
     fireEvent.click(screen.getByRole('tab', { name: /^General/ }));
     fireEvent.click(screen.getByRole('tab', { name: /^Progress/ }));
     expect(screen.getByLabelText<HTMLInputElement>('Percent complete').value).toBe('55');
+  });
+});
+
+describe('New activity — a create that resolves after its opening closed', () => {
+  /** Holds the create's response until the test releases it. */
+  function deferredCreate(): { release: () => void } {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        await gate;
+        return {
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ data: { id: 'act-1', name: 'First' } }),
+        } as unknown as Response;
+      }),
+    );
+    return { release };
+  }
+
+  async function createThenDiscardWhilePending(): Promise<void> {
+    fireEvent.click(screen.getByRole('button', { name: 'open create' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'First' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+    await screen.findByRole('button', { name: 'Saving…' });
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());
+  }
+
+  it('does not close the next opening, and keeps what was typed into it', async () => {
+    const { release } = deferredCreate();
+    mount(
+      <AnnouncerProvider>
+        <CreateHost />
+      </AnnouncerProvider>,
+    );
+    await createThenDiscardWhilePending();
+
+    fireEvent.click(screen.getByRole('button', { name: 'open create' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Second' } });
+    // The reopened form says why its button reads "Saving…".
+    expect(screen.getByText('A previous activity is still being saved.')).toBeInTheDocument();
+
+    release();
+    await waitFor(() =>
+      expect(
+        screen.queryByText('A previous activity is still being saved.'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText('Name')).toHaveValue('Second');
+  });
+
+  it('still announces the create after its opening closed', async () => {
+    const { release } = deferredCreate();
+    mount(
+      <AnnouncerProvider>
+        <CreateHost />
+      </AnnouncerProvider>,
+    );
+    await createThenDiscardWhilePending();
+
+    release();
+    await waitFor(() => expect(document.body).toHaveTextContent('Activity “First” created.'));
   });
 });

@@ -218,6 +218,8 @@ frame/session contract, the handle, `useScopeForm`'s signature); also ux-reviewe
 
 - **Description:** seed at mount via `defaultValues`; no effect (spec §4.5). Docblock rewritten (trap 2
   is now structural).
+- **Also:** delete `ALWAYS_OPEN` in `ActivityCreateDialog.tsx` (grep `TODO(M3b)`) and the `open`
+  parameter of `useScopeForm` and `useDurationSeed` with it.
 - **Complexity:** S. **Risks:** call sites still pass `open` → the type change makes each a compile error.
 - **Testing:** `useScopeForm.test.ts` updated for the signature (seed-on-open cases become
   seed-at-mount).

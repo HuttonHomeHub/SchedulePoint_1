@@ -1,5 +1,14 @@
 import { type ActivitySummary, type CalendarSummary } from '@repo/types';
-import { useCallback, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from 'react';
 import {
   useWatch,
   type FieldErrors,
@@ -136,6 +145,9 @@ const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
  * it. This form is mounted only while the dialog is open, so the honest value is a constant `true`:
  * the hook's seed-on-open effect then runs once, at mount, against the seed the form was just born
  * with — a no-op reset, kept only until the parameter goes.
+ *
+ * TODO(M3b): delete this constant and the `open` parameter of `useScopeForm` and `useDurationSeed`
+ * (ADR-0169; docs/specs/activity-editor-seeding/implementation-plan.md, T3b.1).
  */
 const ALWAYS_OPEN = true;
 
@@ -223,7 +235,7 @@ interface ActivityCreateDialogProps extends ActivityCreateOptions {
   onClose: () => void;
 }
 
-/** What the frame may ask of a mounted form. */
+/** What the frame may ask of a mounted form — the frame's only channel into it (ADR-0169 D3). */
 interface ActivityCreateFormHandle {
   requestClose: () => void;
 }
@@ -311,6 +323,17 @@ function ActivityCreateForm({
   handleRef,
 }: ActivityCreateFormProps): React.ReactElement {
   const announce = useAnnounce();
+  // The create's per-call `onSuccess` outlives this form: a planner can discard, reopen and start
+  // typing while an earlier create is still in flight, and that callback closes over THIS
+  // opening's `onClose`. It must announce regardless, but close only if this opening is still the
+  // one on screen — otherwise it would close the new opening and lose what was typed into it.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // The valid WBS parents: every summary in the plan, derived from the unfiltered pool. Nothing is
   // excluded — the editor drops the row being edited (it cannot parent itself), but an activity
@@ -416,6 +439,10 @@ function ActivityCreateForm({
    * subscribers mid-render.
    */
   const [submittedThisOpening, setSubmittedThisOpening] = useState(false);
+  // The mutation lives in the frame, so a reopened form can read "Saving…" for a create this
+  // opening never submitted; say why rather than leave a button that refuses with no reason.
+  const pendingFromEarlier = mutation.isPending && !submittedThisOpening;
+  const pendingNoteId = useId();
 
   // Per scope, so a field reads its OWN form's errors and reaching for a neighbour's is a compile
   // error (`schedulingErrors.name` does not exist) — the same seam `register` gets.
@@ -583,7 +610,7 @@ function ActivityCreateForm({
       {
         onSuccess: () => {
           announce(`Activity “${values.name}” created.`);
-          onClose();
+          if (mountedRef.current) onClose();
         },
       },
     );
@@ -729,6 +756,7 @@ function ActivityCreateForm({
               className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
               aria-disabled={mutation.isPending}
               aria-busy={mutation.isPending}
+              aria-describedby={pendingFromEarlier ? pendingNoteId : undefined}
               onClick={(event) => {
                 if (mutation.isPending) event.preventDefault();
               }}
@@ -736,6 +764,11 @@ function ActivityCreateForm({
               {mutation.isPending ? 'Saving…' : 'Create activity'}
             </Button>
           </div>
+          {pendingFromEarlier ? (
+            <p id={pendingNoteId} className="text-muted-foreground text-right text-sm">
+              A previous activity is still being saved.
+            </p>
+          ) : null}
         </form>
       </FieldGridContainer>
       {confirmingClose && unsavedReport !== null ? (
