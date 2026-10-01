@@ -414,7 +414,7 @@ test('a clean Close returns focus to the control that opened the editor', async 
   await addActivity(page, 'Compact fill');
 
   await openEditor(page, 'Compact fill', 'Edit');
-  await activityEditor(page).getByRole('button', { name: 'Close' }).click();
+  await activityEditor(page).getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
   // The opener is a menu item whose menu has unmounted, so the row's "Actions for …" trigger is the
   // expected landing place.
