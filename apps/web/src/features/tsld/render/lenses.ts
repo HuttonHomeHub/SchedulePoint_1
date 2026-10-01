@@ -479,6 +479,26 @@ export function buildLevelledGhosts(activities: readonly LevellableActivity[]): 
   return ghosts;
 }
 
+/**
+ * How many of the `levelledCount` activities the engine delayed have NO ghost on the diagram (#426).
+ *
+ * `levelledCount` is the engine's `leveledActivityCount`, which counts every participant delayed by
+ * more than zero working minutes. The ghost is drawn only when the DATES differ
+ * ({@link buildLevelledGhosts}), so a delay inside one day — 08:00 to 12:00 — is counted and never
+ * drawn. This is the difference, taken against the very function that decides what is drawn, so the
+ * summary's sentence and the canvas cannot drift apart. It is a subtraction rather than a per-activity
+ * test because the read carries only `levelingDelayDays`, which is rounded to whole days and so reads
+ * 0 for a delay under half a day; no client predicate can recover the sub-day delays from it. It
+ * assumes every ghost belongs to a counted (delayed) activity — a ghost on an undelayed one would
+ * make this under-report, never over-report, hence the floor at zero.
+ */
+export function countLevelledWithoutGhost(
+  levelledCount: number,
+  activities: readonly LevellableActivity[],
+): number {
+  return Math.max(0, levelledCount - buildLevelledGhosts(activities).length);
+}
+
 /** Narrowing helper for `TsldPanel` — `ActivitySummary` satisfies both matcher and colour shapes. */
 export type LensActivity = ActivitySummary;
 

@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CalendarScope, CalendarSummary } from '@repo/types';
 import { deriveHoursPerDayMinutes } from '@repo/types';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateCalendar, useUpdateCalendar } from '../api/use-calendars';
@@ -15,7 +15,6 @@ import {
 import { CalendarExceptionsEditor } from './CalendarExceptionsEditor';
 import { CalendarScopeBadge } from './CalendarScopeBadge';
 import {
-  emptyWeek,
   shiftsToWeekRows,
   WeeklyShiftEditor,
   weekRowsToShifts,
@@ -41,6 +40,23 @@ import { buildReport } from '@/lib/unsaved-work/report';
  */
 const ORG_TIER_DENIED_MESSAGE =
   'You don’t have permission to add to the shared organisation library. Ask an organisation admin, or create this calendar inside a project instead.';
+
+interface CalendarFormProps {
+  orgSlug: string;
+  onClose: () => void;
+  calendar?: CalendarSummary;
+  readOnly?: boolean;
+  /**
+   * The viewer holds `calendar:manage_org` — may create in the SHARED organisation library
+   * (ADR-0053 §2). Defaults to `true` so existing call sites (which only ever created org
+   * calendars, under the same roles the permission is granted to) are unchanged.
+   */
+  canManageOrg?: boolean;
+  /** Opened from a project's Calendars section — offers "this project" as the tier, and defaults to it. */
+  projectId?: string;
+  /** That project's name, for the scope option's label. */
+  projectName?: string;
+}
 
 /**
  * Create-or-edit dialog for a calendar. The weekly pattern is a bitmask edited via the weekday
@@ -72,31 +88,44 @@ function formatHours(hours: number): string {
 }
 
 export function CalendarFormDialog({
-  orgSlug,
   open,
+  ...props
+}: CalendarFormProps & { open: boolean }): React.ReactElement {
+  const { calendar, readOnly = false, onClose } = props;
+  const isEdit = calendar !== undefined;
+  const title = readOnly ? 'Calendar' : isEdit ? 'Edit calendar' : 'New calendar';
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      // Always `lg`: both create and edit render the full seven-day week plus the
+      // standard-working-day section. `md` (448px) was sized for a name, a description and seven
+      // checkboxes — the control this dialog no longer has (ADR-0088 D3).
+      size="lg"
+      title={title}
+      {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
+    >
+      <CalendarForm key={calendar?.id ?? 'new'} {...props} />
+    </Dialog>
+  );
+}
+
+/**
+ * The form proper. The Dialog mounts its children only while open, so the form, the week rows and
+ * the mutations are born with the calendar's values instead of being seeded by a passive effect
+ * after commit — an effect that runs after the field is on screen can wipe what a fast typist has
+ * already entered (`docs/TECH_DEBT.md` #420). The `key` must not change while the dialog is open.
+ */
+function CalendarForm({
+  orgSlug,
   onClose,
   calendar,
   readOnly = false,
   canManageOrg = true,
   projectId,
   projectName,
-}: {
-  orgSlug: string;
-  open: boolean;
-  onClose: () => void;
-  calendar?: CalendarSummary;
-  readOnly?: boolean;
-  /**
-   * The viewer holds `calendar:manage_org` — may create in the SHARED organisation library
-   * (ADR-0053 §2). Defaults to `true` so existing call sites (which only ever created org
-   * calendars, under the same roles the permission is granted to) are unchanged.
-   */
-  canManageOrg?: boolean;
-  /** Opened from a project's Calendars section — offers "this project" as the tier, and defaults to it. */
-  projectId?: string;
-  /** That project's name, for the scope option's label. */
-  projectName?: string;
-}): React.ReactElement {
+}: CalendarFormProps): React.ReactElement {
   const isEdit = calendar !== undefined;
   const create = useCreateCalendar(orgSlug);
   const update = useUpdateCalendar(orgSlug);
@@ -118,31 +147,47 @@ export function CalendarFormDialog({
   const showScopeChoice = creatingWithTiers && !noTierAvailable;
   const defaultScope: CalendarScope = hasProjectContext ? 'PROJECT' : 'ORG';
 
+  // The shift editor's rows live outside React Hook Form: they are TEXT the planner is mid-way
+  // through typing, across seven days, and RHF's value/validation model would have to be told that
+  // `8:` is a legitimate intermediate state. Seeded at mount, parsed once at submit.
+  /**
+   * The week as it was when this dialog opened.
+   *
+   * **The shift rows live outside react-hook-form on purpose**, which means `formState.isDirty`
+   * **structurally cannot see them**: a planner can rewrite all seven days' hours and the form
+   * still reports itself clean. The M0 inventory found this to be the ONLY surface in the app in
+   * that state, and it is the sharpest case the guard has — so dirtiness here is a comparison
+   * against the opening value rather than a flag.
+   */
+  const [seededWeek] = useState<WeekRows>(() =>
+    // A NEW calendar starts from the Standard week preset — Mon–Fri 08:00–17:00 — not from a
+    // full-day Mon–Fri. The old seed made every hand-made calendar a 24-hour one whose activities
+    // then scheduled three times too fast, which is the defect the hours-per-day field exists to
+    // stop; a construction calendar that works round the clock is the rare case, and it is now one
+    // click away (the 24/7 preset).
+    calendar === undefined ? presetWeek('standard') : shiftsToWeekRows(calendar.shifts),
+  );
+  const [week, setWeek] = useState<WeekRows>(seededWeek);
+
   const {
     register,
     control,
     handleSubmit,
-    setValue,
-    reset,
     formState: { errors, isDirty },
   } = useForm<CalendarFormValues>({
     resolver: zodResolver(calendarFormSchema),
-    defaultValues: { name: '', description: '' },
+    defaultValues: {
+      name: calendar?.name ?? '',
+      description: calendar?.description ?? '',
+      // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
+      // touches nothing else sends it back unchanged; a NEW calendar takes the figure the server
+      // would derive from the week seeded below, so the two can never open disagreeing.
+      hoursPerDay: calendar?.hoursPerDay ?? hoursPerDayOf(seededWeek),
+      // Absent unless the scope control is actually rendered, so the flag-off body is byte-identical
+      // to before (no `scope`/`projectId` keys at all) and the server's ORG default applies.
+      ...(creatingWithTiers ? { scope: defaultScope, ...(projectId ? { projectId } : {}) } : {}),
+    },
   });
-
-  useEffect(() => {
-    if (open) {
-      reset({
-        name: calendar?.name ?? '',
-        description: calendar?.description ?? '',
-        // Absent unless the scope control is actually rendered, so the flag-off body is byte-identical
-        // to before (no `scope`/`projectId` keys at all) and the server's ORG default applies.
-        ...(creatingWithTiers ? { scope: defaultScope, ...(projectId ? { projectId } : {}) } : {}),
-      });
-      mutation.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
-  }, [open, calendar?.id]);
 
   const chosenScope = useWatch({ control, name: 'scope' });
   // Creating in the shared library without `calendar:manage_org` — the API would 403, so say so here
@@ -151,26 +196,7 @@ export function CalendarFormDialog({
   const blockedByOrgPermission =
     noTierAvailable || (showScopeChoice && orgTierUnavailable && chosenScope !== 'PROJECT');
 
-  // The shift editor's rows live outside React Hook Form: they are TEXT the planner is mid-way
-  // through typing, across seven days, and RHF's value/validation model would have to be told that
-  // `8:` is a legitimate intermediate state. Seeded on open, parsed once at submit.
-  const [week, setWeek] = useState<WeekRows>(emptyWeek);
   const [weekProblems, setWeekProblems] = useState<WeekProblem[]>([]);
-  // Seeded by ADJUSTING STATE DURING RENDER rather than in an effect (React's documented pattern
-  // for "reset state when a prop changes"). An effect would set state after paint — one frame of
-  // last calendar's hours on screen — and a cascading re-render the lint rule correctly objects to.
-  const [seededFor, setSeededFor] = useState<string | null>(null);
-  /**
-   * The week as it was when this dialog opened.
-   *
-   * **The shift rows live outside react-hook-form on purpose** (see the comment at their
-   * declaration), which means `formState.isDirty` **structurally cannot see them**: a planner can
-   * rewrite all seven days' hours and the form still reports itself clean. The M0 inventory found
-   * this to be the ONLY surface in the app in that state, and it is the sharpest case the guard has
-   * — so dirtiness here is a comparison against the opening value rather than a flag.
-   */
-  const [seededWeek, setSeededWeek] = useState<WeekRows>(emptyWeek);
-
   /**
    * Dirtiness here is `isDirty` OR a changed working week, and the second half is the whole point:
    * `formState.isDirty` is blind to the shift rows, so registering on it alone would leave the one
@@ -180,32 +206,13 @@ export function CalendarFormDialog({
    */
   const weekChanged = JSON.stringify(week) !== JSON.stringify(seededWeek);
   useRegisterUnsavedWork(
-    open && (isDirty || weekChanged)
+    isDirty || weekChanged
       ? buildReport('This calendar', [
           { when: isDirty, key: 'details', label: 'Calendar details', savable: true },
           { when: weekChanged, key: 'week', label: 'Working week', savable: true },
         ])
       : null,
   );
-  const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;
-  if (open && seededFor !== seedKey) {
-    setSeededFor(seedKey);
-    // A NEW calendar starts from the Standard week preset — Mon–Fri 08:00–17:00 — not from a
-    // full-day Mon–Fri. The old seed made every hand-made calendar a 24-hour one whose activities
-    // then scheduled three times too fast, which is the defect the hours-per-day field exists to
-    // stop; a construction calendar that works round the clock is the rare case, and it is now one
-    // click away (the 24/7 preset).
-    const seededWeek =
-      calendar === undefined ? presetWeek('standard') : shiftsToWeekRows(calendar.shifts);
-    setWeek(seededWeek);
-    setWeekProblems([]);
-    setSeededWeek(seededWeek);
-    // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
-    // touches nothing else sends it back unchanged; a NEW calendar takes the figure the server
-    // would derive from the week seeded above, so the two can never open disagreeing.
-    setValue('hoursPerDay', calendar?.hoursPerDay ?? hoursPerDayOf(seededWeek));
-  }
-
   // What the authored week implies, shown beside the field rather than forced into it: the two are
   // legitimately different (a P6 `day_hr_cnt` of 8 on a calendar with a 10-hour Saturday is
   // ordinary), so this advises and never overwrites.
@@ -275,19 +282,8 @@ export function CalendarFormDialog({
     }
   });
 
-  const title = readOnly ? 'Calendar' : isEdit ? 'Edit calendar' : 'New calendar';
-
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      // Always `lg`: both create and edit render the full seven-day week plus the
-      // standard-working-day section. `md` (448px) was sized for a name, a description and seven
-      // checkboxes — the control this dialog no longer has (ADR-0088 D3).
-      size="lg"
-      title={title}
-      {...(isEdit ? {} : { description: 'Define a reusable working-day pattern.' })}
-    >
+    <>
       <FieldGridContainer>
         <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
           <FormErrorSummary errors={errors} />
@@ -301,7 +297,7 @@ export function CalendarFormDialog({
           ) : null}
 
           {/* Sections as consecutive siblings (ADR-0061): what the calendar IS, then the working week
-            it defines. The week is the calendar's substance, not a field among others. */}
+              it defines. The week is the calendar's substance, not a field among others. */}
           <div className="flex flex-col gap-5">
             <FormSection title="Identity">
               <TextField
@@ -328,8 +324,8 @@ export function CalendarFormDialog({
                     {...register('scope')}
                   >
                     {/* Disabled — not removed — without `calendar:manage_org`: an option that silently
-                  vanishes teaches nothing, whereas a disabled one plus the note below says exactly
-                  what is missing. The API is still the enforcing boundary. */}
+                    vanishes teaches nothing, whereas a disabled one plus the note below says exactly
+                    what is missing. The API is still the enforcing boundary. */}
                     <option value="ORG" disabled={!canManageOrg}>
                       {CALENDAR_SCOPE_LABELS.ORG} (shared library)
                     </option>
@@ -347,9 +343,9 @@ export function CalendarFormDialog({
                       : 'Organisation calendars are shared with every project. To add one to a single project, open that project and use its Calendars section.'}
                   </p>
                   {/* One node, linked from the control by `aria-describedby`, so whichever reason applies
-                is announced WITH the Select rather than only in the summary above. It is an `alert`
-                only when it actually blocks the submit; when the organisation option is merely
-                disabled beside a usable project option it is an ordinary hint, not an error. */}
+                  is announced WITH the Select rather than only in the summary above. It is an `alert`
+                  only when it actually blocks the submit; when the organisation option is merely
+                  disabled beside a usable project option it is an ordinary hint, not an error. */}
                   {blockedByOrgPermission || errors.projectId?.message ? (
                     <p id={scopeErrorId} role="alert" className="text-destructive-text text-sm">
                       {blockedByOrgPermission ? ORG_TIER_DENIED_MESSAGE : errors.projectId?.message}
@@ -363,14 +359,14 @@ export function CalendarFormDialog({
                 </div>
               ) : null}
               {/* No tier is reachable at all: no `<select>` to operate, just the reason (and the submit is
-            disabled above), so the dialog is never a dead end with an unusable control. */}
+              disabled above), so the dialog is never a dead end with an unusable control. */}
               {noTierAvailable ? (
                 <p role="alert" className="text-destructive-text text-sm">
                   {ORG_TIER_DENIED_MESSAGE}
                 </p>
               ) : null}
               {/* Editing: the tier is shown, not edited — a `<dl>` so the value is programmatically
-            associated with its term (the read-only convention used by the plan calendar picker). */}
+              associated with its term (the read-only convention used by the plan calendar picker). */}
               {isEdit ? (
                 <dl className="flex flex-col gap-1.5">
                   <dt className="text-sm font-medium">Scope</dt>
@@ -475,10 +471,9 @@ export function CalendarFormDialog({
             orgSlug={orgSlug}
             calendarId={calendar.id}
             readOnly={readOnly}
-            open={open}
           />
         </div>
       ) : null}
-    </Dialog>
+    </>
   );
 }

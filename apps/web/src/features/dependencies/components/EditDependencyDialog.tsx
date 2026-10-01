@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
-import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useUpdateDependency } from '../api/use-dependencies';
@@ -28,25 +27,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 
-/**
- * Edit a dependency's type and lag (the endpoints are immutable — re-pointing a
- * link means removing it and adding another). PATCHes with the row's `version`;
- * a stale version surfaces as an inline conflict. `dependency` is optional so the
- * dialog stays mounted (toggled by `open`), preserving native focus-restore.
- */
-export function EditDependencyDialog({
-  orgSlug,
-  dependency,
-  open,
-  onClose,
-  calendars = [],
-  planCalendarId,
-  planActivities = [],
-  onSaved,
-}: {
+interface EditDependencyFormProps {
   orgSlug: string;
   dependency?: DependencySummary;
-  open: boolean;
   onClose: () => void;
   /**
    * The route-composed calendar library, used only to read the lag field's working-hours factor
@@ -73,28 +56,57 @@ export function EditDependencyDialog({
    * not passing down.
    */
   onSaved?: (before: DependencySummary, after: DependencySummary) => void;
-}): React.ReactElement {
+}
+
+/**
+ * Edit a dependency's type and lag (the endpoints are immutable — re-pointing a
+ * link means removing it and adding another). PATCHes with the row's `version`;
+ * a stale version surfaces as an inline conflict. `dependency` is optional so the
+ * dialog stays mounted (toggled by `open`), preserving native focus-restore.
+ */
+export function EditDependencyDialog({
+  open,
+  ...props
+}: EditDependencyFormProps & { open: boolean }): React.ReactElement {
+  const { dependency, onClose } = props;
+  const label = dependency
+    ? `${dependency.predecessor.name} → ${dependency.successor.name}`
+    : undefined;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Edit dependency"
+      {...(label ? { description: label } : {})}
+    >
+      <EditDependencyForm key={dependency?.id ?? 'none'} {...props} />
+    </Dialog>
+  );
+}
+
+/**
+ * The form proper. The Dialog mounts its children only while open, so `useForm` is born with the
+ * dependency's values instead of being `reset()` by a passive effect after commit — an effect that
+ * runs after the field is on screen can wipe what a fast typist has already entered
+ * (`docs/TECH_DEBT.md` #420). The mutation hook lives here, so a reopened dialog has no stale
+ * error. The `key` must not change while the dialog is open.
+ */
+function EditDependencyForm({
+  orgSlug,
+  dependency,
+  onClose,
+  calendars = [],
+  planCalendarId,
+  planActivities = [],
+  onSaved,
+}: EditDependencyFormProps): React.ReactElement {
   const update = useUpdateDependency(orgSlug);
   const announce = useAnnounce();
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    control,
-    setError,
-    formState: { errors },
-  } = useForm<TypeAndLagValues>({
-    resolver: zodResolver(typeAndLagSchema),
-    defaultValues: { type: 'FS', lag: '0', lagCalendar: 'PROJECT_DEFAULT' },
-  });
-
-  // The lag unit tracks the chosen calendar (elapsed vs working time); subscribe to just that field
-  // so the label, the help line and the day↔minute factor all stay honest as the selection changes.
-  const lagCalendar = useWatch({ control, name: 'lagCalendar' });
   const calendarOf = (activityId: string): string | null | undefined =>
     planActivities.find((candidate) => candidate.id === activityId)?.calendarId;
-  const hoursPerDay = lagHoursPerDay(lagCalendar, {
+  const factorContext = {
     calendars,
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
     ...(dependency
@@ -103,22 +115,33 @@ export function EditDependencyDialog({
           successorCalendarId: calendarOf(dependency.successor.id),
         }
       : {}),
+  };
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    setError,
+    formState: { errors },
+  } = useForm<TypeAndLagValues>({
+    resolver: zodResolver(typeAndLagSchema),
+    defaultValues: dependency
+      ? {
+          type: dependency.type,
+          // Seeded on the factor of the link's own lag calendar, known at mount. The lag calendar
+          // cannot change before the planner sees this, and changing it is an explicit act with its
+          // own visible field — so unlike the activity duration there is nothing here to re-seed
+          // asynchronously.
+          lag: seedLagText(dependency, lagHoursPerDay(dependency.lagCalendar, factorContext)),
+          lagCalendar: dependency.lagCalendar,
+        }
+      : { type: 'FS', lag: '0', lagCalendar: 'PROJECT_DEFAULT' },
   });
 
-  useEffect(() => {
-    if (open && dependency) {
-      reset({
-        type: dependency.type,
-        // Seeded on the factor known at open. The lag calendar cannot change before the planner
-        // sees this, and changing it is an explicit act with its own visible field — so unlike the
-        // activity duration there is nothing here to re-seed asynchronously.
-        lag: seedLagText(dependency, hoursPerDay),
-        lagCalendar: dependency.lagCalendar,
-      });
-      update.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open/target change
-  }, [open, dependency?.id]);
+  // The lag unit tracks the chosen calendar (elapsed vs working time); subscribe to just that field
+  // so the label, the help line and the day↔minute factor all stay honest as the selection changes.
+  const lagCalendar = useWatch({ control, name: 'lagCalendar' });
+  const hoursPerDay = lagHoursPerDay(lagCalendar, factorContext);
 
   const onSubmit = handleSubmit((values) => {
     if (!dependency) return;
@@ -148,73 +171,62 @@ export function EditDependencyDialog({
     );
   });
 
-  const label = dependency
-    ? `${dependency.predecessor.name} → ${dependency.successor.name}`
-    : undefined;
-
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Edit dependency"
-      {...(label ? { description: label } : {})}
-    >
-      <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-        <FormErrorSummary errors={errors} />
-        {update.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {update.error.message}
-          </p>
-        ) : null}
-        <p className="text-muted-foreground text-sm">
-          The linked activities are fixed. To connect different activities, remove this link and add
-          a new one.
+    <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
+      <FormErrorSummary errors={errors} />
+      {update.isError ? (
+        <p role="alert" className="text-destructive-text text-sm">
+          {update.error.message}
         </p>
-        <SelectField label="Type" id="edit-dependency-type" {...register('type')}>
-          {DEPENDENCY_TYPES.map((value) => (
-            <option key={value} value={value}>
-              {DEPENDENCY_TYPE_LABELS[value]}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Lag calendar"
-          id="edit-dependency-lag-calendar"
-          hint={LAG_CALENDAR_HINT}
-          {...register('lagCalendar')}
+      ) : null}
+      <p className="text-muted-foreground text-sm">
+        The linked activities are fixed. To connect different activities, remove this link and add a
+        new one.
+      </p>
+      <SelectField label="Type" id="edit-dependency-type" {...register('type')}>
+        {DEPENDENCY_TYPES.map((value) => (
+          <option key={value} value={value}>
+            {DEPENDENCY_TYPE_LABELS[value]}
+          </option>
+        ))}
+      </SelectField>
+      <SelectField
+        label="Lag calendar"
+        id="edit-dependency-lag-calendar"
+        hint={LAG_CALENDAR_HINT}
+        {...register('lagCalendar')}
+      >
+        {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+          <option key={value} value={value}>
+            {LAG_CALENDAR_LABELS[value]}
+          </option>
+        ))}
+      </SelectField>
+      <TextField
+        label={lagFieldLabel(lagCalendar, hoursPerDay)}
+        {...lagInputProps(hoursPerDay)}
+        {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
+          ? {}
+          : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
+        error={errors.lag?.message}
+        {...register('lag')}
+      />
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          aria-disabled={update.isPending}
+          aria-busy={update.isPending}
+          onClick={(event) => {
+            if (update.isPending) event.preventDefault();
+          }}
         >
-          {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-            <option key={value} value={value}>
-              {LAG_CALENDAR_LABELS[value]}
-            </option>
-          ))}
-        </SelectField>
-        <TextField
-          label={lagFieldLabel(lagCalendar, hoursPerDay)}
-          {...lagInputProps(hoursPerDay)}
-          {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
-            ? {}
-            : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
-          error={errors.lag?.message}
-          {...register('lag')}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
-            aria-disabled={update.isPending}
-            aria-busy={update.isPending}
-            onClick={(event) => {
-              if (update.isPending) event.preventDefault();
-            }}
-          >
-            {update.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+          {update.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </form>
   );
 }

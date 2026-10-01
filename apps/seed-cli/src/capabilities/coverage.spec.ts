@@ -82,6 +82,14 @@ describe('the capability plans themselves', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it('declare no PROJECT calendar name twice, so any two can be seeded into one project (#428)', () => {
+    // A project calendar's name is unique within its project and the seeder treats the 409 as a
+    // finding, so two plans built from one another must not both carry the inherited calendar.
+    const names = specs.flatMap((spec) => spec.calendars.map((c) => c.name));
+    const repeated = names.filter((name, index) => names.indexOf(name) !== index);
+    expect(repeated).toEqual([]);
+  });
+
   it('reference only keys they define', () => {
     for (const spec of specs) {
       const activityKeys = new Set(spec.activities.map((a) => a.key));

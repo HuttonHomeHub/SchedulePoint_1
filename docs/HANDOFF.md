@@ -31,9 +31,9 @@ Product-owner decisions taken today:
 
 ## Open rows that need a decision or a trigger
 
-- **#420 stays open** until CI has passed the csp suite on several runs. The fix addresses the
-  leading hypothesis (a passive `reset()` racing the first keystroke); it was never reproduced
-  locally. Sibling dialogs with the same shape are listed in the row.
+- **#420 stays open for what is left.** CI passed the csp suite first-attempt on five consecutive
+  runs after the fix, and the sibling forms were converted 2026-10-01; the editor, the create dialog
+  and the Progress panels are not (they need a spec — see the row).
 - **#426** part-day levelling delay counted but never drawn; **#427** `leveledProjectFinish`
   ignores the push to followers. Both found by the M0 measurement.
 - **#428** (new) seed catalogue: `capability-levelling-placed` re-declares a PROJECT calendar that
@@ -54,8 +54,8 @@ Nothing below is approved. Put these to the product owner in plain English:
 
 1. **#428** — fix the two seed-catalogue faults (small).
 2. **#426 / #427** — the two levelling defects M0 found.
-3. **The sibling dialogs from #420** — move the remaining "reset on open" dialogs to seeding at
-   mount, once CI has confirmed the #420 fix.
+3. **#420's remainder** — the activity editor and create dialog's `useScopeForm` reset needs a spec
+   first (the unsaved-work guard sits outside the forms' lifetime).
 4. **Logic-aware levelling** — a real feature; starts with a spec.
 
 ## Model switch points

@@ -23,10 +23,12 @@ const source = readFileSync(join(__dirname, 'CalendarFormDialog.tsx'), 'utf8');
 describe('the calendar form counts a changed working week as unsaved', () => {
   it('registers on a week comparison, not on isDirty alone', () => {
     expect(source).toContain('weekChanged');
-    expect(source).toMatch(/open && \(isDirty \|\| weekChanged\)/);
+    // No `open &&` guard: the form is an inner component the Dialog mounts only while open
+    // (docs/TECH_DEBT.md #420), so its registration ends when the dialog closes.
+    expect(source).toMatch(/useRegisterUnsavedWork\(\s*isDirty \|\| weekChanged/);
   });
 
   it('compares against the week captured when the dialog opened', () => {
-    expect(source).toContain('setSeededWeek(seededWeek)');
+    expect(source).toContain('JSON.stringify(week) !== JSON.stringify(seededWeek)');
   });
 });

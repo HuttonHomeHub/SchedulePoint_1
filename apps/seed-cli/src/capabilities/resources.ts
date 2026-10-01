@@ -212,6 +212,7 @@ export function levellingPlacedPlan(): SeedSpec {
     seedName: 'capability-levelling-placed',
     plan: {
       ...base.plan,
+      defaultCalendarKey: 'LVP_CAL',
       name: 'Resources: levelling with one lift placed by hand',
       description:
         'The same three lifts on the same crane as the levelling plan, but V3 is dragged to 23 Mar, ' +
@@ -219,6 +220,9 @@ export function levellingPlacedPlan(): SeedSpec {
         "serialised, V3 is not delayed and has no levelled ghost, and V3's crane load sits in the " +
         'week of 23 Mar in the resource histogram rather than in the week of 4 Mar.',
     },
+    // A PROJECT calendar's name is unique within its project, and both plans are meant to be seedable
+    // side by side into one (#428), so the placed plan cannot reuse the key and name it inherits.
+    calendars: [calendar('LVP_CAL', 'Levelling placed five-day week', [1, 2, 3, 4, 5])],
     activities: base.activities.map((entry) =>
       entry.key === 'V3' ? { ...entry, visualStart: '2026-03-23', testTags: [] } : entry,
     ),

@@ -174,7 +174,7 @@ export async function seedPlan(
         // empty body is a 422 naming `version`, not a no-op. The create's version is still current
         // here because nothing has touched the row in between.
         if (resource.archived) {
-          await client.post(`${org}/resources/${created.id}/archive`, {
+          await client.postNoContent(`${org}/resources/${created.id}/archive`, {
             version: created.version ?? 1,
           });
         }

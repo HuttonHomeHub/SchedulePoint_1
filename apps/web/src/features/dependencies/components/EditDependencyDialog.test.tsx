@@ -1,6 +1,7 @@
 import type { DependencySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditDependencyDialog } from './EditDependencyDialog';
@@ -57,5 +58,47 @@ describe('EditDependencyDialog', () => {
       lagCalendar: 'PROJECT_DEFAULT',
       version: 5,
     });
+  });
+
+  /**
+   * **The structural property behind #420.** A passive `reset()` runs after the field is on screen,
+   * so a fast typist's text could be wiped by it. Layout effects run before any passive effect,
+   * which makes a layout-phase probe the one place a test can see the value the field is *born*
+   * with — `act` flushes passive effects before `render` returns.
+   */
+  it('is born holding the link’s lag, not seeded by a later effect', () => {
+    const born: string[] = [];
+    function Probe(): null {
+      useLayoutEffect(() => {
+        const input = document.querySelector<HTMLInputElement>('input[name="lag"]');
+        if (input) born.push(input.value);
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EditDependencyDialog orgSlug="acme" dependency={DEP} open onClose={vi.fn()} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(born).toEqual(['3']);
+  });
+
+  it('keeps a lag entered before the first passive effects run', () => {
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLInputElement>('input[name="lag"]')!.value = '7';
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EditDependencyDialog orgSlug="acme" dependency={DEP} open onClose={vi.fn()} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText(/Lag \(working days/)).toHaveValue(7);
   });
 });

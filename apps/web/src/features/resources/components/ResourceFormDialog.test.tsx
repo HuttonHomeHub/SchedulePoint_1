@@ -1,6 +1,7 @@
 import type { ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourceFormDialog } from './ResourceFormDialog';
@@ -53,6 +54,48 @@ describe('ResourceFormDialog', () => {
       name: 'Excavator',
       kind: 'EQUIPMENT',
     });
+  });
+
+  /**
+   * **#420's structural property.** A passive `reset()` runs after the field is on screen, so a
+   * fast typist's text could be wiped by it. Layout effects run before any passive effect, which
+   * makes a layout-phase probe the one place a test can see the value the field is *born* with,
+   * and a value placed there stands in for a keystroke that beat the effect.
+   */
+  it('is born holding the edited resource’s name, not seeded by a later effect', () => {
+    const born: string[] = [];
+    function Probe(): null {
+      useLayoutEffect(() => {
+        const input = document.querySelector<HTMLInputElement>('input[name="name"]');
+        if (input) born.push(input.value);
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ResourceFormDialog orgSlug="acme" open onClose={vi.fn()} resource={RESOURCE} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(born).toEqual(['Crew A']);
+  });
+
+  it('keeps text entered before the first passive effects run in create mode', () => {
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLInputElement>('input[name="name"]')!.value = 'Typed early';
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ResourceFormDialog orgSlug="acme" open onClose={vi.fn()} />
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Typed early');
   });
 
   it('rejects an empty name with a validation error and makes no request', async () => {

@@ -80,32 +80,7 @@ export function NoteItem({
   // the actual focus call happens in the effect below (where ref access is allowed).
   const [restoreEditFocus, setRestoreEditFocus] = useState(false);
 
-  const update = useUpdateNote(orgSlug, target);
   const remove = useDeleteNote(orgSlug, target);
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    control,
-    setFocus,
-    formState: { errors },
-  } = useForm<NoteFormValues>({
-    resolver: zodResolver(noteFormSchema),
-    defaultValues: { body: note.body },
-  });
-  const value = useWatch({ control, name: 'body' }) ?? '';
-  const overLimit = value.length > NOTE_BODY_MAX;
-  const emptyBody = value.trim().length === 0;
-
-  // On opening the editor, seed it with the latest body and move focus into the textarea (SC 2.4.3).
-  useEffect(() => {
-    if (editing) {
-      reset({ body: note.body });
-      setFocus('body');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run on open only
-  }, [editing]);
 
   // On a requested close, restore focus to the Edit button (deferred here so the submit handler stays
   // ref-free — the React Compiler forbids ref access in the `handleSubmit` closure). The flag latches
@@ -121,40 +96,6 @@ export function NoteItem({
     setRestoreEditFocus(true);
     setEditing(false);
   };
-
-  const onSubmit = handleSubmit((values) => {
-    if (overLimit) return;
-    setConflict(null);
-    update.mutate(
-      { noteId: note.id, body: values.body, version: note.version },
-      {
-        onSuccess: () => {
-          closeEditor();
-          announce('Note updated.');
-        },
-        onError: (error) => {
-          if (error instanceof ApiFetchError && error.status === 409) {
-            // Optimistic-lock clash: someone edited this note first. Refresh the thread so the retry
-            // sees the current body/version, close the editor, and announce the reason as a status.
-            closeEditor();
-            onThreadStale();
-            setConflict(
-              'This note was updated elsewhere. We’ve refreshed it — review the latest and edit again if needed.',
-            );
-          } else if (error instanceof ApiFetchError && error.status === 403) {
-            // Authorship was lost server-side: on refetch the Edit affordance (and its button) unmounts,
-            // so don't arm the restore-to-Edit-button path (`closeEditor`) — that focus target vanishes.
-            // Close the editor directly and hand focus to the thread region sink instead (SC 2.4.3).
-            setEditing(false);
-            onThreadStale();
-            onFocusRegion();
-            setConflict('You can no longer edit this note.');
-          }
-          // Other errors surface via the form's inline `update.isError` message below.
-        },
-      },
-    );
-  });
 
   /**
    * **Focus moves in an effect, not beside the close** — and the difference is a race I lost twice.
@@ -209,45 +150,29 @@ export function NoteItem({
       </div>
 
       {editing ? (
-        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-2">
-          <TextareaField
-            label="Edit note"
-            rows={3}
-            error={errors.body?.message}
-            aria-describedby={`note-${note.id}-edit-count`}
-            {...register('body')}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p
-              id={`note-${note.id}-edit-count`}
-              className={
-                overLimit ? 'text-destructive-text text-xs' : 'text-muted-foreground text-xs'
-              }
-            >
-              {value.length.toLocaleString()} / {NOTE_BODY_MAX.toLocaleString()}
-            </p>
-            {update.isError &&
-            !(update.error instanceof ApiFetchError && [403, 409].includes(update.error.status)) ? (
-              <p role="alert" className="text-destructive-text text-xs">
-                {update.error.message}
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => closeEditor()}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                aria-disabled={emptyBody || overLimit || update.isPending}
-                aria-busy={update.isPending}
-                className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-              >
-                {update.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
-          </div>
-        </form>
+        <NoteEditForm
+          orgSlug={orgSlug}
+          target={target}
+          note={note}
+          onClose={closeEditor}
+          onStale={(reason) => {
+            if (reason === 'conflict') {
+              closeEditor();
+              onThreadStale();
+              setConflict(
+                'This note was updated elsewhere. We’ve refreshed it — review the latest and edit again if needed.',
+              );
+            } else {
+              // Authorship was lost server-side: on refetch the Edit affordance (and its button) unmounts,
+              // so don't arm the restore-to-Edit-button path (`closeEditor`) — that focus target vanishes.
+              // Close the editor directly and hand focus to the thread region sink instead (SC 2.4.3).
+              setEditing(false);
+              onThreadStale();
+              onFocusRegion();
+              setConflict('You can no longer edit this note.');
+            }
+          }}
+        />
       ) : (
         <>
           <p className="text-sm break-words whitespace-pre-wrap">{note.body}</p>
@@ -303,5 +228,113 @@ export function NoteItem({
         />
       ) : null}
     </li>
+  );
+}
+
+/**
+ * The inline editor. It is mounted only while editing, so `useForm` is born holding the note's
+ * latest body instead of being `reset()` by a passive effect after the textarea is on screen — an
+ * effect that runs afterwards can wipe what a fast typist has already entered
+ * (`docs/TECH_DEBT.md` #420). The update mutation lives here too, so each edit starts with no stale
+ * error.
+ */
+function NoteEditForm({
+  orgSlug,
+  target,
+  note,
+  onClose,
+  onStale,
+}: {
+  orgSlug: string;
+  target: NoteTarget;
+  note: NoteSummary;
+  /** Close the editor and restore focus to the Edit button (cancel / save). */
+  onClose: () => void;
+  /** A 409 (`conflict`: someone else edited first) or a 403 (`forbidden`: authorship lost). */
+  onStale: (reason: 'conflict' | 'forbidden') => void;
+}): React.ReactElement {
+  const announce = useAnnounce();
+  const update = useUpdateNote(orgSlug, target);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    setFocus,
+    formState: { errors },
+  } = useForm<NoteFormValues>({
+    resolver: zodResolver(noteFormSchema),
+    defaultValues: { body: note.body },
+  });
+  const value = useWatch({ control, name: 'body' }) ?? '';
+  const overLimit = value.length > NOTE_BODY_MAX;
+  const emptyBody = value.trim().length === 0;
+
+  // On opening the editor, move focus into the textarea (SC 2.4.3).
+  useEffect(() => {
+    setFocus('body');
+  }, [setFocus]);
+
+  const onSubmit = handleSubmit((values) => {
+    if (overLimit) return;
+    update.mutate(
+      { noteId: note.id, body: values.body, version: note.version },
+      {
+        onSuccess: () => {
+          onClose();
+          announce('Note updated.');
+        },
+        onError: (error) => {
+          if (error instanceof ApiFetchError && error.status === 409) {
+            // Optimistic-lock clash: someone edited this note first. The parent refreshes the thread
+            // so the retry sees the current body/version, closes the editor and announces the reason.
+            onStale('conflict');
+          } else if (error instanceof ApiFetchError && error.status === 403) {
+            onStale('forbidden');
+          }
+          // Other errors surface via the form's inline `update.isError` message below.
+        },
+      },
+    );
+  });
+
+  return (
+    <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-2">
+      <TextareaField
+        label="Edit note"
+        rows={3}
+        error={errors.body?.message}
+        aria-describedby={`note-${note.id}-edit-count`}
+        {...register('body')}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p
+          id={`note-${note.id}-edit-count`}
+          className={overLimit ? 'text-destructive-text text-xs' : 'text-muted-foreground text-xs'}
+        >
+          {value.length.toLocaleString()} / {NOTE_BODY_MAX.toLocaleString()}
+        </p>
+        {update.isError &&
+        !(update.error instanceof ApiFetchError && [403, 409].includes(update.error.status)) ? (
+          <p role="alert" className="text-destructive-text text-xs">
+            {update.error.message}
+          </p>
+        ) : null}
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            aria-disabled={emptyBody || overLimit || update.isPending}
+            aria-busy={update.isPending}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            {update.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }
