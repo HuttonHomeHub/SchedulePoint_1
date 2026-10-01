@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
  *    Comments are the subject here, so scanning comments for this one rule is correct — the estate
  *    rule (`docs/DESIGN_SYSTEM.md`) is that a directive is a decision, and a decision written to get
  *    a red gate green without saying why is worse than the warning it silences (D5, #353 → #85).
- * 4. A **pinned positive case**: the directive scan finds at least 40 directives and the package scan
+ * 4. A **pinned positive case**: the directive scan finds at least 30 directives and the package scan
  *    finds exactly the 9 workspaces that declare a `lint` script. A scan that silently started
  *    finding nothing — a moved directory, a renamed script key, a regex that stopped matching —
  *    would pass every assertion above vacuously (the ADR-0093 / ADR-0108 lesson: "nothing found" and
@@ -184,11 +184,15 @@ describe('the lint policy is armed and its findings are enforced (ADR-0164, #353
       (sum, file) => sum + directiveLines(readFileSync(file, 'utf8')).length,
       0,
     );
+    // A floor, not a census: it only has to tell "the matcher still sees the estate" from "it sees
+    // nothing". It was 40 until `docs/TECH_DEBT.md` #420's conversions deleted six suppressions
+    // along with the effects they excused (34 remain) — fewer directives is the direction this
+    // policy wants, so the floor tracks the estate down rather than failing the improvement.
     expect(
       totalDirectives,
-      'the directive scan found fewer than 40 react-hooks suppressions in apps/web — the matcher ' +
+      'the directive scan found fewer than 30 react-hooks suppressions in apps/web — the matcher ' +
         'may no longer recognise the directive shape it exists to check',
-    ).toBeGreaterThanOrEqual(40);
+    ).toBeGreaterThanOrEqual(30);
 
     // The reason-matcher recognises the shipped shape and rejects the ones it must reject.
     expect(
