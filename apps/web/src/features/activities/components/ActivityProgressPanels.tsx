@@ -93,7 +93,6 @@ export function ReportedProgressPanel({
   activity,
   hoursPerDay,
   gate,
-  open,
   announce,
   onDirtyChange,
 }: {
@@ -107,7 +106,6 @@ export function ReportedProgressPanel({
    */
   hoursPerDay: number | undefined;
   gate: ScopeGate;
-  open: boolean;
   announce: (message: string) => void;
   /**
    * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
@@ -130,7 +128,6 @@ export function ReportedProgressPanel({
       resumeDate: row?.resumeDate ?? '',
     }),
     activity,
-    open,
   );
 
   useReportDirty(onDirtyChange, isDirty);
@@ -255,7 +252,6 @@ export function ValueMeasurePanel({
   orgSlug,
   activity,
   gate,
-  open,
   onSave,
   onOpenResources,
   pending,
@@ -265,7 +261,6 @@ export function ValueMeasurePanel({
   orgSlug: string;
   activity: ActivitySummary;
   gate: ScopeGate;
-  open: boolean;
   onSave: (patch: Record<string, unknown>, reset: () => void) => void;
   onOpenResources?: () => void;
   pending: boolean;
@@ -280,7 +275,7 @@ export function ValueMeasurePanel({
    */
   onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
-  const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity, open);
+  const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity);
 
   useReportDirty(onDirtyChange, isDirty);
   const steps = useActivitySteps(orgSlug, activity.id);

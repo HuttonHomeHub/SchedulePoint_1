@@ -1,5 +1,5 @@
 import { type ActivitySummary, type CalendarSummary, type DependencySummary } from '@repo/types';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
 import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
@@ -76,60 +76,11 @@ import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
 
-/**
- * The tabbed activity editor, **as a modal dialog** (ADR-0060, ADR-0101). Unconditional since ADR-0089 retired
- * `VITE_ACTIVITY_EDITOR_TABS`; there is no other edit surface.
- *
- * **Saves per write scope, not per dialog.** Each tab owns an independent form and its own Save,
- * because the three write paths this editor spans do not share a permission: definition writes need
- * the plan edit-lock, progress writes deliberately do not (ADR-0028 Q-C), and steps joined the pen
- * side in ADR-0060 §5. One merged Save would have to pick one rule and break the others — it would
- * quietly remove a Contributor's ability to report progress. Per-scope save is therefore structural,
- * not a layout preference.
- *
- * **`version` is read at submit time, never captured.** Every scope save bumps the row's version, so
- * a second save from another tab must use the version the *first* one produced. Reading it from the
- * live `activity` prop inside the submit handler is what makes a two-tab edit session work at all.
- *
- * Copy follows `docs/specs/activity-editor-restructure/copy-review.md` — reviewed as it moved, not
- * moved verbatim. Most visibly, `(optional)` is gone from labels: it was on eleven of twenty-two,
- * which is enough that it stopped meaning anything.
- *
- * M3 ships the three definition tabs; M4 adds Progress, where the reported %, the value measure and
- * the weighted steps finally sit next to each other — three dialogs' worth of screens that were
- * previously reachable only one at a time, from different menus, with no cue that one overrides
- * another.
- *
- * **The layout is ADR-0061 Direction B**: a section rail beside a pane, at the `xl` dialog size.
- * The editor is the app's only dialog that earns it, and the reason is the same one that made
- * per-scope save structural — the scopes carry *different permissions*, and a horizontal tab strip
- * has nowhere to say so. In the rail, a Contributor sees "General 🔒 / Scheduling 🔒 / Progress" on
- * arrival instead of discovering each shut form by clicking into it. Inside the pane, fields are
- * grouped into field components that both this editor and the create dialog render; above it, {@link ContextStrip}
- * keeps the computed dates and float on screen, which the previous version showed nowhere at all.
- */
 /** The three Progress-tab scopes whose forms live inside the panels rather than the host. */
 type ProgressScopeKey = 'progress' | 'measure' | 'steps';
 
-export function ActivityEditorDialog({
-  orgSlug,
-  planId,
-  open,
-  onClose,
-  onSaved,
-  gating,
-  intent,
-  activity,
-  calendars = [],
-  calendarsLoading = false,
-  calendarsError = false,
-  planCalendarId,
-  planActivities = [],
-  planActivitiesLoading = false,
-  planActivitiesError = false,
-  logic,
-  notesSlot,
-}: {
+/** The props the host sees — and the session is handed the same ones, minus `open`. */
+interface ActivityEditorDialogProps {
   orgSlug: string;
   planId: string;
   open: boolean;
@@ -192,9 +143,177 @@ export function ActivityEditorDialog({
    * Absent ⇒ no Notes tab, which is what a host without the flag wants.
    */
   notesSlot?: React.ReactNode;
-}): React.ReactElement {
+}
+
+/** What the frame can ask of the session it hosts: close the way the footer Close does. */
+interface ActivityEditorSessionHandle {
+  requestClose: () => void;
+}
+
+/** One scope save, as the session describes it to the frame that owns the mutation. */
+interface ScopeSave {
+  activity: ActivitySummary;
+  patch: Record<string, unknown>;
+  label: string;
+  /** Session-local effects of a success: marking the scope clean, "Saved.". */
+  onSuccess: (after: ActivitySummary) => void;
+  onError: (error: Error) => void;
+}
+
+/**
+ * The tabbed activity editor, **as a modal dialog** (ADR-0060, ADR-0101). Unconditional since ADR-0089 retired
+ * `VITE_ACTIVITY_EDITOR_TABS`; there is no other edit surface.
+ *
+ * **Saves per write scope, not per dialog.** Each tab owns an independent form and its own Save,
+ * because the three write paths this editor spans do not share a permission: definition writes need
+ * the plan edit-lock, progress writes deliberately do not (ADR-0028 Q-C), and steps joined the pen
+ * side in ADR-0060 §5. One merged Save would have to pick one rule and break the others — it would
+ * quietly remove a Contributor's ability to report progress. Per-scope save is therefore structural,
+ * not a layout preference.
+ *
+ * **`version` is read at submit time, never captured.** Every scope save bumps the row's version, so
+ * a second save from another tab must use the version the *first* one produced. Reading it from the
+ * live `activity` prop inside the submit handler is what makes a two-tab edit session work at all.
+ *
+ * Copy follows `docs/specs/activity-editor-restructure/copy-review.md` — reviewed as it moved, not
+ * moved verbatim. Most visibly, `(optional)` is gone from labels: it was on eleven of twenty-two,
+ * which is enough that it stopped meaning anything.
+ *
+ * M3 ships the three definition tabs; M4 adds Progress, where the reported %, the value measure and
+ * the weighted steps finally sit next to each other — three dialogs' worth of screens that were
+ * previously reachable only one at a time, from different menus, with no cue that one overrides
+ * another.
+ *
+ * **The layout is ADR-0061 Direction B**: a section rail beside a pane, at the `xl` dialog size.
+ * The editor is the app's only dialog that earns it, and the reason is the same one that made
+ * per-scope save structural — the scopes carry *different permissions*, and a horizontal tab strip
+ * has nowhere to say so. In the rail, a Contributor sees "General 🔒 / Scheduling 🔒 / Progress" on
+ * arrival instead of discovering each shut form by clicking into it. Inside the pane, fields are
+ * grouped into field components that both this editor and the create dialog render; above it, {@link ContextStrip}
+ * keeps the computed dates and float on screen, which the previous version showed nowhere at all.
+ *
+ * **The frame** (ADR-0169 D3): the `<dialog>`, the scope-save mutation and the close handle — the
+ * parts that must outlive an opening — around an {@link ActivityEditorSession} that is mounted per
+ * opening and holds every form and every other piece of working state.
+ *
+ * **Why the mutation is here and the forms are not.** A save can finish after the editor has closed.
+ * Its undo record (`onSaved`) and its announcement are the user's only signal that it landed, and a
+ * per-call mutate callback is dropped when the observer that made the call unmounts — so the
+ * observer lives in the component that does not. Session-local effects (marking a scope clean,
+ * "Saved.") ride along as callbacks and are harmless against a session that is gone.
+ *
+ * **Why the `<dialog>` is here.** Rendered by the session it would be created and destroyed with each
+ * opening, removed from the document while modal, which bypasses `close()` and its focus return.
+ * `Dialog` already unmounts its children before `close()` runs, so the session unmounting changes
+ * nothing about where focus goes.
+ *
+ * **Why a handle and not reported state.** A guard fed by a child reporting `isDirty` through an
+ * effect is one render late by construction. The frame reads the answer at the moment of the click,
+ * from the component that owns the forms.
+ */
+export function ActivityEditorDialog({
+  orgSlug,
+  planId,
+  open,
+  onClose,
+  onSaved,
+  activity,
+  ...sessionProps
+}: ActivityEditorDialogProps): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
+  const sessionRef = useRef<ActivityEditorSessionHandle>(null);
+
+  /**
+   * Save one scope. `version` comes from the live row **now**, not from when the editor opened —
+   * see the docblock above. The undo record and the announcement are made here, not by the session,
+   * so they survive the session being unmounted mid-save.
+   */
+  const saveScope = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
+    update.mutate(
+      { activityId: row.id, version: row.version, patch },
+      {
+        onSuccess: (after) => {
+          onSaved?.(row, after);
+          onSuccess(after);
+          announce(`${label} saved.`);
+        },
+        onError,
+      },
+    );
+  };
+
+  /**
+   * **A request while closed is not a request.** After a Discard the host closes the `<dialog>`,
+   * whose own `close` event comes straight back here with the session already gone. Treating it as
+   * a request armed a confirmation for the NEXT opening (F1, `docs/specs/activity-editor-seeding`);
+   * with no session to ask there is nothing to confirm, and a closed editor has nothing to close.
+   */
+  const requestClose = (): void => {
+    if (sessionRef.current) sessionRef.current.requestClose();
+    else if (open) onClose();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      // Escape routes through the same guard as the Close button — an Escape reflex is exactly the
+      // case the confirmation exists for. (`Dialog` has no backdrop-click handler; the modal's
+      // backdrop is inert.)
+      onClose={requestClose}
+      confirmBeforeClose
+      size="xl"
+      body="flush"
+      title={activity ? activity.name : 'Edit activity'}
+      {...(activity
+        ? { description: activitySubtitle(activity, ACTIVITY_TYPE_LABELS[activity.type]) }
+        : {})}
+    >
+      {open && activity ? (
+        // Keyed by the row, so a subject that ever changed under an open editor remounts it: the
+        // title and the forms can never disagree about which activity they describe.
+        <ActivityEditorSession
+          key={activity.id}
+          handleRef={sessionRef}
+          orgSlug={orgSlug}
+          planId={planId}
+          activity={activity}
+          onClose={onClose}
+          onSave={saveScope}
+          savePending={update.isPending}
+          {...sessionProps}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ActivityEditorSession({
+  handleRef,
+  orgSlug,
+  planId,
+  onClose,
+  onSave,
+  savePending,
+  gating,
+  intent,
+  activity,
+  calendars = [],
+  calendarsLoading = false,
+  calendarsError = false,
+  planCalendarId,
+  planActivities = [],
+  planActivitiesLoading = false,
+  planActivitiesError = false,
+  logic,
+  notesSlot,
+}: Omit<ActivityEditorDialogProps, 'open' | 'onSaved' | 'activity'> & {
+  handleRef: React.Ref<ActivityEditorSessionHandle>;
+  activity: ActivitySummary;
+  onSave: (save: ScopeSave) => void;
+  savePending: boolean;
+}): React.ReactElement {
+  const announce = useAnnounce();
   const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
   /**
    * The failing scope and its message — **scoped**, not one dialog-level banner.
@@ -211,13 +330,13 @@ export function ActivityEditorDialog({
   const [confirmingClose, setConfirmingClose] = useState(false);
 
   // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
-  // the same editor as **Edit**, on the tab that answers the action. The hosts keep this dialog
-  // mounted and toggle `open`, so a tab chosen for the previous target would otherwise persist into
-  // the next one — but the user's own tab clicks must survive every other re-render.
+  // the same editor as **Edit**, on the tab that answers the action. A session is born per opening,
+  // so `useState` above already lands it; this adjustment covers a host that hands the SAME session
+  // a new intent without closing, while the user's own tab clicks survive every other re-render.
   //
   // Adjusted **during render** against the previous intent, not in an effect: an effect would paint
   // the stale tab first and then correct it, and setting state from one is the cascading-render
-  // pattern the lint rule rejects. Each open builds a fresh intent object, so identity is the signal.
+  // pattern the lint rule rejects. A new intent is a fresh object, so identity is the signal.
   const [seenIntent, setSeenIntent] = useState(intent);
   if (intent !== seenIntent) {
     setSeenIntent(intent);
@@ -236,12 +355,12 @@ export function ActivityEditorDialog({
   // Before this split the single value was the second answer, which made the duration seed wrong.
   const seedFrame = activityDayFactorFrame(activity);
   const durationSeedFactor = effectiveHoursPerDay(calendars, {
-    activityCalendarId: activity?.calendarId ?? '',
+    activityCalendarId: activity.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
     frame: seedFrame,
   });
   const joinLagFactor = effectiveHoursPerDay(calendars, {
-    activityCalendarId: activity?.calendarId ?? '',
+    activityCalendarId: activity.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
     frame: { kind: 'own' },
   });
@@ -249,10 +368,9 @@ export function ActivityEditorDialog({
     activityGeneralSchema,
     (a) => seedGeneral(a, durationSeedFactor),
     activity,
-    open,
   );
-  const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity, open);
-  const cost = useScopeForm(activityCostSchema, seedCost, activity, open);
+  const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity);
+  const cost = useScopeForm(activityCostSchema, seedCost, activity);
 
   /**
    * The three Progress panels own their forms, so their dirtiness has to be REPORTED up
@@ -305,7 +423,6 @@ export function ActivityEditorDialog({
   );
   const readDuration = useCallback(() => generalGetValues('duration'), [generalGetValues]);
   useDurationSeed({
-    open,
     hoursPerDay,
     activity,
     // The field's LIVE value, not a dirty flag captured by this render — see TECH_DEBT #83.
@@ -316,7 +433,7 @@ export function ActivityEditorDialog({
   const type = useWatch({ control: general.form.control, name: 'type' });
 
   const parentOptions = planActivities.filter(
-    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity?.id,
+    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity.id,
   );
 
   /**
@@ -389,29 +506,23 @@ export function ActivityEditorDialog({
 
   /**
    * Register with the app shell so a navigation, a reload or a closed tab is guarded too — not just
-   * this dialog's own Close (unsaved-work guard, M2-T4). `null` when closed, or a stale form from a
-   * dismissed editor would block navigation forever.
+   * this dialog's own Close (unsaved-work guard, M2-T4). The session exists only while the editor is
+   * open, so unmounting is what unregisters it: a stale form from a dismissed editor cannot block
+   * navigation.
    */
-  useRegisterUnsavedWork(open ? unsavedReport : null);
+  useRegisterUnsavedWork(unsavedReport);
 
   const dirtyScopeNames = unsavedReport.scopes.map((scope) => scope.label);
 
-  /**
-   * Close, unless there is work to lose — then ask (spec US-5).
-   *
-   * **A request while closed is not a request.** The host mounts this editor and toggles `open`, so
-   * after a Discard the forms are still dirty when the host closes the `<dialog>` — and that
-   * element's own `close` event comes straight back here. Treating it as a request armed the
-   * confirmation for the NEXT opening (F1, `docs/specs/activity-editor-seeding`).
-   */
+  /** Close, unless there is work to lose — then ask (spec US-5). */
   const requestClose = (): void => {
-    if (!open) return;
     if (dirtyScopeNames.length > 0) {
       setConfirmingClose(true);
       return;
     }
     onClose();
   };
+  useImperativeHandle(handleRef, () => ({ requestClose }));
 
   /**
    * Recover a scope after a conflict: re-seed it from the row the failed save's refetch brought
@@ -442,9 +553,9 @@ export function ActivityEditorDialog({
   };
 
   /**
-   * Save one scope. `version` comes from the live row **now**, not from when the dialog opened —
-   * see the docblock. A 409 surfaces its message and the list refetch re-seeds, so a retry carries
-   * the version the other tab's save produced.
+   * Save one scope through the frame, which owns the mutation (see {@link ActivityEditorDialog}). A
+   * 409 surfaces its message and the list refetch re-seeds, so a retry carries the version the other
+   * tab's save produced.
    */
   const saveScope = (
     scope: TabKey,
@@ -452,26 +563,23 @@ export function ActivityEditorDialog({
     label: string,
     resetTo: (after: ActivitySummary) => void,
   ): void => {
-    if (!activity) return;
     setSaveError((current) => (current?.scope === scope ? null : current));
-    update.mutate(
-      { activityId: activity.id, version: activity.version, patch },
-      {
-        onSuccess: (after) => {
-          onSaved?.(activity, after);
-          // The editor stays open (the agreed behaviour): a multi-scope session would be pointless
-          // if saving one tab closed the others. Reset marks the scope clean so its dirty marker
-          // clears without discarding what the user just saved.
-          resetTo(after);
-          setSavedScope(scope);
-          announce(`${label} saved.`);
-        },
-        onError: (error: Error) => {
-          setSaveError({ scope, message: error.message });
-          setActive(scope);
-        },
+    onSave({
+      activity,
+      patch,
+      label,
+      // The editor stays open (the agreed behaviour): a multi-scope session would be pointless
+      // if saving one tab closed the others. Reset marks the scope clean so its dirty marker
+      // clears without discarding what the user just saved.
+      onSuccess: (after) => {
+        resetTo(after);
+        setSavedScope(scope);
       },
-    );
+      onError: (error) => {
+        setSaveError({ scope, message: error.message });
+        setActive(scope);
+      },
+    });
   };
 
   const tabs: TabDescriptor<TabKey>[] = [
@@ -507,7 +615,7 @@ export function ActivityEditorDialog({
     // this?" is meaningless for one that cannot hold anything. It sits after Resources and before
     // Progress, on the definition side of the status divide, because membership is a pen-gated
     // structural fact and reuses the `definition` gate object verbatim (see `gating.members`).
-    ...(WBS_IMPROVEMENTS_ENABLED && activity?.type === 'WBS_SUMMARY'
+    ...(WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY'
       ? [{ id: 'members' as const, label: 'Members', ...collectionMarker(gating.members) }]
       : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
@@ -532,7 +640,7 @@ export function ActivityEditorDialog({
       : []),
   ];
 
-  const facts = activity ? activityContextFacts(activity) : [];
+  const facts = activityContextFacts(activity);
 
   // The rail needs ~208px of the dialog's width before the pane starts squeezing its two-column
   // grids into unusable stubs. Below `md` the same list becomes the horizontal strip it was — a
@@ -541,113 +649,89 @@ export function ActivityEditorDialog({
   const viewportFitsRail = useMediaQuery('(min-width: 768px)', true);
 
   return (
-    <Dialog
-      open={open}
-      // Escape routes through the same guard as the Close button — an Escape reflex is exactly the
-      // case the confirmation exists for. (`Dialog` has no backdrop-click handler; the modal's
-      // backdrop is inert.)
-      onClose={requestClose}
-      confirmBeforeClose
-      size="xl"
-      body="flush"
-      title={activity ? activity.name : 'Edit activity'}
-      {...(activity
-        ? { description: activitySubtitle(activity, ACTIVITY_TYPE_LABELS[activity.type]) }
-        : {})}
-    >
-      <>
-        {facts.length > 0 ? (
-          <ContextStrip
-            label="Computed schedule"
-            className="mx-6 mb-4 shrink-0"
-            facts={facts.map((fact) => ({
-              label: fact.label,
-              value: (
-                <span
-                  className={cn(
-                    fact.tone === 'critical' && 'text-destructive-text',
-                    fact.tone === 'warning' && 'text-warning-text',
-                  )}
-                >
-                  {fact.text}
-                </span>
-              ),
-            }))}
-          />
-        ) : null}
+    <>
+      {facts.length > 0 ? (
+        <ContextStrip
+          label="Computed schedule"
+          className="mx-6 mb-4 shrink-0"
+          facts={facts.map((fact) => ({
+            label: fact.label,
+            value: (
+              <span
+                className={cn(
+                  fact.tone === 'critical' && 'text-destructive-text',
+                  fact.tone === 'warning' && 'text-warning-text',
+                )}
+              >
+                {fact.text}
+              </span>
+            ),
+          }))}
+        />
+      ) : null}
 
-        <div className="border-border flex min-h-0 flex-1 flex-col border-t">
-          <Tabs
-            label="Activity sections"
-            tabs={tabs}
-            active={active}
-            onChange={setActive}
-            orientation={viewportFitsRail ? 'vertical' : 'horizontal'}
-            className="flex-1"
-          >
-            {(current) => (
-              <FieldGridContainer className="flex flex-1 flex-col gap-4 p-6">
-                {current === 'general' ? (
-                  <form
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void general.form.handleSubmit((values) => {
-                        // The one check the schema deliberately cannot make (ADR-0070): reachable
-                        // only on the degraded whole-days path, where `4h` is well-formed text this
-                        // field cannot express without a factor.
-                        if (
-                          !isDurationDerivedType(values.type) &&
-                          durationWriteFields(values.duration, hoursPerDay) === null
-                        ) {
-                          general.form.setError(
-                            'duration',
-                            { message: DURATION_NEEDS_WHOLE_DAYS },
-                            { shouldFocus: true },
-                          );
-                          return;
-                        }
-                        saveScope(
-                          'general',
-                          generalBody(values, hoursPerDay),
-                          'General',
-                          (after) => {
-                            general.form.reset(values);
-                            // A type change across the finish-milestone convention made the server
-                            // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
-                            // form still shows the old ones: a later edit there would send them back
-                            // and undo the move. Re-seed it from the saved row — but only when clean,
-                            // because a dirty Scheduling tab holds dates the reader typed, and
-                            // replacing them would discard work (plan M2-T2 risk R2; the Type hint
-                            // says a later Scheduling save is read the new way).
-                            if (
-                              after.type !== activity?.type &&
-                              !scheduling.form.formState.isDirty
-                            ) {
-                              scheduling.form.reset(seedScheduling(after));
-                            }
-                          },
+      <div className="border-border flex min-h-0 flex-1 flex-col border-t">
+        <Tabs
+          label="Activity sections"
+          tabs={tabs}
+          active={active}
+          onChange={setActive}
+          orientation={viewportFitsRail ? 'vertical' : 'horizontal'}
+          className="flex-1"
+        >
+          {(current) => (
+            <FieldGridContainer className="flex flex-1 flex-col gap-4 p-6">
+              {current === 'general' ? (
+                <form
+                  noValidate
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void general.form.handleSubmit((values) => {
+                      // The one check the schema deliberately cannot make (ADR-0070): reachable
+                      // only on the degraded whole-days path, where `4h` is well-formed text this
+                      // field cannot express without a factor.
+                      if (
+                        !isDurationDerivedType(values.type) &&
+                        durationWriteFields(values.duration, hoursPerDay) === null
+                      ) {
+                        general.form.setError(
+                          'duration',
+                          { message: DURATION_NEEDS_WHOLE_DAYS },
+                          { shouldFocus: true },
                         );
-                      })(event);
-                    }}
-                    className="flex flex-col gap-4"
-                  >
-                    <FormProblemCount errors={general.form.formState.errors} />
-                    {scopeError('general')}
+                        return;
+                      }
+                      saveScope('general', generalBody(values, hoursPerDay), 'General', (after) => {
+                        general.form.reset(values);
+                        // A type change across the finish-milestone convention made the server
+                        // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
+                        // form still shows the old ones: a later edit there would send them back
+                        // and undo the move. Re-seed it from the saved row — but only when clean,
+                        // because a dirty Scheduling tab holds dates the reader typed, and
+                        // replacing them would discard work (plan M2-T2 risk R2; the Type hint
+                        // says a later Scheduling save is read the new way).
+                        if (after.type !== activity.type && !scheduling.form.formState.isDirty) {
+                          scheduling.form.reset(seedScheduling(after));
+                        }
+                      });
+                    })(event);
+                  }}
+                  className="flex flex-col gap-4"
+                >
+                  <FormProblemCount errors={general.form.formState.errors} />
+                  {scopeError('general')}
 
-                    <FieldGateProvider gate={gating.general}>
-                      <ActivityIdentityFields form={general.form} />
+                  <FieldGateProvider gate={gating.general}>
+                    <ActivityIdentityFields form={general.form} />
 
-                      <ActivityWorkFields
-                        form={general.form}
-                        hoursPerDay={hoursPerDay}
-                        {...(activity?.type === undefined ? {} : { savedType: activity.type })}
-                        {...(activity === undefined
-                          ? {}
-                          : { savedDurationMinutes: activity.durationMinutes })}
-                      />
+                    <ActivityWorkFields
+                      form={general.form}
+                      hoursPerDay={hoursPerDay}
+                      savedType={activity.type}
+                      savedDurationMinutes={activity.durationMinutes}
+                    />
 
-                      {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
+                    {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
                       never asserts a false state while the plan activities are still resolving.
                       The "no summaries yet" guidance is a distinct, appended clause shown only
                       once the list has resolved empty — not conflated with loading or a load
@@ -657,187 +741,185 @@ export function ActivityEditorDialog({
                       plan" whenever the offerable list was empty, which is exactly when a stored
                       but unresolvable parent is most likely — so the one activity that disproves
                       the sentence was the one it was shown to. */}
-                      {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                        <ActivityBreakdownField
-                          form={general.form}
-                          parentOptions={parentOptions}
-                          loading={planActivitiesLoading}
-                          errored={planActivitiesError}
-                        />
-                      ) : null}
-                      <ScopeSaveBar
-                        gate={gating.general}
-                        dirty={general.isDirty}
-                        pending={update.isPending}
-                        saved={savedScope === 'general'}
-                        label="Save general"
+                    {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+                      <ActivityBreakdownField
+                        form={general.form}
+                        parentOptions={parentOptions}
+                        loading={planActivitiesLoading}
+                        errored={planActivitiesError}
                       />
-                    </FieldGateProvider>
-                  </form>
-                ) : null}
+                    ) : null}
+                    <ScopeSaveBar
+                      gate={gating.general}
+                      dirty={general.isDirty}
+                      pending={savePending}
+                      saved={savedScope === 'general'}
+                      label="Save general"
+                    />
+                  </FieldGateProvider>
+                </form>
+              ) : null}
 
-                {current === 'scheduling' ? (
-                  <form
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void scheduling.form.handleSubmit((values) =>
-                        saveScope('scheduling', schedulingBody(values), 'Scheduling', () =>
-                          scheduling.form.reset(values),
-                        ),
-                      )(event);
-                    }}
-                    className="flex flex-col gap-4"
-                  >
-                    <FormProblemCount errors={scheduling.form.formState.errors} />
-                    {scopeError('scheduling')}
+              {current === 'scheduling' ? (
+                <form
+                  noValidate
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void scheduling.form.handleSubmit((values) =>
+                      saveScope('scheduling', schedulingBody(values), 'Scheduling', () =>
+                        scheduling.form.reset(values),
+                      ),
+                    )(event);
+                  }}
+                  className="flex flex-col gap-4"
+                >
+                  <FormProblemCount errors={scheduling.form.formState.errors} />
+                  {scopeError('scheduling')}
 
-                    <FieldGateProvider gate={gating.scheduling}>
-                      {ACTIVITY_CALENDAR_ENABLED ? (
-                        <FormSection
-                          title="Working time"
-                          description="Which calendar's working days this activity's duration is measured in."
-                        >
-                          <ActivityCalendarField
-                            value={scopeCalendarId ?? ''}
-                            onChange={(calendarId) =>
-                              scheduling.form.setValue('calendarId', calendarId, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                            }
-                            calendars={calendars}
-                            loading={calendarsLoading}
-                            errored={calendarsError}
-                            activityType={type}
-                          />
-                        </FormSection>
-                      ) : null}
-
-                      <ActivityConstraintFields form={scheduling.form} />
-
-                      <ActivityPlacementFields form={scheduling.form} activityType={type} />
-
-                      {INTER_PROJECT_DATES_ENABLED ? (
-                        <ActivityExternalDatesFields
-                          form={scheduling.form}
-                          externalDriven={activity?.externalDriven === true}
+                  <FieldGateProvider gate={gating.scheduling}>
+                    {ACTIVITY_CALENDAR_ENABLED ? (
+                      <FormSection
+                        title="Working time"
+                        description="Which calendar's working days this activity's duration is measured in."
+                      >
+                        <ActivityCalendarField
+                          value={scopeCalendarId ?? ''}
+                          onChange={(calendarId) =>
+                            scheduling.form.setValue('calendarId', calendarId, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          calendars={calendars}
+                          loading={calendarsLoading}
+                          errored={calendarsError}
+                          activityType={type}
                         />
-                      ) : null}
+                      </FormSection>
+                    ) : null}
 
-                      {RESOURCE_LEVELLING_ENABLED ? (
-                        <ActivityLevellingField form={scheduling.form} activityType={type} />
-                      ) : null}
-                      <ScopeSaveBar
-                        gate={gating.scheduling}
-                        dirty={scheduling.isDirty}
-                        pending={update.isPending}
-                        saved={savedScope === 'scheduling'}
-                        label="Save scheduling"
+                    <ActivityConstraintFields form={scheduling.form} />
+
+                    <ActivityPlacementFields form={scheduling.form} activityType={type} />
+
+                    {INTER_PROJECT_DATES_ENABLED ? (
+                      <ActivityExternalDatesFields
+                        form={scheduling.form}
+                        externalDriven={activity.externalDriven === true}
                       />
-                    </FieldGateProvider>
-                  </form>
-                ) : null}
+                    ) : null}
 
-                {/* Logic — the same `ActivityLogicPanel` the Logic dialog renders, not a copy of it.
+                    {RESOURCE_LEVELLING_ENABLED ? (
+                      <ActivityLevellingField form={scheduling.form} activityType={type} />
+                    ) : null}
+                    <ScopeSaveBar
+                      gate={gating.scheduling}
+                      dirty={scheduling.isDirty}
+                      pending={savePending}
+                      saved={savedScope === 'scheduling'}
+                      label="Save scheduling"
+                    />
+                  </FieldGateProvider>
+                </form>
+              ) : null}
+
+              {/* Logic — the same `ActivityLogicPanel` the Logic dialog renders, not a copy of it.
                   Its queries are gated on this tab being the active one, so opening the editor on
                   General does not fetch every activity's predecessors on the way past. */}
-                {current === 'logic' ? (
-                  <ActivityLogicPanel
-                    orgSlug={orgSlug}
-                    planId={planId}
-                    planActivities={planActivities}
-                    calendars={calendars}
-                    {...(planCalendarId === undefined ? {} : { planCalendarId })}
-                    canManageLogic={gating.logic.writable}
-                    enabled={open && current === 'logic'}
-                    {...(activity ? { activity } : {})}
-                    {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}
-                    {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
-                    {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
-                    {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
-                    {...(logic?.onEdited ? { onEdited: logic.onEdited } : {})}
-                    {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
-                  />
-                ) : null}
+              {current === 'logic' ? (
+                <ActivityLogicPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  planActivities={planActivities}
+                  calendars={calendars}
+                  {...(planCalendarId === undefined ? {} : { planCalendarId })}
+                  canManageLogic={gating.logic.writable}
+                  enabled={current === 'logic'}
+                  activity={activity}
+                  {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}
+                  {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
+                  {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
+                  {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
+                  {...(logic?.onEdited ? { onEdited: logic.onEdited } : {})}
+                  {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
+                />
+              ) : null}
 
-                {/* Members — a WBS summary's contents. Rendered only for a `WBS_SUMMARY`, which is
+              {/* Members — a WBS summary's contents. Rendered only for a `WBS_SUMMARY`, which is
                   also the only case the tab exists for, so the two conditions cannot disagree. It
                   is handed the plan's already-loaded activities rather than fetching its own: the
                   editor has them, the plan is bounded, and a second list here could disagree with
                   the one the Scheduling tab's parent picker shows. */}
-                {current === 'members' && activity ? (
-                  <ActivityMembersPanel
-                    orgSlug={orgSlug}
-                    planId={planId}
-                    summary={activity}
-                    planActivities={planActivities}
-                    gate={gating.members}
-                  />
-                ) : null}
+              {current === 'members' ? (
+                <ActivityMembersPanel
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  summary={activity}
+                  planActivities={planActivities}
+                  gate={gating.members}
+                />
+              ) : null}
 
-                {/* Resources — the same `ActivityResourcesPanel` the Resources dialog renders. The
+              {/* Resources — the same `ActivityResourcesPanel` the Resources dialog renders. The
                   milestone and duration-type facts are derived from the row the editor already
                   holds, rather than passed in by each host as the dialog required. */}
-                {current === 'resources' && activity ? (
-                  <ActivityResourcesPanel
-                    key={activity.id}
-                    orgSlug={orgSlug}
-                    planId={planId}
-                    activityId={activity.id}
-                    activityDurationType={activity.durationType}
-                    // The join lag's day↔minute factor (ADR-0071 M4). Deliberately `joinLagFactor` — the
-                    // SAVED calendar — and not the `hoursPerDay` the duration field uses: that one
-                    // follows the Scheduling tab's pending selection, which is right for a duration
-                    // saved alongside it and wrong for an assignment write that does not carry the
-                    // calendar at all.
-                    {...(joinLagFactor === undefined ? {} : { activityHoursPerDay: joinLagFactor })}
-                    isMilestone={isMilestoneType(activity.type)}
-                    canWrite={gating.resources.writable}
-                    // Shaded with the reason, never hidden — the same seam the Logic tab uses one
-                    // block above. Dropping it made a Planner without the pen meet a Resources tab
-                    // whose assign form had simply vanished, with a padlock on the rail as the only
-                    // clue: the lit-but-inert dead end inverted, which is no better.
-                    {...(gating.resources.reason ? { writeReason: gating.resources.reason } : {})}
-                    // The Cost tab and the assignment money fields answer to one gate: a role that
-                    // cannot read cost gets no tab AND no cost fields on a row. Latent today
-                    // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.
-                    canReadCost={gating.cost.readable}
-                    enabled={open && current === 'resources'}
-                  />
-                ) : null}
+              {current === 'resources' ? (
+                <ActivityResourcesPanel
+                  key={activity.id}
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  activityId={activity.id}
+                  activityDurationType={activity.durationType}
+                  // The join lag's day↔minute factor (ADR-0071 M4). Deliberately `joinLagFactor` — the
+                  // SAVED calendar — and not the `hoursPerDay` the duration field uses: that one
+                  // follows the Scheduling tab's pending selection, which is right for a duration
+                  // saved alongside it and wrong for an assignment write that does not carry the
+                  // calendar at all.
+                  {...(joinLagFactor === undefined ? {} : { activityHoursPerDay: joinLagFactor })}
+                  isMilestone={isMilestoneType(activity.type)}
+                  canWrite={gating.resources.writable}
+                  // Shaded with the reason, never hidden — the same seam the Logic tab uses one
+                  // block above. Dropping it made a Planner without the pen meet a Resources tab
+                  // whose assign form had simply vanished, with a padlock on the rail as the only
+                  // clue: the lit-but-inert dead end inverted, which is no better.
+                  {...(gating.resources.reason ? { writeReason: gating.resources.reason } : {})}
+                  // The Cost tab and the assignment money fields answer to one gate: a role that
+                  // cannot read cost gets no tab AND no cost fields on a row. Latent today
+                  // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.
+                  canReadCost={gating.cost.readable}
+                  enabled={current === 'resources'}
+                />
+              ) : null}
 
-                {/* Notes — the composition root's section, given a tab of its own so **Add note**
+              {/* Notes — the composition root's section, given a tab of its own so **Add note**
                   lands on it directly. Before this it opened the Logic dialog and then scrolled +
                   focused a section three panels down; the reveal plumbing that did so survives
                   untouched on the flag-off path, which still needs it. */}
-                {current === 'notes' ? notesSlot : null}
+              {current === 'notes' ? notesSlot : null}
 
-                {/* The co-location (M4): three panels, three write scopes, each headed by what it
+              {/* The co-location (M4): three panels, three write scopes, each headed by what it
                   does to the schedule. Rendered only when a row exists — every panel writes. */}
-                {current === 'progress' && activity ? (
-                  <div className="flex flex-col gap-8">
-                    <ReportedProgressPanel
-                      orgSlug={orgSlug}
-                      planId={planId}
-                      activity={activity}
-                      hoursPerDay={hoursPerDay}
-                      gate={gating.progress}
-                      open={open}
-                      announce={announce}
-                      onDirtyChange={onProgressDirty}
-                    />
-                    <ValueMeasurePanel
-                      orgSlug={orgSlug}
-                      activity={activity}
-                      gate={gating.measure}
-                      open={open}
-                      pending={update.isPending}
-                      saved={savedScope === 'progress'}
-                      onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
-                      onDirtyChange={onMeasureDirty}
-                    />
-                    {/* The flag pair that decides whether weighted steps exist at all.
+              {current === 'progress' ? (
+                <div className="flex flex-col gap-8">
+                  <ReportedProgressPanel
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    activity={activity}
+                    hoursPerDay={hoursPerDay}
+                    gate={gating.progress}
+                    announce={announce}
+                    onDirtyChange={onProgressDirty}
+                  />
+                  <ValueMeasurePanel
+                    orgSlug={orgSlug}
+                    activity={activity}
+                    gate={gating.measure}
+                    pending={savePending}
+                    saved={savedScope === 'progress'}
+                    onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
+                    onDirtyChange={onMeasureDirty}
+                  />
+                  {/* The flag pair that decides whether weighted steps exist at all.
                       **It used to be described as matching "the Steps entry points" in
                       `ActivitiesTable` and `selection-actions`, and those are gone**
                       (`docs/specs/object-bar-defects/` M1) — both opened this tab, so the panel is
@@ -845,84 +927,83 @@ export function ActivityEditorDialog({
                       reason the security review gave: without it the tab would show a checklist the
                       product has no business offering. What changed is that this is now the ONLY
                       place the flags are read for steps, so there is no parity left to keep. */}
-                    {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
-                      <WeightedStepsPanel
-                        orgSlug={orgSlug}
-                        planId={planId}
-                        activity={activity}
-                        gate={gating.steps}
-                        open={open}
-                        announce={announce}
-                        // Only the **Steps** entry point asks for this. Landing at the top of a
-                        // three-panel tab would make that action feel like it opened the wrong thing.
-                        autoFocusHeading={intent?.focusSteps === true}
-                        onDirtyChange={onStepsDirty}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
+                  {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
+                    <WeightedStepsPanel
+                      orgSlug={orgSlug}
+                      planId={planId}
+                      activity={activity}
+                      gate={gating.steps}
+                      open
+                      announce={announce}
+                      // Only the **Steps** entry point asks for this. Landing at the top of a
+                      // three-panel tab would make that action feel like it opened the wrong thing.
+                      autoFocusHeading={intent?.focusSteps === true}
+                      onDirtyChange={onStepsDirty}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
 
-                {current === 'cost' && gating.cost.readable ? (
-                  <form
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void cost.form.handleSubmit((values) =>
-                        saveScope('cost', costBody(values), 'Cost', () => cost.form.reset(values)),
-                      )(event);
-                    }}
-                    className="flex flex-col gap-4"
-                  >
-                    <FormProblemCount errors={cost.form.formState.errors} />
-                    {scopeError('cost')}
+              {current === 'cost' && gating.cost.readable ? (
+                <form
+                  noValidate
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void cost.form.handleSubmit((values) =>
+                      saveScope('cost', costBody(values), 'Cost', () => cost.form.reset(values)),
+                    )(event);
+                  }}
+                  className="flex flex-col gap-4"
+                >
+                  <FormProblemCount errors={cost.form.formState.errors} />
+                  {scopeError('cost')}
 
-                    <FieldGateProvider gate={gating.cost}>
-                      {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
-                      {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
-                      <ScopeSaveBar
-                        gate={gating.cost}
-                        dirty={cost.isDirty}
-                        pending={update.isPending}
-                        saved={savedScope === 'cost'}
-                        label="Save cost"
-                      />
-                    </FieldGateProvider>
-                  </form>
-                ) : null}
-              </FieldGridContainer>
-            )}
-          </Tabs>
+                  <FieldGateProvider gate={gating.cost}>
+                    {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
+                    {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
+                    <ScopeSaveBar
+                      gate={gating.cost}
+                      dirty={cost.isDirty}
+                      pending={savePending}
+                      saved={savedScope === 'cost'}
+                      label="Save cost"
+                    />
+                  </FieldGateProvider>
+                </form>
+              ) : null}
+            </FieldGridContainer>
+          )}
+        </Tabs>
 
-          {/* The dialog's own footer, outside the pane: Close belongs to the editor, not to whichever
+        {/* The dialog's own footer, outside the pane: Close belongs to the editor, not to whichever
             section happens to be open. It stays put while the pane scrolls, which is the point of
             `body="flush"` — previously it sat below the panel and scrolled away with it. */}
-          <div className="border-border bg-muted flex shrink-0 justify-end border-t px-6 py-3">
-            <Button type="button" variant="outline" onClick={requestClose}>
-              Close
-            </Button>
-          </div>
+        <div className="border-border bg-muted flex shrink-0 justify-end border-t px-6 py-3">
+          <Button type="button" variant="outline" onClick={requestClose}>
+            Close
+          </Button>
         </div>
+      </div>
 
-        {/* Discard confirmation (spec US-5). The blast radius is why it matters here and not in the
+      {/* Discard confirmation (spec US-5). The blast radius is why it matters here and not in the
           dialogs this replaces: up to three scopes can be independently dirty at once, so one
           Escape reflex now risks three forms' worth of work instead of one. */}
-        <ConfirmDialog
-          open={confirmingClose}
-          onClose={() => setConfirmingClose(false)}
-          onConfirm={() => {
-            setConfirmingClose(false);
-            onClose();
-          }}
-          title="Discard unsaved changes?"
-          // The first sentence comes from the shared builder so this dialog and the navigation
-          // guard cannot drift about what is dirty (ADR-0065's one-implementation argument). The
-          // action clause stays here, because only this call site knows which action it confirms.
-          description={`${describeUnsavedWork([unsavedReport])} Closing will discard them.`}
-          confirmLabel="Discard"
-          cancelLabel="Keep editing"
-        />
-      </>
-    </Dialog>
+      <ConfirmDialog
+        open={confirmingClose}
+        onClose={() => setConfirmingClose(false)}
+        onConfirm={() => {
+          setConfirmingClose(false);
+          onClose();
+        }}
+        title="Discard unsaved changes?"
+        // The first sentence comes from the shared builder so this dialog and the navigation
+        // guard cannot drift about what is dirty (ADR-0065's one-implementation argument). The
+        // action clause stays here, because only this call site knows which action it confirms.
+        description={`${describeUnsavedWork([unsavedReport])} Closing will discard them.`}
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+      />
+    </>
   );
 }
 

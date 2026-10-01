@@ -20,13 +20,11 @@ import { fieldByLabel, nextTask, startProbe, typeNow, type Probe } from '@/test/
  * before the next render is discarded when that render is a task away.
  * `src/test/typed-input-window.ts` says why no other suite here can see that.
  *
- * **Two hosts are red and two are not, and the difference is the finding.**
+ * **Two hosts were red and two never were, and the difference is the finding.**
  *
- * - The editor was `it.fails` and still is: it asserts the property the epic delivers (typed text
- *   survives), FAILS on this tree, and `it.fails` keeps the suite green while recording it. M3b turns
- *   it into a plain `it`; vitest reports an `it.fails` that starts passing as a failure, so the
- *   flip cannot be forgotten. New activity was flipped by M2 (its form is born per opening) and is
- *   a plain `it`.
+ * - The editor and New activity were `it.fails`: each asserts the property the epic delivers (typed
+ *   text survives) and FAILED on the tree that had a seed effect. New activity was flipped by M2 and
+ *   the editor by M3b, once each form was born per opening, with its values, rather than reset.
  * - The Progress and Resources panels are plain `it` and PASS. A panel mounted by a click re-renders
  *   itself again inside the click's own microtask flush (render, effect, render — measured with a
  *   render log), so the field is registered again before any later task can type. The spec's
@@ -156,7 +154,7 @@ function clickTab(name: string): void {
 }
 
 describe('the typed-input window — editor (Name)', () => {
-  it.fails('keeps text typed in the task the editor opens', async () => {
+  it('keeps text typed in the task the editor opens', async () => {
     probe.renderNow(editor(false));
     probe.renderNow(editor(true));
     const name = fieldByLabel(probe.container, 'Name');
@@ -259,7 +257,7 @@ function ClickHost({ kind }: { kind: 'editor' | 'create' }): React.ReactElement 
 }
 
 describe('the typed-input window — opened by a click', () => {
-  // The editor stays `it.fails` until M3b; New activity is per-opening since M2 and is plain `it`.
+  // Both hosts build their forms per opening (M2, M3b), so both are plain `it`.
   const keepsTextTypedAtOnce = async (kind: 'editor' | 'create'): Promise<void> => {
     probe.renderNow(<ClickHost kind={kind} />);
     await nextTask();
@@ -275,6 +273,6 @@ describe('the typed-input window — opened by a click', () => {
     expect(fieldByLabel(probe.container, 'Name')?.value).toBe('Typed at once');
   };
 
-  it.fails('keeps text typed in the task the editor opens', () => keepsTextTypedAtOnce('editor'));
+  it('keeps text typed in the task the editor opens', () => keepsTextTypedAtOnce('editor'));
   it('keeps text typed in the task New activity opens', () => keepsTextTypedAtOnce('create'));
 });

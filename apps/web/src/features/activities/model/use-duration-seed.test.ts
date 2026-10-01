@@ -34,7 +34,6 @@ describe('useDurationSeed', () => {
     const { rerender } = renderHook(
       ({ hoursPerDay }: { hoursPerDay: number | undefined }) => {
         useDurationSeed({
-          open: true,
           hoursPerDay,
           activity: ACTIVITY,
           readDuration: () => field.value,
@@ -55,7 +54,6 @@ describe('useDurationSeed', () => {
     const { rerender } = renderHook(
       ({ hoursPerDay }: { hoursPerDay: number | undefined }) => {
         useDurationSeed({
-          open: true,
           hoursPerDay,
           activity: ACTIVITY,
           readDuration: () => field.value,
@@ -80,7 +78,6 @@ describe('useDurationSeed', () => {
     const { rerender } = renderHook(
       ({ hoursPerDay }: { hoursPerDay: number | undefined }) => {
         useDurationSeed({
-          open: true,
           hoursPerDay,
           activity: ACTIVITY,
           readDuration: () => field.value,
@@ -98,27 +95,26 @@ describe('useDurationSeed', () => {
     expect(setDuration).not.toHaveBeenCalled();
   });
 
-  it('re-arms when the dialog closes and opens again', () => {
+  it('seeds again for a fresh opening, which is a fresh mount', () => {
+    // The hook has no `open` any more: its host is mounted per opening, so "re-arming" is simply a
+    // new instance starting from clean refs.
     const setDuration = vi.fn();
     const field = { value: '0' };
-    const { rerender } = renderHook(
-      ({ open, hoursPerDay }: { open: boolean; hoursPerDay: number | undefined }) => {
+    const opening = () =>
+      renderHook(() => {
         useDurationSeed({
-          open,
-          hoursPerDay,
+          hoursPerDay: EIGHT,
           activity: ACTIVITY,
           readDuration: () => field.value,
           setDuration,
         });
-      },
-      { initialProps: { open: true, hoursPerDay: EIGHT } },
-    );
+      });
+    const first = opening();
     expect(setDuration).toHaveBeenCalledTimes(1);
 
-    rerender({ open: false, hoursPerDay: EIGHT });
+    first.unmount();
     setDuration.mockClear();
-    // A fresh opening starts a fresh baseline, so the next subject seeds normally.
-    rerender({ open: true, hoursPerDay: EIGHT });
+    opening();
     expect(setDuration).toHaveBeenCalledExactlyOnceWith('4h');
   });
 });

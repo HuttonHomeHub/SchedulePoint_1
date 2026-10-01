@@ -68,7 +68,6 @@ function renderProgress() {
         activity={ACTIVITY}
         hoursPerDay={8}
         gate={OPEN_GATE}
-        open
         announce={vi.fn()}
       />
     </QueryClientProvider>,
@@ -82,7 +81,6 @@ function renderMeasure(onSave = vi.fn()) {
         orgSlug="acme"
         activity={ACTIVITY}
         gate={OPEN_GATE}
-        open
         onSave={onSave}
         pending={false}
       />

@@ -35,20 +35,19 @@ import { seedDurationText } from './duration-field';
  * cannot lose their value, whatever order the two events arrive in — and one who typed exactly the
  * seed loses nothing either, because the two are then the same string.
  *
- * It fires at most once per opening — pinned by a ref rather than by comparing factors, because the
+ * It fires at most once per opening — and its host is mounted per opening, so the refs below start
+ * clean each time — pinned by a ref rather than by comparing factors, because the
  * factor legitimately changes again when the planner picks a different calendar, and re-seeding
  * *then* would discard a duration they had just typed.
  */
 export type ReadDuration = () => string;
 
 export function useDurationSeed({
-  open,
   hoursPerDay,
   activity,
   readDuration,
   setDuration,
 }: {
-  open: boolean;
   hoursPerDay: number | undefined;
   activity: { durationDays: number; durationMinutes: number } | undefined;
   /**
@@ -62,11 +61,6 @@ export function useDurationSeed({
   const seededAtOpen = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      resolved.current = false;
-      seededAtOpen.current = null;
-      return;
-    }
     // What the field held when this opening began — the baseline the "has it been typed in?"
     // question is asked against. Recorded on the first pass, before the factor can have arrived.
     seededAtOpen.current ??= readDuration();
@@ -78,6 +72,6 @@ export function useDurationSeed({
     // `readDuration`/`setDuration`/`activity` are read at the moment the factor lands; adding them
     // here would re-run this on every keystroke and every list refetch, which is the opposite of
     // "once". The values they return are read live inside, so nothing here goes stale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per open, reads live (see above)
-  }, [open, hoursPerDay]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per opening, reads live (see above)
+  }, [hoursPerDay]);
 }

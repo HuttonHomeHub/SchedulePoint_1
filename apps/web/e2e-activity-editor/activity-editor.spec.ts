@@ -562,3 +562,62 @@ test('J5 — New activity opens clean after a failed submit was discarded', asyn
   await dialog.getByRole('button', { name: 'Create activity' }).click();
   await expect(page.getByRole('cell', { name: 'Pour slab', exact: true })).toBeVisible();
 });
+
+/**
+ * **The editor is built per opening** (`docs/specs/activity-editor-seeding/`, journeys J1 and J3;
+ * M3b). Written, not run, by their author — the orchestrator runs them centrally
+ * (`scripts/e2e-local.sh web:activity-editor`).
+ *
+ * J1 is a regression guard: `fill` lands in the opening's first task and the value must still be
+ * there to save. The jsdom window probe is the proof; M0 could not show a driver reaching it.
+ */
+test('J1 — a name typed the moment the editor opens is the name that saves', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Set out');
+
+  await openEditor(page, 'Set out', 'Edit');
+  const editor = activityEditor(page);
+  // No wait between the opening and the keystroke: that gap is the whole point.
+  await editor.getByLabel('Name').fill('Set out grid');
+  await expect(editor.getByLabel('Name')).toHaveValue('Set out grid');
+  await editor.getByRole('button', { name: 'Save general' }).click();
+  await expect(editor.getByText('Saved.').first()).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('cell', { name: 'Set out grid', exact: true })).toBeVisible();
+});
+
+test('J3 — "Saved." belongs to the opening that saved, not the next one', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Blind');
+
+  await openEditor(page, 'Excavate', 'Edit');
+  await activityEditor(page).getByLabel('Name').fill('Excavate basement');
+  await activityEditor(page).getByRole('button', { name: 'Save general' }).click();
+  // The control: the confirmation appears in the opening that made it.
+  await expect(activityEditor(page).getByText('Saved.').first()).toBeVisible();
+  await activityEditor(page).getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+
+  // Another activity, and then the same one: neither opening inherits the message.
+  await openEditor(page, 'Blind', 'Edit');
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeVisible();
+  await expect(activityEditor(page).getByText('Saved.')).toHaveCount(0);
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+  await activityEditor(page).getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+
+  await openEditor(page, 'Excavate basement', 'Edit');
+  await expect(activityEditor(page).getByText('Saved.')).toHaveCount(0);
+});

@@ -141,17 +141,6 @@ const SUBMIT_FIELD_ORDER = [
 const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
 
 /**
- * `useScopeForm` still takes `open` until the editor's own per-opening rebuild (spec M3b) removes
- * it. This form is mounted only while the dialog is open, so the honest value is a constant `true`:
- * the hook's seed-on-open effect then runs once, at mount, against the seed the form was just born
- * with — a no-op reset, kept only until the parameter goes.
- *
- * TODO(M3b): delete this constant and the `open` parameter of `useScopeForm` and `useDurationSeed`
- * (ADR-0169; docs/specs/activity-editor-seeding/implementation-plan.md, T3b.1).
- */
-const ALWAYS_OPEN = true;
-
-/**
  * Validate ONE scope form, returning whether it passed — through that form's own `handleSubmit`.
  *
  * **`handleSubmit`, not `trigger`, and that is a behaviour fix rather than a style choice.**
@@ -370,24 +359,16 @@ function ActivityCreateForm({
       ...(initialParentId == null ? {} : { parentId: initialParentId }),
     }),
     undefined,
-    ALWAYS_OPEN,
     NO_SCOPE_FOCUS,
   );
   const scheduling = useScopeForm(
     activitySchedulingSchema,
     seedScheduling,
     undefined,
-    ALWAYS_OPEN,
     NO_SCOPE_FOCUS,
   );
-  const measure = useScopeForm(
-    activityMeasureSchema,
-    seedMeasure,
-    undefined,
-    ALWAYS_OPEN,
-    NO_SCOPE_FOCUS,
-  );
-  const cost = useScopeForm(activityCostSchema, seedCost, undefined, ALWAYS_OPEN, NO_SCOPE_FOCUS);
+  const measure = useScopeForm(activityMeasureSchema, seedMeasure, undefined, NO_SCOPE_FOCUS);
+  const cost = useScopeForm(activityCostSchema, seedCost, undefined, NO_SCOPE_FOCUS);
 
   /**
    * Creation had **no unsaved-work guard at all** — around twenty fields across four scope forms,
@@ -487,7 +468,6 @@ function ActivityCreateForm({
   );
   const readDuration = useCallback(() => generalGetValues('duration'), [generalGetValues]);
   useDurationSeed({
-    open: ALWAYS_OPEN,
     hoursPerDay,
     // No stored row to re-seed from — this is a create.
     activity: undefined,
