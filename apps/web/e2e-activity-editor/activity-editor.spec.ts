@@ -347,3 +347,89 @@ test('a resource assigned from the Resources tab persists', async ({ page }) => 
     editor.getByRole('listitem').getByRole('spinbutton', { name: 'Budgeted units' }),
   ).toHaveValue('8');
 });
+
+/**
+ * **State that carries between openings, and a draft that dies on a tab switch**
+ * (`docs/specs/activity-editor-seeding/`, journeys J2 and J4).
+ *
+ * Both are marked `test.fail()` at M0: they assert what the epic delivers, so they fail on this
+ * tree, and `test.fail()` keeps the suite green while recording that. Playwright reports a
+ * `test.fail()` that starts passing as a FAILURE, so the milestone that fixes each (M3a for J2, M4
+ * for J4) removes the marker rather than finding out in review. Neither has been run by the author
+ * of M0 — the orchestrator runs them centrally (`scripts/e2e-local.sh web:activity-editor`).
+ */
+test('J2 — a discarded draft leaves nothing armed for the next opening', async ({
+  page,
+}, testInfo) => {
+  test.fail();
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Backfill');
+
+  await openEditor(page, 'Backfill', 'Edit');
+  await activityEditor(page).getByLabel('Name').fill('Backfill and compact');
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('alertdialog', { name: 'Discard unsaved changes?' })
+    .getByRole('button', { name: 'Discard' })
+    .click();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+
+  // Reopen the SAME activity. Today the guard that watches for a changed subject ran while the
+  // editor was closed and armed a confirmation nobody could see; it comes up with the editor, in
+  // the same top layer, beneath it. The screenshot is the evidence of the stacking, which jsdom
+  // cannot show.
+  await openEditor(page, 'Backfill', 'Edit');
+  await testInfo.attach('j2-reopened-editor', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await expect(page.getByRole('alertdialog')).toBeHidden();
+
+  // And a dirty Escape on the reopened editor shows a confirmation the reader can operate.
+  await activityEditor(page).getByLabel('Name').fill('Backfill again');
+  await page.keyboard.press('Escape');
+  const confirm = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+  await expect(page.getByRole('cell', { name: 'Backfill', exact: true })).toBeVisible();
+});
+
+test('J4 — a Progress draft and a weighted step survive a visit to another tab', async ({
+  page,
+}) => {
+  test.fail();
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Fit windows');
+
+  await openEditor(page, 'Fit windows', 'Progress');
+  const editor = activityEditor(page);
+  await editor.getByLabel('Percent complete').fill('55');
+  await editor.getByRole('tab', { name: /^General/ }).click();
+  await editor.getByRole('tab', { name: /^Progress/ }).click();
+  await expect(editor.getByLabel('Percent complete')).toHaveValue('55');
+  await editor.getByRole('button', { name: 'Save progress' }).click();
+  await expect(editor.getByText('Saved.').first()).toBeVisible();
+
+  // Closed and reopened: the value is the saved one, not a leftover draft.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+  await openEditor(page, 'Fit windows', 'Progress');
+  await expect(editor.getByLabel('Percent complete')).toHaveValue('55');
+
+  await editor.getByRole('button', { name: 'Add step' }).click();
+  await editor.getByLabel('Step 1 name').fill('Frames in');
+  await editor.getByRole('tab', { name: /^General/ }).click();
+  await editor.getByRole('tab', { name: /^Progress/ }).click();
+  await expect(editor.getByLabel('Step 1 name')).toHaveValue('Frames in');
+  await editor.getByRole('button', { name: 'Save steps' }).click();
+  await expect(editor.getByLabel('Step 1 name')).toHaveValue('Frames in');
+});
