@@ -1,5 +1,12 @@
 import { Prisma } from '@prisma/client';
 
+/** `alias` is spliced into SQL as raw text, so it must be a literal the caller wrote, never input. */
+function assertBareIdentifier(fn: string, alias: string): void {
+  if (!/^[a-z_][a-z0-9_]*$/.test(alias)) {
+    throw new Error(`${fn}: "${alias}" is not a bare SQL identifier.`);
+  }
+}
+
 /**
  * The **placed finish** — where an activity's bar is DRAWN ends (ADR-0148: Visual is the plan) — as
  * ONE SQL expression, so every reader that states "the project finishes on…" measures the same thing
@@ -16,9 +23,7 @@ import { Prisma } from '@prisma/client';
  */
 export function placedFinishSql(alias?: string): Prisma.Sql {
   if (alias === undefined) return Prisma.raw('COALESCE(visual_effective_finish, early_finish)');
-  if (!/^[a-z_][a-z0-9_]*$/.test(alias)) {
-    throw new Error(`placedFinishSql: "${alias}" is not a bare SQL identifier.`);
-  }
+  assertBareIdentifier('placedFinishSql', alias);
   return Prisma.raw(`COALESCE(${alias}.visual_effective_finish, ${alias}.early_finish)`);
 }
 
@@ -47,10 +52,13 @@ export function placedProjectFinishOf(
  * (`docs/specs/logic-aware-levelling/` C7, `docs/TECH_DEBT.md` #427).
  *
  * The caller restricts the rows to non-LOE, non-summary activities — the engine's roll-up skips both
- * — see {@link LEVELLED_FINISH_EXCLUDED_TYPES}. Same alias rule as {@link placedFinishSql}.
+ * — see {@link LEVELLED_FINISH_EXCLUDED_TYPES}. Same alias rule as {@link placedFinishSql}: `alias` is
+ * spliced as raw SQL, so it must be a string literal at the call site and is refused here unless it is
+ * a bare lower-case identifier.
  */
 export function leveledFinishSql(alias?: string): Prisma.Sql {
   if (alias === undefined) return Prisma.sql`COALESCE(leveled_finish, ${placedFinishSql()})`;
+  assertBareIdentifier('leveledFinishSql', alias);
   return Prisma.sql`COALESCE(${Prisma.raw(`${alias}.leveled_finish`)}, ${placedFinishSql(alias)})`;
 }
 

@@ -116,6 +116,25 @@ export interface LevellingApplication {
 
 const MINUTES_PER_DAY = 1440;
 
+/**
+ * How many days `targetDateFor` may step before it gives up: about ten years. Every real calendar answers
+ * in a step or two (a shutdown is one jump), so this is not a limit anything reaches. It exists because
+ * the loops below are unbounded by argument rather than by construction, and a calendar they cannot
+ * satisfy would otherwise hold the request thread for ever, on a route that is not cheap already.
+ */
+const MAX_TARGET_DATE_STEPS = 3660;
+
+/** The next step count, or a clear error once a date search has gone on past any plausible answer. */
+function stepOrThrow(steps: number, levelled: number): number {
+  if (steps >= MAX_TARGET_DATE_STEPS) {
+    throw new Error(
+      `targetDateFor: no working date found within ${MAX_TARGET_DATE_STEPS} steps of ${dateOf(levelled)}; ` +
+        'the calendar does not yield a placement.',
+    );
+  }
+  return steps + 1;
+}
+
 /** The calendar day (`YYYY-MM-DD`) an absolute instant falls on. */
 const dateOf = (abs: number): string => absMinutesToInstant(abs).slice(0, 10);
 
@@ -123,11 +142,12 @@ const dateOf = (abs: number): string => absMinutesToInstant(abs).slice(0, 10);
  * The earliest working date on `cal` whose placement instant is at or after `levelled`, and whether
  * that placement is later than `levelled` (the bar starts part of a day after the resource frees up).
  *
- * Terminates without a bound: every pass moves to a strictly later day, and the placement of a day
- * grows without limit, so some day is at or after `levelled`; a non-working day jumps straight to the
- * next working one, so a long shutdown costs one step, not one per day.
+ * Terminates by argument: every pass moves to a strictly later day, and the placement of a day grows
+ * without limit, so some day is at or after `levelled`; a non-working day jumps straight to the next
+ * working one, so a long shutdown costs one step, not one per day. {@link MAX_TARGET_DATE_STEPS} backs
+ * the argument with a bound and throws a clear error rather than spinning. Exported for its unit test.
  */
-function targetDateFor(
+export function targetDateFor(
   cal: WorkingTimeCalendar,
   type: EngineActivity['type'],
   levelled: number,
@@ -141,15 +161,22 @@ function targetDateFor(
     const shifted = (date: string, days: number): string =>
       dateOf(instantToAbsMinutes(date) + days * MINUTES_PER_DAY);
     let date = dateOf(levelled);
-    while (placementOf(shifted(date, -1)) >= levelled) date = shifted(date, -1);
+    let steps = 0;
+    while (placementOf(shifted(date, -1)) >= levelled) {
+      date = shifted(date, -1);
+      steps = stepOrThrow(steps, levelled);
+    }
     for (;;) {
       const placed = placementOf(date);
       if (placed >= levelled) return { date, rounded: placed > levelled };
       date = shifted(date, 1);
+      steps = stepOrThrow(steps, levelled);
     }
   }
   let midnight = instantToAbsMinutes(dateOf(levelled));
+  let steps = 0;
   for (;;) {
+    steps = stepOrThrow(steps, levelled);
     const date = dateOf(midnight);
     const placed = startDateInstant(cal, date, type);
     const placedDate = dateOf(placed);

@@ -57,7 +57,7 @@ describe('leveledFinishSql', () => {
   });
 
   it('refuses an alias that is not a bare identifier', () => {
-    expect(() => leveledFinishSql('act; DROP TABLE plans')).toThrow();
+    expect(() => leveledFinishSql('act; DROP TABLE plans')).toThrow(/leveledFinishSql/);
   });
 
   it('excludes level-of-effort and summary activities, as literals', () => {

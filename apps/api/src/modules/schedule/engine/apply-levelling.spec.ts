@@ -1,7 +1,11 @@
 import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { planLevellingApplication, type LevellingApplicationInput } from './apply-levelling';
+import {
+  planLevellingApplication,
+  targetDateFor,
+  type LevellingApplicationInput,
+} from './apply-levelling';
 import { computeSchedule, type ComputeOptions } from './compute';
 import { levelSchedule } from './level';
 import type {
@@ -12,8 +16,10 @@ import type {
   EngineResult,
 } from './types';
 import {
+  absMinutesToInstant,
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
+  instantToAbsMinutes,
   type WorkingTimeCalendar,
 } from './working-time-calendar';
 
@@ -960,4 +966,25 @@ describe('planLevellingApplication — P19: every candidate is returned', () => 
     expect(new Set(plan.rows.map((r) => r.visualStart))).toEqual(new Set(['2026-01-06']));
     expect(plan.remainingAfterApply).toBe(0);
   }, 60_000);
+});
+
+describe('targetDateFor: a calendar that never yields a placement is refused, not waited on', () => {
+  // A calendar whose every day places on the day BEFORE it: the search steps backwards for ever, which is
+  // what a real calendar cannot do and the unbounded loops would not notice.
+  const neverSatisfied: WorkingTimeCalendar = {
+    addWorkingTime: (from) => absMinutesToInstant(instantToAbsMinutes(from) - 1440 + 1),
+    workingTimeBetween: () => 0,
+  };
+  const levelled = instantToAbsMinutes('2026-01-10');
+
+  it('throws a clear error for a task', () => {
+    expect(() => targetDateFor(neverSatisfied, 'TASK', levelled)).toThrow(/no working date found/);
+  });
+
+  it('answers an ordinary calendar in a step or two', () => {
+    expect(targetDateFor(allMinutesWorkCalendar, 'TASK', levelled)).toEqual({
+      date: '2026-01-10',
+      rounded: false,
+    });
+  });
 });
