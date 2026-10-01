@@ -377,6 +377,12 @@ test('J2 — a discarded draft leaves nothing armed for the next opening', async
     .getByRole('button', { name: 'Discard' })
     .click();
   await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+  // Focus returns to the opener. `openEditor` opens through the row's "Actions for …" menu and
+  // clicks a menu item, so the item the dialog saw as focused at open is UNMOUNTED by the time it
+  // closes — the trigger button is the only honest place for focus to land, and this asserts it.
+  await expect(page.getByRole('button', { name: 'Actions for Backfill' })).toBeFocused({
+    timeout: 5000,
+  });
 
   // Reopen the SAME activity. Today the guard that watches for a changed subject ran while the
   // editor was closed and armed a confirmation nobody could see; it comes up with the editor, in
@@ -397,6 +403,82 @@ test('J2 — a discarded draft leaves nothing armed for the next opening', async
   await confirm.getByRole('button', { name: 'Discard' }).click();
   await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
   await expect(page.getByRole('cell', { name: 'Backfill', exact: true })).toBeVisible();
+});
+
+test('a clean Close returns focus to the control that opened the editor', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Compact fill');
+
+  await openEditor(page, 'Compact fill', 'Edit');
+  await activityEditor(page).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+  // The opener is a menu item whose menu has unmounted, so the row's "Actions for …" trigger is the
+  // expected landing place.
+  await expect(page.getByRole('button', { name: 'Actions for Compact fill' })).toBeFocused({
+    timeout: 5000,
+  });
+});
+
+/**
+ * **Chrome's close watcher** (descriptive, not prescriptive). A second Escape within a short window
+ * can be delivered as a `close` without a preceding `cancel`, bypassing `confirmBeforeClose`. This
+ * drives Escape, Escape (dismisses the confirmation), Escape and reports which of the two outcomes
+ * the product reaches. Both are acceptable; a third — editor gone with a confirmation armed for the
+ * next opening, or dirty work lost with no prompt — is the defect.
+ */
+test('Escape, Escape, Escape on a dirty editor ends in a consistent state', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Screed');
+
+  await openEditor(page, 'Screed', 'Edit');
+  const editor = activityEditor(page);
+  const tablist = page.getByRole('tablist', { name: 'Activity sections' });
+  const confirm = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+  await editor.getByLabel('Name').fill('Screed and level');
+
+  await page.keyboard.press('Escape');
+  await expect(confirm, 'first Escape on a dirty editor must open the confirmation').toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(confirm, 'second Escape must dismiss only the confirmation').toBeHidden();
+  await expect(tablist, 'the editor must survive dismissing its confirmation').toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Let a late close event land before sampling.
+  await page.waitForTimeout(500);
+  const editorOpen = await tablist.isVisible();
+  const confirmShown = await confirm.isVisible();
+  if (editorOpen) {
+    expect(
+      confirmShown,
+      'OUTCOME A: editor still open after the third Escape, so the guard must be showing its confirmation',
+    ).toBe(true);
+    await confirm.getByRole('button', { name: 'Discard' }).click();
+    await expect(tablist).toBeHidden();
+  } else {
+    expect(
+      confirmShown,
+      'OUTCOME B: editor closed after the third Escape, so no confirmation may be left showing',
+    ).toBe(false);
+  }
+
+  // Either way, reopening must come up clean: nothing armed, and the dirty name not carried over.
+  await openEditor(page, 'Screed', 'Edit');
+  await expect(
+    page.getByRole('alertdialog'),
+    `nothing may be armed on reopen (outcome ${editorOpen ? 'A' : 'B'})`,
+  ).toBeHidden();
+  await expect(
+    editor.getByLabel('Name'),
+    `a dirty draft must not survive reopening (outcome ${editorOpen ? 'A' : 'B'})`,
+  ).toHaveValue('Screed');
 });
 
 test('J4 — a Progress draft and a weighted step survive a visit to another tab', async ({

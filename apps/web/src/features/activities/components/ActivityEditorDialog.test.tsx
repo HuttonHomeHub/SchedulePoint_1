@@ -463,6 +463,9 @@ describe('ActivityEditorDialog — review findings', () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText(/General has unsaved changes/)).toBeInTheDocument();
+    // The same escape-hatch wording as the create dialog and the navigation guard, so a planner
+    // is not offered "Cancel" here and "Keep editing" one dialog over.
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onClose).toHaveBeenCalled();
   });

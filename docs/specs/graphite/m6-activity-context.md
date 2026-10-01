@@ -237,6 +237,10 @@ Two claims corrected rather than quietly dropped, in the milestone that made the
 
 ## T3, as built
 
+> **Superseded by ADR-0169** (and the modal editor, ADR-0108 D7): the editor no longer re-seeds from a
+> changing host subject, so the `seededId` / "Switching to X" confirmation below no longer exists.
+> Kept as the record of what was built then.
+
 The editor holds a **`seededId`**, and renders the activity that id names rather than the one the
 host is currently offering. When they differ:
 

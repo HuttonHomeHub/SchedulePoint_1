@@ -141,7 +141,10 @@ export function ActivityEditorDialog({
   intent?: ActivityEditorIntent;
   /** Called after a scope saves, with the pre-save row and the server's post-save row (ADR-0048). */
   onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
-  /** The row being edited. This editor is edit-only; creation is {@link ActivityCreateDialog}. */
+  /**
+   * The row being edited. This editor is edit-only; creation is {@link ActivityCreateDialog}. A modal
+   * guarantees it cannot change while the editor is open (ADR-0108 D7, ADR-0169 D5).
+   */
   activity: ActivitySummary | undefined;
   /** Per-scope writability and its reason (`deriveActivityEditorGating`). */
   gating: ActivityEditorGating;
@@ -540,8 +543,9 @@ export function ActivityEditorDialog({
   return (
     <Dialog
       open={open}
-      // Escape and the backdrop route through the same guard as the Close button — an Escape
-      // reflex is exactly the case the confirmation exists for.
+      // Escape routes through the same guard as the Close button — an Escape reflex is exactly the
+      // case the confirmation exists for. (`Dialog` has no backdrop-click handler; the modal's
+      // backdrop is inert.)
       onClose={requestClose}
       confirmBeforeClose
       size="xl"
@@ -777,6 +781,7 @@ export function ActivityEditorDialog({
                   holds, rather than passed in by each host as the dialog required. */}
                 {current === 'resources' && activity ? (
                   <ActivityResourcesPanel
+                    key={activity.id}
                     orgSlug={orgSlug}
                     planId={planId}
                     activityId={activity.id}
@@ -914,6 +919,7 @@ export function ActivityEditorDialog({
           // action clause stays here, because only this call site knows which action it confirms.
           description={`${describeUnsavedWork([unsavedReport])} Closing will discard them.`}
           confirmLabel="Discard"
+          cancelLabel="Keep editing"
         />
       </>
     </Dialog>
