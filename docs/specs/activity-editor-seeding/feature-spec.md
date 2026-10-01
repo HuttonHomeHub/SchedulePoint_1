@@ -135,6 +135,10 @@ also fail as intended in real Chromium (J2, J4 — see §0.4). Under (b) each be
   (`activity-editor.spec.ts:180-212`) never reopens. **Removing the subject guard (NQ-1 (b)) removes
   F1's trigger on its own**, so M3a fixes F1 before M3b rebuilds anything; the per-opening session then
   makes it impossible by construction as well.
+  **Corrected at M3a:** removing the guard was necessary but not sufficient. The editor's own `close`
+  event, fired when the host closes the `<dialog>` after a Discard, re-entered `requestClose` with the
+  forms still dirty and armed the `'close'` confirmation. M3a also makes `requestClose` a no-op while
+  `open` is false (F1's unit stayed red until it did).
 - **F2 — "Saved." and a scope's save error survive into the next opening** (`:255-257`; cleared only at
   `:513`, `:546`, `:556`, `:560`; printed by `scope-save-bar.tsx:92-97`).
 - **F3 — New activity's hidden-field alert survives into the next opening** (`ActivityCreateDialog.tsx:454`,

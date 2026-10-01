@@ -20,9 +20,9 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  * does: `open` is "an intent exists", closing clears the intent, and the next click builds a fresh
  * one. The dialogs stay mounted across openings; that is the whole defect.
  *
- * **F1, F2 and F4 are `it.fails`, and that is a statement about today's code.** Each asserts the
+ * **F2 and F4 are `it.fails`, and that is a statement about today's code.** Each asserts the
  * behaviour the epic delivers, so each FAILS on this tree and `it.fails` keeps the suite green
- * while recording that. F3 was flipped to a plain `it` by M2. The milestone that fixes a finding (M3a F1, M3b F2, M4 F4)
+ * while recording that. F3 was flipped to a plain `it` by M2 and F1 by M3a. The milestone that fixes a finding (M3b F2, M4 F4)
  * turns its case into a plain `it` — vitest reports an `it.fails` that starts passing as a failure, so the
  * flip cannot be forgotten.
  *
@@ -130,7 +130,7 @@ describe('F1 — a discarded draft leaves a confirmation armed for the next open
     await waitFor(() => expect(screen.queryByRole('tablist')).not.toBeInTheDocument());
   }
 
-  it.fails('opens the same activity again with no confirmation armed', async () => {
+  it('opens the same activity again with no confirmation armed', async () => {
     mount(<EditorHost />);
     await dirtyThenDiscard();
     fireEvent.click(screen.getByRole('button', { name: 'open editor' }));

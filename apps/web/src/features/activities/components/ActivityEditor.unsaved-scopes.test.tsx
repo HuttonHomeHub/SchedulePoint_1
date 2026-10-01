@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityEditor, type ActivityEditorShell } from './ActivityEditorDialog';
+import { ActivityEditorDialog } from './ActivityEditorDialog';
 
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
@@ -47,14 +47,12 @@ function row(id: string, name: string): ActivitySummary {
 }
 
 const A = row('a1', 'Excavate');
-const passthrough: ActivityEditorShell = ({ children }) => <>{children}</>;
 
 function mount(onClose = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
-      <ActivityEditor
-        shell={passthrough}
+      <ActivityEditorDialog
         orgSlug="acme"
         planId="plan-1"
         open
@@ -97,7 +95,7 @@ describe('the editor reports every dirty scope, not only the three it used to', 
     // probing the rendered copy rather than assumed, after the first draft of this test asserted
     // the wrong scope name and failed against a component that was working correctly.
     fireEvent.change(await screen.findByLabelText(/% complete/i), { target: { value: '40' } });
-    fireEvent.click(screen.getByRole('button', { name: /^close/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     // The discriminator: pre-lift this closed silently, because the panel's dirtiness never
     // reached `dirtyScopeNames`.
@@ -111,7 +109,7 @@ describe('the editor reports every dirty scope, not only the three it used to', 
     mount();
     await openProgressTab();
     fireEvent.change(await screen.findByLabelText(/% complete/i), { target: { value: '40' } });
-    fireEvent.click(screen.getByRole('button', { name: /^close/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     // Naming it is the point: "something is unsaved" sends the reader hunting across four tabs.
     // And the name must be the SECTION HEADING on screen — this asserted 'Value measure' until the
@@ -125,7 +123,7 @@ describe('the editor reports every dirty scope, not only the three it used to', 
   it('still closes silently when nothing anywhere is dirty', async () => {
     const { onClose } = mount();
     await openProgressTab();
-    fireEvent.click(screen.getByRole('button', { name: /^close/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     // The other half of the guard: a report that is dirty about everything is as useless as one
     // that is dirty about nothing, and over-warning is what gets a guard deleted.

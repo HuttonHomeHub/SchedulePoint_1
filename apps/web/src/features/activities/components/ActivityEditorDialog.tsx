@@ -77,32 +77,7 @@ import { cn } from '@/lib/utils';
 type TabKey = ActivityEditorTab;
 
 /**
- * The chrome an {@link ActivityEditor} is rendered into.
- *
- * **Inverted rather than wrapped**, and the reason is one line in the primitive rather than a
- * preference. `Dialog`'s `confirmBeforeClose` does exactly one thing — it stops the native
- * `<dialog>`'s `cancel` tearing the element down before `onClose` has had a say — and hosts no
- * confirmation of its own. The confirmation is the editor's: `requestClose` reads
- * `dirtyScopeNames`, derived from three `useScopeForm` results that live inside the component. So
- * a `<Dialog>` wrapping a body cannot be handed the body's own `requestClose`.
- *
- * A `shell` prop resolves that without moving a single hook, and without threading the ~25 locals
- * the render body touches through a props object kept in step by hand.
- * {@link ActivityEditorDialog} returns a `<Dialog>`; the Graphite context drawer returns its
- * children. **The drawer's "must not inherit focus containment" therefore holds by construction**
- * — there is no `<Dialog>` in its tree to opt out of. See
- * `docs/specs/graphite/m6-activity-context.md`.
- */
-export type ActivityEditorShell = (chrome: {
-  /** Close, unless there is unsaved work — then ask. The whole reason this is a render prop. */
-  requestClose: () => void;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) => React.ReactElement;
-
-/**
- * The tabbed activity editor (ADR-0060). Unconditional since ADR-0089 retired
+ * The tabbed activity editor, **as a modal dialog** (ADR-0060, ADR-0101). Unconditional since ADR-0089 retired
  * `VITE_ACTIVITY_EDITOR_TABS`; there is no other edit surface.
  *
  * **Saves per write scope, not per dialog.** Each tab owns an independent form and its own Save,
@@ -136,18 +111,15 @@ export type ActivityEditorShell = (chrome: {
 /** The three Progress-tab scopes whose forms live inside the panels rather than the host. */
 type ProgressScopeKey = 'progress' | 'measure' | 'steps';
 
-export function ActivityEditor({
-  shell,
+export function ActivityEditorDialog({
   orgSlug,
   planId,
   open,
   onClose,
-  tabRailAllowed = true,
   onSaved,
   gating,
   intent,
-  activity: incomingActivity,
-  onSubjectHeld,
+  activity,
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
@@ -158,25 +130,10 @@ export function ActivityEditor({
   logic,
   notesSlot,
 }: {
-  /**
-   * The chrome this editor is rendered into. `ActivityEditorDialog` returns a `<Dialog>`;
-   * the drawer subject returns a fragment. Inverted rather than a wrapper because the
-   * shell needs `requestClose`, which is derived from three `useScopeForm` results that
-   * live in here — see `docs/specs/graphite/m6-activity-context.md`.
-   */
-  shell: ActivityEditorShell;
   orgSlug: string;
   planId: string;
   open: boolean;
   onClose: () => void;
-  /**
-   * Whether this host has room for the **vertical** tab rail (~208 px) beside the pane.
-   *
-   * Defaults to `true`, so every existing caller keeps the viewport-only rule it had. The drawer
-   * passes `false`: it is 224–420 px wide at a viewport where the media query is always true, so
-   * without this the rail rendered and left about 92 px for the content it labels.
-   */
-  tabRailAllowed?: boolean;
   /**
    * Why the editor was opened (ADR-0060 §7): which tab to land on, and whether to move focus to the
    * Weighted-steps panel. Omitted ⇒ General, the plain **Edit** behaviour.
@@ -232,14 +189,6 @@ export function ActivityEditor({
    * Absent ⇒ no Notes tab, which is what a host without the flag wants.
    */
   notesSlot?: React.ReactNode;
-  /**
-   * The host's chance to put its selection back when a planner chooses **Keep editing** on a
-   * subject change (Graphite M6-T3). Called with the id the editor is holding.
-   *
-   * Optional, and absent is honest rather than lax: `ActivityEditorDialog` is modal, so its subject
-   * cannot change while it is open and there is nothing for it to restore.
-   */
-  onSubjectHeld?: (activityId: string) => void;
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
@@ -255,33 +204,8 @@ export function ActivityEditor({
   const [saveError, setSaveError] = useState<{ scope: TabKey; message: string } | null>(null);
   /** The scope that last saved, cleared on its next edit — the visible half of the save signal. */
   const [savedScope, setSavedScope] = useState<TabKey | null>(null);
-  /**
-   * **What the discard confirmation is currently guarding**, or `null`.
-   *
-   * One state rather than two booleans: a close and a subject change can both be pending in
-   * principle, and two independent flags would let two confirmations render at once — each
-   * describing work the other is about to discard.
-   */
-  const [confirming, setConfirming] = useState<'close' | 'subject' | null>(null);
-
-  /**
-   * **The subject the forms are seeded from — which is not always the one the host is offering.**
-   *
-   * `useScopeForm` re-seeds whenever `activity?.id` changes, so a new subject silently replaces
-   * every unsaved edit in all three scopes. In a modal that could not happen: the dialog is the
-   * only thing on screen, so the subject cannot change while it is open. **A drawer sits beside a
-   * live canvas**, and selecting another bar is one click — so the guard that a modal got for free
-   * has to be built (Graphite M6-T3).
-   *
-   * Held as an **id** and re-derived, never as a snapshot of the row: the editor reads `version`
-   * from the live row at submit time, which is what makes a two-scope session work at all
-   * (see the docblock above). A held object would go stale on the first save.
-   */
-  const [seededId, setSeededId] = useState(incomingActivity?.id);
-  const activity =
-    incomingActivity?.id === seededId
-      ? incomingActivity
-      : planActivities.find((a) => a.id === seededId);
+  /** Whether the discard confirmation (spec US-5) is showing. */
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
   // the same editor as **Edit**, on the tab that answers the action. The hosts keep this dialog
@@ -393,11 +317,6 @@ export function ActivityEditor({
   );
 
   /**
-   * The scopes with unsaved edits, named for the discard confirmation. Progress's three panels own
-   * their own forms and their own saves, so they are not represented here — each is one endpoint
-   * away from durable, and none of them can be lost by a stray Escape without the others.
-   */
-  /**
    * **Every scope this editor can hold work in, with whether it could still be saved.**
    *
    * Six, not three. The `cost` condition on `gating.cost.readable` is preserved exactly: a role that
@@ -466,7 +385,7 @@ export function ActivityEditor({
   );
 
   /**
-   * Register with the shell so a navigation, a reload or a closed tab is guarded too — not just
+   * Register with the app shell so a navigation, a reload or a closed tab is guarded too — not just
    * this dialog's own Close (unsaved-work guard, M2-T4). `null` when closed, or a stale form from a
    * dismissed editor would block navigation forever.
    */
@@ -475,29 +394,17 @@ export function ActivityEditor({
   const dirtyScopeNames = unsavedReport.scopes.map((scope) => scope.label);
 
   /**
-   * **Adopt a new subject, or hold the old one and ask** (Graphite M6-T3).
+   * Close, unless there is work to lose — then ask (spec US-5).
    *
-   * Adjusted during render, not in an effect — the same reason `seenIntent` above gives: an effect
-   * would paint the new subject's editor for a frame and then take it back, and setting state from
-   * one is the cascading-render pattern the lint rule rejects.
-   *
-   * With nothing dirty this is invisible and costs one extra render on a selection change. With
-   * work outstanding the editor **keeps rendering the old subject** while the confirmation names
-   * both, so a planner is never shown one activity's heading over another's draft.
+   * **A request while closed is not a request.** The host mounts this editor and toggles `open`, so
+   * after a Discard the forms are still dirty when the host closes the `<dialog>` — and that
+   * element's own `close` event comes straight back here. Treating it as a request armed the
+   * confirmation for the NEXT opening (F1, `docs/specs/activity-editor-seeding`).
    */
-  if (incomingActivity?.id !== seededId) {
-    if (dirtyScopeNames.length === 0) {
-      setSeededId(incomingActivity?.id);
-      if (confirming === 'subject') setConfirming(null);
-    } else if (confirming !== 'subject') {
-      setConfirming('subject');
-    }
-  }
-
-  /** Close, unless there is work to lose — then ask (spec US-5). */
   const requestClose = (): void => {
+    if (!open) return;
     if (dirtyScopeNames.length > 0) {
-      setConfirming('close');
+      setConfirmingClose(true);
       return;
     }
     onClose();
@@ -628,21 +535,22 @@ export function ActivityEditor({
   // grids into unusable stubs. Below `md` the same list becomes the horizontal strip it was — a
   // structural switch, which is what `useMediaQuery` is for rather than a CSS utility. The fallback
   // is the rail, so jsdom and a server render both get the desktop shape.
-  //
-  // **The viewport is not always the right question**, which is what `tabRailAllowed` is for: a host
-  // sized by a splitter rather than by the window can be narrow at a wide viewport, and the drawer
-  // always is (224–420 against the rail's 208). A host that says no is believed; a host that says
-  // nothing gets the viewport answer it always had.
   const viewportFitsRail = useMediaQuery('(min-width: 768px)', true);
-  const railFits = tabRailAllowed && viewportFitsRail;
 
-  return shell({
-    requestClose,
-    title: activity ? activity.name : 'Edit activity',
-    ...(activity
-      ? { description: activitySubtitle(activity, ACTIVITY_TYPE_LABELS[activity.type]) }
-      : {}),
-    children: (
+  return (
+    <Dialog
+      open={open}
+      // Escape and the backdrop route through the same guard as the Close button — an Escape
+      // reflex is exactly the case the confirmation exists for.
+      onClose={requestClose}
+      confirmBeforeClose
+      size="xl"
+      body="flush"
+      title={activity ? activity.name : 'Edit activity'}
+      {...(activity
+        ? { description: activitySubtitle(activity, ACTIVITY_TYPE_LABELS[activity.type]) }
+        : {})}
+    >
       <>
         {facts.length > 0 ? (
           <ContextStrip
@@ -670,7 +578,7 @@ export function ActivityEditor({
             tabs={tabs}
             active={active}
             onChange={setActive}
-            orientation={railFits ? 'vertical' : 'horizontal'}
+            orientation={viewportFitsRail ? 'vertical' : 'horizontal'}
             className="flex-1"
           >
             {(current) => (
@@ -994,99 +902,22 @@ export function ActivityEditor({
           dialogs this replaces: up to three scopes can be independently dirty at once, so one
           Escape reflex now risks three forms' worth of work instead of one. */}
         <ConfirmDialog
-          open={confirming !== null}
-          onClose={() => {
-            // **Keeping the old subject is the cancel path, and it must put the host back.**
-            // Without `onSubjectHeld` the canvas selection has already moved, so the drawer would
-            // go on editing one activity while the diagram highlights another — two surfaces
-            // disagreeing about what the reader is working on, which is worse than either answer.
-            if (confirming === 'subject' && seededId !== undefined) onSubjectHeld?.(seededId);
-            setConfirming(null);
-          }}
+          open={confirmingClose}
+          onClose={() => setConfirmingClose(false)}
           onConfirm={() => {
-            const which = confirming;
-            setConfirming(null);
-            if (which === 'subject') setSeededId(incomingActivity?.id);
-            else onClose();
+            setConfirmingClose(false);
+            onClose();
           }}
           title="Discard unsaved changes?"
           // The first sentence comes from the shared builder so this dialog and the navigation
           // guard cannot drift about what is dirty (ADR-0065's one-implementation argument). The
           // action clause stays here, because only this call site knows which action it confirms.
-          description={`${describeUnsavedWork([unsavedReport])} ${
-            confirming === 'subject'
-              ? `Switching to ${incomingActivity?.name ?? 'another activity'} will discard them.`
-              : 'Closing will discard them.'
-          }`}
+          description={`${describeUnsavedWork([unsavedReport])} Closing will discard them.`}
           confirmLabel="Discard"
-          // Passed directly, NOT through a conditional spread. The first version wrote
-          // `{...(confirming === 'subject' ? { cancelLabel: … } : {})}` and typecheck accepted it
-          // against a `ConfirmDialog` that had no such prop at all — a conditional spread widens to
-          // `{}` in one branch, so TS never checks the other. It rendered "Cancel" and said nothing.
-          // The same widening ADR-0074 records for `...(FLAG ? [route] : [])`.
-          cancelLabel={confirming === 'subject' ? 'Keep editing' : 'Cancel'}
         />
       </>
-    ),
-  });
-}
-
-/**
- * The tabbed activity editor **as a modal dialog** — the shape every host rendered before Graphite
- * M6.
- *
- * **It has no production caller as of M6-T5, and that is recorded rather than left to be
- * discovered.** The plan workspace composes `ActivityEditor` with {@link modalShell} directly,
- * because it must choose between that and a drawer portal at render time. What survives here is the
- * tested public composition — eleven suites mount it — and the modal itself is very much alive: the
- * context drawer is `hidden lg:flex`, so every viewport below 1024 gets this chrome.
- *
- * Its public signature is deliberately unchanged by the shell extraction, which is what makes the
- * milestone's proof condition mean anything: all eight `ActivityEditorDialog.*.test.tsx` suites
- * pass **unchanged** through it (the ADR-0062 bar). A reimplemented panel and its dialog each look
- * right alone; only a reader who opens the same activity two ways ever sees one is a version
- * behind, which is why this is an extraction and not a second component.
- */
-export function ActivityEditorDialog(
-  props: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>,
-): React.ReactElement {
-  return <ActivityEditor {...props} shell={modalShell(props.open)} />;
-}
-
-/**
- * **The modal chrome, defined once** (Graphite M6-T5).
- *
- * A factory rather than a constant, because the shell needs `open` and the editor does not pass it:
- * `open` belongs to the host, and threading it through the shell's argument would put a host
- * concern into a contract every shell has to honour.
- *
- * It exists because T2 wrote a second copy of this `<Dialog>` inside the plan workspace's own
- * chrome-chooser — the duplication this epic keeps removing, arriving inside the milestone that
- * removes it. The workspace swaps `shell` between this and a drawer portal; it must never swap
- * between two *components*, because different components remount and take the scope forms' unsaved
- * state with them. That is what the render prop bought.
- */
-export function modalShell(open: boolean): ActivityEditorShell {
-  // Named, because `react/display-name` cannot tell a **called** render function from a mounted
-  // component and neither can a stack trace. This is called — `shell(chrome)` — never `<Shell/>`,
-  // which is what keeps swapping chrome from remounting the editor and losing its unsaved scopes.
-  return function ActivityEditorModalShell({ requestClose, title, description, children }) {
-    return (
-      <Dialog
-        open={open}
-        // Escape and the backdrop route through the same guard as the Close button — an Escape
-        // reflex is exactly the case the confirmation exists for.
-        onClose={requestClose}
-        confirmBeforeClose
-        size="xl"
-        body="flush"
-        title={title}
-        {...(description === undefined ? {} : { description })}
-      >
-        {children}
-      </Dialog>
-    );
-  };
+    </Dialog>
+  );
 }
 
 /**

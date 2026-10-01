@@ -13,8 +13,7 @@ import {
 } from '@/config/env';
 import {
   ActivityCreateDialog,
-  ActivityEditor,
-  modalShell,
+  ActivityEditorDialog,
   deleteActivityDescription,
   dissolveSummaryDescription,
   useDeleteActivity,
@@ -35,48 +34,9 @@ import { ActivityNotesSection } from '@/features/notes';
  * Report-progress and its Steps actions — plus the toolbar's Update-progress — all resolve to the
  * same `editorIntent`. The separate progress and steps dialogs it replaced were deleted with
  * `VITE_ACTIVITY_EDITOR_TABS` (ADR-0089); there is no longer another surface for an entry point to
- * open.
+ * open. It is a modal dialog (ADR-0101): an editor's chrome is the dialog and nothing else, so there
+ * is no host-chosen shell and no subject change to guard while it is open (ADR-0169 D5).
  */
-/**
- * The workspace's one activity editor, **as a modal dialog** (ADR-0101, reversing Graphite M6-T2).
- *
- * It renders exactly once, and it renders in the chrome ADR-0061 designed it for: an `xl`
- * (`max-w-4xl`, 896 px) dialog with a vertical section rail beside the content pane.
- *
- * **Why this stopped being a drawer subject.** Graphite M6 docked it in the trailing context
- * drawer, which was 300 px by default and capped at 420 px. ADR-0061
- * had widened this exact form to 896 px *because 448 px was already unusable* — Save fell below the
- * fold — so docking it put a form into a third of a width that had been judged too narrow at half.
- * The M10 gate pass then found the vertical rail left "about 92 px of content beside it" and
- * switched the drawer to a horizontal tab strip, which fixed the symptom: on a 1920 px desktop the
- * editor ran its sub-768 px narrow layout permanently, four tabs overflowing sideways inside a
- * panel that was itself scrolling vertically, over a Successors table scrolling sideways of its own.
- *
- * The deeper reason is in the record rather than in anyone's taste. ADR-0097 D2 deferred the docked
- * editor on 2026-08-19 with the words *"it wants its own epic and its own design pass"*; Graphite M6
- * shipped it the next day as a sub-task of a shell epic, and that design pass never happened. This
- * restores the chrome the editor was designed for and returns the docked editor to the backlog it
- * was already on — where, if it is built, it is built as something drawer-shaped rather than as a
- * dialog squeezed into a column.
- *
- * The drawer keeps the Project Explorer, which is what it is shaped for: a tree, narrow, a list.
- */
-function PlanActivityEditor({
-  activity,
-  ...props
-}: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
-  return (
-    <ActivityEditor
-      {...props}
-      {...(activity ? { activity } : { activity: undefined })}
-      // No `tabRailAllowed`: it defaults true, so the rail is chosen by the VIEWPORT query again —
-      // the right question for a dialog sized by the window, and the one this editor had before it
-      // was docked in a panel sized by a splitter.
-      shell={modalShell(props.open)}
-    />
-  );
-}
-
 export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
   const { orgSlug, planId } = model;
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -178,24 +138,11 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
 
   return (
     <>
-      <PlanActivityEditor
+      <ActivityEditorDialog
         orgSlug={orgSlug}
         planId={planId}
         open={intended !== undefined}
         onClose={() => model.setEditorIntent(null)}
-        /*
-         * **Keep editing** on the subject-change guard: put the intent back to the activity the
-         * editor is still holding, so the host and the editor agree about the subject rather than
-         * the drawer editing one activity while everything else names another.
-         *
-         * Wired now although nothing changes the subject under the editor **yet** — the drawer does
-         * not follow the canvas selection until T4. A guard that arrives with the path it guards is
-         * a guard somebody has to remember to add, and this register records that shape (ADR-0064
-         * §7) more often than any other.
-         */
-        onSubjectHeld={(activityId) =>
-          model.setEditorIntent({ ...(model.editorIntent ?? { tab: 'general' }), activityId })
-        }
         onSaved={model.recordActivityUpdate}
         gating={model.activityEditorGating}
         calendars={model.calendars.data ?? []}

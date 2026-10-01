@@ -353,16 +353,15 @@ test('a resource assigned from the Resources tab persists', async ({ page }) => 
  * **State that carries between openings, and a draft that dies on a tab switch**
  * (`docs/specs/activity-editor-seeding/`, journeys J2 and J4).
  *
- * Both are marked `test.fail()` at M0: they assert what the epic delivers, so they fail on this
- * tree, and `test.fail()` keeps the suite green while recording that. Playwright reports a
- * `test.fail()` that starts passing as a FAILURE, so the milestone that fixes each (M3a for J2, M4
- * for J4) removes the marker rather than finding out in review. Neither has been run by the author
- * of M0 — the orchestrator runs them centrally (`scripts/e2e-local.sh web:activity-editor`).
+ * J4 is marked `test.fail()` since M0: it asserts what the epic delivers, so it fails on this tree,
+ * and `test.fail()` keeps the suite green while recording that. Playwright reports a `test.fail()`
+ * that starts passing as a FAILURE, so M4 removes the marker rather than finding out in review. J2's
+ * was removed by M3a, which fixed it. Neither has been run by their authors — the orchestrator runs
+ * them centrally (`scripts/e2e-local.sh web:activity-editor`).
  */
 test('J2 — a discarded draft leaves nothing armed for the next opening', async ({
   page,
 }, testInfo) => {
-  test.fail();
   const stamp = Date.now();
   await onboard(page, stamp);
   await openProject(page);

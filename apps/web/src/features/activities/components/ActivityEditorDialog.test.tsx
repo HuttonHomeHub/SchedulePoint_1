@@ -640,6 +640,23 @@ describe('editor layout (ADR-0061 Direction B)', () => {
     );
   });
 
+  it('falls back to a horizontal strip when the viewport has no room for the rail', () => {
+    // The rail-or-strip choice is the viewport's alone: the drawer host that could override it is
+    // gone (ADR-0169 D5), so this is the only way the strip is reached. jsdom has no `matchMedia`,
+    // so the default is the rail; a narrow viewport has to be supplied to see the other branch.
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    mount();
+    expect(screen.getByRole('tablist', { name: 'Activity sections' })).not.toHaveAttribute(
+      'aria-orientation',
+      'vertical',
+    );
+  });
+
   it('keeps the computed dates and float on screen while they are being changed', () => {
     mount({
       activity: row({
