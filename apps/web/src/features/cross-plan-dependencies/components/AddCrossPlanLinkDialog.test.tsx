@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AddCrossPlanLinkDialog } from './AddCrossPlanLinkDialog';
@@ -106,6 +107,40 @@ async function pickUpstreamActivity(): Promise<void> {
 describe('AddCrossPlanLinkDialog', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+  });
+
+  /**
+   * **#420's structural property.** A passive `reset()` on open wipes whatever a fast user has
+   * already chosen. Layout effects run before any passive effect, so a value placed in the field at
+   * layout time stands in for that choice — and `act` flushes passive effects before `render`
+   * returns, so the survival is read afterwards.
+   */
+  it('keeps a choice made before the first passive effects run', () => {
+    mockCascade();
+    function Probe(): null {
+      useLayoutEffect(() => {
+        document.querySelector<HTMLSelectElement>('select[name="type"]')!.value = 'SS';
+      }, []);
+      return null;
+    }
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <AnnouncerProvider>
+          <AddCrossPlanLinkDialog
+            orgSlug="acme"
+            currentPlanId="pl1"
+            anchor={ANCHOR}
+            open
+            onClose={vi.fn()}
+          />
+          <Probe />
+        </AnnouncerProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText('Type')).toHaveValue('SS');
   });
 
   it('excludes the successor’s own plan from the picker (N31 can’t be chosen)', async () => {
