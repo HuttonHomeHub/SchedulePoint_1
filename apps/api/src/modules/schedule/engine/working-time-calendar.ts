@@ -81,8 +81,95 @@ export function absMinutesToInstant(abs: number): string {
   return fromAbsMinutes(abs);
 }
 
-/** Minutes-from-epoch of a `YYYY-MM-DDTHH:MM` (or bare `YYYY-MM-DD`) instant. */
+/** Days from 1970-01-01 to a proleptic-Gregorian civil date (Hinnant's `days_from_civil`). */
+function daysFromCivil(year: number, month: number, day: number): number {
+  const y = month <= 2 ? year - 1 : year;
+  const era = Math.floor(y / 400);
+  const yoe = y - era * 400;
+  const doy = Math.floor((153 * (month + (month > 2 ? -3 : 9)) + 2) / 5) + day - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  return era * 146097 + doe - 719468;
+}
+
+/** Inverse of {@link daysFromCivil} (Hinnant's `civil_from_days`) as `YYYY-MM-DD`. */
+function civilFromDays(days: number): string {
+  const z = days + 719468;
+  const era = Math.floor(z / 146097);
+  const doe = z - era * 146097;
+  const yoe = Math.floor(
+    (doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365,
+  );
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const day = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const month = mp < 10 ? mp + 3 : mp - 9;
+  const year = yoe + era * 400 + (month <= 2 ? 1 : 0);
+  return `${year}-${month < 10 ? '0' : ''}${month}-${day < 10 ? '0' : ''}${day}`;
+}
+
+/** The epoch-day range whose dates are four-digit years — the only range `civilFromDays` is used on. */
+const FAST_MIN_DAY = -354285; // 1000-01-01
+const FAST_MAX_DAY = 2932896; // 9999-12-31
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
+
+/** The value of the ASCII digit at `i`, or `NaN` for anything else (so every range check then fails). */
+function digitAt(s: string, i: number): number {
+  const c = s.charCodeAt(i) - 48;
+  return c >= 0 && c <= 9 ? c : Number.NaN;
+}
+
+/**
+ * Minutes-from-epoch of a `YYYY-MM-DDTHH:MM` (or bare `YYYY-MM-DD`) instant.
+ *
+ * The well-formed, real-calendar-day shape — which is every instant the engine produces or reads — is
+ * read by integer arithmetic. This is the engine's hottest primitive: every `addWorkingTime`,
+ * `workingTimeBetween` and instant roll passes through it, and the `Date` construction plus the
+ * `split().map(Number)` it replaced were the dominant cost of a levelling pass on a contended resource
+ * (m0-measurement.md, "M2.5"). Anything else — an impossible day such as `2026-02-30`, which `Date.UTC`
+ * rolls into March, a year before 1000, a malformed time — takes the original `Date` path, so the
+ * answer is unchanged for every input. `working-time-calendar.fast-path.spec.ts` holds the two paths
+ * to each other.
+ */
 function toAbsMinutes(instant: string): number {
+  const n = instant.length;
+  if (
+    (n === 10 || (n === 16 && instant.charCodeAt(10) === 84 && instant.charCodeAt(13) === 58)) &&
+    instant.charCodeAt(4) === 45 &&
+    instant.charCodeAt(7) === 45
+  ) {
+    const year =
+      digitAt(instant, 0) * 1000 +
+      digitAt(instant, 1) * 100 +
+      digitAt(instant, 2) * 10 +
+      digitAt(instant, 3);
+    const month = digitAt(instant, 5) * 10 + digitAt(instant, 6);
+    const day = digitAt(instant, 8) * 10 + digitAt(instant, 9);
+    const minuteOfDay =
+      n === 16
+        ? (digitAt(instant, 11) * 10 + digitAt(instant, 12)) * 60 +
+          digitAt(instant, 14) * 10 +
+          digitAt(instant, 15)
+        : 0;
+    if (
+      year >= 1000 &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= daysInMonth(year, month) &&
+      minuteOfDay >= 0
+    ) {
+      return daysFromCivil(year, month, day) * MINUTES_PER_DAY + minuteOfDay;
+    }
+  }
+  return toAbsMinutesViaDate(instant);
+}
+
+/** The original `Date`-based read — kept as the fallback for everything the fast path declines. */
+function toAbsMinutesViaDate(instant: string): number {
   const datePart = instant.slice(0, 10);
   const timePart = instant.length > 10 ? instant.slice(11) : '00:00';
   const dayMs = parseCalendarDate(datePart).getTime();
@@ -95,7 +182,10 @@ function toAbsMinutes(instant: string): number {
 function fromAbsMinutes(abs: number): string {
   const dayIndex = Math.floor(abs / MINUTES_PER_DAY);
   const minuteOfDay = abs - dayIndex * MINUTES_PER_DAY;
-  const date = formatCalendarDate(new Date(dayIndex * MINUTES_PER_DAY * 60000));
+  const date =
+    Number.isInteger(abs) && dayIndex >= FAST_MIN_DAY && dayIndex <= FAST_MAX_DAY
+      ? civilFromDays(dayIndex)
+      : formatCalendarDate(new Date(dayIndex * MINUTES_PER_DAY * 60000));
   if (minuteOfDay === 0) return date;
   const h = String(Math.floor(minuteOfDay / 60)).padStart(2, '0');
   const m = String(minuteOfDay % 60).padStart(2, '0');

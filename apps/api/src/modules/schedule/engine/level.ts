@@ -7,6 +7,7 @@ import {
   offsetFromDataDate,
   rollForwardToWorking,
 } from './instants';
+import { ResourceProfile, type Blackout, type PlacedInterval } from './level-profile';
 import type {
   EngineActivity,
   EngineAssignment,
@@ -76,8 +77,8 @@ import {
  * 3. **Placement.** Each levellable activity is placed at the earliest working start ≥ its anchor start
  *    at which every finite-capacity resource it assigns has spare capacity for the whole run — found by
  *    a **single blackout-gap sweep** ({@link earliestFeasibleStart}) that merges the already-placed
- *    intervals into feasible / blackout regions and returns the first region the run fits (O(k log k)
- *    over k placed intervals, never a per-minute scan and never a retry loop — termination is inherent,
+ *    intervals into feasible / blackout regions and returns the first region the run fits (a linear walk
+ *    of k placed events held pre-sorted by {@link ResourceProfile}, never a per-minute scan and never a retry loop — termination is inherent,
  *    so it cannot hang; the final open region always fits, §6/§F).
  * 4. **`levelingDelay`** = working time between anchor start and leveled start on the activity's own
  *    calendar (0 when not delayed).
@@ -215,12 +216,7 @@ export function levelSchedule(
 
   // Per-resource placed intervals `[start, finish)` (abs minutes) with their demand — the profile the
   // interval sweep reads. Order-independent (a set), so the whole pass is deterministic (§1 invariant).
-  interface PlacedInterval {
-    start: number;
-    finish: number;
-    demand: number;
-  }
-  const profile = new Map<string, PlacedInterval[]>();
+  const profile = new Map<string, ResourceProfile>();
   // The interval objects each activity put into `profile`, kept so Pass C can lift a participant out by
   // identity when it re-places it, rather than searching the profile for equal-looking intervals.
   const occupiedBy = new Map<string, Array<{ resourceId: string; interval: PlacedInterval }>>();
@@ -233,9 +229,13 @@ export function levelSchedule(
   ): void => {
     if (demand <= 0 || finish <= start) return;
     const interval = { start, finish, demand };
-    const list = profile.get(resourceId);
-    if (list) list.push(interval);
-    else profile.set(resourceId, [interval]);
+    const resourceProfile = profile.get(resourceId);
+    if (resourceProfile) resourceProfile.add(interval);
+    else {
+      const created = new ResourceProfile();
+      created.add(interval);
+      profile.set(resourceId, created);
+    }
     const mine = occupiedBy.get(owner);
     if (mine) mine.push({ resourceId, interval });
     else occupiedBy.set(owner, [{ resourceId, interval }]);
@@ -243,8 +243,7 @@ export function levelSchedule(
   /** Lift everything `owner` occupies out of the profile (lifting only ever frees capacity). */
   const release = (owner: string): void => {
     for (const { resourceId, interval } of occupiedBy.get(owner) ?? []) {
-      const list = profile.get(resourceId)!;
-      list.splice(list.indexOf(interval), 1);
+      profile.get(resourceId)!.remove(interval);
     }
     occupiedBy.delete(owner);
   };
@@ -267,6 +266,14 @@ export function levelSchedule(
     leveledFollowsLinks?: boolean;
   }
   const overlayById = new Map<string, Overlay>();
+  // The two display dates of an overlay are calendar walks over date strings, and Pass B's overlay for an
+  // activity Pass C then re-places is overwritten without ever being read. So `overlayAt` records what
+  // its dates are OWED and they are written once, onto the overlays that survive, when the results are
+  // merged. (Nothing reads `leveledStart`/`leveledFinish` before then: Pass C reads the instants.)
+  const datesOwed = new Map<
+    Overlay,
+    { a: EngineActivity; startInst: number; finishInst: number }
+  >();
 
   /**
    * An overlay at `[startInst, finishInst)`, with the delay measured on the activity's own calendar from
@@ -280,8 +287,7 @@ export function levelSchedule(
     flags: { windowExceeded: boolean; selfOver: boolean },
   ): Overlay => {
     const cal = calendarOf(a);
-    const d = a.durationMinutes;
-    return {
+    const overlay: Overlay = {
       leveledStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, startInst),
       leveledStartInstant: startInst,
       leveledFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, finishInst),
@@ -289,11 +295,13 @@ export function levelSchedule(
         0,
         cal.workingTimeBetween(absMinutesToInstant(anchorInst), absMinutesToInstant(startInst)),
       ),
-      leveledStart: leveledDate(cal, dataDate, dataDateAbs, startInst, d, false, a.type),
-      leveledFinish: leveledDate(cal, dataDate, dataDateAbs, finishInst, d, true, a.type),
+      leveledStart: '',
+      leveledFinish: '',
       levelingWindowExceeded: flags.windowExceeded,
       selfOverAllocated: flags.selfOver,
     };
+    datesOwed.set(overlay, { a, startInst, finishInst });
+    return overlay;
   };
 
   /** Pin an activity at its network position: overlay = network dates, and occupy its finite demand. */
@@ -361,7 +369,7 @@ export function levelSchedule(
     // resource once this activity's own demand is reserved (capacity − demand; ≥ 0 here, since a
     // self-over-allocated activity was pinned in Pass A). Non-iterative — it cannot hang.
     const perResource = finiteAsgs.map((asg) => ({
-      intervals: profile.get(asg.resourceId) ?? [],
+      profile: profile.get(asg.resourceId),
       need: resourceById.get(asg.resourceId)!.capacity! - asg.unitsPerHour,
       lagMinutes: asg.lagMinutes ?? 0,
     }));
@@ -569,6 +577,16 @@ export function levelSchedule(
     recordMoved(a, overlay);
   }
 
+  for (const ov of overlayById.values()) {
+    const owed = datesOwed.get(ov);
+    if (owed === undefined) continue;
+    const { a, startInst, finishInst } = owed;
+    const cal = calendarOf(a);
+    const d = a.durationMinutes;
+    ov.leveledStart = leveledDate(cal, dataDate, dataDateAbs, startInst, d, false, a.type);
+    ov.leveledFinish = leveledDate(cal, dataDate, dataDateAbs, finishInst, d, true, a.type);
+  }
+
   // Merge the overlay onto the network results (untouched where an activity did not participate).
   const results = output.results.map((r) => {
     const ov = overlayById.get(r.activityId);
@@ -612,9 +630,10 @@ export function levelSchedule(
   };
 }
 
-/** One touched resource's already-placed intervals plus this activity's spare headroom on it. */
+/** One touched resource's already-placed profile plus this activity's spare headroom on it. */
 interface ResourceContention {
-  intervals: ReadonlyArray<{ start: number; finish: number; demand: number }>;
+  /** Absent while nothing has been placed on the resource yet, which is no contention at all. */
+  profile: ResourceProfile | undefined;
   /** capacity − this activity's demand: the max concurrent PLACED demand the resource may already carry. */
   need: number;
   /**
@@ -622,48 +641,6 @@ interface ResourceContention {
    * activity, which is every assignment that predates the column and the whole of Gate B.
    */
   lagMinutes: number;
-}
-
-/** A half-open `[start, finish)` region in absolute minutes where a resource is over its `need`. */
-interface Blackout {
-  start: number;
-  finish: number;
-}
-
-/**
- * One resource's **blackout regions** — the maximal spans over which its already-placed demand exceeds
- * `need`, so this activity cannot join it there. A single sweep of `±demand` events (a finish before a
- * start at an equal instant, so touching intervals do not overlap), returned sorted and disjoint.
- */
-function blackoutsOf(rc: ResourceContention, esAbs: number): Blackout[] {
-  const events: Array<{ t: number; delta: number }> = [];
-  for (const p of rc.intervals) {
-    if (p.finish <= esAbs) continue; // cannot affect a placement at or after the early start
-    events.push({ t: Math.max(p.start, esAbs), delta: p.demand });
-    events.push({ t: p.finish, delta: -p.demand });
-  }
-  if (events.length === 0) return [];
-  events.sort((a, b) => a.t - b.t || a.delta - b.delta);
-
-  const out: Blackout[] = [];
-  let load = 0;
-  let openedAt: number | null = null;
-  let i = 0;
-  while (i < events.length) {
-    const t = events[i]!.t;
-    while (i < events.length && events[i]!.t === t) {
-      load += events[i]!.delta;
-      i += 1;
-    }
-    const over = load > rc.need;
-    if (over && openedAt === null) openedAt = t;
-    else if (!over && openedAt !== null) {
-      out.push({ start: openedAt, finish: t });
-      openedAt = null;
-    }
-  }
-  // Every placed interval finishes, so `load` returns to 0 and no blackout can still be open here.
-  return out;
 }
 
 /**
@@ -696,7 +673,7 @@ function windowIsClear(sorted: readonly Blackout[], from: number, to: number): b
  *
  * The search therefore works on **candidate starts** rather than merged regions:
  *
- * 1. Each resource's own blackouts are computed independently ({@link blackoutsOf}).
+ * 1. Each resource's own blackouts are computed independently ({@link ResourceProfile.blackoutsOf}).
  * 2. The candidates are `start0` plus, for every blackout end `b` on resource `j`, the start `b ⊖ lag_j`
  *    that would place `j`'s joining instant exactly there. That set is **complete**: feasibility can only
  *    change where some resource's demand window crosses one of its own blackout boundaries, and moving a
@@ -711,8 +688,9 @@ function windowIsClear(sorted: readonly Blackout[], from: number, to: number): b
  * blackout ends themselves, the per-resource checks agree with the merged over-count, and the run is
  * placed in the first gap it fits (ADR-0071 Gate B, pinned by `level.parity.spec.ts`).
  *
- * Cost is `O(k log k)` over the k placed intervals (the sorts), with an `O(log b)` check per candidate
- * per resource — never a per-minute scan.
+ * Cost is a walk of each touched resource's placed events — which {@link ResourceProfile} keeps sorted
+ * incrementally, so no call re-sorts them — that reads only as far as the run reaches when every lag is
+ * zero, with an `O(log b)` check per candidate per resource. Never a per-minute scan.
  */
 function earliestFeasibleStart(
   cal: WorkingTimeCalendar,
@@ -724,10 +702,49 @@ function earliestFeasibleStart(
   // A milestone (zero duration) occupies no span, so no resource can ever block it.
   if (d === 0) return { start: start0, finish: start0 };
 
-  const blackouts = perResource.map((rc) => blackoutsOf(rc, esAbs));
+  // With every lag at zero the candidates are the blackout ends themselves, in the order the walk finds
+  // them, and a run of known length either fits in the first gap or is pushed past the blackout that
+  // blocks it. So the walk need only read as far as the run reaches, and widens when the run does not
+  // fit in what it has read. With a lag the candidates are shifted back by a calendar walk and no longer
+  // arrive in discovery order, so the whole profile is read. Either way the answer is the same one.
+  const lagFree = perResource.every((rc) => rc.lagMinutes === 0);
+  let horizon = lagFree ? advanceWorking(cal, start0, d) : Number.POSITIVE_INFINITY;
+  for (;;) {
+    const scans = perResource.map((rc) => rc.profile?.blackoutsOf(rc.need, esAbs, horizon));
+    let knownUntil = Number.POSITIVE_INFINITY;
+    for (const scan of scans) if (scan) knownUntil = Math.min(knownUntil, scan.knownUntil);
+    const found = searchCandidates(
+      cal,
+      start0,
+      d,
+      perResource,
+      scans.map((scan) => scan?.blackouts ?? []),
+      knownUntil,
+    );
+    if ('start' in found) return found;
+    horizon = Math.max(found.needsKnownUntil, esAbs + 2 * (horizon - esAbs));
+  }
+}
+
+/**
+ * The candidate loop of {@link earliestFeasibleStart} over blackouts that are complete up to
+ * `knownUntil`. A candidate whose run reaches past it cannot be judged, and neither can any later one
+ * (a later start finishes later), so that is reported as the horizon the caller must read to instead.
+ */
+function searchCandidates(
+  cal: WorkingTimeCalendar,
+  start0: number,
+  d: number,
+  perResource: readonly ResourceContention[],
+  blackouts: ReadonlyArray<readonly Blackout[]>,
+  knownUntil: number,
+): { start: number; finish: number } | { needsKnownUntil: number } {
   const anyBlackout = blackouts.some((b) => b.length > 0);
   // No contention → the earliest working start fits immediately.
-  if (!anyBlackout) return { start: start0, finish: advanceWorking(cal, start0, d) };
+  if (!anyBlackout) {
+    const finish = advanceWorking(cal, start0, d);
+    return finish <= knownUntil ? { start: start0, finish } : { needsKnownUntil: finish };
+  }
 
   // Candidate starts. A blackout end is translated BACK by the resource's own lag, because it is the
   // resource's joining instant — not the activity's start — that has to clear the blackout.
@@ -744,6 +761,7 @@ function earliestFeasibleStart(
   for (const raw of ordered) {
     const cand = rollForwardToWorking(cal, Math.max(raw, start0));
     const finish = advanceWorking(cal, cand, d);
+    if (finish > knownUntil) return { needsKnownUntil: finish };
     let feasible = true;
     for (let j = 0; j < blackouts.length && feasible; j += 1) {
       const lag = perResource[j]!.lagMinutes;
