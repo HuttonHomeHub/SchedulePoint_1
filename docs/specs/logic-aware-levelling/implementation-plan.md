@@ -82,7 +82,8 @@ C11) confirmed or withdrawn, and the new tests in place as `it.fails` or capture
     in M2**, unlike `level.parity.spec.ts`.
   - `it.fails` cases, red today and green after M2:
     - the chain golden (spec §4.5, C at 2026-01-11 to 2026-01-12, finish 2026-01-12);
-    - S10's `A6500` and `A7740` assertions;
+    - S10's follower assertions (as corrected in M0: `A6200` follows the delayed `A6100`, and
+      `A6500`/`A7740` gain a levelled position, in `scenarios.levelling-links.spec.ts`);
     - SC-1's "no ghost earlier than its links", over the new corpus;
     - an API e2e asserting recalculation response = `GET …/summary` for `leveledProjectFinish` (red for
       M1 if M0-T1 confirms C7).
@@ -242,8 +243,10 @@ with no placement.
 > **Risks:** after the rows are written, rounding a predecessor to the next day pushes an unplaced
 > follower later than its levelled slot, and it clashes. **Mitigation:** `remainingAfterApply` reports it
 > (it is already solved, not predicted); add a case; SC-2 measures it.
-> **Testing requirements:** P3 and P4 revised **on purpose**: P3 becomes `rows: [P]`,
-> `followingLinks: ['S']`, `leftToLogic: []`, with a comment citing this spec. P4 per CQ-1. New cases: a
+> **Testing requirements:** P3, P4, P9, P11, P12 and P14 revised **on purpose** (M0 measured six, not two:
+> spec C20): P3 becomes `rows: [P]`,
+> `followingLinks: ['S']`, `leftToLogic: []`, with a comment citing this spec. P4 per CQ-1. P12 first
+> decides a milestone follower's row (spec C20). New cases: a
 > follower that is also resource-delayed beyond the knock-on (gets a row); a chain of three (one row).
 > Wrong-implementation runs: write rows for followers (fails "S has no placement after settle"); drop the
 > follower silently (fails `followingLinks`). API e2e: response shape (api-reviewer).
