@@ -11546,61 +11546,81 @@ rows it is 80–120 ms and passes. **Container only**: ADR-0128 says a canvas-he
 the product owner's machine before it moves anything. **Trigger:** the next epic touching canvas
 selection, or a reading on real hardware that confirms it.
 
-### 420. The csp suite's Arrange journey times out waiting for a new client's link
+### 420. Three forms still re-seed in a passive effect on open, the defect behind the csp flake
 
-**Status:** open · **Verified:** 2026-09-30 (CI, PR #737) · **Raised:** 2026-09-30 (PR #729) · **Size:** S ·
-**Owner:** web
+**Status:** open · **Verified:** 2026-10-01 (CI, five runs below; the converted forms by their tests) ·
+**Raised:** 2026-09-30 (PR #729) · **Size:** M · **Owner:** web
 
-`e2e-csp/csp.spec.ts` "the Arrange worker loads and runs with no CSP violation" failed on CI twice
-on PR #729, on two different heads (bisect step 1 `c388c67a`, and `487b7f0b`). The second time it
-passed on retry, so the shard was green. Both times it hit the 60 s test timeout inside
-`e2e-arrange/support.ts:35`: after "Create client", `getByRole('link', { name: 'Northgate' })`
-never appears. Step 1 ran main's `app-setup.ts`, so the body-parser change is not the cause.
-**Third occurrence, 2026-09-30 — the trigger has fired.** On PR #737 (head `92b1a3d`) the same test
-failed its first attempt and **both retries**, turning web shard 1 red. This time it timed out one
-line later, at `e2e-arrange/support.ts:39`: after "Create project", `getByRole('link', { name:
-'Riverside' })` never appeared. So the stall follows a create dialog, not one particular entity. It
-is not the PR's: #737 touches no client or project path, the same suite passed locally on that
-exact head (`scripts/e2e-local.sh web:csp`, 4/4, this test in 3.7 s), `e2e-arrange` uses the same
-helper and passed in the same CI run, and one re-run of the shard passed. What the three
-occurrences share is the csp suite's production build under the enforced policy. **Next:** read
-the retry trace in the `playwright-report-web-shard-1` artifact of run `36710871625` (attempt 1)
-on a machine that can download it. The cloud container cannot reach the artifact host. Whether
-the create request fails or the list fails to refresh decides the fix. **Trigger:** fired; this
-is now owed work.
+**What raised it, and what cured it.** `e2e-csp/csp.spec.ts` "the Arrange worker loads and runs with no
+CSP violation" timed out in CI three times on PRs #729 and #737, once at the new client's link
+(`e2e-arrange/support.ts:35`) and once at the new project's (`:39`), and on #737 it failed its first
+attempt and both retries. The retry trace (downloaded 2026-09-30) showed **no `POST …/projects` at all**:
+the dialog was still open, its Name field empty and `[invalid]`, though `fill('Riverside')` had completed.
+So the form's own validation refused the submit — a lost keystroke, not the API and not the list refresh.
+The only thing found consistent with it was a `reset()` in a passive `useEffect` keyed on `open`
+(`ProjectFormDialog`, same shape in `ClientFormDialog`): it runs after the field is on screen, so it can
+wipe what a fast typist has already entered. A local repro with a 400 ms delay on the projects GET passed,
+so the mechanism was **never observed**, only removed.
 
-**Trace read, 2026-09-30** (the product owner downloaded `playwright-report-web-shard-1` of run `36710871625`, attempt 1; all three attempts' `error-context` snapshots agree). **The create request is never sent.** The trace's network log ends at `GET …/clients/:id/projects` (200); there is no `POST …/projects` after the "Create project" click. At failure the dialog is still open with the Name textbox **empty**, `[invalid]` and "Name is required.", although `fill('Riverside')` had completed; the DOM snapshot taken just before the click already reads `value=''`. So the form's own validation refused the submit, and the stall is a **lost keystroke in the create dialog, not the API and not the list refresh**. Timing from the trace: the projects list request started ~15 ms **after** the "New project" click and resolved while the dialog was opening; locally it resolves first. Not yet established: what clears the field. The form is reset on open by an effect (`ProjectFormDialog.tsx:51-57`, same shape in `ClientFormDialog.tsx`), and a remount of the dialog content would do the same. **Next:** reproduce locally by delaying the projects response in the csp suite, then fix the product if a real user can lose typed text this way, not the test.
+**The remedy** (PR #740, then the sibling pass below): the Dialog mounts its children only while `open`, so
+each form is an inner component, keyed by the target's id (or `'new'`), whose `useForm` takes the target's
+values as `defaultValues` at mount and whose mutation hooks live inside it. There is no reset-on-open
+effect. The component props are unchanged.
 
-**Fix landed, 2026-09-30 — addresses the leading hypothesis; the row stays OPEN.** A local repro
-with a 400 ms delay on the projects GET passed, so the mechanism is **unproven**: the reset-on-open
-effect is the only thing found that is consistent with the trace, not something observed clearing the
-field. `ClientFormDialog`, `ProjectFormDialog` and `PlanFormDialog` no longer `reset()` in a passive
-effect. The Dialog mounts its children only while `open`, so each now renders an inner form
-component (keyed by the target's id, or `'new'`) whose `useForm` is given the target's values as
-`defaultValues` at mount, and whose mutation hooks live inside it, so a reopened dialog has no stale
-error. The component props are unchanged. One behaviour difference: closing the dialog while a save
-is in flight now unmounts its mutation observer, so the per-call `onSuccess` (announce, `onCreated`,
-`onClose`) no longer fires for that save; the write itself still completes.
-**Tests:** the "born with the seeded value" property is pinned for all three dialogs by a layout-effect probe in
-`ClientFormDialog.test.tsx`, `ProjectFormDialog.test.tsx` and `PlanFormDialog.test.tsx` — layout effects run before any passive
-effect, so the probe sees the value the field is born with; it was verified red against the
-pre-fix client dialog (received `''`, expected `'Northgate'`). **A test of "text typed right after
-open survives a later effect" is not achievable under jsdom:** `act` flushes passive effects before
-`render` returns, so the old code passes it too, and no red was faked. **Close this row only when CI
-has passed the csp suite on several runs** — until then the fix is a structural removal of the
-suspected race, not a demonstrated cure.
-**Follow-up, not done here — same reset-on-open shape:** `CreateBaselineDialog`,
-`ResourceFormDialog`, `CalendarFormDialog`, `EditDependencyDialog`, `ShareLinksDialog`, `NoteItem`,
-`ActivityResourcesPanel`, `ActivityProgressPanels`, and — found by review, each verified by grep —
-`AddCrossPlanLinkDialog` (`reset(DEFAULT_VALUES)` in an open-effect), `ActivityEditorDialog` (its
-`useScopeForm` re-seeds in a `[open, activity?.id]` effect) and `ActivityCreateDialog` (clears the
-mutation in an open-effect). `InviteMemberDialog` and `ImportScheduleDialog` were also named but
-reset from event handlers, not an effect, so they do not share this shape.
-**Behaviour loss, not a regression of the create paths:** editing a plan through
-`components/layout/workspace/plan-dialogs.tsx:106` no longer announces "Plan … saved." if the dialog
-is closed mid-save, because the per-call `onSuccess` dies with the unmounted form. The navigator's
-create dialogs were already unmounted on close, so they lose nothing. The cache invalidation still
-runs (hook-level, pinned by a test in `ClientFormDialog.test.tsx`).
+**Evidence that it worked.** CI passed the csp suite **4/4 on its first attempt, with no retries, on five
+consecutive shard-1 runs** after #740: `36786176930`, `36789240209`, `36823079172`, `36823305121`,
+`36835646425` (2026-09-30 and 2026-10-01). Before it, the test had failed three times in two days (#729 twice, #737 once). Five clean
+first-attempt runs are good evidence of a cure for the flake, not proof of the mechanism.
+
+**Converted, 2026-10-01** (one commit each, `fix(web)`): `ClientFormDialog`, `ProjectFormDialog` and
+`PlanFormDialog` (#740); `CreateBaselineDialog`, `ResourceFormDialog`, `CalendarFormDialog` (which also
+drops its render-time week seeding and its `open &&` unsaved-work gate), `EditDependencyDialog`,
+`ShareLinksDialog` (its whole body, so the one-time URL and revoke state are born fresh too),
+`AddCrossPlanLinkDialog` (form, mutation and picker queries), and `NoteItem` (the inline editor is now its
+own component, mounted only while editing). Each has a test that puts a value in the field in the layout
+phase — before any passive effect — and asserts it survives; each was verified **red against the previous
+code**. A test of "text typed right after open survives" cannot be written as a plain `render`: `act`
+flushes passive effects before `render` returns, so the old code passes it too.
+
+**Behaviour changes in the converted forms**, none of which matters at its site:
+
+- Closing a dialog mid-save unmounts the mutation observer, so the per-call `onSuccess` (announce,
+  `onCreated`, `onClose`) no longer fires for that save; the write still completes and the cache
+  invalidation (hook-level) still runs. Plan edit through `plan-dialogs.tsx:106` loses its "Plan … saved."
+  announcement in that case. `ShareLinksDialog` also loses the "Share link created" announcement and the
+  one-time URL panel, which nobody could have seen on a closed dialog.
+- `EditDependencyDialog` now seeds the lag on the factor of the link's **own** lag calendar. The old effect
+  ran after a first render whose watched `lagCalendar` was still the form default `PROJECT_DEFAULT`, so a
+  `PREDECESSOR`/`SUCCESSOR` link on a calendar with a different day length opened showing the lag in the
+  wrong unit while its label said otherwise. Identical wherever the two factors agree.
+- `NoteItem`'s editor no longer carries a failed save's error into its next opening.
+
+**Left, and why — not converted.** Each is a place where a re-seed in an effect is either intended or
+cannot move without a decision that is not this row's:
+
+1. **`ActivityEditorDialog`, `ActivityCreateDialog` and the Progress panels' `useScopeForm`**
+   (`useScopeForm.ts`, its `[open, activity?.id]` effect). The effect is also the **late-arriving subject**
+   path (the activity resolves after the dialog opens) and the editor is mounted always, with its
+   unsaved-work guard, `requestClose` and the drawer's `shell` derived from the forms' dirtiness _outside_
+   the Dialog's children (`ActivityEditorDialog.tsx`, the `shell` prop's docblock). Remounting the forms
+   per open means lifting that guard through a seam, which is a change to the editor's shell contract and
+   needs a spec (ADR-0105). `ActivityCreateDialog`'s own effect only clears the mutation, which cannot wipe
+   text; its text-wiping reset is `useScopeForm`'s.
+2. **`WeightedStepsPanel`** re-seeds on `[open, activity.id, loadedSteps]` **on purpose**: "a late-arriving
+   fetch still populates" (its own comment). It is a data re-seed, not an open reset.
+3. **`ActivityResourcesPanel`** resets to blank defaults on `[enabled, activityId]` — a tab revealed or a
+   subject changed, not a dialog opening, and the values are constants. It can only race a typist when the
+   form renders from a warm query cache on reveal. Converting it by keying the body would drop the assigned
+   rows' edit state on every hide and show; converting only the form would stop it clearing a stale error on
+   reveal. Neither is the row's described behaviour.
+
+`InviteMemberDialog` and `ImportScheduleDialog` reset from event handlers, not an effect, and were never in
+scope.
+
+**Remedy for what is left:** a spec for lifting the editor's unsaved-work guard out of the forms'
+lifetime, after which `useScopeForm`'s effect can go. **Trigger:** the next change to
+`ActivityEditorDialog`, `ActivityCreateDialog` or `useScopeForm`, or a second report of a lost keystroke
+in one of them.
 
 ### 427. `leveledProjectFinish` ignores the push a delayed activity gives its followers
 
