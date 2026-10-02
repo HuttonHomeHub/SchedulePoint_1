@@ -27,7 +27,7 @@ describe('unsaved-work report', () => {
    * scopes that already worked, and shows up only in the three that were silently omitted.
    *
    * Deliberately NOT the whole string: the editor appends a context clause (`Closing will discard
-   * them.` / `Switching to X will discard them.`) and a navigation guard needs a third. That clause
+   * them.`) and a navigation guard needs a third. That clause
    * belongs at the call site, because only the call site knows which action is being confirmed —
    * folding it in here would mean this builder growing a parameter for every future caller.
    */

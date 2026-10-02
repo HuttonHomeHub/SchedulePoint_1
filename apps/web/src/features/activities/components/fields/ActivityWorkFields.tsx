@@ -50,7 +50,7 @@ export const WORK_FIELDS = [
  * answer: the reader is asking "what am I editing now", not "what is stored".
  *
  * `useDurationSeed` deliberately stays at the host. It reseeds the duration field when the
- * hours-per-day factor resolves, and it needs the open/close lifecycle to know when that is a
+ * hours-per-day factor resolves, and it needs the host's per-opening lifecycle to know when that is a
  * fresh visit rather than a keystroke (TECH_DEBT #83) — neither of which a field group can see.
  */
 export function ActivityWorkFields({

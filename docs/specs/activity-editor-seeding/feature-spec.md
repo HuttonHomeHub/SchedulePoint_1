@@ -1,10 +1,16 @@
 # Feature Spec: Activity editor seeding — the editor's working state lives for one opening
 
-- **Status:** Draft — kept as the token until ADR-0169 is filed in M1 (plan T1.2), which flips it to
-  `Approved` in the same commit (`check:spec-status` S3).
+- **Status:** Accepted — shipped (ADR-0169). Approved by the product owner, 2026-10-01 (AskUserQuestion); M0–M5
+  landed 2026-10-01 to 2026-10-02.
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) as recorded in §1 "Open questions". To start after the logic-aware
-  levelling work (`docs/specs/logic-aware-levelling`). Do not read the `Draft` token above as unapproved.
+  levelling work (`docs/specs/logic-aware-levelling`).
+- **M0 correction (2026-10-01):** M0's stop gate fired — the typed-input window is red on the editor and
+  New activity only, not on a Progress or Resources tab reveal ([`./m0-measurement.md`](./m0-measurement.md)).
+  The product owner decided on **2026-10-01** (AskUserQuestion) to **continue the approved rebuild** with
+  CQ-1 (b), CQ-2 (b), CQ-3 (a) and NQ-1 (b) unchanged, and this spec and its plan corrected to M0's
+  findings. What changed is recorded in §0.4; every claim that rested on the withdrawn "same window on
+  tab reveal" premise is corrected in place.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-01 (first draft and revision)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #420, "Left, and why — not converted", items 1–3; plus
@@ -53,8 +59,8 @@ replaced by one test of the new rule (§4.5, "A changed subject").
 
 **Evidence convention (CLAUDE.md §19.11).** Decision-bearing claims name the file and line read.
 Dependency internals cite only the six claims registered in `scripts/dependency-claims.json` (react-dom
-19.3.0, react-hook-form 7.88.0, playwright-core 1.63.0). Claims marked **(read, not observed)** are
-reproduced at M0 before anything is built on them.
+19.3.0, react-hook-form 7.88.0, playwright-core 1.63.0). Claims marked **(read, not observed)** were
+reproduced at M0 before anything is built on them; §0.4 records which held.
 
 ---
 
@@ -79,10 +85,18 @@ screen, so it can wipe what a fast typist has already entered" — is **not quit
    (`index.esm.mjs:2285-2297`), overwriting what was typed.
 3. **That re-render is one task later.** Updates made inside a passive-effect flush get at most default
    priority (`react-dom-client.production.js:13238`), so it renders in the next scheduler task.
+   **M0 narrowed this to one case** (`m0-measurement.md` "Why — a minimal reproduction"): it holds for
+   an **already-mounted form whose `open` flips** — the editor and New activity — and does **not** hold
+   for a form **mounted by** the click, whose effect's re-render was observed to complete inside the
+   click's own microtask flush (logged `render, effect, render, typing`). That is observed, not traced to
+   a registered react-dom line, and no design decision below depends on why.
 
 A person cannot click into a field and type inside one task. **A driver can**: Playwright's `fill`
 checks only visible, enabled and editable (`coreBundle.js:20396`) and types with an input-priority
-task. That matches the csp trace in #420 — a hypothesis consistent with it, **not observed**.
+task. That matches the csp trace in #420 — a hypothesis consistent with it, **not observed**. M0's
+probe shows the window **exists** in jsdom for the editor and New activity; whether a real driver's
+`fill` ever lands inside it is still unmeasured (`m0-measurement.md` "What this does not establish"),
+so J1 stays a regression guard and the probe stays the proof.
 
 Two consequences carried into the design: a value placed in the field in the **layout phase** (#749's
 test shape) models a moment nobody can reach, so M0 builds a probe that types inside the real window;
@@ -92,13 +106,13 @@ first-data seed, which uses `keepFieldsRef` so it opens no window (§4.6).
 
 ### 0.2 Per site
 
-| #   | Site                                                                                        | Window reachable?                                                                                                                                                                 | Under the answers                                                                               |
-| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 1a  | `ActivityEditor` (`useScopeForm` × 3, `ActivityEditorDialog.tsx:321-328`)                   | Human: no. Driver: yes, every opening (`useScopeForm.ts:67-77`); the journeys type at once (`e2e-activity-editor/support.ts:106-116`). No flake recorded.                         | **Gone by construction**: forms are born with the seed in a session mounted per opening (§4.5). |
-| 1b  | `ActivityCreateDialog` (`useScopeForm` × 4, `:271-292`)                                     | Same; `addActivity` fills Name with no wait in suite after suite (`support.ts:91-103`). No flake recorded.                                                                        | **Gone by construction** (#749's inner-form shape).                                             |
-| 1c  | `ReportedProgressPanel`, `ValueMeasurePanel` (`ActivityProgressPanels.tsx:122-134`, `:283`) | Same window on **tab reveal**: `Tabs` renders only the active panel (`tabs.tsx:210`), so they mount per visit and reset at mount.                                                 | **Gone**: their forms move into the session (CQ-2 (b), §4.6).                                   |
-| 2   | `WeightedStepsPanel` (`:457-472`)                                                           | Not by a typist: the form is hidden while loading (`:571-572`) and the warm-cache first render has no rows (`:449-452`). Re-seed on `loadedSteps` is intended.                    | Its form moves into the session (F4); the data re-seed stays, narrowed to a clean form (D-9).   |
-| 3   | `ActivityResourcesPanel` (`ActivityResourcesPanel.tsx:216-228`)                             | Driver: yes on tab reveal. The effect fires only at mount (both hosts mount it only while shown) and resets to `useForm`'s own defaults (`:207-213` = `:218-224`). **Redundant.** | **Deleted** (CQ-3 (a)). Zero behaviour change.                                                  |
+| #   | Site                                                                                        | Window reachable?                                                                                                                                                                                  | Under the answers                                                                               |
+| --- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1a  | `ActivityEditor` (`useScopeForm` × 3, `ActivityEditorDialog.tsx:321-328`)                   | Human: no. Driver: yes, every opening (`useScopeForm.ts:67-77`); the journeys type at once (`e2e-activity-editor/support.ts:106-116`). No flake recorded.                                          | **Gone by construction**: forms are born with the seed in a session mounted per opening (§4.5). |
+| 1b  | `ActivityCreateDialog` (`useScopeForm` × 4, `:271-292`)                                     | Same; `addActivity` fills Name with no wait in suite after suite (`support.ts:91-103`). No flake recorded.                                                                                         | **Gone by construction** (#749's inner-form shape).                                             |
+| 1c  | `ReportedProgressPanel`, `ValueMeasurePanel` (`ActivityProgressPanels.tsx:122-134`, `:283`) | **No — withdrawn by M0.** They mount per visit (`tabs.tsx:210`) and reset at mount, but a form mounted by the click re-renders inside the click's flush; the probe kept `55` and the dirty marker. | Their forms move into the session for **F4** (CQ-2 (b), §4.6) — not to close a window.          |
+| 2   | `WeightedStepsPanel` (`:457-472`)                                                           | Not by a typist: the form is hidden while loading (`:571-572`) and the warm-cache first render has no rows (`:449-452`). Re-seed on `loadedSteps` is intended.                                     | Its form moves into the session (F4); the data re-seed stays, narrowed to a clean form (D-9).   |
+| 3   | `ActivityResourcesPanel` (`ActivityResourcesPanel.tsx:216-228`)                             | **No — withdrawn by M0** (the probe kept `12`; same reason as 1c). The effect fires only at mount and resets to `useForm`'s own defaults (`:207-213` = `:218-224`). **Redundant.**                 | **Deleted** (CQ-3 (a)) as a **cleanup**. Zero behaviour change; fixes nothing a test can see.   |
 
 #420's stated reasons for skipping sites 1 and 3 do not hold (recorded per CLAUDE.md §19.11): the
 editor cannot be open without its subject (`activity-crud-dialogs.tsx:92-94`, `:184` — `open` is
@@ -109,7 +123,8 @@ non-modal shell; NQ-1 (b) removes them with the shell (§4.5, ADR-0169 D5).
 
 ### 0.3 State that carries between openings — fixed by construction under (b)
 
-**(read, not observed)** — M0-T3 reproduces each red first; under (b) each becomes a regression test.
+**Observed at M0** (`m0-measurement.md` T0.3): all four reproduce as units (`it.fails`), and F1 and F4
+also fail as intended in real Chromium (J2, J4 — see §0.4). Under (b) each becomes a regression test.
 
 - **F1 — a discarded draft leaves a confirmation armed for the next opening.** Discard calls
   `setConfirming(null)` and `onClose()` (`ActivityEditorDialog.tsx:1006-1010`); the forms stay dirty
@@ -120,6 +135,10 @@ non-modal shell; NQ-1 (b) removes them with the shell (§4.5, ADR-0169 D5).
   (`activity-editor.spec.ts:180-212`) never reopens. **Removing the subject guard (NQ-1 (b)) removes
   F1's trigger on its own**, so M3a fixes F1 before M3b rebuilds anything; the per-opening session then
   makes it impossible by construction as well.
+  **Corrected at M3a:** removing the guard was necessary but not sufficient. The editor's own `close`
+  event, fired when the host closes the `<dialog>` after a Discard, re-entered `requestClose` with the
+  forms still dirty and armed the `'close'` confirmation. M3a also makes `requestClose` a no-op while
+  `open` is false (F1's unit stayed red until it did).
 - **F2 — "Saved." and a scope's save error survive into the next opening** (`:255-257`; cleared only at
   `:513`, `:546`, `:556`, `:560`; printed by `scope-save-bar.tsx:92-97`).
 - **F3 — New activity's hidden-field alert survives into the next opening** (`ActivityCreateDialog.tsx:454`,
@@ -133,17 +152,34 @@ non-modal shell; NQ-1 (b) removes them with the shell (§4.5, ADR-0169 D5).
   (`ActivityEditorDialog.tsx:703`, `:774`, `:958`). A network-callback reset — the #83 shape. Still out
   of scope (D-4), and **unchanged** by (b): the reset runs on the form the save was made from.
 
+### 0.4 What M0 established, and what it changed (2026-10-01)
+
+Source: [`./m0-measurement.md`](./m0-measurement.md), recorded against `afaa017`.
+
+| Premise                                                        | M0 result                                                                                                                                                                                                          | Consequence                                                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Window on opening — editor (1a)                                | **Red** in jsdom (flushSync and click-driven), positive control green                                                                                                                                              | Kept. M3b's per-opening session fixes it.                                                                       |
+| Window on opening — New activity (1b)                          | **Red** in jsdom (flushSync and click-driven), positive control green                                                                                                                                              | Kept. M2 fixes it.                                                                                              |
+| "Same window on **tab reveal**" — Progress (1c), Resources (3) | **Not red.** A form mounted by the click re-renders inside the click's flush; typed `55` and `12` were kept, Progress showed its dirty marker                                                                      | **Withdrawn.** M1 becomes a cleanup; M4 is justified by F4 alone. Their probes stay as plain green `it`s.       |
+| F1–F4                                                          | All four reproduce as units                                                                                                                                                                                        | Kept, as specified.                                                                                             |
+| F1 and F4 in a real browser                                    | J2 and J4 fail as intended in Chromium: `scripts/e2e-local.sh web:activity-editor`, run by the orchestrator in the M0 worktree, reported 13 passed with J2 and J4 as expected failures (reported, not re-run here) | Kept. J2 turns green in M3a, J4 in M4.                                                                          |
+| A driver's `fill` reaches the editor/create window             | **Not measured** — jsdom types before any other task; Playwright arrives milliseconds later                                                                                                                        | Unchanged: the probe is the proof, J1 a regression guard. The fix is justified by construction, not by a flake. |
+
+**Product owner's decision, 2026-10-01 (AskUserQuestion):** continue the approved rebuild with CQ-1 (b),
+CQ-2 (b), CQ-3 (a) and NQ-1 (b) unchanged; correct the spec and plan to these findings. No answer was
+reopened.
+
 ---
 
 ## 1. Business understanding
 
 ### Problem
 
-Text typed into the activity editor, **New activity**, or the editor's Progress and Resources tabs
-must be kept, and every opening must start clean. Today there is a one-task window after each opening
-or tab reveal in which typed input is discarded (§0.1); state from one opening leaks into the next
-(F1–F3); and a Progress-tab draft is destroyed by switching tabs while the editor claims it still
-exists (F4). The product owner chose the structural remedy: the editor's working state is created per
+Text typed into the activity editor or **New activity** must be kept, every opening must start clean,
+and a Progress-tab draft must survive a tab switch. Today there is a one-task window after each opening
+of those two dialogs in which typed input is discarded (§0.1; red in M0's probe — a tab reveal has no
+such window, §0.4); state from one opening leaks into the next (F1–F3); and a Progress-tab draft is
+destroyed by switching tabs while the editor claims it still exists (F4). The product owner chose the structural remedy: the editor's working state is created per
 opening, as the eight siblings' already is (#749), and Progress drafts survive tab switches.
 
 ### Users
@@ -159,7 +195,7 @@ opening, as the eight siblings' already is (#749), and Progress drafts survive t
 ### Primary use cases
 
 1. Open the editor or New activity and type at once.
-2. Reveal Progress or Resources and type at once.
+2. Reveal Progress or Resources and type at once — already kept today (M0); must stay kept.
 3. Type on Progress, visit General, come back — the draft is there, marked, and savable.
 4. Discard or save, close, reopen — nothing from the last opening is shown.
 
@@ -170,7 +206,8 @@ canvas selection bar, toolbar **Update progress…**, **New activity**. User flo
 
 ### Expected outcomes
 
-- No typed character is discarded by seeding, on open or on tab reveal.
+- No typed character is discarded by seeding when the editor or New activity opens (and none is on tab
+  reveal, which M0 found already true and the rebuild must keep true).
 - Progress, measure and steps drafts survive tab switches until saved, discarded or closed.
 - Every opening starts with no confirmation, no "Saved.", no stale error or alert.
 - Unchanged: per-scope save and version-at-submit (ADR-0060); the six-scope unsaved-work report and its
@@ -181,9 +218,11 @@ canvas selection bar, toolbar **Update progress…**, **New activity**. User flo
 
 ### Success criteria
 
-- M0's window probe is red on today's code (editor, create, Progress panel at reveal, Resources panel
-  at mount) and green after the milestone that owns each.
-- F1–F4 red at M0, green after; journeys J1–J4 green locally (`scripts/e2e-local.sh`) and in CI.
+- M0's window probe — red on today's code for the editor and New activity (observed, §0.4) — is green
+  after M3b and M2 respectively; the Progress and Resources probes, green at M0, **stay** green through
+  M1 and M4 (a regression guard, not a fix).
+- F1–F4 red at M0 (observed), green after; J2 and J4 expected-fail at M0 in Chromium (observed),
+  J1–J5 green locally (`scripts/e2e-local.sh`) and in CI at the close-out.
 - Every editor and create suite that does not mount a panel directly or use the no-chrome shell passes
   **unchanged**; the two panel suites are rewritten through a harness and the four shell suites are
   rewritten or retired as listed above — each rewrite reviewed as a contract change, with every
@@ -204,6 +243,10 @@ canvas selection bar, toolbar **Update progress…**, **New activity**. User flo
 
 The recommendations were CQ-1 (a), CQ-2 (a), CQ-3 (a) and NQ-1 (a); the design below follows the
 answers, not the recommendations.
+
+**After M0 (2026-10-01, AskUserQuestion):** the product owner chose to **continue** with all four answers
+unchanged and the plan corrected to M0's findings (§0.4). CQ-3 (a) stands as a deletion of a redundant
+effect — a cleanup, no longer framed as a fix; CQ-2 (b) stands on F4 alone.
 
 **Defaults (proceeding unless told otherwise):**
 
@@ -234,11 +277,13 @@ answers, not the recommendations.
 
 ### User stories & acceptance criteria
 
-> **US-1** — As a **Planner** or **Contributor**, I want what I type the instant the editor opens, or a
-> tab appears, to be kept.
+> **US-1** — As a **Planner** or **Contributor**, I want what I type the instant the editor opens to be
+> kept.
 >
 > - **Given** any entry point **when** input arrives before React's first scheduled re-render **then**
 >   the field and the form hold it, and a save sends it.
+> - **Given** a tab appears (Progress, Resources) **when** I type at once **then** it is kept — true
+>   today (M0, §0.4) and kept true by the rebuild.
 
 > **US-2** — As a **Planner**, I want what I type the instant **New activity** opens to be kept.
 
@@ -472,13 +517,19 @@ effect, and no side effect during render (calling `mutation.reset()` while rende
 mutation's subscribers mid-render).
 
 **`ActivityResourcesPanel`** — delete the `[enabled, activityId]` effect (CQ-3 (a)); the post-assign
-reset (`:275-281`) is event-adjacent (mutation callback) and stays.
+reset (`:275-281`) is event-adjacent (mutation callback) and stays. This is a **cleanup with no
+behaviour change**: M0's Resources probe is already green (§0.4), so the deletion removes a redundant
+reset-to-its-own-defaults and the probe's job is to stay green.
 
 ### 4.6 Progress drafts across tab switches (CQ-2 (b))
 
 **Chosen: the session owns the three Progress forms; the panels render them.** This is the same
 ownership the General, Scheduling and Cost scopes already have, so a tab switch costs Progress exactly
-what it costs General: nothing.
+what it costs General: nothing. **What this fixes is F4** (a draft lost on a tab switch, reproduced at
+M0 in a unit and in J4) — not a typed-input window on tab reveal, which M0 found absent (§0.4). The
+Progress probe is green before and must be green after: moving the form into the session must not
+open a window the panel-owned form did not have (the session's forms are born with the seed, so it
+cannot).
 
 - `ReportedProgressPanel` and `ValueMeasurePanel` receive `form` (a `useScopeForm` result) instead of
   creating one; `open` and `onDirtyChange` are removed; `useReportDirty` is deleted. The session reads
@@ -505,11 +556,13 @@ needs `isDirty` computed against a seed the panel no longer holds, which is owne
 
 ### 4.7 How it is proven
 
-- **Window probe (M0, red today).** Vitest, `createRoot`, `IS_REACT_ACT_ENVIRONMENT = false`: open
+- **Window probe (M0).** Vitest, `createRoot`, `IS_REACT_ACT_ENVIRONMENT = false`: open
   inside `flushSync`, dispatch a native `input` event before yielding, yield one macrotask, assert DOM
-  value and `getValues`. Hosts: the editor (Name), New activity (Name), Progress via a tab click
-  (% complete), Resources via a tab click (Budgeted units). Positive control: the same input after the
-  yield passes today. Turns green in the milestone that owns each host.
+  value and `getValues`. Hosts: the editor (Name) and New activity (Name) — **red at M0**, also red
+  when opened by a click, turning green in M3b and M2; Progress via a tab click (% complete) and
+  Resources via a tab click (Budgeted units) — **green at M0**, kept as plain `it` regression guards
+  that must stay green through M1 and M4. Positive control: the same input after the yield passes on
+  every host.
 - **F1–F4 red-first units**, mounted through `ActivityEditorDialog` (today: `modalShell`) with a host
   that toggles `open` and clears its intent on close the way `activity-crud-dialogs.tsx` does — the
   current suites hold `onClose` as a mock, which is why none could see F1.
@@ -524,7 +577,7 @@ needs `isDirty` computed against a seed the panel no longer holds, which is owne
   save → close → open another → no "Saved.". **J4** Progress: type % complete → General → Progress →
   value present → Save progress → reopen → value persisted; and add a weighted step → switch away and
   back → the row is there → Save steps. Axe (`wcag2a`, `wcag2aa`) on the reopened editor and on the
-  Progress tab with a draft.
+  Progress tab with a draft. J2 and J4 were confirmed failing as intended in Chromium at M0 (§0.4).
 - **Undo across close (US-5).** A unit with a deferred PATCH: Save, close, resolve — `onSaved` called
   once with the before/after rows.
 
@@ -538,7 +591,9 @@ None.
 - **Context:** #420's sibling pass (#749) gave eight dialogs per-opening forms; the activity editor and
   New activity were left mounted-and-toggled because their close guard read form state outside the
   dialog's children. Reading found three consequences of that lifetime (F1–F3), and the Progress panels'
-  self-owned forms produced a fourth (F4), which ADR-0108 D2's reporting shape concealed.
+  self-owned forms produced a fourth (F4), which ADR-0108 D2's reporting shape concealed. M0 measured
+  the typed-input window on the two mounted-and-toggled dialogs and **not** on a panel mounted by a tab
+  click — so the window is a property of a form whose `open` flips, which is what D1 removes.
 - **D1 — Working state is born per opening.** A dialog that edits records mounts its forms, transient
   flags and confirmations inside the dialog's children; closing ends them. No reset-on-open effect.
 - **D2 — The frame keeps what must outlive an opening:** the `<dialog>` element (focus on open and

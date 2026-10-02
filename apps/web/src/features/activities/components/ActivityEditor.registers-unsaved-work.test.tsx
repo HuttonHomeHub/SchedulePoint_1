@@ -7,10 +7,7 @@ import {
   UnsavedWorkProvider,
   useUnsavedWorkReports,
 } from '@/components/layout/unsaved-work/unsaved-work-provider';
-import {
-  ActivityEditor,
-  type ActivityEditorShell,
-} from '@/features/activities/components/ActivityEditorDialog';
+import { ActivityEditorDialog } from '@/features/activities/components/ActivityEditorDialog';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 const GATING = deriveActivityEditorGating({
@@ -33,7 +30,6 @@ const A = {
   accrualType: 'UNIFORM',
   version: 1,
 } as ActivitySummary;
-const passthrough: ActivityEditorShell = ({ children }) => <>{children}</>;
 function Readout(): React.ReactElement {
   const r = useUnsavedWorkReports();
   return (
@@ -68,8 +64,7 @@ describe('editor registers with the shell registry', () => {
       <QueryClientProvider client={c}>
         <UnsavedWorkProvider>
           <Readout />
-          <ActivityEditor
-            shell={passthrough}
+          <ActivityEditorDialog
             orgSlug="acme"
             planId="plan-1"
             open

@@ -36,6 +36,22 @@ export const stepsFormSchema = z.object({
 export type ActivityStepFormValue = z.infer<typeof activityStepSchema>;
 export type StepsFormValues = z.infer<typeof stepsFormSchema>;
 
+/** The editable rows of a saved step list — the fields the form holds, in order. */
+export function stepRowsFromSaved(
+  saved: readonly { name: string; weight: number; percentComplete: number }[],
+): StepsFormValues['steps'] {
+  return saved.map((step) => ({
+    name: step.name,
+    weight: step.weight,
+    percentComplete: step.percentComplete,
+  }));
+}
+
+/** Whether two step lists hold the same rows in the same order. */
+export function sameStepRows(a: StepsFormValues['steps'], b: StepsFormValues['steps']): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** Clamp a number into `[min, max]` (NaN collapses to `min`, matching a blank/invalid draft as 0). */
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;

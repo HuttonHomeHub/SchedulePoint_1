@@ -41,7 +41,7 @@ for (const file of files) {
   const rhf =
     (s.match(/\buseForm[<(]/g) ?? []).length + (s.match(/\buseScopeForm[<(]/g) ?? []).length;
   const outOfBand = seedsStateOnOpen(s);
-  const isDialog = /<Dialog\b|modalShell|DialogContent/.test(s);
+  const isDialog = /<Dialog\b|DialogContent/.test(s);
   if (!rhf && !(isDialog && outOfBand)) continue;
   rows.push({
     file: file.replace('apps/web/src/', ''),

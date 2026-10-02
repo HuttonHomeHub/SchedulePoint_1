@@ -11,23 +11,13 @@ import { seedGeneral } from './activity-editor-seeds';
 import { useScopeForm } from './useScopeForm';
 
 /**
- * **A second opening starts from the row, never from the last one's abandoned draft.**
+ * **A form is born with its row and never re-seeded; a second opening is a second form.**
  *
- * `useScopeForm` seeds on `[open, activity?.id]` (`useScopeForm.ts:48-57`), and the narrow
- * dependency list is deliberate — widening it to the activity *object* would wipe one tab's unsaved
- * edits whenever a sibling tab's save refetched the row, which the hook's docblock calls its trap 2.
- * What the docblock does not say, and what nothing asserted, is the other half: with the list that
- * narrow, **`open` is the only thing that can re-seed a host whose target never changes**.
- *
- * That is exactly the shape of a create host, where `activity` is always `undefined` and `activity?.id`
- * is therefore always the same. It works today because `CreateActivityButton` keeps the dialog
- * mounted and toggles `open` — a fact about a host, three files away, holding up a rule in a hook.
- * A host that stopped toggling would carry one draft into the next create with nothing failing, so
- * the behaviour is pinned here rather than left resting on that arrangement.
- *
- * It also *checks* the claim the plan made about the alternative host shape rather than repeating
- * it: a host that mounts the dialog per opening re-seeds too, through `defaultValues`. Both shapes
- * are asserted, so a future host can be chosen against evidence.
+ * `useScopeForm` has no `open` and no effect (docs/specs/activity-editor-seeding, M3b): `useForm`
+ * takes the seed as `defaultValues` at mount, and the hosts (`ActivityEditorSession`,
+ * `ActivityCreateForm`) are mounted per opening. These cases pin the three halves of that: the seed
+ * is there at mount, a sibling's refetch (a new row OBJECT with the same id) does not re-seed — the
+ * old effect's "trap 2", now structural — and a fresh mount does not inherit an abandoned draft.
  */
 
 const ROW = {
@@ -43,60 +33,39 @@ const ROW = {
 } as unknown as ActivitySummary;
 
 /** The editor's real General scope, so this pins the form the product actually runs. */
-function openScope(activity: ActivitySummary | undefined) {
+function scope(activity: ActivitySummary | undefined) {
   return renderHook(
-    ({ open }: { open: boolean }) =>
-      useScopeForm<ActivityGeneralValues>(
-        activityGeneralSchema,
-        (a) => seedGeneral(a),
-        activity,
-        open,
-      ),
-    { initialProps: { open: false } },
+    ({ row }: { row: ActivitySummary | undefined }) =>
+      useScopeForm<ActivityGeneralValues>(activityGeneralSchema, (a) => seedGeneral(a), row),
+    { initialProps: { row: activity } },
   );
 }
 
-describe('useScopeForm — re-seeding across openings', () => {
-  it('gives a create host a clean form on its second opening', () => {
-    const { result, rerender } = openScope(undefined);
-    rerender({ open: true });
-    expect(result.current.form.getValues('name')).toBe('');
-
-    // A draft the planner abandons by closing the dialog.
-    act(() => result.current.form.setValue('name', 'Abandoned draft', { shouldDirty: true }));
-    expect(result.current.isDirty).toBe(true);
-
-    rerender({ open: false });
-    rerender({ open: true });
-
-    expect(result.current.form.getValues('name')).toBe('');
-    // The tab's unsaved marker goes with it — a fresh form that still reads as dirty would put an
-    // edit marker on a form nobody has edited.
+describe('useScopeForm — seeded at mount, never re-seeded', () => {
+  it('is born with the row, clean', () => {
+    const { result } = scope(ROW);
+    expect(result.current.form.getValues('name')).toBe('Pour slab');
     expect(result.current.isDirty).toBe(false);
   });
 
-  it('re-reads the row when the same activity is opened twice', () => {
-    const { result, rerender } = openScope(ROW);
-    rerender({ open: true });
-
+  it('keeps a draft when a refetch hands it a new object for the same row', () => {
+    const { result, rerender } = scope(ROW);
     act(() => result.current.form.setValue('name', 'Half-typed rename', { shouldDirty: true }));
-    rerender({ open: false });
-    rerender({ open: true });
 
-    // Not 'Half-typed rename': the second visit describes the activity as it is stored, which is
-    // the only value the reader can act on. `activity?.id` is unchanged across both openings, so
-    // `open` is the whole of what makes this true.
-    expect(result.current.form.getValues('name')).toBe('Pour slab');
-    expect(result.current.isDirty).toBe(false);
+    rerender({ row: { ...ROW, version: 2 } });
+
+    expect(result.current.form.getValues('name')).toBe('Half-typed rename');
+    expect(result.current.isDirty).toBe(true);
   });
 
-  it('seeds a host that mounts the dialog per opening, without any toggle at all', () => {
-    // The alternative host shape, asserted rather than assumed: `defaultValues` seeds at mount, so
-    // an `{open && <Dialog/>}` host is not the silent-failure case it might look like. What such a
-    // host loses is the RE-seed above — which is why both are stated here.
-    const { result } = renderHook(() =>
-      useScopeForm<ActivityGeneralValues>(activityGeneralSchema, (a) => seedGeneral(a), ROW, true),
-    );
-    expect(result.current.form.getValues('name')).toBe('Pour slab');
+  it('gives a fresh mount a clean form, not the last one’s abandoned draft', () => {
+    const first = scope(undefined);
+    act(() => first.result.current.form.setValue('name', 'Abandoned draft', { shouldDirty: true }));
+    expect(first.result.current.isDirty).toBe(true);
+    first.unmount();
+
+    const second = scope(undefined);
+    expect(second.result.current.form.getValues('name')).toBe('');
+    expect(second.result.current.isDirty).toBe(false);
   });
 });

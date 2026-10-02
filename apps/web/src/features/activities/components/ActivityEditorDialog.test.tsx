@@ -358,7 +358,14 @@ describe('ActivityEditorDialog — weighted steps panel', () => {
 
   it('is pen-gated: a Planner without the lock cannot even add a row', async () => {
     await openSteps({ gating: PLANNER_NO_PEN });
-    expect(screen.getByRole('button', { name: 'Add step' })).toBeDisabled();
+    // Shaded, not natively disabled: losing the pen mid-edit must not drop focus to <body>.
+    expect(screen.getByRole('button', { name: 'Add step' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Add step' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    expect(screen.queryByLabelText('Step 1 name')).not.toBeInTheDocument();
     expectInert(screen.getByRole('button', { name: /save steps/i }));
     // …while progress beside it stays open, which is the whole reason these are separate saves.
     expect(screen.getByLabelText('Percent complete')).toBeEnabled();
@@ -463,6 +470,9 @@ describe('ActivityEditorDialog — review findings', () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText(/General has unsaved changes/)).toBeInTheDocument();
+    // The same escape-hatch wording as the create dialog and the navigation guard, so a planner
+    // is not offered "Cancel" here and "Keep editing" one dialog over.
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onClose).toHaveBeenCalled();
   });
@@ -635,6 +645,23 @@ describe('editor layout (ADR-0061 Direction B)', () => {
   it('navigates its scopes with a rail, not a strip', () => {
     mount();
     expect(screen.getByRole('tablist', { name: 'Activity sections' })).toHaveAttribute(
+      'aria-orientation',
+      'vertical',
+    );
+  });
+
+  it('falls back to a horizontal strip when the viewport has no room for the rail', () => {
+    // The rail-or-strip choice is the viewport's alone: the drawer host that could override it is
+    // gone (ADR-0169 D5), so this is the only way the strip is reached. jsdom has no `matchMedia`,
+    // so the default is the rail; a narrow viewport has to be supplied to see the other branch.
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    mount();
+    expect(screen.getByRole('tablist', { name: 'Activity sections' })).not.toHaveAttribute(
       'aria-orientation',
       'vertical',
     );

@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary } from '@repo/types';
-import { useEffect } from 'react';
 import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import type { z } from 'zod';
 
@@ -10,17 +9,27 @@ import type { z } from 'zod';
  * Each scope owns an independent RHF form, so saving one tab never runs — or reports — another
  * tab's cross-field rules, and a validation error on Scheduling cannot block a Cost save.
  *
+ * **A form's subject is fixed for its lifetime, so there is no seed effect.** `useForm` takes
+ * `seed(activity)` as `defaultValues` at mount and nothing re-seeds it. The host builds the form
+ * per opening (`ActivityEditorSession`, `ActivityCreateForm`), so a second opening starts from the
+ * row by being a different form, not by being reset. That is also what removes the typed-input
+ * window: a form that is *reset* inside a passive effect discards text typed before the re-render,
+ * and one born with its values has no such moment (`docs/specs/activity-editor-seeding`, M0).
+ *
+ * **The host MUST be mounted per opening.** Nothing here re-seeds, so a host that stays mounted
+ * across openings would carry the previous opening's values into the next; remount it (a key, or
+ * conditional rendering) rather than reaching for a reset effect.
+ *
  * **Two traps this hook exists to close**, both named in the plan as the epic's most likely defects:
  *
  * 1. **`version` must be read at submit time, from the live row.** Each scope save bumps the
- *    activity's version, so a scope holding a version captured when the dialog opened would 409 on
+ *    activity's version, so a scope holding a version captured when the editor opened would 409 on
  *    every save after the first. The hook therefore never stores `version` at all; the caller reads
  *    it from the live `activity` prop inside its submit handler.
- * 2. **The seed effect must stay keyed on `open` + `activity.id`.** Widening it to the activity
- *    *object* would re-seed every scope whenever any scope's save refetched the row — wiping
- *    another tab's unsaved edits mid-session. The dependency list below is deliberately narrow and
- *    the suppression comment names the reason, so a future "fix the exhaustive-deps warning" pass
- *    has to read why first.
+ * 2. **A sibling's save must not re-seed this form.** Re-seeding on the activity *object* wiped
+ *    another tab's unsaved edits whenever a scope's save refetched the row. It is now structural:
+ *    there is no seed path for a refetch to trigger. A host that needs a deliberate re-seed (a
+ *    conflict recovery, a late-arriving factor) calls `form.reset` itself, from an event.
  */
 export interface ScopeForm<TValues extends FieldValues> {
   form: UseFormReturn<TValues>;
@@ -50,7 +59,6 @@ export function useScopeForm<TValues extends FieldValues>(
   schema: z.ZodType,
   seed: (activity: ActivitySummary | undefined) => TValues,
   activity: ActivitySummary | undefined,
-  open: boolean,
   options: ScopeFormOptions = {},
 ): ScopeForm<TValues> {
   const form = useForm<TValues>({
@@ -63,18 +71,6 @@ export function useScopeForm<TValues extends FieldValues>(
     // option gets exactly what it got before this parameter existed.
     shouldFocusError: options.shouldFocusError ?? true,
   });
-
-  const { reset } = form;
-  useEffect(() => {
-    if (open) reset(seed(activity));
-    // Seed ONLY on open / target change. Adding `activity` (the object) would re-seed — and so
-    // discard unsaved edits in every other scope — each time a sibling scope's save refetched the
-    // row. See the docblock's trap 2.
-    //
-    // The directive must sit on the line ABOVE the dependency array, not above this explanation:
-    // the first draft put it three lines up, where it disabled a comment and suppressed nothing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seeds on open/target only (see above)
-  }, [open, activity?.id]);
 
   return {
     form,

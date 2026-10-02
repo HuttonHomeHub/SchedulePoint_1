@@ -127,8 +127,7 @@ function nameScopes(labels: readonly string[]): string {
  * carries an "and" and, past {@link COUNT_BEFORE_LIST_AT} names, its own count
  * (`docs/TECH_DEBT.md` #184).
  *
- * The caller appends its own action clause (`Closing will discard them.`, `Switching to X will
- * discard them.`, and the guard's own). That is not an omission: only the caller knows which action
+ * The caller appends its own action clause (`Closing will discard them.` and the guard's own). That is not an omission: only the caller knows which action
  * it is confirming, and folding it in here would mean a parameter per future caller.
  */
 export function describeUnsavedWork(reports: readonly UnsavedWorkReport[]): string {

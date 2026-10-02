@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1414 web
+> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1427 web
 > source files with 46 Playwright suites beside the base journey, and
-> 168 ADRs.
+> 169 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -459,7 +459,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0056** _(Accepted)_ — TSLD time-axis legibility & preset framing → [`0056-tsld-time-axis-legibility-and-preset-framing.md`](docs/adr/0056-tsld-time-axis-legibility-and-preset-framing.md)
 - **ADR-0058** _(Accepted)_ — Drift control — computed gates and the reconciliation pass → [`0058-drift-control-and-the-reconciliation-pass.md`](docs/adr/0058-drift-control-and-the-reconciliation-pass.md)
 - **ADR-0059** _(Accepted)_ — The Gantt view's rendering substrate, and the view seam → [`0059-gantt-view-rendering-substrate-and-the-view-seam.md`](docs/adr/0059-gantt-view-rendering-substrate-and-the-view-seam.md)
-- **ADR-0060** _(Accepted)_ — The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress model → [`0060-tabbed-activity-editor-and-per-scope-save.md`](docs/adr/0060-tabbed-activity-editor-and-per-scope-save.md)
+- **ADR-0060** _(Accepted; §4 amended by ADR-0169)_ — The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress model → [`0060-tabbed-activity-editor-and-per-scope-save.md`](docs/adr/0060-tabbed-activity-editor-and-per-scope-save.md)
 - **ADR-0061** _(Accepted)_ — Dialog layout: form-layout primitives, and the two-pane editor → [`0061-dialog-layout-system.md`](docs/adr/0061-dialog-layout-system.md)
 - **ADR-0062** _(Accepted)_ — Activity-editor convergence: Logic, Resources and Notes as tabs → [`0062-activity-editor-convergence-logic-resources-notes-as-tabs.md`](docs/adr/0062-activity-editor-convergence-logic-resources-notes-as-tabs.md)
 - **ADR-0063** _(Accepted)_ — The pinned WBS band, and the canvas band model → [`0063-pinned-wbs-band-and-the-canvas-band-model.md`](docs/adr/0063-pinned-wbs-band-and-the-canvas-band-model.md)
@@ -505,7 +505,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0085** _(Accepted)_ — Erasure collides with the audit log, and that collision is the decision → [`0085-privacy-operations.md`](docs/adr/0085-privacy-operations.md)
 - **ADR-0106** _(Accepted)_ — A rule is a scene mark; its label is chrome → [`0106-a-rule-is-a-scene-mark-its-label-is-chrome.md`](docs/adr/0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)
 - **ADR-0107** _(Accepted)_ — A migration a pristine database cannot test → [`0107-a-migration-a-pristine-database-cannot-test.md`](docs/adr/0107-a-migration-a-pristine-database-cannot-test.md)
-- **ADR-0108** _(Accepted)_ — A modal guards the canvas and nothing else → [`0108-a-modal-guards-the-canvas-and-nothing-else.md`](docs/adr/0108-a-modal-guards-the-canvas-and-nothing-else.md)
+- **ADR-0108** _(Accepted; D2 amended by ADR-0169)_ — A modal guards the canvas and nothing else → [`0108-a-modal-guards-the-canvas-and-nothing-else.md`](docs/adr/0108-a-modal-guards-the-canvas-and-nothing-else.md)
 - **ADR-0109** _(Accepted)_ — A command surface wraps, and the leading edge belongs to the work → [`0109-a-command-surface-wraps.md`](docs/adr/0109-a-command-surface-wraps.md)
 - **ADR-0110** _(Accepted)_ — A gate is verified against the defect it names → [`0110-a-gate-is-verified-against-the-defect-it-names.md`](docs/adr/0110-a-gate-is-verified-against-the-defect-it-names.md)
 - **ADR-0111** _(Accepted)_ — A shared primitive's keyboard contract is reviewed before release, not after → [`0111-a-primitives-keyboard-contract-is-reviewed-before-release.md`](docs/adr/0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)
@@ -566,6 +566,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0166** _(Accepted)_ — Resource load and levelling start where the bar is drawn → [`0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md`](docs/adr/0166-resource-load-and-levelling-start-where-the-bar-is-drawn.md)
 - **ADR-0167** _(Accepted; D1 and D3 amended by ADR-0168)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
 - **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
+- **ADR-0169** _(Accepted)_ — An editor's working state lives for one opening → [`0169-an-editors-working-state-lives-for-one-opening.md`](docs/adr/0169-an-editors-working-state-lives-for-one-opening.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

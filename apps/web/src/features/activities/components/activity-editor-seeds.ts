@@ -1,6 +1,8 @@
 import type { ActivitySummary } from '@repo/types';
 
 import { seedDurationText } from '../model/duration-field';
+import { seedRemainingText } from '../model/remaining-field';
+import type { ProgressFormValues } from '../schemas/activity-schemas';
 import type {
   ActivityCostValues,
   ActivityGeneralValues,
@@ -20,6 +22,12 @@ import { minorToMajorInput } from '@/lib/format-money';
  * not be able to touch a Scheduling field, and it cannot, because `costBody` only emits cost keys.
  *
  * A create seeds the API defaults, so an unopened tab saves exactly what the server would default.
+ *
+ * **An optional field's key is always PRESENT, as `undefined` when unset — never omitted.** A
+ * registered input that holds nothing reports `undefined` for it, so react-hook-form gives the live
+ * values an explicit key the defaults lacked, and its deep-equal counts the key sets as different:
+ * the form reads dirty, and closing an editor nobody touched asks to discard (found by the journey
+ * that opens Progress and presses Escape).
  */
 
 export function seedGeneral(
@@ -48,30 +56,40 @@ export function seedScheduling(activity: ActivitySummary | undefined): ActivityS
     expectedFinish: activity?.expectedFinish ?? '',
     externalEarlyStart: activity?.externalEarlyStart ?? '',
     externalLateFinish: activity?.externalLateFinish ?? '',
-    ...(activity?.levelingPriority === null || activity?.levelingPriority === undefined
-      ? {}
-      : { levelingPriority: activity.levelingPriority }),
+    levelingPriority: activity?.levelingPriority ?? undefined,
   };
 }
 
 export function seedCost(activity: ActivitySummary | undefined): ActivityCostValues {
   return {
     accrualType: activity?.accrualType ?? 'UNIFORM',
-    ...(minorToMajorInput(activity?.budgetedExpense ?? null) === undefined
-      ? {}
-      : { budgetedExpense: minorToMajorInput(activity?.budgetedExpense ?? null) }),
-    ...(minorToMajorInput(activity?.actualExpense ?? null) === undefined
-      ? {}
-      : { actualExpense: minorToMajorInput(activity?.actualExpense ?? null) }),
+    budgetedExpense: minorToMajorInput(activity?.budgetedExpense ?? null),
+    actualExpense: minorToMajorInput(activity?.actualExpense ?? null),
   };
 }
 
 export function seedMeasure(activity: ActivitySummary | undefined): ActivityMeasureValues {
   return {
     percentCompleteType: activity?.percentCompleteType ?? 'DURATION',
-    ...(activity?.physicalPercentComplete === null ||
-    activity?.physicalPercentComplete === undefined
-      ? {}
-      : { physicalPercentComplete: activity.physicalPercentComplete }),
+    physicalPercentComplete: activity?.physicalPercentComplete ?? undefined,
+  };
+}
+
+/**
+ * The Reported-progress scope. `remaining` reads the working-hours factor known **at open**; the
+ * editor re-seeds it once if the calendar list lands later (`useLateSeed`), exactly as General's
+ * duration is.
+ */
+export function seedProgress(
+  activity: ActivitySummary | undefined,
+  hoursPerDay: number | undefined,
+): ProgressFormValues {
+  return {
+    percentComplete: activity?.percentComplete ?? 0,
+    actualStart: activity?.actualStart ?? '',
+    actualFinish: activity?.actualFinish ?? '',
+    remaining: activity === undefined ? '' : seedRemainingText(activity, hoursPerDay),
+    suspendDate: activity?.suspendDate ?? '',
+    resumeDate: activity?.resumeDate ?? '',
   };
 }

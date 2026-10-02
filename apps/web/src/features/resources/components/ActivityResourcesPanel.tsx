@@ -204,6 +204,9 @@ export function ActivityResourcesPanel({
     formState: { errors },
   } = useForm<AssignmentFormValues>({
     resolver: zodResolver(assignmentFormSchema),
+    // No seed effect: every host mounts this panel per showing (a dialog's children, a tab's single
+    // panel), so a mount-time `reset` would only restate these values. Only the post-assign `reset`
+    // below returns the form to them.
     defaultValues: {
       resourceId: '',
       budgetedUnits: 0,
@@ -212,20 +215,6 @@ export function ActivityResourcesPanel({
       lagText: '',
     },
   });
-
-  useEffect(() => {
-    if (enabled) {
-      reset({
-        resourceId: '',
-        budgetedUnits: 0,
-        isDriving: false,
-        curveType: 'UNIFORM',
-        lagText: '',
-      });
-      create.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on show/target change
-  }, [enabled, activityId]);
 
   const selectedResourceId = useWatch({ control, name: 'resourceId' });
   const selectedIsMaterial = isMaterialResource(resourceById.get(selectedResourceId));

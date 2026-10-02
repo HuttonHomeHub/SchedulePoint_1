@@ -35,20 +35,55 @@ import { seedDurationText } from './duration-field';
  * cannot lose their value, whatever order the two events arrive in — and one who typed exactly the
  * seed loses nothing either, because the two are then the same string.
  *
- * It fires at most once per opening — pinned by a ref rather than by comparing factors, because the
+ * It fires at most once per opening — and its host is mounted per opening, so the refs below start
+ * clean each time — pinned by a ref rather than by comparing factors, because the
  * factor legitimately changes again when the planner picks a different calendar, and re-seeding
  * *then* would discard a duration they had just typed.
  */
 export type ReadDuration = () => string;
 
+/**
+ * The same once-per-opening, value-compared late seed for ANY text field whose seed depends on the
+ * working-hours factor — the duration below and the Remaining field beside it on the Progress tab
+ * (ADR-0169 M4). `read` is called inside the effect, never captured; `seed` produces the text for the
+ * factor that just arrived.
+ */
+export function useLateSeed({
+  hoursPerDay,
+  read,
+  write,
+  seed,
+}: {
+  hoursPerDay: number | undefined;
+  read: () => string;
+  write: (text: string) => void;
+  seed: (hoursPerDay: number) => string;
+}): void {
+  const resolved = useRef(false);
+  const seededAtOpen = useRef<string | null>(null);
+
+  useEffect(() => {
+    // What the field held when this opening began — the baseline the "has it been typed in?"
+    // question is asked against. Recorded on the first pass, before the factor can have arrived.
+    seededAtOpen.current ??= read();
+    if (hoursPerDay === undefined || resolved.current) return;
+    resolved.current = true;
+    if (read() === seededAtOpen.current) {
+      write(seed(hoursPerDay));
+    }
+    // `read`/`write`/`seed` are read at the moment the factor lands; adding them here would re-run
+    // this on every keystroke and every list refetch, which is the opposite of "once". The values
+    // they return are read live inside, so nothing here goes stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per opening, reads live (see above)
+  }, [hoursPerDay]);
+}
+
 export function useDurationSeed({
-  open,
   hoursPerDay,
   activity,
   readDuration,
   setDuration,
 }: {
-  open: boolean;
   hoursPerDay: number | undefined;
   activity: { durationDays: number; durationMinutes: number } | undefined;
   /**
@@ -58,26 +93,10 @@ export function useDurationSeed({
   readDuration: ReadDuration;
   setDuration: (text: string) => void;
 }): void {
-  const resolved = useRef(false);
-  const seededAtOpen = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      resolved.current = false;
-      seededAtOpen.current = null;
-      return;
-    }
-    // What the field held when this opening began — the baseline the "has it been typed in?"
-    // question is asked against. Recorded on the first pass, before the factor can have arrived.
-    seededAtOpen.current ??= readDuration();
-    if (hoursPerDay === undefined || resolved.current) return;
-    resolved.current = true;
-    if (readDuration() === seededAtOpen.current) {
-      setDuration(seedDurationText(activity, hoursPerDay));
-    }
-    // `readDuration`/`setDuration`/`activity` are read at the moment the factor lands; adding them
-    // here would re-run this on every keystroke and every list refetch, which is the opposite of
-    // "once". The values they return are read live inside, so nothing here goes stale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per open, reads live (see above)
-  }, [open, hoursPerDay]);
+  useLateSeed({
+    hoursPerDay,
+    read: readDuration,
+    write: setDuration,
+    seed: (factor) => seedDurationText(activity, factor),
+  });
 }

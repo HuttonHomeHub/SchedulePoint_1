@@ -1,11 +1,7 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { ActivitySummary } from '@repo/types';
-import { useEffect, useRef } from 'react';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import type { ActivityStep, ActivitySummary } from '@repo/types';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useWatch, type UseFieldArrayReturn, type UseFormReturn } from 'react-hook-form';
 
-import { measureBody } from '../api/scope-bodies';
-import { useUpdateActivityProgress } from '../api/use-activities';
-import { useActivitySteps, useReplaceActivitySteps } from '../api/use-activity-steps';
 import type { ScopeGate } from '../lib/activity-editor-gating';
 import { durationInputProps } from '../model/duration-field';
 import {
@@ -13,27 +9,16 @@ import {
   remainingHelp,
   remainingLabel,
   remainingWriteFields,
-  seedRemainingText,
 } from '../model/remaining-field';
-import {
-  deriveStatusLabel,
-  progressFormSchema,
-  type ProgressFormValues,
-} from '../schemas/activity-schemas';
-import { activityMeasureSchema } from '../schemas/activity-scope-schemas';
-import {
-  rollupPhysicalPercent,
-  stepsFormSchema,
-  type StepsFormValues,
-} from '../schemas/step-schemas';
+import { deriveStatusLabel, type ProgressFormValues } from '../schemas/activity-schemas';
+import type { ActivityMeasureValues } from '../schemas/activity-scope-schemas';
+import { rollupPhysicalPercent, type StepsFormValues } from '../schemas/step-schemas';
 
-import { seedMeasure } from './activity-editor-seeds';
 import {
   ActivityMeasureFields,
   MEASURE_SECTION_DESCRIPTION,
   MEASURE_SECTION_TITLE,
 } from './fields/ActivityMeasureFields';
-import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FieldGateProvider } from '@/components/ui/field-gate';
@@ -69,37 +54,29 @@ import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
  */
 
 /**
- * Report this panel's dirtiness to its host.
+ * **The panels render forms they do not own** (ADR-0169, `docs/specs/activity-editor-seeding` M4).
  *
- * **Reported rather than derived**: only the panel owns the form that knows, and the editor's
- * unsaved-work report has to name six scopes it does not itself hold (ADR-0108, `docs/TECH_DEBT.md`
- * #63).
- *
- * A two-line hook rather than three identical effects (`docs/TECH_DEBT.md` #184). Deliberately NOT
- * an option on `useScopeForm`: `WeightedStepsPanel` does not use that hook at all, so folding it in
- * there would cover two of the three panels — which is the one-and-not-its-neighbour shape this
- * register keeps recording.
+ * Each panel is handed its form by `ActivityEditorSession`, which creates all three with the editor's
+ * other scopes. The panels are mounted only while the Progress tab is showing, so a form made here
+ * died on every tab switch while the editor's marker and close confirmation went on claiming it
+ * (F4). Held by the session, a draft survives the visit elsewhere, and the session reads `isDirty`
+ * itself — there is no copy of the flag to go stale. The panels keep what is about the DOM they
+ * render: the markup, the derived figures, and the steps panel's focus choreography.
  */
-function useReportDirty(report: ((dirty: boolean) => void) | undefined, isDirty: boolean): void {
-  useEffect(() => {
-    report?.(isDirty);
-  }, [report, isDirty]);
-}
 
 /** Reported progress — the Contributor path. Moves the activity's dates. */
 export function ReportedProgressPanel({
-  orgSlug,
-  planId,
-  activity,
+  form,
+  isDirty,
   hoursPerDay,
   gate,
-  open,
-  announce,
-  onDirtyChange,
+  onSave,
+  pending,
+  saved,
+  error,
 }: {
-  orgSlug: string;
-  planId: string;
-  activity: ActivitySummary;
+  form: UseFormReturn<ProgressFormValues>;
+  isDirty: boolean;
   /**
    * The activity's effective working hours per day, or `undefined` when the calendar list has not
    * resolved. Required rather than defaulted (ADR-0070 §3) — after ADR-0068 there is no safe
@@ -107,56 +84,18 @@ export function ReportedProgressPanel({
    */
   hoursPerDay: number | undefined;
   gate: ScopeGate;
-  open: boolean;
-  announce: (message: string) => void;
-  /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and marks the form clean. */
+  onSave: (values: ProgressFormValues) => void;
+  pending: boolean;
+  saved: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error: string | null;
 }): React.ReactElement {
-  const mutation = useUpdateActivityProgress(orgSlug, planId);
-  const { form, isDirty } = useScopeForm<ProgressFormValues>(
-    progressFormSchema,
-    (row) => ({
-      percentComplete: row?.percentComplete ?? 0,
-      actualStart: row?.actualStart ?? '',
-      actualFinish: row?.actualFinish ?? '',
-      remaining: row === undefined ? '' : seedRemainingText(row, hoursPerDay),
-      suspendDate: row?.suspendDate ?? '',
-      resumeDate: row?.resumeDate ?? '',
-    }),
-    activity,
-    open,
-  );
-
-  useReportDirty(onDirtyChange, isDirty);
-
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
-  const onSubmit = form.handleSubmit((submitted) => {
-    mutation.mutate(
-      // `version` is read from the live row at submit time, not captured on open — a sibling
-      // scope's save bumps it, and a stale one would 409 every time after the first.
-      { activityId: activity.id, version: activity.version, hoursPerDay, ...submitted },
-      {
-        onSuccess: (result) => {
-          form.reset(submitted);
-          // The server reports the repairs it applied to keep the report self-consistent
-          // (ADR-0035 §6). Dropping them in the port would hide a silent correction.
-          const warnings = result.meta?.warnings ?? [];
-          announce(
-            warnings.length > 0
-              ? `Progress saved with ${warnings.length} adjustment${warnings.length === 1 ? '' : 's'}.`
-              : 'Progress saved.',
-          );
-        },
-      },
-    );
-  });
+  // `version` is read from the live row by the host at submit time, not captured on open — a sibling
+  // scope's save bumps it, and a stale one would 409 every time after the first.
+  const onSubmit = form.handleSubmit(onSave);
 
   return (
     <form
@@ -170,9 +109,9 @@ export function ReportedProgressPanel({
       <FieldGateProvider gate={gate}>
         <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
         <FormProblemCount errors={form.formState.errors} />
-        {mutation.isError ? (
+        {error ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
+            {error}
           </p>
         ) : null}
         {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
@@ -241,8 +180,8 @@ export function ReportedProgressPanel({
         <ScopeSaveBar
           gate={gate}
           dirty={isDirty}
-          pending={mutation.isPending}
-          saved={mutation.isSuccess}
+          pending={pending}
+          saved={saved}
           label="Save progress"
         />
       </FieldGateProvider>
@@ -252,70 +191,65 @@ export function ReportedProgressPanel({
 
 /** How value is measured — the EV source and its manual physical %. Earns value, moves no date. */
 export function ValueMeasurePanel({
-  orgSlug,
-  activity,
+  form,
+  isDirty,
+  steps,
   gate,
-  open,
   onSave,
   onOpenResources,
   pending,
-  saved = false,
-  onDirtyChange,
+  saved,
+  error,
+  dirtyMessage,
 }: {
-  orgSlug: string;
-  activity: ActivitySummary;
+  form: UseFormReturn<ActivityMeasureValues>;
+  isDirty: boolean;
+  /**
+   * The activity's steps, which the session fetches once for the whole tab: they decide whether the
+   * manual physical % is shaded (steps win), and this panel must not own a second copy of the query.
+   */
+  steps: readonly ActivityStep[];
   gate: ScopeGate;
-  open: boolean;
-  onSave: (patch: Record<string, unknown>, reset: () => void) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and marks the form clean. */
+  onSave: (values: ActivityMeasureValues) => void;
   onOpenResources?: () => void;
   pending: boolean;
   /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
-  saved?: boolean;
-  /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
+  saved: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error: string | null;
+  /** Replaces "Unsaved changes…" while the bar is busy with another scope's save. */
+  dirtyMessage?: string;
 }): React.ReactElement {
-  const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity, open);
-
-  useReportDirty(onDirtyChange, isDirty);
-  const steps = useActivitySteps(orgSlug, activity.id);
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
   const manual = useWatch({ control: form.control, name: 'physicalPercentComplete' });
 
-  const stepRows = steps.data ?? [];
   const rolled = rollupPhysicalPercent(
-    stepRows.map((s) => ({ weight: Number(s.weight), percentComplete: s.percentComplete })),
+    steps.map((s) => ({ weight: Number(s.weight), percentComplete: s.percentComplete })),
     manual ?? null,
   );
   // Steps WIN whenever their weights sum above zero (ADR-0044 §33 / N27). Until now the manual
   // field stayed editable and was silently ignored — the defect that started this epic.
   const stepsWin =
-    stepRows.length > 0 &&
-    stepRows.reduce((sum, s) => sum + Number(s.weight), 0) > 0 &&
-    rolled !== null;
+    steps.length > 0 && steps.reduce((sum, s) => sum + Number(s.weight), 0) > 0 && rolled !== null;
 
   return (
     <form
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        // The body comes from the shared builder, never a literal here — `scope-bodies.ts` is where
-        // "this scope's keys and no other's" is stated once and pinned by test. A hand-rolled copy
-        // beside it is two implementations of one mapping, with nothing keeping them equal.
-        void form.handleSubmit((values) => onSave(measureBody(values), () => form.reset(values)))(
-          event,
-        );
+        void form.handleSubmit(onSave)(event);
       }}
       className="flex flex-col gap-4"
     >
       <FieldGateProvider gate={gate}>
         <PanelHeading title={MEASURE_SECTION_TITLE} effect={MEASURE_SECTION_DESCRIPTION} />
         <FormProblemCount errors={form.formState.errors} />
+        {error ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {error}
+          </p>
+        ) : null}
         {EARNED_VALUE_ENABLED ? (
           <>
             {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
@@ -359,11 +293,20 @@ export function ValueMeasurePanel({
           pending={pending}
           saved={saved}
           label="Save measure"
+          {...(dirtyMessage === undefined ? {} : { dirtyMessage })}
         />
       </FieldGateProvider>
     </form>
   );
 }
+
+/**
+ * A control the gate or the list's end shades stays in the tab order (ADR-0083, ADR-0135): a native
+ * `disabled` drops focus to <body> the instant the pen is lost under a reader mid-edit. The class
+ * pairs with `aria-disabled`, and every handler checks the same condition, so it is inert without
+ * ever leaving the focus ring.
+ */
+const SHADED_BUTTON = 'aria-disabled:pointer-events-none aria-disabled:opacity-60';
 
 /** A blank list starts empty; append adds equally-weighted rows so a first save is a plain average. */
 const NEW_STEP = { name: '', weight: 1, percentComplete: 0 } as const;
@@ -389,87 +332,91 @@ function formatRollup(value: number | null): string {
  *    lit-but-inert dead end this epic exists to remove.
  */
 export function WeightedStepsPanel({
-  orgSlug,
-  planId,
+  form,
+  array,
+  isDirty,
+  query,
   activity,
   gate,
-  open,
+  onSave,
+  pending,
+  saved,
+  error,
   announce,
   autoFocusHeading = false,
-  onDirtyChange,
+  onHeadingFocused,
 }: {
-  orgSlug: string;
-  planId: string;
-  activity: ActivitySummary;
+  form: UseFormReturn<StepsFormValues>;
+  /** The session's `useFieldArray`: the rows are its state, so a draft outlives this panel. */
+  array: UseFieldArrayReturn<StepsFormValues, 'steps'>;
+  isDirty: boolean;
+  /** The session's steps query, reduced to what this panel renders. */
+  query: { isError: boolean; isPending: boolean; refetch: () => unknown };
+  activity: Pick<ActivitySummary, 'id' | 'physicalPercentComplete'>;
   gate: ScopeGate;
-  open: boolean;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and re-seeds from the saved list. */
+  onSave: (steps: StepsFormValues['steps']) => void;
+  pending: boolean;
+  saved: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error: string | null;
   announce: (message: string) => void;
   /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
   autoFocusHeading?: boolean;
   /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
+   * Called once focus has been moved, so the host can stop asking: the panel mounts on every visit to
+   * Progress, and without this a return to the tab would pull focus to the heading again.
    */
-  onDirtyChange?: (dirty: boolean) => void;
-  /**
-   * NOTE: this panel's `isDirty` comes from its own `useForm` + `useFieldArray`, not `useScopeForm`,
-   * so a `move()` re-keys the rows and marks it dirty even if the planner restores the order.
-   * Accepted rather than fixed: the cost of that false positive is one extra confirmation dialog,
-   * and the cost of chasing it is comparing arrays on every keystroke.
-   */
+  onHeadingFocused?: () => void;
 }): React.ReactElement {
-  const steps = useActivitySteps(orgSlug, activity.id);
-  const replace = useReplaceActivitySteps(orgSlug, planId, activity.id);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // After the frame, not at mount: this panel mounts in the same commit that opens the dialog, and
+  // child effects run before `Dialog`'s `showModal()` effect — so a synchronous `focus()` here lands
+  // on an element of a dialog that is not yet showing and does nothing. A frame later it is.
   useEffect(() => {
-    if (open && autoFocusHeading) headingRef.current?.focus();
-  }, [open, autoFocusHeading, activity.id]);
+    if (!autoFocusHeading) return;
+    const frame = requestAnimationFrame(() => {
+      headingRef.current?.focus();
+      onHeadingFocused?.();
+    });
+    return () => cancelAnimationFrame(frame);
+    // `onHeadingFocused` is deliberately not a dependency: the host's callback changes identity on
+    // every render, and re-running this on each would cancel the frame it is waiting for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires per request, not per render
+  }, [autoFocusHeading, activity.id]);
 
-  // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists on the next paint.
-  // A no-dep effect runs after every commit and drains a one-shot callback.
+  // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists after the next commit.
+  // A no-dep LAYOUT effect runs in every commit and drains a one-shot callback. Not a passive effect:
+  // React flushes the previous commit's pending passive effects before it renders a new update, and
+  // that flush runs after the click handler has set the callback — so it drained against the OLD DOM
+  // and dropped focus to <body> whenever a click followed a commit closely (observed in the editor's
+  // "focuses the new row's name field on add" test once the steps mutation left this component).
   const listRef = useRef<HTMLUListElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<(() => void) | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pendingFocus.current) {
       pendingFocus.current();
       pendingFocus.current = null;
     }
   });
 
+  // A save re-seeds the rows from the server's list, which gives every row a new key: the input an
+  // Enter-to-save was pressed in is replaced, and the browser drops focus to <body> (SC 2.4.3). When
+  // that is where focus ended up, put it on the Save button — the one control this form keeps.
+  useLayoutEffect(() => {
+    if (!saved || document.activeElement !== document.body) return;
+    sectionRef.current?.querySelector<HTMLButtonElement>('button[type="submit"]')?.focus();
+  }, [saved]);
+
   const {
     register,
     control,
     handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<StepsFormValues>({
-    resolver: zodResolver(stepsFormSchema),
-    defaultValues: { steps: [] },
-  });
-
-  useReportDirty(onDirtyChange, isDirty);
-  const { fields, append, remove, move } = useFieldArray({ control, name: 'steps' });
-
-  // Seeded on open / target / load change — a late-arriving fetch still populates. Unlike the
-  // definition scopes (see `useScopeForm`'s trap 2) the steps list is its own query, so keying on the
-  // loaded rows cannot be tripped by a sibling scope's save refetching the activity.
-  const loadedSteps = steps.data;
-  useEffect(() => {
-    if (!open) return;
-    reset({
-      steps: (loadedSteps ?? []).map((step) => ({
-        name: step.name,
-        weight: step.weight,
-        percentComplete: step.percentComplete,
-      })),
-    });
-    replace.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open / target / load change
-  }, [open, activity.id, loadedSteps]);
+    formState: { errors },
+  } = form;
+  const { fields, append, remove, move } = array;
 
   // The same weighted mean the server computes, so the planner sees the figure before saving.
   const watchedSteps = useWatch({ control, name: 'steps' });
@@ -481,18 +428,8 @@ export function WeightedStepsPanel({
     activity.physicalPercentComplete ?? null,
   );
 
-  const onSubmit = handleSubmit((values) => {
-    replace.mutate(
-      // Read from the live row at submit time, like every other scope — a sibling save bumps it.
-      { version: activity.version, steps: values.steps },
-      {
-        onSuccess: (saved) => {
-          reset({ steps: saved.map((s) => ({ ...s })) });
-          announce('Steps saved.');
-        },
-      },
-    );
-  });
+  // The host reads the version from the live row at submit time, like every other scope.
+  const onSubmit = handleSubmit((values) => onSave(values.steps));
 
   const rowAt = (index: number): Element | undefined =>
     listRef.current?.querySelectorAll(':scope > li')[index];
@@ -531,9 +468,9 @@ export function WeightedStepsPanel({
           ? ['[data-step-up]', '[data-step-down]']
           : ['[data-step-down]', '[data-step-up]'];
       const preferred = row.querySelector<HTMLButtonElement>(wanted);
-      // At either end of the list the button just pressed is now disabled; fall through to its
-      // sibling rather than letting focus land on <body>.
-      (preferred && !preferred.disabled
+      // At either end of the list the button just pressed is now shaded; fall through to its
+      // sibling rather than leaving focus on a control that does nothing.
+      (preferred && preferred.getAttribute('aria-disabled') !== 'true'
         ? preferred
         : row.querySelector<HTMLButtonElement>(fallback)
       )?.focus();
@@ -542,7 +479,7 @@ export function WeightedStepsPanel({
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section ref={sectionRef} className="flex flex-col gap-4">
       <PanelHeading
         title="Weighted steps"
         effect="Sets the physical % complete. Changes no dates."
@@ -559,16 +496,16 @@ export function WeightedStepsPanel({
         <span className="text-lg font-semibold tabular-nums">{formatRollup(rollup)}</span>
       </div>
 
-      {steps.isError ? (
+      {query.isError ? (
         <div className="flex flex-col items-start gap-3">
           <p role="alert" className="text-destructive-text text-sm">
             Couldn’t load steps.
           </p>
-          <Button variant="outline" size="sm" onClick={() => void steps.refetch()}>
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
             Try again
           </Button>
         </div>
-      ) : steps.isPending ? (
+      ) : query.isPending ? (
         <p className="text-muted-foreground text-sm">Loading steps…</p>
       ) : (
         <form
@@ -581,9 +518,9 @@ export function WeightedStepsPanel({
         >
           <FieldGateProvider gate={gate}>
             <FormProblemCount errors={errors} />
-            {replace.isError ? (
+            {error ? (
               <p role="alert" className="text-destructive-text text-sm">
-                {replace.error.message}
+                {error}
               </p>
             ) : null}
 
@@ -639,9 +576,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="outline"
                           data-step-up=""
-                          disabled={!gate.writable || index === 0}
+                          aria-disabled={!gate.writable || index === 0}
+                          className={SHADED_BUTTON}
                           aria-label={`Move up, step ${index + 1}`}
-                          onClick={() => moveStep(index, -1)}
+                          onClick={() => {
+                            if (gate.writable && index > 0) moveStep(index, -1);
+                          }}
                         >
                           Move up
                         </Button>
@@ -650,9 +590,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="outline"
                           data-step-down=""
-                          disabled={!gate.writable || index === fields.length - 1}
+                          aria-disabled={!gate.writable || index === fields.length - 1}
+                          className={SHADED_BUTTON}
                           aria-label={`Move down, step ${index + 1}`}
-                          onClick={() => moveStep(index, 1)}
+                          onClick={() => {
+                            if (gate.writable && index < fields.length - 1) moveStep(index, 1);
+                          }}
                         >
                           Move down
                         </Button>
@@ -661,9 +604,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="ghost"
                           data-step-remove=""
-                          disabled={!gate.writable}
+                          aria-disabled={!gate.writable}
+                          className={SHADED_BUTTON}
                           aria-label={`Remove step ${index + 1}`}
-                          onClick={() => removeStep(index)}
+                          onClick={() => {
+                            if (gate.writable) removeStep(index);
+                          }}
                         >
                           Remove
                         </Button>
@@ -679,8 +625,11 @@ export function WeightedStepsPanel({
                 ref={addButtonRef}
                 type="button"
                 variant="outline"
-                disabled={!gate.writable}
-                onClick={addStep}
+                aria-disabled={!gate.writable}
+                className={SHADED_BUTTON}
+                onClick={() => {
+                  if (gate.writable) addStep();
+                }}
               >
                 Add step
               </Button>
@@ -693,8 +642,8 @@ export function WeightedStepsPanel({
             <ScopeSaveBar
               gate={gate}
               dirty={isDirty}
-              pending={replace.isPending}
-              saved={replace.isSuccess}
+              pending={pending}
+              saved={saved}
               label="Save steps"
             />
           </FieldGateProvider>
