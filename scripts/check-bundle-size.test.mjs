@@ -22,7 +22,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { runGate } from '../apps/web/scripts/check-bundle-size.mjs';
+import { findChunkCycles, runGate } from '../apps/web/scripts/check-bundle-size.mjs';
 import { packagesIn, staticClosure } from '../apps/web/scripts/bundle-report-plugin.ts';
 
 let failures = 0;
@@ -56,7 +56,7 @@ const BUDGET = {
 
 /** Run the gate quietly — its own output would drown the suite's — keeping what it said. */
 let said = '';
-function run(report = REPORT, budget = BUDGET) {
+function run(report = REPORT, budget = BUDGET, chunkSources = undefined) {
   const write = process.stdout.write.bind(process.stdout);
   said = '';
   process.stdout.write = (chunk) => {
@@ -64,7 +64,7 @@ function run(report = REPORT, budget = BUDGET) {
     return true;
   };
   try {
-    return runGate({ report, budget });
+    return runGate({ report, budget, chunkSources });
   } finally {
     process.stdout.write = write;
   }
@@ -129,6 +129,44 @@ it('B3 — the ceiling does NOT apply to entry-graph chunks', () => {
   r.chunks[0].gzip = BUDGET.maxNonEntryChunkGzipBytes + 1;
   r.entryGraph.gzip = BUDGET.entryGraphGzipBytes;
   assert.equal(run(r), 0);
+});
+
+it('B9 — a synthetic two-chunk import cycle FAILS, naming both chunks', () => {
+  // ADR-0110: the defect the assertion names, built. Both import forms are used so neither regex
+  // branch can be dropped unnoticed: a named static import, and a bare re-export.
+  const sources = {
+    'a-1.js': 'import{x as y}from"./b-2.js";export{y as z};',
+    'b-2.js': 'export{q}from"./a-1.js";',
+  };
+  assert.deepEqual(findChunkCycles(sources), [['a-1.js', 'b-2.js']]);
+  assert.equal(run(REPORT, BUDGET, sources), 1);
+  assert.match(said, /a-1\.js <-> b-2\.js/);
+});
+
+it('B9 — a longer cycle through a third chunk FAILS too', () => {
+  const sources = {
+    'a.js': 'import"./b.js";',
+    'b.js': 'import{n}from"./c.js";',
+    'c.js': 'import{m}from"./a.js";',
+  };
+  assert.deepEqual(findChunkCycles(sources), [['a.js', 'b.js', 'c.js']]);
+});
+
+it('B9 — an acyclic set, with a diamond and a DYNAMIC back-reference, passes', () => {
+  // The dynamic `import("./a.js")` in `d.js` points back up the graph and is NOT an edge: the
+  // gate must not read a lazy route that links home as a cycle.
+  const sources = {
+    'a.js': 'import{x}from"./b.js";import{y}from"./c.js";',
+    'b.js': 'import{z}from"./d.js";',
+    'c.js': 'import{z}from"./d.js";',
+    'd.js': 'const go=()=>import(`./a.js`);',
+  };
+  assert.deepEqual(findChunkCycles(sources), []);
+  assert.equal(run(REPORT, BUDGET, sources), 0);
+});
+
+it('B9 — an empty chunk set is refused, not read as "no cycles"', () => {
+  assert.equal(run(REPORT, BUDGET, {}), 1);
 });
 
 it('B4 — a report with no entryGraph.gzip is refused, not read as zero', () => {

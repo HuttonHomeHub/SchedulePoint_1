@@ -60,7 +60,7 @@
  * route actually triggers, are `docs/TECH_DEBT.md` #292's subject and not this gate's. A green run
  * means the payload has not grown past the line, never that the page is quick.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 const root = new URL('..', import.meta.url);
 const NAME = 'check:bundle-size';
@@ -95,6 +95,81 @@ function finish(problems, population, summary) {
 }
 
 /**
+ * The static `import … from "./x.js"` and `export … from "./x.js"` edges of one emitted chunk.
+ *
+ * Read from the emitted text rather than from Rollup's `imports` list because this is the artefact
+ * the browser actually evaluates. A dynamic `import("./x.js")` is not an edge: it opens a call, not
+ * a module-evaluation dependency, and cannot deadlock initialisation order. The pattern needs the
+ * quote to follow `import`/`from` directly, which is what excludes `import(`.
+ */
+const STATIC_EDGE = /\b(?:import|export)\s*(?:[^;"'`()]*?\bfrom\s*)?["'`]\.\/([^"'`]+\.js)["'`]/g;
+
+/**
+ * Chunks that import each other, found as strongly connected components larger than one (Tarjan).
+ *
+ * `sources` maps an emitted file name to its text. A cycle between chunks is not a size problem and
+ * no other assertion sees it: the modules in it evaluate in an order the page then depends on, which
+ * broke the plan screen intermittently (`Cannot read properties of undefined (reading 'FS')`) the
+ * one time a chunk grouping produced one (`vite.config.ts`). Iterative, so a long import chain
+ * cannot overflow the stack.
+ */
+export function findChunkCycles(sources) {
+  const names = Object.keys(sources);
+  const known = new Set(names);
+  const edges = new Map(
+    names.map((name) => [
+      name,
+      [...sources[name].matchAll(STATIC_EDGE)].map((m) => m[1]).filter((t) => known.has(t)),
+    ]),
+  );
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const cycles = [];
+  let counter = 0;
+  for (const root of names) {
+    if (index.has(root)) continue;
+    const work = [[root, 0]];
+    while (work.length > 0) {
+      const frame = work[work.length - 1];
+      const [node, i] = frame;
+      if (i === 0) {
+        index.set(node, counter);
+        low.set(node, counter);
+        counter += 1;
+        stack.push(node);
+        onStack.add(node);
+      }
+      const out = edges.get(node);
+      if (i < out.length) {
+        frame[1] += 1;
+        const next = out[i];
+        if (!index.has(next)) work.push([next, 0]);
+        else if (onStack.has(next)) low.set(node, Math.min(low.get(node), index.get(next)));
+        continue;
+      }
+      work.pop();
+      if (work.length > 0) {
+        const parent = work[work.length - 1][0];
+        low.set(parent, Math.min(low.get(parent), low.get(node)));
+      }
+      if (low.get(node) === index.get(node)) {
+        const component = [];
+        let member;
+        do {
+          member = stack.pop();
+          onStack.delete(member);
+          component.push(member);
+        } while (member !== node);
+        if (component.length > 1) cycles.push(component.sort());
+      }
+    }
+  }
+  return cycles;
+}
+
+/**
  * Run every assertion against a report and a budget, and return the exit code.
  *
  * **Exported, and the CLI below is a thin caller, so a suite drives the REAL assertions.** It was
@@ -104,8 +179,27 @@ function finish(problems, population, summary) {
  * shipped with every suite in the repository green — the exact failure this epic exists to remove,
  * in its own newest gate.
  */
-export function runGate({ report, budget }) {
+export function runGate({ report, budget, chunkSources }) {
   const problems = [];
+
+  /**
+   * B9 — no two emitted chunks import each other, statically, directly or through others.
+   *
+   * `chunkSources` is absent only for a caller that has no `dist/` to give; the CLI always gives
+   * one, and an EMPTY one is refused rather than read as "no cycles".
+   */
+  if (chunkSources !== undefined) {
+    if (Object.keys(chunkSources).length === 0) {
+      problems.push('no emitted chunks were found to check for import cycles — build first.');
+    }
+    for (const cycle of findChunkCycles(chunkSources)) {
+      problems.push(
+        `chunks import each other in a cycle: ${cycle.join(' <-> ')}.\n` +
+          '      Their evaluation order is then undefined to the page. Adjust the `codeSplitting` ' +
+          'groups in vite.config.ts (a group that spans an entry and a lazy route is the usual cause).',
+      );
+    }
+  }
 
   /** B7 — an unknown key means the file was edited against a different reader. */
   const KNOWN = new Set([
@@ -313,8 +407,17 @@ if (process.argv[1] && process.argv[1].endsWith('check-bundle-size.mjs')) {
     say(`${NAME}: FAIL — build first: pnpm --filter @repo/web build`);
     process.exit(1);
   }
+  const assets = new URL('dist/assets/', root);
+  const chunkSources = existsSync(assets)
+    ? Object.fromEntries(
+        readdirSync(assets)
+          .filter((f) => f.endsWith('.js'))
+          .map((f) => [f, readFileSync(new URL(f, assets), 'utf8')]),
+      )
+    : {};
   process.exit(
     runGate({
+      chunkSources,
       report: JSON.parse(readFileSync(reportPath, 'utf8')),
       budget: JSON.parse(readFileSync(new URL('bundle-budget.json', root), 'utf8')),
     }),
