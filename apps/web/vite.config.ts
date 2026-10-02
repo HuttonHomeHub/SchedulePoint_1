@@ -92,7 +92,12 @@ export default defineConfig({
     // plan's own code in (one chunk of 260+ kB gzip), and `entriesAware` grouping or `maxSize`
     // splitting produced chunk cycles whose initialisation order broke the page intermittently
     // (`Cannot read properties of undefined (reading 'FS')`). `check-bundle-size` fails on the
-    // first; a cycle is not checked by anything, so re-run a cycle probe after touching this.
+    // first (B3's per-chunk ceiling) and on the second (B9 reads the emitted chunks and fails on any
+    // import cycle between them), so a bad edit here fails `pnpm check:web-bundle`.
+    //
+    // The group's test is anchored to this app's own `src` (`apps/web/src`), so a dependency's
+    // `src/lib` or a workspace package cannot match it, and it names no staff code: the staff
+    // endpoints' strings belong to the staff console's chunk, not to every customer's first screen.
     rolldownOptions: {
       output: {
         codeSplitting: {
@@ -100,7 +105,7 @@ export default defineConfig({
             { name: 'boot', tags: ['$initial'], priority: 3 },
             {
               name: 'ui-shared',
-              test: /node_modules[\\/]lucide-react[\\/]|[\\/]src[\\/](components[\\/](ui|layout[\\/](breadcrumbs|chrome))|lib|hooks|features[\\/](staff[\\/]api|(clients|projects|plans|calendars|resources|interchange)[\\/]))/,
+              test: /node_modules[\\/]lucide-react[\\/]|[\\/]apps[\\/]web[\\/]src[\\/](components[\\/](ui|layout[\\/](breadcrumbs|chrome))|lib|hooks|features[\\/](clients|projects|plans|calendars|resources|interchange)[\\/])/,
               priority: 1,
             },
           ],
