@@ -220,6 +220,13 @@ journey (ADR-0081 §2).
 **Outcome:** the app has a route pending state, a structural gate that refuses a statically-added
 route, and a budget ratchet. One low-risk group (`account`) is split to prove the machinery
 end to end.
+
+> **Status 2026-10-02: BUILT (the builder run), pending the orchestrator's journey run.** Three things the plan did not say, recorded as built:
+>
+> - **S1 is a vitest structural test, not a root `check:*` script** (`apps/web/src/app/router-splitting.structural.test.ts`), so it needs no CI step and `pnpm test` already runs it. It carries a temporary `SCHEDULED` list (the 11 screens M2 and M3 convert) that fails when an entry stops being static; **M2 and M3 must delete the entries they convert**, and M5 closes on the list being empty.
+> - **The authenticated frame became lazy in M1**, because CQ-1 says it is lazy in the final design and no later task owns the conversion. Measured at M1 (entry graph gzip): nothing split 461,670; account group alone 467,693 (**+6,023**, chunk boundaries cost compression while most screens are static); account group and frame 461,315 (**-355**). So the entry graph is **not** expected to fall until M2 and M3, **P4's 100,000 bar cannot be met at M1**, and the journey asserts "no more than 1% above the pre-split 463,933" instead, with the full bar left to M3. B8b does not fire at M1 and the budget is unchanged.
+> - **The M1 journey is hermetic** (`/sign-in` to the lazy `/sign-up`; no API), so it drives the stale-deploy path, the pending state and the waves, but **not** the lazy frame or the Account navigation, which need a session. Those ride on `e2e-account`, `e2e-shell` and the base journey, against the dev server.
+
 **Entry point:** the loading treatment on a slow navigation to **Account** — reached from the
 account chip → **Account**. It is user-facing: a planner on a slow connection now sees a skeleton
 where they previously saw nothing happen.
