@@ -1,8 +1,8 @@
 # Implementation Plan: Route code splitting — the web entry graph
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved 2026-10-02
-  (product owner)**
-- **Status:** Approved — 2026-10-02 (product owner). CQ-1 lazy shell; CQ-2 10% deep link / 5% in-app; CQ-4 container readings only, so no milestone waits on a product-owner sitting.
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted — shipped
+  (ADR-0171)**
+- **Status:** Accepted — shipped (ADR-0171). Approved 2026-10-02 (product owner): CQ-1 lazy shell; CQ-2 10% deep link / 5% in-app, **partially met, refresh limb accepted by the product owner**; CQ-4 container readings only, so no milestone waited on a product-owner sitting.
 - **Owner:** web
 
 > **Refreshed 2026-10-02 against `main` (spec §0.5).** What changed in this plan:
@@ -574,6 +574,17 @@ bookmarked-plan path.
 
 ### Milestone 4: The budget, and the documents
 
+> **Shipped 2026-10-02.** B8b did not require a further re-floor: the final entry graph is 176,749
+> gzip bytes against the 180,121 floor (176,749 x 1.05 is above it), so the budgets stand at 189,440 /
+> 135,168 / 17,408 and the per-chunk ceiling did not need a `raisedBecause`. The splitting sections of
+> `FRONTEND_QUALITY.md` and `FRONTEND_ARCHITECTURE.md` are rewritten, and #292 is closed.
+>
+> **CQ-2 decision, 2026-10-02 (product owner): accept the measured trade-off and ship.** Cold deep link
+> +8.5% (passes), in-app +4.99% (inside the limit, indeterminate at 4.1% spread), refresh +17.4% (fails
+> 10%, measured through `vite preview`, which revalidates every chunk where nginx serves them
+> immutable). **CQ-2 partially met; refresh limb accepted by the product owner.** M3 is not withdrawn;
+> the follow-up is `docs/TECH_DEBT.md` #433.
+
 **Outcome:** the budget is re-derived downward with its ratchet armed; every governing document
 describes what the code now does.
 **Entry point:** **Ships dark** — no user-facing change. M1–M3 carried the capability.
@@ -622,6 +633,11 @@ describes what the code now does.
 ---
 
 ### Milestone 5: The gate pass, and the ADR
+
+> **Shipped 2026-10-02 as ADR-0171.** The reviews' non-blocking findings were folded: a chunk-cycle
+> gate (B9), `index.html` revalidated by nginx, the `ui-shared` group anchored and stripped of staff
+> endpoints, the warm-up run once and when idle, the pending status announced, and the error screen
+> focused, offline-aware and honest about the router's own reload.
 
 **Outcome:** specialist reviews over the combined diff; the boundary rule is filed as an ADR.
 **Entry point:** **Ships dark.**

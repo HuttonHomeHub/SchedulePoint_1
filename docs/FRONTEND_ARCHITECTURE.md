@@ -151,19 +151,24 @@ and components. Deleting a feature should mean deleting one folder.
   a screen must always pass them. See `routes/calendars.tsx` / `routes/resources.tsx`.
 - **Guards.** `beforeLoad` on the `_authed` layout enforces authentication and
   redirects unauthenticated users to sign-in with a `redirect` param.
-- **Code splitting.** **Not implemented yet, and this bullet asserted the opposite
-  for the project's life.** Of 23 registered routes exactly **two** are lazy
-  (`/share`, `/staff`), `vite.config.ts` sets no `manualChunks`, and every
-  authenticated screen — the plan workspace, the Gantt, the canvas host, every
-  dialog — is in the entry chunk, so a visitor downloads the whole application
-  before the sign-in form paints. Measured 2026-09-12: **404,797 gzip bytes** in
-  the entry graph, of which **33,478 is TSLD painter code** reached statically
-  from `TsldCanvas.tsx:46`.
-  `docs/TECH_DEBT.md` #292 corrected this same sentence in
-  [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md) and **left this copy standing** —
-  the ADR-0071 shape, in the Routing section a reader opens first. The rule that
-  replaces it, and the measured floor it can reach, are in
-  [`specs/route-code-splitting/`](specs/route-code-splitting/).
+- **Code splitting** (ADR-0171). Every route's screen is a `lazyRouteComponent`
+  except `SignInScreen`, the page every cold visit redirects to; the allow-list
+  and its reasons live in `app/router-splitting.structural.test.ts`, so a new
+  route is split or is named there. The app frame (`authed-layout`) is lazy
+  too. The entry graph is **176,749 gzip bytes** (461,186 before).
+  The rule for a new route: bind it lazily; if a leaf layer it imports is shared
+  with the plan screen, it already lives in `ui-shared`, and the group's
+  directories are changed only with a measurement and a clean `check:web-bundle`
+  (the cycle gate). `defaultPendingComponent` is `RoutePending`, shown after the
+  library's 1,000 ms and kept 500 ms.
+  After the session is known the router fetches the hierarchy screens and the
+  plan screen once, when the browser is idle; a plan URL opened directly fetches
+  the frame and plan at boot. A chunk that fails to download reaches
+  `RouteErrorScreen`, whose button reloads the page (the router has already
+  reloaded once by itself, `lazyRouteComponent.js:37-44`) and withholds the
+  reload while offline. nginx serves `index.html` `no-cache` and `/assets/`
+  immutable, which is what lets a release replace its chunk names safely.
+  [`specs/route-code-splitting/`](specs/route-code-splitting/) has the numbers.
 
 ## Data fetching & caching (ADR-0004)
 

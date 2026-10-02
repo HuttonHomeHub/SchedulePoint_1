@@ -434,3 +434,26 @@ own rule). **Deep link warm does not pass** (+17.4%). The remaining ~190 ms is o
 asks for a route's chunk only after the entry has executed, and a chunk cannot be named in `index.html`
 (hashed, and sign-in must not pay for it). Closing it needs a build step that writes the plan graph into the
 HTML for plan URLs only, which is new machinery the plan did not anticipate and is not built here.
+
+## 14. Final readings, and the decision (2026-10-02)
+
+`ROUTE_SPLIT_LABEL=final`, the same machine and harness, taken after the review fixes (the chunk-cycle
+gate, the anchored `ui-shared` group, the once-only idle warm-up, the pending and error screens). Medians,
+`readyMs`, against `after-fix` in §13:
+
+| path             | after-fix | final | spread (final) |
+| ---------------- | --------- | ----- | -------------- |
+| signInCold       | 1,400     | 1,398 | 2.5%           |
+| planDeepLinkCold | 3,882     | 3,874 | 11.9%          |
+| planDeepLinkWarm | 1,407     | 1,403 | 2.7%           |
+| planInApp        | 2,253     | 2,251 | 22.0%          |
+
+Nothing regressed; the deferred warm-up costs nothing the harness can see. The in-app spread is one
+slow run (2,664 ms against a 2,169-2,251 body) and the median is unmoved, but it is a wide spread and
+the in-app limb stays **indeterminate**. Entry graph 176,749 gzip bytes in two chunks, CSS 16,256,
+largest lazy chunk `jspdf` 128,581, `plan-detail` 87,392, `ui-shared` 86,660.
+
+**Verdict against CQ-2: partially met; the refresh limb is accepted by the product owner
+(2026-10-02).** Cold deep link passes, in-app is inside its limit and indeterminate, refresh fails at
++17.4% through `vite preview`, which revalidates every chunk where nginx serves `/assets/` immutable.
+Re-measuring that path with the production headers is `docs/TECH_DEBT.md` #433.

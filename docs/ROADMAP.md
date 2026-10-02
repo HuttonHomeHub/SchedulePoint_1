@@ -578,6 +578,13 @@ keep `main` releasable.
   > what the diagram's does, and that every Gantt write holding one end of a bar counts **working**
   > days, as the diagram's already does. The working-day fix and the handle ship in one release.
 
+  > **Route code splitting — merged 2026-10-02, releasing after web 0.157.0** (**ADR-0171**,
+  > `docs/specs/route-code-splitting/`, closing `docs/TECH_DEBT.md` #292). Every screen except sign-in
+  > now downloads when it is opened: the first visit's JavaScript fell from 461,186 to 176,749 gzip
+  > bytes and the sign-in screen is 50% faster in the build container. Opening a plan from a bookmark
+  > is 8% slower and a refresh 17% slower there; the product owner accepted the refresh trade, and
+  > `docs/TECH_DEBT.md` #433 owns re-measuring it behind the production cache headers.
+
 ## Delivered — operations & supportability
 
 **A theme this roadmap did not have.** Everything below was built between 2026-08-05 and

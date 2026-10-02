@@ -1,6 +1,6 @@
 # Feature Spec: Route code splitting — the web entry graph
 
-- **Status:** Approved — 2026-10-02 (product owner). CQ-1 lazy shell; CQ-2 up to 10% slower on a deep link or reload, at most 5% slower in-app; CQ-4 container readings only (§1 "Open questions").
+- **Status:** Accepted — shipped (ADR-0171). Approved 2026-10-02 (product owner): CQ-1 lazy shell; CQ-2 up to 10% slower on a deep link or reload, at most 5% slower in-app, **partially met, with the refresh limb accepted by the product owner on 2026-10-02**; CQ-4 container readings only (§1 "Open questions").
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-12 · **Refreshed:** 2026-10-02 (re-verified against `main`; see §0.5)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #292
@@ -390,6 +390,18 @@ follows each one in small print for the build agents.
 > `defaultPreload: 'intent'` (`router.tsx:511`), which covers in-app navigation and nothing about a
 > reload. M3 is one revertible commit, which is what makes "withdraw the workspace part only"
 > real.</sub>
+
+> **CQ-2 outcome — RECORDED 2026-10-02 (product owner): partially met; the refresh limb is accepted.**
+> Container medians against the pre-split build (`m0-measurement.md` §13 and the `final` run), same
+> machine and harness: sign-in **-50%**; plan deep link, cold **+8.5%** (passes 10%); plan opened in
+> the app **+4.99%** (inside 5%, but **indeterminate** at that path's 4.1% spread); plan deep link
+> on a **refresh +17.4%** (fails 10%). The refresh figure was taken through `vite preview`, which
+> revalidates every hashed chunk, while nginx serves `/assets/` immutable, so the deployed cost is
+> expected to be lower and has not been measured. The product owner chose to ship rather than
+> withdraw M3, accepting the refresh trade. `docs/TECH_DEBT.md` #433 re-measures it behind the
+> production cache headers; its trigger is the next change to chunking or preloads, or a planner
+> reporting slow refreshes. The same-machine `final` run after the last review fixes read 1,398 /
+> 3,874 / 1,403 / 2,251 ms (sign-in, cold, refresh, in-app): within 1% of the figures above.
 
 > **CQ-4 — ANSWERED 2026-10-02 (product owner): container readings only.** The product owner will
 > **not** take Lighthouse readings, so Option A is declined and the default below applies: Option B,
