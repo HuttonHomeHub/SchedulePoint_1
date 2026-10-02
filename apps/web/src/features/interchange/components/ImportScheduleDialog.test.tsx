@@ -375,6 +375,23 @@ describe('ImportScheduleDialog', () => {
       expect(screen.getByText('Lanes')).toBeInTheDocument();
     });
 
+    it('marks the checkbox busy while the toggle re-runs the dry-run, and clears it when it settles', async () => {
+      let settle: (response: Response) => void = () => undefined;
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse(200, { data: LAYOUT_REPORT }))
+        .mockReturnValueOnce(new Promise<Response>((resolve) => (settle = resolve)));
+      renderDialog();
+      pickFile();
+      const option = await screen.findByLabelText('Restore the SchedulePoint layout');
+      expect(option).not.toHaveAttribute('aria-busy', 'true');
+
+      fireEvent.click(option);
+      await waitFor(() => expect(option).toHaveAttribute('aria-busy', 'true'));
+
+      settle(jsonResponse(200, { data: REPORT }));
+      await waitFor(() => expect(option).not.toHaveAttribute('aria-busy', 'true'));
+    });
+
     it('unticking re-runs the dry-run with IGNORE, stays offered, and carries IGNORE to the commit', async () => {
       vi.mocked(fetch)
         .mockResolvedValueOnce(jsonResponse(200, { data: LAYOUT_REPORT }))
