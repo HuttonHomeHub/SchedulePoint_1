@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { RouteErrorScreen } from './route-error-screen';
+import { RouteErrorScreen, isChunkLoadFailure } from './route-error-screen';
 
 const invalidate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -64,5 +64,54 @@ describe('RouteErrorScreen', () => {
     // beforeunload guard to recover from what is usually a transient failure.
     expect(reload).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  describe('a chunk that would not download (route code splitting, M1-T1b)', () => {
+    // The three messages the router's own `isModuleNotFoundError` matches, one per engine.
+    const chunkError = new Error(
+      'Failed to fetch dynamically imported module: https://x.test/assets/account-abc.js',
+    );
+
+    function stubReload(): ReturnType<typeof vi.fn> {
+      const reload = vi.fn();
+      vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, reload });
+      return reload;
+    }
+
+    it('reloads the page, because the router latches the failed import for the document', () => {
+      const reload = stubReload();
+      const reset = vi.fn();
+      invalidate.mockClear();
+
+      render(<RouteErrorScreen {...props} error={chunkError} reset={reset} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+      // RED against a screen with no chunk branch: it would reset and invalidate, re-render into
+      // the same latched error, and never reload.
+      expect(reload).toHaveBeenCalledOnce();
+      expect(reset).not.toHaveBeenCalled();
+      expect(invalidate).not.toHaveBeenCalled();
+      vi.restoreAllMocks();
+    });
+
+    it('says why the page will reload', () => {
+      render(<RouteErrorScreen {...props} error={chunkError} reset={vi.fn()} />);
+      expect(screen.getByText(/reloads the page/i)).toBeInTheDocument();
+      expect(screen.queryByText(/temporary problem/i)).not.toBeInTheDocument();
+    });
+
+    it('recognises all three engine messages and nothing else', () => {
+      expect(isChunkLoadFailure(new Error('Failed to fetch dynamically imported module: x'))).toBe(
+        true,
+      );
+      expect(isChunkLoadFailure(new Error('error loading dynamically imported module: x'))).toBe(
+        true,
+      );
+      expect(isChunkLoadFailure(new Error('Importing a module script failed.'))).toBe(true);
+      expect(isChunkLoadFailure(new Error('boom'))).toBe(false);
+      expect(isChunkLoadFailure(new Error('Request failed with status 500'))).toBe(false);
+      expect(isChunkLoadFailure(undefined)).toBe(false);
+      expect(isChunkLoadFailure('Failed to fetch dynamically imported module')).toBe(false);
+    });
   });
 });

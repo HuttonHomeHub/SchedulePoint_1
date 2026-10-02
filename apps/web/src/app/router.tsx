@@ -9,6 +9,7 @@ import {
 import { Suspense, lazy } from 'react';
 
 import { RouteErrorScreen } from '@/app/route-error-screen';
+import { RoutePending } from '@/app/route-pending';
 import { Spinner } from '@/components/ui/spinner';
 import {
   ACCOUNT_SETTINGS_ENABLED,
@@ -511,6 +512,9 @@ export const router = createRouter({
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: RouteErrorScreen,
+  // The timing (1000 ms before it shows, 500 ms minimum) is the library default, left unset on
+  // purpose — see `route-pending.tsx`.
+  defaultPendingComponent: RoutePending,
 });
 
 declare module '@tanstack/react-router' {

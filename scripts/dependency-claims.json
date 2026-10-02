@@ -1051,6 +1051,14 @@
       "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
     },
     {
+      "ref": "utils.js:147-150",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/utils.js",
+      "lines": "147-150",
+      "anchor": "error.message.startsWith(\"Importing a module script failed\")",
+      "citedBy": ["apps/web/src/app/route-error-screen.tsx"]
+    },
+    {
       "ref": "lazyRouteComponent.js:51",
       "package": "@tanstack/react-router",
       "path": "dist/esm/lazyRouteComponent.js",
