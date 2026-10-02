@@ -31,21 +31,26 @@ const it = (name, fn) => cases.push([name, fn]);
 
 /** A report the gate accepts, from which each case removes exactly one thing. */
 const REPORT = {
-  entryGraph: { chunks: 2, raw: 1000, gzip: 1000 },
+  entryGraph: { chunks: 2, raw: 110000, gzip: 100000 },
   chunks: [
-    { file: 'assets/index.js', raw: 900, gzip: 900, inEntryGraph: true, packages: ['react'] },
-    { file: 'assets/paint.js', raw: 100, gzip: 100, inEntryGraph: true, packages: [] },
-    { file: 'assets/jspdf.js', raw: 500, gzip: 400, inEntryGraph: false, packages: ['jspdf'] },
+    { file: 'assets/index.js', raw: 90000, gzip: 90000, inEntryGraph: true, packages: ['react'] },
+    { file: 'assets/paint.js', raw: 10000, gzip: 10000, inEntryGraph: true, packages: [] },
+    { file: 'assets/jspdf.js', raw: 50000, gzip: 40000, inEntryGraph: false, packages: ['jspdf'] },
   ],
-  css: { raw: 200, gzip: 100 },
+  css: { raw: 20000, gzip: 10000 },
 };
 
+/**
+ * Each budget is `floor x 1.05` rounded UP to a whole KiB (B8a): 105,000 -> 105,472 (103 KiB),
+ * 42,000 -> 43,008 (42 KiB), 10,500 -> 11,264 (11 KiB). The floors are not round numbers on purpose
+ * for the last two, so a plain-multiplication implementation of the rule fails the positive case.
+ */
 const BUDGET = {
-  floor: { entryGraphGzipBytes: 1000, maxNonEntryChunkGzipBytes: 400, cssGzipBytes: 100 },
+  floor: { entryGraphGzipBytes: 100000, maxNonEntryChunkGzipBytes: 40000, cssGzipBytes: 10000 },
   headroomRatio: 1.05,
-  entryGraphGzipBytes: 1050,
-  maxNonEntryChunkGzipBytes: 420,
-  cssGzipBytes: 105,
+  entryGraphGzipBytes: 105472,
+  maxNonEntryChunkGzipBytes: 43008,
+  cssGzipBytes: 11264,
   raisedBecause: null,
 };
 
@@ -157,6 +162,78 @@ it('B7 — an unknown key in the budget file FAILS', () => {
   // A key the gate does not read is a number nobody is enforcing, and it looks exactly like one
   // that is. Verified red by dropping the KNOWN-set loop.
   assert.equal(run(REPORT, { ...BUDGET, maxEntryChunkGzipBytes: 999999 }), 1);
+});
+
+it('B8a — a budget looser than floor x headroom, rounded up to a KiB, FAILS', () => {
+  // Verified red by loosening the entry-graph budget by one KiB: nothing else here would notice,
+  // since B1 only compares the report to the budget it is handed.
+  assert.equal(
+    run(REPORT, { ...BUDGET, entryGraphGzipBytes: BUDGET.entryGraphGzipBytes + 1024 }),
+    1,
+  );
+  assert.match(said, /entryGraphGzipBytes is 106496/);
+  assert.equal(
+    run(REPORT, { ...BUDGET, maxNonEntryChunkGzipBytes: BUDGET.maxNonEntryChunkGzipBytes + 1024 }),
+    1,
+  );
+  assert.equal(run(REPORT, { ...BUDGET, cssGzipBytes: BUDGET.cssGzipBytes + 1024 }), 1);
+});
+
+it('B8a — and a budget TIGHTER than the rule fails too: the budget is derived, not chosen', () => {
+  assert.equal(
+    run(REPORT, { ...BUDGET, entryGraphGzipBytes: BUDGET.entryGraphGzipBytes - 1024 }),
+    1,
+  );
+});
+
+it('B8a — the rule is a KiB ceiling, so plain floor x 1.05 is NOT what it asserts', () => {
+  // 100000 x 1.05 = 105000, which is not the budget; 105472 is. A gate that asserted plain
+  // multiplication would reject the committed budget on day one.
+  assert.notEqual(BUDGET.entryGraphGzipBytes, BUDGET.floor.entryGraphGzipBytes * 1.05);
+  assert.equal(run(), 0);
+});
+
+it('B8a — a `raisedBecause` exempts the budgets, and a blank one does not', () => {
+  const loose = { ...BUDGET, entryGraphGzipBytes: BUDGET.entryGraphGzipBytes + 1024 };
+  assert.equal(run(REPORT, { ...loose, raisedBecause: 'a library the product needs' }), 0);
+  assert.equal(run(REPORT, { ...loose, raisedBecause: '   ' }), 1);
+});
+
+it('B8a — a missing headroomRatio is refused, not read as no rule', () => {
+  const b = clone(BUDGET);
+  delete b.headroomRatio;
+  assert.equal(run(REPORT, b), 1);
+});
+
+it('B8b — a build far below the floor FAILS and says to re-floor', () => {
+  // The ratchet. A split changes the report and neither budget field, so without this a build
+  // 280 kB lighter passes every assertion against a budget 280 kB too generous. Verified red
+  // against the real shape: today's budget with a post-split report.
+  const shrunk = clone(REPORT);
+  shrunk.entryGraph.gzip = 50000;
+  assert.equal(run(shrunk), 1);
+  assert.match(said, /Re-floor/);
+});
+
+it('B8b — the boundary: floor / headroom is allowed, one byte under is not', () => {
+  const r = clone(REPORT);
+  r.entryGraph.gzip = 95239; // x 1.05 = 100000.95, at or above the 100000 floor
+  assert.equal(run(r), 0);
+  r.entryGraph.gzip = 95238; // x 1.05 = 99999.9
+  assert.equal(run(r), 1);
+});
+
+it('B8a and B8b hold for the COMMITTED budget, read from the file', () => {
+  // The day-one check: a derivation rule that rejects the repository's own budget is a gate that
+  // gets deleted. A report sitting exactly at the recorded floor must pass both.
+  const budget = JSON.parse(
+    readFileSync(new URL('../apps/web/bundle-budget.json', import.meta.url), 'utf8'),
+  );
+  const report = clone(REPORT);
+  report.entryGraph.gzip = budget.floor.entryGraphGzipBytes;
+  report.chunks[2].gzip = budget.floor.maxNonEntryChunkGzipBytes;
+  report.css.gzip = budget.floor.cssGzipBytes;
+  assert.equal(run(report, budget), 0, said);
 });
 
 it('the empty-population refusal blocks a report with no chunks — ON ITS OWN TERMS', () => {

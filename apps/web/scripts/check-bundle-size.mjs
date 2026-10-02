@@ -49,6 +49,11 @@
  * build that writes none cannot be judged by an old one. `scripts/check-bundle-size.test.mjs` pins
  * both.
  *
+ * ## The budget is derived and ratcheted (B8a, B8b)
+ *
+ * Each budget is its floor x `headroomRatio` rounded up to a whole KiB, and the floor may not sit
+ * above what the build now costs by more than the headroom. See the two assertions below.
+ *
  * ## What it does NOT check
  *
  * Whether the bundle is *fast*. Bytes are a proxy: parse and execute time, and the waterfall a
@@ -61,7 +66,10 @@ const root = new URL('..', import.meta.url);
 const NAME = 'check:bundle-size';
 
 const say = (s) => process.stdout.write(`${s}\n`);
-const kb = (n) => `${(n / 1024).toFixed(2)} kB`;
+// KiB, not kB: the divisor is 1024. The label read `kB` until M1 of `docs/specs/route-code-splitting/`
+// (M0-T2's residue), which made every figure this prints look 2.4% smaller than the bytes in the
+// report it was read from.
+const kb = (n) => `${(n / 1024).toFixed(2)} KiB`;
 
 /**
  * The empty-population refusal, replicated rather than imported.
@@ -217,6 +225,70 @@ export function runGate({ report, budget }) {
     problems.push(
       'bundle-budget.json has no floor.entryGraphGzipBytes — the derivation is unstated.',
     );
+  }
+
+  /**
+   * B8a — each budget is derived from its floor, not chosen.
+   *
+   * The rule, read off every committed pair (three on 2026-09-16, three on 2026-09-25, all
+   * agreeing): **`floor × headroomRatio`, rounded UP to the next whole KiB (1024)**. Plain
+   * multiplication is NOT the rule — it would reject the committed entry-graph budget by about a
+   * kilobyte, a gate failing on day one, which gets deleted rather than fixed. A budget raised on
+   * purpose carries a `raisedBecause` and is exempt: the exemption is the written reason, so a
+   * loosened number cannot arrive without one.
+   */
+  const ratio = budget.headroomRatio;
+  const raised = typeof budget.raisedBecause === 'string' && budget.raisedBecause.trim() !== '';
+  const PAIRS = [
+    ['entryGraphGzipBytes', 'entryGraphGzipBytes'],
+    ['maxNonEntryChunkGzipBytes', 'maxNonEntryChunkGzipBytes'],
+    ['cssGzipBytes', 'cssGzipBytes'],
+  ];
+  if (typeof ratio !== 'number') {
+    problems.push('bundle-budget.json has no numeric headroomRatio — the derivation is unstated.');
+  } else if (!raised) {
+    for (const [key, floorKey] of PAIRS) {
+      const floor = budget.floor?.[floorKey];
+      // The entry floor's absence is B5's finding; do not report one fault twice.
+      if (typeof floor !== 'number') {
+        if (key !== 'entryGraphGzipBytes') {
+          problems.push(`bundle-budget.json has no floor.${floorKey} — ${key} cannot be derived.`);
+        }
+        continue;
+      }
+      const derived = Math.ceil((floor * ratio) / 1024) * 1024;
+      if (budget[key] !== derived) {
+        problems.push(
+          `${key} is ${budget[key]}, but its floor ${floor} x ${ratio}, rounded up to a whole KiB, ` +
+            `is ${derived}.\n` +
+            '      Re-derive it from the floor, or record why it is higher in `raisedBecause`.',
+        );
+      }
+    }
+  }
+
+  /**
+   * B8b — the ratchet: a budget that has become loose says so.
+   *
+   * B8a alone cannot see this. A split changes the report and neither budget field, so a build
+   * that sheds 280 kB passes every other assertion above against a budget now 280 kB too generous —
+   * room for the whole of what was just removed to come back unnoticed. This compares the report to
+   * the floor instead: if the entry graph plus its headroom is below the recorded floor, the floor
+   * is stale, and the remedy is to re-floor at the head that shrank it (a deliberate exception to
+   * `bundle-budget.json`'s "measured at origin/main" rule, for lowerings only —
+   * `docs/specs/route-code-splitting/feature-spec.md` §4).
+   */
+  if (typeof ratio === 'number' && typeof budget.floor?.entryGraphGzipBytes === 'number') {
+    const floor = budget.floor.entryGraphGzipBytes;
+    if (entryGraph * ratio < floor) {
+      problems.push(
+        `the entry graph is ${kb(entryGraph)} gzip, but the recorded floor is ${kb(floor)}: even with ` +
+          `${ratio}x headroom it is below the floor, so the budget now allows the whole of what was ` +
+          'removed to return unnoticed.\n' +
+          '      Re-floor: set `floor` to this build, re-derive the three budgets as floor x ' +
+          'headroomRatio rounded up to a whole KiB, and update `measuredAt` and `measuredBy`.',
+      );
+    }
   }
 
   const spent = entryGraph - (budget.floor?.entryGraphGzipBytes ?? entryGraph);
