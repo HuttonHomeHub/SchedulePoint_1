@@ -1048,7 +1048,10 @@
       "path": "dist/esm/lazyRouteComponent.js",
       "lines": "37-44",
       "anchor": "if (isModuleNotFoundError(error)",
-      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+      "citedBy": [
+        "apps/web/src/app/route-error-screen.tsx",
+        "docs/specs/route-code-splitting/feature-spec.md"
+      ]
     },
     {
       "ref": "utils.js:147-150",

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RouteErrorScreen, isChunkLoadFailure } from './route-error-screen';
@@ -66,6 +66,15 @@ describe('RouteErrorScreen', () => {
     vi.restoreAllMocks();
   });
 
+  it('moves focus to its heading on mount, so a screen reader hears the failure', () => {
+    // RED against a heading with no `tabIndex` and no focus call: `document.activeElement` stays
+    // on `<body>`, because the node the reader was on has been replaced by this screen.
+    render(<RouteErrorScreen {...props} reset={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: 'Something went wrong' });
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(heading).toHaveFocus();
+  });
+
   describe('a chunk that would not download (route code splitting, M1-T1b)', () => {
     // The three messages the router's own `isModuleNotFoundError` matches, one per engine.
     const chunkError = new Error(
@@ -98,6 +107,49 @@ describe('RouteErrorScreen', () => {
       render(<RouteErrorScreen {...props} error={chunkError} reset={vi.fn()} />);
       expect(screen.getByText(/reloads the page/i)).toBeInTheDocument();
       expect(screen.queryByText(/temporary problem/i)).not.toBeInTheDocument();
+    });
+
+    describe('while the browser is offline', () => {
+      function setOnline(value: boolean): void {
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(value);
+      }
+
+      it('says so, and does not reload into a browser error page', () => {
+        setOnline(false);
+        const reload = stubReload();
+
+        render(<RouteErrorScreen {...props} error={chunkError} reset={vi.fn()} />);
+        expect(
+          screen.getByText('You appear to be offline. Reconnect, then try again.'),
+        ).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+        // RED against a branch that reloads unconditionally.
+        expect(reload).not.toHaveBeenCalled();
+        vi.restoreAllMocks();
+      });
+
+      it('goes back to the reload copy and reloads once the connection returns', () => {
+        setOnline(false);
+        const reload = stubReload();
+        render(<RouteErrorScreen {...props} error={chunkError} reset={vi.fn()} />);
+
+        setOnline(true);
+        act(() => {
+          window.dispatchEvent(new Event('online'));
+        });
+        expect(screen.getByText(/reloads the page/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        expect(reload).toHaveBeenCalledOnce();
+        vi.restoreAllMocks();
+      });
+
+      it('does not apply to a failure that is not a chunk', () => {
+        setOnline(false);
+        render(<RouteErrorScreen {...props} reset={vi.fn()} />);
+        expect(screen.getByText(/temporary problem/i)).toBeInTheDocument();
+        vi.restoreAllMocks();
+      });
     });
 
     it('recognises all three engine messages and nothing else', () => {
