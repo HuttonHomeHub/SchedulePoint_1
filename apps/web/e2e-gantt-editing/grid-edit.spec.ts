@@ -637,7 +637,11 @@ test('a start date cannot be typed on a started activity, and the cell says why'
 
   // The refusal is spoken in the cell's own words — a typed value that vanished with no reason
   // would be indistinguishable from a dead key.
-  await expect(page.getByText(/has started, so its start is its actual start/)).toBeVisible();
+  // It is said twice on purpose — once as the cell's own error text and once through the
+  // announcer — so each is asserted by where it lives rather than by an ambiguous text match.
+  const refusal = /has started, so its start is its actual start/;
+  await expect(page.getByTestId('gantt-scroll').getByText(refusal)).toBeAttached();
+  await expect(page.getByTestId('announcer')).toContainText(refusal);
 
   // And NOTHING was written: a placement on a started activity is inert and would have moved the
   // finish. Asserted at the API after the refusal has had every chance to be a write.
