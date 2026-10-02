@@ -120,16 +120,11 @@ a product idea that has not yet earned a roadmap line:
   `e2e-gantt-editing/object-actions.spec.ts` drives it against a real API.
   `add-note` is gone from that registry entirely, with a journey pinning its
   absence, and `clear-visual-placement` was narrowed out on 2026-08-14.
-  **What is actually left**, all named by the ADR rather than discovered here:
-  the **start-edge resize** (D4 — it carried a mode-dependent meaning, and
-  shipping it without the mode statement the canvas has beside it would have left
-  a planner unable to tell which of two writes their drag just made. **That reason
-  lapsed on 2026-09-21**: ADR-0148 deleted the modes, and the canvas start-edge
-  now has one write — `visualStart` + `durationDays`,
-  `use-plan-workspace-model.ts:1284` — so the Gantt resize is unbuilt rather than
-  blocked. Noted by the 2026-09-23 reconciliation pass), the columns
+  **The start-edge resize shipped in web 0.157.0** (#757, 2026-10-02, ADR-0170): the
+  left handle writes what the diagram's does, and the Gantt's finish-edge drag and
+  typed `Start`/`Finish` now count working days. **What is actually left**: the columns
   **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
-  so nothing can set it yet), and a **coarse-pointer** pass _(the citation here
+  so nothing can set it yet — `gantt-view-state.ts:39`), and a **coarse-pointer** pass _(the citation here
   read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed
   on 2026-08-28**, and its subject was the merged command **strip**, not this
   view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
@@ -138,8 +133,8 @@ a product idea that has not yet earned a roadmap line:
   owed is deliberately **not asserted here**: ADR-0118 D6 narrowed the
   house rule to `pointer: coarse` and took the candidate set from 46 to one, and
   nobody has re-measured this view since. It has no live row, which is the
-  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is
-  **substantially** met and deliberately not claimed closed.
+  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; neither
+  residue above is a requirement of the brief.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
   stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
   most of its length arguing was the half that was left.

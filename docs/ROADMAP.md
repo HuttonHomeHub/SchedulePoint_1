@@ -572,7 +572,7 @@ keep `main` releasable.
   > in two docblocks for a month while nothing implemented it; both are corrected rather than
   > quietly fixed.
 
-  > **The Gantt's start-edge resize — decided 2026-10-02, not yet built** (**ADR-0170**,
+  > **The Gantt's start-edge resize — shipped in web 0.157.0 (#757, 2026-10-02)** (**ADR-0170**,
   > `docs/specs/gantt-start-edge-resize/`). ADR-0095 deferred it for a meaning that depended on the
   > scheduling modes; ADR-0148 deleted the modes. The decision is that the Gantt's left handle writes
   > what the diagram's does, and that every Gantt write holding one end of a bar counts **working**
