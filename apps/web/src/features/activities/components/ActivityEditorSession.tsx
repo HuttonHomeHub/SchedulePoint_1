@@ -257,17 +257,29 @@ export function ActivityEditorSession({
   const measure = useScopeForm<ActivityMeasureValues>(activityMeasureSchema, seedMeasure, activity);
 
   // Remaining was seeded late only because its panel used to mount late. It takes the duration's
-  // treatment: once per opening, compared to the field's live value, never over typed text. The write
-  // is `resetField`, so the seeded text becomes the field's default and a seed is not an edit.
-  const progressResetField = progress.form.resetField;
+  // treatment: once per opening, compared to the field's live value, never over typed text.
+  //
+  // The write is a `reset` of the whole row's seed with `keepDirtyValues`, NOT `resetField`: the
+  // input is registered only while the Progress tab is mounted (and never with the ingestion flag
+  // off), and `resetField` is a no-op for an unregistered field — so a list that landed while the
+  // reader was on General resolved the seed and wrote nothing, and a later Save wrote the degraded
+  // whole day over the real hours (TECH_DEBT #83). Resetting to the seed makes the seeded text the
+  // field's default, so a seed is not an edit, while `keepDirtyValues` leaves anything the reader
+  // has typed (and its dirtiness) exactly as it was.
+  const progressReset = progress.form.reset;
   const progressGetValues = progress.form.getValues;
   const readRemaining = useCallback(
     () => progressGetValues('remaining') ?? '',
     [progressGetValues],
   );
   const setRemaining = useCallback(
-    (text: string) => progressResetField('remaining', { defaultValue: text }),
-    [progressResetField],
+    (text: string) =>
+      progressReset(
+        // Only `remaining` depends on the factor, so the factor-less seed supplies every other default.
+        { ...seedProgress(activity, undefined), remaining: text },
+        { keepDirtyValues: true },
+      ),
+    [progressReset, activity],
   );
   useLateSeed({
     hoursPerDay,
