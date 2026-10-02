@@ -367,3 +367,70 @@ chunk count that drives it falls from 21 to 8 in the M3 build (section 12).
 - **Not measured here:** P2 (container timings after M3). The orchestrator runs
   `ROUTE_SPLIT_LABEL=after-m3 scripts/e2e-local.sh measure:route-splitting` on the same machine as a
   re-taken "before".
+
+## 13. Plan opening regressed after M3, and what brought it back (2026-10-02, container timings)
+
+Same machine, same harness (`measure:route-splitting`, 7 runs, 1.6 Mbps / 150 ms RTT). `before2` is the
+pre-split build `31f5995`; `after-m3` is `26aca01`; `after-fix` is `26aca01` plus
+the change committed with this section.
+Medians, `readyMs`:
+
+| path             | before2 | after-m3 | after-fix | after-fix vs before2 | JS requests before2 / m3 / fix |
+| ---------------- | ------- | -------- | --------- | -------------------- | ------------------------------ |
+| signInCold       | 2,797   | 1,450    | **1,400** | -50%                 | 4 / 9 / 3                      |
+| planDeepLinkCold | 3,577   | 4,711    | **3,882** | +8.5% (limit 10%)    | 4 / 54 / 8                     |
+| planDeepLinkWarm | 1,199   | 2,873    | **1,407** | +17.4%               | 4 / 54 / 8                     |
+| planInApp        | 2,146   | 4,091    | **2,253** | +5.0% (limit 5%)     | 0 / 7 / 0                      |
+
+Spread of the `after-fix` runs: 6.3%, 1.3%, 2.7%, 4.1%. Entry graph (`bundle-report.json`): 176,488 gzip
+bytes in 2 chunks, against 180,121 in 8 after M3 (the sign-in JS is 3 requests, 179,360 transferred).
+Largest lazy chunk 128,582 (jspdf); largest application chunk `ui-shared` 86,878; `paint` is still its own
+lazy chunk and outside the entry graph.
+
+**Cause, from a per-request waterfall of the M3 build** (a throwaway node probe, same throttle, own ports;
+the harness JSON holds only per-run totals): it is not bytes. Transferred JS is 507 kB against 464 kB
+before (+43 kB, about 215 ms at this link), which cannot account for +1,134 ms cold or +1,674 ms warm.
+It is the **request count under HTTP/1.1's six connections per origin**, in two ways.
+
+1. The plan screen's static graph was 37 chunks, most under 1 kB (a chevron icon at 195 bytes). They
+   are fetched together by the build's own preload map, so there is no import waterfall: depth in the
+   wave is one. But 17 requests started at once saturate the six connections, and **`/api/v1/me`,
+   issued in the same wave, did not complete for 977 ms** (requested at 1,350, done at 2,327) because it
+   queued behind chunk requests. Everything after it (organisations, membership, the plan's data)
+   hangs off `/me`, so the queue sits on the critical path.
+2. **Warm** moves no bytes (16 kB), so +1,674 ms is almost wholly requests: 54 conditional requests, each
+   a 150 ms round trip, nine rounds of six. `vite preview` revalidates hashed assets where nginx would
+   serve them `immutable`, so the warm figure overstates what the deployed host does; it is reported
+   because the harness is the judge here.
+3. **In-app** regressed because the plan graph (222 kB, 7 requests) was fetched on the click that opens
+   the plan, where before it had been paid once, in the entry, at sign-in.
+
+**What changed.**
+
+- `apps/web/vite.config.ts`: a Rolldown code-splitting group, `ui-shared`, that folds the small leaf layers
+  (`components/ui`, breadcrumbs and chrome, `lib`, `hooks`, lucide icons, and the hierarchy features the
+  plan screen imports) into one chunk, behind a `boot` group that keeps everything the entry reaches in the
+  entry. The plan's static graph went 37 chunks to 4, and `/me` completes at 575 ms (warm) rather than 707.
+- `apps/web/src/app/router.tsx`: `warmHierarchyScreens` now also preloads the plan screen, so by the time a
+  planner clicks through Clients to a plan its chunks are already in (in-app: 4,091 to 2,253); and a document
+  opened on a plan URL starts fetching the frame and plan chunks at boot, beside the session request,
+  and skips the hierarchy warm-up, which only queued four screens ahead of the bytes it needed.
+
+**Tried and rejected, so nobody repeats it.**
+
+- `entriesAware` grouping, and `maxSize` splitting: both emit chunk cycles. Initialisation order then
+  depends on arrival order and the page fails intermittently (`Cannot read properties of undefined
+(reading 'FS')`, 3 of 8 loads). Nothing in the repository checks for chunk cycles; a throwaway probe did.
+- `output.strictExecutionOrder`: fixes the cycles by pulling the whole application into the entry
+  (509 KiB gzip against a 185 KiB budget), which forfeits the sign-in gain.
+- Adding `components/layout` or the plan-private features to the group: `includeDependenciesRecursively`
+  then pulls the plan into one 260 kB chunk against the 132 KiB ceiling.
+- Merging `paint` into `ui-shared`: no measurable change, and it would make the splitting journey's
+  "painter absent from the cold path" assertion vacuous.
+
+**Verdict against CQ-2.** Deep link cold passes (+8.5% against 10%). In-app passes by a hair (+4.99% against
+5%, with 4.1% spread on that path, so it is not distinguishable from the limit: INDETERMINATE under the spec's
+own rule). **Deep link warm does not pass** (+17.4%). The remaining ~190 ms is one extra wave: the router
+asks for a route's chunk only after the entry has executed, and a chunk cannot be named in `index.html`
+(hashed, and sign-in must not pay for it). Closing it needs a build step that writes the plan graph into the
+HTML for plan URLs only, which is new machinery the plan did not anticipate and is not built here.

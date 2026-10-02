@@ -144,6 +144,20 @@ const signUpRoute = createRoute({
 });
 
 /**
+ * Whether this document was opened on a plan URL. A bookmarked plan starts fetching the frame and the
+ * plan screen at boot, beside the session request: the router only asks for a route's chunk once
+ * `beforeLoad` has resolved, which on this path put the whole chunk wave a `/me` round trip late
+ * (`docs/specs/route-code-splitting/m0-measurement.md`, 2026-10-02 pass). A signed-out visitor to a
+ * plan URL pays those bytes before the redirect to sign-in — accepted, because a plan URL is the one
+ * place where the destination is known before the session is.
+ */
+const PLAN_DEEP_LINK = /^\/orgs\/[^/]+\/plans\/[^/]+/.test(window.location.pathname);
+if (PLAN_DEEP_LINK) {
+  void AuthedLayout.preload?.();
+  void PlanDetailScreen.preload?.();
+}
+
+/**
  * Fetch the hierarchy chunks while the organisations query is still in flight.
  *
  * `indexRoute` reaches the organisation overview by a **programmatic redirect**, so no link was ever
@@ -158,9 +172,15 @@ const signUpRoute = createRoute({
  * navigation re-requests the chunk and reaches `RouteErrorScreen` if it is genuinely missing.
  */
 function warmHierarchyScreens(): void {
+  // A plan URL opened directly is going to the plan, not up through the hierarchy: warming four
+  // screens beside its chunks only queues them ahead of the bytes that are on the critical path.
+  if (PLAN_DEEP_LINK) return;
   for (const screen of [OrgHomeScreen, ClientsScreen, ClientDetailScreen, ProjectDetailScreen]) {
     void screen.preload?.();
   }
+  // The plan is the last stop of the walk the hierarchy warm-up serves. Without this its chunks were
+  // fetched on the click that opens it, which put the whole plan graph on the in-app critical path.
+  void PlanDetailScreen.preload?.();
 }
 
 /**

@@ -77,5 +77,35 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // **Chunk grouping for the plan's graph** (`docs/specs/route-code-splitting/m0-measurement.md`,
+    // 2026-10-02 "plan opening" pass). Left alone, Rolldown cuts one chunk per distinct set of
+    // importing routes: the plan screen's static graph was 37 chunks, most under 1 kB, and under
+    // HTTP/1.1's six-connections-per-origin limit those requests queued ahead of the session request
+    // that gates the whole screen. The group below folds the small leaf layers (primitives, helpers,
+    // hooks, icons, and the hierarchy features the plan screen imports) into one chunk, so the plan
+    // opens on five chunks (frame, screen, shared, canvas, painter).
+    //
+    // Two rules, both verified by building rather than assumed. (1) `boot` goes first and claims
+    // everything the entry already reaches: without it the group would absorb entry modules and drag
+    // the whole group into the entry graph. (2) Keep the group to leaf layers. Adding
+    // `components/layout` or a plan-private feature makes `includeDependenciesRecursively` pull the
+    // plan's own code in (one chunk of 260+ kB gzip), and `entriesAware` grouping or `maxSize`
+    // splitting produced chunk cycles whose initialisation order broke the page intermittently
+    // (`Cannot read properties of undefined (reading 'FS')`). `check-bundle-size` fails on the
+    // first; a cycle is not checked by anything, so re-run a cycle probe after touching this.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'boot', tags: ['$initial'], priority: 3 },
+            {
+              name: 'ui-shared',
+              test: /node_modules[\\/]lucide-react[\\/]|[\\/]src[\\/](components[\\/](ui|layout[\\/](breadcrumbs|chrome))|lib|hooks|features[\\/](staff[\\/]api|(clients|projects|plans|calendars|resources|interchange)[\\/]))/,
+              priority: 1,
+            },
+          ],
+        },
+      },
+    },
   },
 });
