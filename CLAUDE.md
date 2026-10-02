@@ -49,11 +49,10 @@ browser-native team use. See the full product context in
 > default-on) — first read-only, with WBS rows, the baseline variance bar and
 > a printed programme — and **became a working surface on 2026-08-17** (ADR-0095:
 > in-cell editing with per-cell write scope, bar moves, dependency arrows behind a
-> default-off toggle; typed dates followed in ADR-0134). It **substantially**
-> delivers the last outstanding Must-have in
-> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
-> "read-primary; **edit supported**" — "substantially" because the start-edge
-> resize is deliberately absent (ADR-0095 D4). This paragraph said "read-only by
+> default-off toggle; typed dates followed in ADR-0134). It delivers the last
+> outstanding Must-have in [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8,
+> which words it "read-primary; **edit supported**" — the start-edge resize that
+> kept it "substantial" shipped in web 0.157.0 (ADR-0170). This paragraph said "read-only by
 > design … Gantt editing is deferred as ADR-0059 M5" until the 2026-09-23 pass,
 > five weeks after ADR-0095 shipped. This banner and the PR that shipped it both said
 > "closing the last Must-have" until the brief was re-read: the same trust-the-

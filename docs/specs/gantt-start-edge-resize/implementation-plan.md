@@ -1,7 +1,7 @@
 # Implementation Plan: The Gantt's start-edge resize
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved 2026-10-02 (product owner)
+- **Status:** Accepted — shipped (ADR-0170)
 - **Owner:** — (the product owner approves; implementation goes to the **builder** agent, CLAUDE.md §19.14)
 
 ## Breakdown

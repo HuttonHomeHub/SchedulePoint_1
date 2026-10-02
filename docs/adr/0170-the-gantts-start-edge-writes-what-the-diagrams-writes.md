@@ -108,9 +108,10 @@ Separately, the Gantt throws away every bar write's outcome: the host calls
 - The existing `bar-drag.spec.ts` locator for the finish handle (`.cursor-ew-resize`, count 1) is
   re-pointed at `[data-bar-edge="finish"]`, because a second handle makes it 2.
 - The diagram's start-edge and move writes on a started activity remain inert; filed as debt (M1-T3).
-- CLAUDE.md §1's "substantially … the start-edge resize is deliberately absent (ADR-0095 D4)" is
-  revisited in M3, from the code, once the release has shipped. Note also that the deferral sentence
-  lives in ADR-0095's closing section, not in D4 (which is the `Alt+←/→` decision).
+- M1 and M2 shipped together in web 0.157.0 (#757, 2026-10-02). CLAUDE.md §1's "substantially … the
+  start-edge resize is deliberately absent (ADR-0095 D4)" was revisited in M3 from the code and now
+  says the Gantt delivers the brief's §8 Must-have. The deferral sentence lives in ADR-0095's closing
+  section, not in D4 (which is the `Alt+←/→` decision).
 
 ## References
 

@@ -1,6 +1,6 @@
 # Feature Spec: The Gantt's start-edge resize
 
-- **Status:** Approved 2026-10-02 (product owner)
+- **Status:** Accepted — shipped (ADR-0170)
 - **Author(s):** Feature Analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-10-02
 - **Tracking issue / epic:** —
