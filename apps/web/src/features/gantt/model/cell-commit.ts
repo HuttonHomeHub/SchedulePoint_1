@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 
-import { startEdgeFrozenReason } from './bar-drag';
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import type { GanttCellKey } from './cell-edit';
 
 import { durationWriteFields } from '@/features/activities/model/duration-field';
@@ -164,7 +164,7 @@ function dateWriteFields(
   // change the duration and move the FINISH. The handle is withheld for the same reason, from the
   // same function, so the cell and the bar cannot disagree about it.
   if (key === 'earlyStart' && Boolean(activity.actualStart ?? activity.actualFinish)) {
-    return refuse(startEdgeFrozenReason());
+    return refuse(START_EDGE_FROZEN_REASON);
   }
 
   // **D4 — a `MANDATORY_*` constraint is never overwritten from a cell.** Mandatory constraints

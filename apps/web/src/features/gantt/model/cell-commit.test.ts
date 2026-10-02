@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { startEdgeFrozenReason } from './bar-drag';
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import {
   cellWriteFields,
   commitCell,
@@ -232,7 +232,7 @@ describe('cellWriteFields', () => {
         const reason = reasonOf(
           cellWriteFields('earlyStart', '04 Mar 2026', ctx({ activity: activity(over) })),
         );
-        expect(reason).toBe(startEdgeFrozenReason());
+        expect(reason).toBe(START_EDGE_FROZEN_REASON);
       });
 
       it('still lets the Finish be typed, which is a duration the engine does use', () => {

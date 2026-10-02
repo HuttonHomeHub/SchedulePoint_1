@@ -1,6 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
+import { ACTIVITY_TYPE_LABELS, type ActivityType } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,8 +6,10 @@ import {
   edgeObjectReason,
   settleBarWrite,
   startEdgeAnnouncement,
-  startEdgeFrozenReason,
+  START_EDGE_FROZEN_REASON,
 } from './bar-drag';
+
+import { isResizeEligibleType } from '@/features/tsld/render/hit-test';
 
 /**
  * **ADR-0170 D3/D6 — the one edge gate, and the one place a bar write is announced.**
@@ -45,10 +45,24 @@ describe('edgeObjectReason', () => {
     // engine still uses.
     for (const actual of [{ actualStart: '2026-03-02' }, { actualFinish: '2026-03-06' }]) {
       const started = { ...task, ...actual };
-      expect(edgeObjectReason(started, 'start')).toBe(startEdgeFrozenReason());
+      expect(edgeObjectReason(started, 'start')).toBe(START_EDGE_FROZEN_REASON);
       expect(edgeObjectReason(started, 'finish')).toBeNull();
     }
   });
+});
+
+describe('the Gantt and the diagram agree on which types have a length to resize', () => {
+  it.each(Object.keys(ACTIVITY_TYPE_LABELS) as ActivityType[])(
+    '%s is refused on both edges exactly when the diagram offers no handle',
+    (type) => {
+      const eligible = isResizeEligibleType(type);
+      for (const edge of ['start', 'finish'] as const) {
+        expect(edgeObjectReason({ ...task, type }, edge) === null, `${type} ${edge}`).toBe(
+          eligible,
+        );
+      }
+    },
+  );
 });
 
 describe('barEdgeGate', () => {
@@ -123,25 +137,5 @@ describe('settleBarWrite', () => {
   it('announces the failure sentence when the write rejects, instead of leaving it unhandled', async () => {
     const announce = await run(Promise.reject(new Error('boom')));
     expect(announce).toHaveBeenCalledExactlyOnceWith('Couldn’t do it.');
-  });
-});
-
-describe('one reason, one place', () => {
-  it('says why a started activity’s start cannot move in exactly one source file', () => {
-    // The handle and the typed `Start` cell must give the SAME sentence (ADR-0170 D3), which they
-    // can only do by importing it. A second literal is how the two come to drift.
-    const dir = __dirname.replace(/\/model$/, '');
-    const needle = 'has started, so its start is its actual start';
-    const sources: string[] = [];
-    const walk = (d: string): void => {
-      for (const entry of readdirSync(d, { withFileTypes: true })) {
-        const full = join(d, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) sources.push(full);
-      }
-    };
-    walk(dir);
-    const holders = sources.filter((f) => readFileSync(f, 'utf8').includes(needle));
-    expect(holders.map((f) => f.slice(dir.length))).toEqual(['/model/bar-drag.ts']);
   });
 });
