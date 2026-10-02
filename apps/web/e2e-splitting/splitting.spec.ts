@@ -22,11 +22,12 @@ import { countWaves, type TimedRequest } from './waves';
  *
  * - **P3**: no more than two sequential JavaScript waves, cold, on `/sign-in` and on a cold
  *   `/sign-up` (the lazy screen's own cold path). Counted from resource timing, not requests.
- * - **P4 (partial)**: cold `/sign-in` JavaScript transfer has not grown past the pre-split figure
- *   recorded in `m0-measurement.md` section 10, plus 1%. The spec's bar is a FALL of 100,000, and
- *   M1 cannot meet it: the entry graph is 461,670 gzip before the milestone's split and 461,315
- *   after, because most screens are still static. The 100,000 bar is arithmetic over the whole
- *   epic and is asserted when the plan-workspace leaves the entry graph (M3), not here.
+ * - **P4**: cold `/sign-in` JavaScript transfer has FALLEN by at least 100,000 bytes from the pre-split
+ *   figure recorded in `m0-measurement.md` section 10. It was asserted as "no more than 1% above"
+ *   while M1 stood alone, because the account group alone could not meet it (and measured worse);
+ *   it became the spec's real bar when the plan workspace left the entry graph (M3). The
+ *   `paint` chunk is asserted absent from the cold path too, which is the spec's prediction that it
+ *   leaves as a consequence rather than by a workaround.
  * - **The pending state**: a slow chunk shows `RoutePending` after the router's one-second default,
  *   passes axe, and a fast one never shows it.
  * - **Stale deploy, driven rather than reasoned about**: the host redeploys under open tabs
@@ -48,11 +49,14 @@ import { countWaves, type TimedRequest } from './waves';
 
 /** The cold `/sign-in` JavaScript transfer before any splitting, `m0-measurement.md` section 10. */
 const PRE_SPLIT_COLD_JS_BYTES = 463_933;
-const PRE_SPLIT_TOLERANCE = 1.01;
+/** P4's bar (spec): the cold path fell by at least this much. */
+const REQUIRED_FALL_BYTES = 100_000;
 /** P3's bar: the entry graph, then at most one wave of route chunks fetched together. */
 const MAX_WAVES = 2;
 /** The chunk the Create-an-account link leads to; `vite build` names it `sign-up-<hash>.js`. */
 const SIGN_UP_CHUNK = /\/assets\/sign-up-[^/]+\.js$/;
+/** The TSLD painter chunk, which left the entry graph with the plan screen (M3). */
+const PAINT_CHUNK = /\/assets\/paint-[^/]+\.js$/;
 const DIST_ASSETS = join(process.cwd(), 'dist', 'assets');
 
 interface JsTiming {
@@ -91,7 +95,7 @@ function expectPopulated(timing: JsTiming): void {
 }
 
 test.describe('waves and bytes @both-pointers', () => {
-  test('cold /sign-in: at most two sequential JavaScript waves, and no more bytes than before', async ({
+  test('cold /sign-in: at most two sequential JavaScript waves, and a fall of at least 100,000 bytes', async ({
     page,
   }) => {
     await page.goto('/sign-in');
@@ -101,7 +105,9 @@ test.describe('waves and bytes @both-pointers', () => {
     const timing = await jsTiming(page);
     expectPopulated(timing);
     expect(countWaves(timing.requests)).toBeLessThanOrEqual(MAX_WAVES);
-    expect(timing.transferBytes).toBeLessThanOrEqual(PRE_SPLIT_COLD_JS_BYTES * PRE_SPLIT_TOLERANCE);
+    expect(timing.transferBytes).toBeLessThanOrEqual(PRE_SPLIT_COLD_JS_BYTES - REQUIRED_FALL_BYTES);
+    // The painter belongs to the plan screen and the guest view, never to the front door.
+    expect(timing.requests.some((r) => PAINT_CHUNK.test(r.name))).toBe(false);
     // The split screens are not in the first paint: none of the seven chunks was requested.
     expect(timing.requests.some((r) => SIGN_UP_CHUNK.test(r.name))).toBe(false);
   });

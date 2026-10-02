@@ -45,9 +45,7 @@ const EAGER_ROUTES: Readonly<Record<string, string>> = {
  * it converts, and the list reaching empty is M5's closing condition. A permanent exception goes
  * in `EAGER_ROUTES` with a reason, not here.
  */
-const SCHEDULED: Readonly<Record<string, string>> = {
-  PlanDetailScreen: 'M3-T1',
-};
+const SCHEDULED: Readonly<Record<string, string>> = {};
 
 /** Block and line comments removed. A `//` inside a string is rare enough in this file to be tolerated. */
 function stripComments(source: string): string {

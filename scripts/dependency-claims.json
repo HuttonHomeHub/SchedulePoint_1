@@ -1059,6 +1059,14 @@
       "citedBy": ["apps/web/src/app/route-error-screen.tsx"]
     },
     {
+      "ref": "lazyRouteComponent.js:28-31",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/lazyRouteComponent.js",
+      "lines": "28-31",
+      "anchor": "}).catch((err) => {",
+      "citedBy": ["apps/web/src/app/router.tsx"]
+    },
+    {
       "ref": "lazyRouteComponent.js:51",
       "package": "@tanstack/react-router",
       "path": "dist/esm/lazyRouteComponent.js",

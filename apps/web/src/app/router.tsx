@@ -25,7 +25,6 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
-import { PlanDetailScreen } from '@/routes/plan-detail';
 import { SignInScreen } from '@/routes/sign-in';
 
 /**
@@ -35,11 +34,11 @@ import { SignInScreen } from '@/routes/sign-in';
  * nowhere here — see `route-pending.tsx`.
  *
  * **The authenticated frame is lazy too** (CQ-1, answered 2026-10-02): a signed-out visitor never
- * sees it. While most screens are still static its closure is in the entry graph anyway, so today it
- * buys wave depth rather than bytes — measured at M1, entry graph gzip: nothing split 461,670;
- * account group only 467,693 (+6,023, as chunk boundaries cost compression); account group and
- * frame 461,315 (-355). The payoff is variant B of `m0-measurement.md` section 9, which needs every
- * screen lazy.
+ * sees it. Measured entry graph gzip: pre-split 461,670; M1 alone (account group and frame lazy)
+ * 461,315 — no gain, because while most screens are static the closure stays in the graph and the
+ * chunk boundaries cost compression; M2 455,253; M3 (plan screen) 180,121 in 8 chunks. The split
+ * only pays once every screen is lazy, which is why the three milestones ship together
+ * (`m0-measurement.md` sections 11 and 12).
  */
 const AuthedLayout = lazyRouteComponent(() => import('@/routes/authed-layout'), 'AuthedLayout');
 const AcceptInviteScreen = lazyRouteComponent(
@@ -59,6 +58,10 @@ const MyActivityScreen = lazyRouteComponent(
   'MyActivityScreen',
 );
 const OrgHomeScreen = lazyRouteComponent(() => import('@/routes/org-home'), 'OrgHomeScreen');
+const PlanDetailScreen = lazyRouteComponent(
+  () => import('@/routes/plan-detail'),
+  'PlanDetailScreen',
+);
 const ProjectDetailScreen = lazyRouteComponent(
   () => import('@/routes/project-detail'),
   'ProjectDetailScreen',
@@ -151,7 +154,7 @@ const signUpRoute = createRoute({
  * paid eagerly before the split, one wave later and off the critical path.
  *
  * No error handling is needed here: `lazyRouteComponent`'s loader catches its own import failure and
- * resolves (`lazyRouteComponent.js:21-24`), so the returned promise never rejects, and the real
+ * resolves (`lazyRouteComponent.js:28-31`), so the returned promise never rejects, and the real
  * navigation re-requests the chunk and reaches `RouteErrorScreen` if it is genuinely missing.
  */
 function warmHierarchyScreens(): void {

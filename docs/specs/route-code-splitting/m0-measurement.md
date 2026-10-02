@@ -288,3 +288,82 @@ spread (13.8%) is wide. Every one of the seven runs of each path was byte-identi
 **463,933 bytes over 4 requests** on both cold paths, 1,200 on the warm path, 0 in-app. That
 463,933 is the **P4 baseline** (total cold JS bytes, pre-split) that M1-T4's journey compares
 against; P4 asks for a fall of at least 100,000.
+
+## 11. After M1, not shipped (2026-10-02)
+
+M1 alone (`27b7de8`: pending state, error-screen retry, S1, B8, the journey, the account group and the
+lazy frame) was built and measured, and it measured **worse** than the pre-split build. The
+orchestrator therefore decided on 2026-10-02 that **M1, M2 and M3 ship together in one release**.
+M1 was never released on its own.
+
+**Journey.** `scripts/e2e-local.sh web:splitting` failed 2 of 14 (chromium and chromium-coarse): "cold
+/sign-in: at most two sequential JavaScript waves, and no more bytes than before". `transferBytes`
+was **469,741** against the **468,572.33** allowed (463,933 x 1.01). The other suites passed:
+`web:account`, `web:shell`, `web:public`, `web` (base). `prepush` was green except the known
+interchange CP1252 test.
+
+**Timing** (`ROUTE_SPLIT_LABEL=after-m1`, build `27b7de8`, 7 runs per path), ready ms, median with
+spread:
+
+| path               | after-m1     | before |
+| ------------------ | ------------ | ------ |
+| `signInCold`       | 2869 (1.0%)  | 2903   |
+| `planDeepLinkCold` | 4186 (1.8%)  | 3772   |
+| `planDeepLinkWarm` | 2143 (20.3%) | 1278   |
+| `planInApp`        | 2196 (20.9%) | 2294   |
+
+JS requests rose from 4 to **19** (sign-in) and **21** (deep link). **Caveat: the container restarted
+between the two readings** (CPU 2.80 GHz for `before`, 2.10 GHz for `after-m1`), so this is not a
+clean before/after; the orchestrator re-takes "before" on the same machine.
+
+**Why the request count rose, read from the M1 build (not guessed).** With most screens still static
+and a few lazy, Rolldown hoists every module shared between the entry and a lazy chunk into its own
+small shared chunk. `dist/index.html` at M1 carried 19 `modulepreload` links for a graph that was 3
+chunks before. The bytes are not smaller (the same code, plus per-chunk compression loss: +6,023
+gzip for the account group alone), and the extra requests are a parallel burst in one wave, not a
+deeper one. M1 pays the cost of the boundaries and none of the benefit, which is what the plan
+predicted for the entry graph ("not expected to fall until M2 and M3") and underweighted for
+requests.
+
+**Why the warm deep link got slower (21 JS requests), measured.** In `route-splitting-after-m1.json`
+the warm run transfers **6,300 JS bytes over 21 requests** and the pre-split run **1,200 over 4**:
+300 bytes per request, i.e. every asset is a conditional request answered `304`, not a cache hit.
+`vite preview` answers with `Cache-Control: no-cache` and a weak `ETag` (checked by `curl -I` against
+a preview of the M2 build: `Cache-Control: no-cache`, `ETag: W/"..."`), so a "warm" load revalidates
+every chunk at the 150 ms RTT. nginx serves `/assets/` with `expires 1y` and `Cache-Control: public,
+immutable` (`apps/web/nginx.conf:35-38`), so in production the warm load makes **no** request for a
+cached chunk. The harness docblock already warned this (`timing.spec.ts:32`). Consequence: the warm
+number is a revalidation cost proportional to the chunk count, and it overstates the production
+cost; it is a conservative reading, not a like-for-like one. The preload and `modulepreload` hints
+do not address it (they change when a chunk is requested, not whether it revalidates), but the
+chunk count that drives it falls from 21 to 8 in the M3 build (section 12).
+
+## 12. After M2 and after M3 (2026-10-02, build sizes only, not timings)
+
+`pnpm exec vite build` in `apps/web`, entry graph from `bundle-report.json`, gzip bytes.
+
+| state                  | entry graph | graph chunks | largest lazy chunk                | CSS    |
+| ---------------------- | ----------- | ------------ | --------------------------------- | ------ |
+| pre-split (`d3b9dbf`)  | 461,186     | 3            | jspdf 128,581                     | 15,779 |
+| after M1 (not shipped) | 461,315     | 19           | jspdf 128,583                     | n/a    |
+| after M2 (ten screens) | 455,253     | 37           | jspdf 128,586                     | 15,948 |
+| after M3 (plan screen) | **180,121** | **8**        | jspdf 128,583; plan-detail 92,501 | 16,235 |
+
+- **The cold `/sign-in` JavaScript is the entry graph**: 463,933 transferred before, **180,121 plus
+  headers** after M3, a fall of about 283,000, against P4's bar of 100,000 (asserted in
+  `e2e-splitting`, not measured here by a browser). After M2 it is 455,253, a fall of about 8,700:
+  M2 cannot meet P4, and the plan said so (M3 is where the plan workspace leaves).
+- **`paint` leaves the entry graph with the plan screen** (`inEntryGraph: false`, 22,569 gzip) as the
+  spec predicted, with no importer outside `features/tsld` keeping it. The guest `/share` chunk and
+  `plan-detail` share that one chunk (one `paint` file in the report).
+- **No lazy chunk exceeds the 135,168 ceiling**: the largest is the export library, then `plan-detail`
+  at 92,501. The plan's "likely" ceiling raise (M4-T1) did not materialise here.
+- **M2 is not a number win on its own** and that is the point of shipping the three together: the
+  entry graph at M2 still carries the plan workspace, so 37 graph chunks cost requests for 6,000
+  bytes. The ratio inverts at M3 (8 chunks).
+- **B8b fired and the budget was re-floored** to 180,121 / 128,583 / 16,235, giving 189,440 / 135,168 /
+  17,408 by the KiB-ceiling rule. This is the lowering exception to `bundle-budget.json`'s
+  `origin/main` rule: measured at the PR head, stated in `measuredBy`.
+- **Not measured here:** P2 (container timings after M3). The orchestrator runs
+  `ROUTE_SPLIT_LABEL=after-m3 scripts/e2e-local.sh measure:route-splitting` on the same machine as a
+  re-taken "before".

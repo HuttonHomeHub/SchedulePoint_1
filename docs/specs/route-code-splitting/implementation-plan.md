@@ -449,6 +449,8 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
 
 ### Milestone 2: The cold-path groups
 
+> **Status 2026-10-02: BUILT (the builder run), together with M3 and released with it.** Ten screens converted in one commit (`calendars`, `resources`, `members`, `audit-log`, `my-activity`, `recently-deleted`, `org-home`, `clients`, `client-detail`, `project-detail`). Entry graph 461,315 to 455,253 gzip. The shell-mount preload is `warmHierarchyScreens()` in the `_authed` `beforeLoad`, fired **once the session is known** rather than beside the session query, so a signed-out visitor sent to `/sign-in` does not download screens they will not reach; it still overlaps the organisations query that the redirect waits on. The post-sign-in journey case needs a session and an API, and `e2e-splitting` is hermetic, so it is **not** added; the redirect path rides on `e2e-overview` and `e2e-shell`.
+
 **Outcome:** `hierarchy`, `libraries` and `org-admin` are lazy, and the organisation overview — the
 one navigation every sign-in performs — is warmed rather than fetched after the redirect.
 **Entry point:** unchanged screens, reached the same way. The user-visible change is that they
@@ -504,6 +506,8 @@ arrive sooner after sign-in.
 ---
 
 ### Milestone 3: The plan workspace
+
+> **Status 2026-10-02: BUILT, pending the orchestrator's journeys and the P2 re-measurement (M3-T2).** `plan-detail` converted; entry graph **180,121** gzip in 8 chunks (from 455,253), `paint` out of the graph and shared with `/share`. `e2e-splitting` now asserts the 100,000-byte fall (P4) and that `paint` is not on the cold path; the budget was re-floored by B8b (`bundle-budget.json`). The hover and keyboard-preload cases need a session and are not in the hermetic suite; `e2e-shell`, `e2e-share` and the canvas suites are the oracle.
 
 **Outcome:** the largest group leaves the entry graph, and `paint` leaves with it.
 **Entry point:** opening a plan from the Project Explorer — unchanged control, and it must feel
@@ -676,6 +680,15 @@ describes what the code now does.
 
 ## Sequencing & slices
 
+> **Amended 2026-10-02 (orchestrator): M1, M2 and M3 ship together in ONE release.** M1 alone was
+> built and measured worse than the pre-split build (cold `/sign-in` JavaScript 469,741 bytes against
+> 463,933; 19 JavaScript requests against 4; `m0-measurement.md` section 11), because the entry graph
+> pays for chunk boundaries until the plan workspace leaves it. So the "each keeps `main` releasable"
+> claim below holds for **correctness** (the suites pass at every step) and **not for cost**: M1 and
+> M2 are not releases. Any step that M1 would have taken on its own (its changeset, its journey in
+> CI, its budget) is folded into the combined release; the one changeset describes M1 to M3. M4
+> follows as a separate documentation milestone.
+
 M0 → M1 → M2 → M3 → M4 → M5, and **each keeps `main` releasable**:
 
 - **M0** ships documentation corrections and a measurement. The probe branch is discarded.
@@ -719,6 +732,7 @@ impact. Specifically here:
 | **Offline navigation lands on the browser's offline page** _(new 2026-10-02)_                 | med                                      | low     | Same error message as a 404, so it takes the one guarded reload. Accepted and recorded (spec §2); unsaved work was already resolved by `NavigationGuard`.                                                                                                                                                                                       |
 | **P2 is measured on a noisy machine** _(CQ-4, answered 2026-10-02)_                           | certain                                  | med     | Container readings only. ≥ 5 runs, spread reported; INDETERMINATE is a first-class outcome and the sign-off then rests on sizes and request counts.                                                                                                                                                                                             |
 | **The P2 baseline is lost to auto-deploy** _(new 2026-10-02)_                                 | med                                      | high    | M0-T5 must complete **before M1 merges**, so before and after come from one container and one harness.                                                                                                                                                                                                                                          |
+| **M1 shipped alone costs more than the unsplit build** _(realised 2026-10-02)_                | certain (measured)                       | med     | M1 measured +5,808 JS bytes and 19 requests against 4 (`m0-measurement.md` section 11). M1, M2 and M3 ship in one release; the journey's byte assertion is the guard and now asserts the 100,000-byte fall.                                                                                                                                     |
 | **B8b fires on every milestone that shrinks the graph** _(new 2026-10-02)_                    | high                                     | low     | Intended (the ratchet). Each split PR re-floors at its head, as spec §4 states. Prepush catches it locally.                                                                                                                                                                                                                                     |
 | **New CI step unbalances the shard packing**                                                  | med                                      | low     | Re-derive longest-processing-time-first from the pessimistic sample; `check:e2e-roster` asserts it.                                                                                                                                                                                                                                             |
 | **Assumption:** the CPM engine is not imported, no migration runs, no `apps/api` file changes | —                                        | —       | Asserted per PR. The ADR-0034 parity gate is untouched by construction — there is nothing here to hold parity _for_.                                                                                                                                                                                                                            |
