@@ -1,7 +1,7 @@
 import { zeroDurationAdvisories } from './advisories.js';
 import { importGraphSchema, type ImportCalendarScope, type ImportGraph } from './import-graph.js';
 import { mapCanonicalToImportGraph } from './mapper.js';
-import type { InterchangeReport, ReportFinding } from './report.js';
+import { boundReport, type InterchangeReport, type ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
 import { adaptXerToCanonical } from './xer-adapter.js';
 import { parseXer, type XerParseCaps } from './xer-parser.js';
@@ -259,5 +259,5 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     ...(advisories.length > 0 ? { advisories } : {}),
   };
 
-  return { ok: true, graph: validated.graph, report };
+  return { ok: true, graph: validated.graph, report: boundReport(report) };
 }

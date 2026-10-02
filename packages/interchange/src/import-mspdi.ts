@@ -10,7 +10,7 @@ import {
 import { mapCanonicalToImportGraph } from './mapper.js';
 import { adaptMspdiToCanonical } from './mspdi-adapter.js';
 import { parseMspdi, type MspdiParseCaps } from './mspdi-parser.js';
-import type { InterchangeReport, ReportFinding } from './report.js';
+import { boundReport, type InterchangeReport, type ReportFinding } from './report.js';
 import { validateAndRepair } from './validate.js';
 
 /**
@@ -194,5 +194,5 @@ export function importMspdi(input: ImportMspdiInput): ImportMspdiResult {
     ...(advisories.length > 0 ? { advisories } : {}),
   };
 
-  return { ok: true, graph: validated.graph, report };
+  return { ok: true, graph: validated.graph, report: boundReport(report) };
 }

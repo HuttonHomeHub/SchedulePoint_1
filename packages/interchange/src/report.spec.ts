@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  boundReport,
   buildReportSchemas,
   interchangeReportSchema,
   interchangeReportStrictSchema,
+  REPORT_LABEL_MAX_LENGTH,
+  REPORT_SENTENCE_MAX_LENGTH,
   type InterchangeReport,
 } from './report.js';
 
@@ -135,5 +138,103 @@ describe('import advisories on the report (ADR-0162 D1/D2, M3-T4)', () => {
     const extra = { ...REPORT, advisories: [{ ...ADVISORY, later: true }] };
     expect(interchangeReportSchema.parse(extra)).toEqual({ ...REPORT, advisories: [ADVISORY] });
     expect(interchangeReportStrictSchema.safeParse(extra).success).toBe(false);
+  });
+});
+
+describe('the report bounds its free text (TECH_DEBT #399)', () => {
+  const long = (n: number): string => 'x'.repeat(n);
+  const oversized: InterchangeReport = {
+    ...REPORT,
+    sourceFilename: long(REPORT_LABEL_MAX_LENGTH + 1),
+    drops: [
+      {
+        kind: 'drop',
+        entity: 'activity',
+        sourceRef: long(REPORT_LABEL_MAX_LENGTH + 1),
+        detail: long(REPORT_SENTENCE_MAX_LENGTH + 1),
+        reason: long(REPORT_SENTENCE_MAX_LENGTH + 1),
+      },
+    ],
+    resourceCollisions: [
+      {
+        resourceKey: long(REPORT_LABEL_MAX_LENGTH + 1),
+        name: long(REPORT_LABEL_MAX_LENGTH + 1),
+        code: long(REPORT_LABEL_MAX_LENGTH + 1),
+        existing: { id: 'lib-1', name: 'Crane', code: null, archived: false },
+      },
+    ],
+    advisories: [
+      {
+        code: 'ZERO_DURATION_TASK',
+        entity: 'activity',
+        sourceRef: long(REPORT_LABEL_MAX_LENGTH + 1),
+        detail: long(REPORT_SENTENCE_MAX_LENGTH + 1),
+      },
+    ],
+  };
+
+  it('both modes refuse an over-long value, field by field', () => {
+    for (const schema of [interchangeReportSchema, interchangeReportStrictSchema]) {
+      expect(schema.safeParse(oversized).success).toBe(false);
+    }
+    for (const field of ['sourceRef', 'detail', 'reason'] as const) {
+      const finding = {
+        kind: 'drop' as const,
+        entity: 'activity',
+        sourceRef: 'ok',
+        detail: 'ok',
+        reason: 'ok',
+        [field]: long(5000),
+      };
+      expect(
+        interchangeReportSchema.safeParse({ ...REPORT, drops: [finding] }).success,
+        field,
+      ).toBe(false);
+    }
+  });
+
+  it('accepts a value exactly at the ceiling', () => {
+    const atCeiling = {
+      ...REPORT,
+      drops: [
+        {
+          kind: 'drop' as const,
+          entity: 'activity',
+          sourceRef: long(REPORT_LABEL_MAX_LENGTH),
+          detail: long(REPORT_SENTENCE_MAX_LENGTH),
+        },
+      ],
+    };
+    expect(interchangeReportStrictSchema.safeParse(atCeiling).success).toBe(true);
+  });
+
+  it('boundReport truncates instead of refusing, so the bounded report always validates', () => {
+    const bounded = boundReport(oversized);
+    expect(interchangeReportStrictSchema.safeParse(bounded).success).toBe(true);
+    expect(bounded.drops[0]!.detail).toHaveLength(REPORT_SENTENCE_MAX_LENGTH);
+    expect(bounded.drops[0]!.detail.endsWith('…')).toBe(true);
+    expect(bounded.sourceFilename).toHaveLength(REPORT_LABEL_MAX_LENGTH);
+  });
+
+  it('boundReport leaves a report within the ceilings exactly as it was', () => {
+    expect(boundReport(REPORT)).toEqual(REPORT);
+    expect('advisories' in boundReport(REPORT)).toBe(false);
+  });
+
+  it('boundReport never leaves half of a surrogate pair at the cut', () => {
+    const bounded = boundReport({
+      ...REPORT,
+      drops: [
+        {
+          kind: 'drop',
+          entity: 'activity',
+          sourceRef: null,
+          detail: '😀'.repeat(REPORT_SENTENCE_MAX_LENGTH),
+        },
+      ],
+    });
+    const detail = bounded.drops[0]!.detail;
+    expect(detail.length).toBeLessThanOrEqual(REPORT_SENTENCE_MAX_LENGTH);
+    expect(detail.slice(0, -1)).toMatch(/^(?:😀)+$/u);
   });
 });
