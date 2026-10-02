@@ -77,7 +77,7 @@ import {
   FLOAT_PATHS_PANEL_MIN_WIDTH,
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
-import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
+import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
@@ -118,6 +118,7 @@ import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
+import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
@@ -979,6 +980,25 @@ export function ToolbarPlanWorkspace({
   const updateActivityFields = useUpdateActivityFields(model.orgSlug, model.planId);
 
   /**
+   * The plan's working-day predicate, built ONCE here and handed to every Gantt write that holds
+   * one end of a bar — the finish-edge and start-edge drags and both typed date cells (ADR-0170
+   * D2). Keyed to `plannedStart`, as the diagram's is: both views count `startDay` from it, so one
+   * predicate fits both. Memoised so a row never rebuilds it and the panel's props stay stable.
+   * Null until the calendar and the plan start have loaded, which the conversion reads as "fall
+   * back to the calendar span".
+   */
+  const ganttWorkingDay = useMemo(
+    () =>
+      // Correct only while the diagram's origin is `plan.plannedStart` too (`dataDate={plan.plannedStart}`
+      // on the canvas below): the predicate counts day offsets from it, and both views must count from
+      // the same day.
+      model.tsldCalendar && plan.plannedStart
+        ? makeWorkingDayPredicate(plan.plannedStart, model.tsldCalendar)
+        : null,
+    [model.tsldCalendar, plan.plannedStart],
+  );
+
+  /**
    * In-grid editing for the Gantt (M2). Built here because it needs the workspace's OWN mutation
    * and undo recorder — the grid must not open a second write path to an activity (spec F5), and
    * `recordActivityUpdate` is already a no-op when `VITE_UNDO_REDO` is off, so this needs no flag.
@@ -997,6 +1017,8 @@ export function ToolbarPlanWorkspace({
     hasComputedSchedule: (model.activities.data ?? []).some((a) => a.earlyStart !== null),
     barDateSource,
     hoursPerDayFor,
+    plannedStartIso: plan.plannedStart ?? null,
+    isWorkingDay: ganttWorkingDay,
     updateFields: updateActivityFields.mutateAsync,
     announce: ganttAnnounce,
     // Focus returns to the row the cell closed on (WCAG 2.4.3). The panel exposes no row handle, so
@@ -1023,8 +1045,28 @@ export function ToolbarPlanWorkspace({
     canEdit,
     reason: model.activityEditorGating.general.reason,
     plannedStartIso: plan.plannedStart ?? null,
-    moveTo: (activityId, startDay) => void model.onTsldReposition({ activityId, startDay }),
-    resizeTo: (activityId, durationDays) => void model.onTsldResize({ activityId, durationDays }),
+    isWorkingDay: ganttWorkingDay,
+    moveTo: (activityId, startDay, applied) =>
+      settleBarWrite(
+        model.onTsldReposition({ activityId, startDay }),
+        applied,
+        'Couldn’t move the activity.',
+        ganttAnnounce,
+      ),
+    resizeTo: (activityId, durationDays, applied) =>
+      settleBarWrite(
+        model.onTsldResize({ activityId, durationDays }),
+        applied,
+        'Couldn’t resize the activity.',
+        ganttAnnounce,
+      ),
+    resizeStart: (activityId, startDay, durationDays, applied) =>
+      settleBarWrite(
+        model.onTsldResize({ activityId, startDay, durationDays }),
+        applied,
+        'Couldn’t resize the activity.',
+        ganttAnnounce,
+      ),
     // The SHARED polite live region (`components/ui/announcer`), not a second one. ADR-0073 C1
     // found two empty states collapsed into one sentence in the single channel a screen-reader user
     // has; a second region would be the same class of problem — two channels competing to be that

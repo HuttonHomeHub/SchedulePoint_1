@@ -1,3 +1,4 @@
+import { drawnSpanPlacement, type DrawnPlacement } from '@/features/tsld/render/snap';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 
 /**
@@ -21,6 +22,15 @@ import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-tim
  * NEAREST working day, so a Saturday drop was written back as **Friday** — earlier than the planner
  * placed it — and then the engine rolled from the client's wrong answer. The ghost previews the
  * roll; the PATCH carries the drop.
+ *
+ * That holds for a MOVE. A resize writes a duration alongside its start, and the duration is only
+ * meaningful from a working day, so the start-edge write rolls the start forward itself, as the
+ * diagram's resize does (`spanToPlacement`, ADR-0170 D2).
+ *
+ * **The rounding differs by gesture, on purpose.** A body move reads the day under the drop point
+ * and so FLOORS (`dateAtChartX`); an edge resize measures how far the pointer travelled and so
+ * ROUNDS to the nearest column (`columnsMoved`). Both are right for what they measure, and a
+ * reader who assumes one rule will think one of them off by half a column.
  */
 
 /** The date a chart x-coordinate falls on. */
@@ -53,23 +63,125 @@ export function startDayAtChartX({
 }
 
 /**
- * A duration in whole days for a bar whose right edge is dragged to chart x.
+ * **Whole columns a pointer moved**, rounded to the nearest — the one rounding every edge gesture
+ * and its live preview share, so the bar a planner sees under the pointer is the bar that is
+ * written. `|| 0` folds `-0` (a small leftward drag rounds to it) into `0`, which would otherwise
+ * read as "moved" to a strict-equality check.
  *
- * Inclusive (ADR-0023): a bar from the 1st to the 5th is five days, so the arithmetic is
- * `finish - start + 1`. Floored at 1, because a task with a zero duration is a milestone and
- * changing an activity's TYPE is not something a drag should be able to do by accident.
+ * A tie rounds up (`Math.round`): exactly half a column right is one column, exactly half a column
+ * left is none. Pinned by a test, because it is asymmetric and nothing else would notice a change.
  */
-export function durationDaysForFinishAtX({
-  startIso,
-  anchorIso,
-  pxPerDay,
+export function columnsMoved(deltaX: number, pxPerDay: number): number {
+  if (!Number.isFinite(pxPerDay) || pxPerDay <= 0) return 0;
+  return Math.round(deltaX / pxPerDay) || 0;
+}
+
+/**
+ * **The bar as drawn while an edge is being dragged**, in chart pixels.
+ *
+ * Previews at whole CALENDAR columns — the same rounding the commit uses — clamped one column short
+ * of the opposite edge so the bar never inverts. The write then rolls the start to a WORKING day and
+ * counts working days (`spanToPlacement`, ADR-0170 D6), so over a weekend the committed bar can sit
+ * a column or two from this picture; that is deliberate, the preview is where the pointer is and the
+ * commit is where the engine will put it. At most one edge is dragged at a time.
+ */
+export function previewBarSpan({
   x,
+  width,
+  pxPerDay,
+  finishDeltaX,
+  startDeltaX,
 }: {
-  startIso: string;
-  anchorIso: string;
-  pxPerDay: number;
   x: number;
-}): number {
-  const finish = dateAtChartX(anchorIso, pxPerDay, x);
-  return Math.max(1, daysBetween(startIso, finish) + 1);
+  width: number;
+  pxPerDay: number;
+  /** The live finish-edge drag, or null. */
+  finishDeltaX: number | null;
+  /** The live start-edge drag, or null. */
+  startDeltaX: number | null;
+}): { x: number; width: number; resizing: boolean } {
+  const room = Math.max(width - pxPerDay, 0);
+  if (finishDeltaX !== null) {
+    const px = Math.max(columnsMoved(finishDeltaX, pxPerDay) * pxPerDay, -room);
+    return { x, width: width + px, resizing: true };
+  }
+  if (startDeltaX !== null) {
+    const px = Math.min(columnsMoved(startDeltaX, pxPerDay) * pxPerDay, room);
+    return { x: x + px, width: width - px, resizing: true };
+  }
+  return { x, width, resizing: false };
+}
+
+/**
+ * **A drawn span of days → the placement the workspace writes, counted in WORKING days.**
+ *
+ * `durationDays` is a working-day quantity. Counting the calendar days a bar covers and writing
+ * that makes the engine lay out that many *working* days, so a five-day task stretched over a
+ * weekend came back two days longer than it was drawn — the defect the diagram fixed with
+ * `drawnSpanPlacement` (ADR-0170 D2) and the Gantt's three "hold one end" writes (the finish-edge
+ * drag and both typed date cells) still carried. This is that same function, so one question has
+ * one answer in both views, and the start is rolled FORWARD to a working day as the diagram does.
+ *
+ * Days are counted from `plannedStart`, which is the origin the predicate is keyed to — NOT from
+ * the chart anchor the bars are drawn from (see the top of this file). With no predicate (the plan
+ * calendar has not loaded) the calendar span is returned, the pre-fix behaviour for that window
+ * only.
+ */
+export function spanToPlacement({
+  startDay,
+  endDay,
+  isWorkingDay,
+}: {
+  startDay: number;
+  endDay: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  return drawnSpanPlacement(startDay, endDay, isWorkingDay);
+}
+
+/**
+ * The placement for dragging a bar's **finish** edge `columns` columns, the start held.
+ *
+ * Clamped so the finish never passes the start: `drawnSpanPlacement` orders its two ends, so an
+ * unclamped leftward drag would silently turn into a start-edge write.
+ */
+export function finishEdgePlacement({
+  plannedStartIso,
+  startIso,
+  finishIso,
+  columns,
+  isWorkingDay,
+}: {
+  plannedStartIso: string;
+  startIso: string;
+  finishIso: string;
+  columns: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  const startDay = daysBetween(plannedStartIso, startIso);
+  const endDay = Math.max(daysBetween(plannedStartIso, finishIso) + columns, startDay);
+  return spanToPlacement({ startDay, endDay, isWorkingDay });
+}
+
+/**
+ * The placement for dragging a bar's **start** edge `columns` columns, the finish held.
+ *
+ * Clamped at the finish day (one working day minimum), the diagram's rule — the bar never inverts.
+ */
+export function startEdgePlacement({
+  plannedStartIso,
+  startIso,
+  finishIso,
+  columns,
+  isWorkingDay,
+}: {
+  plannedStartIso: string;
+  startIso: string;
+  finishIso: string;
+  columns: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  const endDay = daysBetween(plannedStartIso, finishIso);
+  const startDay = Math.min(daysBetween(plannedStartIso, startIso) + columns, endDay);
+  return spanToPlacement({ startDay, endDay, isWorkingDay });
 }

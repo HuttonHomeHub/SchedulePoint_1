@@ -224,12 +224,37 @@ describe('a cell that is open', () => {
     expect(onChange).toHaveBeenCalledTimes(0);
   });
 
-  it('links a refusal to the cell too, so the text and the reason arrive together', () => {
+  it('describes the field by its refusal and marks it invalid, on the input that has focus', () => {
     renderCell({ editing: true, text: '4h', errorMessage: 'Someone else is editing this plan.' });
-    const describedBy = screen.getByRole('gridcell').getAttribute('aria-describedby');
+    const input = screen.getByRole('textbox');
+    // The description lives on the control a screen reader is IN. On the gridcell wrapper it was
+    // never read while focus sat in the field (WCAG 3.3.1 / 4.1.2), and the field carried no
+    // `aria-invalid` to say anything was wrong at all.
+    const describedBy = input.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveTextContent(
       'Someone else is editing this plan.',
     );
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('gridcell').getAttribute('aria-describedby') ?? '').not.toContain(
+      describedBy!,
+    );
+  });
+
+  it('shows the refusal to a sighted planner, not only to a screen reader', () => {
+    renderCell({ editing: true, text: '4h', errorMessage: 'Someone else is editing this plan.' });
+    const message = document.getElementById(
+      screen.getByRole('textbox').getAttribute('aria-describedby')!,
+    )!;
+    // `sr-only` is the defect: the planner's text stays in the field with no visible reason.
+    expect(message).not.toHaveClass('sr-only');
+    expect(message).toHaveTextContent('Someone else is editing this plan.');
+  });
+
+  it('marks nothing invalid while there is no refusal', () => {
+    renderCell({ editing: true, text: '4h' });
+    const input = screen.getByRole('textbox');
+    expect(input).not.toHaveAttribute('aria-invalid');
+    expect(input).not.toHaveAttribute('aria-describedby');
   });
 });

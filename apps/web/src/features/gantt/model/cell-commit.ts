@@ -1,8 +1,11 @@
 import type { ActivitySummary } from '@repo/types';
 
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import type { GanttCellKey } from './cell-edit';
 
 import { durationWriteFields } from '@/features/activities/model/duration-field';
+import { spanToPlacement } from '@/features/gantt/layout/drag-day';
+import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 import { ApiFetchError } from '@/lib/api/client';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { parseCalendarDate } from '@/lib/format-date';
@@ -63,6 +66,13 @@ export interface CellWriteContext {
   activity: ActivitySummary;
   hoursPerDay: number | undefined;
   barDateSource: BarDateSource;
+  /** The plan's `plannedStart` — the origin the working-day predicate is keyed to. */
+  plannedStartIso: string | null;
+  /**
+   * Whether a day offset from `plannedStartIso` is worked, on the plan calendar. Null while the
+   * calendar has not loaded, which falls back to the calendar span (ADR-0170 D2).
+   */
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
 }
 
 /**
@@ -124,24 +134,22 @@ export function cellWriteFields(key: GanttCellKey, text: string, ctx: CellWriteC
   }
 }
 
-/** Calendar days between two `YYYY-MM-DD` days. Positive when `to` is later. */
-function calendarDaysBetween(from: string, to: string): number {
-  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
-}
-
 /**
  * **A typed date writes what the equivalent canvas gesture writes** — ADR-0134, and every branch
  * below mirrors `use-plan-workspace-model.ts:1179-1216` rather than inventing a grid semantic.
  *
- * The arithmetic is the canvas's too, read from `TsldPanel.tsx:165-168` rather than recalled:
- * `durationDays = finish − newStart + 1`, **calendar days, inclusive**. It is not a working-day
- * walk, and it cannot be — the client holds no calendar — which is exactly as true of dragging a
- * bar's edge today. The engine re-derives the real span on the next recalculation.
+ * The arithmetic is the diagram's too: the drawn span is converted with `drawnSpanPlacement` on the
+ * plan's working-day predicate (`spanToPlacement`, ADR-0170 D2), because `durationDays` is a
+ * WORKING-day field. This docblock said "calendar days … the client holds no calendar" until
+ * ADR-0170, which was false from the day the diagram's weekend fix shipped, and a five-day task
+ * finished over a weekend came back two days off the date typed. A typed start is rolled forward
+ * to a working day, as the diagram's resize does; with no calendar loaded the calendar span is
+ * written, for that window only.
  */
 function dateWriteFields(
   key: 'earlyStart' | 'earlyFinish',
   trimmed: string,
-  { activity, barDateSource }: CellWriteContext,
+  { activity, barDateSource, plannedStartIso, isWorkingDay }: CellWriteContext,
 ): CellWrite {
   // **The Late overlay is read-only by ADR-0033**, so the dates on screen are not inputs at all —
   // writing from them would take a planner's typed value and apply it to a different pair of
@@ -149,6 +157,14 @@ function dateWriteFields(
   // this is the second lock, because "should already" is how #290 shipped.
   if (barDateSource === 'late') {
     return refuse('Late dates are a read-only overlay. Turn it off to edit dates.');
+  }
+
+  // **A started or finished activity has no start to move** (ADR-0170 D3): the engine draws it from
+  // its actual and ignores a hand-placed start, so the write would save an inert placement,
+  // change the duration and move the FINISH. The handle is withheld for the same reason, from the
+  // same function, so the cell and the bar cannot disagree about it.
+  if (key === 'earlyStart' && Boolean(activity.actualStart ?? activity.actualFinish)) {
+    return refuse(START_EDGE_FROZEN_REASON);
   }
 
   // **D4 — a `MANDATORY_*` constraint is never overwritten from a cell.** Mandatory constraints
@@ -179,6 +195,25 @@ function dateWriteFields(
     return refuse('This plan has not been calculated yet, so dates cannot be typed in.');
   }
 
+  // Days count from `plannedStart`, the origin the predicate is keyed to. With no predicate the
+  // origin is irrelevant (a calendar span), so the span's own start serves.
+  const workingDays = plannedStartIso !== null ? isWorkingDay : null;
+  const placementFor = (
+    startIso: string,
+    finishIso: string,
+  ): { startIso: string; durationDays: number } => {
+    const origin = plannedStartIso !== null && workingDays !== null ? plannedStartIso : startIso;
+    const placement = spanToPlacement({
+      startDay: daysBetween(origin, startIso),
+      endDay: daysBetween(origin, finishIso),
+      isWorkingDay: workingDays,
+    });
+    return {
+      startIso: addCalendarDays(origin, placement.startDay),
+      durationDays: placement.durationDays,
+    };
+  };
+
   if (key === 'earlyFinish') {
     // **D3 — a typed `Finish` writes a DURATION and no constraint at all.** This
     // is the branch a reader expects to be `FNLT` and is not. A finish-edge resize "spreads
@@ -188,13 +223,13 @@ function dateWriteFields(
     // Its honest consequence, which ADR-0134 states rather than leaving to be discovered: with no
     // constraint and no placement the start is computed, so a later recalculation can move it and
     // carry this finish with it. The typed finish is not a pin — exactly as true of the drag.
-    const durationDays = calendarDaysBetween(start, typed) + 1;
-    if (durationDays < 1) return refuse('The finish cannot be before the start.');
+    if (daysBetween(start, typed) < 0) return refuse('The finish cannot be before the start.');
+    const { durationDays } = placementFor(start, typed);
     return write({ durationDays });
   }
 
-  const durationDays = calendarDaysBetween(typed, finish) + 1;
-  if (durationDays < 1) return refuse('The start cannot be after the finish.');
+  if (daysBetween(typed, finish) < 0) return refuse('The start cannot be after the finish.');
+  const placed = placementFor(typed, finish);
 
   /**
    * **D1 — hand-place, and write NO constraint.** A placement is advisory and a constraint is not;
@@ -207,7 +242,7 @@ function dateWriteFields(
    * what ADR-0134 D1 asked of them in the first place: "a typed date writes the constraint a drag
    * writes."
    */
-  return write({ visualStart: typed, durationDays });
+  return write({ visualStart: placed.startIso, durationDays: placed.durationDays });
 }
 
 /**
@@ -243,6 +278,8 @@ export async function commitCell({
   text,
   hoursPerDay,
   barDateSource,
+  plannedStartIso,
+  isWorkingDay,
   update,
 }: {
   activity: ActivitySummary;
@@ -250,12 +287,16 @@ export async function commitCell({
   text: string;
   hoursPerDay: number | undefined;
   barDateSource: BarDateSource;
+  plannedStartIso: string | null;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
   update: UpdateActivityFieldsFn;
 }): Promise<CellCommitResult> {
   const result = cellWriteFields(key, text, {
     activity,
     hoursPerDay,
     barDateSource,
+    plannedStartIso,
+    isWorkingDay,
   });
   // **The refusal's own sentence, not a generic one.** ADR-0134 D4 refuses a perfectly
   // well-formed date on a mandatory-constrained activity; told only that their value was

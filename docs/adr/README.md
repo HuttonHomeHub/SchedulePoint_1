@@ -193,3 +193,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0167](0167-applying-levelling-is-a-placement-the-planner-makes.md)                             | Applying levelling is a placement the planner makes                               | Accepted           |
 | [0168](0168-levelling-follows-the-links.md)                                                     | Levelling follows the links                                                       | Accepted           |
 | [0169](0169-an-editors-working-state-lives-for-one-opening.md)                                  | An editor's working state lives for one opening                                   | Proposed           |
+| [0170](0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md)                           | The Gantt's start edge writes what the diagram's writes, counted in working days  | Accepted           |

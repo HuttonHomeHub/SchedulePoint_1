@@ -86,8 +86,8 @@ keep `main` releasable.
   `docs/TEST_PLAYBOOK.md` says which plan proves what and what _wrong_ looks like;
   `pnpm check:playbook` gates that its rows resolve in both directions.
   **What it found** is the argument for it: three write-path gaps no existing gate could report
-  (TECH_DEBT #78/#79/#80 — the largest being that ADR-0036's intraday shift patterns are authorable
-  by nothing), the first honest answer to the draw-performance question (TECH_DEBT #75 — the _scene_
+  (TECH*DEBT #78/#79/#80 — the largest being that ADR-0036's intraday shift patterns are authorable
+  by nothing), the first honest answer to the draw-performance question (TECH_DEBT #75 — the \_scene*
   dominates the number), and a live export defect that downgraded every Level of Effort activity to a
   task on the way out. The CPM engine is not modified and the ADR-0034 parity gate is untouched.
 
@@ -571,6 +571,12 @@ keep `main` releasable.
   > cases that never ran. And the one-per-session note turned out to have been described as shipped
   > in two docblocks for a month while nothing implemented it; both are corrected rather than
   > quietly fixed.
+
+  > **The Gantt's start-edge resize — decided 2026-10-02, not yet built** (**ADR-0170**,
+  > `docs/specs/gantt-start-edge-resize/`). ADR-0095 deferred it for a meaning that depended on the
+  > scheduling modes; ADR-0148 deleted the modes. The decision is that the Gantt's left handle writes
+  > what the diagram's does, and that every Gantt write holding one end of a bar counts **working**
+  > days, as the diagram's already does. The working-day fix and the handle ship in one release.
 
 ## Delivered — operations & supportability
 

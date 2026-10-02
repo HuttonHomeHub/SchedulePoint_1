@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import {
   cellWriteFields,
   commitCell,
@@ -47,8 +48,19 @@ const ctx = (over: Partial<CellWriteContext> = {}): CellWriteContext => ({
   activity: activity(),
   hoursPerDay: EIGHT_HOUR,
   barDateSource: 'early',
+  plannedStartIso: null,
+  isWorkingDay: null,
   ...over,
 });
+
+/**
+ * A Mon–Fri plan whose day 0 is Monday 2 March 2026 — the fixture activity's own Monday, so the
+ * predicate and the dates agree without a conversion in the test.
+ */
+const MON_FRI_PLAN: Pick<CellWriteContext, 'plannedStartIso' | 'isWorkingDay'> = {
+  plannedStartIso: '2026-03-02',
+  isWorkingDay: (dayOffset) => ((dayOffset % 7) + 7) % 7 < 5,
+};
 
 /** The fields a successful write sends, or `null` for a refusal — the old shape, for brevity. */
 const fieldsOf = (result: ReturnType<typeof cellWriteFields>): Record<string, unknown> | null =>
@@ -143,6 +155,98 @@ describe('cellWriteFields', () => {
         expect(result).toEqual({ durationDays: 9 });
       },
     );
+
+    describe('counts WORKING days (ADR-0170 D2), as the diagram does', () => {
+      it('a typed finish across a weekend writes working days, not calendar days', () => {
+        // Mon 2 → Tue 10 March: Mon–Fri (5) plus Mon, Tue (2) = 7. Calendar arithmetic wrote 9, and
+        // the engine laid out nine WORKING days, so the finish came back two days after the one typed.
+        expect(
+          fieldsOf(cellWriteFields('earlyFinish', '10 Mar 2026', ctx({ ...MON_FRI_PLAN }))),
+        ).toEqual({ durationDays: 7 });
+      });
+
+      it('a typed start across a weekend writes working days, the finish held', () => {
+        // Finish Fri 6; new start Tue 3 → Tue–Fri = 4. (Calendar and working agree inside a week, so
+        // this is the control case the weekend one below must differ from.)
+        expect(
+          fieldsOf(cellWriteFields('earlyStart', '03 Mar 2026', ctx({ ...MON_FRI_PLAN }))),
+        ).toEqual({ visualStart: '2026-03-03', durationDays: 4 });
+        // Finish moved out to Tue 10; start Fri 6 → Fri, Mon, Tue = 3, not the calendar 5.
+        const longer = activity({
+          earlyFinish: '2026-03-10',
+          visualEffectiveFinish: '2026-03-10',
+        });
+        expect(
+          fieldsOf(
+            cellWriteFields(
+              'earlyStart',
+              '06 Mar 2026',
+              ctx({ ...MON_FRI_PLAN, activity: longer }),
+            ),
+          ),
+        ).toEqual({ visualStart: '2026-03-06', durationDays: 3 });
+      });
+
+      it('rolls a typed start on a weekend FORWARD, and writes the rolled date', () => {
+        // Sat 7 → Mon 9, as the diagram's resize does; the finish (Tue 10) is held: Mon, Tue.
+        const longer = activity({
+          earlyFinish: '2026-03-10',
+          visualEffectiveFinish: '2026-03-10',
+        });
+        expect(
+          fieldsOf(
+            cellWriteFields(
+              'earlyStart',
+              '07 Mar 2026',
+              ctx({ ...MON_FRI_PLAN, activity: longer }),
+            ),
+          ),
+        ).toEqual({ visualStart: '2026-03-09', durationDays: 2 });
+      });
+
+      it('honours a holiday exception in the predicate', () => {
+        const holiday = (d: number): boolean => d !== 3 && MON_FRI_PLAN.isWorkingDay!(d);
+        expect(
+          fieldsOf(
+            cellWriteFields(
+              'earlyFinish',
+              '06 Mar 2026',
+              ctx({ plannedStartIso: '2026-03-02', isWorkingDay: holiday }),
+            ),
+          ),
+        ).toEqual({ durationDays: 4 });
+      });
+
+      it('falls back to the calendar span while the plan calendar has not loaded', () => {
+        expect(fieldsOf(cellWriteFields('earlyFinish', '10 Mar 2026', ctx()))).toEqual({
+          durationDays: 9,
+        });
+      });
+    });
+
+    describe('a started or finished activity has no start to move (ADR-0170 D3)', () => {
+      it.each([
+        ['an actual start', { actualStart: '2026-03-02' }],
+        ['an actual finish', { actualFinish: '2026-03-06' }],
+      ])('refuses a typed Start on an activity with %s, naming why', (_label, over) => {
+        const reason = reasonOf(
+          cellWriteFields('earlyStart', '04 Mar 2026', ctx({ activity: activity(over) })),
+        );
+        expect(reason).toBe(START_EDGE_FROZEN_REASON);
+      });
+
+      it('still lets the Finish be typed, which is a duration the engine does use', () => {
+        expect(
+          fieldsOf(
+            cellWriteFields(
+              'earlyFinish',
+              '10 Mar 2026',
+              ctx({ activity: activity({ actualStart: '2026-03-02' }) }),
+            ),
+          ),
+        ).toEqual({ durationDays: 9 });
+      });
+    });
 
     it('accepts exactly what the cell displays, because the cell is seeded from it', () => {
       // The round trip that matters in practice: a planner opens a date cell, edits one character,
@@ -293,6 +397,8 @@ describe('commitCell', () => {
       text: '4h',
       hoursPerDay: EIGHT_HOUR,
       barDateSource: 'early',
+      plannedStartIso: null,
+      isWorkingDay: null,
       update,
     });
 
@@ -315,6 +421,8 @@ describe('commitCell', () => {
       text: '2 weeks',
       hoursPerDay: EIGHT_HOUR,
       barDateSource: 'early',
+      plannedStartIso: null,
+      isWorkingDay: null,
       update,
     });
 
@@ -334,6 +442,8 @@ describe('commitCell', () => {
       text: 'Piling',
       hoursPerDay: EIGHT_HOUR,
       barDateSource: 'early',
+      plannedStartIso: null,
+      isWorkingDay: null,
       update,
     });
 

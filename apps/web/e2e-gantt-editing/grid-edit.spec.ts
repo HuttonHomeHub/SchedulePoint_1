@@ -14,6 +14,13 @@ import {
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
+import {
+  bindMonFriCalendar,
+  expectWeekday,
+  weekdayOf,
+  workingDaysInclusive,
+} from './calendar-support';
+
 /**
  * **M2-T5 — a duration typed into the Gantt grid, checked at the API.**
  *
@@ -183,6 +190,8 @@ async function readSchedulingFields(
   durationDays: number;
   earlyStart: string | null;
   earlyFinish: string | null;
+  visualEffectiveStart: string | null;
+  visualEffectiveFinish: string | null;
 }> {
   const planId = openPlanId(page);
   const row = await page.evaluate(
@@ -201,6 +210,8 @@ async function readSchedulingFields(
           durationDays: number;
           earlyStart: string | null;
           earlyFinish: string | null;
+          visualEffectiveStart: string | null;
+          visualEffectiveFinish: string | null;
         }[];
       };
       return body.data.find((a) => a.name === activityName) ?? null;
@@ -471,6 +482,8 @@ test('a finish date typed writes a duration and pins nothing', async ({ page }) 
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
   await startEditing(page);
+  // A Mon–Fri plan, asserted rather than assumed: the weekend below is the point of the case.
+  await bindMonFriCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -478,8 +491,12 @@ test('a finish date typed writes a duration and pins nothing', async ({ page }) 
   const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
 
   // Later than today's finish, so the duration must grow — a direction that cannot be confused
-  // with the write doing nothing.
+  // with the write doing nothing. Fri + 4 is the Tuesday of the following week, so **the span
+  // crosses a weekend**: counted in calendar days it is 9, in working days 7 (ADR-0170 D2).
+  expectWeekday(before.earlyStart, 'the fixture start');
+  expect(weekdayOf(before.earlyFinish!), 'the fixture finish is a Friday').toBe(5);
   const target = plusDays(before.earlyFinish!, 4);
+  expectWeekday(target, 'the typed finish');
 
   await finishCell(page).dblclick();
   const field = page.getByRole('textbox', { name: /Finish, Seeded 0/ });
@@ -490,10 +507,140 @@ test('a finish date typed writes a duration and pins nothing', async ({ page }) 
   // **D3, the branch a reader expects to be FNLT and is not.** A finish-edge resize spreads neither
   // field; a typed finish does the same. This asserts the absence as hard as the presence, because
   // "it also wrote a constraint" is the failure that would look like success on screen.
+  //
+  // **And the finish lands ON the date typed.** This asserted only "not equal to before" until
+  // ADR-0170, which is how a typed finish that came back two days late over a weekend passed: the
+  // duration was counted in calendar days into a working-day field, so the engine laid out nine
+  // WORKING days and the finish landed two days after the one typed.
   await expect
     .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).durationDays, {
       timeout: 20_000,
     })
-    .not.toBe(before.durationDays);
+    .toBe(workingDaysInclusive(before.earlyStart!, target));
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).earlyFinish, {
+      timeout: 20_000,
+    })
+    .toBe(target);
   expect((await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType).toBeNull();
+});
+
+/**
+ * **A typed start across a weekend holds the finish** (ADR-0170 D2).
+ *
+ * The bar is first stretched to a second week by typing its finish, so the typed start can sit a
+ * weekend before it without leaving the plan. Counted in calendar days the typed start wrote a
+ * duration two days too long, and the engine — laying out that many WORKING days from the start —
+ * pushed the finish out. The assertion is on the finish, which is what a planner holding it
+ * cares about, and it is read AFTER the recalculation has moved the start: a finish that has simply
+ * not been recalculated yet is unchanged for the wrong reason.
+ */
+test('a start date typed across a weekend leaves the finish where it was', async ({ page }) => {
+  test.setTimeout(240_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await bindMonFriCalendar(page, orgSlug);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+
+  const seeded = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+  const stretchedFinish = plusDays(seeded.earlyFinish!, 7);
+  expectWeekday(stretchedFinish, 'the stretched finish');
+
+  await finishCell(page).dblclick();
+  let field = page.getByRole('textbox', { name: /Finish, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill(asDisplayed(stretchedFinish));
+  await field.press('Enter');
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).earlyFinish, {
+      timeout: 20_000,
+    })
+    .toBe(stretchedFinish);
+
+  // The Friday of the first week: the span from there to the finish crosses one weekend.
+  const target = seeded.earlyFinish!;
+  expect(weekdayOf(target), 'the typed start is a Friday').toBe(5);
+
+  await startCell(page).dblclick();
+  field = page.getByRole('textbox', { name: /Start, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill(asDisplayed(target));
+  await field.press('Enter');
+
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).visualStart, {
+      timeout: 20_000,
+    })
+    .toContain(target);
+  await expect
+    .poll(
+      async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).visualEffectiveStart,
+      { timeout: 20_000 },
+    )
+    .toBe(target);
+  const after = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+  expect(after.durationDays).toBe(workingDaysInclusive(target, stretchedFinish));
+  expect(after.visualEffectiveFinish).toBe(stretchedFinish);
+  expect(after.constraintType).toBeNull();
+});
+
+test('a start date cannot be typed on a started activity, and the cell says why', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+
+  // Report an actual start through the progress endpoint, then let the client see it.
+  const planId = openPlanId(page);
+  const reported = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const list = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities?limit=100`, {
+        credentials: 'include',
+      });
+      const rows = (
+        (await list.json()) as {
+          data: { id: string; name: string; version: number; earlyStart: string }[];
+        }
+      ).data;
+      const row = rows.find((r) => r.name === 'Seeded 0')!;
+      const res = await fetch(`/api/v1/organizations/${org}/activities/${row.id}/progress`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actualStart: row.earlyStart, version: row.version }),
+      });
+      return res.ok ? null : `${res.status} ${await res.text()}`;
+    },
+    { org: orgSlug, id: planId },
+  );
+  expect(reported, 'reporting the actual start').toBeNull();
+  await syncClient(page);
+  await showGantt(page);
+
+  // The cell is SHUT up front (ADR-0083: read-only, not disabled), with the reason where a sighted
+  // planner can read it — a `title` — rather than discovered after typing a date. Asserted beside a
+  // sibling that is open, so "read-only everywhere" cannot be what passes.
+  const refusal = /has started, so its start is its actual start/;
+  await expect(startCell(page)).toHaveAttribute('aria-readonly', 'true');
+  await expect(startCell(page)).toHaveAttribute('title', refusal);
+  await expect(durationCell(page)).not.toHaveAttribute('aria-readonly', 'true');
+
+  // Opening it does nothing: no field to type a value that could never be saved.
+  await startCell(page).dblclick();
+  await expect(page.getByRole('textbox', { name: /Start, Seeded 0/ })).toHaveCount(0);
+
+  // And NOTHING was written: a placement on a started activity is inert and would have moved the
+  // finish. Asserted at the API after the refusal has had every chance to be a write.
+  expect((await readSchedulingFields(page, orgSlug, 'Seeded 0')).visualStart).toBeNull();
 });

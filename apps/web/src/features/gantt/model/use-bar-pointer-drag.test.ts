@@ -41,20 +41,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const pointerDown = (clientX: number) =>
+const pointerDown = (clientX: number, pointerId = 1) =>
   ({
     button: 0,
     clientX,
+    pointerId,
     preventDefault: () => undefined,
     stopPropagation: () => undefined,
   }) as unknown as React.PointerEvent<HTMLElement>;
 
-const move = (clientX: number) => {
-  window.dispatchEvent(new PointerEvent('pointermove', { clientX }));
+const move = (clientX: number, pointerId = 1) => {
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX, pointerId }));
 };
 
-const up = () => {
-  window.dispatchEvent(new PointerEvent('pointerup'));
+const up = (pointerId = 1) => {
+  window.dispatchEvent(new PointerEvent('pointerup', { pointerId }));
 };
 
 const escape = () => {
@@ -159,6 +160,25 @@ describe('useBarPointerDrag', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('treats a browser pointercancel as a cancel — a touch scroll must not commit a stale drag', () => {
+    // The browser takes the pointer over (a touch becomes a scroll) and sends `pointercancel`
+    // INSTEAD of `pointerup`. With no handler the window listeners stayed attached, and the next
+    // unrelated `pointerup` anywhere committed the delta of a drag the planner never finished.
+    const onCommit = vi.fn();
+    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+
+    act(() => result.current.onPointerDown(pointerDown(100)));
+    act(() => {
+      move(200);
+      flushFrame();
+      window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 }));
+    });
+    expect(result.current.dragging).toBe(false);
+
+    act(() => up());
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('cancels its frame on unmount rather than publishing into a dead tree', () => {
     const onCommit = vi.fn();
     const { result, unmount } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
@@ -170,5 +190,42 @@ describe('useBarPointerDrag', () => {
     unmount();
     // A row can be virtualized away mid-drag, so the release handler is not guaranteed to run.
     expect(frames).toHaveLength(0);
+  });
+
+  it('removes its window listeners on unmount, so a later release cannot commit a dead drag', () => {
+    // The unmount effect used to cancel the frame only. A row virtualized away mid-drag left four
+    // listeners on the window, and the next unrelated `pointerup` called `onCommit` for a bar that
+    // was no longer on screen.
+    const onCommit = vi.fn();
+    const { result, unmount } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+
+    act(() => result.current.onPointerDown(pointerDown(100)));
+    act(() => move(150));
+    unmount();
+
+    up();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('ignores a second pointer: neither its move, its release nor its cancel touches the drag', () => {
+    // A second finger landing mid-drag must not move the bar, drop it or cancel it — each event is
+    // matched to the pointer that started the gesture.
+    const onCommit = vi.fn();
+    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+
+    act(() => result.current.onPointerDown(pointerDown(100, 1)));
+    act(() => {
+      move(500, 2);
+      up(2);
+      window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 2 }));
+    });
+    expect(result.current.dragging).toBe(true);
+    expect(onCommit).not.toHaveBeenCalled();
+
+    act(() => {
+      move(160, 1);
+      up(1);
+    });
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith(60);
   });
 });

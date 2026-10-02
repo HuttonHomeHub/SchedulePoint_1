@@ -30,6 +30,14 @@ describe('the plan shortcuts sheet', () => {
     expect(screen.getByRole('heading', { name: 'Edit' })).toBeInTheDocument();
   });
 
+  it('teaches the Gantt start-edge route: the Start cell, or the bar’s left end', () => {
+    // The keyboard route already existed (ADR-0134) and no sheet said so. Stated as a route, not a
+    // new chord: the sheet must not invent a binding the product does not have.
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
+    expect(screen.getByText('F2 on the Start cell (or double-click it)')).toBeInTheDocument();
+    expect(screen.getByText(/keeping the finish/)).toBeInTheDocument();
+  });
+
   it('withholds the Edit section in the Gantt when editing is not enabled', () => {
     // A shaded or absent section, never a list of keys that do nothing — the lit-but-inert shape.
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} view="gantt" />);

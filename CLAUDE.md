@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1428 web
+> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1429 web
 > source files with 46 Playwright suites beside the base journey, and
-> 169 ADRs.
+> 170 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -491,7 +491,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0092** _(Accepted; M5 withdrawn)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
-- **ADR-0095** _(Accepted)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
+- **ADR-0095** _(Accepted; amended by ADR-0170)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
 - **ADR-0096** _(Accepted)_ — Deleted work expires, and purge is refused structurally → [`0096-deleted-work-expires-and-purge-is-refused.md`](docs/adr/0096-deleted-work-expires-and-purge-is-refused.md)
 - **ADR-0097** _(Accepted)_ — The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped → [`0097-a-theme-is-a-system-not-a-palette.md`](docs/adr/0097-a-theme-is-a-system-not-a-palette.md)
 - **ADR-0098** _(Accepted)_ — The landing is the organisation overview → [`0098-the-landing-is-the-organisation-overview.md`](docs/adr/0098-the-landing-is-the-organisation-overview.md)
@@ -531,7 +531,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0131** _(Accepted)_ — A spec header states its approval, and a citation is what closes it → [`0131-a-spec-header-states-its-approval-and-a-citation-is-what-closes-it.md`](docs/adr/0131-a-spec-header-states-its-approval-and-a-citation-is-what-closes-it.md)
 - **ADR-0132** _(Accepted)_ — An alert says whether it is an event or a standing condition → [`0132-an-alert-says-whether-it-is-an-event-or-a-standing-condition.md`](docs/adr/0132-an-alert-says-whether-it-is-an-event-or-a-standing-condition.md)
 - **ADR-0133** _(Accepted)_ — A command surface declares its rows, and the pen leads the one it unlocks → [`0133-a-command-surface-declares-its-rows-and-the-pen-leads-the-one-it-unlocks.md`](docs/adr/0133-a-command-surface-declares-its-rows-and-the-pen-leads-the-one-it-unlocks.md)
-- **ADR-0134** _(Accepted)_ — A typed date writes the constraint a drag writes → [`0134-a-typed-date-writes-the-constraint-a-drag-writes.md`](docs/adr/0134-a-typed-date-writes-the-constraint-a-drag-writes.md)
+- **ADR-0134** _(Accepted; amended by ADR-0170)_ — A typed date writes the constraint a drag writes → [`0134-a-typed-date-writes-the-constraint-a-drag-writes.md`](docs/adr/0134-a-typed-date-writes-the-constraint-a-drag-writes.md)
 - **ADR-0135** _(Accepted)_ — A container hands focus back when somebody else removes the control you were on → [`0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md`](docs/adr/0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md)
 - **ADR-0136** _(Accepted)_ — A rule is enforced where the artefact lands, and the roster is derived → [`0136-a-rule-is-enforced-where-the-artefact-lands.md`](docs/adr/0136-a-rule-is-enforced-where-the-artefact-lands.md)
 - **ADR-0137** _(Accepted)_ — A notification is a record, and the build waits for somebody to notify → [`0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md`](docs/adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)
@@ -567,6 +567,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0167** _(Accepted; D1 and D3 amended by ADR-0168)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
 - **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
 - **ADR-0169** _(Accepted)_ — An editor's working state lives for one opening → [`0169-an-editors-working-state-lives-for-one-opening.md`](docs/adr/0169-an-editors-working-state-lives-for-one-opening.md)
+- **ADR-0170** _(Accepted)_ — The Gantt's start edge writes what the diagram's writes, counted in working days → [`0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md`](docs/adr/0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

@@ -13,9 +13,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * to and it fails silently — ADR-0064 chose an effect cleanup for its recalculation holds for the
  * same reason.
  *
- * **Escape cancels**, and cancelling is not the same as dropping: the bar returns to where it was
- * and nothing is written. Without it a planner who starts a drag by accident has to complete it and
+ * **Escape cancels, and so does the browser's `pointercancel`**, and cancelling is not the same as
+ * dropping: the bar returns to where it was and nothing is written. Without it a planner who starts a drag by accident has to complete it and
  * then undo, which is two writes and a recalculation to fix a slip.
+ *
+ * Every window event is matched to the **pointer that started the gesture**: a second finger
+ * landing mid-drag must not move, drop or cancel it.
  */
 
 export interface BarPointerDrag {
@@ -41,6 +44,9 @@ export function useBarPointerDrag({
   const liveDeltaX = useRef(0);
   const frame = useRef<number | null>(null);
   const cancelled = useRef(false);
+  // Detaches the live gesture's window listeners, or null between gestures. Held in a ref so the
+  // unmount effect can reach it: the release handler does not run for a row virtualized away.
+  const teardown = useRef<(() => void) | null>(null);
 
   const stop = useCallback(() => {
     if (frame.current !== null) {
@@ -52,8 +58,14 @@ export function useBarPointerDrag({
 
   // A drag that outlives its component would keep listeners on the window and publish into a
   // setState on an unmounted tree. Cleared here rather than trusted to the release handler, which
-  // by definition does not run if the row is virtualized away mid-drag.
-  useEffect(() => stop, [stop]);
+  // by definition does not run if the row is virtualized away mid-drag. The listeners are removed
+  // too, not only the frame: left attached, the next unrelated `pointerup` committed a dead drag.
+  useEffect(
+    () => () => {
+      teardown.current?.();
+    },
+    [],
+  );
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
@@ -63,6 +75,10 @@ export function useBarPointerDrag({
       event.preventDefault();
       event.stopPropagation();
 
+      // A second press while one gesture is live (the first's release was lost) replaces it.
+      teardown.current?.();
+
+      const pointerId = event.pointerId;
       originX.current = event.clientX;
       liveDeltaX.current = 0;
       cancelled.current = false;
@@ -74,6 +90,7 @@ export function useBarPointerDrag({
       };
 
       const onMove = (moveEvent: PointerEvent): void => {
+        if (moveEvent.pointerId !== pointerId) return;
         liveDeltaX.current = moveEvent.clientX - originX.current;
         // At most one publish per frame. Without this the row re-renders per pointermove, which on a
         // virtualized list is the whole window.
@@ -83,17 +100,29 @@ export function useBarPointerDrag({
       const finish = (): void => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('keydown', onKey, true);
+        teardown.current = null;
         stop();
       };
 
-      const onUp = (): void => {
+      const onUp = (upEvent: PointerEvent): void => {
+        if (upEvent.pointerId !== pointerId) return;
         const total = liveDeltaX.current;
         const wasCancelled = cancelled.current;
         finish();
         // A drag that never moved is a click, and a click is a selection. Committing zero would
         // burn a version bump and a recalculation on a bar the planner merely touched.
         if (!wasCancelled && total !== 0) onCommit(total);
+      };
+
+      // The browser took the pointer over (a touch became a scroll, a gesture was claimed) and sent
+      // `pointercancel` INSTEAD of `pointerup`. It is a cancel, not a drop: without it the window
+      // listeners outlive the gesture and the next unrelated `pointerup` commits a stale delta.
+      const onCancel = (cancelEvent: PointerEvent): void => {
+        if (cancelEvent.pointerId !== pointerId) return;
+        cancelled.current = true;
+        finish();
       };
 
       const onKey = (keyEvent: KeyboardEvent): void => {
@@ -107,8 +136,10 @@ export function useBarPointerDrag({
         finish();
       };
 
+      teardown.current = finish;
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
     [enabled, onCommit, stop],

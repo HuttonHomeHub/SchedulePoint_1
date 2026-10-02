@@ -66,6 +66,8 @@ export function useGanttGridEditing({
   hasComputedSchedule,
   barDateSource,
   hoursPerDayFor,
+  plannedStartIso,
+  isWorkingDay,
   updateFields,
   announce,
   onCellClosed,
@@ -77,6 +79,9 @@ export function useGanttGridEditing({
   /** Which dates the grid is showing — the seed must match what the cell renders. */
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: (activity: ActivitySummary) => number | undefined;
+  /** The plan's `plannedStart` and the working-day predicate keyed to it (ADR-0170 D2). */
+  plannedStartIso: string | null;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
   updateFields: UpdateActivityFieldsFn;
   /** The shared polite live region. A committed write that says nothing is invisible to AT. */
   announce: (message: string) => void;
@@ -154,6 +159,8 @@ export function useGanttGridEditing({
       text: current.text,
       hoursPerDay: hoursPerDayFor(before),
       barDateSource: barDateSource ?? 'early',
+      plannedStartIso,
+      isWorkingDay,
       update: updateFields,
     });
 

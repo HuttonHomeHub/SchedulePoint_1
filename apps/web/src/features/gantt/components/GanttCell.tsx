@@ -98,10 +98,8 @@ export function GanttCell({
     input.select();
   }, [editing]);
 
-  const describedBy =
-    [gate.reason === null ? null : reasonId, errorMessage === null ? null : errorId]
-      .filter(Boolean)
-      .join(' ') || undefined;
+  // The refusal belongs to the open field, so it is only shown (and only linked) while one is open.
+  const errorShown = editing && errorMessage !== null;
 
   return (
     <div
@@ -124,9 +122,11 @@ export function GanttCell({
       // gives a shaded control a native `title`, and the `View ▾` lens toggles render the reason
       // visibly, with a comment saying a sighted planner needs it as much as a screen-reader one.
       {...(gate.readOnly && gate.reason !== null ? { title: gate.reason } : {})}
-      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+      {...(gate.reason === null ? {} : { 'aria-describedby': reasonId })}
       className={cn(
-        'shrink-0 truncate px-2 text-xs',
+        'shrink-0 px-2 text-xs',
+        // `truncate` clips its children, which would clip the refusal drawn under the field.
+        errorShown ? 'relative' : 'truncate',
         align === 'right' && 'text-right tabular-nums',
         // Chrome dimmed, value not. `--muted` as the fill with `--foreground` text is the pair the
         // contrast matrix already validates across every theme and scope.
@@ -143,6 +143,15 @@ export function GanttCell({
           readOnly={busy}
           aria-busy={busy || undefined}
           aria-label={label}
+          // The refusal is linked and flagged on the INPUT, the control a screen reader is in. It
+          // sat on the gridcell wrapper until the ADR-0170 accessibility gate (WCAG 3.3.1 / 4.1.2):
+          // a description on the wrapper is not read while focus is in the field, and nothing said
+          // the field was invalid. Nothing is announced when it appears — the commit already speaks
+          // the refusal through the polite live region (`use-gantt-grid-editing.ts`), which is the
+          // only route that reaches a user whose focus is already in the field. `aria-describedby`
+          // is read on arrival, so the two never fire for the same event.
+          aria-invalid={errorShown || undefined}
+          {...(errorShown ? { 'aria-describedby': errorId } : {})}
           className="bg-field text-field-foreground border-input h-6 w-full rounded border px-1"
           // Guarded as well as `readOnly`. The reducer already drops a `change` while committing, so
           // this is belt-and-braces — but the test that asserted "no callback while busy" failed
@@ -210,11 +219,17 @@ export function GanttCell({
           {gate.reason}
         </span>
       )}
-      {errorMessage === null ? null : (
-        <span id={errorId} className="text-destructive-text sr-only">
+      {errorShown ? (
+        // Visible, not `sr-only`: the planner's text stays in the field and a refusal only a screen
+        // reader could read left everybody else with a value that would not save and no reason
+        // (WCAG 3.3.1). Drawn under the field so it covers neither the value nor its neighbours.
+        <span
+          id={errorId}
+          className="border-destructive-text bg-background text-destructive-text absolute top-full left-0 z-20 mt-1 w-max max-w-72 rounded border px-2 py-1 text-xs whitespace-normal"
+        >
           {errorMessage}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }
