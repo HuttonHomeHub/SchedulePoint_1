@@ -1,16 +1,16 @@
 # ADR-0169: An editor's working state lives for one opening
 
-- **Status:** Proposed
-- **Date:** 2026-10-01
+- **Status:** Accepted (M0–M4 landed 2026-10-01 to 2026-10-02)
+- **Date:** 2026-10-01 (accepted 2026-10-02)
 - **Deciders:** James Ewbank (product owner — CQ-1 (b), CQ-2 (b), CQ-3 (a) and NQ-1 (b) answered on
   2026-10-01; chose to continue after M0's stop gate fired), with Claude Code
 - **Amends:** ADR-0060 §4 (who owns a scope's form), ADR-0108 D2 (the Progress panels' dirtiness is read,
   not reported)
-- **Completes:** ADR-0101 (an editor is a dialog, not a drawer) — D5 retires the shell it left behind
+- **Completes:** ADR-0101 (an editor is a dialog, not a drawer) — D5 retired the shell it left behind
 - **Spec:** [`docs/specs/activity-editor-seeding/`](../specs/activity-editor-seeding/feature-spec.md) (§4.9
   is this ADR's outline; the measurements are in
   [`m0-measurement.md`](../specs/activity-editor-seeding/m0-measurement.md)). Register row:
-  `docs/TECH_DEBT.md` #420, closed at the epic's close-out.
+  `docs/TECH_DEBT.md` #420, closed by this epic; F5 is #430.
 
 ## Context
 
@@ -47,9 +47,10 @@ measured** — the fix stands on construction and on F1–F3, not on a recorded 
 - **D5 — The shell and the subject guard are retired; the editor is a modal, hard-wired.** Completes
   ADR-0101's reversal of the Graphite M6 drawer: the `shell` render prop, `modalShell`, `tabRailAllowed`
   and `onSubjectHeld` existed for a non-modal host that no longer exists, and the subject guard was
-  reachable only through one (ADR-0108 D7). The session is keyed by the activity id, so a subject change —
-  unreachable — remounts rather than mixing two activities. A future non-modal editor host must design its
-  own guard; this ADR does not pre-build it.
+  reachable only through one (ADR-0108 D7). All four are deleted. The session is keyed by the activity id
+  (`ActivityEditorDialog.tsx`, `key={activity.id}`), so a subject change — unreachable — remounts rather
+  than mixing two activities. A future non-modal editor host must design its own guard; this ADR did not
+  pre-build it.
 - **D6 — No flag** (ADR-0088 D1); the rollback is the commit boundary.
 
 ## Alternatives considered
@@ -72,7 +73,7 @@ measured** — the fix stands on construction and on F1–F3, not on a recorded 
 - Closing mid-save discards the form state by design; the write, its undo record and its announcement
   survive (D2).
 - F5 (a successful save's `reset(values)` wiping text typed while the save was in flight) is not changed
-  by this ADR and is filed as a register row at the close-out.
+  by this ADR and is filed as `docs/TECH_DEBT.md` #430.
 - `ActivityResourcesPanel`'s mount-time reset-to-its-own-defaults is deleted as a cleanup (M1, CQ-3 (a)):
   M0 found it redundant, and its Resources probe stays green as the regression guard.
 

@@ -1,8 +1,8 @@
 # Implementation Plan: Activity editor seeding — the editor's working state lives for one opening
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-01 (flipped with ADR-0169's filing in M1, T1.2;
-  `check:spec-status` S3).
+- **Status:** Accepted — shipped (ADR-0169). Approved by the product owner, 2026-10-01 (AskUserQuestion); M0–M5
+  landed 2026-10-01 to 2026-10-02.
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) (spec §1 "Open questions"). Starts **after the logic-aware levelling
   work** (`docs/specs/logic-aware-levelling`).
@@ -290,7 +290,7 @@ row-move focus fall-through, the `aria-live` roll-up, all with a form owned else
 
 ---
 
-### Milestone M5: Close-out — S
+### Milestone M5: Close-out — S — **done, 2026-10-02**
 
 **Entry point:** `Ships dark: documentation only.`
 **Reviewers:** accessibility-reviewer and component-reviewer over the whole epic.
@@ -299,10 +299,13 @@ row-move focus fall-through, the `aria-live` roll-up, all with a form owned else
 
 - ADR-0169 → `Accepted`; spec and plan → `Accepted — shipped (ADR-0169)`; close #420 with M0 evidence
   and per-site verdicts; file **F5**; patch changesets per behavioural milestone (D-2).
+  **Done 2026-10-02:** #420 closed, F5 filed as #430 (still true in `ActivityEditorSession.tsx`), five patch
+  changesets already in place from M2–M4.
 
 ##### Task T5.2 — Final review pass and gates
 
-- `pnpm prepush`; `scripts/e2e-local.sh web:<activity-editor suite>`.
+- `pnpm prepush`; `scripts/e2e-local.sh web:<activity-editor suite>`. **Done 2026-10-02** (the journey run is the
+  orchestrator's).
 
 ## Sequencing & slices
 

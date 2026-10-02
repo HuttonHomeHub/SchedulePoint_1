@@ -1,7 +1,7 @@
 # Feature Spec: Activity editor seeding — the editor's working state lives for one opening
 
-- **Status:** Approved — by the product owner, 2026-10-01 (ADR-0169 filed `Proposed` in M1, plan T1.2;
-  the spec closes as `Accepted — shipped (ADR-0169)` at M5).
+- **Status:** Accepted — shipped (ADR-0169). Approved by the product owner, 2026-10-01 (AskUserQuestion); M0–M5
+  landed 2026-10-01 to 2026-10-02.
 - **Approval:** **approved to build by the product owner on 2026-10-01** (AskUserQuestion), with CQ-1 (b),
   CQ-2 (b), CQ-3 (a) and NQ-1 (b) as recorded in §1 "Open questions". To start after the logic-aware
   levelling work (`docs/specs/logic-aware-levelling`).

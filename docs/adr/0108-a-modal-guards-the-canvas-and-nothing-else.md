@@ -1,6 +1,6 @@
 # ADR-0108 — A modal guards the canvas and nothing else
 
-- **Status:** Accepted (M0–M5 landed 2026-08-23)
+- **Status:** Accepted (M0–M5 landed 2026-08-23); D2 amended by ADR-0169
 - **Date:** 2026-08-23
 - **Supersedes:** nothing. **Amends:** nothing. ADR-0060 (per-scope save), ADR-0101 (an editor is a
   dialog) and ADR-0028 (the edit-lock) are load-bearing context rather than subjects.

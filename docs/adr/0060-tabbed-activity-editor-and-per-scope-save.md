@@ -1,6 +1,6 @@
 # ADR-0060: The tabbed activity editor, per-scope save, the steps edit-lock gate, and the co-located progress model
 
-- **Status:** Accepted (M0–M6 landed; `VITE_ACTIVITY_EDITOR_TABS` **default-on** 2026-07-29)
+- **Status:** Accepted (M0–M6 landed; `VITE_ACTIVITY_EDITOR_TABS` **default-on** 2026-07-29); §4 amended by ADR-0169
 - **Date:** 2026-07-28
 - **Deciders:** Technical Lead, Product Owner
 - **Note:** the three open questions were answered on 2026-07-28. Two were confirmed as drafted; the
