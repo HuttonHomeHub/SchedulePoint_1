@@ -1,6 +1,8 @@
 import type { ActivitySummary } from '@repo/types';
 
 import { seedDurationText } from '../model/duration-field';
+import { seedRemainingText } from '../model/remaining-field';
+import type { ProgressFormValues } from '../schemas/activity-schemas';
 import type {
   ActivityCostValues,
   ActivityGeneralValues,
@@ -70,5 +72,24 @@ export function seedMeasure(activity: ActivitySummary | undefined): ActivityMeas
   return {
     percentCompleteType: activity?.percentCompleteType ?? 'DURATION',
     physicalPercentComplete: activity?.physicalPercentComplete ?? undefined,
+  };
+}
+
+/**
+ * The Reported-progress scope. `remaining` reads the working-hours factor known **at open**; the
+ * editor re-seeds it once if the calendar list lands later (`useLateSeed`), exactly as General's
+ * duration is.
+ */
+export function seedProgress(
+  activity: ActivitySummary | undefined,
+  hoursPerDay: number | undefined,
+): ProgressFormValues {
+  return {
+    percentComplete: activity?.percentComplete ?? 0,
+    actualStart: activity?.actualStart ?? '',
+    actualFinish: activity?.actualFinish ?? '',
+    remaining: activity === undefined ? '' : seedRemainingText(activity, hoursPerDay),
+    suspendDate: activity?.suspendDate ?? '',
+    resumeDate: activity?.resumeDate ?? '',
   };
 }

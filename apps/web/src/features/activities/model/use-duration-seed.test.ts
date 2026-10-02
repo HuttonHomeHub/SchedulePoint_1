@@ -10,7 +10,8 @@ vi.mock('@/config/env', async (importOriginal) => ({
   SUB_DAY_DURATIONS_ENABLED: true,
 }));
 
-const { useDurationSeed } = await import('./use-duration-seed');
+const { useDurationSeed, useLateSeed } = await import('./use-duration-seed');
+const { seedRemainingText } = await import('./remaining-field');
 
 /**
  * The late-arriving factor must never overwrite what a planner typed (ADR-0070; `TECH_DEBT` #83).
@@ -116,5 +117,47 @@ describe('useDurationSeed', () => {
     setDuration.mockClear();
     opening();
     expect(setDuration).toHaveBeenCalledExactlyOnceWith('4h');
+  });
+});
+
+/**
+ * The Progress tab's Remaining field takes the same treatment (ADR-0169 M4): a sub-day remainder
+ * opens as whole days before the calendar list lands, and must not stay that way — but a value the
+ * planner typed meanwhile wins, whatever order the two events arrive in.
+ */
+describe('useLateSeed — the Remaining field', () => {
+  const ROW = { remainingDurationDays: 1, remainingDurationMinutes: 240 };
+
+  function mountRemaining(field: { value: string }, write: (text: string) => void) {
+    return renderHook(
+      ({ hoursPerDay }: { hoursPerDay: number | undefined }) => {
+        useLateSeed({
+          hoursPerDay,
+          read: () => field.value,
+          write,
+          seed: (factor) => seedRemainingText(ROW, factor),
+        });
+      },
+      { initialProps: { hoursPerDay: undefined as number | undefined } },
+    );
+  }
+
+  it('re-seeds a sub-day remainder once the factor lands on an untouched field', () => {
+    const write = vi.fn();
+    const field = { value: '1' };
+    const { rerender } = mountRemaining(field, write);
+
+    rerender({ hoursPerDay: EIGHT });
+    expect(write).toHaveBeenCalledExactlyOnceWith('4h');
+  });
+
+  it('does NOT overwrite a remainder typed before the factor arrives', () => {
+    const write = vi.fn();
+    const field = { value: '1' };
+    const { rerender } = mountRemaining(field, write);
+
+    field.value = '2h';
+    rerender({ hoursPerDay: EIGHT });
+    expect(write).not.toHaveBeenCalled();
   });
 });

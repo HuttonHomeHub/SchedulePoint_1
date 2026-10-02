@@ -1,10 +1,7 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivityStep, ActivitySummary } from '@repo/types';
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { useWatch, type UseFieldArrayReturn, type UseFormReturn } from 'react-hook-form';
 
-import { measureBody } from '../api/scope-bodies';
-import { useActivitySteps } from '../api/use-activity-steps';
 import type { ScopeGate } from '../lib/activity-editor-gating';
 import { durationInputProps } from '../model/duration-field';
 import {
@@ -12,27 +9,16 @@ import {
   remainingHelp,
   remainingLabel,
   remainingWriteFields,
-  seedRemainingText,
 } from '../model/remaining-field';
-import {
-  deriveStatusLabel,
-  progressFormSchema,
-  type ProgressFormValues,
-} from '../schemas/activity-schemas';
-import { activityMeasureSchema } from '../schemas/activity-scope-schemas';
-import {
-  rollupPhysicalPercent,
-  stepsFormSchema,
-  type StepsFormValues,
-} from '../schemas/step-schemas';
+import { deriveStatusLabel, type ProgressFormValues } from '../schemas/activity-schemas';
+import type { ActivityMeasureValues } from '../schemas/activity-scope-schemas';
+import { rollupPhysicalPercent, type StepsFormValues } from '../schemas/step-schemas';
 
-import { seedMeasure } from './activity-editor-seeds';
 import {
   ActivityMeasureFields,
   MEASURE_SECTION_DESCRIPTION,
   MEASURE_SECTION_TITLE,
 } from './fields/ActivityMeasureFields';
-import { useScopeForm } from './useScopeForm';
 
 import { Button } from '@/components/ui/button';
 import { FieldGateProvider } from '@/components/ui/field-gate';
@@ -68,35 +54,29 @@ import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
  */
 
 /**
- * Report this panel's dirtiness to its host.
+ * **The panels render forms they do not own** (ADR-0169, `docs/specs/activity-editor-seeding` M4).
  *
- * **Reported rather than derived**: only the panel owns the form that knows, and the editor's
- * unsaved-work report has to name six scopes it does not itself hold (ADR-0108, `docs/TECH_DEBT.md`
- * #63).
- *
- * A two-line hook rather than three identical effects (`docs/TECH_DEBT.md` #184). Deliberately NOT
- * an option on `useScopeForm`: `WeightedStepsPanel` does not use that hook at all, so folding it in
- * there would cover two of the three panels — which is the one-and-not-its-neighbour shape this
- * register keeps recording.
+ * Each panel is handed its form by `ActivityEditorSession`, which creates all three with the editor's
+ * other scopes. The panels are mounted only while the Progress tab is showing, so a form made here
+ * died on every tab switch while the editor's marker and close confirmation went on claiming it
+ * (F4). Held by the session, a draft survives the visit elsewhere, and the session reads `isDirty`
+ * itself — there is no copy of the flag to go stale. The panels keep what is about the DOM they
+ * render: the markup, the derived figures, and the steps panel's focus choreography.
  */
-function useReportDirty(report: ((dirty: boolean) => void) | undefined, isDirty: boolean): void {
-  useEffect(() => {
-    report?.(isDirty);
-  }, [report, isDirty]);
-}
 
 /** Reported progress — the Contributor path. Moves the activity's dates. */
 export function ReportedProgressPanel({
-  activity,
+  form,
+  isDirty,
   hoursPerDay,
   gate,
   onSave,
   pending,
   saved,
   error,
-  onDirtyChange,
 }: {
-  activity: ActivitySummary;
+  form: UseFormReturn<ProgressFormValues>;
+  isDirty: boolean;
   /**
    * The activity's effective working hours per day, or `undefined` when the calendar list has not
    * resolved. Required rather than defaulted (ADR-0070 §3) — after ADR-0068 there is no safe
@@ -104,41 +84,18 @@ export function ReportedProgressPanel({
    */
   hoursPerDay: number | undefined;
   gate: ScopeGate;
-  /** Saves through the host, which owns the mutation (ADR-0169 D-10); `reset` marks the form clean. */
-  onSave: (values: ProgressFormValues, reset: () => void) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and marks the form clean. */
+  onSave: (values: ProgressFormValues) => void;
   pending: boolean;
   saved: boolean;
   /** The last save's failure, held by the host so it cannot outlive the opening. */
   error: string | null;
-  /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
-  const { form, isDirty } = useScopeForm<ProgressFormValues>(
-    progressFormSchema,
-    (row) => ({
-      percentComplete: row?.percentComplete ?? 0,
-      actualStart: row?.actualStart ?? '',
-      actualFinish: row?.actualFinish ?? '',
-      remaining: row === undefined ? '' : seedRemainingText(row, hoursPerDay),
-      suspendDate: row?.suspendDate ?? '',
-      resumeDate: row?.resumeDate ?? '',
-    }),
-    activity,
-  );
-
-  useReportDirty(onDirtyChange, isDirty);
-
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
   // `version` is read from the live row by the host at submit time, not captured on open — a sibling
   // scope's save bumps it, and a stale one would 409 every time after the first.
-  const onSubmit = form.handleSubmit((submitted) => onSave(submitted, () => form.reset(submitted)));
+  const onSubmit = form.handleSubmit(onSave);
 
   return (
     <form
@@ -234,43 +191,37 @@ export function ReportedProgressPanel({
 
 /** How value is measured — the EV source and its manual physical %. Earns value, moves no date. */
 export function ValueMeasurePanel({
-  orgSlug,
-  activity,
+  form,
+  isDirty,
+  steps,
   gate,
   onSave,
   onOpenResources,
   pending,
   saved = false,
   error = null,
-  onDirtyChange,
 }: {
-  orgSlug: string;
-  activity: ActivitySummary;
+  form: UseFormReturn<ActivityMeasureValues>;
+  isDirty: boolean;
+  /**
+   * The activity's steps, which the session fetches once for the whole tab: they decide whether the
+   * manual physical % is shaded (steps win), and this panel must not own a second copy of the query.
+   */
+  steps: readonly ActivityStep[];
   gate: ScopeGate;
-  onSave: (patch: Record<string, unknown>, reset: () => void) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and marks the form clean. */
+  onSave: (values: ActivityMeasureValues) => void;
   onOpenResources?: () => void;
   pending: boolean;
   /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
   saved?: boolean;
   /** The last save's failure, held by the host so it cannot outlive the opening. */
   error?: string | null;
-  /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
-  const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity);
-
-  useReportDirty(onDirtyChange, isDirty);
-  const steps = useActivitySteps(orgSlug, activity.id);
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
   const manual = useWatch({ control: form.control, name: 'physicalPercentComplete' });
 
-  const stepRows = steps.data ?? [];
+  const stepRows = steps;
   const rolled = rollupPhysicalPercent(
     stepRows.map((s) => ({ weight: Number(s.weight), percentComplete: s.percentComplete })),
     manual ?? null,
@@ -287,12 +238,7 @@ export function ValueMeasurePanel({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        // The body comes from the shared builder, never a literal here — `scope-bodies.ts` is where
-        // "this scope's keys and no other's" is stated once and pinned by test. A hand-rolled copy
-        // beside it is two implementations of one mapping, with nothing keeping them equal.
-        void form.handleSubmit((values) => onSave(measureBody(values), () => form.reset(values)))(
-          event,
-        );
+        void form.handleSubmit(onSave)(event);
       }}
       className="flex flex-col gap-4"
     >
@@ -377,7 +323,10 @@ function formatRollup(value: number | null): string {
  *    lit-but-inert dead end this epic exists to remove.
  */
 export function WeightedStepsPanel({
-  orgSlug,
+  form,
+  array,
+  isDirty,
+  query,
   activity,
   gate,
   onSave,
@@ -386,13 +335,17 @@ export function WeightedStepsPanel({
   error,
   announce,
   autoFocusHeading = false,
-  onDirtyChange,
 }: {
-  orgSlug: string;
+  form: UseFormReturn<StepsFormValues>;
+  /** The session's `useFieldArray`: the rows are its state, so a draft outlives this panel. */
+  array: UseFieldArrayReturn<StepsFormValues, 'steps'>;
+  isDirty: boolean;
+  /** The session's steps query, reduced to what this panel renders. */
+  query: { isError: boolean; isPending: boolean; refetch: () => unknown };
   activity: ActivitySummary;
   gate: ScopeGate;
-  /** Saves through the host, which owns the mutation (ADR-0169 D-10); `reset` re-seeds from the saved list. */
-  onSave: (steps: StepsFormValues['steps'], reset: (saved: ActivityStep[]) => void) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10) and re-seeds from the saved list. */
+  onSave: (steps: StepsFormValues['steps']) => void;
   pending: boolean;
   saved: boolean;
   /** The last save's failure, held by the host so it cannot outlive the opening. */
@@ -401,24 +354,20 @@ export function WeightedStepsPanel({
   /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
   autoFocusHeading?: boolean;
   /**
-   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
-   *
-   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
-   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
-   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
-  /**
-   * NOTE: this panel's `isDirty` comes from its own `useForm` + `useFieldArray`, not `useScopeForm`,
-   * so a `move()` re-keys the rows and marks it dirty even if the planner restores the order.
+   * NOTE: `isDirty` comes from the session's own `useForm` + `useFieldArray`, not `useScopeForm`,
+   * so a `move()` re-keys the rows and can mark it dirty even if the planner restores the order.
    * Accepted rather than fixed: the cost of that false positive is one extra confirmation dialog,
    * and the cost of chasing it is comparing arrays on every keystroke.
    */
 }): React.ReactElement {
-  const steps = useActivitySteps(orgSlug, activity.id);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // After the frame, not at mount: this panel mounts in the same commit that opens the dialog, and
+  // child effects run before `Dialog`'s `showModal()` effect — so a synchronous `focus()` here lands
+  // on an element of a dialog that is not yet showing and does nothing. A frame later it is.
   useEffect(() => {
-    if (autoFocusHeading) headingRef.current?.focus();
+    if (!autoFocusHeading) return;
+    const frame = requestAnimationFrame(() => headingRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, [autoFocusHeading, activity.id]);
 
   // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists after the next commit.
@@ -441,30 +390,9 @@ export function WeightedStepsPanel({
     register,
     control,
     handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<StepsFormValues>({
-    resolver: zodResolver(stepsFormSchema),
-    defaultValues: { steps: [] },
-  });
-
-  useReportDirty(onDirtyChange, isDirty);
-  const { fields, append, remove, move } = useFieldArray({ control, name: 'steps' });
-
-  // Seeded on open / target / load change — a late-arriving fetch still populates. Unlike the
-  // definition scopes (see `useScopeForm`'s trap 2) the steps list is its own query, so keying on the
-  // loaded rows cannot be tripped by a sibling scope's save refetching the activity.
-  const loadedSteps = steps.data;
-  useEffect(() => {
-    reset({
-      steps: (loadedSteps ?? []).map((step) => ({
-        name: step.name,
-        weight: step.weight,
-        percentComplete: step.percentComplete,
-      })),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open / target / load change
-  }, [activity.id, loadedSteps]);
+    formState: { errors },
+  } = form;
+  const { fields, append, remove, move } = array;
 
   // The same weighted mean the server computes, so the planner sees the figure before saving.
   const watchedSteps = useWatch({ control, name: 'steps' });
@@ -477,9 +405,7 @@ export function WeightedStepsPanel({
   );
 
   // The host reads the version from the live row at submit time, like every other scope.
-  const onSubmit = handleSubmit((values) =>
-    onSave(values.steps, (savedSteps) => reset({ steps: savedSteps.map((s) => ({ ...s })) })),
-  );
+  const onSubmit = handleSubmit((values) => onSave(values.steps));
 
   const rowAt = (index: number): Element | undefined =>
     listRef.current?.querySelectorAll(':scope > li')[index];
@@ -546,16 +472,16 @@ export function WeightedStepsPanel({
         <span className="text-lg font-semibold tabular-nums">{formatRollup(rollup)}</span>
       </div>
 
-      {steps.isError ? (
+      {query.isError ? (
         <div className="flex flex-col items-start gap-3">
           <p role="alert" className="text-destructive-text text-sm">
             Couldn’t load steps.
           </p>
-          <Button variant="outline" size="sm" onClick={() => void steps.refetch()}>
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
             Try again
           </Button>
         </div>
-      ) : steps.isPending ? (
+      ) : query.isPending ? (
         <p className="text-muted-foreground text-sm">Loading steps…</p>
       ) : (
         <form

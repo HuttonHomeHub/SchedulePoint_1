@@ -1,18 +1,25 @@
 import type { ActivitySummary } from '@repo/types';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { stepKeys } from '../api/use-activity-steps';
+import { progressFormSchema, type ProgressFormValues } from '../schemas/activity-schemas';
+import {
+  activityMeasureSchema,
+  type ActivityMeasureValues,
+} from '../schemas/activity-scope-schemas';
 
+import { seedMeasure, seedProgress } from './activity-editor-seeds';
 import { ReportedProgressPanel, ValueMeasurePanel } from './ActivityProgressPanels';
-
-import { apiFetch } from '@/lib/api/client';
+import { useScopeForm } from './useScopeForm';
 
 /**
  * M0.5 — how the **Progress tab's** two form panels report their problems
- * (`ActivityProgressPanels.tsx:139` and `:277`). The third panel, `WeightedStepsPanel` (`:554`), is
+ * (`ReportedProgressPanel` and `ValueMeasurePanel`). The third panel, `WeightedStepsPanel`, is
  * covered in `WeightedStepsPanel.test.tsx` beside its own suite.
+ *
+ * **Mounted through a harness since M4 (ADR-0169).** The forms are owned by `ActivityEditorSession`,
+ * so a panel cannot be mounted alone: each host below makes the form the way the session does and
+ * hands it down, which is also why "no write was attempted" is now `onSave` not being called.
  *
  * The rule, from `FormProblemCount`'s docblock and ADR-0077 §9: a field's problem belongs to the
  * field; the alert belongs to the form. One problem is silent, because `handleSubmit` has already
@@ -25,8 +32,6 @@ import { apiFetch } from '@/lib/api/client';
  * and nothing would say so. Each panel is therefore mounted directly, with its gate passed in as a
  * literal — the panel's own contract, independent of who derived it.
  */
-
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const ACTIVITY = {
   id: 'a1',
@@ -49,67 +54,79 @@ const ACTIVITY = {
  */
 const OPEN_GATE = { writable: true, reason: null, readable: true };
 
-function client() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
-  });
-  // No steps: the manual physical % stays editable, so the measure panel's only validated field is
-  // reachable. (Steps winning would shade it, which is a different case with its own test.)
-  queryClient.setQueryData(stepKeys.listByActivity('acme', 'a1'), []);
-  return queryClient;
+/**
+ * The session's side of the seam (ADR-0169 M4): the forms are created OUTSIDE the panels, by the
+ * same `useScopeForm` the editor uses, and the panel only renders them. "Nothing was written" is
+ * therefore `onSave` not being called — the panel no longer reaches a network layer at all.
+ */
+function ProgressHost({ onSave }: { onSave: (values: ProgressFormValues) => void }) {
+  const { form, isDirty } = useScopeForm<ProgressFormValues>(
+    progressFormSchema,
+    (row) => seedProgress(row, 8),
+    ACTIVITY,
+  );
+  return (
+    <ReportedProgressPanel
+      form={form}
+      isDirty={isDirty}
+      hoursPerDay={8}
+      gate={OPEN_GATE}
+      onSave={onSave}
+      pending={false}
+      saved={false}
+      error={null}
+    />
+  );
+}
+
+function MeasureHost({ onSave }: { onSave: (values: ActivityMeasureValues) => void }) {
+  const { form, isDirty } = useScopeForm<ActivityMeasureValues>(
+    activityMeasureSchema,
+    seedMeasure,
+    ACTIVITY,
+  );
+  return (
+    <ValueMeasurePanel
+      form={form}
+      isDirty={isDirty}
+      // No steps: the manual physical % stays editable, so the measure panel's only validated field is
+      // reachable. (Steps winning would shade it, which is a different case with its own test.)
+      steps={[]}
+      gate={OPEN_GATE}
+      onSave={onSave}
+      pending={false}
+    />
+  );
 }
 
 function renderProgress() {
-  return render(
-    <QueryClientProvider client={client()}>
-      <ReportedProgressPanel
-        activity={ACTIVITY}
-        hoursPerDay={8}
-        gate={OPEN_GATE}
-        onSave={vi.fn()}
-        pending={false}
-        saved={false}
-        error={null}
-      />
-    </QueryClientProvider>,
-  );
+  const onSave = vi.fn();
+  render(<ProgressHost onSave={onSave} />);
+  return onSave;
 }
 
-function renderMeasure(onSave = vi.fn()) {
-  render(
-    <QueryClientProvider client={client()}>
-      <ValueMeasurePanel
-        orgSlug="acme"
-        activity={ACTIVITY}
-        gate={OPEN_GATE}
-        onSave={onSave}
-        pending={false}
-      />
-    </QueryClientProvider>,
-  );
+function renderMeasure() {
+  const onSave = vi.fn();
+  render(<MeasureHost onSave={onSave} />);
   return onSave;
 }
 
 const COUNT = /problems — check the highlighted fields below\./;
 
-beforeEach(() => {
-  vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
-});
-
 describe('ReportedProgressPanel — how problems are reported', () => {
   it('states a single problem once, beside its field', async () => {
-    renderProgress();
+    const onSave = renderProgress();
     // A blank number field reads back as NaN, which is the commonest way this form fails.
     fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
 
     expect(await screen.findAllByText('Enter a percentage from 0 to 100.')).toHaveLength(1);
     expect(screen.queryByText(COUNT)).toBeNull();
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('counts two problems without repeating either sentence', async () => {
-    renderProgress();
+    const onSave = renderProgress();
     // Two cross-field rules, each attached by `path` so it lands on a control like any other: a
     // finish with no start, and a resume before the suspend it resumes from.
     fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-05-08' } });
@@ -122,7 +139,7 @@ describe('ReportedProgressPanel — how problems are reported', () => {
     expect(screen.getAllByText('Resume cannot be before the suspend.')).toHaveLength(1);
     expect(count).not.toHaveTextContent('Set an actual start before a finish.');
     expect(count).not.toHaveTextContent('Resume cannot be before the suspend.');
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('reports its problems with no pen and no role attached to the gate', async () => {

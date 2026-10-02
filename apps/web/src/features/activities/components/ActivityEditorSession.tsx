@@ -1,25 +1,42 @@
-import { type ActivityStep, type ActivitySummary } from '@repo/types';
-import { useCallback, useImperativeHandle, useMemo, useState } from 'react';
-import { useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { type ActivitySummary } from '@repo/types';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
-import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
+import { costBody, generalBody, measureBody, schedulingBody } from '../api/scope-bodies';
+import { useActivitySteps } from '../api/use-activity-steps';
 import { activityContextFacts } from '../lib/activity-editor-context';
 import type { ActivityEditorTab } from '../lib/activity-editor-intent';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
-import { useDurationSeed } from '../model/use-duration-seed';
+import { seedRemainingText } from '../model/remaining-field';
+import { useDurationSeed, useLateSeed } from '../model/use-duration-seed';
 import {
   isDurationDerivedType,
   isMilestoneType,
+  progressFormSchema,
   type ProgressFormValues,
 } from '../schemas/activity-schemas';
 import {
   activityCostSchema,
   activityGeneralSchema,
+  activityMeasureSchema,
   activitySchedulingSchema,
+  type ActivityMeasureValues,
 } from '../schemas/activity-scope-schemas';
-import type { StepsFormValues } from '../schemas/step-schemas';
+import {
+  sameStepRows,
+  stepRowsFromSaved,
+  stepsFormSchema,
+  type StepsFormValues,
+} from '../schemas/step-schemas';
 
-import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
+import {
+  seedCost,
+  seedGeneral,
+  seedMeasure,
+  seedProgress,
+  seedScheduling,
+} from './activity-editor-seeds';
 import type { ActivityEditorSessionProps } from './activity-editor-types';
 import {
   ReportedProgressPanel,
@@ -75,11 +92,8 @@ import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
 
-/** The three Progress-tab scopes whose forms live inside the panels rather than the host. */
-type ProgressScopeKey = 'progress' | 'measure' | 'steps';
-
-/** The Progress tab's panels, each of which saves and fails on its own. */
-type PanelSlot = ProgressScopeKey;
+/** The Progress tab's three panels, each of which saves and fails on its own. */
+type PanelSlot = 'progress' | 'measure' | 'steps';
 
 /** Every scope that can say "Saved.": the tabs' definition scopes and the Progress tab's panels. */
 type SaveSlot = TabKey | PanelSlot;
@@ -162,6 +176,12 @@ export function ActivityEditorSession({
     if (intent) setActive(intent.tab);
   }
 
+  // The steps list is fetched on the first visit to Progress in an opening, not at open (D-8) — the
+  // query lives with the form it seeds, and a Contributor who never looks at Progress never pays for
+  // it. Adjusted during render for the same reason as the intent above: it is derived from `active`.
+  const [stepsRequested, setStepsRequested] = useState(active === 'progress');
+  if (active === 'progress' && !stepsRequested) setStepsRequested(true);
+
   // The General scope seeds its duration from the factor known at OPEN; `useDurationSeed` below
   // re-reads it once the calendar list lands, so a sub-day duration is never shown (or saved) as
   // its rounded day. The seed factor deliberately reads the SAVED calendar, not a watched one —
@@ -190,30 +210,6 @@ export function ActivityEditorSession({
   );
   const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity);
   const cost = useScopeForm(activityCostSchema, seedCost, activity);
-
-  /**
-   * The three Progress panels own their forms, so their dirtiness has to be REPORTED up
-   * (unsaved-work guard, M2-T1/T2). Before this, `dirtyScopeNames` below named three scopes while
-   * the editor held six, so a dirty weighted step closed on Escape in silence —
-   * `docs/TECH_DEBT.md` #63's second half.
-   *
-   * One state object rather than three, so a panel reporting `false` on mount cannot schedule three
-   * separate renders. The setter is identity-stable per panel (`useCallback`) because it is a
-   * dependency of each panel's reporting effect.
-   */
-  const [progressDirty, setProgressDirty] = useState<Record<ProgressScopeKey, boolean>>({
-    progress: false,
-    measure: false,
-    steps: false,
-  });
-  const setScopeDirty = useCallback(
-    (key: ProgressScopeKey) => (dirty: boolean) =>
-      setProgressDirty((held) => (held[key] === dirty ? held : { ...held, [key]: dirty })),
-    [],
-  );
-  const onProgressDirty = useMemo(() => setScopeDirty('progress'), [setScopeDirty]);
-  const onMeasureDirty = useMemo(() => setScopeDirty('measure'), [setScopeDirty]);
-  const onStepsDirty = useMemo(() => setScopeDirty('steps'), [setScopeDirty]);
 
   // The live factor follows the calendar the SCHEDULING scope currently selects — a planner can
   // change the calendar and the duration in one visit, and the two tabs must agree (ADR-0070 §3).
@@ -248,6 +244,70 @@ export function ActivityEditorSession({
     readDuration,
     setDuration,
   });
+
+  // **The Progress tab's three forms live here, with the others** (F4, ADR-0169 §4.6). The panels are
+  // mounted only while their tab shows, so a form made inside one died on every tab switch while the
+  // marker and the close confirmation went on claiming it. Born with their values, like every other
+  // scope: nothing seeds them again, so they open no typed-input window.
+  const progress = useScopeForm<ProgressFormValues>(
+    progressFormSchema,
+    (row) => seedProgress(row, hoursPerDay),
+    activity,
+  );
+  const measure = useScopeForm<ActivityMeasureValues>(activityMeasureSchema, seedMeasure, activity);
+
+  // Remaining was seeded late only because its panel used to mount late. It takes the duration's
+  // treatment: once per opening, compared to the field's live value, never over typed text. The write
+  // is `resetField`, so the seeded text becomes the field's default and a seed is not an edit.
+  const progressResetField = progress.form.resetField;
+  const progressGetValues = progress.form.getValues;
+  const readRemaining = useCallback(
+    () => progressGetValues('remaining') ?? '',
+    [progressGetValues],
+  );
+  const setRemaining = useCallback(
+    (text: string) => progressResetField('remaining', { defaultValue: text }),
+    [progressResetField],
+  );
+  useLateSeed({
+    hoursPerDay,
+    read: readRemaining,
+    write: setRemaining,
+    seed: (factor) => seedRemainingText(activity, factor),
+  });
+
+  const stepsQuery = useActivitySteps(orgSlug, stepsRequested ? activity.id : '');
+  const stepsForm = useForm<StepsFormValues>({
+    resolver: zodResolver(stepsFormSchema),
+    defaultValues: { steps: [] },
+  });
+  const stepsArray = useFieldArray({ control: stepsForm.control, name: 'steps' });
+  const stepsDirty = stepsForm.formState.isDirty;
+
+  /**
+   * The rows the steps form was last seeded or saved with — what "clean" is measured against, as a
+   * live comparison rather than RHF's flag (which a `move()` marks dirty even when the order comes
+   * back). Written only from the seed effect and the save callback, never during render.
+   */
+  const stepsHeld = useRef<StepsFormValues['steps'] | null>(null);
+  const stepsData = stepsQuery.data;
+  const resetSteps = stepsForm.reset;
+  const getSteps = stepsForm.getValues;
+  // The first arrival seeds with `keepFieldsRef`, so the registered inputs keep their refs and the
+  // rows are not re-registered under a typist. A LATER arrival with different data re-seeds only a
+  // clean form (spec D-9): steps are pen-gated, so a change under a draft means the pen moved, and a
+  // draft is reported as unsavable (ADR-0108 D5), never wiped by a refetch.
+  useEffect(() => {
+    if (!stepsData) return;
+    const incoming = stepRowsFromSaved(stepsData);
+    const held = stepsHeld.current;
+    if (held !== null) {
+      if (sameStepRows(incoming, held)) return;
+      if (!sameStepRows(getSteps('steps'), held)) return;
+    }
+    stepsHeld.current = incoming;
+    resetSteps({ steps: incoming }, { keepFieldsRef: true });
+  }, [stepsData, getSteps, resetSteps]);
 
   const type = useWatch({ control: general.form.control, name: 'type' });
 
@@ -292,19 +352,19 @@ export function ActivityEditorSession({
         // unsaved changes", naming a tab and a string that appears nowhere on screen. Found by the
         // ux review; the spec had named the right labels and the code had not used them.
         {
-          when: progressDirty.progress,
+          when: progress.isDirty,
           key: 'progress',
           label: 'Reported progress',
           savable: gating.progress.writable,
         },
         {
-          when: progressDirty.measure,
+          when: measure.isDirty,
           key: 'measure',
           label: MEASURE_SECTION_TITLE,
           savable: gating.progress.writable,
         },
         {
-          when: progressDirty.steps,
+          when: stepsDirty,
           key: 'steps',
           label: 'Weighted steps',
           savable: gating.steps.writable,
@@ -314,7 +374,9 @@ export function ActivityEditorSession({
       general.isDirty,
       scheduling.isDirty,
       cost.isDirty,
-      progressDirty,
+      progress.isDirty,
+      measure.isDirty,
+      stepsDirty,
       gating.general.writable,
       gating.cost.readable,
       gating.cost.writable,
@@ -412,44 +474,45 @@ export function ActivityEditorSession({
     begin();
   };
 
-  const saveMeasure = (patch: Record<string, unknown>, reset: () => void): void =>
+  const saveMeasure = (values: ActivityMeasureValues): void =>
     savePanel('measure', () =>
       saves.saveFields({
         activity,
-        patch,
+        // The body comes from the shared builder, never a literal here — `scope-bodies.ts` is where
+        // "this scope's keys and no other's" is stated once and pinned by test.
+        patch: measureBody(values),
         label: 'Measure',
         onSuccess: () => {
-          reset();
+          measure.form.reset(values);
           markSaved('measure', true);
         },
         onError: (error) => setPanelError('measure', error.message),
       }),
     );
 
-  const saveProgress = (values: ProgressFormValues, reset: () => void): void =>
+  const saveProgress = (values: ProgressFormValues): void =>
     savePanel('progress', () =>
       saves.saveProgress({
         activity,
         hoursPerDay,
         values,
         onSuccess: () => {
-          reset();
+          progress.form.reset(values);
           markSaved('progress', true);
         },
         onError: (error) => setPanelError('progress', error.message),
       }),
     );
 
-  const saveSteps = (
-    steps: StepsFormValues['steps'],
-    reset: (saved: ActivityStep[]) => void,
-  ): void =>
+  const saveSteps = (steps: StepsFormValues['steps']): void =>
     savePanel('steps', () =>
       saves.saveSteps({
         activity,
         steps,
         onSuccess: (saved) => {
-          reset(saved);
+          const rows = stepRowsFromSaved(saved);
+          stepsHeld.current = rows;
+          stepsForm.reset({ steps: rows });
           markSaved('steps', true);
         },
         onError: (error) => setPanelError('steps', error.message),
@@ -494,9 +557,12 @@ export function ActivityEditorSession({
       : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
     // so a padlock here would be a lie in exactly the situation the rail exists to clarify. It DOES
-    // carry the unsaved dot now (`docs/TECH_DEBT.md` #63): its three panels own their forms, and
-    // until the unsaved-work guard lifted their dirtiness up there was nothing here to read.
-    { id: 'progress', label: 'Progress', ...progressMarker(progressDirty) },
+    // carry the unsaved dot (`docs/TECH_DEBT.md` #63), read from the three forms this session holds.
+    {
+      id: 'progress',
+      label: 'Progress',
+      ...progressMarker(progress.isDirty || measure.isDirty || stepsDirty),
+    },
     ...(gating.cost.readable
       ? [
           {
@@ -776,24 +842,24 @@ export function ActivityEditorSession({
               {current === 'progress' ? (
                 <div className="flex flex-col gap-8">
                   <ReportedProgressPanel
-                    activity={activity}
+                    form={progress.form}
+                    isDirty={progress.isDirty}
                     hoursPerDay={hoursPerDay}
                     gate={gating.progress}
                     onSave={saveProgress}
                     pending={saves.progressPending}
                     saved={savedSlots.progress === true}
                     error={panelErrors.progress ?? null}
-                    onDirtyChange={onProgressDirty}
                   />
                   <ValueMeasurePanel
-                    orgSlug={orgSlug}
-                    activity={activity}
+                    form={measure.form}
+                    isDirty={measure.isDirty}
+                    steps={stepsQuery.data ?? []}
                     gate={gating.measure}
+                    onSave={saveMeasure}
                     pending={saves.fieldsPending}
                     saved={savedSlots.measure === true}
                     error={panelErrors.measure ?? null}
-                    onSave={saveMeasure}
-                    onDirtyChange={onMeasureDirty}
                   />
                   {/* The flag pair that decides whether weighted steps exist at all.
                       **It used to be described as matching "the Steps entry points" in
@@ -805,7 +871,10 @@ export function ActivityEditorSession({
                       place the flags are read for steps, so there is no parity left to keep. */}
                   {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
                     <WeightedStepsPanel
-                      orgSlug={orgSlug}
+                      form={stepsForm}
+                      array={stepsArray}
+                      isDirty={stepsDirty}
+                      query={stepsQuery}
                       activity={activity}
                       gate={gating.steps}
                       onSave={saveSteps}
@@ -816,7 +885,6 @@ export function ActivityEditorSession({
                       // Only the **Steps** entry point asks for this. Landing at the top of a
                       // three-panel tab would make that action feel like it opened the wrong thing.
                       autoFocusHeading={intent?.focusSteps === true}
-                      onDirtyChange={onStepsDirty}
                     />
                   ) : null}
                 </div>
@@ -907,7 +975,7 @@ function collectionMarker(gate: { writable: boolean }): Pick<TabDescriptor<strin
 }
 
 /**
- * The marker for **Progress**, whose three panels own their own forms and their own Saves.
+ * The marker for **Progress**, whose three panels have their own forms and their own Saves.
  *
  * Deliberately not {@link marker}: Progress can never be `locked` (the pen does not gate it,
  * ADR-0028 Q-C — a padlock would be false for exactly the reader it is meant to inform), and it has
@@ -915,11 +983,11 @@ function collectionMarker(gate: { writable: boolean }): Pick<TabDescriptor<strin
  * rather than through one scope form. So the only marker it can honestly carry is the dot — which
  * is the whole of what `docs/TECH_DEBT.md` #63 was missing: switch to General with a changed
  * weighted step and the tab said nothing, while every other tab in the strip would have.
+ *
+ * It reads the three forms' own `isDirty`, which the session holds across tab switches, so the dot
+ * can neither disappear while a draft exists nor outlive one (F4).
  */
-function progressMarker(
-  dirty: Record<ProgressScopeKey, boolean>,
-): Pick<TabDescriptor<string>, 'marker'> {
-  const anyDirty = Object.values(dirty).some(Boolean);
+function progressMarker(anyDirty: boolean): Pick<TabDescriptor<string>, 'marker'> {
   return anyDirty ? { marker: { kind: 'dot', label: 'unsaved changes' } satisfies TabMarker } : {};
 }
 

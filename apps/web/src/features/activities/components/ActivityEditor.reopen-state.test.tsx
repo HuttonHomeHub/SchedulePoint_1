@@ -20,10 +20,10 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  * does: `open` is "an intent exists", closing clears the intent, and the next click builds a fresh
  * one. The dialogs stay mounted across openings; that is the whole defect.
  *
- * **F4 is `it.fails`, and that is a statement about today's code.** It asserts the behaviour the
- * epic delivers, so it FAILS on this tree and `it.fails` keeps the suite green while recording that.
- * F3 was flipped to a plain `it` by M2, F1 by M3a and F2 by M3b. M4 turns F4's case into a plain `it` —
- * vitest reports an `it.fails` that starts passing as a failure, so the flip cannot be forgotten.
+ * Each case was `it.fails` until the milestone that fixed its finding, and `it.fails` is how a red
+ * test is kept in a green suite: vitest reports one that starts passing as a failure, so a flip cannot
+ * be forgotten. F3 was flipped by M2, F1 by M3a, F2 by M3b and F4 by M4 (the Progress forms now live
+ * in the session, so a draft survives a tab switch).
  *
  * jsdom has no top layer, so F1 asserts only that a confirmation is ARMED for the next opening;
  * that it opens beneath the editor is the Playwright journey J2's question.
@@ -209,7 +209,7 @@ describe('New activity — a failed create does not greet the next opening', () 
 });
 
 describe('F4 — a Progress draft dies on a tab switch', () => {
-  it.fails('shows the draft again when the reader returns to Progress', () => {
+  it('shows the draft again when the reader returns to Progress', () => {
     mount(<EditorHost />);
     fireEvent.click(screen.getByRole('button', { name: 'open progress' }));
     fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '55' } });

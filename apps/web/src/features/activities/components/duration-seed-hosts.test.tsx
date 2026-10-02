@@ -140,3 +140,60 @@ describe('ActivityEditorDialog — a late calendar list', () => {
     expect(screen.getByLabelText('Duration')).toHaveValue('2');
   });
 });
+
+/**
+ * **The Progress tab's Remaining field takes the same treatment** (ADR-0169 M4). Its panel used to be
+ * seeded late only because it mounted late; the form now lives in the session from the start, so the
+ * factor can arrive after it, and `useLateSeed` seeds it once — over an untouched field, never over
+ * typed text.
+ */
+describe('ActivityEditorDialog — a late calendar list, on the Remaining field', () => {
+  const WITH_REMAINING = {
+    ...ACTIVITY,
+    percentComplete: 10,
+    remainingDurationDays: 1,
+    remainingDurationMinutes: 240,
+  } as unknown as ActivitySummary;
+
+  function progressElement(calendars: CalendarSummary[]): React.ReactElement {
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <ActivityEditorDialog
+          orgSlug="acme"
+          planId="pl1"
+          open
+          onClose={vi.fn()}
+          activity={WITH_REMAINING}
+          intent={{ activityId: 'a1', tab: 'progress' }}
+          gating={PLANNER_WITH_PEN}
+          calendars={calendars}
+          planCalendarId="cal-8"
+        />
+      </QueryClientProvider>
+    );
+  }
+
+  it('re-seeds an untouched remainder from the row’s exact minutes, without marking it edited', () => {
+    const { rerender } = render(progressElement([]));
+    expect(screen.getByLabelText('Remaining duration (days)')).toHaveValue(1);
+
+    rerender(progressElement(CALENDARS));
+
+    expect(screen.getByLabelText('Remaining duration')).toHaveValue('4h');
+    // A seed is not an edit: the tab must not claim unsaved work the planner never did.
+    expect(
+      screen.queryByRole('tab', { name: /Progress, unsaved changes/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves a remainder typed before it arrived exactly as typed', () => {
+    const { rerender } = render(progressElement([]));
+    fireEvent.change(screen.getByLabelText('Remaining duration (days)'), {
+      target: { value: '3' },
+    });
+
+    rerender(progressElement(CALENDARS));
+
+    expect(screen.getByLabelText('Remaining duration')).toHaveValue('3');
+  });
+});
