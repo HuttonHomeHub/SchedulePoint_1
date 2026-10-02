@@ -139,6 +139,10 @@ const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Esc', action: 'Discard the cell edit' },
   { keys: 'Alt + ← / →', action: 'Move the bar one day earlier / later (recalculates)' },
   { keys: 'Shift + ← / →', action: 'Shorten / lengthen the bar one day (recalculates)' },
+  {
+    keys: 'F2 → Start cell',
+    action: 'Change the start, keeping the finish — or drag the left end of the bar',
+  },
 ];
 
 function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {

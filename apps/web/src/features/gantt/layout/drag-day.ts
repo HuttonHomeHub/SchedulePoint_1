@@ -118,3 +118,26 @@ export function finishEdgePlacement({
   const endDay = Math.max(daysBetween(plannedStartIso, finishIso) + columns, startDay);
   return spanToPlacement({ startDay, endDay, isWorkingDay });
 }
+
+/**
+ * The placement for dragging a bar's **start** edge `columns` columns, the finish held.
+ *
+ * Clamped at the finish day (one working day minimum), the diagram's rule — the bar never inverts.
+ */
+export function startEdgePlacement({
+  plannedStartIso,
+  startIso,
+  finishIso,
+  columns,
+  isWorkingDay,
+}: {
+  plannedStartIso: string;
+  startIso: string;
+  finishIso: string;
+  columns: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  const endDay = daysBetween(plannedStartIso, finishIso);
+  const startDay = Math.min(daysBetween(plannedStartIso, startIso) + columns, endDay);
+  return spanToPlacement({ startDay, endDay, isWorkingDay });
+}

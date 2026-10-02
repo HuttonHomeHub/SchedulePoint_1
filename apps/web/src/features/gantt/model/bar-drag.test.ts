@@ -3,7 +3,13 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { barEdgeGate, edgeObjectReason, settleBarWrite, startEdgeFrozenReason } from './bar-drag';
+import {
+  barEdgeGate,
+  edgeObjectReason,
+  settleBarWrite,
+  startEdgeAnnouncement,
+  startEdgeFrozenReason,
+} from './bar-drag';
 
 /**
  * **ADR-0170 D3/D6 — the one edge gate, and the one place a bar write is announced.**
@@ -68,6 +74,15 @@ describe('barEdgeGate', () => {
 
   it('is resizable for an editable task', () => {
     expect(barEdgeGate(task, OPEN, 'start')).toEqual({ resizable: true, reason: null });
+  });
+});
+
+describe('startEdgeAnnouncement', () => {
+  it('is the diagram’s sentence', () => {
+    expect(startEdgeAnnouncement('Pour', '04 Mar 2026', 3)).toBe(
+      'Moved the start of “Pour” to 04 Mar 2026 (3 days, finish unchanged); dates will update.',
+    );
+    expect(startEdgeAnnouncement('Pour', '04 Mar 2026', 1)).toContain('(1 day,');
   });
 });
 

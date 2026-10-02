@@ -45,6 +45,13 @@ export interface GanttBarDrag {
   moveTo: (activityId: string, startDay: number, applied: string) => Promise<void>;
   /** Change a bar's duration in working days, the start held. */
   resizeTo: (activityId: string, durationDays: number, applied: string) => Promise<void>;
+  /** Move a bar's start, the finish held: a start day and the working days to the finish. */
+  resizeStart: (
+    activityId: string,
+    startDay: number,
+    durationDays: number,
+    applied: string,
+  ) => Promise<void>;
   /** Say something now (refusals) — the same live region the rest of the workspace uses. */
   announce: (message: string) => void;
 }
@@ -162,6 +169,15 @@ export async function settleBarWrite(
  */
 export function moveAnnouncement(name: string, startIso: string): string {
   return `${name} moved to ${startIso}.`;
+}
+
+/** The diagram's sentence verbatim (`TsldPanel.tsx`), so one operation reads one way in both views. */
+export function startEdgeAnnouncement(
+  name: string,
+  startDisplay: string,
+  durationDays: number,
+): string {
+  return `Moved the start of “${name}” to ${startDisplay} (${String(durationDays)} ${durationDays === 1 ? 'day' : 'days'}, finish unchanged); dates will update.`;
 }
 
 export function resizeAnnouncement(name: string, durationDays: number): string {

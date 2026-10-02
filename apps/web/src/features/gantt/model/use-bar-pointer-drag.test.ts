@@ -159,6 +159,25 @@ describe('useBarPointerDrag', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('treats a browser pointercancel as a cancel — a touch scroll must not commit a stale drag', () => {
+    // The browser takes the pointer over (a touch becomes a scroll) and sends `pointercancel`
+    // INSTEAD of `pointerup`. With no handler the window listeners stayed attached, and the next
+    // unrelated `pointerup` anywhere committed the delta of a drag the planner never finished.
+    const onCommit = vi.fn();
+    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+
+    act(() => result.current.onPointerDown(pointerDown(100)));
+    act(() => {
+      move(200);
+      flushFrame();
+      window.dispatchEvent(new PointerEvent('pointercancel'));
+    });
+    expect(result.current.dragging).toBe(false);
+
+    act(() => up());
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('cancels its frame on unmount rather than publishing into a dead tree', () => {
     const onCommit = vi.fn();
     const { result, unmount } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));

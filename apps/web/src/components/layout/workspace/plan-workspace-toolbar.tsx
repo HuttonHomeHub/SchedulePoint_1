@@ -1057,6 +1057,13 @@ export function ToolbarPlanWorkspace({
         'Couldn’t resize the activity.',
         ganttAnnounce,
       ),
+    resizeStart: (activityId, startDay, durationDays, applied) =>
+      settleBarWrite(
+        model.onTsldResize({ activityId, startDay, durationDays }),
+        applied,
+        'Couldn’t resize the activity.',
+        ganttAnnounce,
+      ),
     // The SHARED polite live region (`components/ui/announcer`), not a second one. ADR-0073 C1
     // found two empty states collapsed into one sentence in the single channel a screen-reader user
     // has; a second region would be the same class of problem — two channels competing to be that

@@ -7,6 +7,7 @@ import {
   finishEdgePlacement,
   spanToPlacement,
   startDayAtChartX,
+  startEdgePlacement,
 } from './drag-day';
 
 import { anActivity } from '@/test/activity-fixture';
@@ -165,6 +166,31 @@ describe('finishEdgePlacement', () => {
         columns: -9,
       }),
     ).toEqual({ startDay: 2, durationDays: 1 });
+  });
+});
+
+describe('startEdgePlacement', () => {
+  const base = { plannedStartIso: PLAN_MONDAY, isWorkingDay: MON_FRI };
+
+  it('holds the finish: a start dragged back over a weekend adds working days, not calendar ones', () => {
+    // Task Tue 10 → Thu 12; the start is dragged three columns left, to Sat 7, and rolls forward to
+    // Mon 9. The finish (day 10) stays, so Mon–Thu: four working days.
+    expect(
+      startEdgePlacement({ ...base, startIso: '2026-03-10', finishIso: '2026-03-12', columns: -3 }),
+    ).toEqual({ startDay: 7, durationDays: 4 });
+  });
+
+  it('clamps at the finish day, so the bar never inverts', () => {
+    expect(
+      startEdgePlacement({ ...base, startIso: '2026-03-03', finishIso: '2026-03-05', columns: 9 }),
+    ).toEqual({ startDay: 3, durationDays: 1 });
+  });
+
+  it('counts back across a weekend: Mon 9 → Fri 13 dragged to the previous Thursday', () => {
+    // Start Mon 9 (day 7) dragged 4 left is Thu 5 (day 3); finish Fri 13 (day 11): Thu, Fri, then Mon–Fri.
+    expect(
+      startEdgePlacement({ ...base, startIso: '2026-03-09', finishIso: '2026-03-13', columns: -4 }),
+    ).toEqual({ startDay: 3, durationDays: 7 });
   });
 });
 

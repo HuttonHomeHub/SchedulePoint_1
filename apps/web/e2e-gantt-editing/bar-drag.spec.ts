@@ -10,6 +10,7 @@ import {
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -17,6 +18,7 @@ import {
   bindMonFriCalendar,
   expectWeekday,
   plusDays,
+  rollForward,
   weekdayOf,
   workingDaysInclusive,
 } from './calendar-support';
@@ -128,6 +130,64 @@ async function dragEdge(
   await page.mouse.down();
   await page.mouse.move(x + columns * pxPerDay, y, { steps: 8 });
   await page.mouse.up();
+}
+
+/** Patch an activity through the API with its current version, and fail loudly if it is refused. */
+async function patchActivity(
+  page: Page,
+  orgSlug: string,
+  name: string,
+  path: '' | '/progress',
+  body: Record<string, unknown>,
+): Promise<void> {
+  const row = byName(await readActivities(page, orgSlug), name);
+  const failure = await page.evaluate(
+    async ({
+      org,
+      id,
+      version,
+      suffix,
+      patch,
+    }: {
+      org: string;
+      id: string;
+      version: number;
+      suffix: string;
+      patch: Record<string, unknown>;
+    }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/activities/${id}${suffix}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...patch, version }),
+      });
+      return response.ok ? null : `${response.status} ${await response.text()}`;
+    },
+    { org: orgSlug, id: row.id, version: row.version, suffix: path, patch: body },
+  );
+  expect(failure, `patching ${name}`).toBeNull();
+}
+
+/** Recalculate through the API, then let the open client see what the API-side writes did. */
+async function recalculateAndSync(page: Page): Promise<void> {
+  const planId = openPlanId(page);
+  const org = /\/orgs\/([^/]+)/.exec(page.url())?.[1];
+  if (org === undefined) throw new Error(`no org in ${page.url()}`);
+  const failure = await page.evaluate(
+    async ({ slug, id }: { slug: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${slug}/plans/${id}/schedule/recalculate`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        },
+      );
+      return response.ok ? null : `${response.status} ${await response.text()}`;
+    },
+    { slug: org, id: planId },
+  );
+  expect(failure, 'recalculating').toBeNull();
+  await syncClient(page);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -250,7 +310,7 @@ test('a summary refuses to move', async ({ page }) => {
   expect(after.visualStart).toBeNull();
 });
 
-test('a bar carries a pointer resize handle a planner can actually reach', async ({ page }) => {
+test('a bar carries pointer resize handles a planner can actually reach', async ({ page }) => {
   test.setTimeout(180_000);
   const orgSlug = await ganttPlan(page);
   await showGantt(page);
@@ -259,11 +319,13 @@ test('a bar carries a pointer resize handle a planner can actually reach', async
 
   // Present and non-zero, which is the property `e2e-toolbar-fit` had to learn to assert: a control
   // shrunk to zero visible width is in the DOM, has no overhang, and is pointer-unreachable.
-  const handle = edgeFor(page, first.id, 'finish');
-  await expect(handle).toHaveCount(1);
-  const box = await handle.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThan(0);
-  expect(box?.height ?? 0).toBeGreaterThan(0);
+  for (const edge of ['start', 'finish'] as const) {
+    const handle = edgeFor(page, first.id, edge);
+    await expect(handle).toHaveCount(1);
+    const box = await handle.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(0);
+    expect(box?.height ?? 0).toBeGreaterThan(0);
+  }
 });
 
 /**
@@ -301,4 +363,104 @@ test('a finish-edge drag across a weekend lands the finish where it was dropped'
     .toBe(target);
   // A finish-edge drag writes a duration and no constraint, as it always has.
   expect(byName(await readActivities(page, orgSlug), 'Seeded 0').constraintType).toBeNull();
+});
+
+/**
+ * **The left handle: the start moves, the finish stays, and one undo puts it back** (ADR-0170 D1).
+ *
+ * The bar is first placed on a Tuesday so its start can be dragged back across a weekend. The
+ * load-bearing assertion is the last one: **`visualEffectiveFinish` is unchanged**, read after the
+ * recalculation has moved the start. It is what the gesture promises, and it is exactly what a
+ * calendar-day count would have broken.
+ */
+test('dragging the left handle across a weekend moves the start and holds the finish', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const orgSlug = await ganttPlan(page, 3, true);
+
+  const seeded = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  const placedStart = plusDays(seeded.earlyStart!, 8);
+  expect(weekdayOf(placedStart), 'the placed start is a Tuesday').toBe(2);
+  await patchActivity(page, orgSlug, 'Seeded 0', '', { visualStart: placedStart });
+  await recalculateAndSync(page);
+  await showGantt(page);
+
+  const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  expect(before.visualEffectiveStart).toBe(placedStart);
+  expectWeekday(before.visualEffectiveFinish, 'the placed finish');
+  expect(workingDaysInclusive(placedStart, before.visualEffectiveFinish!)).toBe(5);
+  const columnsCovered =
+    (Date.parse(before.visualEffectiveFinish!) - Date.parse(placedStart)) / 86_400_000 + 1;
+  expect(columnsCovered, 'the bar must cross a weekend').toBeGreaterThan(5);
+
+  // Two columns left of a Tuesday is a Sunday, which rolls FORWARD to the Monday before the bar's
+  // own week — a start the engine would have chosen too.
+  const dropped = plusDays(placedStart, -2);
+  const target = rollForward(dropped);
+  expect(dropped, 'the drop must land on a non-working day').not.toBe(target);
+
+  await dragEdge(page, before.id, 'start', -2, columnsCovered);
+
+  await expect
+    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualStart, {
+      timeout: 20_000,
+    })
+    .toBe(target);
+  await expect
+    .poll(
+      async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualEffectiveStart,
+      { timeout: 20_000 },
+    )
+    .toBe(target);
+  const after = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  expect(
+    after.constraintType,
+    'a start-edge drag writes a placement, never a constraint',
+  ).toBeNull();
+  expect(after.durationDays).toBe(workingDaysInclusive(target, before.visualEffectiveFinish!));
+  expect(after.visualEffectiveFinish, 'the finish is held').toBe(before.visualEffectiveFinish);
+
+  // One undo puts both the start and the duration back.
+  await page.keyboard.press('Control+z');
+  await expect
+    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualStart, {
+      timeout: 20_000,
+    })
+    .toBe(placedStart);
+  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').durationDays).toBe(
+    before.durationDays,
+  );
+});
+
+/**
+ * **No left handle where the start cannot move** — paired with a positive count on an eligible bar
+ * in the SAME plan, so a zero cannot pass over a feature that is absent everywhere.
+ */
+test('a milestone and a started activity carry no left handle; an eligible bar does', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const orgSlug = await ganttPlan(page, 3, true);
+
+  await patchActivity(page, orgSlug, 'Seeded 1', '', { type: 'START_MILESTONE' });
+  const seeded = byName(await readActivities(page, orgSlug), 'Seeded 2');
+  await patchActivity(page, orgSlug, 'Seeded 2', '/progress', { actualStart: seeded.earlyStart });
+  await recalculateAndSync(page);
+  await showGantt(page);
+
+  const rows = await readActivities(page, orgSlug);
+  const eligible = byName(rows, 'Seeded 0');
+  const milestone = byName(rows, 'Seeded 1');
+  const started = byName(rows, 'Seeded 2');
+
+  // The fixture really is what the case says it is.
+  expect((milestone as unknown as { type: string }).type).toBe('START_MILESTONE');
+
+  await expect(edgeFor(page, eligible.id, 'start')).toHaveCount(1);
+  await expect(edgeFor(page, milestone.id, 'start')).toHaveCount(0);
+  await expect(edgeFor(page, milestone.id, 'finish')).toHaveCount(0);
+  await expect(edgeFor(page, started.id, 'start')).toHaveCount(0);
+  // The finish is a duration the engine still uses, so a started activity keeps its right handle.
+  await expect(edgeFor(page, started.id, 'finish')).toHaveCount(1);
 });

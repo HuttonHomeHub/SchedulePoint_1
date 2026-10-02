@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * to and it fails silently — ADR-0064 chose an effect cleanup for its recalculation holds for the
  * same reason.
  *
- * **Escape cancels**, and cancelling is not the same as dropping: the bar returns to where it was
+ * **Escape cancels, and so does the browser's `pointercancel`**, and cancelling is not the same as dropping: the bar returns to where it was
  * and nothing is written. Without it a planner who starts a drag by accident has to complete it and
  * then undo, which is two writes and a recalculation to fix a slip.
  */
@@ -83,6 +83,7 @@ export function useBarPointerDrag({
       const finish = (): void => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('keydown', onKey, true);
         stop();
       };
@@ -94,6 +95,14 @@ export function useBarPointerDrag({
         // A drag that never moved is a click, and a click is a selection. Committing zero would
         // burn a version bump and a recalculation on a bar the planner merely touched.
         if (!wasCancelled && total !== 0) onCommit(total);
+      };
+
+      // The browser took the pointer over (a touch became a scroll, a gesture was claimed) and sent
+      // `pointercancel` INSTEAD of `pointerup`. It is a cancel, not a drop: without it the window
+      // listeners outlive the gesture and the next unrelated `pointerup` commits a stale delta.
+      const onCancel = (): void => {
+        cancelled.current = true;
+        finish();
       };
 
       const onKey = (keyEvent: KeyboardEvent): void => {
@@ -109,6 +118,7 @@ export function useBarPointerDrag({
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
     [enabled, onCommit, stop],

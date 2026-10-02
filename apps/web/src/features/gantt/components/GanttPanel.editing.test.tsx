@@ -1,5 +1,5 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GanttBarDrag } from '../model/bar-drag';
@@ -304,6 +304,7 @@ describe('moving a bar from the keyboard', () => {
     isWorkingDay: null,
     moveTo: vi.fn(() => Promise.resolve()),
     resizeTo: vi.fn(() => Promise.resolve()),
+    resizeStart: vi.fn(() => Promise.resolve()),
     announce: vi.fn(),
     ...over,
   });
@@ -391,19 +392,21 @@ describe('the bar gestures in the rendered row', () => {
     isWorkingDay: null,
     moveTo: vi.fn(() => Promise.resolve()),
     resizeTo: vi.fn(() => Promise.resolve()),
+    resizeStart: vi.fn(() => Promise.resolve()),
     announce: vi.fn(),
     ...over,
   });
 
   const bars = () => document.querySelectorAll('[data-activity-id] span[aria-hidden="true"]');
 
-  const handle = (container: HTMLElement, edge: 'finish') =>
+  const handle = (container: HTMLElement, edge: 'start' | 'finish') =>
     container.querySelectorAll(`[data-bar-edge="${edge}"]`);
 
-  it('offers the finish handle on an editable task, and none where the bar is shut', () => {
+  it('offers both handles on an editable task, and none where the bar is shut', () => {
     const { container, unmount } = render(
       <GanttPanel activities={[activity()]} drag={dragBundle()} />,
     );
+    expect(handle(container, 'start')).toHaveLength(1);
     expect(handle(container, 'finish')).toHaveLength(1);
     unmount();
 
@@ -412,6 +415,7 @@ describe('the bar gestures in the rendered row', () => {
     const shut = render(
       <GanttPanel activities={[activity()]} drag={dragBundle({ canEdit: false })} />,
     );
+    expect(handle(shut.container, 'start')).toHaveLength(0);
     expect(handle(shut.container, 'finish')).toHaveLength(0);
   });
 
@@ -439,14 +443,44 @@ describe('the bar gestures in the rendered row', () => {
     );
     const rows = container.querySelectorAll<HTMLElement>('[data-activity-id]');
     expect(rows[0]!.querySelectorAll('[data-bar-edge]')).toHaveLength(0);
-    expect(rows[1]!.querySelectorAll('[data-bar-edge]')).toHaveLength(1);
+    expect(rows[1]!.querySelectorAll('[data-bar-edge]')).toHaveLength(2);
   });
 
-  it('keeps the finish handle on a started activity, whose duration the engine still uses', () => {
-    const { container } = render(
-      <GanttPanel activities={[activity({ actualStart: '2026-01-05' })]} drag={dragBundle()} />,
+  it.each([
+    ['an actual start', { actualStart: '2026-01-05' }],
+    ['an actual finish', { actualFinish: '2026-01-09' }],
+  ])(
+    'withholds the START handle once the activity has %s, and keeps the finish handle',
+    (_l, over) => {
+      // The engine draws a started activity from its actual and ignores a hand-placed start, so the
+      // handle would save an inert placement and move the finish (ADR-0170 D3).
+      const { container } = render(
+        <GanttPanel activities={[activity(over)]} drag={dragBundle()} />,
+      );
+      expect(handle(container, 'start')).toHaveLength(0);
+      expect(handle(container, 'finish')).toHaveLength(1);
+    },
+  );
+
+  it('withholds the start handle on a bar too narrow for two handles, leaving the finish one', () => {
+    // 6 px/day without a measured width: two days is 12 px (< 16), three is 18 px.
+    const narrow = render(
+      <GanttPanel
+        activities={[activity({ earlyStart: '2026-01-05', earlyFinish: '2026-01-06' })]}
+        drag={dragBundle()}
+      />,
     );
-    expect(handle(container, 'finish')).toHaveLength(1);
+    expect(handle(narrow.container, 'start')).toHaveLength(0);
+    expect(handle(narrow.container, 'finish')).toHaveLength(1);
+    narrow.unmount();
+
+    const wide = render(
+      <GanttPanel
+        activities={[activity({ earlyStart: '2026-01-05', earlyFinish: '2026-01-07' })]}
+        drag={dragBundle()}
+      />,
+    );
+    expect(handle(wide.container, 'start')).toHaveLength(1);
   });
 
   it('refuses the finish resize from the keyboard on a level-of-effort activity, with a reason', () => {
@@ -470,7 +504,7 @@ describe('the bar gestures in the rendered row', () => {
   });
 
   /**
-   * **The pointer gesture, with a Mon–Fri plan.** `plannedStart` is Thu 1 Jan 2026, so day 0 is a
+   * **The pointer gestures, with a Mon–Fri plan.** `plannedStart` is Thu 1 Jan 2026, so day 0 is a
    * Thursday and the predicate below is keyed to it, exactly as the host builds it. The fixture bar
    * is Mon 5 – Fri 9 Jan at 6 px a day.
    */
@@ -503,26 +537,76 @@ describe('the bar gestures in the rendered row', () => {
       );
     });
 
+    it('moves the start with the finish held, counting working days back across a weekend', () => {
+      // Tue 6 – Fri 9 (4 days). Three columns left is Sat 3, rolled forward to Mon 5 (day 4): the
+      // finish is held, so Mon–Fri is five working days — not the seven calendar days covered.
+      const resizeStart = vi.fn(() => Promise.resolve());
+      const { container } = render(
+        <GanttPanel
+          activities={[activity({ earlyStart: '2026-01-06', durationDays: 4 })]}
+          drag={dragBundle({ resizeStart, isWorkingDay: monFri })}
+        />,
+      );
+      drag(handle(container, 'start')[0]!, -3);
+      expect(resizeStart).toHaveBeenCalledExactlyOnceWith(
+        'a1',
+        4,
+        5,
+        expect.stringContaining(
+          'Moved the start of “Foundations” to 05 Jan 2026 (5 days, finish unchanged)',
+        ),
+      );
+    });
+
+    it('clamps the start at the finish day, so the bar never inverts', () => {
+      const resizeStart = vi.fn(() => Promise.resolve());
+      const { container } = render(
+        <GanttPanel
+          activities={[activity()]}
+          drag={dragBundle({ resizeStart, isWorkingDay: monFri })}
+        />,
+      );
+      drag(handle(container, 'start')[0]!, 40);
+      // Fri 9 is day 8: a one-day task starting on the finish day.
+      expect(resizeStart).toHaveBeenCalledExactlyOnceWith('a1', 8, 1, expect.any(String));
+    });
+
     it('writes nothing for a drag that returns to where it started', () => {
+      const resizeStart = vi.fn(() => Promise.resolve());
       const resizeTo = vi.fn(() => Promise.resolve());
       const { container } = render(
-        <GanttPanel activities={[activity()]} drag={dragBundle({ resizeTo })} />,
+        <GanttPanel activities={[activity()]} drag={dragBundle({ resizeStart, resizeTo })} />,
       );
+      drag(handle(container, 'start')[0]!, 0);
       drag(handle(container, 'finish')[0]!, 0);
+      expect(resizeStart).not.toHaveBeenCalled();
       expect(resizeTo).not.toHaveBeenCalled();
     });
 
     it('writes nothing and announces nothing when Escape cancels the drag', () => {
-      const resizeTo = vi.fn(() => Promise.resolve());
+      const resizeStart = vi.fn(() => Promise.resolve());
       const announce = vi.fn();
       const { container } = render(
-        <GanttPanel activities={[activity()]} drag={dragBundle({ resizeTo, announce })} />,
+        <GanttPanel activities={[activity()]} drag={dragBundle({ resizeStart, announce })} />,
       );
-      drag(handle(container, 'finish')[0]!, 3, true);
+      drag(handle(container, 'start')[0]!, -3, true);
       fireEvent.keyDown(window, { key: 'Escape' });
       window.dispatchEvent(new PointerEvent('pointerup'));
-      expect(resizeTo).not.toHaveBeenCalled();
+      expect(resizeStart).not.toHaveBeenCalled();
       expect(announce).not.toHaveBeenCalled();
+    });
+
+    it('previews the start edge at whole columns while dragging', () => {
+      const { container } = render(
+        <GanttPanel activities={[activity()]} drag={dragBundle({ isWorkingDay: monFri })} />,
+      );
+      const start = handle(container, 'start')[0] as HTMLElement;
+      const before = start.style.left;
+      drag(start, -2, true);
+      // The handle is published on the next frame; the commit rounds the same way.
+      return waitFor(() => {
+        expect(start.style.left).not.toBe(before);
+      }).finally(() => window.dispatchEvent(new PointerEvent('pointercancel')));
     });
 
     it('does not announce success itself — the host does, after the write settles', () => {

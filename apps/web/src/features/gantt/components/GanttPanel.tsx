@@ -16,6 +16,7 @@ import {
   dateAtChartX,
   finishEdgePlacement,
   startDayAtChartX,
+  startEdgePlacement,
 } from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
@@ -41,6 +42,7 @@ import {
   barMoveGate,
   moveAnnouncement,
   resizeAnnouncement,
+  startEdgeAnnouncement,
   type GanttBarDrag,
 } from '../model/bar-drag';
 import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
@@ -70,6 +72,7 @@ import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 import { wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { formatCalendarDate } from '@/lib/format-date';
 import { finishMilestoneDayShift } from '@/lib/milestone-day';
 import { cn } from '@/lib/utils';
 
@@ -94,6 +97,13 @@ export const GANTT_ROW_HEIGHT = 28;
  * reimplemented"). A second date-to-pixel scale is how two views drift about where a Monday is.
  */
 const FALLBACK_PX_PER_DAY = 6;
+
+/**
+ * The narrowest bar that offers a start handle: two 8 px handles (ADR-0170 D5). Below it the two
+ * would overlap each other and the body's grab area, so narrow bars are byte-for-byte what they were
+ * and the typed `Start` cell is the route.
+ */
+const START_HANDLE_MIN_BAR_PX = 16;
 
 /** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
 const DEFAULT_ZOOM: ZoomLevel = 'month';
@@ -1569,9 +1579,10 @@ function GanttRowView({
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
   // two affordances for one capability must not disagree about whether it exists.
   const moveGate = drag === undefined ? null : barMoveGate(activity, drag);
-  // The same gate the keyboard resize reads (ADR-0170 D3), so a handle is never lit where the
-  // keyboard would refuse.
+  // One gate per edge, from the same function the keyboard resize and the typed `Start` cell read
+  // (ADR-0170 D3), so a handle is never lit where the keyboard or the cell would refuse.
   const finishGate = drag === undefined ? null : barEdgeGate(activity, drag, 'finish');
+  const startGate = drag === undefined ? null : barEdgeGate(activity, drag, 'start');
   const { start: barStartIso, finish: barFinishIso } = barDatesFor(activity, barDateSource);
   const commitDrag = useCallback(
     (deltaX: number) => {
@@ -1642,6 +1653,83 @@ function GanttRowView({
     onCommit: commitResize,
   });
 
+  /**
+   * The start-edge resize (ADR-0170 D1): the start moves, the finish stays. The same workspace
+   * write the diagram's start edge makes — `onTsldResize` with a `startDay` — so it writes
+   * `visualStart` and a duration and **no constraint**. The start is rolled forward to a working
+   * day and the duration counted in working days from it (`startEdgePlacement`), which is what
+   * keeps "finish unchanged" true across a weekend; the announcement names the date that was
+   * WRITTEN, not the one dropped on.
+   */
+  const commitResizeStart = useCallback(
+    (deltaX: number) => {
+      if (drag === null || drag === undefined) return;
+      if (geometry === null || barStartIso === null || barFinishIso === null) return;
+      const { plannedStartIso } = drag;
+      if (plannedStartIso === null) return;
+      const columns = columnsMoved(deltaX, pxPerDay);
+      if (columns === 0) return;
+      const placement = startEdgePlacement({
+        plannedStartIso,
+        startIso: barStartIso,
+        finishIso: barFinishIso,
+        columns,
+        isWorkingDay: drag.isWorkingDay,
+      });
+      if (
+        placement.startDay === daysBetween(plannedStartIso, barStartIso) &&
+        placement.durationDays === activity.durationDays
+      ) {
+        return;
+      }
+      void drag.resizeStart(
+        activity.id,
+        placement.startDay,
+        placement.durationDays,
+        startEdgeAnnouncement(
+          activity.name,
+          formatCalendarDate(addCalendarDays(plannedStartIso, placement.startDay)),
+          placement.durationDays,
+        ),
+      );
+    },
+    [
+      drag,
+      geometry,
+      barStartIso,
+      barFinishIso,
+      pxPerDay,
+      activity.id,
+      activity.name,
+      activity.durationDays,
+    ],
+  );
+  const barResizeStart = useBarPointerDrag({
+    enabled:
+      startGate?.resizable === true &&
+      geometry !== null &&
+      !geometry.milestone &&
+      geometry.width >= START_HANDLE_MIN_BAR_PX,
+    onCommit: commitResizeStart,
+  });
+
+  // The live bar. A resize previews the edge under the pointer at whole columns — the same
+  // rounding the commit uses — clamped one column short of the opposite edge, so the picture and
+  // the write cannot disagree. Published through the hook's rAF-throttled `deltaX`, so this adds
+  // no state of its own and no render per pointermove.
+  const shown = (() => {
+    if (geometry === null) return null;
+    const room = Math.max(geometry.width - pxPerDay, 0);
+    if (barResize.deltaX !== null) {
+      const px = Math.max(columnsMoved(barResize.deltaX, pxPerDay) * pxPerDay, -room);
+      return { x: geometry.x, width: geometry.width + px, resizing: true };
+    }
+    if (barResizeStart.deltaX !== null) {
+      const px = Math.min(columnsMoved(barResizeStart.deltaX, pxPerDay) * pxPerDay, room);
+      return { x: geometry.x + px, width: geometry.width - px, resizing: true };
+    }
+    return { x: geometry.x, width: geometry.width, resizing: false };
+  })();
   const ghost =
     showVariance && variance !== undefined
       ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
@@ -1887,10 +1975,12 @@ function GanttRowView({
               // The ghost is a TRANSFORM on the live bar, not a second element: one bar means the
               // planner is dragging the thing they grabbed, and it costs no extra node per row.
               style={{
-                left: geometry.x,
-                width: geometry.width,
+                left: shown?.x ?? geometry.x,
+                width: shown?.width ?? geometry.width,
                 ...(barDrag.deltaX === null
-                  ? {}
+                  ? shown?.resizing === true
+                    ? { opacity: 0.75 }
+                    : {}
                   : { transform: `translateX(${String(barDrag.deltaX)}px)`, opacity: 0.75 }),
                 ...(moveGate?.movable === true ? { cursor: 'grab', pointerEvents: 'auto' } : {}),
               }}
@@ -1933,19 +2023,36 @@ function GanttRowView({
                 {badge.glyph}
               </span>
             )}
-            {/* The finish-edge handle. Rendered only when the bar can be resized, so it is never a
-                lit-but-inert grab zone: `barEdgeGate`'s answer, the one the keyboard resize reads —
-                no milestone, level-of-effort or summary (ADR-0170 D3). Eight pixels wide,
-                straddling the edge, the smallest zone a pointer finds reliably without eating the
-                neighbouring bar's. Pointer-only and `aria-hidden`: the keyboard equivalent is
-                Shift+←/→ on the row, so this is an additional affordance rather than the only one.
-                `data-bar-edge` is the stable handle for a journey to find it by. */}
+            {/* The two edge handles. Each is rendered only when its edge can be resized — never a
+                lit-but-inert grab zone — which is `barEdgeGate`'s answer, the same one the keyboard
+                resize and the typed `Start` cell read: no milestone, level-of-effort or summary, and
+                (start edge only) nothing already started or finished, because the engine ignores a
+                hand-placed start there. Eight pixels wide, straddling the edge, the smallest zone a
+                pointer finds reliably without eating the neighbouring bar's. The start handle is
+                withheld below two handles' width (a bar too short to hold both would hand the
+                body's grab area to the left one); the typed `Start` cell is the route there, and the
+                keyboard route everywhere (F2 → Start, or Shift+←/→ for the finish). Pointer-only and
+                `aria-hidden`: an additional affordance, with `data-bar-edge` as the stable handle
+                for a journey to find them by. */}
+            {startGate?.resizable === true &&
+            !geometry.milestone &&
+            geometry.width >= START_HANDLE_MIN_BAR_PX ? (
+              <span
+                aria-hidden="true"
+                data-bar-edge="start"
+                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
+                style={{ left: (shown?.x ?? geometry.x) - 4 }}
+                onPointerDown={barResizeStart.onPointerDown}
+              />
+            ) : null}
             {finishGate?.resizable === true && !geometry.milestone ? (
               <span
                 aria-hidden="true"
                 data-bar-edge="finish"
                 className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
-                style={{ left: geometry.x + geometry.width - 4 }}
+                style={{
+                  left: (shown?.x ?? geometry.x) + (shown?.width ?? geometry.width) - 4,
+                }}
                 onPointerDown={barResize.onPointerDown}
               />
             ) : null}
