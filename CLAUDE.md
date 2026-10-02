@@ -933,6 +933,7 @@ When operating in this repo, Claude Code should:
    "no check in this suite failed" event is a weaker claim than it reads as, in
    three distinct ways, **all three of which occurred on one afternoon**
    (2026-08-22, six times across PRs #347, #349 and #351):
+
    - **one app can own several suites**, so a suite completing says nothing
      about the run whose jobs you care about;
    - the event can name a **superseded** suite, cancelled by a newer push;
@@ -1035,89 +1036,90 @@ When operating in this repo, Claude Code should:
     needed that only they can give**. Nothing else qualifies — not a finished
     milestone, not a good moment to summarise, not a long turn.
 
-        - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
-          approved programme lost **seven and a half hours** between two milestones
-          (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
-          blocked: a milestone landed, a progress report was written, the turn ended,
-          and the session sat idle until the product owner typed. From the inside that
-          is indistinguishable from working — which is exactly why it needs a rule
-          rather than an intention.
-        - **So chain the work inside the turn.** Finish a slice, commit it, push it,
-          and start the next one **in the same turn**. Report at the end of the turn,
-          not instead of continuing.
-        - **And arm a wake-up as the FIRST action of the turn** (`send_later`,
-          ~25 minutes), carrying the remaining milestone list. Not last, not "before
-          the turn ends". A turn boundary is a real limit; being unable to cross it
-          alone is not a reason to stop, because the tool to cross it exists. This
-          session used that tool to babysit a pull request and not to continue the
-          work — which is the whole lesson.
-        - **"Before the turn can end" is what this bullet said until 2026-08-25, and
-          that wording is the defect.** It permits arming last, and arming last means
-          remembering at exactly the moment you are least likely to: a wake-up fired
-          at 15:57, was not re-armed, and the session sat idle 16:03–18:02 while the
-          product owner had twice asked for continuous progress. Correct advice that
-          cannot work is ADR-0076 Class 3 — the same shape as a stage banner telling
-          its reader to re-run `ls | wc -l`.
-        - **So the instruction lives in the fired message, not in this file.** A
-          wake-up's own first line orders its own re-arming, which is the only part
-          of the mechanism that does not depend on anybody consulting a document.
-          That is ADR-0058's move one layer over — replace vigilance with something
-          the machine carries — and 2026-08-25 is the evidence: four wake-ups fired,
-          three re-armed themselves correctly, and the fourth stopped only because
-          its terminal condition had been met. **It is still not a gate**, and cannot
-          be: nothing in CI can observe whether a session re-armed. Treat it as the
-          weak instrument §19.11's last bullet describes, and give the message a
-          written **terminal condition** so "stop" is a fact it can check rather than
-          a judgement it has to make.
-        - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
-          arm one out of band, delete the outstanding trigger first.** On 2026-08-26
-          two were live at once: one armed at 11:16 in response to a firing, and a
-          second armed at 11:33 mid-turn after a pull request was opened, without the
-          first having fired. The older was due at 11:39 carrying **"Branch is pushed;
-          no PR opened yet"** and a milestone listed as remaining that had already
-          landed. Had it fired it would have sent the session to write an ADR that
-          existed and open a pull request that was open. The bullet above puts the
-          re-arming instruction inside the fired message precisely so the mechanism
-          cannot go stale — and this is the mechanism going stale anyway, by being
-          duplicated, which no amount of care inside one message can prevent. Found
-          only because the product owner asked whether the wake-ups were working.
-          `list_triggers` shows what is outstanding; `delete_trigger` removes it.
-        - **And if the chain looks dead, re-arm anyway — a firing you have not yet
-          been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
-          16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
-
-    run*once_fired`) and its notification was delivered **at 16:47 — about
-forty-one minutes late**, after the product owner had already asked
-whether the wake-ups were working. Nothing re-armed in between, so the
-loop sat dead with the epic half-built. That is the previous bullet's own
-failure one day later and in the opposite direction: it guards against
-**two** live triggers, and this was **none**.
-**The first version of this bullet said the notification "never
-surfaced", and committed that as fact twenty-five minutes before it
-arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
-about a delivery channel whose latency nothing here measures, written into
-the register bullet whose whole subject is not trusting an unobserved
-event. The remedy below does not change, because it covers both cases;
-only the diagnosis was wrong, and it is corrected in place rather than
-quietly edited.
-The bullet above puts the re-arming instruction inside the fired message
-so the mechanism cannot go stale, and that is exactly why it cannot cover
-this case — the instruction is \_in the message that was never read*. So
-the rule gains its second half: **whenever you touch an epic whose
-terminal condition is unmet and `list_triggers` comes back empty, arm
-    one.** That is a state you can check, rather than an event you have to
-    have noticed. It is still not a gate and cannot be: nothing in CI can
-    observe whether a session is armed. Weak instrument, per §19.11's last
-    bullet — but a checkable state beats a remembered event. - **And check the terminal condition is reachable before arming it.** One
-    written the same day as this bullet required the work to be "merged and
-    released, tag and publish job confirmed" — for a documentation change with
-    **no changeset**, which opens no Version Packages PR and cuts no release.
-    A loop whose exit test can never pass does not stop; it re-arms forever
-    while looking diligent. The failure is the same Class 3 shape as the wording
-    three bullets up, committed in the message that fixed it: state the
-    condition, then ask what would actually make it true. - **If something genuinely needs an answer**, ask it, then **keep working on
-    everything that does not depend on it**. A blocking question blocks one
-    milestone, not the programme.
+    - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
+      approved programme lost **seven and a half hours** between two milestones
+      (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
+      blocked: a milestone landed, a progress report was written, the turn ended,
+      and the session sat idle until the product owner typed. From the inside that
+      is indistinguishable from working — which is exactly why it needs a rule
+      rather than an intention.
+    - **So chain the work inside the turn.** Finish a slice, commit it, push it,
+      and start the next one **in the same turn**. Report at the end of the turn,
+      not instead of continuing.
+    - **And arm a wake-up as the FIRST action of the turn** (`send_later`,
+      ~25 minutes), carrying the remaining milestone list. Not last, not "before
+      the turn ends". A turn boundary is a real limit; being unable to cross it
+      alone is not a reason to stop, because the tool to cross it exists. This
+      session used that tool to babysit a pull request and not to continue the
+      work — which is the whole lesson.
+    - **"Before the turn can end" is what this bullet said until 2026-08-25, and
+      that wording is the defect.** It permits arming last, and arming last means
+      remembering at exactly the moment you are least likely to: a wake-up fired
+      at 15:57, was not re-armed, and the session sat idle 16:03–18:02 while the
+      product owner had twice asked for continuous progress. Correct advice that
+      cannot work is ADR-0076 Class 3 — the same shape as a stage banner telling
+      its reader to re-run `ls | wc -l`.
+    - **So the instruction lives in the fired message, not in this file.** A
+      wake-up's own first line orders its own re-arming, which is the only part
+      of the mechanism that does not depend on anybody consulting a document.
+      That is ADR-0058's move one layer over — replace vigilance with something
+      the machine carries — and 2026-08-25 is the evidence: four wake-ups fired,
+      three re-armed themselves correctly, and the fourth stopped only because
+      its terminal condition had been met. **It is still not a gate**, and cannot
+      be: nothing in CI can observe whether a session re-armed. Treat it as the
+      weak instrument §19.11's last bullet describes, and give the message a
+      written **terminal condition** so "stop" is a fact it can check rather than
+      a judgement it has to make.
+    - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
+      arm one out of band, delete the outstanding trigger first.** On 2026-08-26
+      two were live at once: one armed at 11:16 in response to a firing, and a
+      second armed at 11:33 mid-turn after a pull request was opened, without the
+      first having fired. The older was due at 11:39 carrying **"Branch is pushed;
+      no PR opened yet"** and a milestone listed as remaining that had already
+      landed. Had it fired it would have sent the session to write an ADR that
+      existed and open a pull request that was open. The bullet above puts the
+      re-arming instruction inside the fired message precisely so the mechanism
+      cannot go stale — and this is the mechanism going stale anyway, by being
+      duplicated, which no amount of care inside one message can prevent. Found
+      only because the product owner asked whether the wake-ups were working.
+      `list_triggers` shows what is outstanding; `delete_trigger` removes it.
+    - **And if the chain looks dead, re-arm anyway — a firing you have not yet
+      been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
+      16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
+run_once_fired`) and its notification was delivered **at 16:47 — about
+      forty-one minutes late**, after the product owner had already asked
+      whether the wake-ups were working. Nothing re-armed in between, so the
+      loop sat dead with the epic half-built. That is the previous bullet's own
+      failure one day later and in the opposite direction: it guards against
+      **two** live triggers, and this was **none**.
+      **The first version of this bullet said the notification "never
+      surfaced", and committed that as fact twenty-five minutes before it
+      arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
+      about a delivery channel whose latency nothing here measures, written into
+      the register bullet whose whole subject is not trusting an unobserved
+      event. The remedy below does not change, because it covers both cases;
+      only the diagnosis was wrong, and it is corrected in place rather than
+      quietly edited.
+      The bullet above puts the re-arming instruction inside the fired message
+      so the mechanism cannot go stale, and that is exactly why it cannot cover
+      this case — the instruction is _in the message that was never read_. So
+      the rule gains its second half: **whenever you touch an epic whose
+      terminal condition is unmet and `list_triggers` comes back empty, arm
+      one.** That is a state you can check, rather than an event you have to
+      have noticed. It is still not a gate and cannot be: nothing in CI can
+      observe whether a session is armed. Weak instrument, per §19.11's last
+      bullet — but a checkable state beats a remembered event.
+    - **And check the terminal condition is reachable before arming it.** One
+      written the same day as this bullet required the work to be "merged and
+      released, tag and publish job confirmed" — for a documentation change with
+      **no changeset**, which opens no Version Packages PR and cuts no release.
+      A loop whose exit test can never pass does not stop; it re-arms forever
+      while looking diligent. The failure is the same Class 3 shape as the wording
+      three bullets up, committed in the message that fixed it: state the
+      condition, then ask what would actually make it true.
+    - **If something genuinely needs an answer**, ask it, then **keep working on
+      everything that does not depend on it**. A blocking question blocks one
+      milestone, not the programme.
 
 13. **A shared primitive's keyboard contract is reviewed before release** (ADR-0111).
     Changing which keys `Deck`, `Toolbar`, `Menu`, `Combobox`, `Tabs`, `Dialog` or a
@@ -1140,6 +1142,7 @@ terminal condition is unmet and `list_triggers` comes back empty, arm
 
 14. **Spend the expensive model on decisions, not on keystrokes** (product owner, 2026-09-29).
     The standard does not change with the model; what changes is which model does which part.
+
     - **Opus plans, Sonnet builds, Haiku searches** — and each is pinned in an agent's
       frontmatter, never passed per call from memory. Planners (**feature-analyst**,
       **ui-architect**, **database-architect**) are Opus; implementation goes to the
