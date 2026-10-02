@@ -1,5 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import { GANTT_CELL_SCOPES, type GanttCellKey } from './cell-edit';
 
 import type {
@@ -45,14 +46,16 @@ export interface GanttCellGate extends ScopeGate {
 /**
  * The gate for one cell on one activity.
  *
- * Three things can shut a cell, and they are deliberately different facts:
+ * Four things can shut a cell, and they are deliberately different facts:
  *
  * 1. **Permission** — the editor's scope gate, by reference (above).
  * 2. **The activity's own shape** — a `WBS_SUMMARY`'s dates and duration are an engine rollup of
  *    its children (ADR-0038), so there is nothing on it to type; a milestone has no duration at
  *    all. These are omissions of a capability the object does not have, not refusals aimed at the
  *    reader, and the reason says so.
- * 3. **The plan not being calculated yet** — handled by the caller passing `hasComputedSchedule`,
+ * 3. **The activity having started** — its start is its actual, so the Start cell is shut with the
+ *    start handle's own reason (ADR-0170 D3).
+ * 4. **The plan not being calculated yet** — handled by the caller passing `hasComputedSchedule`,
  *    because it is a property of the plan rather than of this row. **Name and duration stay
  *    editable** there and only the dates go read-only: a duration is an *input*, not a rollup, and
  *    a freshly-created uncalculated plan is exactly when a planner is typing initial durations.
@@ -66,7 +69,8 @@ export function ganttCellGate({
   hasComputedSchedule,
 }: {
   key: GanttCellKey;
-  activity: Pick<ActivitySummary, 'type'>;
+  activity: Pick<ActivitySummary, 'type'> &
+    Partial<Pick<ActivitySummary, 'actualStart' | 'actualFinish'>>;
   gating: ActivityEditorGating;
   hasComputedSchedule: boolean;
 }): GanttCellGate {
@@ -91,6 +95,15 @@ export function ganttCellGate({
       readOnly: true,
       reason: 'A milestone marks a moment, so it has no duration.',
     };
+  }
+
+  // **A started activity has no start to type** (ADR-0170 D3). The engine draws it from its actual
+  // and ignores a hand-placed start, so a typed one would save an inert placement and move the
+  // FINISH. Shut up front, read-only with the reason visible, rather than discovered at commit
+  // after the planner has typed a date (ADR-0083); the commit-time refusal in `cell-commit.ts` is
+  // the backstop. The sentence is the start handle's own, from the same constant.
+  if (key === 'earlyStart' && Boolean(activity.actualStart ?? activity.actualFinish)) {
+    return { writable: false, readable: true, readOnly: true, reason: START_EDGE_FROZEN_REASON };
   }
 
   if (!hasComputedSchedule && (key === 'earlyStart' || key === 'earlyFinish')) {

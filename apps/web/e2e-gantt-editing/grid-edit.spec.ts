@@ -628,20 +628,17 @@ test('a start date cannot be typed on a started activity, and the cell says why'
   await syncClient(page);
   await showGantt(page);
 
-  const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
-  await startCell(page).dblclick();
-  const field = page.getByRole('textbox', { name: /Start, Seeded 0/ });
-  await expect(field).toBeVisible();
-  await field.fill(asDisplayed(plusDays(before.earlyStart!, 1)));
-  await field.press('Enter');
-
-  // The refusal is spoken in the cell's own words — a typed value that vanished with no reason
-  // would be indistinguishable from a dead key.
-  // It is said twice on purpose — once as the cell's own error text and once through the
-  // announcer — so each is asserted by where it lives rather than by an ambiguous text match.
+  // The cell is SHUT up front (ADR-0083: read-only, not disabled), with the reason where a sighted
+  // planner can read it — a `title` — rather than discovered after typing a date. Asserted beside a
+  // sibling that is open, so "read-only everywhere" cannot be what passes.
   const refusal = /has started, so its start is its actual start/;
-  await expect(page.getByTestId('gantt-scroll').getByText(refusal)).toBeAttached();
-  await expect(page.getByTestId('announcer')).toContainText(refusal);
+  await expect(startCell(page)).toHaveAttribute('aria-readonly', 'true');
+  await expect(startCell(page)).toHaveAttribute('title', refusal);
+  await expect(durationCell(page)).not.toHaveAttribute('aria-readonly', 'true');
+
+  // Opening it does nothing: no field to type a value that could never be saved.
+  await startCell(page).dblclick();
+  await expect(page.getByRole('textbox', { name: /Start, Seeded 0/ })).toHaveCount(0);
 
   // And NOTHING was written: a placement on a started activity is inert and would have moved the
   // finish. Asserted at the API after the refusal has had every chance to be a write.

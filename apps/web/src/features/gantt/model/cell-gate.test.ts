@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
+import { START_EDGE_FROZEN_REASON } from './bar-drag';
 import { ganttCellGate } from './cell-gate';
 
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
@@ -25,9 +26,10 @@ const gatingFor = (over: Partial<Parameters<typeof deriveActivityEditorGating>[0
     ...over,
   });
 
-const task = { type: 'TASK' } as Pick<ActivitySummary, 'type'>;
-const summary = { type: 'WBS_SUMMARY' } as Pick<ActivitySummary, 'type'>;
-const milestone = { type: 'START_MILESTONE' } as Pick<ActivitySummary, 'type'>;
+type GateActivity = Pick<ActivitySummary, 'type' | 'actualStart' | 'actualFinish'>;
+const task = { type: 'TASK' } as GateActivity;
+const summary = { type: 'WBS_SUMMARY' } as GateActivity;
+const milestone = { type: 'START_MILESTONE' } as GateActivity;
 
 const gate = (
   key: Parameters<typeof ganttCellGate>[0]['key'],
@@ -107,6 +109,39 @@ describe('what the object itself cannot do', () => {
     // useless — nobody can type there. The object's reason wins.
     const shut = gate('earlyFinish', summary, { canWrite: false });
     expect(shut.reason).toMatch(/rolls this up/i);
+  });
+});
+
+describe('a started activity has no start to type', () => {
+  const started = { type: 'TASK', actualStart: '2026-01-05' } as GateActivity;
+  const finished = { type: 'TASK', actualFinish: '2026-01-09' } as GateActivity;
+
+  it.each([
+    ['an actual start', started],
+    ['an actual finish', finished],
+  ])('shuts the Start cell on %s, with the handle refusal as its reason', (_l, activity) => {
+    // Shaded rather than refused at commit (ADR-0083): the planner learns it before typing, and
+    // the sentence is the one the bar's start handle gives — one function, so they cannot drift.
+    const shut = gate('earlyStart', activity);
+    expect(shut).toMatchObject({ writable: false, readOnly: true, readable: true });
+    expect(shut.reason).toBe(START_EDGE_FROZEN_REASON);
+  });
+
+  it('leaves the other cells alone, Finish included', () => {
+    // A finish-edge write on a started activity is real: only the START is its actual.
+    for (const key of ['name', 'duration', 'earlyFinish', 'percentComplete'] as const) {
+      expect(gate(key, started).writable, key).toBe(true);
+    }
+  });
+
+  it('leaves the Start cell of an activity that has not started open', () => {
+    expect(gate('earlyStart', task).writable).toBe(true);
+  });
+
+  it('still lets a summary say why it rolls up, ahead of the started reason', () => {
+    expect(gate('earlyStart', { ...summary, actualStart: '2026-01-05' }).reason).toMatch(
+      /rolls this up/i,
+    );
   });
 });
 

@@ -59,7 +59,8 @@ Separately, the Gantt throws away every bar write's outcome: the host calls
   `apps/api/src/modules/schedule/engine/compute.ts:110-112`, which draws such an activity from its
   actual and ignores a hand-placed start), because a start-edge write there would save an inert
   placement, change the duration and move the **finish** — the opposite of the gesture's promise (CQ-2:
-  product owner, default stands). The typed `Start` cell refuses with the same reason. **Level-of-effort
+  product owner, default stands). The typed `Start` cell is **shut up front** — read-only with the same reason shown as its `title` (ADR-0083: shaded, not
+  disabled), so the planner learns it before typing — and its commit still refuses with that reason as a backstop. **Level-of-effort
   loses its Gantt resize**, which today refuses only milestones (`GanttPanel.tsx:797`) and so writes a
   duration the engine does not use. The diagram allows the same inert write on a started activity; that
   is filed as a `docs/TECH_DEBT.md` row for its own review rather than changed here.
