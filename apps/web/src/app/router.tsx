@@ -157,6 +157,9 @@ if (PLAN_DEEP_LINK) {
   void PlanDetailScreen.preload?.();
 }
 
+/** Whether the hierarchy warm-up has run; it only ever needs to. */
+let warmed = false;
+
 /**
  * Fetch the hierarchy chunks while the organisations query is still in flight.
  *
@@ -172,6 +175,11 @@ if (PLAN_DEEP_LINK) {
  * navigation re-requests the chunk and reaches `RouteErrorScreen` if it is genuinely missing.
  */
 function warmHierarchyScreens(): void {
+  // `_authed`'s `beforeLoad` runs on every navigation beneath it, so without this the four-screen
+  // fetch was re-issued on each one. A repeat is cheap (the loaders are memoised) but it was also
+  // re-scheduled each time, and the first call is the only one that does anything.
+  if (warmed) return;
+  warmed = true;
   // A plan URL opened directly is going to the plan, not up through the hierarchy: warming four
   // screens beside its chunks only queues them ahead of the bytes that are on the critical path.
   if (PLAN_DEEP_LINK) return;
@@ -181,6 +189,21 @@ function warmHierarchyScreens(): void {
   // The plan is the last stop of the walk the hierarchy warm-up serves. Without this its chunks were
   // fetched on the click that opens it, which put the whole plan graph on the in-app critical path.
   void PlanDetailScreen.preload?.();
+}
+
+/**
+ * Run `task` once the browser has nothing better to do, so a warm-up never competes with the route
+ * the user actually opened for the connection pool (six per origin under HTTP/1.1). `timeout` bounds
+ * the wait on a page that never goes idle; Safari has no `requestIdleCallback`, so a short timer
+ * stands in.
+ */
+function deferUntilIdle(task: () => void): void {
+  if (warmed) return;
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 2000 });
+  } else {
+    window.setTimeout(task, 300);
+  }
 }
 
 /**
@@ -199,7 +222,7 @@ const authedRoute = createRoute({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: '/sign-in', search: { redirect: location.href } });
     }
-    warmHierarchyScreens();
+    deferUntilIdle(warmHierarchyScreens);
     return { session };
   },
   component: AuthedLayout,
