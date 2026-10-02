@@ -49,8 +49,6 @@ const EXCLUDED: Record<string, string> = {
   'EditDependencyDialog.tsx': 'Two fields on an existing link.',
   'AddCrossPlanLinkDialog.tsx': 'Small form, one save.',
   'ShareLinksDialog.tsx': 'Creates a link in one action; holds no draft.',
-  'ActivityProgressPanels.tsx':
-    'Reports dirtiness UP to the editor, which registers for all six scopes.',
   'useScopeForm.ts': 'The hook itself, not a surface.',
 };
 
@@ -80,7 +78,7 @@ describe('the unsaved-work census', () => {
     // assertion below from passing against an empty census.
     expect(registered).toEqual(
       expect.arrayContaining([
-        'ActivityEditorDialog.tsx',
+        'ActivityEditorSession.tsx',
         'ActivityCreateDialog.tsx',
         'CalendarFormDialog.tsx',
         'CalendarExceptionsEditor.tsx',
