@@ -46,16 +46,6 @@ const EAGER_ROUTES: Readonly<Record<string, string>> = {
  * in `EAGER_ROUTES` with a reason, not here.
  */
 const SCHEDULED: Readonly<Record<string, string>> = {
-  AuditLogScreen: 'M2-T1',
-  CalendarsScreen: 'M2-T1',
-  MembersScreen: 'M2-T1',
-  MyActivityScreen: 'M2-T1',
-  RecentlyDeletedScreen: 'M2-T1',
-  ResourcesScreen: 'M2-T1',
-  ClientDetailScreen: 'M2-T2',
-  ClientsScreen: 'M2-T2',
-  OrgHomeScreen: 'M2-T2',
-  ProjectDetailScreen: 'M2-T2',
   PlanDetailScreen: 'M3-T1',
 };
 

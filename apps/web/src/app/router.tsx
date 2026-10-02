@@ -25,17 +25,7 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
-import { AuditLogScreen } from '@/routes/audit-log';
-import { CalendarsScreen } from '@/routes/calendars';
-import { ClientDetailScreen } from '@/routes/client-detail';
-import { ClientsScreen } from '@/routes/clients';
-import { MembersScreen } from '@/routes/members';
-import { MyActivityScreen } from '@/routes/my-activity';
-import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
-import { ProjectDetailScreen } from '@/routes/project-detail';
-import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
-import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
 
 /**
@@ -56,6 +46,28 @@ const AcceptInviteScreen = lazyRouteComponent(
   () => import('@/routes/accept-invite'),
   'AcceptInviteScreen',
 );
+const AuditLogScreen = lazyRouteComponent(() => import('@/routes/audit-log'), 'AuditLogScreen');
+const CalendarsScreen = lazyRouteComponent(() => import('@/routes/calendars'), 'CalendarsScreen');
+const ClientDetailScreen = lazyRouteComponent(
+  () => import('@/routes/client-detail'),
+  'ClientDetailScreen',
+);
+const ClientsScreen = lazyRouteComponent(() => import('@/routes/clients'), 'ClientsScreen');
+const MembersScreen = lazyRouteComponent(() => import('@/routes/members'), 'MembersScreen');
+const MyActivityScreen = lazyRouteComponent(
+  () => import('@/routes/my-activity'),
+  'MyActivityScreen',
+);
+const OrgHomeScreen = lazyRouteComponent(() => import('@/routes/org-home'), 'OrgHomeScreen');
+const ProjectDetailScreen = lazyRouteComponent(
+  () => import('@/routes/project-detail'),
+  'ProjectDetailScreen',
+);
+const RecentlyDeletedScreen = lazyRouteComponent(
+  () => import('@/routes/recently-deleted'),
+  'RecentlyDeletedScreen',
+);
+const ResourcesScreen = lazyRouteComponent(() => import('@/routes/resources'), 'ResourcesScreen');
 const AccountScreen = lazyRouteComponent(() => import('@/routes/account'), 'AccountScreen');
 const ForgotPasswordScreen = lazyRouteComponent(
   () => import('@/routes/forgot-password'),
@@ -129,6 +141,26 @@ const signUpRoute = createRoute({
 });
 
 /**
+ * Fetch the hierarchy chunks while the organisations query is still in flight.
+ *
+ * `indexRoute` reaches the organisation overview by a **programmatic redirect**, so no link was ever
+ * hovered and intent-preloading structurally cannot cover the one navigation every sign-in makes
+ * (`docs/specs/route-code-splitting/` M2-T2). Fired once the session is known to exist rather than
+ * beside the session query: a signed-out visitor is redirected to `/sign-in` and should not pay
+ * for screens they will not reach. A reader who only ever opens `/account` pays the same bytes they
+ * paid eagerly before the split, one wave later and off the critical path.
+ *
+ * No error handling is needed here: `lazyRouteComponent`'s loader catches its own import failure and
+ * resolves (`lazyRouteComponent.js:21-24`), so the returned promise never rejects, and the real
+ * navigation re-requests the chunk and reaches `RouteErrorScreen` if it is genuinely missing.
+ */
+function warmHierarchyScreens(): void {
+  for (const screen of [OrgHomeScreen, ClientsScreen, ClientDetailScreen, ProjectDetailScreen]) {
+    void screen.preload?.();
+  }
+}
+
+/**
  * Pathless layout route that guards everything under it. `beforeLoad` ensures
  * the session (from the shared `/me` query) and redirects unauthenticated users
  * to sign-in with a `redirect` back to where they were headed. The API always
@@ -144,6 +176,7 @@ const authedRoute = createRoute({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: '/sign-in', search: { redirect: location.href } });
     }
+    warmHierarchyScreens();
     return { session };
   },
   component: AuthedLayout,
