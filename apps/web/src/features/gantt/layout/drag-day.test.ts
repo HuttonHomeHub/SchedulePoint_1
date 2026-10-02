@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { barGeometry, chartAnchor } from './bar-geometry';
-import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from './drag-day';
+import {
+  columnsMoved,
+  dateAtChartX,
+  finishEdgePlacement,
+  spanToPlacement,
+  startDayAtChartX,
+} from './drag-day';
 
 import { anActivity } from '@/test/activity-fixture';
 
@@ -74,29 +80,91 @@ describe('startDayAtChartX', () => {
   });
 });
 
-describe('durationDaysForFinishAtX', () => {
-  it('counts inclusively — the 1st to the 5th is five days', () => {
-    expect(
-      durationDaysForFinishAtX({
-        startIso: '2026-02-01',
-        anchorIso: '2026-02-01',
-        pxPerDay: PX_PER_DAY,
-        x: 40,
-      }),
-    ).toBe(5);
+/** A Mon–Fri predicate over day offsets: day 0 is a Monday, offsets 5 and 6 (mod 7) are off. */
+const MON_FRI = (dayOffset: number): boolean => ((dayOffset % 7) + 7) % 7 < 5;
+/** A Monday, so `PLAN_MONDAY` offsets and `MON_FRI` agree. */
+const PLAN_MONDAY = '2026-03-02';
+
+describe('spanToPlacement', () => {
+  it('counts WORKING days across a weekend, not the calendar days the bar covers', () => {
+    // Fri (4) → Tue (8) is five columns and three working days. Writing five made the engine lay
+    // out five working days, and the bar came back two days longer than it was drawn.
+    expect(spanToPlacement({ startDay: 4, endDay: 8, isWorkingDay: MON_FRI })).toEqual({
+      startDay: 4,
+      durationDays: 3,
+    });
   });
 
-  it('floors at one day, so a drag cannot turn a task into a milestone', () => {
-    // A zero-duration activity IS a milestone. Changing an activity's type is not something a
-    // careless drag should be able to do, and there is no way to say "I meant that" afterwards.
+  it('rolls a non-working start FORWARD to the next working day', () => {
+    // Saturday (5) → Wednesday (9): the bar starts Monday (7), so Mon, Tue, Wed.
+    expect(spanToPlacement({ startDay: 5, endDay: 9, isWorkingDay: MON_FRI })).toEqual({
+      startDay: 7,
+      durationDays: 3,
+    });
+  });
+
+  it('honours a holiday exception, which a weekday mask alone would miss', () => {
+    // Wednesday (2) is a shutdown day: Mon–Fri is four working days, not five.
+    const withHoliday = (d: number): boolean => d !== 2 && MON_FRI(d);
     expect(
-      durationDaysForFinishAtX({
-        startIso: '2026-02-10',
-        anchorIso: '2026-02-01',
-        pxPerDay: PX_PER_DAY,
-        x: 0,
+      spanToPlacement({ startDay: 0, endDay: 4, isWorkingDay: withHoliday }).durationDays,
+    ).toBe(4);
+  });
+
+  it('returns the calendar span with no predicate — the plan calendar has not loaded', () => {
+    expect(spanToPlacement({ startDay: 4, endDay: 8, isWorkingDay: null })).toEqual({
+      startDay: 4,
+      durationDays: 5,
+    });
+  });
+
+  it('floors at one working day, so a drag cannot turn a task into a milestone', () => {
+    // A span drawn inside a weekend has no working day in it. Zero is a milestone.
+    expect(spanToPlacement({ startDay: 5, endDay: 6, isWorkingDay: MON_FRI }).durationDays).toBe(1);
+  });
+});
+
+describe('columnsMoved', () => {
+  it('rounds to the nearest column, and never returns -0', () => {
+    expect(columnsMoved(14, 10)).toBe(1);
+    expect(columnsMoved(-14, 10)).toBe(-1);
+    expect(Object.is(columnsMoved(-4, 10), 0)).toBe(true);
+  });
+
+  it('is zero for a scale that cannot be divided by', () => {
+    expect(columnsMoved(50, 0)).toBe(0);
+  });
+});
+
+describe('finishEdgePlacement', () => {
+  const base = { plannedStartIso: PLAN_MONDAY, isWorkingDay: MON_FRI };
+
+  it('keeps a Mon–Fri task five days long when its finish is dragged a weekend out and back', () => {
+    // Mon 2 → Fri 6 is five working days. Drag the finish seven columns (to Fri 13) and it is ten.
+    // Calendar arithmetic would have said 12.
+    expect(
+      finishEdgePlacement({ ...base, startIso: '2026-03-02', finishIso: '2026-03-06', columns: 7 })
+        .durationDays,
+    ).toBe(10);
+  });
+
+  it('writes the duration the pointer drew across a weekend', () => {
+    // Fri 6 → Tue 10 drawn: three working days.
+    expect(
+      finishEdgePlacement({ ...base, startIso: '2026-03-06', finishIso: '2026-03-06', columns: 4 })
+        .durationDays,
+    ).toBe(3);
+  });
+
+  it('never lets the finish pass the start', () => {
+    expect(
+      finishEdgePlacement({
+        ...base,
+        startIso: '2026-03-04',
+        finishIso: '2026-03-06',
+        columns: -9,
       }),
-    ).toBe(1);
+    ).toEqual({ startDay: 2, durationDays: 1 });
   });
 });
 
@@ -120,6 +188,30 @@ describe('the round trip a drag actually depends on', () => {
       expect(dateAtChartX(ANCHOR, pxPerDay, geometry!.x), `at ${pxPerDay}px/day`).toBe(
         '2026-03-17',
       );
+    }
+  });
+});
+
+describe('the edge placements round-trip against the geometry the bar is drawn with', () => {
+  it('holds at every zoom preset scale', () => {
+    // Draw the bar, "drag" its finish by whole columns taken from a pixel delta at that scale, and
+    // the days written must not depend on the scale — a conversion that only holds at 10 px/day
+    // holds by coincidence.
+    for (const pxPerDay of [1, 2.5, 6, 10, 24, 60]) {
+      const activity = anActivity({ earlyStart: '2026-03-02', earlyFinish: '2026-03-06' });
+      const geometry = barGeometry(activity, ANCHOR, pxPerDay);
+      expect(geometry).not.toBeNull();
+      const columns = columnsMoved(7 * pxPerDay, pxPerDay);
+      expect(
+        finishEdgePlacement({
+          plannedStartIso: PLAN_MONDAY,
+          startIso: '2026-03-02',
+          finishIso: '2026-03-06',
+          columns,
+          isWorkingDay: MON_FRI,
+        }).durationDays,
+        `at ${String(pxPerDay)}px/day`,
+      ).toBe(10);
     }
   });
 });

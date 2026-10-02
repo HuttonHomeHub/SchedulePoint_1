@@ -64,6 +64,8 @@ function setup() {
       hasComputedSchedule: true,
       barDateSource: 'early',
       hoursPerDayFor: HOURS_PER_DAY,
+      plannedStartIso: null,
+      isWorkingDay: null,
       updateFields,
       announce,
       onCellClosed: NOOP,

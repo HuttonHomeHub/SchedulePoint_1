@@ -11534,3 +11534,10 @@ a picker which commits to the server disables itself while saving; a re-render o
 popup is consistent with the log, and nothing has established which. Not #420's shape: no text was
 typed and nothing was reset. Seen once in the five shard-1 runs read on 2026-10-01. **Next:** read the
 trace of a recurrence before changing the product or the helper. **Trigger:** a second occurrence.
+
+### 431. The diagram's start edge and move write an inert placement on a started activity
+
+**Status:** open · **Verified:** 2026-10-02 (read in `TsldPanel.tsx`, `hit-test.ts` and `compute.ts`; not reproduced in a browser) ·
+**Raised:** 2026-10-02 (ADR-0170 D3) · **Size:** S · **Owner:** web
+
+The diagram arms a bar-end resize on `isResizeEligibleType` alone (the edge zones, `hit-test.ts:91-93`: not a milestone, level-of-effort or summary; and the `Shift+←/→` nudge, `TsldPanel.tsx:2254`); neither file mentions an actual date. The move was not read for this and is the same shape to check. The engine draws an activity with any actual from that actual and ignores a hand-placed start — `isFrozenByActuals` (`compute.ts:110-112`) feeds the Visual pass at `compute.ts:364-366` — so on a started or finished activity a start-edge drag saves a `visualStart` the schedule never uses (and, if the move is ungated too, so does a move). The start edge also writes a changed `durationDays` beside it, so the **finish** moves, which is the opposite of what that gesture announces ("finish unchanged"). The Gantt refuses the same gesture (ADR-0170 D3: no left handle, and the typed `Start` refuses with a reason), so the two views now disagree. **Next:** decide whether the diagram refuses with a spoken reason, as the Gantt does, or whether a placement on a started activity should mean something; then one shared rule in place of two. **Trigger:** a report of a started bar that "snapped back" after a drag, or the next change to the diagram's edge gate.

@@ -13,6 +13,14 @@ import {
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
+import {
+  bindMonFriCalendar,
+  expectWeekday,
+  plusDays,
+  weekdayOf,
+  workingDaysInclusive,
+} from './calendar-support';
+
 /**
  * **M3 — a bar moved from the Gantt, checked at the API.**
  *
@@ -35,7 +43,11 @@ import { recalculate } from '../e2e-support/toolbar';
 interface ActivityRow {
   id: string;
   name: string;
+  version: number;
+  durationDays: number;
   earlyStart: string | null;
+  earlyFinish: string | null;
+  visualEffectiveFinish: string | null;
   visualStart: string | null;
   visualEffectiveStart: string | null;
   constraintType: string | null;
@@ -66,20 +78,56 @@ const byName = (rows: ActivityRow[], name: string): ActivityRow => {
   return row;
 };
 
-async function ganttPlan(page: Page, count = 3): Promise<string> {
+async function ganttPlan(page: Page, count = 3, monFri = false): Promise<string> {
   const orgSlug = await onboard(page, Date.now());
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
   await startEditing(page);
+  // A weekend proves nothing on a plan that does not skip it, so the working-day cases bind a
+  // Mon–Fri calendar — asserted, not assumed — before anything is seeded (ADR-0170).
+  if (monFri) await bindMonFriCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, count);
   await recalculate(page);
   return orgSlug;
 }
 
-/** The bar for a row, located by its activity id rather than by its copy (ADR-0091's rule). */
-function barFor(page: Page, activityId: string) {
-  return page.locator(`[data-activity-id="${activityId}"] .cursor-ew-resize`);
+/**
+ * An edge handle for a row, located by its activity id and its edge rather than by its copy
+ * (ADR-0091's rule) or by its cursor class. **The class is not an identity**: this was
+ * `.cursor-ew-resize` with a count of one until the start handle made it two (ADR-0170).
+ */
+function edgeFor(page: Page, activityId: string, edge: 'start' | 'finish') {
+  return page.locator(`[data-activity-id="${activityId}"] [data-bar-edge="${edge}"]`);
+}
+
+/**
+ * Drag a row's edge handle by whole columns, from the handle's measured centre.
+ *
+ * The scale is read off the bar the plan drew (`columnsCovered` day columns wide) rather than
+ * assumed, because it is whatever the zoom preset framed for this viewport; dragging by whole
+ * multiples of it from the handle's own centre is what keeps the drop on a column and not a pixel
+ * either side of a boundary. Asserted at the API by every caller — a drag that moved the picture
+ * proves the preview, not the write.
+ */
+async function dragEdge(
+  page: Page,
+  activityId: string,
+  edge: 'start' | 'finish',
+  columns: number,
+  columnsCovered: number,
+): Promise<void> {
+  const row = page.locator(`[data-activity-id="${activityId}"]`);
+  const bar = await row.locator('span[style*="cursor: grab"]').boundingBox();
+  const handle = await edgeFor(page, activityId, edge).boundingBox();
+  if (bar === null || handle === null) throw new Error('the bar or its handle has no box');
+  const pxPerDay = bar.width / columnsCovered;
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + columns * pxPerDay, y, { steps: 8 });
+  await page.mouse.up();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -208,12 +256,49 @@ test('a bar carries a pointer resize handle a planner can actually reach', async
   await showGantt(page);
 
   const first = byName(await readActivities(page, orgSlug), 'Seeded 0');
-  const handle = barFor(page, first.id);
 
   // Present and non-zero, which is the property `e2e-toolbar-fit` had to learn to assert: a control
   // shrunk to zero visible width is in the DOM, has no overhang, and is pointer-unreachable.
+  const handle = edgeFor(page, first.id, 'finish');
   await expect(handle).toHaveCount(1);
   const box = await handle.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThan(0);
   expect(box?.height ?? 0).toBeGreaterThan(0);
+});
+
+/**
+ * **A finish-edge drag across a weekend lands where it was dropped** (ADR-0170 D2).
+ *
+ * Counted in calendar days the drag wrote a duration two days too long for a span that crossed a
+ * weekend, and the engine — which counts WORKING days into that field — laid the bar out two days
+ * past the drop. The assertion is the stored finish equalling the day the pointer released on.
+ */
+test('a finish-edge drag across a weekend lands the finish where it was dropped', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const orgSlug = await ganttPlan(page, 3, true);
+  await showGantt(page);
+
+  const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  expectWeekday(before.earlyStart, 'the fixture start');
+  expect(weekdayOf(before.earlyFinish!), 'the fixture finish is a Friday').toBe(5);
+  // Four columns right of a Friday is the Tuesday after: the drag crosses a weekend.
+  const target = plusDays(before.earlyFinish!, 4);
+  expectWeekday(target, 'the drop day');
+
+  await dragEdge(page, before.id, 'finish', 4, 5);
+
+  await expect
+    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').durationDays, {
+      timeout: 20_000,
+    })
+    .toBe(workingDaysInclusive(before.earlyStart!, target));
+  await expect
+    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').earlyFinish, {
+      timeout: 20_000,
+    })
+    .toBe(target);
+  // A finish-edge drag writes a duration and no constraint, as it always has.
+  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').constraintType).toBeNull();
 });

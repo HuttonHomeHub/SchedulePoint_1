@@ -1,3 +1,4 @@
+import { drawnSpanPlacement, type DrawnPlacement } from '@/features/tsld/render/snap';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 
 /**
@@ -21,6 +22,10 @@ import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-tim
  * NEAREST working day, so a Saturday drop was written back as **Friday** — earlier than the planner
  * placed it — and then the engine rolled from the client's wrong answer. The ghost previews the
  * roll; the PATCH carries the drop.
+ *
+ * That holds for a MOVE. A resize writes a duration alongside its start, and the duration is only
+ * meaningful from a working day, so the start-edge write rolls the start forward itself, as the
+ * diagram's resize does (`spanToPlacement`, ADR-0170 D2).
  */
 
 /** The date a chart x-coordinate falls on. */
@@ -53,23 +58,63 @@ export function startDayAtChartX({
 }
 
 /**
- * A duration in whole days for a bar whose right edge is dragged to chart x.
- *
- * Inclusive (ADR-0023): a bar from the 1st to the 5th is five days, so the arithmetic is
- * `finish - start + 1`. Floored at 1, because a task with a zero duration is a milestone and
- * changing an activity's TYPE is not something a drag should be able to do by accident.
+ * **Whole columns a pointer moved**, rounded to the nearest — the one rounding every edge gesture
+ * and its live preview share, so the bar a planner sees under the pointer is the bar that is
+ * written. `|| 0` folds `-0` (a small leftward drag rounds to it) into `0`, which would otherwise
+ * read as "moved" to a strict-equality check.
  */
-export function durationDaysForFinishAtX({
-  startIso,
-  anchorIso,
-  pxPerDay,
-  x,
+export function columnsMoved(deltaX: number, pxPerDay: number): number {
+  if (!Number.isFinite(pxPerDay) || pxPerDay <= 0) return 0;
+  return Math.round(deltaX / pxPerDay) || 0;
+}
+
+/**
+ * **A drawn span of days → the placement the workspace writes, counted in WORKING days.**
+ *
+ * `durationDays` is a working-day quantity. Counting the calendar days a bar covers and writing
+ * that makes the engine lay out that many *working* days, so a five-day task stretched over a
+ * weekend came back two days longer than it was drawn — the defect the diagram fixed with
+ * `drawnSpanPlacement` (ADR-0170 D2) and the Gantt's three "hold one end" writes (the finish-edge
+ * drag and both typed date cells) still carried. This is that same function, so one question has
+ * one answer in both views, and the start is rolled FORWARD to a working day as the diagram does.
+ *
+ * Days are counted from `plannedStart`, which is the origin the predicate is keyed to — NOT from
+ * the chart anchor the bars are drawn from (see the top of this file). With no predicate (the plan
+ * calendar has not loaded) the calendar span is returned, the pre-fix behaviour for that window
+ * only.
+ */
+export function spanToPlacement({
+  startDay,
+  endDay,
+  isWorkingDay,
 }: {
+  startDay: number;
+  endDay: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  return drawnSpanPlacement(startDay, endDay, isWorkingDay);
+}
+
+/**
+ * The placement for dragging a bar's **finish** edge `columns` columns, the start held.
+ *
+ * Clamped so the finish never passes the start: `drawnSpanPlacement` orders its two ends, so an
+ * unclamped leftward drag would silently turn into a start-edge write.
+ */
+export function finishEdgePlacement({
+  plannedStartIso,
+  startIso,
+  finishIso,
+  columns,
+  isWorkingDay,
+}: {
+  plannedStartIso: string;
   startIso: string;
-  anchorIso: string;
-  pxPerDay: number;
-  x: number;
-}): number {
-  const finish = dateAtChartX(anchorIso, pxPerDay, x);
-  return Math.max(1, daysBetween(startIso, finish) + 1);
+  finishIso: string;
+  columns: number;
+  isWorkingDay: ((dayOffset: number) => boolean) | null;
+}): DrawnPlacement {
+  const startDay = daysBetween(plannedStartIso, startIso);
+  const endDay = Math.max(daysBetween(plannedStartIso, finishIso) + columns, startDay);
+  return spanToPlacement({ startDay, endDay, isWorkingDay });
 }

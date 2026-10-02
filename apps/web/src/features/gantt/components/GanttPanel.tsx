@@ -11,7 +11,12 @@ import {
   chartWidth,
   spanGeometry,
 } from '../layout/bar-geometry';
-import { dateAtChartX, durationDaysForFinishAtX, startDayAtChartX } from '../layout/drag-day';
+import {
+  columnsMoved,
+  dateAtChartX,
+  finishEdgePlacement,
+  startDayAtChartX,
+} from '../layout/drag-day';
 import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   ganttLinkPaths,
@@ -32,6 +37,7 @@ import {
 } from '../layout/row-model';
 import {
   NUDGE_DAYS,
+  barEdgeGate,
   barMoveGate,
   moveAnnouncement,
   resizeAnnouncement,
@@ -773,8 +779,12 @@ export function GanttPanel({
     // An axis day, as the pointer path sends: a finish milestone's is one after its date (#381).
     const startDay =
       daysBetween(plannedStartIso, start) + finishMilestoneDayShift(activity.type) + deltaDays;
-    drag.moveTo(activity.id, startDay);
-    drag.announce(moveAnnouncement(activity.name, addCalendarDays(start, deltaDays)));
+    // The host announces once the write has settled (ADR-0170 D6); only a refusal is said here.
+    void drag.moveTo(
+      activity.id,
+      startDay,
+      moveAnnouncement(activity.name, addCalendarDays(start, deltaDays)),
+    );
     return true;
   };
 
@@ -788,13 +798,9 @@ export function GanttPanel({
   const resizeBar = (row: GanttRow, deltaDays: number): boolean => {
     if (drag === undefined || row.kind !== 'activity') return false;
     const activity = row.activity;
-    const gate = barMoveGate(activity, drag);
-    if (!gate.movable) {
+    const gate = barEdgeGate(activity, drag, 'finish');
+    if (!gate.resizable) {
       if (gate.reason !== null) drag.announce(gate.reason);
-      return true;
-    }
-    if (activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE') {
-      drag.announce('A milestone marks a moment, so it has no duration.');
       return true;
     }
     const next = Math.max(1, activity.durationDays + deltaDays);
@@ -802,8 +808,7 @@ export function GanttPanel({
       drag.announce(`${activity.name} is already one day long.`);
       return true;
     }
-    drag.resizeTo(activity.id, next);
-    drag.announce(resizeAnnouncement(activity.name, next));
+    void drag.resizeTo(activity.id, next, resizeAnnouncement(activity.name, next));
     return true;
   };
 
@@ -1564,7 +1569,10 @@ function GanttRowView({
   // function the keyboard nudge uses, so a bar a planner cannot nudge is a bar they cannot drag —
   // two affordances for one capability must not disagree about whether it exists.
   const moveGate = drag === undefined ? null : barMoveGate(activity, drag);
-  const barStartIso = barDatesFor(activity, barDateSource).start;
+  // The same gate the keyboard resize reads (ADR-0170 D3), so a handle is never lit where the
+  // keyboard would refuse.
+  const finishGate = drag === undefined ? null : barEdgeGate(activity, drag, 'finish');
+  const { start: barStartIso, finish: barFinishIso } = barDatesFor(activity, barDateSource);
   const commitDrag = useCallback(
     (deltaX: number) => {
       if (drag === null || drag === undefined) return;
@@ -1576,8 +1584,9 @@ function GanttRowView({
         pxPerDay,
         x: geometry.x + deltaX,
       });
-      drag.moveTo(activity.id, startDay);
-      drag.announce(
+      void drag.moveTo(
+        activity.id,
+        startDay,
         moveAnnouncement(activity.name, dateAtChartX(anchorIso, pxPerDay, geometry.x + deltaX)),
       );
     },
@@ -1589,36 +1598,39 @@ function GanttRowView({
   });
 
   /**
-   * The finish-edge resize (M3-T3).
-   *
-   * `onTsldResize` with `durationDays` alone — no `startDay` — which is ADR-0052 M3's finish-edge
-   * semantic verbatim rather than a new one invented here. The start edge is deliberately NOT
-   * offered on this surface yet: it carries a MODE-dependent meaning (EARLY writes SNET +
-   * durationDays, VISUAL writes visualStart + durationDays), and shipping it without the mode
-   * statement the canvas has beside it would leave a planner unable to tell which of two writes
-   * their drag just made.
+   * The finish-edge resize: the start is held and the duration is the WORKING days from it to
+   * where the edge was dropped (`finishEdgePlacement`, ADR-0170 D2) — not the calendar days the
+   * bar then covers, which made a five-day task stretched over a weekend come back two days
+   * longer than it was drawn. `onTsldResize` with `durationDays` alone, ADR-0052 M3's finish-edge
+   * semantic.
    */
   const commitResize = useCallback(
     (deltaX: number) => {
       if (drag === null || drag === undefined) return;
-      if (geometry === null || barStartIso === null) return;
-      const durationDays = durationDaysForFinishAtX({
+      if (geometry === null || barStartIso === null || barFinishIso === null) return;
+      const { plannedStartIso } = drag;
+      if (plannedStartIso === null) return;
+      const columns = columnsMoved(deltaX, pxPerDay);
+      if (columns === 0) return;
+      const { durationDays } = finishEdgePlacement({
+        plannedStartIso,
         startIso: barStartIso,
-        anchorIso,
-        pxPerDay,
-        // The bar's right edge is exclusive in pixels and inclusive in dates, so a day is taken off
-        // before converting — without it every resize would read one day long.
-        x: geometry.x + geometry.width + deltaX - pxPerDay,
+        finishIso: barFinishIso,
+        columns,
+        isWorkingDay: drag.isWorkingDay,
       });
       if (durationDays === activity.durationDays) return;
-      drag.resizeTo(activity.id, durationDays);
-      drag.announce(resizeAnnouncement(activity.name, durationDays));
+      void drag.resizeTo(
+        activity.id,
+        durationDays,
+        resizeAnnouncement(activity.name, durationDays),
+      );
     },
     [
       drag,
       geometry,
       barStartIso,
-      anchorIso,
+      barFinishIso,
       pxPerDay,
       activity.id,
       activity.name,
@@ -1626,9 +1638,10 @@ function GanttRowView({
     ],
   );
   const barResize = useBarPointerDrag({
-    enabled: moveGate?.movable === true && geometry !== null && !geometry.milestone,
+    enabled: finishGate?.resizable === true && geometry !== null && !geometry.milestone,
     onCommit: commitResize,
   });
+
   const ghost =
     showVariance && variance !== undefined
       ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
@@ -1921,14 +1934,16 @@ function GanttRowView({
               </span>
             )}
             {/* The finish-edge handle. Rendered only when the bar can be resized, so it is never a
-                lit-but-inert grab zone — and never on a milestone, which has no length to change.
-                Eight pixels wide, straddling the edge, which is the smallest zone a pointer finds
-                reliably without eating the neighbouring bar's grab area. Pointer-only by design:
-                the keyboard equivalent is Shift+←/→ on the row (ADR-0052's chord), so this is an
-                additional affordance rather than the only one. */}
-            {moveGate?.movable === true ? (
+                lit-but-inert grab zone: `barEdgeGate`'s answer, the one the keyboard resize reads —
+                no milestone, level-of-effort or summary (ADR-0170 D3). Eight pixels wide,
+                straddling the edge, the smallest zone a pointer finds reliably without eating the
+                neighbouring bar's. Pointer-only and `aria-hidden`: the keyboard equivalent is
+                Shift+←/→ on the row, so this is an additional affordance rather than the only one.
+                `data-bar-edge` is the stable handle for a journey to find it by. */}
+            {finishGate?.resizable === true && !geometry.milestone ? (
               <span
                 aria-hidden="true"
+                data-bar-edge="finish"
                 className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
                 style={{ left: geometry.x + geometry.width - 4 }}
                 onPointerDown={barResize.onPointerDown}
