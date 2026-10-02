@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ActivitySummary } from '@repo/types';
-import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
+import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-hook-form';
 import type { z } from 'zod';
 
 /**
@@ -53,6 +53,33 @@ export interface ScopeFormOptions {
    * host owns the single ordered focus decision itself.
    */
   shouldFocusError?: boolean;
+}
+
+/**
+ * Mark a scope saved without discarding what was typed while the save was in flight (TECH_DEBT #430).
+ *
+ * The fields stay editable after Save is pressed, so by the time the response lands the form can hold
+ * text the request never carried. A plain `reset(sent)` replaced it with the sent value and cleared
+ * the dirty marker over unsaved work. `reset(…, { keepDirtyValues })` is NOT the answer: it keeps
+ * every field RHF still counts dirty against the OLD defaults, which includes each field the reader
+ * submitted and never touched again — so the scope would stay marked unsaved after a save that took
+ * everything. The question is "what changed since the submit", so ask it directly: reset to what was
+ * sent (everything is clean, the sent values are the new defaults), then put back, as edits, only the
+ * fields whose live value no longer equals what was sent. Top-level keys only — every scope's values
+ * are flat JSON-shaped scalars, which is also why `JSON.stringify` is a sufficient equality.
+ */
+export function resetKeepingLaterEdits<TValues extends FieldValues>(
+  form: UseFormReturn<TValues>,
+  sent: TValues,
+): void {
+  const live = form.getValues();
+  form.reset(sent);
+  for (const key of Object.keys(live) as Array<Path<TValues>>) {
+    const typed = live[key];
+    if (JSON.stringify(typed) !== JSON.stringify(sent[key])) {
+      form.setValue(key, typed, { shouldDirty: true });
+    }
+  }
 }
 
 export function useScopeForm<TValues extends FieldValues>(
