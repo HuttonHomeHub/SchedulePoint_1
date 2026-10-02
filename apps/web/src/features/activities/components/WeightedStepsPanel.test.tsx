@@ -1,9 +1,11 @@
 import type { ActivityStep, ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { stepKeys } from '../api/use-activity-steps';
+import type { ScopeGate } from '../lib/activity-editor-gating';
 
 import { WeightedStepsPanel } from './ActivityProgressPanels';
 
@@ -48,6 +50,31 @@ const STEP: ActivityStep = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
+/**
+ * The host's side of the seam (ADR-0169 D-10): the panel hands its values up and the host owns the
+ * write, so a save here is `reset` plus the host's "Saved." flag — what `ActivityEditorSession` does.
+ */
+function Host({ gate }: { gate: ScopeGate }): React.ReactElement {
+  const [saved, setSaved] = useState(false);
+  return (
+    <WeightedStepsPanel
+      orgSlug="acme"
+      activity={ACTIVITY}
+      gate={gate}
+      onSave={(_steps, reset) => {
+        reset([]);
+        setSaved(true);
+      }}
+      pending={false}
+      saved={saved}
+      error={null}
+      announce={vi.fn()}
+    />
+  );
+}
+
+const OPEN_GATE: ScopeGate = { writable: true, reason: null, readable: true };
+
 function renderPanel() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -55,14 +82,7 @@ function renderPanel() {
   queryClient.setQueryData(stepKeys.listByActivity('acme', 'a1'), [STEP]);
   return render(
     <QueryClientProvider client={queryClient}>
-      <WeightedStepsPanel
-        orgSlug="acme"
-        planId="pl1"
-        activity={ACTIVITY}
-        gate={{ writable: true, reason: null, readable: true }}
-        open
-        announce={vi.fn()}
-      />
+      <Host gate={OPEN_GATE} />
     </QueryClientProvider>,
   );
 }
@@ -92,17 +112,12 @@ describe('WeightedStepsPanel', () => {
     queryClient.setQueryData(stepKeys.listByActivity('acme', 'a1'), [STEP]);
     render(
       <QueryClientProvider client={queryClient}>
-        <WeightedStepsPanel
-          orgSlug="acme"
-          planId="pl1"
-          activity={ACTIVITY}
+        <Host
           gate={{
             writable: false,
             reason: 'Start editing to change this activity.',
             readable: true,
           }}
-          open
-          announce={vi.fn()}
         />
       </QueryClientProvider>,
     );

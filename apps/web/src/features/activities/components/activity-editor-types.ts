@@ -1,7 +1,14 @@
-import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
+import type {
+  ActivityStep,
+  ActivitySummary,
+  CalendarSummary,
+  DependencySummary,
+} from '@repo/types';
 
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
+import type { ProgressFormValues } from '../schemas/activity-schemas';
+import type { StepsFormValues } from '../schemas/step-schemas';
 
 /** The props the host sees — and the session is handed the same ones, minus `open`. */
 export interface ActivityEditorDialogProps {
@@ -84,6 +91,42 @@ export interface ScopeSave {
   onError: (error: Error) => void;
 }
 
+/** One Reported-progress save (`PATCH …/progress`). */
+export interface ProgressSave {
+  activity: ActivitySummary;
+  hoursPerDay: number | undefined;
+  values: ProgressFormValues;
+  /** `adjustments` is how many repairs the server applied to keep the report consistent. */
+  onSuccess: (adjustments: number) => void;
+  onError: (error: Error) => void;
+}
+
+/** One weighted-steps save (`PUT …/steps`). */
+export interface StepsSave {
+  activity: ActivitySummary;
+  steps: StepsFormValues['steps'];
+  onSuccess: (saved: ActivityStep[]) => void;
+  onError: (error: Error) => void;
+}
+
+/**
+ * The three writes the editor makes, as the frame offers them to the session (ADR-0169 D-10).
+ *
+ * The frame owns the mutation observers so a save that finishes after the editor closed still
+ * records its undo and announces. Each `save*` settles ITS OWN callbacks, so overlapping saves each
+ * report. The `*Pending` flags are the observer's: they follow the most recent call, and — the
+ * observers outliving a session — a fresh opening sees the previous opening's save as pending until
+ * it settles, which keeps a second write from racing a first on the same row version.
+ */
+export interface ActivityEditorSaves {
+  saveFields: (save: ScopeSave) => void;
+  saveProgress: (save: ProgressSave) => void;
+  saveSteps: (save: StepsSave) => void;
+  fieldsPending: boolean;
+  progressPending: boolean;
+  stepsPending: boolean;
+}
+
 /**
  * What the frame hands one opening of the editor: everything the dialog was given except the
  * frame-owned `open`, `onSaved` and `activity` (the row arrives non-optional, keyed), plus the seams
@@ -95,6 +138,5 @@ export interface ActivityEditorSessionProps extends Omit<
 > {
   handleRef: React.Ref<ActivityEditorSessionHandle>;
   activity: ActivitySummary;
-  onSave: (save: ScopeSave) => void;
-  savePending: boolean;
+  saves: ActivityEditorSaves;
 }

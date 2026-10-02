@@ -63,12 +63,13 @@ function renderProgress() {
   return render(
     <QueryClientProvider client={client()}>
       <ReportedProgressPanel
-        orgSlug="acme"
-        planId="pl1"
         activity={ACTIVITY}
         hoursPerDay={8}
         gate={OPEN_GATE}
-        announce={vi.fn()}
+        onSave={vi.fn()}
+        pending={false}
+        saved={false}
+        error={null}
       />
     </QueryClientProvider>,
   );

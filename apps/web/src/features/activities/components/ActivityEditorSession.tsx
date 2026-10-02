@@ -1,4 +1,4 @@
-import { type ActivitySummary } from '@repo/types';
+import { type ActivityStep, type ActivitySummary } from '@repo/types';
 import { useCallback, useImperativeHandle, useMemo, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
@@ -7,12 +7,17 @@ import { activityContextFacts } from '../lib/activity-editor-context';
 import type { ActivityEditorTab } from '../lib/activity-editor-intent';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
 import { useDurationSeed } from '../model/use-duration-seed';
-import { isDurationDerivedType, isMilestoneType } from '../schemas/activity-schemas';
+import {
+  isDurationDerivedType,
+  isMilestoneType,
+  type ProgressFormValues,
+} from '../schemas/activity-schemas';
 import {
   activityCostSchema,
   activityGeneralSchema,
   activitySchedulingSchema,
 } from '../schemas/activity-scope-schemas';
+import type { StepsFormValues } from '../schemas/step-schemas';
 
 import { seedCost, seedGeneral, seedScheduling } from './activity-editor-seeds';
 import type { ActivityEditorSessionProps } from './activity-editor-types';
@@ -73,6 +78,12 @@ type TabKey = ActivityEditorTab;
 /** The three Progress-tab scopes whose forms live inside the panels rather than the host. */
 type ProgressScopeKey = 'progress' | 'measure' | 'steps';
 
+/** The Progress tab's panels, each of which saves and fails on its own. */
+type PanelSlot = ProgressScopeKey;
+
+/** Every scope that can say "Saved.": the tabs' definition scopes and the Progress tab's panels. */
+type SaveSlot = TabKey | PanelSlot;
+
 /**
  * One opening of the editor (ADR-0169 D3): every form and every other piece of working state, mounted
  * when the dialog opens and gone when it closes. What must outlive an opening — the `<dialog>` and
@@ -84,8 +95,7 @@ export function ActivityEditorSession({
   orgSlug,
   planId,
   onClose,
-  onSave,
-  savePending,
+  saves,
   gating,
   intent,
   activity,
@@ -110,8 +120,31 @@ export function ActivityEditorSession({
    * that owns it.
    */
   const [saveError, setSaveError] = useState<{ scope: TabKey; message: string } | null>(null);
-  /** The scope that last saved, cleared on its next edit — the visible half of the save signal. */
-  const [savedScope, setSavedScope] = useState<TabKey | null>(null);
+  /**
+   * The scopes that have saved — the visible half of the save signal, shown by `ScopeSaveBar` while
+   * the scope is clean. A record rather than one slot because the Progress tab shows three scopes at
+   * once, each of which says "Saved." for itself. Cleared per scope when its next save begins.
+   */
+  const [savedSlots, setSavedSlots] = useState<Partial<Record<SaveSlot, true>>>({});
+  const markSaved = (slot: SaveSlot, saved: boolean): void =>
+    setSavedSlots((held) => {
+      if (saved) return { ...held, [slot]: true };
+      const { [slot]: _cleared, ...rest } = held;
+      return rest;
+    });
+  /**
+   * A Progress-tab panel's save failure, shown inside the panel that made the write. These panels have
+   * no "Refresh this section" recovery (their rows are not re-seeded from the list), so they carry a
+   * message and nothing else — held here, not in the mutation, because the mutation outlives the
+   * session (ADR-0169 D-10) and its error would greet the next opening.
+   */
+  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelSlot, string>>>({});
+  const setPanelError = (slot: PanelSlot, message: string | null): void =>
+    setPanelErrors((held) => {
+      if (message !== null) return { ...held, [slot]: message };
+      const { [slot]: _cleared, ...rest } = held;
+      return rest;
+    });
   /** Whether the discard confirmation (spec US-5) is showing. */
   const [confirmingClose, setConfirmingClose] = useState(false);
 
@@ -342,18 +375,19 @@ export function ActivityEditorSession({
   };
 
   /**
-   * Save one scope through the frame, which owns the mutation (see {@link ActivityEditorDialog}). A
-   * 409 surfaces its message and the list refetch re-seeds, so a retry carries the version the other
-   * tab's save produced.
+   * Save one definition scope through the frame, which owns the mutation (see
+   * {@link ActivityEditorDialog}). A 409 surfaces its message and the list refetch re-seeds, so a retry
+   * carries the version the other tab's save produced.
    */
   const saveScope = (
-    scope: TabKey,
+    scope: 'general' | 'scheduling' | 'cost',
     patch: Record<string, unknown>,
     label: string,
     resetTo: (after: ActivitySummary) => void,
   ): void => {
     setSaveError((current) => (current?.scope === scope ? null : current));
-    onSave({
+    markSaved(scope, false);
+    saves.saveFields({
       activity,
       patch,
       label,
@@ -362,7 +396,7 @@ export function ActivityEditorSession({
       // clears without discarding what the user just saved.
       onSuccess: (after) => {
         resetTo(after);
-        setSavedScope(scope);
+        markSaved(scope, true);
       },
       onError: (error) => {
         setSaveError({ scope, message: error.message });
@@ -370,6 +404,57 @@ export function ActivityEditorSession({
       },
     });
   };
+
+  /** The Progress tab's three writes: the panel's own error and "Saved.", never another scope's. */
+  const savePanel = (slot: PanelSlot, begin: () => void): void => {
+    setPanelError(slot, null);
+    markSaved(slot, false);
+    begin();
+  };
+
+  const saveMeasure = (patch: Record<string, unknown>, reset: () => void): void =>
+    savePanel('measure', () =>
+      saves.saveFields({
+        activity,
+        patch,
+        label: 'Measure',
+        onSuccess: () => {
+          reset();
+          markSaved('measure', true);
+        },
+        onError: (error) => setPanelError('measure', error.message),
+      }),
+    );
+
+  const saveProgress = (values: ProgressFormValues, reset: () => void): void =>
+    savePanel('progress', () =>
+      saves.saveProgress({
+        activity,
+        hoursPerDay,
+        values,
+        onSuccess: () => {
+          reset();
+          markSaved('progress', true);
+        },
+        onError: (error) => setPanelError('progress', error.message),
+      }),
+    );
+
+  const saveSteps = (
+    steps: StepsFormValues['steps'],
+    reset: (saved: ActivityStep[]) => void,
+  ): void =>
+    savePanel('steps', () =>
+      saves.saveSteps({
+        activity,
+        steps,
+        onSuccess: (saved) => {
+          reset(saved);
+          markSaved('steps', true);
+        },
+        onError: (error) => setPanelError('steps', error.message),
+      }),
+    );
 
   const tabs: TabDescriptor<TabKey>[] = [
     {
@@ -541,8 +626,8 @@ export function ActivityEditorSession({
                     <ScopeSaveBar
                       gate={gating.general}
                       dirty={general.isDirty}
-                      pending={savePending}
-                      saved={savedScope === 'general'}
+                      pending={saves.fieldsPending}
+                      saved={savedSlots.general === true}
                       label="Save general"
                     />
                   </FieldGateProvider>
@@ -604,8 +689,8 @@ export function ActivityEditorSession({
                     <ScopeSaveBar
                       gate={gating.scheduling}
                       dirty={scheduling.isDirty}
-                      pending={savePending}
-                      saved={savedScope === 'scheduling'}
+                      pending={saves.fieldsPending}
+                      saved={savedSlots.scheduling === true}
                       label="Save scheduling"
                     />
                   </FieldGateProvider>
@@ -691,21 +776,23 @@ export function ActivityEditorSession({
               {current === 'progress' ? (
                 <div className="flex flex-col gap-8">
                   <ReportedProgressPanel
-                    orgSlug={orgSlug}
-                    planId={planId}
                     activity={activity}
                     hoursPerDay={hoursPerDay}
                     gate={gating.progress}
-                    announce={announce}
+                    onSave={saveProgress}
+                    pending={saves.progressPending}
+                    saved={savedSlots.progress === true}
+                    error={panelErrors.progress ?? null}
                     onDirtyChange={onProgressDirty}
                   />
                   <ValueMeasurePanel
                     orgSlug={orgSlug}
                     activity={activity}
                     gate={gating.measure}
-                    pending={savePending}
-                    saved={savedScope === 'progress'}
-                    onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
+                    pending={saves.fieldsPending}
+                    saved={savedSlots.measure === true}
+                    error={panelErrors.measure ?? null}
+                    onSave={saveMeasure}
                     onDirtyChange={onMeasureDirty}
                   />
                   {/* The flag pair that decides whether weighted steps exist at all.
@@ -719,10 +806,12 @@ export function ActivityEditorSession({
                   {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
                     <WeightedStepsPanel
                       orgSlug={orgSlug}
-                      planId={planId}
                       activity={activity}
                       gate={gating.steps}
-                      open
+                      onSave={saveSteps}
+                      pending={saves.stepsPending}
+                      saved={savedSlots.steps === true}
+                      error={panelErrors.steps ?? null}
                       announce={announce}
                       // Only the **Steps** entry point asks for this. Landing at the top of a
                       // three-panel tab would make that action feel like it opened the wrong thing.
@@ -753,8 +842,8 @@ export function ActivityEditorSession({
                     <ScopeSaveBar
                       gate={gating.cost}
                       dirty={cost.isDirty}
-                      pending={savePending}
-                      saved={savedScope === 'cost'}
+                      pending={saves.fieldsPending}
+                      saved={savedSlots.cost === true}
                       label="Save cost"
                     />
                   </FieldGateProvider>

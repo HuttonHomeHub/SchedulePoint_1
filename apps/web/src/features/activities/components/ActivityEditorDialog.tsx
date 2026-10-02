@@ -1,13 +1,16 @@
 import { useRef } from 'react';
 
-import { useUpdateActivityFields } from '../api/use-activities';
+import { useUpdateActivityFields, useUpdateActivityProgress } from '../api/use-activities';
+import { useReplaceActivitySteps } from '../api/use-activity-steps';
 import { activitySubtitle } from '../lib/activity-editor-context';
 import { ACTIVITY_TYPE_LABELS } from '../schemas/activity-schemas';
 
 import type {
   ActivityEditorDialogProps,
   ActivityEditorSessionHandle,
+  ProgressSave,
   ScopeSave,
+  StepsSave,
 } from './activity-editor-types';
 import { ActivityEditorSession } from './ActivityEditorSession';
 
@@ -53,7 +56,8 @@ import { Dialog } from '@/components/ui/dialog';
  * **Why the mutation is here and the forms are not.** A save can finish after the editor has closed.
  * Its undo record (`onSaved`) and its announcement are the user's only signal that it landed, and a
  * per-call mutate callback is dropped when the observer that made the call unmounts — so the
- * observer lives in the component that does not. Session-local effects (marking a scope clean,
+ * observers (definition fields, reported progress, weighted steps) live in the component that does
+ * not, and each call settles through its own `mutateAsync` promise. Session-local effects (marking a scope clean,
  * "Saved.") ride along as callbacks and are harmless against a session that is gone.
  *
  * **Why the `<dialog>` is here.** Rendered by the session it would be created and destroyed with each
@@ -76,31 +80,76 @@ export function ActivityEditorDialog({
 }: ActivityEditorDialogProps): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
+  const progress = useUpdateActivityProgress(orgSlug, planId);
+  // The steps endpoint is addressed by the activity; a closed frame has none, and nothing can call it.
+  const replaceSteps = useReplaceActivitySteps(orgSlug, planId, activity?.id ?? '');
   const sessionRef = useRef<ActivityEditorSessionHandle>(null);
 
   /**
-   * Save one scope. `version` comes from the live row **now**, not from when the editor opened —
-   * see the docblock above. The undo record and the announcement are made here, not by the session,
-   * so they survive the session being unmounted mid-save — and so does the announcement of a
-   * failure, which the session can no longer display.
+   * What every failed save does. A mounted session shows the failure beside what owns it. With the
+   * session gone (closed mid-save) nothing shows it, and a save that failed silently reads as one
+   * that landed — SC 4.1.3 — so the live region is the only signal left.
    */
-  const saveScope = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
-    update.mutate(
-      { activityId: row.id, version: row.version, patch },
-      {
-        onSuccess: (after) => {
-          onSaved?.(row, after);
-          onSuccess(after);
-          announce(`${label} saved.`);
-        },
-        onError: (error) => {
-          onError(error);
-          // A mounted session shows the failure beside the tab that owns it. With the session gone
-          // (closed mid-save) nothing shows it, and a save that failed silently reads as one that
-          // landed — SC 4.1.3 — so the live region is the only signal left.
-          if (!sessionRef.current) announce(`${label} not saved: ${error.message}`);
-        },
+  const failed =
+    (label: string, onError: (error: Error) => void) =>
+    (error: Error): void => {
+      onError(error);
+      if (!sessionRef.current) announce(`${label} not saved: ${error.message}`);
+    };
+
+  // **Each call settles through the promise `mutateAsync` returns, never a per-call `mutate`
+  // callback.** react-query v5 fires those only for the latest call an observer made
+  // (`mutationObserver.js` ~126-147), so a first save still in flight when a second began lost its
+  // undo record, its "Saved." and its announcement. The promise belongs to its own call.
+
+  /**
+   * Save one definition scope. `version` comes from the live row **now**, not from when the editor
+   * opened — see the docblock above. The undo record and the announcement are made here, not by the
+   * session, so they survive the session being unmounted mid-save.
+   */
+  const saveFields = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
+    void update.mutateAsync({ activityId: row.id, version: row.version, patch }).then(
+      (after) => {
+        onSaved?.(row, after);
+        onSuccess(after);
+        announce(`${label} saved.`);
       },
+      failed(label, onError),
+    );
+  };
+
+  const saveProgress = ({
+    activity: row,
+    hoursPerDay,
+    values,
+    onSuccess,
+    onError,
+  }: ProgressSave) => {
+    void progress
+      .mutateAsync({ activityId: row.id, version: row.version, hoursPerDay, ...values })
+      .then(
+        (result) => {
+          // The server reports the repairs it applied to keep the report self-consistent
+          // (ADR-0035 §6). Dropping them in the port would hide a silent correction.
+          const adjustments = result.meta?.warnings?.length ?? 0;
+          onSuccess(adjustments);
+          announce(
+            adjustments > 0
+              ? `Progress saved with ${adjustments} adjustment${adjustments === 1 ? '' : 's'}.`
+              : 'Progress saved.',
+          );
+        },
+        failed('Progress', onError),
+      );
+  };
+
+  const saveSteps = ({ activity: row, steps, onSuccess, onError }: StepsSave): void => {
+    void replaceSteps.mutateAsync({ version: row.version, steps }).then(
+      (saved) => {
+        onSuccess(saved);
+        announce('Steps saved.');
+      },
+      failed('Steps', onError),
     );
   };
 
@@ -140,8 +189,14 @@ export function ActivityEditorDialog({
           planId={planId}
           activity={activity}
           onClose={onClose}
-          onSave={saveScope}
-          savePending={update.isPending}
+          saves={{
+            saveFields,
+            saveProgress,
+            saveSteps,
+            fieldsPending: update.isPending,
+            progressPending: progress.isPending,
+            stepsPending: replaceSteps.isPending,
+          }}
           {...sessionProps}
         />
       ) : null}

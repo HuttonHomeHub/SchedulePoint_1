@@ -1,11 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ActivitySummary } from '@repo/types';
-import { useEffect, useRef } from 'react';
+import type { ActivityStep, ActivitySummary } from '@repo/types';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
 import { measureBody } from '../api/scope-bodies';
-import { useUpdateActivityProgress } from '../api/use-activities';
-import { useActivitySteps, useReplaceActivitySteps } from '../api/use-activity-steps';
+import { useActivitySteps } from '../api/use-activity-steps';
 import type { ScopeGate } from '../lib/activity-editor-gating';
 import { durationInputProps } from '../model/duration-field';
 import {
@@ -88,16 +87,15 @@ function useReportDirty(report: ((dirty: boolean) => void) | undefined, isDirty:
 
 /** Reported progress — the Contributor path. Moves the activity's dates. */
 export function ReportedProgressPanel({
-  orgSlug,
-  planId,
   activity,
   hoursPerDay,
   gate,
-  announce,
+  onSave,
+  pending,
+  saved,
+  error,
   onDirtyChange,
 }: {
-  orgSlug: string;
-  planId: string;
   activity: ActivitySummary;
   /**
    * The activity's effective working hours per day, or `undefined` when the calendar list has not
@@ -106,7 +104,12 @@ export function ReportedProgressPanel({
    */
   hoursPerDay: number | undefined;
   gate: ScopeGate;
-  announce: (message: string) => void;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10); `reset` marks the form clean. */
+  onSave: (values: ProgressFormValues, reset: () => void) => void;
+  pending: boolean;
+  saved: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error: string | null;
   /**
    * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
    *
@@ -116,7 +119,6 @@ export function ReportedProgressPanel({
    */
   onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
-  const mutation = useUpdateActivityProgress(orgSlug, planId);
   const { form, isDirty } = useScopeForm<ProgressFormValues>(
     progressFormSchema,
     (row) => ({
@@ -134,26 +136,9 @@ export function ReportedProgressPanel({
 
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
-  const onSubmit = form.handleSubmit((submitted) => {
-    mutation.mutate(
-      // `version` is read from the live row at submit time, not captured on open — a sibling
-      // scope's save bumps it, and a stale one would 409 every time after the first.
-      { activityId: activity.id, version: activity.version, hoursPerDay, ...submitted },
-      {
-        onSuccess: (result) => {
-          form.reset(submitted);
-          // The server reports the repairs it applied to keep the report self-consistent
-          // (ADR-0035 §6). Dropping them in the port would hide a silent correction.
-          const warnings = result.meta?.warnings ?? [];
-          announce(
-            warnings.length > 0
-              ? `Progress saved with ${warnings.length} adjustment${warnings.length === 1 ? '' : 's'}.`
-              : 'Progress saved.',
-          );
-        },
-      },
-    );
-  });
+  // `version` is read from the live row by the host at submit time, not captured on open — a sibling
+  // scope's save bumps it, and a stale one would 409 every time after the first.
+  const onSubmit = form.handleSubmit((submitted) => onSave(submitted, () => form.reset(submitted)));
 
   return (
     <form
@@ -167,9 +152,9 @@ export function ReportedProgressPanel({
       <FieldGateProvider gate={gate}>
         <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
         <FormProblemCount errors={form.formState.errors} />
-        {mutation.isError ? (
+        {error ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {mutation.error.message}
+            {error}
           </p>
         ) : null}
         {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
@@ -238,8 +223,8 @@ export function ReportedProgressPanel({
         <ScopeSaveBar
           gate={gate}
           dirty={isDirty}
-          pending={mutation.isPending}
-          saved={mutation.isSuccess}
+          pending={pending}
+          saved={saved}
           label="Save progress"
         />
       </FieldGateProvider>
@@ -256,6 +241,7 @@ export function ValueMeasurePanel({
   onOpenResources,
   pending,
   saved = false,
+  error = null,
   onDirtyChange,
 }: {
   orgSlug: string;
@@ -266,6 +252,8 @@ export function ValueMeasurePanel({
   pending: boolean;
   /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
   saved?: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error?: string | null;
   /**
    * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
    *
@@ -311,6 +299,11 @@ export function ValueMeasurePanel({
       <FieldGateProvider gate={gate}>
         <PanelHeading title={MEASURE_SECTION_TITLE} effect={MEASURE_SECTION_DESCRIPTION} />
         <FormProblemCount errors={form.formState.errors} />
+        {error ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {error}
+          </p>
+        ) : null}
         {EARNED_VALUE_ENABLED ? (
           <>
             {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
@@ -385,19 +378,25 @@ function formatRollup(value: number | null): string {
  */
 export function WeightedStepsPanel({
   orgSlug,
-  planId,
   activity,
   gate,
-  open,
+  onSave,
+  pending,
+  saved,
+  error,
   announce,
   autoFocusHeading = false,
   onDirtyChange,
 }: {
   orgSlug: string;
-  planId: string;
   activity: ActivitySummary;
   gate: ScopeGate;
-  open: boolean;
+  /** Saves through the host, which owns the mutation (ADR-0169 D-10); `reset` re-seeds from the saved list. */
+  onSave: (steps: StepsFormValues['steps'], reset: (saved: ActivityStep[]) => void) => void;
+  pending: boolean;
+  saved: boolean;
+  /** The last save's failure, held by the host so it cannot outlive the opening. */
+  error: string | null;
   announce: (message: string) => void;
   /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
   autoFocusHeading?: boolean;
@@ -417,18 +416,21 @@ export function WeightedStepsPanel({
    */
 }): React.ReactElement {
   const steps = useActivitySteps(orgSlug, activity.id);
-  const replace = useReplaceActivitySteps(orgSlug, planId, activity.id);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (open && autoFocusHeading) headingRef.current?.focus();
-  }, [open, autoFocusHeading, activity.id]);
+    if (autoFocusHeading) headingRef.current?.focus();
+  }, [autoFocusHeading, activity.id]);
 
-  // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists on the next paint.
-  // A no-dep effect runs after every commit and drains a one-shot callback.
+  // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists after the next commit.
+  // A no-dep LAYOUT effect runs in every commit and drains a one-shot callback. Not a passive effect:
+  // React flushes the previous commit's pending passive effects before it renders a new update, and
+  // that flush runs after the click handler has set the callback — so it drained against the OLD DOM
+  // and dropped focus to <body> whenever a click followed a commit closely (observed in the editor's
+  // "focuses the new row's name field on add" test once the steps mutation left this component).
   const listRef = useRef<HTMLUListElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<(() => void) | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pendingFocus.current) {
       pendingFocus.current();
       pendingFocus.current = null;
@@ -454,7 +456,6 @@ export function WeightedStepsPanel({
   // loaded rows cannot be tripped by a sibling scope's save refetching the activity.
   const loadedSteps = steps.data;
   useEffect(() => {
-    if (!open) return;
     reset({
       steps: (loadedSteps ?? []).map((step) => ({
         name: step.name,
@@ -462,9 +463,8 @@ export function WeightedStepsPanel({
         percentComplete: step.percentComplete,
       })),
     });
-    replace.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only on open / target / load change
-  }, [open, activity.id, loadedSteps]);
+  }, [activity.id, loadedSteps]);
 
   // The same weighted mean the server computes, so the planner sees the figure before saving.
   const watchedSteps = useWatch({ control, name: 'steps' });
@@ -476,18 +476,10 @@ export function WeightedStepsPanel({
     activity.physicalPercentComplete ?? null,
   );
 
-  const onSubmit = handleSubmit((values) => {
-    replace.mutate(
-      // Read from the live row at submit time, like every other scope — a sibling save bumps it.
-      { version: activity.version, steps: values.steps },
-      {
-        onSuccess: (saved) => {
-          reset({ steps: saved.map((s) => ({ ...s })) });
-          announce('Steps saved.');
-        },
-      },
-    );
-  });
+  // The host reads the version from the live row at submit time, like every other scope.
+  const onSubmit = handleSubmit((values) =>
+    onSave(values.steps, (savedSteps) => reset({ steps: savedSteps.map((s) => ({ ...s })) })),
+  );
 
   const rowAt = (index: number): Element | undefined =>
     listRef.current?.querySelectorAll(':scope > li')[index];
@@ -576,9 +568,9 @@ export function WeightedStepsPanel({
         >
           <FieldGateProvider gate={gate}>
             <FormProblemCount errors={errors} />
-            {replace.isError ? (
+            {error ? (
               <p role="alert" className="text-destructive-text text-sm">
-                {replace.error.message}
+                {error}
               </p>
             ) : null}
 
@@ -688,8 +680,8 @@ export function WeightedStepsPanel({
             <ScopeSaveBar
               gate={gate}
               dirty={isDirty}
-              pending={replace.isPending}
-              saved={replace.isSuccess}
+              pending={pending}
+              saved={saved}
               label="Save steps"
             />
           </FieldGateProvider>
