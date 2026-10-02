@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.12.1
+
+### Patch Changes
+
+- [#755](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/755) [`60a50a6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60a50a6ecac9b4d096ed3209cb698f1029226bee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import report now truncates an over-long code, name or sentence from the uploaded file instead of passing it through unbounded. The import dialog's layout and calendar checkboxes report themselves busy while the dry-run re-runs. A tooltip on a trigger in a very short window no longer covers the trigger when neither side has room for it.
+
 ## 0.12.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.156.2
+
+### Patch Changes
+
+- [#755](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/755) [`60a50a6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60a50a6ecac9b4d096ed3209cb698f1029226bee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import report now truncates an over-long code, name or sentence from the uploaded file instead of passing it through unbounded. The import dialog's layout and calendar checkboxes report themselves busy while the dry-run re-runs. A tooltip on a trigger in a very short window no longer covers the trigger when neither side has room for it.
+
+- [#755](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/755) [`60a50a6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60a50a6ecac9b4d096ed3209cb698f1029226bee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Text typed into an activity editor tab while its save is in flight is no longer replaced when the save completes.
+- Updated dependencies [[`60a50a6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60a50a6ecac9b4d096ed3209cb698f1029226bee)]:
+  - @repo/interchange@0.12.1
+
 ## 0.156.1
 
 ### Patch Changes
