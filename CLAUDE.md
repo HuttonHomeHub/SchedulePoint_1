@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1428 web
 > source files with 46 Playwright suites beside the base journey, and
-> 169 ADRs.
+> 170 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -491,7 +491,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0092** _(Accepted; M5 withdrawn)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
-- **ADR-0095** _(Accepted)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
+- **ADR-0095** _(Accepted; amended by ADR-0170)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
 - **ADR-0096** _(Accepted)_ — Deleted work expires, and purge is refused structurally → [`0096-deleted-work-expires-and-purge-is-refused.md`](docs/adr/0096-deleted-work-expires-and-purge-is-refused.md)
 - **ADR-0097** _(Accepted)_ — The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped → [`0097-a-theme-is-a-system-not-a-palette.md`](docs/adr/0097-a-theme-is-a-system-not-a-palette.md)
 - **ADR-0098** _(Accepted)_ — The landing is the organisation overview → [`0098-the-landing-is-the-organisation-overview.md`](docs/adr/0098-the-landing-is-the-organisation-overview.md)
@@ -531,7 +531,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0131** _(Accepted)_ — A spec header states its approval, and a citation is what closes it → [`0131-a-spec-header-states-its-approval-and-a-citation-is-what-closes-it.md`](docs/adr/0131-a-spec-header-states-its-approval-and-a-citation-is-what-closes-it.md)
 - **ADR-0132** _(Accepted)_ — An alert says whether it is an event or a standing condition → [`0132-an-alert-says-whether-it-is-an-event-or-a-standing-condition.md`](docs/adr/0132-an-alert-says-whether-it-is-an-event-or-a-standing-condition.md)
 - **ADR-0133** _(Accepted)_ — A command surface declares its rows, and the pen leads the one it unlocks → [`0133-a-command-surface-declares-its-rows-and-the-pen-leads-the-one-it-unlocks.md`](docs/adr/0133-a-command-surface-declares-its-rows-and-the-pen-leads-the-one-it-unlocks.md)
-- **ADR-0134** _(Accepted)_ — A typed date writes the constraint a drag writes → [`0134-a-typed-date-writes-the-constraint-a-drag-writes.md`](docs/adr/0134-a-typed-date-writes-the-constraint-a-drag-writes.md)
+- **ADR-0134** _(Accepted; amended by ADR-0170)_ — A typed date writes the constraint a drag writes → [`0134-a-typed-date-writes-the-constraint-a-drag-writes.md`](docs/adr/0134-a-typed-date-writes-the-constraint-a-drag-writes.md)
 - **ADR-0135** _(Accepted)_ — A container hands focus back when somebody else removes the control you were on → [`0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md`](docs/adr/0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md)
 - **ADR-0136** _(Accepted)_ — A rule is enforced where the artefact lands, and the roster is derived → [`0136-a-rule-is-enforced-where-the-artefact-lands.md`](docs/adr/0136-a-rule-is-enforced-where-the-artefact-lands.md)
 - **ADR-0137** _(Accepted)_ — A notification is a record, and the build waits for somebody to notify → [`0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md`](docs/adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)
@@ -567,6 +567,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0167** _(Accepted; D1 and D3 amended by ADR-0168)_ — Applying levelling is a placement the planner makes → [`0167-applying-levelling-is-a-placement-the-planner-makes.md`](docs/adr/0167-applying-levelling-is-a-placement-the-planner-makes.md)
 - **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
 - **ADR-0169** _(Accepted)_ — An editor's working state lives for one opening → [`0169-an-editors-working-state-lives-for-one-opening.md`](docs/adr/0169-an-editors-working-state-lives-for-one-opening.md)
+- **ADR-0170** _(Accepted)_ — The Gantt's start edge writes what the diagram's writes, counted in working days → [`0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md`](docs/adr/0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)
@@ -932,7 +933,6 @@ When operating in this repo, Claude Code should:
    "no check in this suite failed" event is a weaker claim than it reads as, in
    three distinct ways, **all three of which occurred on one afternoon**
    (2026-08-22, six times across PRs #347, #349 and #351):
-
    - **one app can own several suites**, so a suite completing says nothing
      about the run whose jobs you care about;
    - the event can name a **superseded** suite, cancelled by a newer push;
@@ -1035,90 +1035,89 @@ When operating in this repo, Claude Code should:
     needed that only they can give**. Nothing else qualifies — not a finished
     milestone, not a good moment to summarise, not a long turn.
 
-    - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
-      approved programme lost **seven and a half hours** between two milestones
-      (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
-      blocked: a milestone landed, a progress report was written, the turn ended,
-      and the session sat idle until the product owner typed. From the inside that
-      is indistinguishable from working — which is exactly why it needs a rule
-      rather than an intention.
-    - **So chain the work inside the turn.** Finish a slice, commit it, push it,
-      and start the next one **in the same turn**. Report at the end of the turn,
-      not instead of continuing.
-    - **And arm a wake-up as the FIRST action of the turn** (`send_later`,
-      ~25 minutes), carrying the remaining milestone list. Not last, not "before
-      the turn ends". A turn boundary is a real limit; being unable to cross it
-      alone is not a reason to stop, because the tool to cross it exists. This
-      session used that tool to babysit a pull request and not to continue the
-      work — which is the whole lesson.
-    - **"Before the turn can end" is what this bullet said until 2026-08-25, and
-      that wording is the defect.** It permits arming last, and arming last means
-      remembering at exactly the moment you are least likely to: a wake-up fired
-      at 15:57, was not re-armed, and the session sat idle 16:03–18:02 while the
-      product owner had twice asked for continuous progress. Correct advice that
-      cannot work is ADR-0076 Class 3 — the same shape as a stage banner telling
-      its reader to re-run `ls | wc -l`.
-    - **So the instruction lives in the fired message, not in this file.** A
-      wake-up's own first line orders its own re-arming, which is the only part
-      of the mechanism that does not depend on anybody consulting a document.
-      That is ADR-0058's move one layer over — replace vigilance with something
-      the machine carries — and 2026-08-25 is the evidence: four wake-ups fired,
-      three re-armed themselves correctly, and the fourth stopped only because
-      its terminal condition had been met. **It is still not a gate**, and cannot
-      be: nothing in CI can observe whether a session re-armed. Treat it as the
-      weak instrument §19.11's last bullet describes, and give the message a
-      written **terminal condition** so "stop" is a fact it can check rather than
-      a judgement it has to make.
-    - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
-      arm one out of band, delete the outstanding trigger first.** On 2026-08-26
-      two were live at once: one armed at 11:16 in response to a firing, and a
-      second armed at 11:33 mid-turn after a pull request was opened, without the
-      first having fired. The older was due at 11:39 carrying **"Branch is pushed;
-      no PR opened yet"** and a milestone listed as remaining that had already
-      landed. Had it fired it would have sent the session to write an ADR that
-      existed and open a pull request that was open. The bullet above puts the
-      re-arming instruction inside the fired message precisely so the mechanism
-      cannot go stale — and this is the mechanism going stale anyway, by being
-      duplicated, which no amount of care inside one message can prevent. Found
-      only because the product owner asked whether the wake-ups were working.
-      `list_triggers` shows what is outstanding; `delete_trigger` removes it.
-    - **And if the chain looks dead, re-arm anyway — a firing you have not yet
-      been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
-      16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
-run_once_fired`) and its notification was delivered **at 16:47 — about
-      forty-one minutes late**, after the product owner had already asked
-      whether the wake-ups were working. Nothing re-armed in between, so the
-      loop sat dead with the epic half-built. That is the previous bullet's own
-      failure one day later and in the opposite direction: it guards against
-      **two** live triggers, and this was **none**.
-      **The first version of this bullet said the notification "never
-      surfaced", and committed that as fact twenty-five minutes before it
-      arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
-      about a delivery channel whose latency nothing here measures, written into
-      the register bullet whose whole subject is not trusting an unobserved
-      event. The remedy below does not change, because it covers both cases;
-      only the diagnosis was wrong, and it is corrected in place rather than
-      quietly edited.
-      The bullet above puts the re-arming instruction inside the fired message
-      so the mechanism cannot go stale, and that is exactly why it cannot cover
-      this case — the instruction is _in the message that was never read_. So
-      the rule gains its second half: **whenever you touch an epic whose
-      terminal condition is unmet and `list_triggers` comes back empty, arm
-      one.** That is a state you can check, rather than an event you have to
-      have noticed. It is still not a gate and cannot be: nothing in CI can
-      observe whether a session is armed. Weak instrument, per §19.11's last
-      bullet — but a checkable state beats a remembered event.
-    - **And check the terminal condition is reachable before arming it.** One
-      written the same day as this bullet required the work to be "merged and
-      released, tag and publish job confirmed" — for a documentation change with
-      **no changeset**, which opens no Version Packages PR and cuts no release.
-      A loop whose exit test can never pass does not stop; it re-arms forever
-      while looking diligent. The failure is the same Class 3 shape as the wording
-      three bullets up, committed in the message that fixed it: state the
-      condition, then ask what would actually make it true.
-    - **If something genuinely needs an answer**, ask it, then **keep working on
-      everything that does not depend on it**. A blocking question blocks one
-      milestone, not the programme.
+        - **The failure mode is ending the turn, and it is silent.** On 2026-08-08 an
+          approved programme lost **seven and a half hours** between two milestones
+          (`ce4e6c5` at 23:33, `b710cbd` at 07:03). Nothing failed and nothing was
+          blocked: a milestone landed, a progress report was written, the turn ended,
+          and the session sat idle until the product owner typed. From the inside that
+          is indistinguishable from working — which is exactly why it needs a rule
+          rather than an intention.
+        - **So chain the work inside the turn.** Finish a slice, commit it, push it,
+          and start the next one **in the same turn**. Report at the end of the turn,
+          not instead of continuing.
+        - **And arm a wake-up as the FIRST action of the turn** (`send_later`,
+          ~25 minutes), carrying the remaining milestone list. Not last, not "before
+          the turn ends". A turn boundary is a real limit; being unable to cross it
+          alone is not a reason to stop, because the tool to cross it exists. This
+          session used that tool to babysit a pull request and not to continue the
+          work — which is the whole lesson.
+        - **"Before the turn can end" is what this bullet said until 2026-08-25, and
+          that wording is the defect.** It permits arming last, and arming last means
+          remembering at exactly the moment you are least likely to: a wake-up fired
+          at 15:57, was not re-armed, and the session sat idle 16:03–18:02 while the
+          product owner had twice asked for continuous progress. Correct advice that
+          cannot work is ADR-0076 Class 3 — the same shape as a stage banner telling
+          its reader to re-run `ls | wc -l`.
+        - **So the instruction lives in the fired message, not in this file.** A
+          wake-up's own first line orders its own re-arming, which is the only part
+          of the mechanism that does not depend on anybody consulting a document.
+          That is ADR-0058's move one layer over — replace vigilance with something
+          the machine carries — and 2026-08-25 is the evidence: four wake-ups fired,
+          three re-armed themselves correctly, and the fourth stopped only because
+          its terminal condition had been met. **It is still not a gate**, and cannot
+          be: nothing in CI can observe whether a session re-armed. Treat it as the
+          weak instrument §19.11's last bullet describes, and give the message a
+          written **terminal condition** so "stop" is a fact it can check rather than
+          a judgement it has to make.
+        - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
+          arm one out of band, delete the outstanding trigger first.** On 2026-08-26
+          two were live at once: one armed at 11:16 in response to a firing, and a
+          second armed at 11:33 mid-turn after a pull request was opened, without the
+          first having fired. The older was due at 11:39 carrying **"Branch is pushed;
+          no PR opened yet"** and a milestone listed as remaining that had already
+          landed. Had it fired it would have sent the session to write an ADR that
+          existed and open a pull request that was open. The bullet above puts the
+          re-arming instruction inside the fired message precisely so the mechanism
+          cannot go stale — and this is the mechanism going stale anyway, by being
+          duplicated, which no amount of care inside one message can prevent. Found
+          only because the product owner asked whether the wake-ups were working.
+          `list_triggers` shows what is outstanding; `delete_trigger` removes it.
+        - **And if the chain looks dead, re-arm anyway — a firing you have not yet
+          been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
+          16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
+
+    run*once_fired`) and its notification was delivered **at 16:47 — about
+forty-one minutes late**, after the product owner had already asked
+whether the wake-ups were working. Nothing re-armed in between, so the
+loop sat dead with the epic half-built. That is the previous bullet's own
+failure one day later and in the opposite direction: it guards against
+**two** live triggers, and this was **none**.
+**The first version of this bullet said the notification "never
+surfaced", and committed that as fact twenty-five minutes before it
+arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
+about a delivery channel whose latency nothing here measures, written into
+the register bullet whose whole subject is not trusting an unobserved
+event. The remedy below does not change, because it covers both cases;
+only the diagnosis was wrong, and it is corrected in place rather than
+quietly edited.
+The bullet above puts the re-arming instruction inside the fired message
+so the mechanism cannot go stale, and that is exactly why it cannot cover
+this case — the instruction is \_in the message that was never read*. So
+the rule gains its second half: **whenever you touch an epic whose
+terminal condition is unmet and `list_triggers` comes back empty, arm
+    one.** That is a state you can check, rather than an event you have to
+    have noticed. It is still not a gate and cannot be: nothing in CI can
+    observe whether a session is armed. Weak instrument, per §19.11's last
+    bullet — but a checkable state beats a remembered event. - **And check the terminal condition is reachable before arming it.** One
+    written the same day as this bullet required the work to be "merged and
+    released, tag and publish job confirmed" — for a documentation change with
+    **no changeset**, which opens no Version Packages PR and cuts no release.
+    A loop whose exit test can never pass does not stop; it re-arms forever
+    while looking diligent. The failure is the same Class 3 shape as the wording
+    three bullets up, committed in the message that fixed it: state the
+    condition, then ask what would actually make it true. - **If something genuinely needs an answer**, ask it, then **keep working on
+    everything that does not depend on it**. A blocking question blocks one
+    milestone, not the programme.
 
 13. **A shared primitive's keyboard contract is reviewed before release** (ADR-0111).
     Changing which keys `Deck`, `Toolbar`, `Menu`, `Combobox`, `Tabs`, `Dialog` or a
@@ -1141,7 +1140,6 @@ run_once_fired`) and its notification was delivered **at 16:47 — about
 
 14. **Spend the expensive model on decisions, not on keystrokes** (product owner, 2026-09-29).
     The standard does not change with the model; what changes is which model does which part.
-
     - **Opus plans, Sonnet builds, Haiku searches** — and each is pinned in an agent's
       frontmatter, never passed per call from memory. Planners (**feature-analyst**,
       **ui-architect**, **database-architect**) are Opus; implementation goes to the

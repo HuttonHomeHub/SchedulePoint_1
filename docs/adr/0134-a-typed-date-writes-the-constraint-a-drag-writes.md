@@ -11,6 +11,8 @@
 - **Amended by:** ADR-0148 (2026-09-21) — the `SNET` branch for a typed `Start` is deleted with
   the scheduling modes; a typed start always hand-places. (Header note added by the 2026-09-23
   reconciliation pass; ADR-0148 recorded the amendment and this file did not.)
+- **Amended by:** ADR-0170 (2026-10-02) — a typed `Start` and `Finish` count working days through the
+  diagram's `drawnSpanPlacement`, not calendar days; a typed `Start` on an activity with actuals is refused.
 - **Spec:** [`docs/specs/gantt-editing-gaps/`](../specs/gantt-editing-gaps/) — Milestone 3
 
 ## Context
