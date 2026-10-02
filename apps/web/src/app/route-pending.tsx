@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { PageContainer, Skeleton } from '@/components/ui/page';
 
@@ -30,13 +30,15 @@ import { PageContainer, Skeleton } from '@/components/ui/page';
  * hosts that region is itself still loading.
  */
 export function RoutePending(): React.JSX.Element {
-  const [message, setMessage] = useState('');
-  useEffect(() => setMessage('Loading…'), []);
+  const status = useRef<HTMLSpanElement>(null);
+  // Written to the DOM rather than through state: the element has no React children to reconcile,
+  // and the text must land after the empty element is already in the document.
+  useEffect(() => {
+    if (status.current) status.current.textContent = 'Loading…';
+  }, []);
   return (
     <PageContainer aria-busy="true" data-testid="route-pending">
-      <span role="status" className="sr-only">
-        {message}
-      </span>
+      <span ref={status} role="status" className="sr-only" />
       <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-4 w-2/3" />
