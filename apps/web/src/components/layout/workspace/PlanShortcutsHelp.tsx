@@ -140,7 +140,7 @@ const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Alt + ← / →', action: 'Move the bar one day earlier / later (recalculates)' },
   { keys: 'Shift + ← / →', action: 'Shorten / lengthen the bar one day (recalculates)' },
   {
-    keys: 'F2 → Start cell',
+    keys: 'F2 on the Start cell (or double-click it)',
     action: 'Change the start, keeping the finish — or drag the left end of the bar',
   },
 ];

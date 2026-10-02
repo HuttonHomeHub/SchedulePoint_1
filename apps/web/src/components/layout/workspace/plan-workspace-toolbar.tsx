@@ -989,6 +989,9 @@ export function ToolbarPlanWorkspace({
    */
   const ganttWorkingDay = useMemo(
     () =>
+      // Correct only while the diagram's origin is `plan.plannedStart` too (`dataDate={plan.plannedStart}`
+      // on the canvas below): the predicate counts day offsets from it, and both views must count from
+      // the same day.
       model.tsldCalendar && plan.plannedStart
         ? makeWorkingDayPredicate(plan.plannedStart, model.tsldCalendar)
         : null,

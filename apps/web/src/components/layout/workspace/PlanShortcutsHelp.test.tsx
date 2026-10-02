@@ -34,7 +34,7 @@ describe('the plan shortcuts sheet', () => {
     // The keyboard route already existed (ADR-0134) and no sheet said so. Stated as a route, not a
     // new chord: the sheet must not invent a binding the product does not have.
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
-    expect(screen.getByText('F2 → Start cell')).toBeInTheDocument();
+    expect(screen.getByText('F2 on the Start cell (or double-click it)')).toBeInTheDocument();
     expect(screen.getByText(/keeping the finish/)).toBeInTheDocument();
   });
 
