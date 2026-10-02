@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { PageContainer, Skeleton } from '@/components/ui/page';
 
 /**
@@ -21,12 +23,19 @@ import { PageContainer, Skeleton } from '@/components/ui/page';
  *
  * `aria-busy` plus a status line carry the announcement, because the skeleton blocks are
  * `aria-hidden` (a skeleton is not information).
+ *
+ * **The status element mounts EMPTY and is filled after mount.** A live region that arrives already
+ * containing its text is inserted, not changed, and assistive technology commonly announces nothing
+ * for it. The shared `useAnnounce` region is no help here: this screen is shown while the shell that
+ * hosts that region is itself still loading.
  */
 export function RoutePending(): React.JSX.Element {
+  const [message, setMessage] = useState('');
+  useEffect(() => setMessage('Loading…'), []);
   return (
     <PageContainer aria-busy="true" data-testid="route-pending">
       <span role="status" className="sr-only">
-        Loading…
+        {message}
       </span>
       <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-1/3" />

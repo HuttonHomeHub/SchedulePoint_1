@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { RoutePending } from './route-pending';
@@ -13,6 +14,20 @@ describe('RoutePending', () => {
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
     expect(container.querySelector('main')).toBeNull();
+  });
+});
+
+describe('RoutePending announcement', () => {
+  it('mounts its live region empty, so the text arrives as a change rather than an insertion', () => {
+    // A server render runs no effects, so it shows exactly what the first commit contains.
+    const html = renderToString(<RoutePending />);
+    expect(html).toMatch(/role="status"[^>]*><\/span>/);
+    expect(html).not.toContain('Loading…');
+  });
+
+  it('then fills the same element', () => {
+    render(<RoutePending />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
   });
 });
 
