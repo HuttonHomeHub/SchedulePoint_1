@@ -5,6 +5,7 @@ import {
   columnsMoved,
   dateAtChartX,
   finishEdgePlacement,
+  previewBarSpan,
   spanToPlacement,
   startDayAtChartX,
   startEdgePlacement,
@@ -134,6 +135,51 @@ describe('columnsMoved', () => {
 
   it('is zero for a scale that cannot be divided by', () => {
     expect(columnsMoved(50, 0)).toBe(0);
+  });
+
+  it('rounds an exact half column UP — one column to the right, none to the left', () => {
+    // `Math.round` ties toward +Infinity, so the two directions are asymmetric. Pinned because
+    // nothing else would notice the day somebody swaps the rounding.
+    expect(columnsMoved(5, 10)).toBe(1);
+    expect(columnsMoved(-5, 10)).toBe(0);
+    expect(columnsMoved(15, 10)).toBe(2);
+    expect(columnsMoved(-15, 10)).toBe(-1);
+  });
+});
+
+describe('previewBarSpan', () => {
+  const bar = { x: 100, width: 50, pxPerDay: 10 };
+
+  it('is the bar unchanged, and not resizing, with no drag', () => {
+    expect(previewBarSpan({ ...bar, finishDeltaX: null, startDeltaX: null })).toEqual({
+      x: 100,
+      width: 50,
+      resizing: false,
+    });
+  });
+
+  it('moves only the right edge for a finish drag, at whole columns', () => {
+    expect(previewBarSpan({ ...bar, finishDeltaX: 24, startDeltaX: null })).toEqual({
+      x: 100,
+      width: 70,
+      resizing: true,
+    });
+  });
+
+  it('moves the left edge and shrinks the width by the same amount for a start drag', () => {
+    expect(previewBarSpan({ ...bar, finishDeltaX: null, startDeltaX: 26 })).toEqual({
+      x: 130,
+      width: 20,
+      resizing: true,
+    });
+  });
+
+  it('stops one column short of the opposite edge, so the bar never inverts', () => {
+    expect(previewBarSpan({ ...bar, finishDeltaX: -500, startDeltaX: null }).width).toBe(10);
+    expect(previewBarSpan({ ...bar, finishDeltaX: null, startDeltaX: 500 })).toMatchObject({
+      x: 140,
+      width: 10,
+    });
   });
 });
 

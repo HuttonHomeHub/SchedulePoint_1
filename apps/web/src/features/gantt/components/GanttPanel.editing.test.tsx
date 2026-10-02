@@ -599,17 +599,51 @@ describe('the bar gestures in the rendered row', () => {
       expect(announce).not.toHaveBeenCalled();
     });
 
-    it('previews the start edge at whole columns while dragging', () => {
+    it('previews the start edge at whole columns, exactly, while dragging', async () => {
       const { container } = render(
         <GanttPanel activities={[activity()]} drag={dragBundle({ isWorkingDay: monFri })} />,
       );
       const start = handle(container, 'start')[0] as HTMLElement;
-      const before = start.style.left;
+      const finish = handle(container, 'finish')[0] as HTMLElement;
+      // Anchor is one padding day before Mon 5, so the bar starts at 1 column (6 px) and is five
+      // columns (30 px) wide: its handles straddle x=6 and x=36 by half their 8 px.
+      expect(start.style.left).toBe('2px');
+      expect(finish.style.left).toBe('32px');
+
+      // 14 px is 2.33 columns, which rounds to 2: the left edge moves exactly 12 px, not 14.
+      drag(start, 14 / PX, true);
+      await waitFor(() => expect(start.style.left).toBe('14px'));
+      // The finish edge is held, so the right handle has not moved.
+      expect(finish.style.left).toBe('32px');
+      window.dispatchEvent(new PointerEvent('pointercancel'));
+    });
+
+    it('previews the finish edge at whole columns, exactly, while dragging', async () => {
+      const { container } = render(
+        <GanttPanel activities={[activity()]} drag={dragBundle({ isWorkingDay: monFri })} />,
+      );
+      const start = handle(container, 'start')[0] as HTMLElement;
+      const finish = handle(container, 'finish')[0] as HTMLElement;
+      drag(finish, 2, true);
+      await waitFor(() => expect(finish.style.left).toBe('44px'));
+      expect(start.style.left).toBe('2px');
+      window.dispatchEvent(new PointerEvent('pointercancel'));
+    });
+
+    it('returns the preview to the drawn bar and writes nothing on a pointercancel', async () => {
+      const resizeStart = vi.fn(() => Promise.resolve());
+      const { container } = render(
+        <GanttPanel activities={[activity()]} drag={dragBundle({ resizeStart })} />,
+      );
+      const start = handle(container, 'start')[0] as HTMLElement;
       drag(start, -2, true);
-      // The handle is published on the next frame; the commit rounds the same way.
-      return waitFor(() => {
-        expect(start.style.left).not.toBe(before);
-      }).finally(() => window.dispatchEvent(new PointerEvent('pointercancel')));
+      await waitFor(() => expect(start.style.left).toBe('-10px'));
+
+      // The browser took the pointer (a touch became a scroll): a cancel, not a drop.
+      window.dispatchEvent(new PointerEvent('pointercancel'));
+      await waitFor(() => expect(start.style.left).toBe('2px'));
+      window.dispatchEvent(new PointerEvent('pointerup'));
+      expect(resizeStart).not.toHaveBeenCalled();
     });
 
     it('does not announce success itself — the host does, after the write settles', () => {

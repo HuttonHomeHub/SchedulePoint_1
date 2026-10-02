@@ -15,6 +15,7 @@ import {
   columnsMoved,
   dateAtChartX,
   finishEdgePlacement,
+  previewBarSpan,
   startDayAtChartX,
   startEdgePlacement,
 } from '../layout/drag-day';
@@ -1713,23 +1714,19 @@ function GanttRowView({
     onCommit: commitResizeStart,
   });
 
-  // The live bar. A resize previews the edge under the pointer at whole columns — the same
-  // rounding the commit uses — clamped one column short of the opposite edge, so the picture and
-  // the write cannot disagree. Published through the hook's rAF-throttled `deltaX`, so this adds
-  // no state of its own and no render per pointermove.
-  const shown = (() => {
-    if (geometry === null) return null;
-    const room = Math.max(geometry.width - pxPerDay, 0);
-    if (barResize.deltaX !== null) {
-      const px = Math.max(columnsMoved(barResize.deltaX, pxPerDay) * pxPerDay, -room);
-      return { x: geometry.x, width: geometry.width + px, resizing: true };
-    }
-    if (barResizeStart.deltaX !== null) {
-      const px = Math.min(columnsMoved(barResizeStart.deltaX, pxPerDay) * pxPerDay, room);
-      return { x: geometry.x + px, width: geometry.width - px, resizing: true };
-    }
-    return { x: geometry.x, width: geometry.width, resizing: false };
-  })();
+  // The live bar while an edge is dragged: calendar columns, as `previewBarSpan` explains (the
+  // write then rolls to a working day, deliberately — ADR-0170 D6). Published through the hooks'
+  // rAF-throttled `deltaX`, so this adds no state of its own and no render per pointermove.
+  const shown =
+    geometry === null
+      ? null
+      : previewBarSpan({
+          x: geometry.x,
+          width: geometry.width,
+          pxPerDay,
+          finishDeltaX: barResize.deltaX,
+          startDeltaX: barResizeStart.deltaX,
+        });
   const ghost =
     showVariance && variance !== undefined
       ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)

@@ -26,6 +26,11 @@ import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-tim
  * That holds for a MOVE. A resize writes a duration alongside its start, and the duration is only
  * meaningful from a working day, so the start-edge write rolls the start forward itself, as the
  * diagram's resize does (`spanToPlacement`, ADR-0170 D2).
+ *
+ * **The rounding differs by gesture, on purpose.** A body move reads the day under the drop point
+ * and so FLOORS (`dateAtChartX`); an edge resize measures how far the pointer travelled and so
+ * ROUNDS to the nearest column (`columnsMoved`). Both are right for what they measure, and a
+ * reader who assumes one rule will think one of them off by half a column.
  */
 
 /** The date a chart x-coordinate falls on. */
@@ -62,10 +67,49 @@ export function startDayAtChartX({
  * and its live preview share, so the bar a planner sees under the pointer is the bar that is
  * written. `|| 0` folds `-0` (a small leftward drag rounds to it) into `0`, which would otherwise
  * read as "moved" to a strict-equality check.
+ *
+ * A tie rounds up (`Math.round`): exactly half a column right is one column, exactly half a column
+ * left is none. Pinned by a test, because it is asymmetric and nothing else would notice a change.
  */
 export function columnsMoved(deltaX: number, pxPerDay: number): number {
   if (!Number.isFinite(pxPerDay) || pxPerDay <= 0) return 0;
   return Math.round(deltaX / pxPerDay) || 0;
+}
+
+/**
+ * **The bar as drawn while an edge is being dragged**, in chart pixels.
+ *
+ * Previews at whole CALENDAR columns — the same rounding the commit uses — clamped one column short
+ * of the opposite edge so the bar never inverts. The write then rolls the start to a WORKING day and
+ * counts working days (`spanToPlacement`, ADR-0170 D6), so over a weekend the committed bar can sit
+ * a column or two from this picture; that is deliberate, the preview is where the pointer is and the
+ * commit is where the engine will put it. At most one edge is dragged at a time.
+ */
+export function previewBarSpan({
+  x,
+  width,
+  pxPerDay,
+  finishDeltaX,
+  startDeltaX,
+}: {
+  x: number;
+  width: number;
+  pxPerDay: number;
+  /** The live finish-edge drag, or null. */
+  finishDeltaX: number | null;
+  /** The live start-edge drag, or null. */
+  startDeltaX: number | null;
+}): { x: number; width: number; resizing: boolean } {
+  const room = Math.max(width - pxPerDay, 0);
+  if (finishDeltaX !== null) {
+    const px = Math.max(columnsMoved(finishDeltaX, pxPerDay) * pxPerDay, -room);
+    return { x, width: width + px, resizing: true };
+  }
+  if (startDeltaX !== null) {
+    const px = Math.min(columnsMoved(startDeltaX, pxPerDay) * pxPerDay, room);
+    return { x: x + px, width: width - px, resizing: true };
+  }
+  return { x, width, resizing: false };
 }
 
 /**
