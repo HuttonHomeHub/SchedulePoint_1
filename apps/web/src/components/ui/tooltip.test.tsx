@@ -280,6 +280,58 @@ describe('useTooltip', () => {
     expect(tipTop + height).toBeLessThanOrEqual(triggerTop);
   });
 
+  describe('a viewport with room on neither side (TECH_DEBT #400)', () => {
+    const TIP_HEIGHT = 40;
+    const viewportHeight = window.innerHeight;
+    afterEach(() => {
+      window.innerHeight = viewportHeight;
+      vi.restoreAllMocks();
+    });
+
+    /** A 60 px viewport, a 24 px trigger at `top` and a 40 px tip: neither side can hold the tip. */
+    function openSqueezed(top: number): {
+      tipTop: number;
+      triggerTop: number;
+      triggerBottom: number;
+    } {
+      window.innerHeight = 60;
+      render(<Host />);
+      const button = screen.getByRole('button');
+      const box = (t: number, h: number): DOMRect => {
+        const r = {
+          top: t,
+          bottom: t + h,
+          left: 100,
+          right: 124,
+          width: 24,
+          height: h,
+          x: 100,
+          y: t,
+        };
+        return { ...r, toJSON: () => r };
+      };
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.hasAttribute('data-tooltip') ? box(0, TIP_HEIGHT) : box(top, 24);
+      });
+      fireEvent.focus(button);
+      const el = tip();
+      if (!el) throw new Error('the tip did not open');
+      return { tipTop: parseFloat(el.style.top), triggerTop: top, triggerBottom: top + 24 };
+    }
+
+    it('goes above, clear of the trigger, when that side has more room (red: second clamp)', () => {
+      const { tipTop, triggerTop } = openSqueezed(30);
+      expect(tipTop + TIP_HEIGHT).toBeLessThanOrEqual(triggerTop);
+    });
+
+    it('goes below, clear of the trigger, when that side has more room (red: second clamp)', () => {
+      const { tipTop, triggerBottom } = openSqueezed(2);
+      expect(tipTop).toBeGreaterThanOrEqual(triggerBottom);
+    });
+  });
+
   it('disabled leaves the mechanism inert', () => {
     render(<Host disabled />);
     fireEvent.focus(screen.getByRole('button'));
