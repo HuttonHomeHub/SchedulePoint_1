@@ -117,8 +117,8 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 - **Route-based splitting is the INTENTION, and is not what the app does today.**
   This line read "route-based splitting by default — each route is its own chunk"
-  until 2026-09-10, when it was measured. `app/router.tsx` declares 26 routes and
-  has **two** `lazy()` boundaries — `/share` and `/staff` — and `vite.config.ts`
+  until 2026-09-10, when it was measured. `app/router.tsx` declares 23 `createRoute`
+  routes (22 with a screen) and has **two** `lazy()` boundaries — `/share` and `/staff` — and `vite.config.ts`
   sets no `manualChunks`. A production build emits **10 JS chunks**, of which two
   are route chunks (`share` at 0.30 kB gzip, being only the wrapper, and `staff`
   at 23.84 kB); the rest are library splits that Rolldown derived from the two

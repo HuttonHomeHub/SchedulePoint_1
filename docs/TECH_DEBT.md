@@ -9044,7 +9044,7 @@ before the next person tries to register one.
 
 ### 292. The web entry chunk carries every authenticated route
 
-**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-10-02 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
 
 **The heading's 372 kB is Vite's build-reporter figure (kB = 1000 bytes) and is NOT comparable
 with the byte counts `bundle-report.json` now carries.** Re-measured 2026-09-11 from the report:
@@ -9094,7 +9094,7 @@ critical path, so the entry chunk is **1.86×** it.
 
 **The cause is not bloat, it is that the splitting the documentation describes does not exist.**
 That file said "route-based splitting by default — each route is its own chunk"; `app/router.tsx`
-declares 26 routes and has **two** `lazy()` boundaries (`/share`, `/staff`), and `vite.config.ts`
+declares 23 `createRoute` routes (22 with a screen; counted 2026-10-02 with `grep -c 'createRoute('`) and has **two** `lazy()` boundaries (`/share`, `/staff`), and `vite.config.ts`
 sets no `manualChunks`. The other eight chunks are library splits Rolldown derived from those two
 dynamic imports plus the export path's. **Every authenticated route — the entire plan workspace,
 the Gantt, the canvas painter's host, every dialog — is in the entry chunk**, so a planner signing
@@ -9128,11 +9128,15 @@ prefetches on intent, the app is a persistent shell (ADR-0029) whose routes shar
 code, and a split that moves 300 kB out of the entry and then fetches it on the first navigation may
 buy a faster sign-in and a slower first plan open. **Measure the LCP effect before splitting**, on
 the product owner's own hardware, the way every other performance question in this repository has
-been settled.
+been settled. _(2026-10-02: the product owner declined to take readings, so the approved epic
+measures in the build container and scopes its sign-off to download sizes, request counts and
+container timings — `docs/specs/route-code-splitting/feature-spec.md` CQ-4.)_
 
 **Why it was never noticed — and the first half of this is no longer true.** Nothing in CI checked a
-bundle size when this row was raised (`#48(b)`); ADR-0136 closed that, and `ci.yml:270` now runs
-`check:bundle-size` after the build, so that sub-item is discharged (corrected 2026-09-12).
+bundle size when this row was raised (`#48(b)`); ADR-0136 closed that, and `ci.yml:286-287` now runs
+`check:web-bundle` after the build, so that sub-item is discharged (corrected 2026-09-12; the
+citation was `ci.yml:270` running `check:bundle-size` until 2026-10-02, when the gate moved to the
+root script and the line moved with it).
 
 > **A correction inside the correction, recorded because it is the shape this register exists to
 > catch.** The first version of this paragraph said "**#48 no longer exists as a row**". It does —
