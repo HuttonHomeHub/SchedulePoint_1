@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.156.1
+
+### Patch Changes
+
+- [#753](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/753) [`adf645c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adf645c9ecda6d2fac2987c10c0a8d5135d1eeac) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Discarding an activity editor's unsaved changes no longer leaves a "Discard unsaved changes?" confirmation armed for the next time the editor is opened.
+
+- [#753](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/753) [`adf645c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adf645c9ecda6d2fac2987c10c0a8d5135d1eeac) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity editor now starts from a clean form every time it opens: text typed the instant it opens is kept, and a "Saved." from a previous opening no longer greets the next one. A save that finishes after the editor was closed is still announced and can still be undone.
+
+- [#753](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/753) [`adf645c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adf645c9ecda6d2fac2987c10c0a8d5135d1eeac) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity editor's Remaining field is no longer left on a whole day (and saved as one) when the calendar list arrives while you are on another tab. A Progress save that fails while you are elsewhere is now announced, the Steps shortcut's focus lands once rather than on every return to Progress, Enter-to-save in the weighted steps keeps focus in the form, and the step buttons stay focusable when the pen is lost.
+
+- [#753](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/753) [`adf645c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adf645c9ecda6d2fac2987c10c0a8d5135d1eeac) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - New activity now starts from a clean form every time it opens: text typed the instant the dialog opens is kept, and a hidden-field alert or server error from a previous opening no longer greets the next one.
+
+- [#753](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/753) [`adf645c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adf645c9ecda6d2fac2987c10c0a8d5135d1eeac) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A Progress-tab draft — reported progress, value measure or weighted steps — now survives a visit to another tab in the activity editor, and the tab's unsaved marker no longer outlives (or hides) the draft. Two saves started before the first finished now each record their undo step, show "Saved." and announce, instead of only the last one.
+
 ## 0.156.0
 
 ### Minor Changes
