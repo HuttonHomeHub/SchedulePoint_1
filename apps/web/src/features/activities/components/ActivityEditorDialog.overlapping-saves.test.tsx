@@ -129,7 +129,38 @@ describe('two saves of different scopes in flight at once', () => {
       'Scheduling saved.',
     ]);
 
-    // Both forms are clean: Scheduling is on screen, General is checked by returning to it.
+    // Neither bar is left reading "Saving…", and both forms are clean: Scheduling is on screen, and
+    // General is checked by returning to it.
+    expect(screen.queryByRole('button', { name: 'Saving…' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /^General/ }));
+    expect(screen.queryByRole('button', { name: 'Saving…' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /unsaved changes/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('a Save busy only because another scope’s save is finishing', () => {
+  it('says so, rather than reading as stuck, and is released when that save settles', async () => {
+    mount(vi.fn());
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+    await waitFor(() => expect(releases).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole('tab', { name: /^Scheduling/ }));
+    fireEvent.click(screen.getByLabelText(/schedule as late as possible/i));
+
+    const save = screen.getByRole('button', { name: 'Saving…' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(save.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'Another save is finishing.',
+    );
+
+    releases[0]!({ ...ROW, version: 2, name: 'Renamed' });
+
+    // Scheduling's own edit is still unsaved and now savable; its bar is no longer busy.
+    expect(await screen.findByRole('button', { name: 'Save scheduling' })).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
+    expect(screen.queryByText('Another save is finishing.')).not.toBeInTheDocument();
   });
 });

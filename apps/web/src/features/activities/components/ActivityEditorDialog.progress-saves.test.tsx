@@ -45,21 +45,25 @@ const ROW = {
 } as ActivitySummary;
 
 let progressResponse: { ok: boolean; status: number; body: unknown };
+/** When set, the PATCH waits for it — so a test can move the reader before the save settles. */
+let holdProgress: Promise<void> | null;
 
 beforeEach(() => {
   announce.mockReset();
+  holdProgress = null;
   progressResponse = { ok: true, status: 200, body: { data: { ...ROW, percentComplete: 55 } } };
   vi.stubGlobal(
     'fetch',
-    vi.fn((url: string, init?: RequestInit) =>
-      Promise.resolve({
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') await holdProgress;
+      return {
         ok: init?.method === 'PATCH' ? progressResponse.ok : true,
         status: init?.method === 'PATCH' ? progressResponse.status : 200,
         json: () =>
           Promise.resolve(init?.method === 'PATCH' ? progressResponse.body : { data: [] }),
         url,
-      } as unknown as Response),
-    ),
+      } as unknown as Response;
+    }),
   );
 });
 
@@ -128,5 +132,30 @@ describe('a Reported-progress save', () => {
 
     expect(await screen.findByLabelText('Percent complete')).toHaveValue(10);
     expect(screen.queryByText('This activity changed elsewhere.')).not.toBeInTheDocument();
+  });
+});
+
+describe('a Reported-progress save that fails while the reader is on another tab', () => {
+  it('is announced, because the panel that would show it is not on screen', async () => {
+    progressResponse = {
+      ok: false,
+      status: 409,
+      body: { error: { message: 'This activity changed elsewhere.' } },
+    };
+    let release!: () => void;
+    holdProgress = new Promise<void>((resolve) => (release = resolve));
+    mount();
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '55' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+    fireEvent.click(screen.getByRole('tab', { name: /^General/ }));
+
+    release();
+
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith('Progress not saved: This activity changed elsewhere.'),
+    );
+    // And the failure is waiting where it belongs when the reader comes back.
+    fireEvent.click(screen.getByRole('tab', { name: /^Progress/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent('This activity changed elsewhere.');
   });
 });

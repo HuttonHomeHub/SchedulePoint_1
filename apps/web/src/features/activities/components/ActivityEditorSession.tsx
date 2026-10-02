@@ -92,6 +92,9 @@ import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
 
+/** What a Save explains itself with while it is busy only because another scope's save is finishing. */
+const ANOTHER_SAVE_FINISHING = 'Another save is finishing.';
+
 /** The Progress tab's three panels, each of which saves and fails on its own. */
 type PanelSlot = 'progress' | 'measure' | 'steps';
 
@@ -140,6 +143,23 @@ export function ActivityEditorSession({
    * once, each of which says "Saved." for itself. Cleared per scope when its next save begins.
    */
   const [savedSlots, setSavedSlots] = useState<Partial<Record<SaveSlot, true>>>({});
+  /**
+   * The definition-scope saves this opening has in flight. The four scopes that save through
+   * `PATCH …/:id` share one observer, so every bar reads "Saving…" while any of them is — and a bar
+   * that is busy for a save it did not make needs to say so (SC 3.3.2), not just look stuck.
+   */
+  const [savingSlots, setSavingSlots] = useState<Partial<Record<SaveSlot, true>>>({});
+  const markSaving = (slot: SaveSlot, saving: boolean): void =>
+    setSavingSlots((held) => {
+      if (saving) return { ...held, [slot]: true };
+      const { [slot]: _cleared, ...rest } = held;
+      return rest;
+    });
+  /** The sentence for a dirty bar blocked only by somebody else's save, or `undefined` to say nothing new. */
+  const othersSaving = (slot: SaveSlot): { dirtyMessage: string } | Record<string, never> =>
+    saves.fieldsPending && savingSlots[slot] !== true
+      ? { dirtyMessage: ANOTHER_SAVE_FINISHING }
+      : {};
   const markSaved = (slot: SaveSlot, saved: boolean): void =>
     setSavedSlots((held) => {
       if (saved) return { ...held, [slot]: true };
@@ -171,16 +191,35 @@ export function ActivityEditorSession({
   // the stale tab first and then correct it, and setting state from one is the cascading-render
   // pattern the lint rule rejects. A new intent is a fresh object, so identity is the signal.
   const [seenIntent, setSeenIntent] = useState(intent);
+  /**
+   * Whether the **Steps** entry point's focus request is still owed. The panel mounts on every visit
+   * to Progress, so a flag read straight off `intent` would pull focus back to the heading each time
+   * the reader returned; the panel reports back once it has landed and the request is spent.
+   */
+  const [stepsFocusDue, setStepsFocusDue] = useState(intent?.focusSteps === true);
   if (intent !== seenIntent) {
     setSeenIntent(intent);
-    if (intent) setActive(intent.tab);
+    if (intent) {
+      setActive(intent.tab);
+      setStepsFocusDue(intent.focusSteps === true);
+    }
   }
+  // The tab showing AT THE MOMENT a save settles — a promise callback would otherwise read the tab
+  // from the render that began the save. Written in an effect, never during render.
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   // The steps list is fetched on the first visit to Progress in an opening, not at open (D-8) — the
   // query lives with the form it seeds, and a Contributor who never looks at Progress never pays for
   // it. Adjusted during render for the same reason as the intent above: it is derived from `active`.
-  const [stepsRequested, setStepsRequested] = useState(active === 'progress');
-  if (active === 'progress' && !stepsRequested) setStepsRequested(true);
+  //
+  // Only where the panel that renders them exists (the same flag pair as the panel below): a host with
+  // either flag off would otherwise fetch a list nobody is shown.
+  const stepsEnabled = ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED;
+  const [stepsRequested, setStepsRequested] = useState(stepsEnabled && active === 'progress');
+  if (stepsEnabled && active === 'progress' && !stepsRequested) setStepsRequested(true);
 
   // The General scope seeds its duration from the factor known at OPEN; `useDurationSeed` below
   // re-reads it once the calendar list lands, so a sub-day duration is never shown (or saved) as
@@ -294,12 +333,16 @@ export function ActivityEditorSession({
     defaultValues: { steps: [] },
   });
   const stepsArray = useFieldArray({ control: stepsForm.control, name: 'steps' });
+
   const stepsDirty = stepsForm.formState.isDirty;
 
   /**
-   * The rows the steps form was last seeded or saved with — what "clean" is measured against, as a
-   * live comparison rather than RHF's flag (which a `move()` marks dirty even when the order comes
-   * back). Written only from the seed effect and the save callback, never during render.
+   * The rows the steps form was last seeded or saved with. The seed guard below compares the form to
+   * them directly, because a refetch must leave a draft alone however RHF has marked it. RHF's own
+   * `isDirty` is the same question asked of its default values (a `move()` put back to the original
+   * order reads clean — pinned in `ActivityEditor.progress-drafts.test.tsx`), so the marker, the
+   * census and the close confirmation use it rather than a second watch on every keystroke. Written
+   * only from the seed effect and the save callback, never during render.
    */
   const stepsHeld = useRef<StepsFormValues['steps'] | null>(null);
   const stepsData = stepsQuery.data;
@@ -461,6 +504,7 @@ export function ActivityEditorSession({
   ): void => {
     setSaveError((current) => (current?.scope === scope ? null : current));
     markSaved(scope, false);
+    markSaving(scope, true);
     saves.saveFields({
       activity,
       patch,
@@ -469,10 +513,12 @@ export function ActivityEditorSession({
       // if saving one tab closed the others. Reset marks the scope clean so its dirty marker
       // clears without discarding what the user just saved.
       onSuccess: (after) => {
+        markSaving(scope, false);
         resetTo(after);
         markSaved(scope, true);
       },
       onError: (error) => {
+        markSaving(scope, false);
         setSaveError({ scope, message: error.message });
         setActive(scope);
       },
@@ -483,7 +529,19 @@ export function ActivityEditorSession({
   const savePanel = (slot: PanelSlot, begin: () => void): void => {
     setPanelError(slot, null);
     markSaved(slot, false);
+    if (slot === 'measure') markSaving(slot, true);
     begin();
+  };
+
+  /**
+   * A panel's failure is shown inside the panel, which is only on screen while Progress is — so with
+   * the reader on another tab it would be invisible and the live region is the one signal left. The
+   * frame announces the same sentence when the whole session is gone.
+   */
+  const panelFailed = (slot: PanelSlot, label: string, error: Error): void => {
+    if (slot === 'measure') markSaving(slot, false);
+    setPanelError(slot, error.message);
+    if (activeRef.current !== 'progress') announce(`${label} not saved: ${error.message}`);
   };
 
   const saveMeasure = (values: ActivityMeasureValues): void =>
@@ -495,10 +553,11 @@ export function ActivityEditorSession({
         patch: measureBody(values),
         label: 'Measure',
         onSuccess: () => {
+          markSaving('measure', false);
           measure.form.reset(values);
           markSaved('measure', true);
         },
-        onError: (error) => setPanelError('measure', error.message),
+        onError: (error) => panelFailed('measure', 'Measure', error),
       }),
     );
 
@@ -512,7 +571,7 @@ export function ActivityEditorSession({
           progress.form.reset(values);
           markSaved('progress', true);
         },
-        onError: (error) => setPanelError('progress', error.message),
+        onError: (error) => panelFailed('progress', 'Progress', error),
       }),
     );
 
@@ -527,7 +586,7 @@ export function ActivityEditorSession({
           stepsForm.reset({ steps: rows });
           markSaved('steps', true);
         },
-        onError: (error) => setPanelError('steps', error.message),
+        onError: (error) => panelFailed('steps', 'Steps', error),
       }),
     );
 
@@ -707,6 +766,7 @@ export function ActivityEditorSession({
                       pending={saves.fieldsPending}
                       saved={savedSlots.general === true}
                       label="Save general"
+                      {...othersSaving('general')}
                     />
                   </FieldGateProvider>
                 </form>
@@ -770,6 +830,7 @@ export function ActivityEditorSession({
                       pending={saves.fieldsPending}
                       saved={savedSlots.scheduling === true}
                       label="Save scheduling"
+                      {...othersSaving('scheduling')}
                     />
                   </FieldGateProvider>
                 </form>
@@ -872,6 +933,7 @@ export function ActivityEditorSession({
                     pending={saves.fieldsPending}
                     saved={savedSlots.measure === true}
                     error={panelErrors.measure ?? null}
+                    {...othersSaving('measure')}
                   />
                   {/* The flag pair that decides whether weighted steps exist at all.
                       **It used to be described as matching "the Steps entry points" in
@@ -896,7 +958,8 @@ export function ActivityEditorSession({
                       announce={announce}
                       // Only the **Steps** entry point asks for this. Landing at the top of a
                       // three-panel tab would make that action feel like it opened the wrong thing.
-                      autoFocusHeading={intent?.focusSteps === true}
+                      autoFocusHeading={stepsFocusDue}
+                      onHeadingFocused={() => setStepsFocusDue(false)}
                     />
                   ) : null}
                 </div>
@@ -925,6 +988,7 @@ export function ActivityEditorSession({
                       pending={saves.fieldsPending}
                       saved={savedSlots.cost === true}
                       label="Save cost"
+                      {...othersSaving('cost')}
                     />
                   </FieldGateProvider>
                 </form>

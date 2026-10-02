@@ -91,6 +91,35 @@ function renderPanel() {
 }
 
 describe('WeightedStepsPanel', () => {
+  it('keeps focus on the form when Enter saves, instead of dropping it to the page', async () => {
+    // A save re-seeds the rows with new keys, so the input Enter was pressed in is replaced.
+    renderPanel();
+    const name = screen.getByLabelText('Step 1 name');
+    name.focus();
+    fireEvent.change(name, { target: { value: 'Rebar B' } });
+
+    fireEvent.submit(name.closest('form')!);
+
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Save steps' }));
+  });
+
+  it('shades its row controls with aria-disabled, so losing the pen does not drop focus', () => {
+    render(
+      <Host
+        onSave={vi.fn()}
+        gate={{ writable: false, reason: 'Start editing to change this activity.', readable: true }}
+      />,
+    );
+    for (const name of ['Add step', 'Remove step 1', 'Move up, step 1', 'Move down, step 1']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).not.toBeDisabled();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 1' }));
+    expect(screen.getByLabelText('Step 1 name')).toBeInTheDocument();
+  });
+
   it('confirms a successful save in the bar, not only to a screen reader', async () => {
     // This panel was the one `ScopeSaveBar` caller that never passed `saved`: after a save the
     // helper text went from "Unsaved changes in this section." to blank and the button greyed —

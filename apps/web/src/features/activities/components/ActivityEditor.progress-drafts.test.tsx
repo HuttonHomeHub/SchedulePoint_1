@@ -66,20 +66,21 @@ afterEach(() => vi.unstubAllGlobals());
 
 function mount(intent: { tab: 'general' | 'progress'; focusSteps?: true } = { tab: 'progress' }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const onClose = vi.fn();
   const view = render(
     <QueryClientProvider client={client}>
       <ActivityEditorDialog
         orgSlug="acme"
         planId="plan-1"
         open
-        onClose={vi.fn()}
+        onClose={onClose}
         activity={ROW}
         intent={{ activityId: ROW.id, ...intent }}
         gating={GATING}
       />
     </QueryClientProvider>,
   );
-  return { client, ...view };
+  return { client, onClose, ...view };
 }
 
 const awayAndBack = (): void => {
@@ -175,6 +176,49 @@ describe('opened with the Steps intent', () => {
     // A frame after the dialog opens, not at mount: the panel mounts before `showModal()`.
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Weighted steps' })),
+    );
+  });
+});
+
+// A characterisation rather than a regression: RHF compares values with its defaults, so the marker and
+// the close confirmation already read a restored order as clean. Pinned so a change to how the steps
+// form counts as dirty cannot quietly make the editor prompt over nothing.
+describe('"clean" has one definition for the steps form', () => {
+  it('a step moved and moved back asks nothing on close', async () => {
+    steps = [
+      { name: 'Rebar', weight: 2, percentComplete: 25 },
+      { name: 'Pour', weight: 1, percentComplete: 0 },
+    ];
+    const { onClose } = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Move down, step 1' }));
+    // Out of order is a real draft: the marker says so.
+    expect(screen.getByRole('tab', { name: /Progress.*unsaved changes/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move up, step 2' }));
+    expect(screen.getByLabelText('Step 1 name')).toHaveValue('Rebar');
+    expect(screen.queryByRole('tab', { name: /unsaved changes/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the Steps entry point’s focus request is spent once', () => {
+  it('does not pull focus back to the heading when the reader returns to Progress', async () => {
+    mount({ tab: 'progress', focusSteps: true });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Weighted steps' })),
+    );
+
+    awayAndBack();
+    // A frame for any (wrongly) re-armed request to land in.
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(document.activeElement).not.toBe(
+      screen.getByRole('heading', { name: 'Weighted steps' }),
     );
   });
 });

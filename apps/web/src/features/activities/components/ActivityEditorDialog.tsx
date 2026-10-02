@@ -110,9 +110,11 @@ export function ActivityEditorDialog({
   const saveFields = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
     void update.mutateAsync({ activityId: row.id, version: row.version, patch }).then(
       (after) => {
-        onSaved?.(row, after);
+        // The session's own effects first: they mark the scope clean, and a throw from the host's undo
+        // recording must not leave a saved form looking unsaved.
         onSuccess(after);
         announce(`${label} saved.`);
+        onSaved?.(row, after);
       },
       failed(label, onError),
     );

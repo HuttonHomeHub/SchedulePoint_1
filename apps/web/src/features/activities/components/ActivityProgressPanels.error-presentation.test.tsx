@@ -95,6 +95,8 @@ function MeasureHost({ onSave }: { onSave: (values: ActivityMeasureValues) => vo
       gate={OPEN_GATE}
       onSave={onSave}
       pending={false}
+      saved={false}
+      error={null}
     />
   );
 }

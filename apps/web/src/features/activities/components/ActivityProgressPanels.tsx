@@ -198,8 +198,9 @@ export function ValueMeasurePanel({
   onSave,
   onOpenResources,
   pending,
-  saved = false,
-  error = null,
+  saved,
+  error,
+  dirtyMessage,
 }: {
   form: UseFormReturn<ActivityMeasureValues>;
   isDirty: boolean;
@@ -214,24 +215,23 @@ export function ValueMeasurePanel({
   onOpenResources?: () => void;
   pending: boolean;
   /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
-  saved?: boolean;
+  saved: boolean;
   /** The last save's failure, held by the host so it cannot outlive the opening. */
-  error?: string | null;
+  error: string | null;
+  /** Replaces "Unsaved changes…" while the bar is busy with another scope's save. */
+  dirtyMessage?: string;
 }): React.ReactElement {
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
   const manual = useWatch({ control: form.control, name: 'physicalPercentComplete' });
 
-  const stepRows = steps;
   const rolled = rollupPhysicalPercent(
-    stepRows.map((s) => ({ weight: Number(s.weight), percentComplete: s.percentComplete })),
+    steps.map((s) => ({ weight: Number(s.weight), percentComplete: s.percentComplete })),
     manual ?? null,
   );
   // Steps WIN whenever their weights sum above zero (ADR-0044 §33 / N27). Until now the manual
   // field stayed editable and was silently ignored — the defect that started this epic.
   const stepsWin =
-    stepRows.length > 0 &&
-    stepRows.reduce((sum, s) => sum + Number(s.weight), 0) > 0 &&
-    rolled !== null;
+    steps.length > 0 && steps.reduce((sum, s) => sum + Number(s.weight), 0) > 0 && rolled !== null;
 
   return (
     <form
@@ -293,11 +293,20 @@ export function ValueMeasurePanel({
           pending={pending}
           saved={saved}
           label="Save measure"
+          {...(dirtyMessage === undefined ? {} : { dirtyMessage })}
         />
       </FieldGateProvider>
     </form>
   );
 }
+
+/**
+ * A control the gate or the list's end shades stays in the tab order (ADR-0083, ADR-0135): a native
+ * `disabled` drops focus to <body> the instant the pen is lost under a reader mid-edit. The class
+ * pairs with `aria-disabled`, and every handler checks the same condition, so it is inert without
+ * ever leaving the focus ring.
+ */
+const SHADED_BUTTON = 'aria-disabled:pointer-events-none aria-disabled:opacity-60';
 
 /** A blank list starts empty; append adds equally-weighted rows so a first save is a plain average. */
 const NEW_STEP = { name: '', weight: 1, percentComplete: 0 } as const;
@@ -335,6 +344,7 @@ export function WeightedStepsPanel({
   error,
   announce,
   autoFocusHeading = false,
+  onHeadingFocused,
 }: {
   form: UseFormReturn<StepsFormValues>;
   /** The session's `useFieldArray`: the rows are its state, so a draft outlives this panel. */
@@ -342,7 +352,7 @@ export function WeightedStepsPanel({
   isDirty: boolean;
   /** The session's steps query, reduced to what this panel renders. */
   query: { isError: boolean; isPending: boolean; refetch: () => unknown };
-  activity: ActivitySummary;
+  activity: Pick<ActivitySummary, 'id' | 'physicalPercentComplete'>;
   gate: ScopeGate;
   /** Saves through the host, which owns the mutation (ADR-0169 D-10) and re-seeds from the saved list. */
   onSave: (steps: StepsFormValues['steps']) => void;
@@ -354,11 +364,10 @@ export function WeightedStepsPanel({
   /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
   autoFocusHeading?: boolean;
   /**
-   * NOTE: `isDirty` comes from the session's own `useForm` + `useFieldArray`, not `useScopeForm`,
-   * so a `move()` re-keys the rows and can mark it dirty even if the planner restores the order.
-   * Accepted rather than fixed: the cost of that false positive is one extra confirmation dialog,
-   * and the cost of chasing it is comparing arrays on every keystroke.
+   * Called once focus has been moved, so the host can stop asking: the panel mounts on every visit to
+   * Progress, and without this a return to the tab would pull focus to the heading again.
    */
+  onHeadingFocused?: () => void;
 }): React.ReactElement {
   const headingRef = useRef<HTMLHeadingElement>(null);
   // After the frame, not at mount: this panel mounts in the same commit that opens the dialog, and
@@ -366,8 +375,14 @@ export function WeightedStepsPanel({
   // on an element of a dialog that is not yet showing and does nothing. A frame later it is.
   useEffect(() => {
     if (!autoFocusHeading) return;
-    const frame = requestAnimationFrame(() => headingRef.current?.focus());
+    const frame = requestAnimationFrame(() => {
+      headingRef.current?.focus();
+      onHeadingFocused?.();
+    });
     return () => cancelAnimationFrame(frame);
+    // `onHeadingFocused` is deliberately not a dependency: the host's callback changes identity on
+    // every render, and re-running this on each would cancel the frame it is waiting for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires per request, not per render
   }, [autoFocusHeading, activity.id]);
 
   // A `useFieldArray` mutation re-renders, so the new/previous DOM only exists after the next commit.
@@ -377,6 +392,7 @@ export function WeightedStepsPanel({
   // and dropped focus to <body> whenever a click followed a commit closely (observed in the editor's
   // "focuses the new row's name field on add" test once the steps mutation left this component).
   const listRef = useRef<HTMLUListElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
@@ -385,6 +401,14 @@ export function WeightedStepsPanel({
       pendingFocus.current = null;
     }
   });
+
+  // A save re-seeds the rows from the server's list, which gives every row a new key: the input an
+  // Enter-to-save was pressed in is replaced, and the browser drops focus to <body> (SC 2.4.3). When
+  // that is where focus ended up, put it on the Save button — the one control this form keeps.
+  useLayoutEffect(() => {
+    if (!saved || document.activeElement !== document.body) return;
+    sectionRef.current?.querySelector<HTMLButtonElement>('button[type="submit"]')?.focus();
+  }, [saved]);
 
   const {
     register,
@@ -444,9 +468,9 @@ export function WeightedStepsPanel({
           ? ['[data-step-up]', '[data-step-down]']
           : ['[data-step-down]', '[data-step-up]'];
       const preferred = row.querySelector<HTMLButtonElement>(wanted);
-      // At either end of the list the button just pressed is now disabled; fall through to its
-      // sibling rather than letting focus land on <body>.
-      (preferred && !preferred.disabled
+      // At either end of the list the button just pressed is now shaded; fall through to its
+      // sibling rather than leaving focus on a control that does nothing.
+      (preferred && preferred.getAttribute('aria-disabled') !== 'true'
         ? preferred
         : row.querySelector<HTMLButtonElement>(fallback)
       )?.focus();
@@ -455,7 +479,7 @@ export function WeightedStepsPanel({
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section ref={sectionRef} className="flex flex-col gap-4">
       <PanelHeading
         title="Weighted steps"
         effect="Sets the physical % complete. Changes no dates."
@@ -552,9 +576,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="outline"
                           data-step-up=""
-                          disabled={!gate.writable || index === 0}
+                          aria-disabled={!gate.writable || index === 0}
+                          className={SHADED_BUTTON}
                           aria-label={`Move up, step ${index + 1}`}
-                          onClick={() => moveStep(index, -1)}
+                          onClick={() => {
+                            if (gate.writable && index > 0) moveStep(index, -1);
+                          }}
                         >
                           Move up
                         </Button>
@@ -563,9 +590,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="outline"
                           data-step-down=""
-                          disabled={!gate.writable || index === fields.length - 1}
+                          aria-disabled={!gate.writable || index === fields.length - 1}
+                          className={SHADED_BUTTON}
                           aria-label={`Move down, step ${index + 1}`}
-                          onClick={() => moveStep(index, 1)}
+                          onClick={() => {
+                            if (gate.writable && index < fields.length - 1) moveStep(index, 1);
+                          }}
                         >
                           Move down
                         </Button>
@@ -574,9 +604,12 @@ export function WeightedStepsPanel({
                           size="sm"
                           variant="ghost"
                           data-step-remove=""
-                          disabled={!gate.writable}
+                          aria-disabled={!gate.writable}
+                          className={SHADED_BUTTON}
                           aria-label={`Remove step ${index + 1}`}
-                          onClick={() => removeStep(index)}
+                          onClick={() => {
+                            if (gate.writable) removeStep(index);
+                          }}
                         >
                           Remove
                         </Button>
@@ -592,8 +625,11 @@ export function WeightedStepsPanel({
                 ref={addButtonRef}
                 type="button"
                 variant="outline"
-                disabled={!gate.writable}
-                onClick={addStep}
+                aria-disabled={!gate.writable}
+                className={SHADED_BUTTON}
+                onClick={() => {
+                  if (gate.writable) addStep();
+                }}
               >
                 Add step
               </Button>

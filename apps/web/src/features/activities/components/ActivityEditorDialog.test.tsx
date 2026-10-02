@@ -358,7 +358,14 @@ describe('ActivityEditorDialog — weighted steps panel', () => {
 
   it('is pen-gated: a Planner without the lock cannot even add a row', async () => {
     await openSteps({ gating: PLANNER_NO_PEN });
-    expect(screen.getByRole('button', { name: 'Add step' })).toBeDisabled();
+    // Shaded, not natively disabled: losing the pen mid-edit must not drop focus to <body>.
+    expect(screen.getByRole('button', { name: 'Add step' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Add step' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    expect(screen.queryByLabelText('Step 1 name')).not.toBeInTheDocument();
     expectInert(screen.getByRole('button', { name: /save steps/i }));
     // …while progress beside it stays open, which is the whole reason these are separate saves.
     expect(screen.getByLabelText('Percent complete')).toBeEnabled();

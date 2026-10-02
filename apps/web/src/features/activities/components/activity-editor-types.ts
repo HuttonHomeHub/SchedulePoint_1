@@ -110,11 +110,13 @@ export interface StepsSave {
 }
 
 /**
- * The three writes the editor makes, as the frame offers them to the session (ADR-0169 D-10).
+ * The three writes the editor makes — definition fields, reported progress and weighted steps — as the
+ * frame offers them to the session (ADR-0169 D-10). Each is its own endpoint and its own mutation.
  *
  * The frame owns the mutation observers so a save that finishes after the editor closed still
  * records its undo and announces. Each `save*` settles ITS OWN callbacks, so overlapping saves each
- * report. The `*Pending` flags are the observer's: they follow the most recent call, and — the
+ * report. The `*Pending` flags are the observers': `fieldsPending` is shared by every scope that saves
+ * through `PATCH …/:id` (General, Scheduling, Cost, Measure), and each follows the most recent call, and — the
  * observers outliving a session — a fresh opening sees the previous opening's save as pending until
  * it settles, which keeps a second write from racing a first on the same row version.
  */
