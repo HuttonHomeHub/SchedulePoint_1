@@ -147,7 +147,8 @@ export function barEdgeGate(
  * Each write used to be a `void`ed promise with the row announcing success the instant it called,
  * so a stale-version refusal read as a move that had worked and a rejection was an unhandled
  * promise. The outcome is the workspace's own (`TsldEditOutcome`): applied → the row's success
- * sentence; a domain conflict → its sentence; neither (the pen path has already spoken for a lost
+ * sentence, followed by the conflict when a post-write warning came with it; a domain
+ * conflict → its sentence; neither (the pen path has already spoken for a lost
  * lock) → nothing more; a throw → the failure sentence. Matches the diagram
  * (`TsldPanel.tsx`, the reposition/resize `.then` handlers).
  */
@@ -159,7 +160,11 @@ export async function settleBarWrite(
 ): Promise<void> {
   try {
     const outcome = await write;
-    if (outcome.applied) announce(applied);
+    // Both set is a write that landed whose recalculation then failed
+    // (`use-plan-workspace-model.ts`'s resize): the planner needs the success AND the warning, and
+    // two `announce` calls in one tick overwrite each other, so they are one sentence.
+    if (outcome.applied)
+      announce(outcome.conflict === null ? applied : `${applied} ${outcome.conflict}`);
     else if (outcome.conflict !== null) announce(outcome.conflict);
   } catch {
     announce(failed);

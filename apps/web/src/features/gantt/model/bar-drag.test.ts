@@ -124,6 +124,11 @@ describe('settleBarWrite', () => {
     expect(announce).toHaveBeenCalledExactlyOnceWith('It worked.');
   });
 
+  it('announces the success AND the warning, in one sentence, when the write landed but the recalculation failed', async () => {
+    const announce = await run(Promise.resolve({ applied: true, conflict: 'Recalc failed.' }));
+    expect(announce).toHaveBeenCalledExactlyOnceWith('It worked. Recalc failed.');
+  });
+
   it('announces the conflict, never the success, for a stale-version refusal (409)', async () => {
     const announce = await run(Promise.resolve({ applied: false, conflict: 'Stale.' }));
     expect(announce).toHaveBeenCalledExactlyOnceWith('Stale.');
