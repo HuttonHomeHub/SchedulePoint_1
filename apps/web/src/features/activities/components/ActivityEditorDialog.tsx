@@ -227,7 +227,8 @@ export function ActivityEditorDialog({
   /**
    * Save one scope. `version` comes from the live row **now**, not from when the editor opened —
    * see the docblock above. The undo record and the announcement are made here, not by the session,
-   * so they survive the session being unmounted mid-save.
+   * so they survive the session being unmounted mid-save — and so does the announcement of a
+   * failure, which the session can no longer display.
    */
   const saveScope = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
     update.mutate(
@@ -238,7 +239,13 @@ export function ActivityEditorDialog({
           onSuccess(after);
           announce(`${label} saved.`);
         },
-        onError,
+        onError: (error) => {
+          onError(error);
+          // A mounted session shows the failure beside the tab that owns it. With the session gone
+          // (closed mid-save) nothing shows it, and a save that failed silently reads as one that
+          // landed — SC 4.1.3 — so the live region is the only signal left.
+          if (!sessionRef.current) announce(`${label} not saved: ${error.message}`);
+        },
       },
     );
   };
@@ -288,6 +295,21 @@ export function ActivityEditorDialog({
   );
 }
 
+/**
+ * What the frame hands one opening of the editor: everything the dialog was given except the
+ * frame-owned `open`, `onSaved` and `activity` (the row arrives non-optional, keyed), plus the seams
+ * the frame owns — the close handle and the scope-save mutation.
+ */
+interface ActivityEditorSessionProps extends Omit<
+  ActivityEditorDialogProps,
+  'open' | 'onSaved' | 'activity'
+> {
+  handleRef: React.Ref<ActivityEditorSessionHandle>;
+  activity: ActivitySummary;
+  onSave: (save: ScopeSave) => void;
+  savePending: boolean;
+}
+
 function ActivityEditorSession({
   handleRef,
   orgSlug,
@@ -307,12 +329,7 @@ function ActivityEditorSession({
   planActivitiesError = false,
   logic,
   notesSlot,
-}: Omit<ActivityEditorDialogProps, 'open' | 'onSaved' | 'activity'> & {
-  handleRef: React.Ref<ActivityEditorSessionHandle>;
-  activity: ActivitySummary;
-  onSave: (save: ScopeSave) => void;
-  savePending: boolean;
-}): React.ReactElement {
+}: ActivityEditorSessionProps): React.ReactElement {
   const announce = useAnnounce();
   const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
   /**
@@ -522,6 +539,9 @@ function ActivityEditorSession({
     }
     onClose();
   };
+  // No deps array, deliberately: `requestClose` closes over this render's `dirtyScopeNames`, and the
+  // frame must read the answer as of the latest render, at the moment of the click. A memoised
+  // handle would answer from a stale dirty set.
   useImperativeHandle(handleRef, () => ({ requestClose }));
 
   /**

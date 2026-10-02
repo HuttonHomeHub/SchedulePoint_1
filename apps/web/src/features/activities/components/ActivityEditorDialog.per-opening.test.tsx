@@ -104,9 +104,11 @@ describe('the session is keyed by the activity it edits', () => {
 
 describe('a save that completes after the editor closed', () => {
   let finishPatch: (() => void) | null = null;
+  let failPatch: (() => void) | null = null;
 
   beforeEach(() => {
     finishPatch = null;
+    failPatch = null;
     vi.stubGlobal(
       'fetch',
       vi.fn((_url: string, init?: RequestInit) => {
@@ -119,6 +121,13 @@ describe('a save that completes after the editor closed', () => {
         }
         // Held until the test releases it: the save is in flight while the editor closes.
         return new Promise<Response>((resolve) => {
+          failPatch = () =>
+            resolve({
+              ok: false,
+              status: 409,
+              json: () =>
+                Promise.resolve({ error: { message: 'This activity changed elsewhere.' } }),
+            } as unknown as Response);
           finishPatch = () =>
             resolve({
               ok: true,
@@ -167,5 +176,28 @@ describe('a save that completes after the editor closed', () => {
     await waitFor(() =>
       expect(screen.getByTestId('announcer')).toHaveTextContent('General saved.'),
     );
+  });
+
+  it('announces a failure too, because nothing else shows it once the session is gone', async () => {
+    const onSaved = vi.fn();
+    mount(<Host onSaved={onSaved} />);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+    await waitFor(() => expect(failPatch).not.toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByRole('tablist')).not.toBeInTheDocument());
+
+    failPatch?.();
+
+    // SC 4.1.3: a save that failed after the editor closed must not read as one that landed.
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        'General not saved: This activity changed elsewhere.',
+      ),
+    );
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,10 @@ import type { z } from 'zod';
  * window: a form that is *reset* inside a passive effect discards text typed before the re-render,
  * and one born with its values has no such moment (`docs/specs/activity-editor-seeding`, M0).
  *
+ * **The host MUST be mounted per opening.** Nothing here re-seeds, so a host that stays mounted
+ * across openings would carry the previous opening's values into the next; remount it (a key, or
+ * conditional rendering) rather than reaching for a reset effect.
+ *
  * **Two traps this hook exists to close**, both named in the plan as the epic's most likely defects:
  *
  * 1. **`version` must be read at submit time, from the live row.** Each scope save bumps the
