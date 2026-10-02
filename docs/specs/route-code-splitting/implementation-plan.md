@@ -64,6 +64,8 @@ and delivery quality.
 
 ### Milestone 0: Measure, and decide whether to build (shippable: the measurement + the corrections)
 
+> **Status 2026-10-02: COMPLETE.** P1 passed (`m0-measurement.md` §9) and the timing baseline is recorded (§10). M1 is unlocked.
+
 **Outcome:** the floor, the LCP baseline and the waterfall depth are measured and committed; four
 stale or wrong claims across three documents are corrected; the epic is either unlocked or stopped
 with a recorded finding.
@@ -189,7 +191,7 @@ journey (ADR-0081 §2).
 
 ##### Task M0-T5 — Baseline P2 in the build container
 
-> **Status 2026-10-02: NOT DONE; CQ-4 is answered — container readings only.** **Hard deadline:
+> **Status 2026-10-02: DONE — baseline recorded in `m0-measurement.md` §10 (build `31f5995`, 7 runs per path).** CQ-4 is answered — container readings only. _Original note:_ **Hard deadline:
 > before M1 merges**, so the baseline and the later reading come from one machine and the pre-split
 > build still exists to measure. The task is a Playwright `measure-*` harness with CDP 4G
 > throttling, run in the container with **≥ 5 runs per path** and the spread reported. There is no

@@ -257,6 +257,34 @@ chunks of 76 to 84 revisit P3's fragmentation concern; the figures say nothing a
 **Cleaned up per §8 Step 4:** `router.tsx` restored, the probe branch deleted, status clean, and
 `pnpm check:web-bundle` re-run on the restored tree (same 450.38 kB line as above).
 
-**M0-T5 (container timing baseline) NOT taken.** Its instrument is a Playwright `measure-*` harness
+**M0-T5 (container timing baseline) NOT taken in this run; taken later, see §10.** Its instrument is a Playwright `measure-*` harness
 over CDP throttling, which this run may not execute (the database and fixed ports are shared). It
 is still owed, before M1 merges.
+
+## 10. The pre-split timing baseline (M0-T5), 2026-10-02
+
+**Build:** `31f59954b9ffe3792474ae98f55b0fda7ca8f0d9`, taken 2026-10-02T10:20:26Z, working tree clean.
+That tree is `origin/main` `d3b9dbf` plus the measurement harness (`31f5995`), so the application
+code is the **pre-split** code. Command: `ROUTE_SPLIT_LABEL=before scripts/e2e-local.sh
+measure:route-splitting` (1 passed, 3.4 min). Raw output is `apps/web/measure-output/
+route-splitting-before.{json,md}`, gitignored; the table below is the committed copy.
+
+**Environment:** 4 x Intel(R) Xeon(R) Processor @ 2.80GHz, 16 GiB, Chromium 141.0.7390.37, viewport
+1646x1080, 7 runs per path. Throttle (CDP): 1638 kbps down, 150 ms RTT. A container reading, not a
+planner machine (CQ-4); the verdict is INDETERMINATE whenever the spread is >= the effect judged.
+
+| path               | ready ms, median (min-max, spread) | LCP ms, median (min-max, spread) | JS requests (median) |
+| ------------------ | ---------------------------------- | -------------------------------- | -------------------- |
+| `signInCold`       | 2903 (2860-2967, 3.7%)             | 3720 (3660-3756, 2.6%)           | 4                    |
+| `planDeepLinkCold` | 3772 (3698-4145, 11.8%)            | 3576 (3548-3648, 2.8%)           | 4                    |
+| `planDeepLinkWarm` | 1278 (1246-1316, 5.5%)             | 1076 (948-1096, 13.8%)           | 4                    |
+| `planInApp`        | 2294 (2257-2412, 6.8%)             | n/a                              | 0                    |
+
+**Read against P2.** CQ-2's thresholds are 10% on a deep link or reload and 5% in-app. The cold
+deep link's ready-time spread is 11.8% and the in-app spread is 6.8%, both **at or above** the
+effect sizes, so a ready-time verdict on those two paths will be INDETERMINATE unless the effect is
+larger than the spread. LCP spreads on the cold paths (2.6%, 2.8%) are tight. The warm path's LCP
+spread (13.8%) is wide. Every one of the seven runs of each path was byte-identical in JS transfer:
+**463,933 bytes over 4 requests** on both cold paths, 1,200 on the warm path, 0 in-app. That
+463,933 is the **P4 baseline** (total cold JS bytes, pre-split) that M1-T4's journey compares
+against; P4 asks for a fall of at least 100,000.
