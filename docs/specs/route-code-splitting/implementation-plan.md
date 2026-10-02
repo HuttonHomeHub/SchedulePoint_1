@@ -85,7 +85,7 @@ journey (ADR-0081 §2).
 
 ##### Task M0-T1 — Re-derive `bundle-report.json` and record whether it moved
 
-> **Status 2026-10-02: ran 2026-09-12 (404,797); RE-RUN REQUIRED.** The budget file shows ≥ 445,254
+> **Status 2026-10-02: re-run, measured 2026-10-02 at tree `d3b9dbf`: entry graph 461,186 gzip bytes, 3 chunks (`m0-measurement.md` §9).** Originally ran 2026-09-12 (404,797). The budget file shows ≥ 445,254
 > by 2026-09-25. Run `m0-measurement.md` §8 Step 1 (`pnpm check:web-bundle`, then the `node -e`
 > extraction). Do **not** use `pnpm --filter @repo/web build` as written below: since ADR-0160 the
 > root gate is what deletes a stale report first.
@@ -135,7 +135,7 @@ journey (ADR-0081 §2).
 
 ##### Task M0-T3 — The probe build: measure the floor, and answer CQ-1
 
-> **Status 2026-10-02: ran 2026-09-12 (P1 PASS, 157,483; shell 43,878); RE-RUN REQUIRED**, as three
+> **Status 2026-10-02: re-run, measured 2026-10-02 at tree `d3b9dbf`: P1 PASS (A 228,960; B 178,259; C 175,424), shell cost 50,701, sign-in cost 2,835, no lazy chunk over 135,168 (`m0-measurement.md` §9).** Originally ran 2026-09-12 (P1 PASS, 157,483; shell 43,878). Run as three
 > named variants (A eager shell, B lazy shell, C all lazy) per `m0-measurement.md` §8 Steps 2–4. The
 > 2026-09-12 run did not record which routes each variant converted ("19 routes lazy" reconciles
 > with neither 20 nor 21), so the shell figure cannot be separated from sign-in. Also record the

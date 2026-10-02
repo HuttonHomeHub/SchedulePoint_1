@@ -13,6 +13,7 @@
 >   still only two are lazy (`/share` at `:307`, `/staff` at `:315`). **No route or screen was added**
 >   in those three weeks. The brief that commissioned this refresh said there were new
 >   screens/routes. That was wrong, and the brief is not evidence (CLAUDE.md §19.11).
+> - **Re-measured 2026-10-02 at `d3b9dbf`** (`m0-measurement.md` §9): entry graph today **461,186**; lazy-shell design (variant B) **178,259**; shell cost **50,701** (was 43,878); `paint` is in today's graph at 55,647 and out of it in A and B. P1 passes for A and B. The figures in the next bullet are the pre-measurement account.
 > - **It is bigger in bytes, and every byte figure below is now historical.** The budget was
 >   re-floored twice (404,744 → 425,798 on 2026-09-16 → **445,254** on 2026-09-25,
 >   `bundle-budget.json:6-7`), so the entry graph has grown by at least ~40 kB, and `paint` grew with

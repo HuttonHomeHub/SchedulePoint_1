@@ -198,3 +198,65 @@ last probe's. A probe report left on disk is exactly the stale-report failure AD
 **What this does not measure:** P2 (timings, CQ-4), P3 (waves) and P4 (total cold bytes). P3 and
 P4 need a browser against `vite preview` and are the M1-T4 journey's job. Nothing here may be
 quoted as a P2/P3/P4 result.
+
+---
+
+## 9. Re-measurement of 2026-10-02 — bytes only, taken per §8
+
+**Tree:** `origin/main` = `d3b9dbf147cc975aec2f6842423c839ddff8e472` (`web` 0.156.2). The probes ran
+on a throwaway branch off the approval commit `28c05e8`, which is docs-only: `git diff --stat
+origin/main -- apps packages` printed nothing, so the measured code tree equals `origin/main`'s.
+Container, `pnpm install --frozen-lockfile`, `vite build` per §8 Step 2, figures from the §8
+extraction. Bytes only: nothing here is a P2, P3 or P4 result. A single build per variant, which is
+enough for bytes (the build is deterministic).
+
+**Today's baseline** came through the gate (`pnpm check:web-bundle`): `entry graph 450.38 kB of
+457.00 kB gzip` (the gate's `kB` is KiB, see §7). The report says **461,186 gzip bytes**, 3 chunks,
+10 chunks in total, CSS 15,919. This replaces 404,797.
+
+**Variants.** The 18 screens other than sign-in are `AcceptInvite`, `Account`, `AuditLog`,
+`Calendars`, `ClientDetail`, `Clients`, `ForgotPassword`, `Members`, `MyActivity`, `Onboarding`,
+`OrgHome`, `PlanDetail`, `ProjectDetail`, `RecentlyDeleted`, `ResetPassword`, `Resources`, `SignUp`
+and `VerifyEmail` (all `...Screen`). All converted with `lazyRouteComponent` (exported by the
+installed `@tanstack/react-router`). `/share` and `/staff` unchanged.
+
+| variant                                          | lazy routes added | entry graph (gzip) | chunks in graph | total chunks | CSS    | `paint` in graph (gzip) | lazy < 15,000 |
+| ------------------------------------------------ | ----------------- | ------------------ | --------------- | ------------ | ------ | ----------------------- | ------------- |
+| today (nothing converted)                        | 0                 | **461,186**        | 3               | 10           | 15,919 | **yes** (55,647)        | 3             |
+| **A** eager shell and sign-in                    | 18                | **228,960**        | 25              | 68           | 16,207 | no (22,559)             | 36            |
+| **B** lazy shell, eager sign-in (**the design**) | 19                | **178,259**        | 8               | 76           | 16,207 | no (22,569)             | 61            |
+| **C** every route lazy                           | 20                | **175,424**        | 7               | 84           | 16,207 | no (22,569)             | 70            |
+
+**Derived (§8 Step 3).**
+
+- **P1: PASS for both A and B.** A is 228,960 (25 chunks in the graph) and B is 178,259 (8 chunks),
+  against the absolute 300,000. Today's 461,186 falls by 232,226 (50.4%) to A and by 282,927
+  (61.3%) to B. The epic proceeds.
+- **Shell cost (B − A on the entry graph), CQ-1's number: 50,701 gzip bytes**, replacing 43,878.
+  Putting the shell behind a lazy boundary is the larger of the two wins, by a wider margin than
+  2026-09-12 recorded. Graph chunks 25 → 8.
+- **Sign-in cost (C − B): 2,835 gzip bytes.** So 2026-09-12's 43,878 was shell plus little else:
+  sign-in is small. C is 175,424 against 157,483 on 2026-09-12, **17,941 bytes of floor growth** in
+  three weeks (router, vendor closure, shared primitives, boot path), none of it route code.
+- **`paint` is out of the entry graph in A and B** (`inEntryGraph: false`, 22,559 and 22,569 gzip).
+  It is **in** today's graph at **55,647**, up from 33,478: 12.1% of the 461,186. Every stranger
+  who loads a login form downloads it today.
+- **Ceiling:** no lazy chunk is over 135,168 in A, B or C. The largest is `jspdf.es.min` at 128,582
+  (today 128,581). It is the export library, not a route chunk. So the plan-workspace tripping the
+  ceiling, which the spec rated likely, did **not** happen in these probes. The probe has no
+  per-group chunks, so this is the result for one-chunk-per-route-component, not for the grouped
+  design M3 builds.
+- **Fragmentation:** lazy chunks under 15,000 gzip bytes: today 3, A 36, B 61, C 70.
+
+**Against the plan's predictions.** The spec's "~288 kB above the floor" holds: 461,186 − 175,424 =
+285,762. Nothing contradicts a prediction. Two things were not predicted and move the case for
+**B over A**: A's entry graph is 25 chunks, so an eager shell drags the shell's whole static closure
+into the first wave, and B costs 50,701 bytes less than A (more than the 43,878 recorded). Total
+chunks of 76 to 84 revisit P3's fragmentation concern; the figures say nothing about waves.
+
+**Cleaned up per §8 Step 4:** `router.tsx` restored, the probe branch deleted, status clean, and
+`pnpm check:web-bundle` re-run on the restored tree (same 450.38 kB line as above).
+
+**M0-T5 (container timing baseline) NOT taken.** Its instrument is a Playwright `measure-*` harness
+over CDP throttling, which this run may not execute (the database and fixed ports are shared). It
+is still owed, before M1 merges.
