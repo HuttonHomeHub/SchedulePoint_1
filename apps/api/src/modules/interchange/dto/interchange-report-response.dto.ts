@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  boundReport,
   IMPORT_ADVISORY_CODES,
   type ImportAdvisory,
   type ImportAdvisoryCode,
@@ -221,7 +222,9 @@ export class InterchangeReportResponseDto {
   advisories?: ImportAdvisoryResponseDto[];
 
   /** Map a pure-pipeline report to its API representation (the shapes are identical; this documents it). */
-  static from(report: InterchangeReport): InterchangeReportResponseDto {
+  static from(unbounded: InterchangeReport): InterchangeReportResponseDto {
+    // The API adds findings of its own after the importer bounded its (#399); this is the last place.
+    const report = boundReport(unbounded);
     return {
       detectedFormat: report.detectedFormat,
       sourceVersion: report.sourceVersion,

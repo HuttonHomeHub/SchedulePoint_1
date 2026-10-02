@@ -258,6 +258,7 @@ function ImportFlow({
             label="Add this file’s global calendars to the organisation library"
             checked={globalCalendarsShared}
             onChange={(event) => onToggleGlobalCalendars(event.target.checked)}
+            aria-busy={dryRun.isPending}
             hint={`Off (recommended): the file’s calendars belong to “${projectName}” alone. On: its global calendars join the shared library every project picks from.`}
           />
         ) : null}
@@ -267,6 +268,9 @@ function ImportFlow({
             label="Restore the SchedulePoint layout"
             checked={restoreLayout}
             onChange={(event) => onToggleRestoreLayout(event.target.checked)}
+            // Toggling re-runs the dry-run (TECH_DEBT #390): the control stays operable, as the
+            // report's own busy row and the later announcement do the talking, but says it is working.
+            aria-busy={dryRun.isPending}
             hint="This file came from SchedulePoint and carries where each bar was placed and which lane it sat in, as they were when the file was exported. Off: bars are drawn where the logic puts them and packed into lanes afresh. The logic, early dates and critical path are the same either way."
           />
         ) : null}

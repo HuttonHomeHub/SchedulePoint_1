@@ -1,7 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { clampAnchor, portalTarget, useMeasuredBox } from '@/components/ui/overlay-position';
+import {
+  CLAMP_MARGIN,
+  clampAnchor,
+  portalTarget,
+  useMeasuredBox,
+} from '@/components/ui/overlay-position';
 
 /**
  * A hand-rolled **tooltip** (WAI-ARIA APG tooltip pattern) on semantic HTML — the `menu.tsx` /
@@ -108,6 +113,12 @@ interface TriggerAnchor {
  * dock's icon-only **Make milestone…**, the first icon-only trigger at the bottom of the screen: a
  * real mouse click did nothing. Every earlier icon-only trigger sat in the command deck at the top,
  * where below always fits.
+ *
+ * **When it fits neither side** (a viewport shorter than the tip plus the trigger's distance from
+ * the nearer edge — TECH_DEBT #400) the clamp used to do the same thing a second time: the "above"
+ * call pushed the tip back down over the trigger. The tip now takes the side with more room and
+ * stays flush against the trigger there, running off the viewport edge rather than onto the trigger:
+ * a clipped tip is a cosmetic loss, a tip over its trigger is a dead control.
  */
 function placeTip(
   anchor: TriggerAnchor,
@@ -116,9 +127,15 @@ function placeTip(
 ): { left: number; top: number } {
   const x = anchor.x - width / 2;
   const below = clampAnchor({ x, y: anchor.below }, width, height);
-  // The clamp moved it up: it would have covered the trigger. Put it above instead.
-  if (below.top < anchor.below) return clampAnchor({ x, y: anchor.above - height }, width, height);
-  return below;
+  if (below.top >= anchor.below) return below;
+
+  const aboveTop = anchor.above - height;
+  if (aboveTop >= CLAMP_MARGIN) return clampAnchor({ x, y: aboveTop }, width, height);
+
+  // Neither side fits. Only `left` is taken from the clamp: its `top` is what covers the trigger.
+  const { left } = clampAnchor({ x, y: anchor.below }, width, height);
+  const roomBelow = window.innerHeight - anchor.below;
+  return { left, top: roomBelow >= anchor.above ? anchor.below : aboveTop };
 }
 
 /**

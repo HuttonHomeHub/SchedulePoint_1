@@ -54,7 +54,7 @@ import { ActivityLevellingField } from './fields/ActivityLevellingField';
 import { MEASURE_SECTION_TITLE } from './fields/ActivityMeasureFields';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
-import { useScopeForm } from './useScopeForm';
+import { resetKeepingLaterEdits, useScopeForm } from './useScopeForm';
 
 import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
@@ -554,7 +554,7 @@ export function ActivityEditorSession({
         label: 'Measure',
         onSuccess: () => {
           markSaving('measure', false);
-          measure.form.reset(values);
+          resetKeepingLaterEdits(measure.form, values);
           markSaved('measure', true);
         },
         onError: (error) => panelFailed('measure', 'Measure', error),
@@ -568,7 +568,7 @@ export function ActivityEditorSession({
         hoursPerDay,
         values,
         onSuccess: () => {
-          progress.form.reset(values);
+          resetKeepingLaterEdits(progress.form, values);
           markSaved('progress', true);
         },
         onError: (error) => panelFailed('progress', 'Progress', error),
@@ -582,8 +582,15 @@ export function ActivityEditorSession({
         steps,
         onSuccess: (saved) => {
           const rows = stepRowsFromSaved(saved);
+          // Rows edited since the press are put back as a draft over the saved ones (#430). The
+          // array regenerates its row keys on either write, which only matters to a typist who
+          // is mid-edit — and that is exactly the reader whose text this keeps.
+          const later = stepsForm.getValues('steps');
           stepsHeld.current = rows;
           stepsForm.reset({ steps: rows });
+          if (!sameStepRows(later, steps)) {
+            stepsForm.setValue('steps', later, { shouldDirty: true });
+          }
           markSaved('steps', true);
         },
         onError: (error) => panelFailed('steps', 'Steps', error),
@@ -713,7 +720,7 @@ export function ActivityEditorSession({
                         return;
                       }
                       saveScope('general', generalBody(values, hoursPerDay), 'General', (after) => {
-                        general.form.reset(values);
+                        resetKeepingLaterEdits(general.form, values);
                         // A type change across the finish-milestone convention made the server
                         // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
                         // form still shows the old ones: a later edit there would send them back
@@ -779,7 +786,7 @@ export function ActivityEditorSession({
                     event.preventDefault();
                     void scheduling.form.handleSubmit((values) =>
                       saveScope('scheduling', schedulingBody(values), 'Scheduling', () =>
-                        scheduling.form.reset(values),
+                        resetKeepingLaterEdits(scheduling.form, values),
                       ),
                     )(event);
                   }}
@@ -971,7 +978,9 @@ export function ActivityEditorSession({
                   onSubmit={(event) => {
                     event.preventDefault();
                     void cost.form.handleSubmit((values) =>
-                      saveScope('cost', costBody(values), 'Cost', () => cost.form.reset(values)),
+                      saveScope('cost', costBody(values), 'Cost', () =>
+                        resetKeepingLaterEdits(cost.form, values),
+                      ),
                     )(event);
                   }}
                   className="flex flex-col gap-4"
