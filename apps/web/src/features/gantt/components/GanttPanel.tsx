@@ -2040,7 +2040,7 @@ function GanttRowView({
               <span
                 aria-hidden="true"
                 data-bar-edge="start"
-                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
+                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize touch-none"
                 style={{ left: (shown?.x ?? geometry.x) - 4 }}
                 onPointerDown={barResizeStart.onPointerDown}
               />
@@ -2049,7 +2049,7 @@ function GanttRowView({
               <span
                 aria-hidden="true"
                 data-bar-edge="finish"
-                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize"
+                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize touch-none"
                 style={{
                   left: (shown?.x ?? geometry.x) + (shown?.width ?? geometry.width) - 4,
                 }}

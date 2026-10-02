@@ -408,6 +408,9 @@ describe('the bar gestures in the rendered row', () => {
     );
     expect(handle(container, 'start')).toHaveLength(1);
     expect(handle(container, 'finish')).toHaveLength(1);
+    // `touch-none`: without it the browser claims a touch drag for panning and cancels it.
+    expect(handle(container, 'start')[0]).toHaveClass('touch-none');
+    expect(handle(container, 'finish')[0]).toHaveClass('touch-none');
     unmount();
 
     // Shut: no handle at all rather than an inert grab zone. A handle that does nothing is the
