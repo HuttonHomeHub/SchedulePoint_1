@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
 } from '@tanstack/react-router';
 import { Suspense, lazy } from 'react';
@@ -24,26 +25,55 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
-import { AcceptInviteScreen } from '@/routes/accept-invite';
-import { AccountScreen } from '@/routes/account';
 import { AuditLogScreen } from '@/routes/audit-log';
-import { AuthedLayout } from '@/routes/authed-layout';
 import { CalendarsScreen } from '@/routes/calendars';
 import { ClientDetailScreen } from '@/routes/client-detail';
 import { ClientsScreen } from '@/routes/clients';
-import { ForgotPasswordScreen } from '@/routes/forgot-password';
 import { MembersScreen } from '@/routes/members';
 import { MyActivityScreen } from '@/routes/my-activity';
-import { OnboardingScreen } from '@/routes/onboarding';
 import { OrgHomeScreen } from '@/routes/org-home';
 import { PlanDetailScreen } from '@/routes/plan-detail';
 import { ProjectDetailScreen } from '@/routes/project-detail';
 import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
-import { ResetPasswordScreen } from '@/routes/reset-password';
 import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
-import { SignUpScreen } from '@/routes/sign-up';
-import { VerifyEmailScreen } from '@/routes/verify-email';
+
+/**
+ * **Not code-split, by rule** (`docs/specs/route-code-splitting/`): a route component is a
+ * `lazyRouteComponent` unless `router-splitting.structural.test.ts` names it in `EAGER_ROUTES` with
+ * a reason (or schedules it). The loading treatment's timing is the router's default and is set
+ * nowhere here — see `route-pending.tsx`.
+ *
+ * **The authenticated frame is lazy too** (CQ-1, answered 2026-10-02): a signed-out visitor never
+ * sees it. While most screens are still static its closure is in the entry graph anyway, so today it
+ * buys wave depth rather than bytes — measured at M1, entry graph gzip: nothing split 461,670;
+ * account group only 467,693 (+6,023, as chunk boundaries cost compression); account group and
+ * frame 461,315 (-355). The payoff is variant B of `m0-measurement.md` section 9, which needs every
+ * screen lazy.
+ */
+const AuthedLayout = lazyRouteComponent(() => import('@/routes/authed-layout'), 'AuthedLayout');
+const AcceptInviteScreen = lazyRouteComponent(
+  () => import('@/routes/accept-invite'),
+  'AcceptInviteScreen',
+);
+const AccountScreen = lazyRouteComponent(() => import('@/routes/account'), 'AccountScreen');
+const ForgotPasswordScreen = lazyRouteComponent(
+  () => import('@/routes/forgot-password'),
+  'ForgotPasswordScreen',
+);
+const OnboardingScreen = lazyRouteComponent(
+  () => import('@/routes/onboarding'),
+  'OnboardingScreen',
+);
+const ResetPasswordScreen = lazyRouteComponent(
+  () => import('@/routes/reset-password'),
+  'ResetPasswordScreen',
+);
+const SignUpScreen = lazyRouteComponent(() => import('@/routes/sign-up'), 'SignUpScreen');
+const VerifyEmailScreen = lazyRouteComponent(
+  () => import('@/routes/verify-email'),
+  'VerifyEmailScreen',
+);
 
 export interface RouterContext {
   queryClient: QueryClient;
