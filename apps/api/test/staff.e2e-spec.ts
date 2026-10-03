@@ -162,6 +162,35 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     expect(await staffAuditCount()).toBe(before + 1);
   });
 
+  it('does not report a staff account as dual-hatted once its membership is removed (#436)', async () => {
+    const agent = await signedInStaff();
+    const staff = await prisma.user.findFirstOrThrow({ where: { email: STAFF_EMAIL } });
+    const created = await agent
+      .post('/api/v1/organizations')
+      .set('Origin', ORIGIN)
+      .send({ name: 'Acme' })
+      .expect(201);
+    const orgId = created.body.data.id as string;
+
+    const before = await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(200);
+    expect(before.body.data.dualHatted).toBe(true);
+
+    // Somebody else must hold the admin seat, or the last-admin guard refuses the removal.
+    const other = request.agent(server());
+    await signUp(other, MEMBER_EMAIL).expect(200);
+    const otherUser = await prisma.user.findFirstOrThrow({ where: { email: MEMBER_EMAIL } });
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: otherUser.id, role: 'ORG_ADMIN' },
+    });
+    const membership = await prisma.orgMember.findFirstOrThrow({
+      where: { organizationId: orgId, userId: staff.id },
+    });
+    await other.delete(`/api/v1/organizations/acme/members/${membership.id}`).expect(204);
+
+    const after = await agent.get('/api/v1/staff/me').set('Origin', ORIGIN).expect(200);
+    expect(after.body.data.dualHatted).toBe(false);
+  });
+
   it('records the staff actor with a user id, which the CHECK constraint requires', async () => {
     const agent = await signedInStaff();
 

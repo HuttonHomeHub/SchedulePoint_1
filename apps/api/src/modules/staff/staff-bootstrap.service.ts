@@ -45,7 +45,7 @@ export class StaffBootstrapService implements OnApplicationBootstrap {
         verifiedIds.length === 0
           ? []
           : await this.prisma.orgMember.findMany({
-              where: { userId: { in: verifiedIds } },
+              where: { userId: { in: verifiedIds }, deletedAt: null },
               select: { userId: true },
             });
       const dualHatted = new Set(memberships.map((row) => row.userId)).size;
