@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** Default keyboard step (px) for arrow-key resizing. */
-const KEY_STEP = 16;
+/**
+ * Default keyboard step (px) for arrow-key resizing. Exported so a typed twin of a divider (the Gantt's
+ * `View ▾` width fields) steps by the same amount rather than restating the number.
+ */
+export const KEY_STEP = 16;
 
 export interface PanelResizerProps {
   /**

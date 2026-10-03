@@ -25,8 +25,8 @@ function bundle(over: Partial<Bundle> = {}): Bundle {
     hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
     setHidden: vi.fn(),
     widths: resolveColumnWidths({}),
-    setWidth: vi.fn(),
-    table: { size: 584, min: 524, max: 720, setSize: vi.fn() },
+    setWidth: vi.fn((_key: string, width: number) => width),
+    table: { size: 584, min: 524, max: 720, setSize: vi.fn((size: number) => size) },
     reset: vi.fn(),
     isDefault: false,
     ...over,
@@ -43,7 +43,7 @@ describe('a column width field', () => {
     expect(code).toHaveValue(80);
     expect(code).toHaveAttribute('min', '48');
     expect(code).toHaveAttribute('max', '400');
-    expect(screen.getByText(/48 to 400 pixels/)).toBeInTheDocument();
+    expect(screen.getByText(/Widths are 48 to 400 px/)).toBeInTheDocument();
     expect(code.getAttribute('aria-describedby')).toBeTruthy();
   });
 
@@ -124,6 +124,88 @@ describe('a column width field', () => {
   });
 });
 
+describe('a typed value is never changed silently', () => {
+  const status = (): HTMLElement => screen.getByRole('status');
+
+  it('has a polite status region from the start, so a later message is announced', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    expect(status()).toBeEmptyDOMElement();
+  });
+
+  it('says so when a value outside the bounds is limited to them', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    fireEvent.change(field('Code width'), { target: { value: '20' } });
+    fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    expect(status()).toHaveTextContent('Code width limited to 48 px. Widths are 48 to 400 px.');
+    expect(field('Code width')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('says so when the chart guard limited a value that was inside the bounds', () => {
+    const columns = bundle({ setWidth: vi.fn(() => 220) });
+    render(<GanttColumnsGroup columns={columns} />);
+    fireEvent.change(field('Code width'), { target: { value: '300' } });
+    fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    expect(status()).toHaveTextContent(
+      'Code width limited to 220 px so the chart keeps at least 240 px.',
+    );
+  });
+
+  it('says so when nothing usable was typed, and the field reverts', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    fireEvent.change(field('Code width'), { target: { value: '' } });
+    fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    expect(status()).toHaveTextContent('Code width not changed. Enter 48 to 400 px.');
+    expect(field('Code width')).toHaveValue(80);
+  });
+
+  it('says nothing when the value was applied as typed, and clears an earlier message', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    fireEvent.change(field('Code width'), { target: { value: '20' } });
+    fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    expect(status()).not.toBeEmptyDOMElement();
+    fireEvent.change(field('Code width'), { target: { value: '160' } });
+    fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    expect(status()).toBeEmptyDOMElement();
+  });
+
+  it('says so for the table width too, against the table’s own bounds', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    fireEvent.change(field('Table width'), { target: { value: '100' } });
+    fireEvent.keyDown(field('Table width'), { key: 'Enter' });
+    expect(status()).toHaveTextContent('Table width limited to 524 px. Widths are 524 to 720 px.');
+  });
+
+  it('announces a reset', () => {
+    render(<GanttColumnsGroup columns={bundle({ isDefault: false })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset widths' }));
+    expect(status()).toHaveTextContent('Widths reset to standard.');
+  });
+});
+
+describe('Escape in a width field', () => {
+  it('discards the draft, and the blur that follows does not commit it', () => {
+    const columns = bundle();
+    render(<GanttColumnsGroup columns={columns} />);
+    const code = field('Code width');
+    fireEvent.change(code, { target: { value: '300' } });
+    expect(code).toHaveValue(300);
+    fireEvent.keyDown(code, { key: 'Escape' });
+    expect(code).toHaveValue(80);
+    // Closing the popover blurs the field; that must not apply what was just discarded.
+    fireEvent.blur(code);
+    expect(columns.setWidth).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('leaves an untouched field alone', () => {
+    const columns = bundle();
+    render(<GanttColumnsGroup columns={columns} />);
+    fireEvent.keyDown(field('Code width'), { key: 'Escape' });
+    fireEvent.blur(field('Code width'));
+    expect(columns.setWidth).not.toHaveBeenCalled();
+  });
+});
+
 describe('the table width field', () => {
   it('shows the divider’s own number and bounds, and writes through the same setter', () => {
     const columns = bundle();
@@ -132,7 +214,7 @@ describe('the table width field', () => {
     expect(table).toHaveValue(584);
     expect(table).toHaveAttribute('min', '524');
     expect(table).toHaveAttribute('max', '720');
-    expect(screen.getByText(/524 to 720 pixels/)).toBeInTheDocument();
+    expect(screen.getByText(/524 to 720 px/)).toBeInTheDocument();
     fireEvent.change(table, { target: { value: '600' } });
     fireEvent.keyDown(table, { key: 'Enter' });
     expect(columns.table.setSize).toHaveBeenCalledExactlyOnceWith(600);

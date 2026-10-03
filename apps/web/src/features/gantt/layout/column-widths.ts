@@ -198,8 +198,10 @@ export function ganttColumnWidth(
 /**
  * The pane's ceiling. **The floor always wins**: a ceiling below the floor makes `clampSize` return
  * the ceiling, i.e. a pane narrower than its own columns, which is ADR-0095's Float-over-chart
- * incident again. With the shipped widths `FIXED` tops out at 686, so the inversion was latent;
- * per-column widths are what make it live.
+ * incident again. With the shipped widths `FIXED` tops out at 686 — all six columns at their defaults,
+ * Activity at its 120 px floor, and the 72 px baseline column (`column-widths.test.ts` pins it) — so
+ * the inversion was latent; per-column widths are what make it live. (The 746 a fresh pane seeds
+ * to is the same sum with Activity at its 180 px default, which is a size, not a floor.)
  */
 export function gridCeiling(fixedWidth: number): number {
   return Math.max(GANTT_GRID_MAX_WIDTH, fixedWidth);
@@ -240,7 +242,9 @@ export function chartGuard(
   candidate: number,
   limits: { fixedWithoutColumn: number; pane: number; scrollerWidth: number },
 ): number {
-  const room =
-    Math.max(limits.scrollerWidth - CHART_MIN_WIDTH, limits.pane) - limits.fixedWithoutColumn;
+  // A scroller that reports 0 is **unmeasured** (not yet laid out, or `display: none`), not a window
+  // with no room: treating it as zero would clamp every typed width to the floor.
+  const scroller = limits.scrollerWidth > 0 ? limits.scrollerWidth : Number.POSITIVE_INFINITY;
+  const room = Math.max(scroller - CHART_MIN_WIDTH, limits.pane) - limits.fixedWithoutColumn;
   return Math.min(candidate, Math.max(COLUMN_MIN, room));
 }

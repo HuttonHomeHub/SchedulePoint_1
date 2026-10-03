@@ -156,6 +156,33 @@ test('the same sequence works with the keyboard alone', async ({ page }) => {
   await expect.poll(() => headerWidth(page, 'Code')).toBe(80);
 });
 
+test('a typed width the chart guard limits is limited aloud, never silently', async ({ page }) => {
+  test.setTimeout(240_000);
+  await ganttPlan(page);
+  // A window too narrow to take the whole of 300 px without crowding the chart: the table may not
+  // grow past its pane, so Activity absorbs what it can and the guard limits the rest. The guard
+  // reads the scroller's width at the moment of typing, so resizing after the plan is open is enough.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(ganttGrid(page)).toBeVisible();
+
+  await openView(page);
+  await field(page, 'Code width').fill('300');
+  await page.keyboard.press('Enter');
+
+  const status = page.getByRole('status').filter({ hasText: /Code width limited to/ });
+  await expect(status).toHaveText(
+    /Code width limited to \d+ px so the chart keeps at least 240 px\./,
+  );
+  // The field and the grid agree with what the message says, and neither shows the 300 typed.
+  const shown = Number(await field(page, 'Code width').inputValue());
+  expect(shown).toBeLessThan(300);
+  expect(shown).toBeGreaterThanOrEqual(48);
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(shown);
+  await expect(field(page, 'Code width')).not.toHaveAttribute('aria-invalid', 'true');
+  await page.keyboard.press('Escape');
+  await chartMeetsGrid(page, 'after a limited width');
+});
+
 test('a hidden column has no width field, and returns at the width it was given', async ({
   page,
 }) => {

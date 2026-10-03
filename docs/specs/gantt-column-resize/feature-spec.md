@@ -211,6 +211,12 @@ invariant   : Σ visible widths + variance = pane              (existing structu
   **default** widths (`GanttPanel.tsx:436-454`), and stays so. Making it planner-aware would rescale
   every bar on every frame of a column drag.
 
+> **Addendum (M1 review, 2026-10-03).** `Reset widths` also restores the divider to the pane's seed, and
+> hiding or showing a column changes that seed (it is the default widths of the visible columns summed),
+> so a divider the planner has not touched can make Reset available after a column is hidden. A typed
+> value that is limited — by the bounds or by the chart guard — is said in a polite status, never changed
+> silently.
+
 > **A pre-existing divergence, recorded rather than fixed.** `barRegionWidth` uses `GRID_WIDTH` (`:445`)
 > while the chart actually starts at the dragged `gridWidth` (`:508`, `:1000`). So after a `Grid width`
 > drag, a zoom preset frames its range against a width that is not the visible chart's. Whether that is

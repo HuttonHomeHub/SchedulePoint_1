@@ -17,7 +17,6 @@ import {
   defaultGridWidth,
   ganttColumnWidth,
   ganttFixedWidth,
-  gridCeiling,
   type ColumnWidths,
   type ResizableColumnKey,
 } from '../layout/column-widths';
@@ -1256,8 +1255,8 @@ function GanttPanelBody({
         <PanelResizer
           orientation="vertical"
           size={gridWidth}
-          min={FIXED_WIDTH}
-          max={gridCeiling(FIXED_WIDTH)}
+          min={gridPrefs.min}
+          max={gridPrefs.max}
           label="Grid width"
           onResize={gridPrefs.setSize}
           // Measured from the SCROLLER's left edge, because that is what the sticky column's width

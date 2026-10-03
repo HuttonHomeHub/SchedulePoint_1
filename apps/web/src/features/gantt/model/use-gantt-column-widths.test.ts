@@ -19,7 +19,9 @@ describe('useGanttColumnWidths', () => {
 
   it('round-trips a width through storage into a fresh mount', () => {
     const first = renderHook(() => useGanttColumnWidths());
-    act(() => first.result.current.setWidth('code', 160));
+    act(() => {
+      first.result.current.setWidth('code', 160);
+    });
     expect(first.result.current.widths).toEqual({ code: 160 });
     expect(JSON.parse(localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY) ?? 'null')).toEqual({
       v: 1,
@@ -32,9 +34,13 @@ describe('useGanttColumnWidths', () => {
 
   it('clamps what it is given', () => {
     const { result } = renderHook(() => useGanttColumnWidths());
-    act(() => result.current.setWidth('code', 20));
+    act(() => {
+      result.current.setWidth('code', 20);
+    });
     expect(result.current.widths.code).toBe(48);
-    act(() => result.current.setWidth('code', 9000));
+    act(() => {
+      result.current.setWidth('code', 9000);
+    });
     expect(result.current.widths.code).toBe(400);
   });
 
@@ -50,17 +56,25 @@ describe('useGanttColumnWidths', () => {
   it('applies the guard the panel published, and stops applying it when withdrawn', () => {
     const { result } = renderHook(() => useGanttColumnWidths());
     result.current.guardRef.current = (_key, candidate) => Math.min(candidate, 100);
-    act(() => result.current.setWidth('code', 300));
+    act(() => {
+      result.current.setWidth('code', 300);
+    });
     expect(result.current.widths.code).toBe(100);
     result.current.guardRef.current = null;
-    act(() => result.current.setWidth('code', 300));
+    act(() => {
+      result.current.setWidth('code', 300);
+    });
     expect(result.current.widths.code).toBe(300);
   });
 
   it('reset REMOVES the stored key rather than writing the defaults', () => {
     const { result } = renderHook(() => useGanttColumnWidths());
-    act(() => result.current.setWidth('code', 160));
-    act(() => result.current.reset());
+    act(() => {
+      result.current.setWidth('code', 160);
+    });
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.widths).toEqual({});
     expect(localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).toBeNull();
   });
@@ -82,9 +96,13 @@ describe('useGanttColumnWidths', () => {
       throw new Error('denied');
     });
     const { result } = renderHook(() => useGanttColumnWidths());
-    act(() => result.current.setWidth('code', 160));
+    act(() => {
+      result.current.setWidth('code', 160);
+    });
     expect(result.current.widths.code).toBe(160);
-    act(() => result.current.reset());
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.widths).toEqual({});
   });
 });

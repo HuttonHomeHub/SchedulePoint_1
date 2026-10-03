@@ -115,6 +115,11 @@ describe('chartGuard', () => {
     expect(chartGuard(400, { ...limits, scrollerWidth: 700 })).toBe(584 - 444);
   });
 
+  it('treats an unmeasured (0-wide) scroller as unmeasured, not as no room', () => {
+    // Clamped to the floor by a naive subtraction: 0 - 240 is negative, so the pane would decide.
+    expect(chartGuard(300, { ...limits, scrollerWidth: 0 })).toBe(300);
+  });
+
   it('never goes below the column minimum, and never refuses', () => {
     expect(chartGuard(400, { fixedWithoutColumn: 900, pane: 584, scrollerWidth: 700 })).toBe(
       COLUMN_MIN,

@@ -87,12 +87,13 @@ export interface TsldToolbarContext {
          * the host's `useGanttColumnWidths` passed down, never a second copy.
          */
         widths: Readonly<Record<ResizableColumnKey, number>>;
-        setWidth: (key: ResizableColumnKey, width: number) => void;
+        /** Returns the width APPLIED, which differs from the request when it was limited. */
+        setWidth: (key: ResizableColumnKey, width: number) => number;
         /**
          * The table's width — the SAME value the `Grid width` divider shows, bounded by the same
          * floor and ceiling. A typed twin for a drag (WCAG 2.5.7).
          */
-        table: { size: number; min: number; max: number; setSize: (size: number) => void };
+        table: { size: number; min: number; max: number; setSize: (size: number) => number };
         /** Every column and the table back to standard; the stored column preference is deleted. */
         reset: () => void;
         /** Nothing differs from standard — `Reset widths` is then shaded with its reason. */

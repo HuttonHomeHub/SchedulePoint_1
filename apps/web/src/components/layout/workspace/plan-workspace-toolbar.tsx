@@ -54,6 +54,7 @@ import { PanelSurface, Surface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
+import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_ACTIVITY_TYPES_ENABLED,
@@ -599,7 +600,11 @@ export function ToolbarPlanWorkspace({
               size: ganttGridPrefs.size,
               min: ganttGridPrefs.min,
               max: ganttGridPrefs.max,
-              setSize: ganttGridPrefs.setSize,
+              // Returns the width applied, like `setWidth`, so the field can say when it limited one.
+              setSize: (size: number): number => {
+                ganttGridPrefs.setSize(size);
+                return clampSize(size, ganttGridPrefs.min, ganttGridPrefs.max);
+              },
             },
             reset: () => {
               ganttColumnWidths.reset();

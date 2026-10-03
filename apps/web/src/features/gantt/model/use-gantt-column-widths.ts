@@ -21,8 +21,11 @@ export type ColumnWidthGuard = (key: ResizableColumnKey, candidate: number) => n
 export interface GanttColumnWidthsBundle {
   /** The widths the planner has set — only those, already clamped. Absent keys use the default. */
   widths: ColumnWidths;
-  /** Set one column's width, clamped (and chart-guarded once the panel has published its guard). */
-  setWidth: (key: ResizableColumnKey, width: number) => void;
+  /**
+   * Set one column's width, clamped (and chart-guarded once the panel has published its guard).
+   * Returns the width **applied**, so a caller can say when it differs from what was asked.
+   */
+  setWidth: (key: ResizableColumnKey, width: number) => number;
   /** Put every column back to its standard width and **delete** the stored preference. */
   reset: () => void;
   guardRef: MutableRefObject<ColumnWidthGuard | null>;
@@ -56,12 +59,10 @@ export function useGanttColumnWidths(): GanttColumnWidthsBundle {
   // stale render's copy.
   const latest = useRef(widths);
 
-  const setWidth = useCallback((key: ResizableColumnKey, width: number) => {
+  const setWidth = useCallback((key: ResizableColumnKey, width: number): number => {
     const asked = clampColumnWidth(width);
-    const next: ColumnWidths = {
-      ...latest.current,
-      [key]: clampColumnWidth(guardRef.current?.(key, asked) ?? asked),
-    };
+    const applied = clampColumnWidth(guardRef.current?.(key, asked) ?? asked);
+    const next: ColumnWidths = { ...latest.current, [key]: applied };
     latest.current = next;
     setWidths(next);
     try {
@@ -69,6 +70,7 @@ export function useGanttColumnWidths(): GanttColumnWidthsBundle {
     } catch {
       // Storage full or disabled — the widths apply for the session and will not persist.
     }
+    return applied;
   }, []);
 
   const reset = useCallback(() => {
