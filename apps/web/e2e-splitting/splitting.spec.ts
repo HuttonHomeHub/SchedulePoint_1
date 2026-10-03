@@ -57,6 +57,11 @@ const MAX_WAVES = 2;
 const SIGN_UP_CHUNK = /\/assets\/sign-up-[^/]+\.js$/;
 /** The TSLD painter chunk, which left the entry graph with the plan screen (M3). */
 const PAINT_CHUNK = /\/assets\/paint-[^/]+\.js$/;
+/**
+ * The onboarding screen's chunk, which `/sign-in` and `/sign-up` fetch on idle (`warmOnboardingScreen`,
+ * `docs/TECH_DEBT.md` #435). A deliberate warm-up, not part of the path to the screen being measured.
+ */
+const ONBOARDING_CHUNK = /\/assets\/onboarding-[^/]+\.js$/;
 const DIST_ASSETS = join(process.cwd(), 'dist', 'assets');
 
 interface JsTiming {
@@ -64,7 +69,14 @@ interface JsTiming {
   readonly transferBytes: number;
 }
 
-/** Every script resource the page has fetched so far, from the browser's own timeline. */
+/**
+ * Every script resource the page has fetched so far, from the browser's own timeline — **except the
+ * idle-time onboarding warm-up**. P3 and P4 are about the critical path to the screen the visitor
+ * asked for; an idle preload starts whenever the browser goes quiet (so it lands as a third wave on a
+ * slow runner, as it did on `chromium-coarse`) and is by design off that path, exactly as
+ * `warmHierarchyScreens` is for the signed-in routes. Excluding it by name keeps the bar honest
+ * without raising `MAX_WAVES`; the warm-up itself is pinned by the router's S2 structural test.
+ */
 async function jsTiming(page: Page): Promise<JsTiming> {
   const rows = await page.evaluate(() =>
     (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
@@ -76,9 +88,10 @@ async function jsTiming(page: Page): Promise<JsTiming> {
         transferSize: e.transferSize,
       })),
   );
+  const critical = rows.filter((r) => !ONBOARDING_CHUNK.test(r.name));
   return {
-    requests: rows,
-    transferBytes: rows.reduce((sum, r) => sum + r.transferSize, 0),
+    requests: critical,
+    transferBytes: critical.reduce((sum, r) => sum + r.transferSize, 0),
   };
 }
 
