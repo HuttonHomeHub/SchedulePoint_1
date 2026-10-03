@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.159.1
+
+### Patch Changes
+
+- [#768](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/768) [`192ccb1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/192ccb1db22075df28a2ab7d86e63db4352e52bc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dissolving a WBS summary with one activity now reads "its 1 activity moves up" instead of "its 1 activity move up".
+
 ## 0.159.0
 
 ### Minor Changes
