@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.159.2
+
+### Patch Changes
+
+- [#770](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/770) [`1d2e7f0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1d2e7f066a4e95228aa25ef794fda7597e65b592) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A started or finished activity can no longer be moved sideways in the diagram or the Gantt, which now say why; moving it between lanes still works.
+
 ## 0.159.1
 
 ### Patch Changes
