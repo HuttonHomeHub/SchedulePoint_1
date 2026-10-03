@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.158.0
+
+### Minor Changes
+
+- [#760](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/760) [`096fc47`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/096fc47c8276d4006fdeedbdf93da56e2600829d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The app now loads far less code before the sign-in screen appears. Every screen except sign-in, including the plan workspace, the client and project screens, the libraries and the administration screens, downloads only when it is opened, so a first visit's JavaScript falls from about 461 kB to about 177 kB and the sign-in screen is about twice as fast to appear. The screens you are most likely to open next are fetched quietly in the background after you sign in. Slow screens show a loading skeleton, announced to screen readers, instead of a blank page. If a download fails, for example because the app was updated while a tab was open, the error screen takes focus and "Try again" reloads the page; if you are offline it says so and waits instead of reloading. The page itself is now always re-checked on load so a new release's files are never missed. Opening a plan from a bookmark is about 8% slower and a page refresh on a plan is slower in testing (accepted, and tracked for re-measuring on the production server), while opening a plan from inside the app is unchanged.
+
 ## 0.157.0
 
 ### Minor Changes
