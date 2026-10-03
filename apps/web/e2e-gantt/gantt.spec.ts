@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import {
+  chartMeetsGrid,
   createClient,
   createPlan,
   createProject,
@@ -113,36 +114,9 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   // The `role="separator"` carries `aria-valuemin`/`max`, so the bounds are read off the control
   // rather than restated here — a copied constant is how a gate comes to agree with the wrong
   // number.
-  const chartMeetsGrid = async (where: string): Promise<void> => {
-    // Only meaningful at `scrollLeft: 0`. The pinned block is `position: sticky; left: 0`, so once
-    // the scroller moves the chart header slides UNDER it and the two edges legitimately overlap —
-    // an assertion taken mid-scroll would report the defect it is looking for.
-    await grid.evaluate((el) => {
-      let node = el.parentElement;
-      while (node && node.scrollWidth <= node.clientWidth) node = node.parentElement;
-      if (node) node.scrollLeft = 0;
-    });
-    const heads = await grid.getByRole('columnheader').evaluateAll((els) =>
-      els.map((el) => {
-        const box = el.getBoundingClientRect();
-        return { name: (el.textContent ?? '').trim(), left: box.left, right: box.right };
-      }),
-    );
-    const timeline = heads.find((h) => h.name === 'Timeline');
-    // `Actions` is `sr-only`, so it takes no layout and its rect says nothing about the pane.
-    const pinned = heads.filter((h) => h.name !== 'Timeline' && h.name !== 'Actions');
-    expect(timeline, `${where}: no Timeline column header`).toBeDefined();
-    expect(pinned.length, `${where}: no pinned column headers`).toBeGreaterThan(0);
-    // ONE equality catches both ways the arithmetic can be wrong: a column overflowing onto the
-    // chart reads as `>`, a gap between the two as `<`.
-    expect(
-      Math.round(Math.max(...pinned.map((h) => h.right))),
-      `${where}: the pinned columns do not end where the chart begins — ${JSON.stringify(heads)}`,
-    ).toBe(Math.round(timeline?.left ?? -1));
-  };
 
   const splitter = page.getByRole('separator', { name: 'Grid width' });
-  await chartMeetsGrid('at the seeded width');
+  await chartMeetsGrid(page, 'at the seeded width');
 
   // Home is the floor: the width at which `name` stops absorbing and every column is at its
   // tightest, which is where a sum that is wrong by a column shows first.
@@ -150,13 +124,13 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   await splitter.focus();
   await page.keyboard.press('Home');
   await expect(splitter).toHaveAttribute('aria-valuenow', floor ?? '');
-  await chartMeetsGrid('at the floor');
+  await chartMeetsGrid(page, 'at the floor');
 
   // And a step off the floor, so the pass is not a property of one width. ArrowRight grows a
   // vertical divider (`PanelResizer`'s start-anchored default).
   await page.keyboard.press('ArrowRight');
   await expect(splitter).not.toHaveAttribute('aria-valuenow', floor ?? '');
-  await chartMeetsGrid('one step above the floor');
+  await chartMeetsGrid(page, 'one step above the floor');
 
   /**
    * And with a **baseline active**, which adds a `vs baseline` column to the pinned block.
@@ -196,11 +170,11 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
     ganttGrid(page).getByRole('columnheader', { name: 'vs baseline' }),
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
-  await chartMeetsGrid('with a baseline, at the seeded width');
+  await chartMeetsGrid(page, 'with a baseline, at the seeded width');
 
   await page.getByRole('separator', { name: 'Grid width' }).focus();
   await page.keyboard.press('Home');
-  await chartMeetsGrid('with a baseline, at the floor');
+  await chartMeetsGrid(page, 'with a baseline, at the floor');
 
   // ------------------------------------------------------------------ 6. Back to the diagram
   await page.getByRole('button', { name: 'Diagram', exact: true }).click();

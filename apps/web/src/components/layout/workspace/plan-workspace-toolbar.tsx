@@ -77,8 +77,16 @@ import {
   FLOAT_PATHS_PANEL_MIN_WIDTH,
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
+import {
+  VARIANCE_COLUMN_WIDTH,
+  isDefaultWidths,
+  resolveColumnWidths,
+} from '@/features/gantt/layout/column-widths';
+import { GANTT_COLUMNS } from '@/features/gantt/layout/grid-columns';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
+import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
+import { useGanttGridPrefs } from '@/features/gantt/model/use-gantt-grid-prefs';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
 import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
@@ -528,6 +536,23 @@ export function ToolbarPlanWorkspace({
   // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
   // set were both lifted to this file to end.
   const ganttViewState = useGanttViewState();
+  // The planner's column widths and the grid pane's size (ADR-0173). Held here for the same reason as
+  // the view state: the `View ▾` fields and the grid read ONE value, and two `useState`s over one
+  // storage key do not sync. The pane's bounds derive from the same pure arithmetic the panel lays
+  // out with, from the visible columns and whether a baseline column is showing.
+  const ganttColumnWidths = useGanttColumnWidths();
+  const ganttVisibleColumns = useMemo(
+    () => GANTT_COLUMNS.filter((c) => !ganttViewState.hiddenColumns.has(c.key)),
+    [ganttViewState.hiddenColumns],
+  );
+  const ganttGridPrefs = useGanttGridPrefs({
+    columns: ganttVisibleColumns,
+    widths: ganttColumnWidths.widths,
+    extraPinnedWidth:
+      model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0
+        ? VARIANCE_COLUMN_WIDTH
+        : 0,
+  });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 
   // **One call, two surfaces** (console epic M5). Its result goes to the deck's pen item through
@@ -565,7 +590,25 @@ export function ToolbarPlanWorkspace({
     // than shaded (ADR-0082's omit branch — a thing the projection cannot do, not a permission).
     ganttColumns:
       planView === 'gantt'
-        ? { hidden: ganttViewState.hiddenColumns, setHidden: ganttViewState.onHiddenColumnsChange }
+        ? {
+            hidden: ganttViewState.hiddenColumns,
+            setHidden: ganttViewState.onHiddenColumnsChange,
+            widths: resolveColumnWidths(ganttColumnWidths.widths),
+            setWidth: ganttColumnWidths.setWidth,
+            table: {
+              size: ganttGridPrefs.size,
+              min: ganttGridPrefs.min,
+              max: ganttGridPrefs.max,
+              setSize: ganttGridPrefs.setSize,
+            },
+            reset: () => {
+              ganttColumnWidths.reset();
+              ganttGridPrefs.setSize(ganttGridPrefs.seed);
+            },
+            isDefault:
+              isDefaultWidths(ganttColumnWidths.widths) &&
+              ganttGridPrefs.size === ganttGridPrefs.seed,
+          }
         : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
@@ -1455,6 +1498,10 @@ export function ToolbarPlanWorkspace({
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
           viewState={ganttViewState}
+          // Column widths and the grid pane, owned HERE so the `View ▾` fields and the grid read the
+          // same numbers (ADR-0173).
+          columnWidths={ganttColumnWidths}
+          gridPrefs={ganttGridPrefs}
           // Indent / Outdent (M5-T4). The panel resolves WHERE from its own row order; this is the
           // write.
           rowStructure={rowStructure}

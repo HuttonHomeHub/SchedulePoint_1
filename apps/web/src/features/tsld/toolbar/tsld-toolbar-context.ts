@@ -9,6 +9,7 @@ import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
 import type { PlanViewMode } from '@/features/gantt';
+import type { ResizableColumnKey } from '@/features/gantt/layout/column-widths';
 import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
@@ -80,6 +81,22 @@ export interface TsldToolbarContext {
     | {
         hidden: ReadonlySet<GanttColumnKey>;
         setHidden: (next: ReadonlySet<GanttColumnKey>) => void;
+        /**
+         * **Column widths, typed** (ADR-0173). Every resizable column's current width in px —
+         * the planner's, else the default — and the writer for one. A device preference, so it is
+         * the host's `useGanttColumnWidths` passed down, never a second copy.
+         */
+        widths: Readonly<Record<ResizableColumnKey, number>>;
+        setWidth: (key: ResizableColumnKey, width: number) => void;
+        /**
+         * The table's width — the SAME value the `Grid width` divider shows, bounded by the same
+         * floor and ceiling. A typed twin for a drag (WCAG 2.5.7).
+         */
+        table: { size: number; min: number; max: number; setSize: (size: number) => void };
+        /** Every column and the table back to standard; the stored column preference is deleted. */
+        reset: () => void;
+        /** Nothing differs from standard — `Reset widths` is then shaded with its reason. */
+        isDefault: boolean;
       }
     | undefined;
 

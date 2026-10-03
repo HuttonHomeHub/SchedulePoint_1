@@ -6,6 +6,7 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { resolveColumnWidths } from '@/features/gantt/layout/column-widths';
 import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { DEFAULT_HIDDEN_COLUMNS, HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 
@@ -29,7 +30,15 @@ const setHidden = vi.fn();
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
     planView: 'gantt',
-    ganttColumns: { hidden: new Set(DEFAULT_HIDDEN_COLUMNS), setHidden },
+    ganttColumns: {
+      hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      setHidden,
+      widths: resolveColumnWidths({}),
+      setWidth: vi.fn(),
+      table: { size: 584, min: 524, max: 720, setSize: vi.fn() },
+      reset: vi.fn(),
+      isDefault: true,
+    },
     ...over,
   });
 }
