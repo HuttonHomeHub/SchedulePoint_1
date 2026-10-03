@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.159.3
+
+### Patch Changes
+
+- [#774](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/774) [`10eb238`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/10eb238716bb7da1ae8bb92f7bf4e903e2ff6708) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Warm the onboarding screen from the sign-in and sign-up screens, so the first screen a new account sees no longer waits on a cold chunk fetch.
+
 ## 0.159.2
 
 ### Patch Changes
