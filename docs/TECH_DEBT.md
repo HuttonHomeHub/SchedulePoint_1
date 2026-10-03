@@ -11508,3 +11508,17 @@ reads these. None is declared safe: the gate carries each as `KNOWN LEAK #436` s
 (ADR-0164) while the fix is a separate change. **Next:** add `deletedAt: null` to each with a Supertest
 regression verified red (remove a member, read the landing/banner) and a `@repo/api` patch changeset, then
 delete the three declarations. **Trigger:** now — a real, if small, disagreement with a documented contract.
+
+### 441. A baseline's activity count compiles to a grouped subquery the planner may not restrict to the page
+
+**Status:** open · **Verified:** 2026-10-03 (backend-performance review of ADR-0172 M4; `EXPLAIN` on an empty `baseline_activities` chose a sequential scan) ·
+**Raised:** 2026-10-03 · **Size:** S · **Owner:** api
+
+`baseline.repository.ts` selects a baseline's snapshot-row count through Prisma's `_count`, in both the list
+(`findManyActiveByPlan`) and the single read (`findActiveWithCountByIdInPlan`). Prisma compiles that to a grouped
+subquery over **all** of `baseline_activities`, left-joined to the baselines of the page. This predates ADR-0172: M4
+only added `deleted_at IS NULL` to the grouped side, which cannot make it smaller. **Not established:** whether the
+planner restricts the grouped scan to the page's baselines at a realistic size — the one plan read was against an
+empty table, which proves nothing about a large one. **Next:** measure the list read against about 500,000 snapshot
+rows (a few hundred baselines of a few thousand activities) and, only if it is slow, replace `_count` with a keyed
+`groupBy` over the page's baseline ids. **Trigger:** the baselines list becomes slow, or the table grows.
