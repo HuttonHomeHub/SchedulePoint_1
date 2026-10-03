@@ -1840,11 +1840,11 @@ describe('soft-delete scanner — raw SQL predicates', () => {
   });
 });
 
-// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 30 declarations covering 79 calls.
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls.
 const NESTED_READS_FLOOR = 9;
 const COUNTS_FLOOR = 2;
-const DECLARATIONS = 30;
-const COVERED = 79;
+const DECLARATIONS = 27;
+const COVERED = 76;
 
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();

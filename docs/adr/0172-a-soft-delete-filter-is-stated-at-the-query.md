@@ -90,9 +90,10 @@ raw SQL, including `Prisma.sql` fragments.
   assembled in another function costs a declaration. Creates and to-one reads are unchecked. It is the
   first use of the TypeScript compiler API in a gate here, so a small scanner must be maintained.
 - **Measured at close-out (2026-10-03).** The scan adds about one second to `pnpm test`. It examines
-  307 reads, writes and nested selections (112 of them writes, the spec's §4.11 count) and 36 raw statements that name a soft-deletable table, and prints 30
-  declarations (three of them `KNOWN LEAK #436`). Triage found the three leaks in `TECH_DEBT.md` #436
-  and the baseline `_count`s of M4; everything else was deliberate and is declared with its reason.
+  307 reads, writes and nested selections (112 of them writes, the spec's §4.11 count) and 36 raw statements that name a soft-deletable table, and prints 27
+  declarations covering 76 calls. Triage found three real leaks (`org_members` reads, fixed in #772 and
+  recorded as closed #436) and the baseline `_count`s of M4; everything else was deliberate and is
+  declared with its reason.
 - **A declaration on raw SQL covers every table in its statement**, so a later-removed `deleted_at`
   on a to-one parent join under a declared statement is not caught; the reason must name the tables.
 - **Advisory at the merge boundary**, like every gate here: `main` is unprotected (CLAUDE.md §8).

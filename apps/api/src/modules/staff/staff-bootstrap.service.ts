@@ -41,7 +41,6 @@ export class StaffBootstrapService implements OnApplicationBootstrap {
         select: { id: true, emailVerified: true },
       });
       const verifiedIds = accounts.filter((account) => account.emailVerified).map((a) => a.id);
-      // soft-delete: any-state — KNOWN LEAK #436: a removed membership still counts as a hat.
       const memberships =
         verifiedIds.length === 0
           ? []
