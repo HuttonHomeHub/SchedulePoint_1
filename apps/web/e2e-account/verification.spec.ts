@@ -91,9 +91,10 @@ test('sign-up with verification enforced explains itself instead of bouncing', a
   await signInPage.getByLabel('Email', { exact: true }).fill(email);
   await signInPage.getByLabel('Password').fill(PASSWORD);
   await signInPage.getByRole('button', { name: 'Sign in' }).click();
-  await expect(
-    signInPage.getByRole('heading', { name: /create your organisation/i }),
-  ).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(signInPage.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   await context.close();
   await signInContext.close();
@@ -119,7 +120,11 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
   await admin.getByLabel('Password').fill(PASSWORD);
   await admin.getByRole('button', { name: 'Sign in' }).click();
 
-  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+
+  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await admin.getByLabel('Organisation name').fill(orgName);
   await admin.getByRole('button', { name: /create organisation/i }).click();
   await expect(admin).toHaveURL(/\/orgs\//);
@@ -150,7 +155,10 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
   await invitee.getByLabel('Email', { exact: true }).fill(inviteeEmail);
   await invitee.getByLabel('Password').fill(PASSWORD);
   await invitee.getByRole('button', { name: 'Sign in' }).click();
-  await expect(invitee.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(invitee.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Now verified, the accept works — which is the other half of the assertion: the refusal state
   // must not be reachable once the condition it names is satisfied.

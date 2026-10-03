@@ -39,7 +39,10 @@ test('the shell withholds the Project Explorer on the three routes that have no 
   await expect(page).toHaveURL(/\/onboarding/);
   await expectNoOrganisationNavigation(page);
   // The screen's own content is untouched: this is a removal from the shell, not from the route.
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   // **The route out is still offered.** Withholding navigation that cannot navigate must not also
   // withhold the navigation that can — the account menu is how a reader with no organisation
   // reaches their own two screens, and it is the only way off this one.

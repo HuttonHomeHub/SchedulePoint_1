@@ -11425,8 +11425,16 @@ click found it "not stable", then "not visible" for the rest of the 30 s — so 
 it was shown**, without the click landing. The helper's own comment (`combobox.ts:43-44`) records that
 a picker which commits to the server disables itself while saving; a re-render or a refetch closing the
 popup is consistent with the log, and nothing has established which. Not #420's shape: no text was
-typed and nothing was reset. Seen once in the five shard-1 runs read on 2026-10-01. **Next:** read the
-trace of a recurrence before changing the product or the helper. **Trigger:** a second occurrence.
+typed and nothing was reset. Seen once in the five shard-1 runs read on 2026-10-01. **Second occurrence, 2026-10-03:** run `37150846578` (#770, Chromium), same test, failed once and passed
+on retry. **Reading the code (no trace yet):** `chooseComboboxOption` retries only the _open_ inside
+`toPass` (`combobox.ts:44-47`), then asserts and clicks the option as separate, un-retried steps
+(`:49-50`). The test calls it twice back to back (`schedule.spec.ts:164-165`); the first pick commits to
+the server and disables the input while saving, and the refetch that follows can re-render the picker and
+close the popup after the second call has already seen the option, which is the "not stable, then not
+visible" log. **Next (helper-only, not applied here):** move the option click inside the `toPass` block
+(open, assert visible, click, each with a short timeout) so a popup that closes is re-opened, and have the
+first call wait for its own save to settle before returning; confirm against a trace first. **Trigger:**
+met; apply with the next edit to `combobox.ts`.
 
 ### 432. The Gantt-editing journeys' eight-hour calendar fixture works Tuesday to Saturday, not Monday to Friday
 
@@ -11455,16 +11463,32 @@ or file the build step that would write the plan's chunks into the HTML for plan
 
 **Trigger.** The next change to chunking or preloads, or a planner reporting slow refreshes.
 
-### 435. Two end-to-end shards failed once each after route code-splitting, in code no PR touched
+### 435. Four end-to-end shards failed after route code-splitting, in code no PR touched
 
-**Status:** open · **Verified:** 2026-10-03 (CI logs: run `37112521524` web shard 4 on `main`; run `37133783585` web shard 1 on #762) ·
+**Status:** open · **Verified:** 2026-10-03 (CI logs: runs `37112521524`, `37133783585`, `37150846578`, `37153537285`; the router and the helpers read in the tree) ·
 **Raised:** 2026-10-03 (driving #762) · **Size:** S · **Owner:** web
 
-Both appeared after #760 (ADR-0171) changed how screens load. On `main` after #761, web shard 4 failed in
-`test:e2e:activity-editor`. On #762, web shard 1 failed `e2e/auth.spec.ts` on **Firefox only**, on all
-three attempts (`/` never redirected to `/sign-in` within 5 s; the onboarding heading never appeared),
-and `baselines.spec.ts` failed once at the same onboarding step before passing; one re-run of the job
-passed, and #764 then passed every shard first time. Neither diff could reach the failing screens.
-**Not established:** whether lazy-loaded first navigation is slow enough to miss a 5 s expectation, or
-whether this is runner state. The container has no Firefox, so it was not reproduced locally.
-**Next:** on a recurrence, read the trace before changing anything. **Trigger:** a second failure of either.
+All four appeared after #760 (ADR-0171) changed how screens load. **(1)** `main` after #761, web shard 4,
+`test:e2e:activity-editor`. **(2)** #762, web shard 1, `e2e/auth.spec.ts` on **Firefox only**, all three
+attempts (`/` never redirected to `/sign-in` within 5 s; the onboarding heading never appeared), and
+`baselines.spec.ts` failed once at the same step. **(3)** #770, Firefox shard 1, run `37150846578`:
+`auth.spec.ts:12` again and `activities.spec.ts:14` (onboarding heading), all three attempts.
+**(4)** #772, Chromium shard 4, run `37153537285`: `e2e-activity-editor/activity-editor.spec.ts:593` via
+`support.ts:18`, the "Create your organisation" heading not visible in 5 s, all three attempts. No diff
+touched the failing screens.
+
+**Diagnosis (read in the tree, not reproduced: the container has no Firefox).** After sign-up the app goes
+`/` -> `_authed` -> index `beforeLoad` -> redirect `/onboarding`, whose `OnboardingScreen` is a
+`lazyRouteComponent` that was in neither `warmHierarchyScreens` (reached only by users who hold an
+organisation) nor any preload, so its chunk was fetched cold inside a 5 s expectation. `clients.spec.ts`
+and `dependencies.spec.ts` had already widened exactly this wait to 15 s under #182; the other ~60 helpers
+had not. **The `/` -> `/sign-in` limb is a different path:** `SignInScreen` is eager (`EAGER_ROUTES`) and the
+redirect is thrown in `_authed`'s `beforeLoad` before any component loads, so the only thing awaited is the
+`/me` round trip. That is a latency margin, not a chunk, and is why those waits were widened but not "fixed".
+
+**Landed:** `signInRoute` and `signUpRoute` preload the onboarding chunk on idle (`warmOnboardingScreen`,
+pinned by `router-splitting.structural.test.ts` S2), and every wait for the onboarding heading, plus the
+`/sign-in` URL waits after `goto('/')`, is 15 s. **Not established:** that these were the whole cause, and
+the Firefox `/me` limb is untested. **Next:** confirm no recurrence over 10 CI runs on `main`/PRs, then
+delete this row and add #435 to the ledger; a recurrence after this change means the diagnosis is
+incomplete, so read the trace before widening anything further. **Trigger:** any recurrence.

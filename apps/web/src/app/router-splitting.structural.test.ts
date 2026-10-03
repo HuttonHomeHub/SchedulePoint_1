@@ -162,3 +162,23 @@ describe('S1 — route code splitting is the rule, and eager is the named except
     }
   });
 });
+
+describe('S2 — the onboarding screen is warmed where it is the likely next screen (#435)', () => {
+  const source = stripComments(ROUTER);
+  const blockOf = (route: string): string => {
+    const at = source.indexOf(`const ${route} = createRoute(`);
+    expect(at, `${route} not found`).toBeGreaterThanOrEqual(0);
+    return optionsBlock(source, at);
+  };
+
+  it.each(['signInRoute', 'signUpRoute'])('S2a — %s warms the onboarding chunk', (route) => {
+    expect(blockOf(route)).toMatch(/beforeLoad:\s*warmOnboardingScreen/);
+  });
+
+  it('S2b — the warm-up preloads OnboardingScreen, off the critical path', () => {
+    const fn = /function warmOnboardingScreen\(\)[^{]*\{([\s\S]*?)\n\}/.exec(source);
+    expect(fn, 'warmOnboardingScreen not found').not.toBeNull();
+    expect(fn![1]).toMatch(/deferUntilIdle\(/);
+    expect(fn![1]).toMatch(/OnboardingScreen\.preload/);
+  });
+});

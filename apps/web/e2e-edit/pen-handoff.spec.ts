@@ -31,7 +31,10 @@ async function signUp(page: Page, name: string, email: string): Promise<void> {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('correct-horse-battery');
   await page.getByRole('button', { name: /create an account/i }).click();
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 interface TwoActors {

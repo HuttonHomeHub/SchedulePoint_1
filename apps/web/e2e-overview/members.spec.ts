@@ -137,9 +137,10 @@ test.describe('invitations, from the landing to Members and back', () => {
     await plannerPage.getByLabel('Email').fill(`planner-${stamp}@example.com`);
     await plannerPage.getByLabel('Password').fill('correct-horse-battery');
     await plannerPage.getByRole('button', { name: /create an account/i }).click();
+    // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
     await expect(
       plannerPage.getByRole('heading', { name: /create your organisation/i }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await plannerPage.goto(acceptUrl);
     await plannerPage.getByRole('button', { name: /accept and join/i }).click();
     await expect(plannerPage).toHaveURL(new RegExp(`/orgs/${orgSlug}`));

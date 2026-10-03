@@ -156,9 +156,10 @@ test('a Viewer is told where the work stands, having no way to change it', async
   await viewerPage.getByLabel('Email').fill(`viewer-${stamp}@example.com`);
   await viewerPage.getByLabel('Password').fill('correct-horse-battery');
   await viewerPage.getByRole('button', { name: /create an account/i }).click();
-  await expect(
-    viewerPage.getByRole('heading', { name: /create your organisation/i }),
-  ).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(viewerPage.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await viewerPage.goto(acceptUrl);
   await viewerPage.getByRole('button', { name: /accept and join/i }).click();
 

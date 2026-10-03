@@ -11,7 +11,8 @@ import { expect, test } from '@playwright/test';
 test.describe('Authentication journey', () => {
   test('guards unauthenticated visits to sign-in (accessible)', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/sign-in/);
+    // 15 s, not 5 s: the redirect waits on the /me round trip under CI load (docs/TECH_DEBT.md #182, #435).
+    await expect(page).toHaveURL(/\/sign-in/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
@@ -34,7 +35,10 @@ test.describe('Authentication journey', () => {
     await page.getByRole('button', { name: /create an account/i }).click();
 
     // With no organisations yet, onboarding is shown.
-    await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+    // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+    await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+      timeout: 15_000,
+    });
     await page.getByLabel('Organisation name').fill(orgName);
     await page.getByRole('button', { name: /create organisation/i }).click();
 

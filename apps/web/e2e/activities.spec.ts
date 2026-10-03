@@ -23,7 +23,11 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await page.getByLabel('Password').fill('correct-horse-battery');
   await page.getByRole('button', { name: /create an account/i }).click();
 
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByLabel('Organisation name').fill(orgName);
   await page.getByRole('button', { name: /create organisation/i }).click();
   await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
