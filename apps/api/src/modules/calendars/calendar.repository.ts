@@ -377,6 +377,9 @@ export class CalendarRepository {
    * that activity's duration; the caller's absent-id fallback is the same 1440 either way.
    *
    * One `id = ANY(...)` for a whole response — never a lookup per row.
+   *
+   * soft-delete: any-state — a soft-deleted calendar's stored hours-per-day must still be read,
+   * or an activity's duration is silently reinterpreted (see above).
    */
   async findHoursPerDayMinutes(
     ids: readonly string[],

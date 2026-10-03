@@ -379,7 +379,10 @@ export class CrossPlanDependencyRepository {
     return result.count;
   }
 
-  /** Shared keyset page (createdAt, id) with the endpoint includes. */
+  /** Shared keyset page (createdAt, id) with the endpoint includes.
+   *
+   * soft-delete: any-state — the `where` is passed in, and every caller builds it with
+   * `this.active(...)`; the filter is stated at the caller, not here. */
   private page(
     where: Prisma.CrossPlanDependencyWhereInput,
     params: { take: number; cursor?: string },

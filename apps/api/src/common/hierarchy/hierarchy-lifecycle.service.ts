@@ -641,6 +641,9 @@ export class HierarchyLifecycleService {
    * endpoint-guard that keeps a restore from resurrecting a dangling edge. Plan-
    * level batches are self-consistent (all endpoints are in the same batch), so
    * only a single-activity restore can leave a link behind.
+   *
+   * soft-delete: deleted-only — selects the links stamped with this batch id, which are deleted by
+   * construction; the active-endpoint read below carries its own filter.
    */
   private async restoreLinksInBatch(
     tx: Prisma.TransactionClient,

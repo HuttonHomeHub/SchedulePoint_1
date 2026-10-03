@@ -152,7 +152,10 @@ export class NoteRepository {
     return new Map(users.map((u) => [u.id, u.name]));
   }
 
-  /** Shared keyset page — newest-first (created_at DESC, id DESC). */
+  /** Shared keyset page — newest-first (created_at DESC, id DESC).
+   *
+   * soft-delete: any-state — the `where` is passed in, and every caller builds it with
+   * `this.active(...)`; the filter is stated at the caller, not here. */
   private page(
     where: Prisma.NoteWhereInput,
     params: { take: number; cursor?: string },

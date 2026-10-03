@@ -11492,3 +11492,19 @@ pinned by `router-splitting.structural.test.ts` S2), and every wait for the onbo
 the Firefox `/me` limb is untested. **Next:** confirm no recurrence over 10 CI runs on `main`/PRs, then
 delete this row and add #435 to the ledger; a recurrence after this change means the diagnosis is
 incomplete, so read the trace before widening anything further. **Trigger:** any recurrence.
+
+### 436. Three reads of `org_members` ignore `deleted_at`, so a removed member still counts
+
+**Status:** open · **Verified:** 2026-10-03 (`soft-delete-filter.structural.spec.ts` flagged all three; `members.service.ts:146` soft-deletes a membership through `org-member.repository.ts:106-109`) ·
+**Raised:** 2026-10-03 (ADR-0172 M2 triage) · **Size:** S · **Owner:** api
+
+Removing a member stamps `org_members.deleted_at`; every other membership read filters it. Three do not:
+`overview.repository.ts` `resolveMemberNames` (the landing's "changed by" and pen-holder names — its own
+docblock says somebody who has left resolves to nothing and renders "a former member", which a removed
+member's row defeats), `staff-bootstrap.service.ts` (the boot log's dual-hatted count) and
+`staff-health.service.ts` `isDualHatted` (the staff console's "which hat" banner, ADR-0086 D4). **Not
+established:** whether any of the three has been seen to misreport, and no test removes a member and then
+reads these. None is declared safe: the gate carries each as `KNOWN LEAK #436` so it lands green
+(ADR-0164) while the fix is a separate change. **Next:** add `deletedAt: null` to each with a Supertest
+regression verified red (remove a member, read the landing/banner) and a `@repo/api` patch changeset, then
+delete the three declarations. **Trigger:** now — a real, if small, disagreement with a documented contract.

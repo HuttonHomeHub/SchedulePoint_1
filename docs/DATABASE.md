@@ -100,10 +100,16 @@
   Each read **and write** states its rule itself — through the repository's
   `active()` helper, a shared predicate, or an explicit `deletedAt` key — and a
   query that must see deleted rows on purpose (restore, the recycle bin, the
-  retention sweep, an engine input) says so with a reason. A structural gate that
-  refuses a query stating neither is being introduced by ADR-0172 (milestones
-  M2–M5 of `docs/specs/soft-delete-filter/`); **until it lands, review is the
-  only check**. Creates and to-one relation reads are outside it.
+  retention sweep, an engine input) says so with a reason —
+  `// soft-delete: any-state — <reason>` (or `deleted-only`) beside the call or in
+  the docblock of the enclosing method. **A structural gate refuses a top-level
+  read** (`find*`, `count`, `aggregate`, `groupBy`) **on a soft-deletable model
+  that states neither**: `apps/api/src/common/query/soft-delete-filter.structural.spec.ts`
+  (ADR-0172), which derives the model list from `schema.prisma`. **It does not yet
+  cover writes, nested `include`/`select`/`_count` reads or raw SQL** — those are
+  milestones M3–M5 of `docs/specs/soft-delete-filter/`, and until each lands
+  review is the only check for it. Creates and to-one relation reads are outside
+  the gate by decision.
 - Unique constraints that must ignore deleted rows use **partial unique indexes**
   (`WHERE deleted_at IS NULL`).
 - **Hard deletes** are reserved for compliance/erasure requests and are explicit,

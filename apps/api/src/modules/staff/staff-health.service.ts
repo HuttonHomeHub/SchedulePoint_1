@@ -364,6 +364,8 @@ export class StaffHealthService {
    * member out on day one, and staff-ness confers nothing inside any organisation by construction.
    * The compensation D4 named was that the console **says which hat is active**. That was decided
    * and never built; the UX review found it. This is the fact the banner needs.
+   *
+   * soft-delete: any-state — KNOWN LEAK #436: a removed membership still counts as a hat.
    */
   async isDualHatted(userId: string): Promise<boolean> {
     return (await this.prisma.orgMember.count({ where: { userId, deletedAt: null } })) > 0;

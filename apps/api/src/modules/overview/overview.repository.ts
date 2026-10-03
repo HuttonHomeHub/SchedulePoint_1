@@ -539,6 +539,8 @@ export class OverviewRepository {
    * current member of THIS organisation resolves to nothing and the caller renders
    * "a former member" — which is also the honest answer, since somebody who has left is
    * exactly who a missing row usually is.
+   *
+   * soft-delete: any-state — KNOWN LEAK #436: a removed member's row still resolves to a name here.
    */
   async resolveMemberNames(params: {
     organizationId: string;

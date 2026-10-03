@@ -120,7 +120,9 @@ export class ActivityRepository {
   }
 
   /** An activity in an organisation in ANY state (active or soft-deleted) — used
-   * to scope a restore to the caller's org before reactivating it. */
+   * to scope a restore to the caller's org before reactivating it.
+   *
+   * soft-delete: any-state — restore must find the deleted row it is about to reactivate. */
   findByIdInOrg(
     id: string,
     organizationId: string,

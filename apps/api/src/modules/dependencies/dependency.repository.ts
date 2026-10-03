@@ -122,7 +122,10 @@ export class DependencyRepository {
     });
   }
 
-  /** A dependency in an organisation in ANY state — used to scope a soft-delete. */
+  /** A dependency in an organisation in ANY state — used to scope a soft-delete.
+   *
+   * soft-delete: any-state — returns the row's own `deletedAt` so the caller can tell a deleted
+   * dependency from an absent one; filtering here would erase that difference. */
   findByIdInOrg(
     id: string,
     organizationId: string,
@@ -241,7 +244,10 @@ export class DependencyRepository {
     return result.count;
   }
 
-  /** Shared keyset page (createdAt, id) with the endpoint includes. */
+  /** Shared keyset page (createdAt, id) with the endpoint includes.
+   *
+   * soft-delete: any-state — the `where` is passed in, and every caller builds it with
+   * `this.active(...)`; the filter is stated at the caller, not here. */
   private page(
     where: Prisma.ActivityDependencyWhereInput,
     params: { take: number; cursor?: string },
