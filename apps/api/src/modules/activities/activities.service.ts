@@ -1083,6 +1083,8 @@ export class ActivitiesService {
        */
       const destinations = new Set(rows.map((r) => r.parentId));
       const soleParentId = destinations.size === 1 ? ([...destinations][0] ?? null) : null;
+      // soft-delete: any-state — labels an audit row only; the destination was validated as an
+      // active parent earlier in this same transaction, under the plan lock.
       const parent =
         soleParentId === null
           ? null
@@ -1729,6 +1731,8 @@ export class ActivitiesService {
       // derive them: it did not know which activities were children, and `updateMany` reports only
       // a count. Without this the caller's only correct move after a dissolve is a full refetch,
       // and nothing tells it so.
+      // soft-delete: any-state — re-reads the ids this transaction just selected as active and
+      // updated (both guarded on `deletedAt: null`) under the plan lock, so none can be deleted.
       return tx.activity.findMany({
         where: { id: { in: rows.map((r) => r.id) } },
         select: { id: true, parentId: true, version: true },

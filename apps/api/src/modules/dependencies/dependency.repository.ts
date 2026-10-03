@@ -122,18 +122,6 @@ export class DependencyRepository {
     });
   }
 
-  /** A dependency in an organisation in ANY state — used to scope a soft-delete. */
-  findByIdInOrg(
-    id: string,
-    organizationId: string,
-    db: Prisma.TransactionClient = this.prisma,
-  ): Promise<{ id: string; deletedAt: Date | null } | null> {
-    return db.activityDependency.findFirst({
-      where: { id, organizationId },
-      select: { id: true, deletedAt: true },
-    });
-  }
-
   /** A page of a plan's active dependencies (keyset cursor by id). */
   findManyActiveByPlan(params: {
     organizationId: string;
@@ -241,7 +229,10 @@ export class DependencyRepository {
     return result.count;
   }
 
-  /** Shared keyset page (createdAt, id) with the endpoint includes. */
+  /** Shared keyset page (createdAt, id) with the endpoint includes.
+   *
+   * soft-delete: any-state — the `where` is passed in, and every caller builds it with
+   * `this.active(...)`; the filter is stated at the caller, not here. */
   private page(
     where: Prisma.ActivityDependencyWhereInput,
     params: { take: number; cursor?: string },

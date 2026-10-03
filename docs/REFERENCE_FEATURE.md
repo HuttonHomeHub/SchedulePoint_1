@@ -96,9 +96,13 @@ exceptions). Contains no raw Prisma and no HTTP concerns.
 
 ### Repository / data-access pattern
 
-`client.repository.ts` — the **only** Prisma consumer for the feature. It
-encapsulates queries and **centralises the soft-delete filter** (`deletedAt:
-null`) so no caller can forget it, exposes an optimistic-locked update
+`client.repository.ts` — the feature's Prisma consumer, though **not the only
+one** in the codebase: services such as `activities.service.ts` and
+`common/hierarchy/*` also query Prisma directly. It encapsulates queries and
+keeps the soft-delete filter in one private `active()` helper (`deletedAt:
+null`) so the repository's own callers need not repeat it — a per-repository
+convention, not a central guarantee (see `docs/DATABASE.md` "Soft deletes" and
+ADR-0172). It exposes an optimistic-locked update
 (`updateIfVersionMatches` → row count), and keeps pagination query shape in one
 place. Swapping the ORM would touch only this file.
 

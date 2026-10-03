@@ -94,9 +94,25 @@
 ## Soft deletes
 
 - Default to **soft delete** via a nullable `deleted_at timestamptz`. Deletes set
-  the timestamp; **all queries exclude soft-deleted rows by default** (a Prisma
-  extension/base repository enforces this centrally — never rely on every caller
-  remembering).
+  the timestamp. Twenty models carry `deleted_at`, and **filtering is per query**:
+  nothing excludes soft-deleted rows centrally (there is no Prisma extension,
+  middleware or base repository — `PrismaService` is a bare `PrismaClient`).
+  Each read **and write** states its rule itself — through the repository's
+  `active()` helper, a shared predicate, or an explicit `deletedAt` key — and a
+  query that must see deleted rows on purpose (restore, the recycle bin, the
+  retention sweep, an engine input) says so with a reason —
+  `// soft-delete: any-state — <reason>` (or `deleted-only`) beside the call or in
+  the docblock of the enclosing method. **A structural gate refuses a top-level
+  read** (`find*`, `count`, `aggregate`, `groupBy`) **or write** (`update*`, `upsert`,
+  `delete*`, and a nested write inside `data`), **a to-many `include`, `select` or
+  `_count`, and a raw-SQL statement** (`$queryRaw`, `$executeRaw`, `Prisma.sql`) **on a
+  soft-deletable model that states neither**:
+  `apps/api/src/common/query/soft-delete-filter.structural.spec.ts` (ADR-0172), which
+  derives the model and table lists from `schema.prisma`. A declaration on a method
+  covers the calls of that kind inside it, and the run prints how many. The raw-SQL
+  check reads the statement's static text, so it can be fooled by an alias that
+  belongs to another table; a wrong stance (`{ not: null }` for `null`) passes. Creates and to-one relation reads are outside
+  the gate by decision.
 - Unique constraints that must ignore deleted rows use **partial unique indexes**
   (`WHERE deleted_at IS NULL`).
 - **Hard deletes** are reserved for compliance/erasure requests and are explicit,

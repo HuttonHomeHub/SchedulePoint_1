@@ -832,7 +832,7 @@ export class BaselineRepository {
   ): Promise<(Baseline & { activityCount: number }) | null> {
     const row = await db.baseline.findFirst({
       where: this.active({ id, organizationId, planId }),
-      include: { _count: { select: { activities: true } } },
+      include: { _count: { select: { activities: { where: { deletedAt: null } } } } },
     });
     if (!row) return null;
     const { _count, ...baseline } = row;
@@ -948,7 +948,7 @@ export class BaselineRepository {
       orderBy: [{ createdAt: params.order }, { id: params.order }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-      include: { _count: { select: { activities: true } } },
+      include: { _count: { select: { activities: { where: { deletedAt: null } } } } },
     });
     return rows.map(({ _count, ...baseline }) => ({
       ...baseline,

@@ -142,6 +142,8 @@ const DAY_FACTOR_DIVERGENCE: DiagnosticEntry = {
     JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
     WHERE a.deleted_at IS NULL AND a.type = 'RESOURCE_DEPENDENT'
   `,
+  // soft-delete: any-state — the calendars are the ones activities are bound to, and a soft-deleted
+  // calendar must still be counted or this diagnostic excludes the activities it exists to find.
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
            count(DISTINCT a.plan_id) AS affected_plans,
@@ -224,6 +226,8 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
     JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
     WHERE a.deleted_at IS NULL
   `,
+  // soft-delete: any-state — the calendars are the ones activities are bound to, and a soft-deleted
+  // calendar must still be counted or this diagnostic excludes the activities it exists to find.
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
            count(DISTINCT a.plan_id) AS affected_plans,
@@ -539,6 +543,9 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
       AND a.constraint_date IS NOT NULL
       AND a.early_start = a.constraint_date
   `,
+  // soft-delete: any-state — the snapshot rows are filtered through their baseline's own
+  // `deleted_at`, and a baseline's snapshot is stamped with it (hierarchy-lifecycle,
+  // `softDeleteWithSnapshot`), so an active baseline has active rows.
   numerator: Prisma.sql`
     SELECT count(DISTINCT a.id) AS affected,
            count(DISTINCT a.plan_id) AS affected_plans,

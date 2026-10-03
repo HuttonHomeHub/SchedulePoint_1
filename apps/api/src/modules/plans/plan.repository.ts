@@ -106,6 +106,12 @@ export class PlanRepository {
    * org-scoped: every caller has already resolved the activities through an org-scoped read, so the
    * plan ids are derived from rows the caller is entitled to, and adding a scope here would imply a
    * trust boundary that does not exist at this call site.
+   *
+   * **The caller must pass ids it has already scoped to an organisation** (this read does not, and
+   * adds no filter on deletion): an id taken from a request would reach any tenant's plan.
+   *
+   * soft-delete: any-state — an engine input: the plan's calendar fallback must resolve for
+   * whichever plan the already-scoped activities name, in any state.
    */
   findCalendarIds(
     ids: readonly string[],
@@ -118,7 +124,9 @@ export class PlanRepository {
   }
 
   /** A plan in an organisation in ANY state (active or soft-deleted) — used to
-   * scope a restore to the caller's org before reactivating it. */
+   * scope a restore to the caller's org before reactivating it.
+   *
+   * soft-delete: any-state — restore must find the deleted row it is about to reactivate. */
   findByIdInOrg(
     id: string,
     organizationId: string,

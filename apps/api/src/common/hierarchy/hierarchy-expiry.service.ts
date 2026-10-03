@@ -153,6 +153,12 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
     }
   }
 
+  /**
+   * soft-delete: any-state — the subtree lookups under an expiring client or project take every
+   * project and plan beneath it, active ones included, because the expiry deletes by ownership scope
+   * rather than by deletion state (ADR-0096 D5). The candidates themselves are `deletedAt: { lt }`.
+   * (TECH_DEBT #139 concerns two other tables, which the runner's own label cites.)
+   */
   private async sweep(now: Date): Promise<void> {
     const cutoff = new Date(now.getTime() - this.config.retentionHierarchyDays * 86_400_000);
     let activityBudget = ACTIVITY_BUDGET_PER_RUN;

@@ -83,6 +83,9 @@ export class RecycleBinRepository {
     const cursorAt = cursor?.deletedAt ?? null;
     const cursorId = cursor?.id ?? null;
 
+    // soft-delete: any-state — the bin lists deleted rows on purpose (`deleted_at IS NOT NULL`), and
+    // its joins to the parent client or project read the parent's own state to say whether it
+    // blocks the restore; filtering either would hide exactly the blocker the row reports.
     const rows = await this.prisma.$queryRaw<DeletedUnionRow[]>`
       SELECT 'client' AS kind, c.id, c.name, c.deleted_at, true AS parent_active,
              c.delete_batch_id,

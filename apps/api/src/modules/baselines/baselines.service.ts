@@ -297,6 +297,8 @@ export class BaselinesService {
       // Recorded AFTER the flip and inside the same lock, so the 404 above records nothing. The
       // plan is re-read here rather than carried from outside: `activate` never loaded it, and a
       // row whose only label is a uuid answers nobody's question.
+      // soft-delete: any-state — labels the audit row only; the baseline resolved active above is
+      // stamped with its plan by the cascade, so its plan is live (hierarchy-lifecycle).
       const plan = await tx.plan.findFirst({
         where: { id: planId, organizationId: organization.id },
         select: { name: true },
@@ -348,6 +350,8 @@ export class BaselinesService {
     await this.prisma.$transaction(async (tx) => {
       await acquirePlanWriteLock(tx, planId);
       const batchId = await this.baselines.softDeleteWithSnapshot(baselineId, principal.userId, tx);
+      // soft-delete: any-state — labels the audit row only; the baseline resolved active above is
+      // stamped with its plan by the cascade, so its plan is live (hierarchy-lifecycle).
       const plan = await tx.plan.findFirst({
         where: { id: planId, organizationId: organization.id },
         select: { name: true },

@@ -22,7 +22,8 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "@tanstack/react-query": "5.103.2",
     "body-parser": "2.3.0",
-    "eslint": "9.39.5"
+    "eslint": "9.39.5",
+    "@prisma/client": "6.19.3"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -1332,6 +1333,14 @@
       "lines": "20396",
       "anchor": "injected.checkElementStates(node, [\"visible\", \"enabled\", \"editable\"])",
       "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
+    },
+    {
+      "ref": "library.d.ts:4",
+      "package": "@prisma/client",
+      "path": "runtime/library.d.ts",
+      "lines": "4",
+      "anchor": "declare function $extends(this: Client, extension: ExtensionArgs",
+      "citedBy": ["docs/specs/soft-delete-filter/feature-spec.md"]
     }
   ]
 }
