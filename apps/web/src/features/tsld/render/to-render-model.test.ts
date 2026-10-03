@@ -89,6 +89,16 @@ describe('toRenderActivities', () => {
     });
   });
 
+  it('flags a bar whose start is frozen by an actual, on either actual', () => {
+    expect(toRenderActivities([activity()])[0]?.startFrozen).toBe(false);
+    expect(toRenderActivities([activity({ actualStart: '2026-01-01' })])[0]?.startFrozen).toBe(
+      true,
+    );
+    expect(toRenderActivities([activity({ actualFinish: '2026-01-03' })])[0]?.startFrozen).toBe(
+      true,
+    );
+  });
+
   it('carries the conflict REASON across the seam, on the same gate as the boolean', () => {
     /**
      * The painter needs the reason to decide which EDGE it marks (`LATER_THAN_BOUND` is a breach of

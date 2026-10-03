@@ -92,6 +92,26 @@ export function isResizeEligibleType(type: ActivityType): boolean {
   return !isMilestone(type) && type !== 'LEVEL_OF_EFFORT' && type !== 'WBS_SUMMARY';
 }
 
+/** Why a started or finished activity's start edge cannot be resized — spoken by the diagram's
+ * refusal and by the Gantt's handle and `Start` cell, so the one rule has one sentence. */
+export const START_EDGE_FROZEN_REASON =
+  'This activity has started, so its start is its actual start and cannot be moved here.';
+
+/**
+ * True when an activity's start is frozen by its actuals (ADR-0170 D3): any `actualStart` or
+ * `actualFinish`. Mirrors the engine's `isFrozenByActuals` — an activity with an actual is drawn
+ * from it and ignores a hand-placed start, so a start-edge write would save an inert placement and
+ * move the FINISH instead. The ONE rule both the diagram and the Gantt ask (docs/TECH_DEBT.md
+ * #431); a pure predicate here because the render model imports no other feature (ADR-0026 D8).
+ * A move is deliberately not covered: both views still allow it.
+ */
+export function isStartEdgeFrozen(activity: {
+  actualStart?: string | null | undefined;
+  actualFinish?: string | null | undefined;
+}): boolean {
+  return Boolean(activity.actualStart ?? activity.actualFinish);
+}
+
 /** Half-width (px) of the grab zone around a drawn lag anchor (ADR-0052 M3) — 12, so the target is
  * a full **24px** wide and meets WCAG 2.5.8 outright rather than leaning on the Equivalent
  * exception the bar-end zones ({@link EDGE_HANDLE_PX}) take. It is deliberately wider than those
@@ -257,6 +277,9 @@ export function classifyHit(
     }
     const handleW = Math.min(EDGE_HANDLE_PX, rect.w / 2);
     if (point.x <= rect.x + handleW) {
+      // A started bar has no start handle under resize vocabulary — the zone is body, so a press
+      // there repositions (still allowed) instead of arming a write the engine would ignore.
+      if (options?.resizeHandles && activity.startFrozen) return { kind: 'body', id: activity.id };
       return { kind: options?.resizeHandles ? 'resizeStart' : 'startHandle', id: activity.id };
     }
     if (point.x >= rect.x + rect.w - handleW) {

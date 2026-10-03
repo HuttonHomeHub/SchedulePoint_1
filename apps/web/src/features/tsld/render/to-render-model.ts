@@ -1,6 +1,7 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
 import { canvasLabel } from './a11y';
+import { isStartEdgeFrozen } from './hit-test';
 import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
 
@@ -78,6 +79,7 @@ export function toRenderActivities(
     // Engine-owned total float. Carried straight through — the canvas never computes float, it
     // only draws what the engine decided.
     totalFloat: a.totalFloat,
+    startFrozen: isStartEdgeFrozen(a),
     // **The feasible window's right edge, and it is gated on the SAME basis the bar is drawn on**
     // (one-planning-surface M-E). `remainingFloat` is the room left from the PLACED finish; from
     // the EARLY finish the room is the whole `totalFloat`. So a plan switched back to Early mode

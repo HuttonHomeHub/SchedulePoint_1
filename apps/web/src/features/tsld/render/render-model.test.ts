@@ -46,6 +46,7 @@ import {
   laneRowAt,
   isMilestone,
   isResizeEligibleType,
+  isStartEdgeFrozen,
   LANE_HEIGHT,
   MAX_PX_PER_DAY,
   MIN_PX_PER_DAY,
@@ -604,6 +605,27 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
     expect(
       classifyHit(milestone, { x: rect.x + 1, y: rect.y + rect.h / 2 }, VIEW, DATA_DATE, RESIZE),
     ).toEqual({ kind: 'body', id: 'a1' });
+  });
+
+  it('withholds the START zone on a bar frozen by actuals, and still offers the finish zone', () => {
+    // A started bar's start is its actual start (ADR-0170 D3, TECH_DEBT #431): the left zone is
+    // body, so a press there repositions rather than arming a write the engine would ignore.
+    const acts = [activity({ startFrozen: true })];
+    expect(classifyHit(acts, { x: 104, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'body',
+      id: 'a1',
+    });
+    expect(classifyHit(acts, { x: 146, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      kind: 'resizeFinish',
+      id: 'a1',
+    });
+  });
+
+  it('isStartEdgeFrozen is true for any actual and false for none', () => {
+    expect(isStartEdgeFrozen({ actualStart: null, actualFinish: null })).toBe(false);
+    expect(isStartEdgeFrozen({})).toBe(false);
+    expect(isStartEdgeFrozen({ actualStart: '2026-03-02', actualFinish: null })).toBe(true);
+    expect(isStartEdgeFrozen({ actualStart: null, actualFinish: '2026-03-06' })).toBe(true);
   });
 
   it('flag-off parity: without the option the zones keep their link-draw kinds', () => {

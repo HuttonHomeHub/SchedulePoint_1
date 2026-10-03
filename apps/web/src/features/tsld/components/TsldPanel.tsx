@@ -52,6 +52,7 @@ import {
   wbsGroupClause,
 } from '../render/a11y';
 import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
+import { isStartEdgeFrozen, START_EDGE_FROZEN_REASON } from '../render/hit-test';
 import {
   buildBaselineGhosts,
   buildLevelledGhosts,
@@ -2652,6 +2653,13 @@ export function TsldPanel({
       // the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
+      // The start edge of a started activity writes an inert placement and moves the finish
+      // (ADR-0170 D3). The grab zone is withheld, so this is the backstop: refuse out loud.
+      if (intent.edge === 'start' && isStartEdgeFrozen(activity)) {
+        showConflict(START_EDGE_FROZEN_REASON);
+        announce(START_EDGE_FROZEN_REASON);
+        return;
+      }
       clearConflict();
       // A finish-edge drag keeps the start where the bar is DRAWN. From the early start, the
       // working-day count below ran over a range the bar does not occupy, so a placed bar's resize
