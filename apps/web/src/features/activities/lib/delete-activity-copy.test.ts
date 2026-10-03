@@ -105,7 +105,18 @@ describe('dissolveSummaryDescription', () => {
       summary('s2', 'Inner', 's1'),
       { id: 'a', name: 'Excavate', parentId: 's2' },
     ]);
-    expect(copy).toContain('its 1 activity move up to “Superstructure”');
+    expect(copy).toContain('its 1 activity moves up to “Superstructure”');
+  });
+
+  // Regression for #434: a single child read "its 1 activity move up … put them back".
+  it('uses the singular verb and pronoun for a one-child summary', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Substructure'), [
+      summary('s1', 'Substructure'),
+      { id: 'a', name: 'Excavate', parentId: 's1' },
+    ]);
+    expect(copy).toContain('its 1 activity moves up to the top level');
+    expect(copy).toContain('will NOT put that activity back under it');
+    expect(copy).not.toContain('put them back');
   });
 
   /**
@@ -118,7 +129,16 @@ describe('dissolveSummaryDescription', () => {
       summary('s1', 'Substructure'),
       { id: 'a', name: 'Excavate', parentId: 's1' },
     ]);
-    expect(copy).toContain('will NOT put them back');
+    expect(copy).toContain('will NOT put that activity back');
+  });
+
+  it('says "put them back" when there are several children', () => {
+    const copy = dissolveSummaryDescription(summary('s1', 'Substructure'), [
+      summary('s1', 'Substructure'),
+      { id: 'a', name: 'Excavate', parentId: 's1' },
+      { id: 'b', name: 'Blind', parentId: 's1' },
+    ]);
+    expect(copy).toContain('will NOT put them back under it');
   });
 
   it('says plainly when there is nothing to move', () => {
@@ -137,6 +157,6 @@ describe('dissolveSummaryDescription', () => {
       { id: 'a', name: 'Excavate', parentId: 's2' },
       { id: 'b', name: 'Blind', parentId: 's2' },
     ]);
-    expect(copy).toContain('its 1 activity move up');
+    expect(copy).toContain('its 1 activity moves up');
   });
 });
