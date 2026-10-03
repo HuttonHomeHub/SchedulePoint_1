@@ -48,6 +48,12 @@ const codeFor = (i: number): string =>
 
 const ACTIVITY_COUNT = 10;
 
+interface Sample {
+  text: string;
+  visibleTextWidth: number;
+  cellClientWidth: number;
+}
+
 interface LimbError {
   error: string;
 }
@@ -159,25 +165,70 @@ async function truncation(page: Page): Promise<unknown> {
         width: Math.round(el.getBoundingClientRect().width),
         srOnly: el.classList.contains('sr-only'),
       }))
-      .filter((h) => !h.srOnly && h.label !== 'Timeline' && h.label !== 'vs baseline');
+      // The Timeline header's text includes its ruler labels ("TimelineFeb 2026…"): match by prefix.
+      .filter((h) => !h.srOnly && !h.label.startsWith('Timeline') && h.label !== 'vs baseline');
     const rows = [...grid.querySelectorAll('[role="row"]')].filter(
       (r) => Number(r.getAttribute('aria-rowindex')) >= 2,
     );
+    // The app hides text with Tailwind's `sr-only` class and `aria-hidden`. A cell carrying such
+    // text ("Start editing to change this activity.") reports a scrollWidth that is not the width of
+    // anything a sighted reader sees, so only visible text is measured.
+    const hidden = (el: Element): boolean => el.closest('.sr-only, [aria-hidden="true"]') !== null;
+    const visibleText = (cell: Element): { text: string; width: number } => {
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      let text = '';
+      let left = Infinity;
+      let right = -Infinity;
+      for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+        const parent = n.parentElement;
+        if (parent === null || hidden(parent) || (n.textContent ?? '').trim() === '') continue;
+        range.selectNodeContents(n);
+        const r = range.getBoundingClientRect();
+        text += n.textContent ?? '';
+        left = Math.min(left, r.left);
+        right = Math.max(right, r.right);
+      }
+      return { text: text.trim(), width: right > left ? Math.round(right - left) : 0 };
+    };
     const columns = headers.map((h) => {
       let truncated = 0;
-      const examples: { text: string; scrollWidth: number; clientWidth: number }[] = [];
+      const examples: {
+        text: string;
+        visibleTextWidth: number;
+        cellClientWidth: number;
+        overflowScrollWidth: number | null;
+        overflowClientWidth: number | null;
+      }[] = [];
+      const samples: { text: string; visibleTextWidth: number; cellClientWidth: number }[] = [];
       for (const row of rows) {
         const cell = row.querySelector(`[role="gridcell"][aria-colindex="${h.colindex}"]`);
         if (cell === null) continue;
-        const candidates = [cell, ...cell.querySelectorAll('*')];
-        const worst = candidates.find((el) => el.scrollWidth > el.clientWidth);
-        if (worst === undefined) continue;
+        const visible = visibleText(cell);
+        const style = getComputedStyle(cell);
+        const content =
+          cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const overflowing = [cell, ...cell.querySelectorAll('*')].find(
+          (el) => !hidden(el) && el.scrollWidth > el.clientWidth,
+        );
+        // Either a visible box says it clips, or the visible glyphs are wider than the cell shows.
+        const isTruncated = overflowing !== undefined || visible.width > content + 1;
+        if (samples.length < 3) {
+          samples.push({
+            text: visible.text.slice(0, 60),
+            visibleTextWidth: visible.width,
+            cellClientWidth: cell.clientWidth,
+          });
+        }
+        if (!isTruncated) continue;
         truncated += 1;
         if (examples.length < 3) {
           examples.push({
-            text: (cell.textContent ?? '').trim().slice(0, 60),
-            scrollWidth: worst.scrollWidth,
-            clientWidth: worst.clientWidth,
+            text: visible.text.slice(0, 60),
+            visibleTextWidth: visible.width,
+            cellClientWidth: cell.clientWidth,
+            overflowScrollWidth: overflowing?.scrollWidth ?? null,
+            overflowClientWidth: overflowing?.clientWidth ?? null,
           });
         }
       }
@@ -187,6 +238,7 @@ async function truncation(page: Page): Promise<unknown> {
         cells: rows.length,
         truncated,
         examples,
+        samples,
       };
     });
     return { mountedRows: rows.length, columns };
@@ -209,10 +261,15 @@ async function boxes(page: Page): Promise<{
     const grid = document.querySelector('[role="treegrid"]');
     if (scroller === null || grid === null) throw new Error('no scroller / treegrid');
     const headerCells = [...grid.querySelectorAll('[role="columnheader"]')];
-    const timeline = headerCells.find((h) => (h.textContent ?? '').trim() === 'Timeline');
+    // The Timeline header's text includes its ruler labels ("TimelineFeb 2026…"), so match by prefix.
+    const timeline = headerCells.find((h) => (h.textContent ?? '').trim().startsWith('Timeline'));
     const firstHeader = headerCells[0];
     if (timeline === undefined || firstHeader === undefined || firstHeader.parentElement === null) {
-      throw new Error('no header row');
+      throw new Error(
+        `no header row: ${headerCells.length} columnheaders, texts ${JSON.stringify(
+          headerCells.map((h) => (h.textContent ?? '').trim().slice(0, 30)),
+        )}, first parent class ${firstHeader?.parentElement?.className ?? 'none'}`,
+      );
     }
     const s = scroller.getBoundingClientRect();
     return {
@@ -464,12 +521,17 @@ function summarise(results: Record<string, unknown>): string {
             label: string;
             truncated: number;
             cells: number;
-            examples: { text: string }[];
+            examples: Sample[];
+            samples: Sample[];
           }[];
         };
         lines.push(`- ${variant} (${d.mountedRows} rows)`);
         for (const c of d.columns) {
-          const ex = c.examples[0] === undefined ? '' : ` e.g. "${c.examples[0].text}"`;
+          const first = c.examples[0] ?? c.samples[0];
+          const ex =
+            first === undefined
+              ? ''
+              : ` e.g. "${first.text}" visible ${first.visibleTextWidth} px in a ${first.cellClientWidth} px cell`;
           lines.push(`  - ${c.label}: ${c.truncated}/${c.cells} truncated${ex}`);
         }
       }
