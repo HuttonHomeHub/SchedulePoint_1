@@ -54,10 +54,10 @@ What is true, measured on 2026-10-03:
 - **D6.** `docs/DATABASE.md` "Soft deletes" and `docs/REFERENCE_FEATURE.md` describe D1–D5.
 
 **Delivery.** The gate is delivered in milestones M2–M5 of the spec's plan, and each milestone's PR
-flips the standards' wording for the rule it adds to present tense. **M2 (2026-10-03) delivers the
-top-level read rule** and the declaration grammar, in
-`apps/api/src/common/query/soft-delete-filter.structural.spec.ts`. **Writes (M3), nested reads and
-`_count` (M4) and raw SQL (M5) are not yet gated**, and the standards say so.
+flips the standards' wording for the rule it adds to present tense. **M2 (2026-10-03) delivered the top-level read rule** and the declaration grammar, in
+`apps/api/src/common/query/soft-delete-filter.structural.spec.ts`; **M3 (2026-10-03) added writes**
+(`update*`, `upsert`, `delete*`, nested writes). **Nested reads and `_count` (M4) and raw SQL (M5)
+are not yet gated**, and the standards say so.
 
 ## Alternatives considered
 

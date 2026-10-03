@@ -5,8 +5,8 @@ import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Every top-level read of a soft-deletable model states what it means to do about deleted rows
- * (ADR-0172, `docs/specs/soft-delete-filter/`).
+ * Every top-level read and write of a soft-deletable model states what it means to do about
+ * deleted rows (ADR-0172, `docs/specs/soft-delete-filter/`).
  *
  * **Why this is a gate.** `docs/DATABASE.md` once said a Prisma extension filtered deleted rows
  * centrally. None exists: filtering is per query, in about two hundred places, by repositories
@@ -24,10 +24,20 @@ import { describe, expect, it } from 'vitest';
  * covers no read is refused (ADR-0124: find by structure, refuse by declaration), and every
  * declaration is printed by the run (US-5) so a reviewer reads the list rather than searching.
  *
- * **This milestone checks top-level reads only** — `findMany`, `findFirst`, `findFirstOrThrow`,
- * `findUnique`, `findUniqueOrThrow`, `count`, `aggregate`, `groupBy`. Writes, nested
- * `include`/`select`/`_count` and raw SQL are later milestones of the same plan; a green run here
- * says nothing about them.
+ * **Reads** are `findMany`, `findFirst`, `findFirstOrThrow`, `findUnique`, `findUniqueOrThrow`,
+ * `count`, `aggregate`, `groupBy`. **Writes** are `update`, `updateMany`, `updateManyAndReturn`,
+ * `upsert`, `delete`, `deleteMany`, plus a **nested write** (`update`, `updateMany`, `upsert`,
+ * `delete`, `deleteMany`, `set`, `disconnect`) inside any `data` on a relation whose target is
+ * soft-deletable. A write's stance means the same as a read's: an edit of a live row goes through
+ * `active()`, a soft-delete stamp is guarded on `deletedAt: null`, and a restore or a hard delete by
+ * ownership scope is declared. `create`/`createMany` are not checked (a new row has no deleted
+ * state). Nested `include`/`select`/`_count` and raw SQL are later milestones of the same plan; a
+ * green run says nothing about them.
+ *
+ * **A declaration on a function covers every call of the declared kind inside it** — one label
+ * for a restore routine rather than one per `updateMany`. The listing prints the covered count
+ * beside each declaration, so a new unguarded write added to a labelled function shows up as a
+ * rise in that number in review rather than passing silently. Labels are never file-wide.
  *
  * **The roster is derived** (ADR-0136) from `prisma/schema.prisma`: a model with a `deletedAt`
  * field is soft-deletable, so a 21st model is under the check with no edit here.
@@ -61,6 +71,35 @@ const READ_OPERATIONS = new Set([
   'count',
   'aggregate',
   'groupBy',
+]);
+
+const WRITE_OPERATIONS = new Set([
+  'update',
+  'updateMany',
+  'updateManyAndReturn',
+  'upsert',
+  'delete',
+  'deleteMany',
+]);
+
+/** Operations whose `data` (or `create`/`update` for an upsert) can carry a nested write. */
+const NESTING_OPERATIONS = new Set([
+  'create',
+  'createMany',
+  'update',
+  'updateMany',
+  'updateManyAndReturn',
+  'upsert',
+]);
+
+const NESTED_WRITE_KEYS = new Set([
+  'update',
+  'updateMany',
+  'upsert',
+  'delete',
+  'deleteMany',
+  'set',
+  'disconnect',
 ]);
 
 const DECLARATION_MARKER = /soft-delete:/;
@@ -104,6 +143,43 @@ function deriveRoster(schema: string): SoftDeletableModel[] {
   return roster;
 }
 
+interface SchemaInfo {
+  roster: SoftDeletableModel[];
+  /** Every model's accessor, soft-deletable or not — a nested write hangs off any of them. */
+  accessors: Map<string, string>;
+  /** model → relation field → target model, from the field's declared type, never its name. */
+  relations: Map<string, Map<string, string>>;
+}
+
+function deriveSchema(schema: string): SchemaInfo {
+  const models = [...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1] as string);
+  const names = new Set(models);
+  const relations = new Map<string, Map<string, string>>();
+  let current: string | null = null;
+  for (const line of schema.split('\n')) {
+    const open = /^model\s+(\w+)\s*\{/.exec(line);
+    if (open) {
+      current = open[1] ?? null;
+      relations.set(current as string, new Map());
+      continue;
+    }
+    if (current === null) continue;
+    if (/^\}/.test(line)) {
+      current = null;
+      continue;
+    }
+    const field = /^\s+(\w+)\s+(\w+)(\[\])?\??(\s|$)/.exec(line);
+    if (field && names.has(field[2] as string)) {
+      relations.get(current)?.set(field[1] as string, field[2] as string);
+    }
+  }
+  return {
+    roster: deriveRoster(schema),
+    accessors: new Map(models.map((m) => [m.charAt(0).toLowerCase() + m.slice(1), m])),
+    relations,
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Scanner
 // ---------------------------------------------------------------------------------------------
@@ -124,7 +200,9 @@ interface Declaration {
 }
 
 interface ScanResult {
+  /** Reads, writes and nested writes examined, whether or not they needed a declaration. */
   sitesExamined: number;
+  writesExamined: number;
   findings: Finding[];
   declarations: Declaration[];
 }
@@ -200,48 +278,73 @@ class Analyser {
   private readonly sources = new Map<string, ts.SourceFile>();
   private readonly helpers: Map<string, HelperDefinition[]>;
   private readonly accessors: Map<string, string>;
+  private readonly allAccessors: Map<string, string>;
+  private readonly relations: Map<string, Map<string, string>>;
+  private readonly rosterModels: Set<string>;
 
-  constructor(sources: Sources, roster: SoftDeletableModel[], extraHelperSources: Sources = {}) {
+  constructor(sources: Sources, schema: SchemaInfo, extraHelperSources: Sources = {}) {
     for (const [file, text] of Object.entries(sources)) this.sources.set(file, parse(file, text));
     const helperFiles = new Map(this.sources);
     for (const [file, text] of Object.entries(extraHelperSources)) {
       helperFiles.set(file, parse(file, text));
     }
     this.helpers = collectHelpers(helperFiles);
-    this.accessors = new Map(roster.map((m) => [m.accessor, m.model]));
+    this.accessors = new Map(schema.roster.map((m) => [m.accessor, m.model]));
+    this.allAccessors = schema.accessors;
+    this.relations = schema.relations;
+    this.rosterModels = new Set(schema.roster.map((m) => m.model));
   }
 
   scan(): ScanResult {
     const findings: Finding[] = [];
     const declarations: Declaration[] = [];
     let sitesExamined = 0;
+    let writesExamined = 0;
 
     for (const [file, source] of this.sources) {
       const declared = this.declarationsIn(file, source, findings);
       const consumed = new Map<number, Set<string>>();
 
+      const flag = (node: ts.Node, label: string, message: string): void => {
+        sitesExamined += 1;
+        const line = lineOf(source, node);
+        const covering = this.coveringDeclaration(node, declared);
+        if (covering) {
+          const set = consumed.get(covering.pos) ?? new Set<string>();
+          set.add(`${label}@${line}`);
+          consumed.set(covering.pos, set);
+          return;
+        }
+        findings.push({ file, line, message: `${file}:${line} — ${message}` });
+      };
+
       const visit = (node: ts.Node): void => {
         if (ts.isCallExpression(node)) {
-          const site = this.readSite(node);
+          const site = this.dataSite(node);
           if (site) {
-            sitesExamined += 1;
-            const line = lineOf(source, node);
+            if (site.write) writesExamined += 1;
             if (!this.hasStance(node, site.where, file, 0)) {
-              const covering = this.coveringDeclaration(node, declared);
-              if (covering) {
-                const set = consumed.get(covering.pos) ?? new Set<string>();
-                set.add(`${site.model}.${site.operation}@${line}`);
-                consumed.set(covering.pos, set);
-              } else {
-                findings.push({
-                  file,
-                  line,
-                  message:
-                    `${file}:${line} — ${site.model}.${site.operation} has no deletedAt stance ` +
-                    '(filter it, or declare why not)',
-                });
-              }
+              flag(
+                node,
+                `${site.model}.${site.operation}`,
+                `${site.model}.${site.operation} has no deletedAt stance ` +
+                  '(filter it, or declare why not)',
+              );
+            } else {
+              sitesExamined += 1;
             }
+          }
+          for (const nested of this.nestedWrites(node, file)) {
+            if (nested.stated) {
+              sitesExamined += 1;
+              continue;
+            }
+            flag(
+              nested.node,
+              `${nested.target}.nested ${nested.key}`,
+              `nested ${nested.key} on ${nested.parent}.${nested.field} (${nested.target}) has no ` +
+                'deletedAt stance (filter it, or declare why not)',
+            );
           }
         }
         ts.forEachChild(node, visit);
@@ -255,7 +358,7 @@ class Analyser {
             file,
             line: decl.line,
             message:
-              `${file}:${decl.line} — declaration does not precede a read on a soft-deletable ` +
+              `${file}:${decl.line} — declaration does not precede a read or write on a soft-deletable ` +
               'model that needs it',
           });
         } else if (decl.valid) {
@@ -269,22 +372,115 @@ class Analyser {
         }
       }
     }
-    return { sitesExamined, findings, declarations };
+    return { sitesExamined, writesExamined, findings, declarations };
   }
 
-  /** `<anything>.<accessor>.<readOperation>(...)` on a roster model. */
-  private readSite(
-    call: ts.CallExpression,
-  ): { model: string; operation: string; where: ts.Expression | null } | null {
+  /** `<anything>.<accessor>.<read or write operation>(...)` on a roster model. */
+  private dataSite(call: ts.CallExpression): {
+    model: string;
+    operation: string;
+    write: boolean;
+    where: ts.Expression | null;
+  } | null {
     const callee = call.expression;
     if (!ts.isPropertyAccessExpression(callee) || !ts.isIdentifier(callee.name)) return null;
     const operation = callee.name.text;
-    if (!READ_OPERATIONS.has(operation)) return null;
+    const write = WRITE_OPERATIONS.has(operation);
+    if (!write && !READ_OPERATIONS.has(operation)) return null;
     const receiver = callee.expression;
     if (!ts.isPropertyAccessExpression(receiver) || !ts.isIdentifier(receiver.name)) return null;
     const model = this.accessors.get(receiver.name.text);
     if (model === undefined) return null;
-    return { model, operation, where: whereOf(call.arguments[0]) };
+    return { model, operation, write, where: whereOf(call.arguments[0]) };
+  }
+
+  /**
+   * Nested writes inside the `data` of a create/update on **any** model: the parent need not be
+   * soft-deletable, only the relation's target. Each is stated when its own `where` carries a
+   * stance; a to-one or a bare `delete: true`/`set` has no `where`, so it must be declared.
+   */
+  private nestedWrites(
+    call: ts.CallExpression,
+    file: string,
+  ): {
+    node: ts.Node;
+    parent: string;
+    field: string;
+    target: string;
+    key: string;
+    stated: boolean;
+  }[] {
+    const callee = call.expression;
+    if (!ts.isPropertyAccessExpression(callee) || !ts.isIdentifier(callee.name)) return [];
+    if (!NESTING_OPERATIONS.has(callee.name.text)) return [];
+    const receiver = callee.expression;
+    if (!ts.isPropertyAccessExpression(receiver) || !ts.isIdentifier(receiver.name)) return [];
+    const parent = this.allAccessors.get(receiver.name.text);
+    const options = call.arguments[0] && unwrap(call.arguments[0]);
+    if (parent === undefined || !options || !ts.isObjectLiteralExpression(options)) return [];
+    const found: ReturnType<Analyser['nestedWrites']> = [];
+    for (const property of options.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const name = propertyName(property.name);
+      if (name !== 'data' && name !== 'create' && name !== 'update') continue;
+      const value = unwrap(property.initializer);
+      if (ts.isObjectLiteralExpression(value)) this.walkData(value, parent, file, found);
+    }
+    return found;
+  }
+
+  private walkData(
+    data: ts.ObjectLiteralExpression,
+    model: string,
+    file: string,
+    found: ReturnType<Analyser['nestedWrites']>,
+  ): void {
+    for (const property of data.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const field = propertyName(property.name);
+      const target = field === null ? undefined : this.relations.get(model)?.get(field);
+      const value = unwrap(property.initializer);
+      if (field === null || target === undefined || !ts.isObjectLiteralExpression(value)) continue;
+      for (const op of value.properties) {
+        if (!ts.isPropertyAssignment(op)) continue;
+        const key = propertyName(op.name);
+        if (key === null) continue;
+        const operand = unwrap(op.initializer);
+        const operands = ts.isArrayLiteralExpression(operand) ? [...operand.elements] : [operand];
+        if (NESTED_WRITE_KEYS.has(key) && this.rosterModels.has(target)) {
+          // `set: []` has no element to carry a `where`, and still rewrites the relation.
+          const checked = operands.length === 0 ? [operand] : operands;
+          for (const item of checked) {
+            const object = unwrap(item);
+            const where = ts.isObjectLiteralExpression(object) ? whereOf(object) : null;
+            found.push({
+              node: op,
+              parent: model,
+              field,
+              target,
+              key,
+              stated: where !== null && this.stance(where, file, 0, op),
+            });
+          }
+        }
+        for (const item of operands) {
+          const object = unwrap(item);
+          if (!ts.isObjectLiteralExpression(object)) continue;
+          this.walkData(object, target, file, found);
+          for (const inner of object.properties) {
+            if (!ts.isPropertyAssignment(inner)) continue;
+            const innerName = propertyName(inner.name);
+            const innerValue = unwrap(inner.initializer);
+            if (
+              (innerName === 'data' || innerName === 'create' || innerName === 'update') &&
+              ts.isObjectLiteralExpression(innerValue)
+            ) {
+              this.walkData(innerValue, target, file, found);
+            }
+          }
+        }
+      }
+    }
   }
 
   private hasStance(
@@ -364,7 +560,7 @@ class Analyser {
 
   /** The declaration comment covering this call: nearest enclosing node that carries one. */
   private coveringDeclaration(
-    call: ts.CallExpression,
+    call: ts.Node,
     declared: Map<number, ParsedDeclaration>,
   ): ParsedDeclaration | null {
     for (let node: ts.Node | undefined = call; node; node = node.parent) {
@@ -389,8 +585,17 @@ class Analyser {
     const note = (pos: number, end: number): void => {
       if (seen.has(pos)) return;
       seen.add(pos);
-      const raw = text.slice(pos, end);
+      let raw = text.slice(pos, end);
       if (!DECLARATION_MARKER.test(raw)) return;
+      // A reason often runs on over several `//` lines; read the comment as the author wrote it.
+      if (raw.startsWith('//')) {
+        for (let cursor = end; ;) {
+          const next = /^\n[ \t]*(\/\/[^\n]*)/.exec(text.slice(cursor));
+          if (!next || DECLARATION_MARKER.test(next[1] ?? '')) break;
+          raw += `\n${next[1]}`;
+          cursor += next[0].length;
+        }
+      }
       const cleaned = raw
         .replace(/^\/\*+|\*+\/$/g, '')
         .split('\n')
@@ -499,19 +704,20 @@ function listSources(dir: string): string[] {
   return files;
 }
 
-const roster = deriveRoster(readFileSync(SCHEMA_PATH, 'utf8'));
+const schemaInfo = deriveSchema(readFileSync(SCHEMA_PATH, 'utf8'));
+const roster = schemaInfo.roster;
 
 function scanTree(): ScanResult {
   const sources: Sources = {};
   for (const file of listSources(SRC_ROOT)) {
     sources[relative(API_ROOT, file)] = readFileSync(file, 'utf8');
   }
-  return new Analyser(sources, roster).scan();
+  return new Analyser(sources, schemaInfo).scan();
 }
 
 /** Run the scanner over synthetic sources; the first is the one under test. */
 const check = (source: string, extra: Sources = {}): ScanResult =>
-  new Analyser({ 'synthetic.ts': source }, roster, extra).scan();
+  new Analyser({ 'synthetic.ts': source }, schemaInfo, extra).scan();
 
 const messages = (result: ScanResult): string[] => result.findings.map((f) => f.message);
 
@@ -575,7 +781,7 @@ describe('soft-delete scanner — synthetic sources', () => {
     }
   });
 
-  it('examines every read operation and ignores writes and creates', () => {
+  it('examines every read operation', () => {
     const ops = [
       'findMany',
       'findFirst',
@@ -589,9 +795,27 @@ describe('soft-delete scanner — synthetic sources', () => {
     for (const op of ops) {
       expect(check(`db.note.${op}({ where: { id } });`).findings, op).toHaveLength(1);
     }
-    expect(
-      check('db.note.update({ where: { id }, data: {} }); db.note.create({ data: {} });'),
-    ).toMatchObject({ sitesExamined: 0, findings: [] });
+  });
+
+  it('examines every write operation and ignores creates', () => {
+    for (const op of [
+      'update',
+      'updateMany',
+      'updateManyAndReturn',
+      'upsert',
+      'delete',
+      'deleteMany',
+    ]) {
+      expect(check(`db.note.${op}({ where: { id }, data: {} });`).findings, op).toHaveLength(1);
+      expect(
+        check(`db.note.${op}({ where: { id, deletedAt: null }, data: {} });`).findings,
+        op,
+      ).toEqual([]);
+    }
+    expect(check('db.note.create({ data: {} }); db.note.createMany({ data: [] });')).toMatchObject({
+      sitesExamined: 0,
+      findings: [],
+    });
   });
 
   it('ignores a model with no deletedAt and a non-Prisma look-alike', () => {
@@ -772,7 +996,7 @@ describe('soft-delete scanner — synthetic sources', () => {
         // soft-delete: any-state — nothing below needs this declaration at all
         const x = 1;`);
       expect(messages(none)).toEqual([
-        expect.stringContaining('does not precede a read on a soft-deletable model'),
+        expect.stringContaining('does not precede a read or write on a soft-deletable model'),
       ]);
       const filtered = check(`
         function f() {
@@ -793,6 +1017,124 @@ describe('soft-delete scanner — synthetic sources', () => {
   });
 });
 
+describe('soft-delete scanner — writes', () => {
+  it('passes an edit through a helper, a stamp guarded on deletedAt: null and a restore', () => {
+    const result = check(`
+      class R {
+        private active(where: object) { return { ...where, deletedAt: null }; }
+        edit() { return this.db.plan.updateMany({ where: this.active({ id, version }), data: {} }); }
+        stamp() {
+          return this.db.plan.updateMany({
+            where: { id, deletedAt: null },
+            data: { deletedAt: new Date() },
+          });
+        }
+        restore() {
+          return this.db.plan.updateMany({ where: { deleteBatchId, deletedAt: { not: null } }, data: {} });
+        }
+      }`);
+    expect(result.findings).toEqual([]);
+    expect(result.writesExamined).toBe(3);
+  });
+
+  it('fails an unguarded updateMany, naming the model and operation', () => {
+    const result = check(`
+      async function f(db: Db) {
+        await db.resource.updateMany({ where: { id }, data: { name: 'x' } });
+      }`);
+    expect(messages(result)).toEqual([
+      'synthetic.ts:3 — Resource.updateMany has no deletedAt stance (filter it, or declare why not)',
+    ]);
+  });
+
+  it('lets a function-level declaration cover several writes and reports how many', () => {
+    const result = check(`
+      class R {
+        /**
+         * soft-delete: any-state — restore targets rows that are deleted by definition here.
+         */
+        async restore(tx: Tx) {
+          await tx.client.updateMany({ where: { deleteBatchId }, data: {} });
+          await tx.project.updateMany({ where: { deleteBatchId }, data: {} });
+          await tx.plan.updateMany({ where: { deleteBatchId }, data: {} });
+        }
+        async other(tx: Tx) {
+          await tx.plan.updateMany({ where: { id }, data: {} });
+        }
+      }`);
+    expect(result.declarations).toHaveLength(1);
+    expect(result.declarations[0]?.covers).toHaveLength(3);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.message).toContain('Plan.updateMany');
+  });
+
+  it('refuses a stale function-level declaration once its writes are guarded', () => {
+    const result = check(`
+      class R {
+        /** soft-delete: any-state — this once covered an unguarded write and now covers none. */
+        async restore(tx: Tx) {
+          await tx.plan.updateMany({ where: { id, deletedAt: null }, data: {} });
+        }
+      }`);
+    expect(messages(result)).toEqual([expect.stringContaining('does not precede a read or write')]);
+  });
+
+  it('refuses a nested write on a soft-deletable relation, and passes a stated one', () => {
+    const bad = check(`
+      db.plan.update({
+        where: { id, deletedAt: null },
+        data: { activities: { updateMany: { where: {}, data: {} } } },
+      });`);
+    expect(messages(bad)).toEqual([
+      expect.stringContaining('nested updateMany on Plan.activities (Activity)'),
+    ]);
+    const ok = check(`
+      db.plan.update({
+        where: { id, deletedAt: null },
+        data: { activities: { updateMany: { where: { deletedAt: null }, data: {} } } },
+      });`);
+    expect(ok.findings).toEqual([]);
+  });
+
+  it('treats a bare nested delete, set and disconnect as unstated, and a create as fine', () => {
+    for (const nested of ['delete: true', 'set: []', 'disconnect: [{ id }]']) {
+      const result = check(
+        `db.plan.update({ where: { id, deletedAt: null }, data: { activities: { ${nested} } } });`,
+      );
+      expect(result.findings, nested).toHaveLength(1);
+    }
+    const created = check(
+      'db.plan.update({ where: { id, deletedAt: null }, data: { activities: { create: { name } } } });',
+    );
+    expect(created.findings).toEqual([]);
+  });
+
+  it('follows a relation by its declared type, not its name, and ignores a non-soft-deletable target', () => {
+    // BaselineActivity hangs off Baseline as `activities`; PlanLock has no deletedAt.
+    const viaType = check(
+      'db.baseline.update({ where: { id, deletedAt: null }, data: { activities: { deleteMany: {} } } });',
+    );
+    expect(messages(viaType)).toEqual([expect.stringContaining('(BaselineActivity)')]);
+    const lock = check(
+      'db.plan.update({ where: { id, deletedAt: null }, data: { lock: { delete: true } } });',
+    );
+    expect(lock.findings).toEqual([]);
+  });
+
+  it('declares a nested write by a declaration above the statement', () => {
+    const result = check(`
+      function f() {
+        // soft-delete: any-state — the whole subtree is replaced on purpose in this call.
+        return db.plan.update({
+          where: { id, deletedAt: null },
+          data: { activities: { deleteMany: {} } },
+        });
+      }`);
+    expect(result.findings).toEqual([]);
+    expect(result.declarations).toHaveLength(1);
+  });
+});
+
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
 
@@ -803,7 +1145,12 @@ describe('soft-delete gate — the repository tree', () => {
     expect(result.sitesExamined).toBeGreaterThanOrEqual(150);
   });
 
-  it('every top-level read of a soft-deletable model states a deletedAt stance', () => {
+  it('examined a plausible number of writes — the second pinned positive case', () => {
+    // 112 single-line write calls on the 20 models when the spec was written (§4.11).
+    expect(result.writesExamined).toBeGreaterThanOrEqual(90);
+  });
+
+  it('every read and write of a soft-deletable model states a deletedAt stance', () => {
     expect(
       result.findings.map((f) => f.message),
       'filter the read (usually via the repository active() helper), or declare why it must see ' +

@@ -57,6 +57,11 @@ export class InvitationRepository {
     });
   }
 
+  /**
+   * soft-delete: any-state — nothing in the application writes `invitations.deleted_at`, so no
+   * deleted row can match this id; adding `deletedAt: null` would turn a future deleted match
+   * into a thrown P2025, which is a behaviour choice rather than a gate chore.
+   */
   async setStatus(
     id: string,
     data: Prisma.InvitationUncheckedUpdateInput,

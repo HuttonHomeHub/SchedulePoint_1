@@ -70,8 +70,9 @@ export interface ExpiryCounts {
  * from the schema file, then run end to end against a real database
  * (`docs/specs/recently-deleted/measurements/05-delete-order.sql`).
  *
- * soft-delete: any-state — the id lookups below resolve every row the scope owns, active children
- * included, because two child tables are not cascade-stamped (ADR-0096 D5, TECH_DEBT #139).
+ * soft-delete: any-state — the id lookups and the deletes below take every row the scope owns,
+ * active children included, because two child tables are not cascade-stamped (ADR-0096 D5,
+ * TECH_DEBT #139); a `deletedAt` filter would leave orphans and fail on RESTRICT foreign keys.
  */
 export async function deleteExpiredScope(
   tx: Prisma.TransactionClient,

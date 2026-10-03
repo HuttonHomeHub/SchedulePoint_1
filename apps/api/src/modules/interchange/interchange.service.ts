@@ -1271,6 +1271,11 @@ export class InterchangeService {
     return findings;
   }
 
+  /**
+   * soft-delete: any-state — removes the plan, calendars and resources THIS import created moments
+   * ago, which nobody has seen, so there is no deleted state to respect and it must remove every
+   * row it made (see "nothing is created on failure"; the one hard-delete path beside ADR-0096).
+   */
   private async compensate(
     planId: string,
     calendarIds: string[],

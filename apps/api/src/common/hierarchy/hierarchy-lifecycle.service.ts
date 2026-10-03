@@ -495,6 +495,10 @@ export class HierarchyLifecycleService {
    * Throws {@link NotFoundError} if the row is missing or not deleted,
    * `PARENT_DELETED` if its parent is still deleted, or `NAME_TAKEN` if
    * reactivating would collide with an active sibling.
+   *
+   * soft-delete: deleted-only — every write here reactivates rows selected by the batch id the
+   * deleted root carries (or by the id of a root proven deleted by `loadDeletedRoot`), so each
+   * target is soft-deleted by construction; a `deletedAt` guard would only restate that.
    */
   async restoreBatch(
     tx: Prisma.TransactionClient,
@@ -643,7 +647,8 @@ export class HierarchyLifecycleService {
    * only a single-activity restore can leave a link behind.
    *
    * soft-delete: deleted-only — selects the links stamped with this batch id, which are deleted by
-   * construction; the active-endpoint read below carries its own filter.
+   * construction, and reactivates exactly the restorable ids chosen from them; the active-endpoint
+   * read below carries its own filter.
    */
   private async restoreLinksInBatch(
     tx: Prisma.TransactionClient,
