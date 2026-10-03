@@ -361,6 +361,33 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     });
   });
 
+  describe('a removed member (#436)', () => {
+    it('is not named once the member is removed through the members endpoint', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Tower B');
+      const planner = await memberWith(orgId, 'PLANNER', 'planner@example.com');
+      await planner.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Excavate' })
+        .expect(201);
+      expect((await fetchOverview(actor)).recentlyChanged[0]?.changedBy).toEqual({
+        kind: 'MEMBER',
+        name: 'planner',
+      });
+
+      // The real removal path soft-deletes `org_members`; the row survives with `deleted_at` set,
+      // which is the state the name lookup used to ignore.
+      const member = await prisma.orgMember.findFirstOrThrow({
+        where: { organizationId: orgId, userId: planner.userId },
+      });
+      await actor.agent.delete(`/api/v1/organizations/acme/members/${member.id}`).expect(204);
+
+      expect((await fetchOverview(actor)).recentlyChanged[0]?.changedBy).toEqual({
+        kind: 'FORMER_MEMBER',
+      });
+    });
+  });
+
   describe('the section-omission matrix', () => {
     it('sends the invitation count to an Org Admin', async () => {
       const { actor } = await adminWithOrg();

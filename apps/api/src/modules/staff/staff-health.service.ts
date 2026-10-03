@@ -366,6 +366,6 @@ export class StaffHealthService {
    * and never built; the UX review found it. This is the fact the banner needs.
    */
   async isDualHatted(userId: string): Promise<boolean> {
-    return (await this.prisma.orgMember.count({ where: { userId } })) > 0;
+    return (await this.prisma.orgMember.count({ where: { userId, deletedAt: null } })) > 0;
   }
 }

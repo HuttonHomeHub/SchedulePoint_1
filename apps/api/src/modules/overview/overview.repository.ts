@@ -549,7 +549,7 @@ export class OverviewRepository {
     if (unique.length === 0) return new Map();
 
     const members = await this.prisma.orgMember.findMany({
-      where: { organizationId, userId: { in: unique } },
+      where: { organizationId, userId: { in: unique }, deletedAt: null },
       select: { userId: true, user: { select: { name: true } } },
     });
 
