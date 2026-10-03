@@ -1,6 +1,10 @@
 import type { ActivitySummary, ActivityType } from '@repo/types';
 
-import { isResizeEligibleType } from '@/features/tsld/render/hit-test';
+import {
+  isResizeEligibleType,
+  isStartEdgeFrozen,
+  START_EDGE_FROZEN_REASON,
+} from '@/features/tsld/render/hit-test';
 
 /**
  * **Moving a bar: what the Gantt needs from its host, and what it may never decide itself.**
@@ -86,9 +90,8 @@ export function barMoveGate(
 /** Which end of a bar a resize holds still, by the end it moves. */
 export type BarEdge = 'start' | 'finish';
 
-/** Why a started or finished activity's start cannot be moved — said by the handle's refusal AND the Start cell. */
-export const START_EDGE_FROZEN_REASON =
-  'This activity has started, so its start is its actual start and cannot be moved here.';
+/** Re-exported from the shared rule (`isStartEdgeFrozen`'s file) so the Gantt's cells keep one import. */
+export { START_EDGE_FROZEN_REASON };
 
 /**
  * The sentence for a type `isResizeEligibleType` refuses. Whether a type is refused is decided
@@ -111,16 +114,16 @@ function ineligibleTypeReason(type: ActivityType): string {
  * a length to change. A summary is not a task at all, so it is never told "it has started".
  * Shared by the finish handle, the keyboard resize, the start handle and the typed `Start` cell.
  *
- * The frozen rule mirrors the engine's `isFrozenByActuals` — an activity with any actual is drawn
- * from its actual and ignores a hand-placed start — so a start-edge write there would save an
- * inert placement, change the duration and move the FINISH, the opposite of the gesture's promise.
+ * The frozen rule is `isStartEdgeFrozen`, shared with the diagram (docs/TECH_DEBT.md #431): a
+ * start-edge write there would save an inert placement, change the duration and move the FINISH,
+ * the opposite of the gesture's promise.
  */
 export function edgeObjectReason(
   activity: Pick<ActivitySummary, 'type' | 'actualStart' | 'actualFinish'>,
   edge: BarEdge,
 ): string | null {
   if (!isResizeEligibleType(activity.type)) return ineligibleTypeReason(activity.type);
-  if (edge === 'start' && Boolean(activity.actualStart ?? activity.actualFinish)) {
+  if (edge === 'start' && isStartEdgeFrozen(activity)) {
     return START_EDGE_FROZEN_REASON;
   }
   return null;

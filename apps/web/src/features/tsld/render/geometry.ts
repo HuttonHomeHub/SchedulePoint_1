@@ -659,6 +659,10 @@ export interface RenderActivity {
    * right from the bar's finish under the float/drift lens. Null/absent (uncalculated, or the
    * lens off) ⇒ no tail. */
   totalFloat?: number | null;
+  /** True when the activity's start is frozen by actuals (`isStartEdgeFrozen`), pre-derived at the
+   * mapping seam so the hit test can withhold the start-edge resize zone without reading a domain
+   * field. Absent reads as false. */
+  startFrozen?: boolean;
 }
 
 /** A directed dependency edge (predecessor → successor) by activity id. */
