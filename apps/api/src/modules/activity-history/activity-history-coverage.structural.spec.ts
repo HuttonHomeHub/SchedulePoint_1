@@ -212,25 +212,6 @@ const SITES: Record<string, Site> = {
     status: 'exempt',
     reason: "A failed import's rollback; history for these activities is deleted first.",
   },
-  'common/hierarchy/hierarchy-expiry.runner.ts::deleteExpiredScope::crossPlanDependency.deleteMany':
-    {
-      status: 'exempt',
-      reason: 'Permanent expiry (ADR-0096); the subtree and its history go together.',
-    },
-  'common/hierarchy/hierarchy-expiry.runner.ts::deleteExpiredScope::activityDependency.deleteMany':
-    {
-      status: 'exempt',
-      reason: 'Permanent expiry (ADR-0096).',
-    },
-  'common/hierarchy/hierarchy-expiry.runner.ts::deleteExpiredScope::resourceAssignment.deleteMany':
-    {
-      status: 'exempt',
-      reason: 'Permanent expiry (ADR-0096).',
-    },
-  'common/hierarchy/hierarchy-expiry.runner.ts::deleteExpiredScope::activity.deleteMany': {
-    status: 'exempt',
-    reason: 'Permanent expiry (ADR-0096); history is deleted first, counted and budgeted.',
-  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -249,10 +230,16 @@ function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
+    const rel = relative(SRC, path);
     if (statSync(path).isDirectory()) {
       // The engine reads inputs and writes outputs; its own gate is `check:engine-parity`.
-      if (relative(SRC, path) === join('modules', 'schedule', 'engine')) continue;
+      if (rel === join('modules', 'schedule', 'engine')) continue;
       out.push(...sourceFiles(path));
+    } else if (rel === join('common', 'hierarchy', 'hierarchy-expiry.runner.ts')) {
+      // Permanent expiry deletes the whole subtree, history first, and has its own DMMF-derived
+      // census (`hierarchy-expiry.structural.spec.ts`) that fails if it forgets a child. Nothing
+      // outside `common/hierarchy` may even name that file, which this spec would otherwise do.
+      continue;
     } else if (name.endsWith('.ts') && !/\.(spec|test|e2e-spec)\.ts$/.test(name)) {
       out.push(path);
     }
