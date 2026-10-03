@@ -608,7 +608,7 @@ export function ToolbarPlanWorkspace({
             },
             reset: () => {
               ganttColumnWidths.reset();
-              ganttGridPrefs.setSize(ganttGridPrefs.seed);
+              ganttGridPrefs.resetSize();
             },
             isDefault:
               isDefaultWidths(ganttColumnWidths.widths) &&

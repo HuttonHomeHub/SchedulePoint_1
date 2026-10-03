@@ -35,6 +35,13 @@ export interface UseResizablePanelPrefs {
   collapse: () => void;
   expand: () => void;
   setSize: (size: number) => void;
+  /**
+   * Put the size back on `defaultSize`, **without clamping against this render's bounds**. For a
+   * caller whose bounds are about to change in the same gesture (the Gantt's Reset widths lowers its
+   * floor as it clears the widths that raised it): `setSize(defaultSize)` would clamp the default up
+   * to the stale floor and store that. The size read back is still clamped to the bounds then current.
+   */
+  resetSize: () => void;
 }
 
 interface PanelPrefs {
@@ -67,7 +74,7 @@ function readPrefs({ storageKey, min, max, defaultSize }: ResizablePanelOptions)
 }
 
 export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResizablePanelPrefs {
-  const { storageKey, min, max } = options;
+  const { storageKey, min, max, defaultSize } = options;
   const [prefs, setPrefs] = useState<PanelPrefs>(() => readPrefs(options));
 
   useEffect(() => {
@@ -83,6 +90,11 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
   const setSize = useCallback(
     (size: number) => setPrefs((p) => ({ ...p, size: clampSize(size, min, max) })),
     [min, max],
+  );
+
+  const resetSize = useCallback(
+    () => setPrefs((p) => ({ ...p, size: defaultSize })),
+    [defaultSize],
   );
 
   /**
@@ -107,5 +119,6 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
     collapse,
     expand,
     setSize,
+    resetSize,
   };
 }
