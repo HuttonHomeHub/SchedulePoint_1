@@ -2,6 +2,8 @@ import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { START_EDGE_FROZEN_REASON } from '../render/hit-test';
+
 import {
   NUDGE_DEBOUNCE_MS,
   useCoalescedNudge,
@@ -172,6 +174,26 @@ describe('useCoalescedNudge', () => {
     act(() => result.current(a, 'time', 1));
     await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
     expect(deps.onReposition).toHaveBeenCalledWith({ activityId: 'a1', startDay: 1 });
+  });
+
+  it('refuses a sideways nudge of a started activity, aloud, and writes nothing (#431)', async () => {
+    const started = activity({ actualStart: '2026-01-01' });
+    const deps = makeDeps({ activities: [started] });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(started, 'time', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.setConflict).toHaveBeenCalledWith(START_EDGE_FROZEN_REASON, false);
+    expect(deps.onReposition).not.toHaveBeenCalled();
+    expect(deps.setGhost).not.toHaveBeenCalled();
+  });
+
+  it('still nudges a started activity between lanes (#431)', async () => {
+    const started = activity({ actualFinish: '2026-01-03' });
+    const deps = makeDeps({ activities: [started] });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(started, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.onReposition).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 1 });
   });
 
   it('announces the top-lane boundary and issues no write', async () => {

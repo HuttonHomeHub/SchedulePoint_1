@@ -2038,7 +2038,8 @@ export function TsldPanel({
     dataDate,
     setGhost: setPendingReposition,
     // A nudge conflict is a stale-version reject (refreshable); null clears the banner.
-    setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
+    setConflict: (message, refreshable) =>
+      message === null ? clearConflict() : showConflict(message, refreshable),
     announce,
     isPointerBusy: () => pointerRepositionBusyRef.current,
   });
@@ -2498,6 +2499,13 @@ export function TsldPanel({
     if (intent.kind === 'reposition') {
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedReposition) return;
+      // A started activity's drag never carries a day (the gesture holds its ghost in its column);
+      // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
+      // data — and the banner's `role="alert"` says it, as the start-edge backstop does.
+      if (intent.sidewaysRefused) {
+        showConflict(START_EDGE_FROZEN_REASON, false);
+        return;
+      }
       clearConflict();
 
       // **The plural drag** (`docs/TECH_DEBT.md` #108). When the dragged bar is part of a selection
@@ -2511,6 +2519,12 @@ export function TsldPanel({
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
       if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
         const rows = activities.filter((a) => pluralIds.includes(a.id));
+        // One started bar in the set would be slid sideways with the rest, writing a placement the
+        // schedule ignores (#431): refuse the whole sideways batch rather than move some of it.
+        if (intent.startDay !== undefined && rows.some(isStartEdgeFrozen)) {
+          showConflict(START_EDGE_FROZEN_REASON, false);
+          return;
+        }
         // The gesture's `startDay` is measured off the DRAWN bar, so the delta must be too: from
         // the early start, a placed primary shifted every selected bar by its own drift as well
         // as by the drag (reported 2026-09-23).

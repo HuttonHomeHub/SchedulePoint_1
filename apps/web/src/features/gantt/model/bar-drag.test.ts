@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   barEdgeGate,
+  barMoveGate,
   edgeObjectReason,
   settleBarWrite,
   startEdgeAnnouncement,
@@ -63,6 +64,29 @@ describe('the Gantt and the diagram agree on which types have a length to resize
       }
     },
   );
+});
+
+describe('barMoveGate', () => {
+  it('allows a not-started task and refuses a summary', () => {
+    expect(barMoveGate(task, OPEN)).toEqual({ movable: true, reason: null });
+    expect(barMoveGate({ ...task, type: 'WBS_SUMMARY' }, OPEN).movable).toBe(false);
+  });
+
+  it('refuses a started and a finished activity, with the spoken reason (#431)', () => {
+    for (const actual of [{ actualStart: '2026-03-02' }, { actualFinish: '2026-03-06' }]) {
+      expect(barMoveGate({ ...task, ...actual }, OPEN)).toEqual({
+        movable: false,
+        reason: START_EDGE_FROZEN_REASON,
+      });
+    }
+  });
+
+  it('puts the object’s reason before the reader’s', () => {
+    const readOnly = { canEdit: false, reason: 'Take the pen first.' };
+    expect(barMoveGate({ ...task, actualStart: '2026-03-02' }, readOnly).reason).toBe(
+      START_EDGE_FROZEN_REASON,
+    );
+  });
 });
 
 describe('barEdgeGate', () => {

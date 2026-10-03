@@ -105,6 +105,9 @@ export interface BodyGrab {
   startDay: number;
   endDay: number;
   laneIndex: number;
+  /** The activity's start is frozen by actuals (`isStartEdgeFrozen`): a drag may change its lane
+   * but never its day (docs/TECH_DEBT.md #431). Absent reads as false. */
+  startFrozen?: boolean;
 }
 
 /**
@@ -170,6 +173,9 @@ export type EditIntent =
       startDay?: number;
       /** The new lane (whole, ≥ 0). Present iff the drag crossed a whole lane row; omitted ⇒ lane unchanged. */
       laneIndex?: number;
+      /** Set on a started activity's drag that went sideways and nowhere else: there is nothing to
+       * write, but the host owes the planner the reason (docs/TECH_DEBT.md #431). */
+      sidewaysRefused?: true;
     }
   | {
       /**
@@ -258,6 +264,10 @@ export type GestureState =
       currentStartDay: number;
       /** The lane under the pointer now — `round(dy / LANE_HEIGHT)` from the grab, clamped ≥ 0. */
       currentLaneIndex: number;
+      /** The grabbed activity's start is frozen by actuals, so the day never follows the pointer. */
+      dayLocked?: boolean;
+      /** The pointer reached a different day column while {@link dayLocked} held the bar still. */
+      sidewaysBlocked?: boolean;
     }
   | {
       /**
@@ -464,7 +474,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       if (event.hit.kind === 'body' && event.body) {
-        const { id, startDay, endDay, laneIndex } = event.body;
+        const { id, startDay, endDay, laneIndex, startFrozen } = event.body;
         return {
           state: {
             kind: 'repositioning',
@@ -478,6 +488,8 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             laneIndex,
             currentStartDay: startDay,
             currentLaneIndex: laneIndex,
+            dayLocked: startFrozen === true,
+            sidewaysBlocked: false,
           },
         };
       }
@@ -524,7 +536,11 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           Math.max(Math.abs(event.point.x - state.grabX), Math.abs(event.point.y - state.grabY)) >
             REPOSITION_THRESHOLD_PX;
         const delta = dayColumnAt(event.point.x, ctx.view) - state.grabDay;
-        const currentStartDay = state.originStartDay + delta;
+        // A frozen bar keeps its day: the ghost holds the column so it never slides sideways, and
+        // whether the pointer ended up in another column is kept so a sideways-only drop is refused aloud.
+        const currentStartDay =
+          state.dayLocked === true ? state.originStartDay : state.originStartDay + delta;
+        const sidewaysBlocked = state.dayLocked === true && delta !== 0;
         const currentLaneIndex = Math.max(
           0,
           state.laneIndex + Math.round((event.point.y - state.grabY) / LANE_HEIGHT),
@@ -532,10 +548,19 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         if (
           currentStartDay === state.currentStartDay &&
           currentLaneIndex === state.currentLaneIndex &&
-          movedPastThreshold === state.movedPastThreshold
+          movedPastThreshold === state.movedPastThreshold &&
+          sidewaysBlocked === (state.sidewaysBlocked === true)
         )
           return { state };
-        return { state: { ...state, currentStartDay, currentLaneIndex, movedPastThreshold } };
+        return {
+          state: {
+            ...state,
+            currentStartDay,
+            currentLaneIndex,
+            movedPastThreshold,
+            sidewaysBlocked,
+          },
+        };
       }
       if (state.kind === 'resizing') {
         // The day column under the pointer becomes the tentative inclusive finish day (finish
@@ -637,6 +662,12 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const laneChanged = state.currentLaneIndex !== state.laneIndex;
         // A press that never travelled past the pixel threshold — or that landed back on the
         // origin day AND lane — is a select, not a move (guards click-jitter at low zoom, D5).
+        if (state.sidewaysBlocked === true && !laneChanged) {
+          return {
+            state: IDLE,
+            intent: { kind: 'reposition', activityId: state.activityId, sidewaysRefused: true },
+          };
+        }
         if (!state.movedPastThreshold || (!dayChanged && !laneChanged)) {
           return { state: IDLE, select: state.activityId };
         }

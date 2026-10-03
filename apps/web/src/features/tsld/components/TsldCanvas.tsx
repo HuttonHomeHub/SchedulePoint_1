@@ -668,7 +668,13 @@ function bodyGrab(
   if (!a || a.earlyStart === null) return undefined;
   const startDay = axisDayOf(a.type, dataDate, a.earlyStart);
   const endDay = a.earlyFinish === null ? startDay : axisDayOf(a.type, dataDate, a.earlyFinish);
-  return { id, startDay, endDay, laneIndex: a.laneIndex };
+  return {
+    id,
+    startDay,
+    endDay,
+    laneIndex: a.laneIndex,
+    ...(a.startFrozen ? { startFrozen: true } : {}),
+  };
 }
 
 /**

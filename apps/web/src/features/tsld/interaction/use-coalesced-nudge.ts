@@ -5,6 +5,7 @@ import type { PendingGhost } from '../components/TsldCanvas';
 import type { TsldEditOutcome, TsldRepositionInput } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
 import { repositionAnnouncement } from '../model/reposition-announcement';
+import { isStartEdgeFrozen, START_EDGE_FROZEN_REASON } from '../render/hit-test';
 
 import type { BarDateSource } from '@/lib/bar-dates';
 
@@ -52,7 +53,8 @@ export interface CoalescedNudgeDeps {
   activities: readonly ActivitySummary[];
   dataDate: string | null;
   setGhost: (ghost: PendingGhost | null) => void;
-  setConflict: (message: string | null) => void;
+  /** `refreshable` false for a refusal that is a rule, not stale data (no refresh offered). */
+  setConflict: (message: string | null, refreshable?: boolean) => void;
   announce: (message: string) => void;
   /** True while a pointer-drag reposition is committing — a keyboard nudge must not race it. */
   isPointerBusy: () => boolean;
@@ -201,6 +203,12 @@ export function useCoalescedNudge(
       depsRef.current;
     if (!onReposition || dataDate === null) return;
     if (isPointerBusy()) return; // don't race an in-flight pointer-drag reposition
+    // A started activity cannot move sideways (docs/TECH_DEBT.md #431): refuse aloud and write
+    // nothing. The lane axis is unaffected.
+    if (axis === 'time' && isStartEdgeFrozen(activity)) {
+      setConflict(START_EDGE_FROZEN_REASON, false);
+      return;
+    }
     let t = targetRef.current;
     if (!t || t.activityId !== activity.id) {
       // Switching activities mid-burst — flush the previous target before starting a new one.
