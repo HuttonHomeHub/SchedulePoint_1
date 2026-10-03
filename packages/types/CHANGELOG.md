@@ -1,5 +1,11 @@
 # @repo/types
 
+## 0.40.0
+
+### Minor Changes
+
+- [#764](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/764) [`7d0acfe`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7d0acfec8146188ccd0e4815295a2bff181cf57b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A resource group can now be dissolved through the API: `POST /api/v1/organizations/:orgSlug/resources/:resourceId/dissolve` removes the group and keeps everything directly inside it, moving those resources up to the group's own parent (or the top level). Planners and Org Admins can do it; a resource that is not a group is refused. Unlike deleting a group, nothing inside it is lost, and no plan's dates can change. Resources have no recycle bin, so a dissolved group cannot be restored, only created again. Each dissolve is written to the organisation audit log as "Group dissolved", with how many resources were kept and where they went. No screen offers it yet.
+
 ## 0.39.0
 
 ### Minor Changes
