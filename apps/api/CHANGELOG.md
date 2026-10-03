@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.84.2
+
+### Patch Changes
+
+- [#776](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/776) [`e09558c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e09558c359f7f9ec7308d2f7817cbb3fd9f0eed9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A baseline's activity count now counts only live snapshot rows. The count read every row, relying on
+  the snapshot being stamped deleted together with its baseline; stating the filter makes the number
+  mean the same thing as the baseline's detail view and cannot drift from it.
+
 ## 0.84.1
 
 ### Patch Changes
