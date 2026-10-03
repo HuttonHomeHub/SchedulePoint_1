@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.159.0
+
+### Minor Changes
+
+- [#766](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/766) [`e1636e3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1636e3c93448309a168c8225de096b35e6a8d2b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A resource group can now be dissolved from the Resources library: open the group's `⋯` menu and choose Dissolve to remove the grouping and keep every resource in it, moved up to the group's own parent (or the top level). The confirmation says how many resources are kept and where they go, and that a dissolved group cannot be restored, only created again. Deleting a group now says it deletes everything inside it, counts what is inside, and points at Dissolve instead. The library's filter note no longer refers to a Group column that was removed.
+
 ## 0.158.2
 
 ### Patch Changes
