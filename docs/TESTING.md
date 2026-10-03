@@ -125,6 +125,15 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
     no test can make it do — so this reads the call sites instead, which is the
     part that is actually decidable.
 
+  The soft-delete filter has one (ADR-0172):
+  `apps/api/src/common/query/soft-delete-filter.structural.spec.ts` parses
+  `apps/api/src` with the TypeScript compiler API and fails any read, write,
+  to-many `include`/`_count` or raw-SQL statement on a soft-deletable model
+  (derived from `schema.prisma`) that states no `deletedAt` stance and carries
+  no `// soft-delete: any-state|deleted-only — <reason>` declaration. It prints
+  every declaration, and three pinned counts stop a scanner that silently finds
+  nothing from passing.
+
 ## End-to-end (Playwright)
 
 The default suite lives in `apps/web/e2e/`. **Each feature flag also has its own

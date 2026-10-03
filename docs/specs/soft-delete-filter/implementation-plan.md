@@ -1,7 +1,7 @@
 # Implementation Plan: Make a forgotten soft-delete filter impossible to merge
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-03: option B (the computed gate), with Q2 answered **"check edits too"** — the first version checks writes (update, updateMany, delete, upsert on soft-deletable models) as well as reads; Q3 at its default (a real leak found by labelling gets its own fix PR, test and patch changeset).
+- **Status:** Accepted — shipped (ADR-0172). Approved by the product owner, 2026-10-03: option B (the computed gate), with Q2 answered **"check edits too"** — the first version checks writes (update, updateMany, delete, upsert on soft-deletable models) as well as reads; Q3 at its default (a real leak found by labelling gets its own fix PR, test and patch changeset).
 - **Owner:** _(assigned on approval)_ — planned by feature-analyst; built by the **builder** agent
 
 ## Breakdown

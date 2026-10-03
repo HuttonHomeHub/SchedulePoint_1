@@ -54,11 +54,11 @@ What is true, measured on 2026-10-03:
 - **D6.** `docs/DATABASE.md` "Soft deletes" and `docs/REFERENCE_FEATURE.md` describe D1–D5.
 
 **Delivery.** The gate is delivered in milestones M2–M5 of the spec's plan, and each milestone's PR
-flips the standards' wording for the rule it adds to present tense. **M2 (2026-10-03) delivered the top-level read rule** and the declaration grammar, in
-`apps/api/src/common/query/soft-delete-filter.structural.spec.ts`; **M3 added writes** (`update*`,
-`upsert`, `delete*`, nested writes); **M4 added to-many `include`/`select`/`_count`**, and its one
-finding was fixed by stating the filter (`baseline.repository.ts`, two `_count`s). **Raw SQL (M5) is
-not yet gated**, and the standards say so.
+flips the standards' wording for the rule it adds to present tense. All five milestones shipped on 2026-10-03. **M2** delivered the top-level read rule and the declaration
+grammar, in `apps/api/src/common/query/soft-delete-filter.structural.spec.ts`; **M3** added writes
+(`update*`, `upsert`, `delete*`, nested writes); **M4** added to-many `include`/`select`/`_count`, and
+its findings were fixed by stating the filter (`baseline.repository.ts`, two `_count`s); **M5** added
+raw SQL, including `Prisma.sql` fragments.
 
 ## Alternatives considered
 
@@ -89,6 +89,12 @@ not yet gated**, and the standards say so.
 - **Negative.** A **wrong** stance (`{ not: null }` where `null` was meant) still passes. A `where`
   assembled in another function costs a declaration. Creates and to-one reads are unchecked. It is the
   first use of the TypeScript compiler API in a gate here, so a small scanner must be maintained.
+- **Measured at close-out (2026-10-03).** The scan adds about one second to `pnpm test`. It examines
+  307 reads, writes and nested selections (112 of them writes, the spec's §4.11 count) and 36 raw statements that name a soft-deletable table, and prints 30
+  declarations (three of them `KNOWN LEAK #436`). Triage found the three leaks in `TECH_DEBT.md` #436
+  and the baseline `_count`s of M4; everything else was deliberate and is declared with its reason.
+- **A declaration on raw SQL covers every table in its statement**, so a later-removed `deleted_at`
+  on a to-one parent join under a declared statement is not caught; the reason must name the tables.
 - **Advisory at the merge boundary**, like every gate here: `main` is unprotected (CLAUDE.md §8).
 - **Follow-ups.** A genuine leak found by labelling is fixed in its own PR with a regression test and
   a patch changeset. The M4 `_count` filter is the epic's only intended runtime change.
