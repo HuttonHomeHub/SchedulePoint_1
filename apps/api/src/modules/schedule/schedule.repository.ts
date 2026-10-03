@@ -374,6 +374,10 @@ export class ScheduleRepository {
    * A single grouped aggregate over a plan's active activities' persisted engine
    * columns — no recompute, no N+1. `early_finish` is cast to text so the date
    * crosses the boundary as `YYYY-MM-DD` with no timezone reinterpretation.
+   *
+   * soft-delete: any-state — the activities are filtered; the one unfiltered read is the plan's own
+   * `planned_start`, scoped by the id of the plan being summarised, which both callers resolve
+   * active (`findActiveByIdInOrg`) before calling.
    */
   async summarise(organizationId: string, planId: string): Promise<ScheduleAggregate> {
     const rows = await this.prisma.$queryRaw<
@@ -1000,6 +1004,9 @@ export class ScheduleRepository {
    *
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.
+   *
+   * soft-delete: any-state — stamps the freshness cursor of the one plan this transaction just
+   * recalculated, which the caller loaded active and holds the plan write lock on.
    */
   async stampScheduleComputedAt(
     planId: string,

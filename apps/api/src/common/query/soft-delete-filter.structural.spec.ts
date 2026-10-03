@@ -35,8 +35,15 @@ import { describe, expect, it } from 'vitest';
  * target is soft-deletable, on any call: `true` and an object with no `where` stating a stance both
  * fail, because the relation's own `where` is the only place a stance can live. A shared fragment
  * held in a local `const` and spread into the options is followed. To-one relations are out of
- * scope (Prisma cannot filter them; TECH_DEBT #139 is the known exception). Raw SQL is a later
- * milestone of the same plan; a green run says nothing about it.
+ * scope (Prisma cannot filter them; TECH_DEBT #139 is the known exception).
+ *
+ * **Raw SQL** — a `$queryRaw`/`$executeRaw` template or a `Prisma.sql` fragment — is judged on its
+ * static text: every soft-deletable table it reads from, joins, updates or inserts into (tables come
+ * from `@@map`) needs a `deleted_at` mention, `<alias>.deleted_at` or a bare one when it is the only
+ * such table. It is a text heuristic: an alias belonging to another table can fool it, a comma join
+ * is invisible, and a `Prisma.sql` fragment spliced into a query elsewhere is judged alone. The
+ * `*Unsafe` variants cannot be read statically and fail unless declared (none exist today). Raw SQL
+ * to-one joins to a parent table are the same decision as to-one includes, and are declared.
  *
  * **A declaration on a function covers every call of the declared kind inside it** — one label
  * for a restore routine rather than one per `updateMany`. The listing prints the covered count
@@ -56,7 +63,14 @@ import { describe, expect, it } from 'vitest';
  * costing a declaration, never a miss. Whether a declaration's reason is true is a reviewer's
  * job; the gate only makes it visible. Receiver-agnostic: it keys on `.<accessor>.<operation>(`,
  * so `db.`, `tx.`, `client.` and `this.prisma.` are one shape, and a model reached through a
- * computed property name (`prisma[name]`) is invisible.
+ * computed property name (`prisma[name]`) is invisible. Also unseen: a `create` that
+ * connects a new row to a deleted parent (guarded by the parent's own active read), a to-one
+ * `include`, a comma join in raw SQL, and code outside `apps/api/src`.
+ *
+ * **Revisit when** (spec §4.8): a defect shows a row attached to a deleted parent; the declaration
+ * count passes ~30 or a leak turns up that this gate structurally could not see (then a SQL-level
+ * observer in the e2e tier); a user-visible leak is confirmed (then database-level enforcement);
+ * or TECH_DEBT #139 is resolved, after which a to-one check becomes meaningful.
  */
 
 const API_ROOT = join(__dirname, '../../..');
@@ -106,6 +120,44 @@ const NESTED_WRITE_KEYS = new Set([
   'disconnect',
 ]);
 
+/** Tags whose static text is SQL: Prisma's raw templates and `Prisma.sql` fragments. */
+const RAW_TAGS = new Set(['$queryRaw', '$executeRaw', 'Prisma.sql']);
+const UNSAFE_RAW = new Set(['$queryRawUnsafe', '$executeRawUnsafe']);
+const TABLE_REFERENCE =
+  /\b(?:from|join|update|into|using)\s+(?:only\s+)?"?(?:public"?\.)?"?(\w+)"?(?:\s+(?:as\s+)?(\w+))?/gi;
+const SQL_KEYWORDS = new Set([
+  'set',
+  'where',
+  'on',
+  'join',
+  'left',
+  'right',
+  'inner',
+  'outer',
+  'cross',
+  'full',
+  'using',
+  'group',
+  'order',
+  'limit',
+  'having',
+  'union',
+  'returning',
+  'select',
+  'values',
+  'as',
+  'and',
+  'or',
+  'when',
+  'then',
+  'else',
+  'end',
+  'natural',
+  'for',
+  'window',
+  'with',
+]);
+
 const DECLARATION_MARKER = /soft-delete:/;
 const DECLARATION_GRAMMAR = /soft-delete:\s*(any-state|deleted-only)\s*(?:—|--?)\s*([\s\S]*)/;
 const MIN_REASON_LENGTH = 10;
@@ -118,6 +170,8 @@ const HELPER_DEPTH_LIMIT = 6;
 interface SoftDeletableModel {
   model: string;
   accessor: string;
+  /** The table, from `@@map`; the model name where the schema maps nothing. */
+  table: string;
 }
 
 /** Models whose block holds a `deletedAt` **field** line — not a comment that mentions one. */
@@ -125,20 +179,25 @@ function deriveRoster(schema: string): SoftDeletableModel[] {
   const roster: SoftDeletableModel[] = [];
   let current: string | null = null;
   let hasDeletedAt = false;
+  let table: string | null = null;
   for (const line of schema.split('\n')) {
     const open = /^model\s+(\w+)\s*\{/.exec(line);
     if (open) {
       current = open[1] ?? null;
       hasDeletedAt = false;
+      table = null;
       continue;
     }
     if (current === null) continue;
     if (/^\s+deletedAt\s+DateTime\?/.test(line)) hasDeletedAt = true;
+    const mapped = /^\s*@@map\("([^"]+)"\)/.exec(line);
+    if (mapped) table = mapped[1] ?? null;
     if (/^\}/.test(line)) {
       if (hasDeletedAt) {
         roster.push({
           model: current,
           accessor: current.charAt(0).toLowerCase() + current.slice(1),
+          table: table ?? current,
         });
       }
       current = null;
@@ -212,6 +271,8 @@ interface ScanResult {
   /** Reads, writes and nested writes examined, whether or not they needed a declaration. */
   sitesExamined: number;
   writesExamined: number;
+  /** Raw SQL templates that name a soft-deletable table. */
+  rawExamined: number;
   findings: Finding[];
   declarations: Declaration[];
 }
@@ -291,6 +352,7 @@ class Analyser {
   private readonly relations: Map<string, Map<string, string>>;
   private readonly toMany: Set<string>;
   private readonly rosterModels: Set<string>;
+  private readonly tables: Map<string, string>;
 
   constructor(sources: Sources, schema: SchemaInfo, extraHelperSources: Sources = {}) {
     for (const [file, text] of Object.entries(sources)) this.sources.set(file, parse(file, text));
@@ -304,6 +366,7 @@ class Analyser {
     this.relations = schema.relations;
     this.toMany = schema.toMany;
     this.rosterModels = new Set(schema.roster.map((m) => m.model));
+    this.tables = new Map(schema.roster.map((m) => [m.table.toLowerCase(), m.model]));
   }
 
   scan(): ScanResult {
@@ -311,6 +374,7 @@ class Analyser {
     const declarations: Declaration[] = [];
     let sitesExamined = 0;
     let writesExamined = 0;
+    let rawExamined = 0;
 
     for (const [file, source] of this.sources) {
       const declared = this.declarationsIn(file, source, findings);
@@ -330,6 +394,28 @@ class Analyser {
       };
 
       const visit = (node: ts.Node): void => {
+        if (ts.isTaggedTemplateExpression(node)) {
+          const tag = tagName(node.tag);
+          if (tag !== null && RAW_TAGS.has(tag)) {
+            const raw = this.rawSql(node);
+            if (raw.tablesNamed > 0) rawExamined += 1;
+            for (const problem of raw.problems) {
+              flag(node, `${problem.table}.sql`, problem.message);
+            }
+          }
+        }
+        if (
+          ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          UNSAFE_RAW.has(node.expression.name.text)
+        ) {
+          flag(
+            node,
+            `${node.expression.name.text}`,
+            `${node.expression.name.text} cannot be read statically, so it cannot state a ` +
+              'deleted_at stance (use a tagged template, or declare why not)',
+          );
+        }
         if (ts.isCallExpression(node)) {
           const site = this.dataSite(node);
           if (site) {
@@ -395,7 +481,7 @@ class Analyser {
         }
       }
     }
-    return { sitesExamined, writesExamined, findings, declarations };
+    return { sitesExamined, writesExamined, rawExamined, findings, declarations };
   }
 
   /** `<anything>.<accessor>.<read or write operation>(...)` on a roster model. */
@@ -450,6 +536,44 @@ class Analyser {
       if (ts.isObjectLiteralExpression(value)) this.walkData(value, parent, file, found);
     }
     return found;
+  }
+
+  /**
+   * Raw SQL, judged on its static text only (interpolations are values, not SQL). Every soft-
+   * deletable table the text reads from, joins, updates or inserts into must have a `deleted_at`
+   * mention: `<alias>.deleted_at`, or a bare one when it is the only such table. This is a text
+   * heuristic and says so — an alias that belongs to another table can fool it, and a comma join
+   * is invisible — but it stops a new statement forgetting the column entirely.
+   */
+  private rawSql(node: ts.TaggedTemplateExpression): {
+    tablesNamed: number;
+    problems: { table: string; message: string }[];
+  } {
+    const template = node.template;
+    const text = ts.isNoSubstitutionTemplateLiteral(template)
+      ? template.text
+      : [template.head.text, ...template.templateSpans.map((span) => `?${span.literal.text}`)].join(
+          '',
+        );
+    const references: { table: string; alias: string }[] = [];
+    for (const match of text.matchAll(TABLE_REFERENCE)) {
+      const table = (match[1] ?? '').toLowerCase();
+      if (!this.tables.has(table)) continue;
+      const alias = match[2] && !SQL_KEYWORDS.has(match[2].toLowerCase()) ? match[2] : table;
+      references.push({ table, alias });
+    }
+    const problems: { table: string; message: string }[] = [];
+    for (const { table, alias } of references) {
+      if (problems.some((problem) => problem.table === table)) continue;
+      const qualified = new RegExp(`\\b(?:${alias}|${table})"?\\."?deleted_at\\b`, 'i').test(text);
+      const bare = /\bdeleted_at\b/i.test(text);
+      if (qualified || (bare && references.length === 1)) continue;
+      problems.push({
+        table,
+        message: `raw SQL on ${table} states no deleted_at (filter it, or declare why not)`,
+      });
+    }
+    return { tablesNamed: references.length, problems };
   }
 
   /**
@@ -758,6 +882,16 @@ interface ParsedDeclaration {
   valid: boolean;
 }
 
+/** `this.prisma.$queryRaw` -> `$queryRaw`; `Prisma.sql` -> `Prisma.sql`; anything else null. */
+function tagName(tag: ts.Expression): string | null {
+  if (ts.isIdentifier(tag)) return tag.text;
+  if (!ts.isPropertyAccessExpression(tag)) return null;
+  if (ts.isIdentifier(tag.expression) && tag.expression.text === 'Prisma') {
+    return `Prisma.${tag.name.text}`;
+  }
+  return tag.name.text;
+}
+
 function parse(file: string, text: string): ts.SourceFile {
   return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
@@ -866,9 +1000,9 @@ describe('soft-delete roster', () => {
     ).toHaveLength(20);
     expect(roster).toEqual(
       expect.arrayContaining([
-        { model: 'Activity', accessor: 'activity' },
-        { model: 'BaselineActivity', accessor: 'baselineActivity' },
-        { model: 'Organization', accessor: 'organization' },
+        { model: 'Activity', accessor: 'activity', table: 'activities' },
+        { model: 'BaselineActivity', accessor: 'baselineActivity', table: 'baseline_activities' },
+        { model: 'Organization', accessor: 'organization', table: 'organizations' },
       ]),
     );
   });
@@ -883,7 +1017,7 @@ describe('soft-delete roster', () => {
       '  deletedAt DateTime? @map("deleted_at")',
       '}',
     ].join('\n');
-    expect(deriveRoster(schema)).toEqual([{ model: 'Gone', accessor: 'gone' }]);
+    expect(deriveRoster(schema)).toEqual([{ model: 'Gone', accessor: 'gone', table: 'Gone' }]);
   });
 });
 
@@ -1355,6 +1489,89 @@ describe('soft-delete scanner — nested reads and _count', () => {
   });
 });
 
+describe('soft-delete scanner — raw SQL', () => {
+  it('fails raw SQL that names a soft-deletable table without deleted_at', () => {
+    const result = check(
+      'db.$queryRaw`SELECT p.id FROM plans p WHERE p.organization_id = ${org}::uuid`;',
+    );
+    expect(messages(result)).toEqual([
+      'synthetic.ts:1 — raw SQL on plans states no deleted_at (filter it, or declare why not)',
+    ]);
+    expect(result.rawExamined).toBe(1);
+  });
+
+  it('passes an alias-qualified, a bare, a quoted and an IS NOT NULL mention', () => {
+    for (const sql of [
+      'SELECT p.id FROM plans p WHERE p.deleted_at IS NULL',
+      'SELECT id FROM plans WHERE deleted_at IS NULL',
+      'SELECT p."id" FROM "plans" p WHERE p."deleted_at" IS NULL',
+      'SELECT id FROM activities WHERE deleted_at IS NOT NULL',
+    ]) {
+      expect(check(`db.$queryRaw\`${sql}\`;`).findings, sql).toEqual([]);
+    }
+  });
+
+  it('checks writes through $executeRaw, and a Prisma.sql fragment', () => {
+    expect(
+      check('tx.$executeRaw`UPDATE plans SET name = ${n} WHERE id = ${id}::uuid`;').findings,
+    ).toHaveLength(1);
+    expect(
+      check(
+        'tx.$executeRaw`UPDATE plans SET name = ${n} WHERE id = ${id}::uuid AND deleted_at IS NULL`;',
+      ).findings,
+    ).toEqual([]);
+    expect(check('const q = Prisma.sql`SELECT 1 FROM notes n`;').findings).toHaveLength(1);
+  });
+
+  it('needs a stance per table when several are named, not one for the whole text', () => {
+    const bad = check(
+      'db.$queryRaw`SELECT p.id FROM plans p JOIN projects pr ON pr.id = p.project_id WHERE p.deleted_at IS NULL`;',
+    );
+    expect(messages(bad)).toEqual([
+      'synthetic.ts:1 — raw SQL on projects states no deleted_at (filter it, or declare why not)',
+    ]);
+    const ok = check(
+      'db.$queryRaw`SELECT p.id FROM plans p JOIN projects pr ON pr.id = p.project_id WHERE p.deleted_at IS NULL AND pr.deleted_at IS NULL`;',
+    );
+    expect(ok.findings).toEqual([]);
+  });
+
+  it('ignores a table that is not soft-deletable and SQL that names none', () => {
+    expect(check('db.$queryRaw`SELECT * FROM csp_reports`;').findings).toEqual([]);
+    expect(
+      check('db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;').rawExamined,
+    ).toBe(0);
+  });
+
+  it('reads a table only where it is referenced, not where the word appears in prose', () => {
+    const result = check(
+      'db.$queryRaw`SELECT 1 FROM csp_reports -- plans and notes are not read here\n WHERE true`;',
+    );
+    expect(result.findings).toEqual([]);
+  });
+
+  it('refuses the Unsafe variants unless declared', () => {
+    expect(check('db.$queryRawUnsafe(sql);').findings).toHaveLength(1);
+    expect(check('db.$executeRawUnsafe("DELETE FROM plans");').findings).toHaveLength(1);
+    const declared = check(`
+      function f() {
+        // soft-delete: any-state — a maintenance statement that must reach every row on purpose.
+        return db.$queryRawUnsafe(sql);
+      }`);
+    expect(declared.findings).toEqual([]);
+  });
+
+  it('accepts a declaration above a raw statement', () => {
+    const result = check(`
+      function f() {
+        // soft-delete: any-state — the bin lists rows of every state by design in this statement.
+        return db.$queryRaw\`SELECT id FROM plans\`;
+      }`);
+    expect(result.findings).toEqual([]);
+    expect(result.declarations).toHaveLength(1);
+  });
+});
+
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
 
@@ -1370,7 +1587,13 @@ describe('soft-delete gate — the repository tree', () => {
     expect(result.writesExamined).toBeGreaterThanOrEqual(90);
   });
 
-  it('every read and write of a soft-deletable model states a deletedAt stance', () => {
+  it('examined a plausible number of raw SQL statements — the third pinned positive case', () => {
+    // 16 raw sites on soft-deletable tables when the spec was written (§0 F11), plus the staff
+    // diagnostics' Prisma.sql fragments, which the first count missed.
+    expect(result.rawExamined).toBeGreaterThanOrEqual(15);
+  });
+
+  it('every read, write, nested read and raw statement states a deletedAt stance', () => {
     expect(
       result.findings.map((f) => f.message),
       'filter the read (usually via the repository active() helper), or declare why it must see ' +

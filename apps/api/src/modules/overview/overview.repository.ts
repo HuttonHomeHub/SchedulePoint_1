@@ -133,6 +133,10 @@ export class OverviewRepository {
    * `status <> 'ARCHIVED'` rather than `= 'ACTIVE'`: a DRAFT plan is work in progress and
    * belongs on this list. Archived is the one status a planner has explicitly said they
    * are done with.
+   *
+   * soft-delete: any-state — the joins to `projects` and `clients` are the parents of a plan that is
+   * itself filtered to `deleted_at IS NULL`; the delete cascade stamps a plan with its project and
+   * client (hierarchy-lifecycle), so an active plan's parents are active.
    */
   async findRecentlyChanged(params: {
     organizationId: string;
@@ -254,6 +258,10 @@ export class OverviewRepository {
    * port pattern). A repository that resolved calendars would be doing scheduling.
    *
    * **The engine is not imported.** Every column is one the last recalculation persisted.
+   *
+   * soft-delete: any-state — the joins to `projects` and `clients` are the parents of a plan that is
+   * itself filtered to `deleted_at IS NULL`; the delete cascade stamps a plan with its project and
+   * client (hierarchy-lifecycle), so an active plan's parents are active.
    */
   async findPlanStanding(params: {
     organizationId: string;
