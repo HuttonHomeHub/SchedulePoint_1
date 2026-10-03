@@ -258,7 +258,7 @@ Docker build, CI, changelog, version impact). "Tests" means `pnpm prepush` was *
 
 | Risk / assumption                                                            | Likelihood     | Impact | Mitigation                                                                                                                  |
 | ---------------------------------------------------------------------------- | -------------- | ------ | --------------------------------------------------------------------------------------------------------------------------- |
-| A planner expects to restore a dissolved group from Recently deleted         | med            | med    | Copy says it cannot be undone from a recycle bin and how to regroup (Q1). Name is reusable (spec E10).                      |
+| A planner expects to restore a dissolved group from Recently deleted         | med            | med    | Copy says it cannot be undone and how to regroup (Q1). Name is reusable (spec E10).                                         |
 | Children promoted to a stale parent after a concurrent reparent of the group | low            | med    | Re-read under the tree lock; unit test with a differing re-read.                                                            |
 | A concurrent create-into-group leaves an active child under a deleted group  | low            | high   | Every `parentId` write takes the tree lock (spec E6); defence count before soft-delete; e2e concurrency invariant.          |
 | A schedule changes because of a dissolve                                     | very low       | high   | Engine never reads `parent_id` — pinned by `resource-tree-parity.structural.spec.ts:34-54`; e2e recalculation before/after. |

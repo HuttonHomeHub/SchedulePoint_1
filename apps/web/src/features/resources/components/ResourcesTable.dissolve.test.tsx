@@ -8,6 +8,7 @@ import { resourceKeys } from '../api/use-resources';
 import { ResourcesTable } from './ResourcesTable';
 
 import type * as AnnouncerModule from '@/components/ui/announcer';
+import { Button } from '@/components/ui/button';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { clickRowAction, openRowActions } from '@/test/row-actions';
@@ -63,18 +64,20 @@ const CREW_ARCHIVED = resource({
 });
 const LOOSE = resource({ id: 'loose', name: 'Loose Crew' });
 
-function renderTable(canWrite = true) {
+function renderTable(canWrite = true, { seedCount = true } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryData(resourceKeys.list('acme'), [GROUP, CREW_A, CREW_B, LOOSE]);
-  queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
-    GROUP,
-    CREW_A,
-    CREW_B,
-    CREW_ARCHIVED,
-    LOOSE,
-  ]);
+  if (seedCount) {
+    queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
+      GROUP,
+      CREW_A,
+      CREW_B,
+      CREW_ARCHIVED,
+      LOOSE,
+    ]);
+  }
   return render(
     <QueryClientProvider client={queryClient}>
       <ResourcesTable orgSlug="acme" canWrite={canWrite} calendars={[]} />
@@ -113,11 +116,12 @@ describe('ResourcesTable — dissolve a group', () => {
   it('states what is kept, where it goes, and that there is no restore, counting archived members', async () => {
     renderTable();
     await clickRowAction('Groundworks', 'Dissolve');
-    const dialog = screen.getByRole('alertdialog', { name: 'Dissolve group' });
+    const dialog = await screen.findByRole('alertdialog', { name: 'Dissolve group' });
     // 3, not the 2 the table shows: the count is the unfiltered read including the archived one.
     expect(within(dialog).getByText(/keeps its 3 resources/)).toBeInTheDocument();
     expect(within(dialog).getByText(/move up to the top level/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/can’t be undone from a recycle bin/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/This can’t be undone\./)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/recycle/)).not.toBeInTheDocument();
     expect(
       within(dialog).getByText(/create the group again and move them back/),
     ).toBeInTheDocument();
@@ -126,10 +130,23 @@ describe('ResourcesTable — dissolve a group', () => {
   it('does not dress the confirm as destructive', async () => {
     renderTable();
     await clickRowAction('Groundworks', 'Dissolve');
-    const confirm = within(screen.getByRole('alertdialog')).getByRole('button', {
+    const confirm = within(await screen.findByRole('alertdialog')).getByRole('button', {
       name: 'Dissolve',
     });
-    expect(confirm.className).not.toContain('destructive');
+    // Compared with the Delete confirm's own class list rather than a substring of a token name, so
+    // renaming the variant cannot make this pass vacuously.
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+    );
+    await clickRowAction('Groundworks', 'Delete');
+    const deleteConfirm = within(await screen.findByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    });
+    expect(confirm.className).not.toBe(deleteConfirm.className);
+    const defaultClasses =
+      render(<Button variant="default">x</Button>).container.querySelector('button')?.className ??
+      '';
+    for (const token of defaultClasses.split(/\s+/)) expect(confirm.className).toContain(token);
   });
 
   it('posts to the dissolve route, then closes, announces the server’s count and focuses the list', async () => {
@@ -148,7 +165,7 @@ describe('ResourcesTable — dissolve a group', () => {
     renderTable();
     await clickRowAction('Groundworks', 'Dissolve');
     fireEvent.click(
-      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
     );
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
@@ -171,7 +188,7 @@ describe('ResourcesTable — dissolve a group', () => {
     renderTable();
     await clickRowAction('Groundworks', 'Dissolve');
     fireEvent.click(
-      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
     );
 
     expect(
@@ -181,13 +198,158 @@ describe('ResourcesTable — dissolve a group', () => {
     ).toBeInTheDocument();
     expect(announceSpy).not.toHaveBeenCalled();
   });
+
+  it('hands focus to the list when the dialog is closed after a 404 removed the group’s row', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Resource not found.' }),
+    );
+    // The refetch that follows the failure no longer contains the group.
+    vi.mocked(apiFetchAllPages).mockResolvedValue([CREW_A, CREW_B, LOOSE]);
+    renderTable();
+    await clickRowAction('Groundworks', 'Dissolve');
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dissolve' }));
+    await within(dialog).findByText('This group was already removed. Refresh the library.');
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Actions for Groundworks' })).toBeNull(),
+    );
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toContainElement(screen.getByRole('table'));
+  });
+
+  it('shows any other failure inline and leaves the dialog open', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new ApiFetchError(500, { code: 'INTERNAL', message: 'The server fell over.' }),
+    );
+    renderTable();
+    await clickRowAction('Groundworks', 'Dissolve');
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+    );
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/./);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(announceSpy).not.toHaveBeenCalled();
+  });
+
+  it('labels the confirm “Dissolving…” and aria-disabled while the write is in flight', async () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => undefined));
+    renderTable();
+    await clickRowAction('Groundworks', 'Dissolve');
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+    );
+
+    const busy = await within(screen.getByRole('alertdialog')).findByRole('button', {
+      name: 'Dissolving…',
+    });
+    expect(busy).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('announces an empty group as empty rather than “0 resources were kept”', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ promoted: [] });
+    vi.mocked(apiFetchAllPages).mockResolvedValue([CREW_A, CREW_B, LOOSE]);
+    renderTable();
+    await clickRowAction('Groundworks', 'Dissolve');
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+    );
+
+    await waitFor(() => expect(announceSpy).toHaveBeenCalled());
+    expect(announceSpy).toHaveBeenCalledWith('Group “Groundworks” dissolved. It was empty.');
+  });
+
+  it('announces one kept resource in the singular', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ promoted: [{ id: 'a', parentId: null, version: 4 }] });
+    vi.mocked(apiFetchAllPages).mockResolvedValue([CREW_A, LOOSE]);
+    renderTable();
+    await clickRowAction('Groundworks', 'Dissolve');
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Dissolve' }),
+    );
+
+    await waitFor(() => expect(announceSpy).toHaveBeenCalled());
+    expect(announceSpy).toHaveBeenCalledWith(
+      'Group “Groundworks” dissolved. Its 1 resource was kept.',
+    );
+  });
+});
+
+describe('ResourcesTable — the count is known when a group dialog opens', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset();
+    announceSpy.mockReset();
+  });
+
+  const includeReads = () =>
+    vi
+      .mocked(apiFetchAllPages)
+      .mock.calls.filter(([path]) => String(path).includes('archived=include'));
+
+  it('holds the dialog until the unfiltered read lands, then opens on the real count', async () => {
+    let release: (rows: ResourceSummary[]) => void = () => undefined;
+    vi.mocked(apiFetchAllPages).mockReturnValue(
+      new Promise<ResourceSummary[]>((resolve) => {
+        release = resolve;
+      }),
+    );
+    renderTable(true, { seedCount: false });
+    await screen.findByRole('button', { name: 'Actions for Groundworks' });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Groundworks' }));
+    fireEvent.click(
+      within(screen.getByRole('menu', { name: 'Actions for Groundworks' })).getByRole('menuitem', {
+        name: 'Dissolve',
+      }),
+    );
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    release([GROUP, CREW_A, CREW_B, CREW_ARCHIVED, LOOSE]);
+
+    const dialog = await screen.findByRole('alertdialog', { name: 'Dissolve group' });
+    // The very first description the dialog carries already has the number: it is read once.
+    expect(dialog).toHaveAccessibleDescription(/keeps its 3 resources/);
+    expect(includeReads()).toHaveLength(1);
+  });
+
+  it('makes no unfiltered read for a leaf delete, or with no dialog open', async () => {
+    vi.mocked(apiFetchAllPages).mockResolvedValue([]);
+    renderTable(true, { seedCount: false });
+    await screen.findByRole('button', { name: 'Actions for Crew A' });
+    expect(includeReads()).toHaveLength(0);
+
+    await clickRowAction('Crew A', 'Delete');
+    expect(screen.getByRole('alertdialog', { name: 'Delete resource' })).toBeInTheDocument();
+    expect(includeReads()).toHaveLength(0);
+  });
+
+  it('counts for a group delete too, before it opens', async () => {
+    vi.mocked(apiFetchAllPages).mockResolvedValue([GROUP, CREW_A, CREW_B, CREW_ARCHIVED, LOOSE]);
+    renderTable(true, { seedCount: false });
+    await screen.findByRole('button', { name: 'Actions for Groundworks' });
+    await clickRowAction('Groundworks', 'Delete');
+
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete group' });
+    expect(dialog).toHaveAccessibleDescription(/and the 3 resources in it/);
+  });
 });
 
 describe('ResourcesTable — deleting a group', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset();
+    announceSpy.mockReset();
+  });
+
   it('titles the dialog for a group and says the delete includes its contents and points at Dissolve', async () => {
     renderTable();
     await clickRowAction('Groundworks', 'Delete');
-    const dialog = screen.getByRole('alertdialog', { name: 'Delete group' });
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete group' });
     expect(
       within(dialog).getByText(/Delete the group “Groundworks” and the 3 resources in it\?/),
     ).toBeInTheDocument();

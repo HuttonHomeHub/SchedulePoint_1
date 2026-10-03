@@ -278,7 +278,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   await expect(deleteDialog).toContainText('dissolve the group instead');
   await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(deleteDialog).toBeHidden();
-  await expect(page.getByRole('cell', { name: /Night crews/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Actions for Night crews' })).toBeVisible();
 });
 
 /** Create a library resource from the Resources screen (defaults to the Labour kind). */

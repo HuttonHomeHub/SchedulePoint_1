@@ -5,12 +5,13 @@ import {
   type CalendarSummary,
   type ResourceSummary,
 } from '@repo/types';
-import type { UseQueryResult } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import {
+  resourcesQueryOptions,
   useArchiveResource,
   useDeleteResource,
   useDissolveResourceGroup,
@@ -143,6 +144,7 @@ export function ResourcesTable({
     archived: archivedFilter,
     ...(kindFilter === ANY_RESOURCE_KIND ? {} : { kind: kindFilter }),
   });
+  const queryClient = useQueryClient();
   const deleteResource = useDeleteResource(orgSlug);
   const dissolveGroup = useDissolveResourceGroup(orgSlug);
   const archiveResource = useArchiveResource(orgSlug);
@@ -168,13 +170,29 @@ export function ResourcesTable({
 
   // The group dialogs' counts come from their own read — unfiltered and INCLUDING archived rows —
   // because the table's rows follow its filters and the archived default, and the server moves or
-  // deletes archived members too. Idle until a dialog opens, so nothing fetches for a library
-  // nobody is dissolving from.
+  // deletes archived members too. Idle unless a GROUP dialog is open: a leaf delete has no count to
+  // make, and nothing fetches for a library nobody is dissolving from.
   const groupDialogLibrary = useResources(
     orgSlug,
     { archived: 'include' },
-    dissolving !== null || deleting !== null,
+    dissolving !== null || (deleting !== null && isResourceGroup(deleting)),
   );
+
+  /**
+   * Open a group's dialog only once the count it states is in the cache. `aria-describedby` is read
+   * once when a dialog opens, so a dialog that opened on the vague sentence and sharpened a moment
+   * later would tell a screen-reader user the vague one and never the number. A failed read still
+   * opens the dialog — the copy degrades to a sentence without a number (the server is authoritative)
+   * — rather than leaving a menu item that does nothing.
+   */
+  const openOnceCounted = async (open: () => void): Promise<void> => {
+    try {
+      await queryClient.fetchQuery(resourcesQueryOptions(orgSlug, { archived: 'include' }));
+    } catch (error) {
+      console.warn('Could not count the group’s resources before confirming', error);
+    }
+    open();
+  };
 
   const editing = editingId ? resources.data?.find((r) => r.id === editingId) : undefined;
 
@@ -402,10 +420,12 @@ export function ResourcesTable({
                 not shaded (`docs/UX_STANDARDS.md` "Row / node actions"). */}
             {isResourceGroup(resource) ? (
               <MenuItem
-                onSelect={() => {
-                  setDissolveError(null);
-                  setDissolving(resource);
-                }}
+                onSelect={() =>
+                  void openOnceCounted(() => {
+                    setDissolveError(null);
+                    setDissolving(resource);
+                  })
+                }
               >
                 Dissolve
               </MenuItem>
@@ -413,8 +433,12 @@ export function ResourcesTable({
             <MenuItem
               destructive
               onSelect={() => {
-                setDeleteError(null);
-                setDeleting(resource);
+                const open = (): void => {
+                  setDeleteError(null);
+                  setDeleting(resource);
+                };
+                if (isResourceGroup(resource)) void openOnceCounted(open);
+                else open();
               }}
             >
               Delete
@@ -466,7 +490,9 @@ export function ResourcesTable({
         // Names what happened, with the server's own count of what moved.
         const kept = result.promoted.length;
         announce(
-          `Group “${name}” dissolved. Its ${kept === 1 ? '1 resource was' : `${String(kept)} resources were`} kept.`,
+          kept === 0
+            ? `Group “${name}” dissolved. It was empty.`
+            : `Group “${name}” dissolved. Its ${kept === 1 ? '1 resource was' : `${String(kept)} resources were`} kept.`,
         );
         regionRef.current?.focus();
       },
@@ -631,6 +657,17 @@ export function ResourcesTable({
             <ConfirmDialog
               open={dissolving !== null}
               onClose={() => {
+                // After a 404 the refetch has already removed the group's row and its `⋯` behind
+                // this dialog, so there is nothing to return focus to: hand it to the region, as the
+                // success path does (WCAG 2.4.3).
+                if (dissolveError) {
+                  flushSync(() => {
+                    setDissolving(null);
+                    setDissolveError(null);
+                  });
+                  regionRef.current?.focus();
+                  return;
+                }
                 setDissolving(null);
                 setDissolveError(null);
               }}

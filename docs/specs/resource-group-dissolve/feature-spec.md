@@ -99,7 +99,7 @@ in-use guard to write and no per-resource assign locks to take. Only the org tre
 
 **Happy path:** Resources library → `⋯` on the group's row ("Actions for Groundworks crews") →
 **Dissolve** → confirmation states how many resources move and where to, and that it cannot be
-undone from a recycle bin → **Dissolve** → the group row disappears, its members show at their new
+undone → **Dissolve** → the group row disappears, its members show at their new
 level, a polite announcement says "Group “Groundworks crews” dissolved. Its 4 resources were kept.",
 focus lands on the library region. See the user-flow diagram in §4.
 
@@ -128,7 +128,7 @@ resources in it? … Deleted resources cannot be restored. To keep them, dissolv
 
 - **Q1 — Ship dissolve without any resource restore?** Resources have no restore today, for
   deletes as well as for this (E9). _Recommended default: **yes**_ — ship dissolve with copy that
-  says plainly it cannot be undone from a recycle bin, and that the group can be re-created and
+  says plainly it cannot be undone, and that the group can be re-created and
   its members moved back (true: E10). Building a resource restore (a recycle-bin kind, a restore
   route, name-collision rules on restore, the branch semantics ADR-0053 §3 assumes) is a separate,
   larger piece of work that would also be the first restore for **deleted** resources; it should be
@@ -187,14 +187,16 @@ resources in it? … Deleted resources cannot be restored. To keep them, dissolv
 >   refuses it with 422.
 
 > **US-2** — As a **Planner**, I want the confirmation to tell me how many resources move and to
-> where, and that this cannot be undone from a recycle bin, so that I know what I am agreeing to.
+> where, and that this cannot be undone, so that I know what I am agreeing to.
 >
 > **Acceptance criteria**
 >
 > - **Given** the dialog is open for G with n direct children and parent P **then** it reads
 >   "Dissolve the group “G”? This removes the grouping and keeps its n resources — they move up to
->   “P” [or: to the top level]. This can’t be undone from a recycle bin; to group them again, create
->   the group again and move them back."
+>   “P” [or: to the top level]. This can’t be undone. To group them again, create the group again and
+>   move them back." _(2026-10-03: the shipped sentence no longer says "from a recycle bin" — the
+>   product calls that place "Recently deleted", resources are not in it, and naming it invited the
+>   wrong search. A one-member group reads "it moves up" rather than "they move up".)_
 > - n counts **direct** children including archived ones (the server moves archived children too).
 > - **Given** the counts are not yet known **then** the dialog says the same thing without a number
 >   (never "nothing in it" from data it has not got — the `delete-activity-copy.ts:28-36` rule).

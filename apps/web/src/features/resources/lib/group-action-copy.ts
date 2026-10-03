@@ -53,10 +53,11 @@ export function deleteResourceDescription(
 /**
  * Dissolving a group removes the grouping and keeps the resources. Three things have to land: the
  * resources are **kept**, **where** they go (the group's own parent, or the top level — a planner
- * needs to know which before agreeing), and that this **cannot be undone from a recycle bin**.
- * That last one is the claim most likely to be assumed wrongly, because every other deletion here
- * is restorable; a resource dissolve has no restore, so the copy names the way back instead
- * (create the group again and move them in).
+ * needs to know which before agreeing), and that this **cannot be undone**. That last one is the
+ * claim most likely to be assumed wrongly, because most deletions here are restorable; a resource
+ * dissolve has no restore (and resources are not in Recently deleted), so the copy names the way
+ * back instead (create the group again and move them in). The verb and pronoun follow the count —
+ * "it moves up" for one, "they move up" otherwise.
  *
  * Counts only DIRECT children: dissolve moves one level, and a grandchild stays under its own
  * parent, which is what moves up.
@@ -82,10 +83,11 @@ export function dissolveGroupDescription(
         ? 'the group above it'
         : `“${parentName}”`;
   const kept = known ? `its ${plural(children.length)}` : 'the resources in it';
+  const moves = known && children.length === 1 ? 'it moves' : 'they move';
   return (
-    `Dissolve the group ${name}? This removes the grouping and keeps ${kept} — they move up to ` +
-    `${destination}. This can’t be undone from a recycle bin; to group them again, create the ` +
-    `group again and move them back.`
+    `Dissolve the group ${name}? This removes the grouping and keeps ${kept} — ${moves} up to ` +
+    `${destination}. This can’t be undone. To group them again, create the group again and ` +
+    `move them back.`
   );
 }
 

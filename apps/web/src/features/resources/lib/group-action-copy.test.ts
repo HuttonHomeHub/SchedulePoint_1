@@ -13,14 +13,16 @@ const group = (id: string, name: string, parentId: string | null = null) => ({
 });
 
 describe('dissolveGroupDescription', () => {
-  it('names the count, the top level, and that there is no recycle-bin restore', () => {
+  it('names the count, the top level, and that it cannot be undone', () => {
     const g = group('g', 'Groundworks');
     const text = dissolveGroupDescription(g, [g, row('a', 'A', 'g'), row('b', 'B', 'g')]);
     expect(text).toContain('Dissolve the group “Groundworks”?');
     expect(text).toContain('keeps its 2 resources');
     expect(text).toContain('the top level');
-    expect(text).toContain('can’t be undone from a recycle bin');
-    expect(text).toContain('create the group again and move them back');
+    expect(text).toContain('they move up to the top level');
+    expect(text).toContain('This can’t be undone. To group them again, create the group again');
+    expect(text).toContain('move them back');
+    expect(text).not.toContain('recycle');
   });
 
   it('names the parent group when there is one, and counts one resource in the singular', () => {
@@ -28,7 +30,13 @@ describe('dissolveGroupDescription', () => {
     const g = group('g', 'Groundworks', 'p');
     const text = dissolveGroupDescription(g, [p, g, row('a', 'A', 'g')]);
     expect(text).toContain('its 1 resource —');
-    expect(text).toContain('move up to “Site”');
+    expect(text).toContain('it moves up to “Site”');
+    expect(text).not.toContain('they move');
+  });
+
+  it('keeps the plural verb for a library that has not arrived, where the count is unknown', () => {
+    const g = group('g', 'G');
+    expect(dissolveGroupDescription(g, [])).toContain('they move up to the top level');
   });
 
   it('counts direct children only', () => {
