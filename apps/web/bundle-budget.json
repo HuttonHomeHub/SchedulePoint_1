@@ -1,17 +1,17 @@
 {
   "_": "What the web app's first paint may cost, and what a raise means. THREE quantities: the JS entry graph, the ceiling on any one lazy chunk, and the render-blocking CSS — the last added at the M5 gate pass, when the performance review found it measured in the report and read by nothing, under a docblock claiming to cover everything the browser parses first. See apps/web/scripts/check-bundle-size.mjs. A raise carries a one-line reason in `raisedBecause` — a budget quietly moved up is a budget that never says no.",
-  "measuredAt": "2026-09-25",
-  "measuredBy": "pnpm exec vite build in apps/web (writes bundle-report.json), run against origin/main's apps/web/src at a841768f — the floor is what main costs, never what a branch costs, or the branch under test sets its own bar.",
+  "measuredAt": "2026-10-02",
+  "measuredBy": "pnpm exec vite build in apps/web (writes bundle-report.json), run at the head of the route code-splitting change (M1-M3), not origin/main. That is the stated exception to the rule this field used to carry, and it is for LOWERINGS only: a split that shrinks the entry graph by more than the headroom cannot be measured against main, which still holds the unsplit graph (docs/specs/route-code-splitting/feature-spec.md section 4). A raise is still measured against origin/main, or the branch under test sets its own bar.",
   "floor": {
-    "_": "The measurement the budget is derived from, kept so a later reader can see how much headroom has been spent without re-running the build. RE-FLOORED 2026-09-25 on the product owner's instruction, replacing the 2026-09-16 measurement of 425798 / 128582 / 15433, which is recorded here because `check-bundle-size.mjs` B7 reads a fixed key set and a `previousFloor` key would fail the gate. The entry graph grew 425798 → 445254 (+19.00 kB) in nine days across the NetPoint, layout-interchange and link-routing epics, none of which added a package: the headroom was spent as designed, on ordinary features.",
-    "entryGraphGzipBytes": 445254,
-    "maxNonEntryChunkGzipBytes": 128584,
-    "cssGzipBytes": 15779
+    "_": "The measurement the budget is derived from, kept so a later reader can see how much headroom has been spent without re-running the build. RE-FLOORED 2026-10-02 DOWNWARD by the route code-splitting epic (M1-M3), replacing the 2026-09-25 measurement of 445254 / 128584 / 15779, recorded here because `check-bundle-size.mjs` B7 reads a fixed key set and a `previousFloor` key would fail the gate. The entry graph fell 445254 -> 180121 (-265133 gzip) because the plan screens, the hierarchy, the libraries, the administration screens, the account screens and the authenticated frame left it, and with them the `paint` chunk. The per-chunk ceiling is set by jspdf (128583), unchanged; the largest application chunk is plan-detail at 92501.",
+    "entryGraphGzipBytes": 180121,
+    "maxNonEntryChunkGzipBytes": 128583,
+    "cssGzipBytes": 16235
   },
   "headroomRatio": 1.05,
   "headroomRatioIsAJudgement": "1.05 is a CHOICE, not a measurement (product-owner decision, docs/specs/delivery-gates/ CQ-2). It is about 20 kB gzip on the entry graph — room for an ordinary feature without a conversation, and not room for a library. There is no evidence behind the number; it is the smallest margin that does not make the gate fire on routine work.",
-  "entryGraphGzipBytes": 467968,
+  "entryGraphGzipBytes": 189440,
   "maxNonEntryChunkGzipBytes": 135168,
   "cssGzipBytes": 17408,
-  "raisedBecause": "Raised on the product owner's instruction (2026-09-25). The 2026-09-16 headroom was spent and the links-and-labels epic (ADR-0159) was the 4.39 kB that tipped it: main measured 434.82 kB against a 437.00 kB budget with 2.18 kB left, and the epic takes the entry graph to 439.21 kB. Measured rather than assumed — the entry graph's package set is IDENTICAL across the two builds (26 either side, nothing new, nothing gone), and 4.29 of the 4.39 kB is the statically-imported `paint` chunk, which now carries the shared row-text layout and the track split, so the growth is application code, which is what `headroomRatio` exists to admit. Each budget is the smallest whole kB at or above floor × 1.05, the rule the earlier numbers were derived by; re-deriving moves the entry graph to 457 kB and the CSS to 17 kB (main's CSS grew 15433 → 15779 since the last floor), and leaves the lazy-chunk ceiling at 132 kB."
+  "raisedBecause": null
 }

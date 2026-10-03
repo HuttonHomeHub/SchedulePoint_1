@@ -49,19 +49,27 @@
  * build that writes none cannot be judged by an old one. `scripts/check-bundle-size.test.mjs` pins
  * both.
  *
+ * ## The budget is derived and ratcheted (B8a, B8b)
+ *
+ * Each budget is its floor x `headroomRatio` rounded up to a whole KiB, and the floor may not sit
+ * above what the build now costs by more than the headroom. See the two assertions below.
+ *
  * ## What it does NOT check
  *
  * Whether the bundle is *fast*. Bytes are a proxy: parse and execute time, and the waterfall a
  * route actually triggers, are `docs/TECH_DEBT.md` #292's subject and not this gate's. A green run
  * means the payload has not grown past the line, never that the page is quick.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 const root = new URL('..', import.meta.url);
 const NAME = 'check:bundle-size';
 
 const say = (s) => process.stdout.write(`${s}\n`);
-const kb = (n) => `${(n / 1024).toFixed(2)} kB`;
+// KiB, not kB: the divisor is 1024. The label read `kB` until M1 of `docs/specs/route-code-splitting/`
+// (M0-T2's residue), which made every figure this prints look 2.4% smaller than the bytes in the
+// report it was read from.
+const kb = (n) => `${(n / 1024).toFixed(2)} KiB`;
 
 /**
  * The empty-population refusal, replicated rather than imported.
@@ -87,6 +95,81 @@ function finish(problems, population, summary) {
 }
 
 /**
+ * The static `import … from "./x.js"` and `export … from "./x.js"` edges of one emitted chunk.
+ *
+ * Read from the emitted text rather than from Rollup's `imports` list because this is the artefact
+ * the browser actually evaluates. A dynamic `import("./x.js")` is not an edge: it opens a call, not
+ * a module-evaluation dependency, and cannot deadlock initialisation order. The pattern needs the
+ * quote to follow `import`/`from` directly, which is what excludes `import(`.
+ */
+const STATIC_EDGE = /\b(?:import|export)\s*(?:[^;"'`()]*?\bfrom\s*)?["'`]\.\/([^"'`]+\.js)["'`]/g;
+
+/**
+ * Chunks that import each other, found as strongly connected components larger than one (Tarjan).
+ *
+ * `sources` maps an emitted file name to its text. A cycle between chunks is not a size problem and
+ * no other assertion sees it: the modules in it evaluate in an order the page then depends on, which
+ * broke the plan screen intermittently (`Cannot read properties of undefined (reading 'FS')`) the
+ * one time a chunk grouping produced one (`vite.config.ts`). Iterative, so a long import chain
+ * cannot overflow the stack.
+ */
+export function findChunkCycles(sources) {
+  const names = Object.keys(sources);
+  const known = new Set(names);
+  const edges = new Map(
+    names.map((name) => [
+      name,
+      [...sources[name].matchAll(STATIC_EDGE)].map((m) => m[1]).filter((t) => known.has(t)),
+    ]),
+  );
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const cycles = [];
+  let counter = 0;
+  for (const root of names) {
+    if (index.has(root)) continue;
+    const work = [[root, 0]];
+    while (work.length > 0) {
+      const frame = work[work.length - 1];
+      const [node, i] = frame;
+      if (i === 0) {
+        index.set(node, counter);
+        low.set(node, counter);
+        counter += 1;
+        stack.push(node);
+        onStack.add(node);
+      }
+      const out = edges.get(node);
+      if (i < out.length) {
+        frame[1] += 1;
+        const next = out[i];
+        if (!index.has(next)) work.push([next, 0]);
+        else if (onStack.has(next)) low.set(node, Math.min(low.get(node), index.get(next)));
+        continue;
+      }
+      work.pop();
+      if (work.length > 0) {
+        const parent = work[work.length - 1][0];
+        low.set(parent, Math.min(low.get(parent), low.get(node)));
+      }
+      if (low.get(node) === index.get(node)) {
+        const component = [];
+        let member;
+        do {
+          member = stack.pop();
+          onStack.delete(member);
+          component.push(member);
+        } while (member !== node);
+        if (component.length > 1) cycles.push(component.sort());
+      }
+    }
+  }
+  return cycles;
+}
+
+/**
  * Run every assertion against a report and a budget, and return the exit code.
  *
  * **Exported, and the CLI below is a thin caller, so a suite drives the REAL assertions.** It was
@@ -96,8 +179,27 @@ function finish(problems, population, summary) {
  * shipped with every suite in the repository green — the exact failure this epic exists to remove,
  * in its own newest gate.
  */
-export function runGate({ report, budget }) {
+export function runGate({ report, budget, chunkSources }) {
   const problems = [];
+
+  /**
+   * B9 — no two emitted chunks import each other, statically, directly or through others.
+   *
+   * `chunkSources` is absent only for a caller that has no `dist/` to give; the CLI always gives
+   * one, and an EMPTY one is refused rather than read as "no cycles".
+   */
+  if (chunkSources !== undefined) {
+    if (Object.keys(chunkSources).length === 0) {
+      problems.push('no emitted chunks were found to check for import cycles — build first.');
+    }
+    for (const cycle of findChunkCycles(chunkSources)) {
+      problems.push(
+        `chunks import each other in a cycle: ${cycle.join(' <-> ')}.\n` +
+          '      Their evaluation order is then undefined to the page. Adjust the `codeSplitting` ' +
+          'groups in vite.config.ts (a group that spans an entry and a lazy route is the usual cause).',
+      );
+    }
+  }
 
   /** B7 — an unknown key means the file was edited against a different reader. */
   const KNOWN = new Set([
@@ -219,6 +321,70 @@ export function runGate({ report, budget }) {
     );
   }
 
+  /**
+   * B8a — each budget is derived from its floor, not chosen.
+   *
+   * The rule, read off every committed pair (three on 2026-09-16, three on 2026-09-25, all
+   * agreeing): **`floor × headroomRatio`, rounded UP to the next whole KiB (1024)**. Plain
+   * multiplication is NOT the rule — it would reject the committed entry-graph budget by about a
+   * kilobyte, a gate failing on day one, which gets deleted rather than fixed. A budget raised on
+   * purpose carries a `raisedBecause` and is exempt: the exemption is the written reason, so a
+   * loosened number cannot arrive without one.
+   */
+  const ratio = budget.headroomRatio;
+  const raised = typeof budget.raisedBecause === 'string' && budget.raisedBecause.trim() !== '';
+  const PAIRS = [
+    ['entryGraphGzipBytes', 'entryGraphGzipBytes'],
+    ['maxNonEntryChunkGzipBytes', 'maxNonEntryChunkGzipBytes'],
+    ['cssGzipBytes', 'cssGzipBytes'],
+  ];
+  if (typeof ratio !== 'number') {
+    problems.push('bundle-budget.json has no numeric headroomRatio — the derivation is unstated.');
+  } else if (!raised) {
+    for (const [key, floorKey] of PAIRS) {
+      const floor = budget.floor?.[floorKey];
+      // The entry floor's absence is B5's finding; do not report one fault twice.
+      if (typeof floor !== 'number') {
+        if (key !== 'entryGraphGzipBytes') {
+          problems.push(`bundle-budget.json has no floor.${floorKey} — ${key} cannot be derived.`);
+        }
+        continue;
+      }
+      const derived = Math.ceil((floor * ratio) / 1024) * 1024;
+      if (budget[key] !== derived) {
+        problems.push(
+          `${key} is ${budget[key]}, but its floor ${floor} x ${ratio}, rounded up to a whole KiB, ` +
+            `is ${derived}.\n` +
+            '      Re-derive it from the floor, or record why it is higher in `raisedBecause`.',
+        );
+      }
+    }
+  }
+
+  /**
+   * B8b — the ratchet: a budget that has become loose says so.
+   *
+   * B8a alone cannot see this. A split changes the report and neither budget field, so a build
+   * that sheds 280 kB passes every other assertion above against a budget now 280 kB too generous —
+   * room for the whole of what was just removed to come back unnoticed. This compares the report to
+   * the floor instead: if the entry graph plus its headroom is below the recorded floor, the floor
+   * is stale, and the remedy is to re-floor at the head that shrank it (a deliberate exception to
+   * `bundle-budget.json`'s "measured at origin/main" rule, for lowerings only —
+   * `docs/specs/route-code-splitting/feature-spec.md` §4).
+   */
+  if (typeof ratio === 'number' && typeof budget.floor?.entryGraphGzipBytes === 'number') {
+    const floor = budget.floor.entryGraphGzipBytes;
+    if (entryGraph * ratio < floor) {
+      problems.push(
+        `the entry graph is ${kb(entryGraph)} gzip, but the recorded floor is ${kb(floor)}: even with ` +
+          `${ratio}x headroom it is below the floor, so the budget now allows the whole of what was ` +
+          'removed to return unnoticed.\n' +
+          '      Re-floor: set `floor` to this build, re-derive the three budgets as floor x ' +
+          'headroomRatio rounded up to a whole KiB, and update `measuredAt` and `measuredBy`.',
+      );
+    }
+  }
+
   const spent = entryGraph - (budget.floor?.entryGraphGzipBytes ?? entryGraph);
   return finish(
     problems,
@@ -241,8 +407,17 @@ if (process.argv[1] && process.argv[1].endsWith('check-bundle-size.mjs')) {
     say(`${NAME}: FAIL — build first: pnpm --filter @repo/web build`);
     process.exit(1);
   }
+  const assets = new URL('dist/assets/', root);
+  const chunkSources = existsSync(assets)
+    ? Object.fromEntries(
+        readdirSync(assets)
+          .filter((f) => f.endsWith('.js'))
+          .map((f) => [f, readFileSync(new URL(f, assets), 'utf8')]),
+      )
+    : {};
   process.exit(
     runGate({
+      chunkSources,
       report: JSON.parse(readFileSync(reportPath, 'utf8')),
       budget: JSON.parse(readFileSync(new URL('bundle-budget.json', root), 'utf8')),
     }),

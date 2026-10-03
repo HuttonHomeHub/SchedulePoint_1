@@ -1,9 +1,28 @@
 # Implementation Plan: Route code splitting — the web entry graph
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft — awaiting approval before
-  implementation**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted — shipped
+  (ADR-0171)**
+- **Status:** Accepted — shipped (ADR-0171). Approved 2026-10-02 (product owner): CQ-1 lazy shell; CQ-2 10% deep link / 5% in-app, **partially met, refresh limb accepted by the product owner**; CQ-4 container readings only, so no milestone waited on a product-owner sitting.
 - **Owner:** web
+
+> **Refreshed 2026-10-02 against `main` (spec §0.5).** What changed in this plan:
+>
+> - **M0 is half done.** M0-T4 is **complete** (citations registered, router estate single-version).
+>   M0-T2 is **mostly complete**, with a three-item residue. M0-T1 and M0-T3 ran on 2026-09-12 and
+>   **must re-run**, because the entry graph has grown ≥ 40 kB since; `m0-measurement.md` §8 gives
+>   the commands. M0-T5 (timing baseline) never ran and now has a decision attached (CQ-4) and a
+>   deadline: **before M1 merges**.
+> - **New task M1-T1b**: the router error screen's "Try again" must actually recover from a failed
+>   chunk download (spec §2, new).
+> - **M1-T3 (B8) is redesigned.** As drafted it could not catch a loose budget (spec §4).
+> - **M1-T4** inherits the forced-colours suite's production-build harness and **must drive the
+>   stale-deploy path**. Stale-deploy is re-rated **high likelihood**, because the product owner's
+>   host auto-deploys every release (ADR-0047).
+> - **No route, screen or group changed.** The seven groups and 22 routes below are as drafted.
+>   `router.tsx` citations moved +1 line.
+>
+> **Milestone sizes (2026-10-02):** M0 **M** (remaining) · M1 **L** · M2 **M** · M3 **L** · M4 **S** ·
+> M5 **M**.
 
 > **The shape of this plan is unusual and deliberately so.** M0 is a **measurement milestone whose
 > permitted outcome is that the epic stops**. `docs/TECH_DEBT.md` #292 says in terms that splitting
@@ -11,6 +30,16 @@
 > before splitting. So M0 builds a throwaway probe, measures the floor and the LCP, and **either
 > unlocks M1 or closes the row with a finding**. Nothing in M1–M5 is written on the assumption that
 > M0 passes.
+
+> **Approved 2026-10-02 — the product owner's answers change three things in this plan.**
+>
+> - **CQ-1: the shell is lazy.** Variant B in `m0-measurement.md` §8 is the design; variant A is
+>   the fallback P3 can trigger (spec CQ-1).
+> - **CQ-2: 10% deep link or reload, 5% in-app**, exactly as P2 states; worse withdraws M3 only.
+> - **CQ-4: container readings only.** M0-T5 and M3-T2 are container measurements, and the sign-off
+>   is scoped to **download sizes, request counts and container timings**. P2's verdict is
+>   INDETERMINATE whenever the spread is too wide, and the epic then rests on P1, P3 and P4. **No
+>   milestone waits on a product-owner sitting.**
 
 ## Breakdown
 
@@ -35,6 +64,8 @@ and delivery quality.
 
 ### Milestone 0: Measure, and decide whether to build (shippable: the measurement + the corrections)
 
+> **Status 2026-10-02: COMPLETE.** P1 passed (`m0-measurement.md` §9) and the timing baseline is recorded (§10). M1 is unlocked.
+
 **Outcome:** the floor, the LCP baseline and the waterfall depth are measured and committed; four
 stale or wrong claims across three documents are corrected; the epic is either unlocked or stopped
 with a recorded finding.
@@ -56,6 +87,11 @@ journey (ADR-0081 §2).
 
 ##### Task M0-T1 — Re-derive `bundle-report.json` and record whether it moved
 
+> **Status 2026-10-02: re-run, measured 2026-10-02 at tree `d3b9dbf`: entry graph 461,186 gzip bytes, 3 chunks (`m0-measurement.md` §9).** Originally ran 2026-09-12 (404,797). The budget file shows ≥ 445,254
+> by 2026-09-25. Run `m0-measurement.md` §8 Step 1 (`pnpm check:web-bundle`, then the `node -e`
+> extraction). Do **not** use `pnpm --filter @repo/web build` as written below: since ADR-0160 the
+> root gate is what deletes a stale report first.
+
 - **Description:** run `pnpm --filter @repo/web build` and compare every figure against the
   committed report (`measuredAt: 2026-09-11T14:04:54.760Z`). **The spec was written with Bash
   disabled and every number in it is read, not measured** — this task is what makes them
@@ -71,6 +107,15 @@ journey (ADR-0081 §2).
   3. Note any delta from the committed report in the spec's §0 table, dated.
 
 ##### Task M0-T2 — Correct `FRONTEND_ARCHITECTURE.md`, and the units contradiction
+
+> **Status 2026-10-02: MOSTLY DONE by others.** `FRONTEND_ARCHITECTURE.md:154-166` now says "Not
+> implemented yet"; `FRONTEND_QUALITY.md:103-106` quotes bytes; #292's stale paragraphs, the `paint`
+> wording and the route count were corrected 2026-09-12/16. **Residue, all prose, size XS:**
+> (1) `FRONTEND_QUALITY.md:120` "declares 26 routes" → 23 `createRoute` + root, 22 with a screen;
+> (2) #292's "The cause is not bloat" paragraph says the same "26", and its "Why it was never
+> noticed" paragraph cites `ci.yml:270` running `check:bundle-size`, where CI now runs
+> `check:web-bundle` at `ci.yml:286-287`; (3) the gate's `kB` label (`check-bundle-size.mjs:64`)
+> moves to M1-T3, which edits that file. Steps 1–3 below are kept as the record of what was planned.
 
 - **Description:** `docs/FRONTEND_ARCHITECTURE.md:151-153` still asserts "Routes are lazy by default
   (per-route chunks)". This is the second copy of the sentence #292 corrected once; ADR-0071's
@@ -91,6 +136,12 @@ journey (ADR-0081 §2).
      `paint`/"already lazy" wording, and the 26 → 24 route count.
 
 ##### Task M0-T3 — The probe build: measure the floor, and answer CQ-1
+
+> **Status 2026-10-02: re-run, measured 2026-10-02 at tree `d3b9dbf`: P1 PASS (A 228,960; B 178,259; C 175,424), shell cost 50,701, sign-in cost 2,835, no lazy chunk over 135,168 (`m0-measurement.md` §9).** Originally ran 2026-09-12 (P1 PASS, 157,483; shell 43,878). Run as three
+> named variants (A eager shell, B lazy shell, C all lazy) per `m0-measurement.md` §8 Steps 2–4. The
+> 2026-09-12 run did not record which routes each variant converted ("19 routes lazy" reconciles
+> with neither 20 nor 21), so the shell figure cannot be separated from sign-in. Also record the
+> largest lazy chunk against 135,168, which brings M4-T1's likely `raisedBecause` forward.
 
 - **Description:** on a throwaway branch, make **every** route component lazy and build. Read the
   entry graph. Then do it again with the shell lazy. Two numbers, two builds, discarded afterwards.
@@ -113,6 +164,13 @@ journey (ADR-0081 §2).
 
 ##### Task M0-T4 — Register the router citations against the version `apps/web` resolves
 
+> **Status 2026-10-02: DONE — nothing to do.** All six citations are registered in
+> `scripts/dependency-claims.json` with this spec in `citedBy`. The lockfile holds a single
+> `@tanstack/react-router` 1.170.40 and a single `@tanstack/router-core` 1.171.33, equal to
+> `verifiedAgainst`, so the split-estate risk below no longer applies. One ref is registered under
+> its old text with moved lines (the pending-component ref in `load-client.js`, registered at lines
+> 685-686). **Leave the spec's citation text as it is**: `check:claims` matches on the ref string.
+
 - **Description:** the spec cites `lazyRouteComponent.js:51`, `:37-44`,
   `router-core/dist/esm/router.d.ts:98-113` and `router-core/dist/esm/load-client.js:10-12`. ADR-0076
   Class 2 requires each to be registered in `scripts/dependency-claims.json` with
@@ -131,7 +189,14 @@ journey (ADR-0081 §2).
   2. Add the four citations with anchors.
   3. Confirm `check:claims` reports the resolved version, not the other one.
 
-##### Task M0-T5 — Baseline P2 on the product owner's hardware
+##### Task M0-T5 — Baseline P2 in the build container
+
+> **Status 2026-10-02: DONE — baseline recorded in `m0-measurement.md` §10 (build `31f5995`, 7 runs per path).** CQ-4 is answered — container readings only. _Original note:_ **Hard deadline:
+> before M1 merges**, so the baseline and the later reading come from one machine and the pre-split
+> build still exists to measure. The task is a Playwright `measure-*` harness with CDP 4G
+> throttling, run in the container with **≥ 5 runs per path** and the spread reported. There is no
+> Lighthouse card and no product-owner sitting. The harness docblock states that it measures the
+> container, not a planner's hardware (ADR-0128's own warning).
 
 - **Description:** measure cold `/sign-in` LCP, warm plan-open and cold plan-open **before** any
   change, with repeat runs, and record the **run-to-run spread**.
@@ -143,10 +208,10 @@ journey (ADR-0081 §2).
   INDETERMINATE and that must be known now rather than at M5.
 - **Testing:** the measurement records its population and refuses a verdict over an empty one.
 - **Development steps:**
-  1. Decide the instrument (browser performance entries; the `e2e-export`/`measure-*` harness
-     conventions are the local precedent).
-  2. Three runs per path, on the product owner's own machine.
-  3. Commit the readings with hardware, viewport, build SHA and spread.
+  1. Build the instrument (browser performance entries over CDP 4G throttling; the
+     `e2e-export`/`measure-*` harness conventions are the local precedent).
+  2. At least five runs per path, in the container, spread reported.
+  3. Commit the readings with the machine, viewport, build SHA and spread.
 
 ---
 
@@ -155,6 +220,13 @@ journey (ADR-0081 §2).
 **Outcome:** the app has a route pending state, a structural gate that refuses a statically-added
 route, and a budget ratchet. One low-risk group (`account`) is split to prove the machinery
 end to end.
+
+> **Status 2026-10-02: BUILT (the builder run), pending the orchestrator's journey run.** Three things the plan did not say, recorded as built:
+>
+> - **S1 is a vitest structural test, not a root `check:*` script** (`apps/web/src/app/router-splitting.structural.test.ts`), so it needs no CI step and `pnpm test` already runs it. It carries a temporary `SCHEDULED` list (the 11 screens M2 and M3 convert) that fails when an entry stops being static; **M2 and M3 must delete the entries they convert**, and M5 closes on the list being empty.
+> - **The authenticated frame became lazy in M1**, because CQ-1 says it is lazy in the final design and no later task owns the conversion. Measured at M1 (entry graph gzip): nothing split 461,670; account group alone 467,693 (**+6,023**, chunk boundaries cost compression while most screens are static); account group and frame 461,315 (**-355**). So the entry graph is **not** expected to fall until M2 and M3, **P4's 100,000 bar cannot be met at M1**, and the journey asserts "no more than 1% above the pre-split 463,933" instead, with the full bar left to M3. B8b does not fire at M1 and the budget is unchanged.
+> - **The M1 journey is hermetic** (`/sign-in` to the lazy `/sign-up`; no API), so it drives the stale-deploy path, the pending state and the waves, but **not** the lazy frame or the Account navigation, which need a session. Those ride on `e2e-account`, `e2e-shell` and the base journey, against the dev server.
+
 **Entry point:** the loading treatment on a slow navigation to **Account** — reached from the
 account chip → **Account**. It is user-facing: a planner on a slow connection now sees a skeleton
 where they previously saw nothing happen.
@@ -189,6 +261,39 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
   2. Register `defaultPendingComponent`.
   3. Unit-test the render and the absence of the two timing options.
 
+##### Task M1-T1b — A failed chunk download gets a retry that works _(new 2026-10-02)_
+
+- **Description:** `RouteErrorScreen` (`app/route-error-screen.tsx`, #314) offers **Try again** =
+  `reset()` + `router.invalidate()` and deliberately never reloads. For a failed **chunk
+  download** that may not recover: `lazyRouteComponent` latches the error, and a browser may cache
+  a failed module fetch for the life of the document (spec §2, **[unverified]**). So, for the
+  `isModuleNotFoundError` case **only**, the button reloads the page, and its copy says why. Every
+  other error keeps #314's behaviour.
+- **Complexity:** S
+- **Dependencies:** none (lands before M1-T6, so the first lazy group ships with it)
+- **Risks:**
+  - Undoing #314 for every error by accident. The point of #314 was to keep unsaved work behind
+    the boundary. → a unit case for each branch, and the non-chunk branch asserts **no** reload.
+  - The detection drifting from the router's: three message prefixes today (router-core `utils.js`
+    `isModuleNotFoundError`). Importing the router's own predicate is **not available**:
+    `@tanstack/react-router`'s `dist/esm/index.js` does not re-export it, and `apps/web/package.json`
+    has no direct `@tanstack/router-core` dependency (both checked 2026-10-02). Adding one would
+    reopen the two-version risk #178 records. → **Default: replicate the three prefixes and
+    register the source location in `scripts/dependency-claims.json`** (router-core
+    `dist/esm/utils.js`, the `isModuleNotFoundError` function, with an anchor on its return line).
+    Then `check:claims` fails on the router bump that changes them, which is the repository's
+    mechanism for exactly this.
+  - The **[unverified]** premise is false (re-import does recover in every browser) → then the
+    reload is merely unnecessary, not wrong. The M1-T4 journey decides it, and the docblock records
+    the answer.
+- **Testing:** unit (both branches; verified red by removing the branch); journey (M1-T4, network
+  failure case).
+- **Development steps:**
+  1. Branch on a local `isChunkLoadFailure(error)` that mirrors the router's predicate (registered
+     claim, see Risks); reload for that case, copy reviewed by ux-reviewer.
+  2. Unit-test both branches.
+  3. Docblock cites #314 and states which failures take which path.
+
 ##### Task M1-T2 — S1: the structural gate over `router.tsx`
 
 - **Description:** every route is `lazyRouteComponent` or named in a reasoned `EAGER_ROUTES`
@@ -203,6 +308,9 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
   - The gate reads prose. Four gates in this repository have matched their own docblocks
     (ADR-0097's weight ratchet, ADR-0106's reset-fills test, #222, #231). → **strip comments before
     scanning**, and pin a fixture containing the banned form inside a comment.
+  - **(2026-10-02)** A new root `check:*` script is picked up by `pnpm prepush` automatically
+    (ADR-0160) and must also be a CI step, or `check:ci-roster` refuses it. → land the script and
+    its CI step in one commit.
 - **Testing:** verified red against a statically-imported route, and against an empty population.
 - **Development steps:**
   1. Write the scan over `router.tsx` with comments stripped.
@@ -210,6 +318,22 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
   3. Verify red three ways: a static route, an empty file, a banned form in a comment.
 
 ##### Task M1-T3 — B8: the budget ratchet
+
+> **Redesigned 2026-10-02 (spec §4 "How the budget moves").** The assertion below compares two
+> fields of `bundle-budget.json`, and a split changes neither, so on its own it **cannot catch the
+> loose budget it was written for**. B8 is now:
+>
+> - **B8a (derivation)**: each budget = `ceil(floor × headroomRatio / 1024) × 1024`, unless
+>   `raisedBecause` is non-empty. This is the assertion described below, kept.
+> - **B8b (the ratchet)**: fail when `report.entryGraph.gzip × headroomRatio < floor.entryGraphGzipBytes`,
+>   with a "re-floor" message. Verified red by feeding today's budget a post-split report (a probe
+>   report from `m0-measurement.md` §8 is a ready fixture).
+>
+> The KiB-ceiling rule is re-checked against the 2026-09-25 floor (445,254 / 128,584 / 15,779 →
+> 467,968 / 135,168 / 17,408): **six agreeing pairs** across two floors. Also fix the `kb()` label
+> at `check-bundle-size.mjs:64` (KiB printed as `kB`, the M0-T2 residue) in the same change. No new
+> key in B7's `KNOWN` set (`:103-114`; was `:94-105`).
+> Complexity stays **S**, plus about half a day for B8b's fixtures.
 
 - **Description:** assert in `check-bundle-size.mjs` that each budget does not exceed
   `floor × headroomRatio` beyond rounding. **This is a shared-gate change** and is the ADR-0105
@@ -233,12 +357,13 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
   (ADR-0076 Class 3, caught before it reached code); B8 must assert the KiB-ceiling rule, and M4-T1
   must re-derive the new budgets the same way.
 
-- **Testing:** added to the exported `runGate` suite (`check-bundle-size.mjs:90` is exported
-  precisely so assertions are suite-driven); verified red by loosening a budget.
+- **Testing:** added to the exported `runGate` suite (`check-bundle-size.mjs:99`, was `:90`, is
+  exported precisely so assertions are suite-driven; the suite is `scripts/check-bundle-size.test.mjs`);
+  B8a verified red by loosening a budget, and B8b verified red with a shrunken report.
 - **Development steps:**
-  1. Compute the tolerance from the three real pairs.
-  2. Add B8 to `runGate` and to `KNOWN` if any key is added (`:94-105`).
-  3. Verify red; confirm green against the unchanged budget.
+  1. Compute the tolerance from the six real pairs.
+  2. Add B8a and B8b to `runGate`; `KNOWN` (`:103-114`) needs no new key.
+  3. Verify each red; confirm both green against today's unchanged budget and report.
 
 ---
 
@@ -251,6 +376,17 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
 > **Testing requirements:** it **is** the test.
 
 ##### Task M1-T4 — `playwright.splitting.config.ts` + `e2e-splitting/`
+
+> **2026-10-02:** start from `playwright.forced-colors.config.ts`, not only the CSP config. It
+> already uses `vite build && vite preview --port … --strictPort` with `reuseExistingServer: false`
+> (`:61-69`), which closes the stale-server risk below by construction. **Two cases added**, because
+> stale-deploy is now rated high likelihood (ADR-0047 auto-redeploy): (a) delete one route chunk
+> from `dist/assets/` after load, navigate, and assert exactly one reload and a working screen;
+> (b) block the chunk with `page.route`, then assert `RouteErrorScreen` appears and its button
+> recovers (M1-T1b). Case (b) also settles the spec's **[unverified]** module-cache premise.
+> **P4 baseline:** P4 is "down ≥ 100,000" against the **pre-split** build, so the journey must
+> record that figure first. Run it once against `main` before M1-T6 lands, or keep a pinned
+> fixture of the pre-split byte total. Complexity M → **M/L**.
 
 - **Description:** build + preview on 4173, Chromium, both pointer modes. Assert P3 (≤ 2 sequential
   JS waves before FCP) and P4 (total cold JS bytes down ≥ 100,000).
@@ -283,6 +419,9 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
   - A suite with no recorded duration is charged the **largest** measured, never zero.
   - ADR-0138 measured a 21–27% run-to-run spread on shard totals; pack from the pessimistic sample.
 - **Testing:** `pnpm check:ci-roster`, `pnpm check:e2e-roster`.
+- **Default shard (2026-10-02): 1**, beside `test:e2e:csp` and `test:e2e:forced-colors`, the other
+  two production-build suites (`ci.yml:1112-1134`). Confirm or overturn it with the LPT
+  re-derivation, not by habit.
 - **Development steps:**
   1. Add the `test:e2e:splitting` script and the CI step with its shard condition.
   2. Re-derive the packing longest-processing-time-first; update the roster.
@@ -310,6 +449,8 @@ Account navigation. **Lands with this milestone, not at enablement** (ADR-0081 �
 
 ### Milestone 2: The cold-path groups
 
+> **Status 2026-10-02: BUILT (the builder run), together with M3 and released with it.** Ten screens converted in one commit (`calendars`, `resources`, `members`, `audit-log`, `my-activity`, `recently-deleted`, `org-home`, `clients`, `client-detail`, `project-detail`). Entry graph 461,315 to 455,253 gzip. The shell-mount preload is `warmHierarchyScreens()` in the `_authed` `beforeLoad`, fired **once the session is known** rather than beside the session query, so a signed-out visitor sent to `/sign-in` does not download screens they will not reach; it still overlaps the organisations query that the redirect waits on. The post-sign-in journey case needs a session and an API, and `e2e-splitting` is hermetic, so it is **not** added; the redirect path rides on `e2e-overview` and `e2e-shell`.
+
 **Outcome:** `hierarchy`, `libraries` and `org-admin` are lazy, and the organisation overview — the
 one navigation every sign-in performs — is warmed rather than fetched after the redirect.
 **Entry point:** unchanged screens, reached the same way. The user-visible change is that they
@@ -335,7 +476,7 @@ arrive sooner after sign-in.
 - **Complexity:** S
 - **Dependencies:** M1-T6
 - **Risks:** `resources`, `audit-log` and `my-activity` sit behind dark flags
-  (`router.tsx:482-485`) → a lazy component in an unregistered route is never fetched; confirm the
+  (`router.tsx:483-486`, was `:482-485`) → a lazy component in an unregistered route is never fetched; confirm the
   flag-off tree is unchanged rather than assuming.
 - **Testing:** `e2e-library`, `e2e-audit`, `e2e-recently-deleted`, `e2e-resource-view`.
 - **Development steps:**
@@ -349,7 +490,7 @@ arrive sooner after sign-in.
 - **Complexity:** M
 - **Dependencies:** M2-T1
 - **Risks:**
-  - **`indexRoute` reaches `org-home` by a programmatic redirect** (`router.tsx:138`) with no hover,
+  - **`indexRoute` reaches `org-home` by a programmatic redirect** (`router.tsx:139`, was `:138`) with no hover,
     so intent-preloading structurally cannot cover the one navigation every sign-in performs. → the
     explicit preload, fired in parallel with the session query rather than after the redirect.
   - The preload fires for readers who never reach those screens (`/account` only) → it is the same
@@ -365,6 +506,8 @@ arrive sooner after sign-in.
 ---
 
 ### Milestone 3: The plan workspace
+
+> **Status 2026-10-02: BUILT, pending the orchestrator's journeys and the P2 re-measurement (M3-T2).** `plan-detail` converted; entry graph **180,121** gzip in 8 chunks (from 455,253), `paint` out of the graph and shared with `/share`. `e2e-splitting` now asserts the 100,000-byte fall (P4) and that `paint` is not on the cold path; the budget was re-floored by B8b (`bundle-budget.json`). The hover and keyboard-preload cases need a session and are not in the hermetic suite; `e2e-shell`, `e2e-share` and the canvas suites are the oracle.
 
 **Outcome:** the largest group leaves the entry graph, and `paint` leaves with it.
 **Entry point:** opening a plan from the Project Explorer — unchanged control, and it must feel
@@ -385,7 +528,11 @@ bookmarked-plan path.
 ##### Task M3-T1 — Convert `plan-detail`, and confirm `paint` leaves the entry graph
 
 - **Description:** one import becomes lazy. The prediction committed in the spec is that `paint`
-  (33,477 gzip) becomes `inEntryGraph: false` as a **consequence**.
+  (33,477 gzip on 2026-09-11; larger now, re-measured in M0) becomes `inEntryGraph: false` as a
+  **consequence**. _(2026-10-02: the "four static importers" in the risk below were really two
+  runtime importers plus two `import type`. Today's runtime importers are `TsldCanvas.tsx:46`,
+  `use-tsld-canvas-ui-state.ts:8`, and `render-export-image.ts:2-8` via `use-diagram-image.ts:10`,
+  all in `features/tsld`, plus two perf-probe scenes in the lazy staff chunk. Spec §0.2.)_
 - **Complexity:** M
 - **Dependencies:** M2-T2
 - **Risks:**
@@ -400,11 +547,15 @@ bookmarked-plan path.
   1. Convert; rebuild; assert `paint.inEntryGraph === false` and record the entry graph.
   2. Confirm `share` and `plan-detail` share the chunk (read `bundle-report.json`'s `packages` and
      the import lists, not the filenames — `bundle-report-plugin.ts:39-52`).
-  3. Run the canvas, Gantt, WBS, undo, multi-select, revision-compare and export suites.
+  3. Run the canvas, Gantt, WBS, undo, multi-select, revision-compare and export suites — by config
+     name: `authoring`, `authoring-flow`, `edit`, `gantt`, `gantt-editing`, `wbs`, `undo`,
+     `multi-select`, `revision-compare`, `export`, `share`, `minimap`, `workspace-chrome` (there is
+     no `canvas` config; listed 2026-10-02 from `apps/web/playwright.*.config.ts`). Then
+     `scripts/e2e-sweep.sh` for the rest.
 
-##### Task M3-T2 — Re-measure P2 and P3 on the product owner's hardware
+##### Task M3-T2 — Re-measure P2 and P3 in the container
 
-- **Description:** the ship/withdraw decision. Same instrument, same machine, same three paths as
+- **Description:** the ship/withdraw decision. Same instrument, same container, same three paths as
   M0-T5, with spreads.
 - **Complexity:** M
 - **Dependencies:** M3-T1
@@ -413,13 +564,26 @@ bookmarked-plan path.
   does not (ADR-0125's recorded caution).
 - **Testing:** the measurement is the test; it records its population and refuses an empty one.
 - **Development steps:**
-  1. Three runs per path; report deltas against M0-T5 with both spreads.
+  1. At least five runs per path; report deltas against M0-T5 with both spreads.
   2. Evaluate P2 and P3 explicitly, naming the verdict.
-  3. If cold plan-open regressed > 10%, **stop and put CQ-2 to the product owner with the number.**
+  3. If cold plan-open regressed > 10%, **withdraw the plan-screen part (M3)** per CQ-2's answer;
+     the cheaper groups stay shipped. If the spread makes it INDETERMINATE, the sign-off falls back
+     to sizes and request counts, and says so.
 
 ---
 
 ### Milestone 4: The budget, and the documents
+
+> **Shipped 2026-10-02.** B8b did not require a further re-floor: the final entry graph is 176,749
+> gzip bytes against the 180,121 floor (176,749 x 1.05 is above it), so the budgets stand at 189,440 /
+> 135,168 / 17,408 and the per-chunk ceiling did not need a `raisedBecause`. The splitting sections of
+> `FRONTEND_QUALITY.md` and `FRONTEND_ARCHITECTURE.md` are rewritten, and #292 is closed.
+>
+> **CQ-2 decision, 2026-10-02 (product owner): accept the measured trade-off and ship.** Cold deep link
+> +8.5% (passes), in-app +4.99% (inside the limit, indeterminate at 4.1% spread), refresh +17.4% (fails
+> 10%, measured through `vite preview`, which revalidates every chunk where nginx serves them
+> immutable). **CQ-2 partially met; refresh limb accepted by the product owner.** M3 is not withdrawn;
+> the follow-up is `docs/TECH_DEBT.md` #433.
 
 **Outcome:** the budget is re-derived downward with its ratchet armed; every governing document
 describes what the code now does.
@@ -435,16 +599,27 @@ describes what the code now does.
 - **Dependencies:** M3-T2 passed
 - **Risks:** the per-chunk ceiling (135,168) is now below a legitimate `plan-workspace` chunk →
   **this is the one number that may need to go up**, and if so it takes a `raisedBecause` naming the
-  group. Do not raise it silently.
-- **Testing:** `check:bundle-size` with B8 armed; verified red by leaving the old budget in place.
+  group. Do not raise it silently. _(2026-10-02: rated **likely**; the M0 re-measurement reports
+  the answer before any code is written.)_
+  - **(2026-10-02) The re-floor is measured at the PR head, not `origin/main`**, which is a stated
+    exception to `bundle-budget.json:4`'s rule for lowerings only (spec §4). Write that in
+    `measuredBy`. Today's `raisedBecause` (`:16`) describes the 2026-09-25 raise. Move its
+    substance into `floor._` as that re-floor did with its predecessor, and set `raisedBecause` to
+    `null` unless the ceiling rises.
+  - **(2026-10-02) In practice B8b forces a re-floor in M1, M2 and M3 as well**, whenever a
+    milestone shrinks the graph by more than ~5%. That is intended. M4-T1 then becomes the final
+    re-floor and the ceiling decision, not the only one.
+- **Testing:** `pnpm check:web-bundle` with B8a/B8b armed (the root gate, which `pnpm prepush` runs);
+  verified red by leaving the old budget in place.
 - **Development steps:**
   1. Update `measuredAt`, `measuredBy`, `floor`, the three budgets.
-  2. Confirm B8 passes and would fail against the pre-epic budget.
+  2. Confirm B8a/B8b pass and that B8b would fail against the pre-epic budget.
 
 ##### Task M4-T2 — Rewrite the splitting sections
 
-- **Description:** `FRONTEND_QUALITY.md:110-121` and `FRONTEND_ARCHITECTURE.md:151-153` now describe
-  the present **and state the grouping rule**, so the next route is not a judgement call.
+- **Description:** `FRONTEND_QUALITY.md:116-127` and `FRONTEND_ARCHITECTURE.md:154-166` (were
+  `:110-121` / `:151-153`, corrected 2026-10-02) now describe the present **and state the grouping
+  rule**, so the next route is not a judgement call.
 - **Complexity:** S
 - **Dependencies:** M4-T1
 - **Risks:** writing the aspiration again → the sections must name the eager allow-list and the
@@ -458,6 +633,11 @@ describes what the code now does.
 ---
 
 ### Milestone 5: The gate pass, and the ADR
+
+> **Shipped 2026-10-02 as ADR-0171.** The reviews' non-blocking findings were folded: a chunk-cycle
+> gate (B9), `index.html` revalidated by nginx, the `ui-shared` group anchored and stripped of staff
+> endpoints, the warm-up run once and when idle, the pending status announced, and the error screen
+> focused, offline-aware and honest about the router's own reload.
 
 **Outcome:** specialist reviews over the combined diff; the boundary rule is filed as an ADR.
 **Entry point:** **Ships dark.**
@@ -481,8 +661,9 @@ describes what the code now does.
   3. **ux-reviewer** — does the skeleton read as loading rather than broken; is the 1,000 ms
      threshold right for the workspace.
   4. **component-reviewer** — the pending component's contract; one treatment, not two.
-  5. **devops-reviewer** — the CI step, the shard packing, the Turbo-cache trigger
-     (`check-bundle-size.mjs:33-41`).
+  5. **devops-reviewer** — the CI step, the shard packing, and the new root `check:*` for S1 in
+     prepush and CI. (The Turbo-cache trigger this item named has already fired and been handled,
+     `check-bundle-size.mjs:37-50`, ADR-0160. Corrected 2026-10-02.)
   6. **security-reviewer** — confirm no authz change and that the CSP still covers the new chunks.
   7. Sweep every suite (`scripts/e2e-sweep.sh`) — ADR-0091 records three journeys breaking across
      one epic because only the suite CI named was fixed.
@@ -495,11 +676,14 @@ describes what the code now does.
 - **Complexity:** S
 - **Dependencies:** M5-T1
 - **Risks:**
-  - `check:adr-coverage` refuses an ADR absent from `docs/ROADMAP.md` (`:50-67`) **and** now checks
+  - `check:adr-coverage` refuses an ADR absent from `docs/ROADMAP.md` (`:59-90`, was `:50-67`) **and** now checks
     the ADR index both ways (ADR-0110 D6). → ROADMAP entry + `docs/adr/README.md` + the CLAUDE.md
     §16 entry, all in the same commit.
-  - The CLAUDE.md entry is the one nothing gates (`docs/TECH_DEBT.md` #291) — ADR-0132 went missing
-    from it for a day for exactly this reason. → write it deliberately, not last.
+  - ~~The CLAUDE.md entry is the one nothing gates (`docs/TECH_DEBT.md` #291)~~ **Stale 2026-10-02:
+    ADR-0147 gates it.** CLAUDE.md §16 is now one line per ADR, and `check:adr-coverage` fails
+    without that line. Write it as **one line**, keeping reasoning in the ADR (CLAUDE.md §19.14).
+  - The ADR records the **lowering-re-floor exception** to `bundle-budget.json:4`'s `origin/main`
+    rule (M4-T1), and the error-screen chunk branch (M1-T1b) as an amendment to #314's behaviour.
 - **Testing:** `pnpm prepush` (which derives its gate list — do **not** run the parts by hand,
   CLAUDE.md §19.8).
 - **Development steps:**
@@ -511,6 +695,15 @@ describes what the code now does.
 ---
 
 ## Sequencing & slices
+
+> **Amended 2026-10-02 (orchestrator): M1, M2 and M3 ship together in ONE release.** M1 alone was
+> built and measured worse than the pre-split build (cold `/sign-in` JavaScript 469,741 bytes against
+> 463,933; 19 JavaScript requests against 4; `m0-measurement.md` section 11), because the entry graph
+> pays for chunk boundaries until the plan workspace leaves it. So the "each keeps `main` releasable"
+> claim below holds for **correctness** (the suites pass at every step) and **not for cost**: M1 and
+> M2 are not releases. Any step that M1 would have taken on its own (its changeset, its journey in
+> CI, its budget) is folded into the combined release; the one changeset describes M1 to M3. M4
+> follows as a separate documentation milestone.
 
 M0 → M1 → M2 → M3 → M4 → M5, and **each keeps `main` releasable**:
 
@@ -538,19 +731,25 @@ impact. Specifically here:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                             | Likelihood | Impact  | Mitigation                                                                                                                                                 |
-| --------------------------------------------------------------------------------------------- | ---------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1 fails — the entry graph is floor-dominated**                                             | med        | high    | M0 stops the epic and rewrites #292 with the floor. This is a permitted, planned outcome, not a failure of the plan.                                       |
-| **Cold plan-open regresses beyond 10%** (#292 predicts exactly this)                          | med        | high    | P2 measures it on the product owner's hardware before shipping; CQ-2 decides; M3 is revertible as one commit.                                              |
-| **A lazy chunk every route imports anyway** — entry graph shrinks, download does not          | med        | high    | P4 measures total cold bytes, which is the only assertion that can see it. The byte gate reports this as a success.                                        |
-| **Waterfall deepens to three waves on a 4G RTT**                                              | med        | med     | P3, browser-measured, both pointer modes.                                                                                                                  |
-| **Coarse pointer never preloads** (no hover)                                                  | high       | low–med | Measured in both modes. If materially worse it is **recorded as debt**, not guessed at — the product owner uses a keyboard.                                |
-| **Measurement spread swamps the effect**                                                      | med        | med     | Spread reported with every verdict; INDETERMINATE is a first-class outcome (ADR-0128/ADR-0130).                                                            |
-| **The probe's numbers get quoted as the shipped result**                                      | low        | med     | The harness states in its own docblock where it bypasses the product (ADR-0081 §3).                                                                        |
-| **S1 or B8 passes over an empty population**                                                  | med        | med     | Pinned positive case + empty-population refusal on both; verified red three ways.                                                                          |
-| **A gate matches its own docblock** (four prior instances here)                               | med        | low     | Comments stripped before scanning; a fixture pins the banned form inside a comment.                                                                        |
-| **Router citations registered against the wrong installed version** (#178)                    | med        | low     | M0-T4 reads the lockfile for `apps/web`'s resolved version rather than taking the first store directory.                                                   |
-| **Stale-deploy white screen**                                                                 | low        | med     | `lazyRouteComponent` reloads once (`:37-44`) where React's `lazy()` does not — which is why it is the chosen primitive. Untested by CI; named as residual. |
-| **New CI step unbalances the shard packing**                                                  | med        | low     | Re-derive longest-processing-time-first from the pessimistic sample; `check:e2e-roster` asserts it.                                                        |
-| **Assumption:** the CPM engine is not imported, no migration runs, no `apps/api` file changes | —          | —       | Asserted per PR. The ADR-0034 parity gate is untouched by construction — there is nothing here to hold parity _for_.                                       |
-| **Assumption:** every number in the spec is _read_, not measured (Bash was disabled)          | certain    | med     | M0-T1 re-derives them all and records any delta. **Do not build on the spec's figures before M0-T1 has run.**                                              |
+| Risk / assumption                                                                             | Likelihood                               | Impact  | Mitigation                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1 fails — the entry graph is floor-dominated**                                             | med                                      | high    | M0 stops the epic and rewrites #292 with the floor. This is a permitted, planned outcome, not a failure of the plan.                                                                                                                                                                                                                            |
+| **Cold plan-open regresses beyond 10%** (#292 predicts exactly this)                          | med                                      | high    | P2 measures it in the container before shipping; CQ-2 (answered 2026-10-02: 10% / 5%) decides; M3 is revertible as one commit.                                                                                                                                                                                                                  |
+| **A lazy chunk every route imports anyway** — entry graph shrinks, download does not          | med                                      | high    | P4 measures total cold bytes, which is the only assertion that can see it. The byte gate reports this as a success.                                                                                                                                                                                                                             |
+| **Waterfall deepens to three waves on a 4G RTT**                                              | med                                      | med     | P3, browser-measured, both pointer modes.                                                                                                                                                                                                                                                                                                       |
+| **Coarse pointer never preloads** (no hover)                                                  | high                                     | low–med | Measured in both modes. If materially worse it is **recorded as debt**, not guessed at — the product owner uses a keyboard.                                                                                                                                                                                                                     |
+| **Measurement spread swamps the effect**                                                      | med                                      | med     | Spread reported with every verdict; INDETERMINATE is a first-class outcome (ADR-0128/ADR-0130).                                                                                                                                                                                                                                                 |
+| **The probe's numbers get quoted as the shipped result**                                      | low                                      | med     | The harness states in its own docblock where it bypasses the product (ADR-0081 §3).                                                                                                                                                                                                                                                             |
+| **S1 or B8 passes over an empty population**                                                  | med                                      | med     | Pinned positive case + empty-population refusal on both; verified red three ways.                                                                                                                                                                                                                                                               |
+| **A gate matches its own docblock** (four prior instances here)                               | med                                      | low     | Comments stripped before scanning; a fixture pins the banned form inside a comment.                                                                                                                                                                                                                                                             |
+| ~~**Router citations registered against the wrong installed version** (#178)~~                | **retired 2026-10-02**                   | —       | One version of each router package in the lockfile; citations registered (M0-T4 done).                                                                                                                                                                                                                                                          |
+| **Stale-deploy white screen**                                                                 | **high** (was low — re-rated 2026-10-02) | med     | The product owner's host auto-redeploys every release under open tabs (ADR-0047), so this path runs on the first unvisited-screen navigation after each release. `lazyRouteComponent` reloads once (`:37-44`) where React's `lazy()` does not. **No longer an untested residual**: M1-T4 drives it against a real `dist/` with a chunk deleted. |
+| **"Try again" cannot recover a failed chunk** _(new 2026-10-02)_                              | med                                      | med     | M1-T1b reloads for that failure class only; M1-T4 drives the network-failure case and settles the module-cache premise.                                                                                                                                                                                                                         |
+| **Offline navigation lands on the browser's offline page** _(new 2026-10-02)_                 | med                                      | low     | Same error message as a 404, so it takes the one guarded reload. Accepted and recorded (spec §2); unsaved work was already resolved by `NavigationGuard`.                                                                                                                                                                                       |
+| **P2 is measured on a noisy machine** _(CQ-4, answered 2026-10-02)_                           | certain                                  | med     | Container readings only. ≥ 5 runs, spread reported; INDETERMINATE is a first-class outcome and the sign-off then rests on sizes and request counts.                                                                                                                                                                                             |
+| **The P2 baseline is lost to auto-deploy** _(new 2026-10-02)_                                 | med                                      | high    | M0-T5 must complete **before M1 merges**, so before and after come from one container and one harness.                                                                                                                                                                                                                                          |
+| **M1 shipped alone costs more than the unsplit build** _(realised 2026-10-02)_                | certain (measured)                       | med     | M1 measured +5,808 JS bytes and 19 requests against 4 (`m0-measurement.md` section 11). M1, M2 and M3 ship in one release; the journey's byte assertion is the guard and now asserts the 100,000-byte fall.                                                                                                                                     |
+| **B8b fires on every milestone that shrinks the graph** _(new 2026-10-02)_                    | high                                     | low     | Intended (the ratchet). Each split PR re-floors at its head, as spec §4 states. Prepush catches it locally.                                                                                                                                                                                                                                     |
+| **New CI step unbalances the shard packing**                                                  | med                                      | low     | Re-derive longest-processing-time-first from the pessimistic sample; `check:e2e-roster` asserts it.                                                                                                                                                                                                                                             |
+| **Assumption:** the CPM engine is not imported, no migration runs, no `apps/api` file changes | —                                        | —       | Asserted per PR. The ADR-0034 parity gate is untouched by construction — there is nothing here to hold parity _for_.                                                                                                                                                                                                                            |
+| **Assumption:** every number in the spec is _read_, not measured (Bash was disabled)          | certain                                  | med     | M0-T1 re-derives them all and records any delta. **Do not build on the spec's figures before M0-T1 has run.** _(2026-10-02: M0-T1 ran on 2026-09-12 and is now stale again; the refresh was also written without Bash. Re-run per `m0-measurement.md` §8.)_                                                                                     |

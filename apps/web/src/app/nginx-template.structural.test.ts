@@ -123,6 +123,22 @@ describe('nginx.conf as an envsubst template', () => {
     expect(permissions).toContain('camera=()');
   });
 
+  it('revalidates index.html without dropping the security headers it inherits', () => {
+    // A cached document names chunks the next release deletes. And `add_header` inside a location
+    // replaces EVERY inherited header, so the revalidation must be `expires -1` (Cache-Control:
+    // no-cache) — an `add_header` here would silently strip the CSP from the one response that is
+    // a document. Pinned on both halves.
+    const block = /location = \/index\.html \{([^}]*)\}/.exec(render(ENV))?.[1];
+
+    expect(block, 'a `location = /index.html` block exists').toBeDefined();
+    expect(block).toContain('expires -1;');
+    expect(block).not.toContain('add_header');
+  });
+
+  it('keeps fingerprinted assets immutable', () => {
+    expect(render(ENV)).toMatch(/location \/assets\/ \{[^}]*public, immutable/);
+  });
+
   it('sets no HSTS at the web container, deliberately', () => {
     // Not an omission: this block listens only on plain 8080 and cannot know the browser's scheme
     // (TECH_DEBT #89), and HSTS is sticky. It belongs at the edge terminator.

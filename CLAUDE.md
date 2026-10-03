@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1429 web
-> source files with 46 Playwright suites beside the base journey, and
-> 170 ADRs.
+> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1432 web
+> source files with 47 Playwright suites beside the base journey, and
+> 171 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -567,6 +567,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0168** _(Accepted)_ — Levelling follows the links → [`0168-levelling-follows-the-links.md`](docs/adr/0168-levelling-follows-the-links.md)
 - **ADR-0169** _(Accepted)_ — An editor's working state lives for one opening → [`0169-an-editors-working-state-lives-for-one-opening.md`](docs/adr/0169-an-editors-working-state-lives-for-one-opening.md)
 - **ADR-0170** _(Accepted)_ — The Gantt's start edge writes what the diagram's writes, counted in working days → [`0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md`](docs/adr/0170-the-gantts-start-edge-writes-what-the-diagrams-writes.md)
+- **ADR-0171** _(Accepted)_ — Routes load when they are opened, and the chunk groups that keep that fast → [`0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md`](docs/adr/0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

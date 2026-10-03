@@ -104,9 +104,10 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
   the entry graph** — verified from Rollup's own static/dynamic import lists
   rather than inferred from chunk names, which cannot say which kind an import
   was. They cost the first paint nothing.
-- The remaining gap to any aspirational figure is explained by the bullet below
-  on code splitting rather than by anything being oversized: every authenticated
-  route is in the entry chunk (`docs/TECH_DEBT.md` #292).
+- **The figures above are the pre-split measurement**, kept because they date the
+  bundle gate. The first visit now costs 176,749 gzip bytes of JavaScript; see
+  the code-splitting section below (ADR-0171, which closed `docs/TECH_DEBT.md`
+  #292).
 - Prefer platform APIs and small libraries; **justify every new dependency**
   (size, maintenance, tree-shakeability) in the PR.
 - Import icons and utilities by name (tree-shakeable); never import whole
@@ -115,16 +116,34 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Code splitting & lazy loading
 
-- **Route-based splitting is the INTENTION, and is not what the app does today.**
-  This line read "route-based splitting by default — each route is its own chunk"
-  until 2026-09-10, when it was measured. `app/router.tsx` declares 26 routes and
-  has **two** `lazy()` boundaries — `/share` and `/staff` — and `vite.config.ts`
-  sets no `manualChunks`. A production build emits **10 JS chunks**, of which two
-  are route chunks (`share` at 0.30 kB gzip, being only the wrapper, and `staff`
-  at 23.84 kB); the rest are library splits that Rolldown derived from the two
-  dynamic imports. **Every authenticated route — the whole plan workspace — is in
-  the entry chunk.** Aim for the rule above when adding a route; do not read it as
-  a description of the present.
+- **Every screen except sign-in is lazy, and a new route must be too** (ADR-0171).
+  `app/router.tsx` binds each screen with `lazyRouteComponent`; the one eager
+  route, `SignInScreen` (2,835 gzip bytes), is allow-listed with its reason in
+  `router-splitting.structural.test.ts`, which fails on any other static screen.
+  The first visit's JavaScript is the entry graph, **176,749 gzip bytes in two
+  chunks** (it was 461,186 before the split). The router shows `RoutePending`
+  after 1,000 ms and keeps it 500 ms, so a navigation under a second never
+  flashes a skeleton; set neither option in `router.tsx`.
+- **Two chunk groups shape what the split costs** (`vite.config.ts`). `boot`
+  keeps everything the entry reaches in the entry; `ui-shared` folds the leaf
+  layers the plan screen imports (primitives, chrome, `lib`, hooks, icons, the
+  hierarchy features) into one chunk, because 37 chunks of under a kilobyte
+  each, requested over HTTP/1.1's six connections per origin, delayed the
+  session request by about a second. **Do not add a directory to `ui-shared`
+  without measuring**: `components/layout` or a plan-private feature turns it
+  into one 260 kB chunk, and `entriesAware` or `maxSize` splitting produced
+  chunk cycles that broke the page on 3 of 8 loads. `check:web-bundle` fails on
+  any import cycle between emitted chunks (B9), on any lazy chunk over the
+  per-chunk ceiling and on an entry graph over its budget.
+- **The budget was lowered once, by exception.** `bundle-budget.json` is
+  normally measured at `origin/main`; the split lowered it at its own head
+  (floor 180,121, budget 189,440), and its ratchet (B8b) now fails a build that
+  leaves the budget loose.
+- **The plan-opening cost is measured, not assumed**: sign-in 2,797 to 1,398 ms,
+  a cold plan deep link +8.3%, a plan opened in the app +4.9%, and a refresh
+  +17.0% in the build container (`docs/specs/route-code-splitting/m0-measurement.md`
+  sections 13 and 14; the refresh figure revalidates every chunk where nginx
+  would not, and `docs/TECH_DEBT.md` #433 re-measures it).
 - **Lazy-load heavy, non-critical UI** (charts, rich editors, rarely-used
   dialogs) behind `React.lazy`/dynamic import with a Suspense fallback.
 - Prefetch likely-next routes on link hover/focus (intent-based).

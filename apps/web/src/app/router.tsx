@@ -4,11 +4,13 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
 } from '@tanstack/react-router';
 import { Suspense, lazy } from 'react';
 
 import { RouteErrorScreen } from '@/app/route-error-screen';
+import { RoutePending } from '@/app/route-pending';
 import { Spinner } from '@/components/ui/spinner';
 import {
   ACCOUNT_SETTINGS_ENABLED,
@@ -23,26 +25,70 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
-import { AcceptInviteScreen } from '@/routes/accept-invite';
-import { AccountScreen } from '@/routes/account';
-import { AuditLogScreen } from '@/routes/audit-log';
-import { AuthedLayout } from '@/routes/authed-layout';
-import { CalendarsScreen } from '@/routes/calendars';
-import { ClientDetailScreen } from '@/routes/client-detail';
-import { ClientsScreen } from '@/routes/clients';
-import { ForgotPasswordScreen } from '@/routes/forgot-password';
-import { MembersScreen } from '@/routes/members';
-import { MyActivityScreen } from '@/routes/my-activity';
-import { OnboardingScreen } from '@/routes/onboarding';
-import { OrgHomeScreen } from '@/routes/org-home';
-import { PlanDetailScreen } from '@/routes/plan-detail';
-import { ProjectDetailScreen } from '@/routes/project-detail';
-import { RecentlyDeletedScreen } from '@/routes/recently-deleted';
-import { ResetPasswordScreen } from '@/routes/reset-password';
-import { ResourcesScreen } from '@/routes/resources';
 import { SignInScreen } from '@/routes/sign-in';
-import { SignUpScreen } from '@/routes/sign-up';
-import { VerifyEmailScreen } from '@/routes/verify-email';
+
+/**
+ * **Not code-split, by rule** (`docs/specs/route-code-splitting/`): a route component is a
+ * `lazyRouteComponent` unless `router-splitting.structural.test.ts` names it in `EAGER_ROUTES` with
+ * a reason (or schedules it). The loading treatment's timing is the router's default and is set
+ * nowhere here — see `route-pending.tsx`.
+ *
+ * **The authenticated frame is lazy too** (CQ-1, answered 2026-10-02): a signed-out visitor never
+ * sees it. Measured entry graph gzip: pre-split 461,670; M1 alone (account group and frame lazy)
+ * 461,315 — no gain, because while most screens are static the closure stays in the graph and the
+ * chunk boundaries cost compression; M2 455,253; M3 (plan screen) 180,121 in 8 chunks. The split
+ * only pays once every screen is lazy, which is why the three milestones ship together
+ * (`m0-measurement.md` sections 11 and 12).
+ */
+const AuthedLayout = lazyRouteComponent(() => import('@/routes/authed-layout'), 'AuthedLayout');
+const AcceptInviteScreen = lazyRouteComponent(
+  () => import('@/routes/accept-invite'),
+  'AcceptInviteScreen',
+);
+const AuditLogScreen = lazyRouteComponent(() => import('@/routes/audit-log'), 'AuditLogScreen');
+const CalendarsScreen = lazyRouteComponent(() => import('@/routes/calendars'), 'CalendarsScreen');
+const ClientDetailScreen = lazyRouteComponent(
+  () => import('@/routes/client-detail'),
+  'ClientDetailScreen',
+);
+const ClientsScreen = lazyRouteComponent(() => import('@/routes/clients'), 'ClientsScreen');
+const MembersScreen = lazyRouteComponent(() => import('@/routes/members'), 'MembersScreen');
+const MyActivityScreen = lazyRouteComponent(
+  () => import('@/routes/my-activity'),
+  'MyActivityScreen',
+);
+const OrgHomeScreen = lazyRouteComponent(() => import('@/routes/org-home'), 'OrgHomeScreen');
+const PlanDetailScreen = lazyRouteComponent(
+  () => import('@/routes/plan-detail'),
+  'PlanDetailScreen',
+);
+const ProjectDetailScreen = lazyRouteComponent(
+  () => import('@/routes/project-detail'),
+  'ProjectDetailScreen',
+);
+const RecentlyDeletedScreen = lazyRouteComponent(
+  () => import('@/routes/recently-deleted'),
+  'RecentlyDeletedScreen',
+);
+const ResourcesScreen = lazyRouteComponent(() => import('@/routes/resources'), 'ResourcesScreen');
+const AccountScreen = lazyRouteComponent(() => import('@/routes/account'), 'AccountScreen');
+const ForgotPasswordScreen = lazyRouteComponent(
+  () => import('@/routes/forgot-password'),
+  'ForgotPasswordScreen',
+);
+const OnboardingScreen = lazyRouteComponent(
+  () => import('@/routes/onboarding'),
+  'OnboardingScreen',
+);
+const ResetPasswordScreen = lazyRouteComponent(
+  () => import('@/routes/reset-password'),
+  'ResetPasswordScreen',
+);
+const SignUpScreen = lazyRouteComponent(() => import('@/routes/sign-up'), 'SignUpScreen');
+const VerifyEmailScreen = lazyRouteComponent(
+  () => import('@/routes/verify-email'),
+  'VerifyEmailScreen',
+);
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -98,6 +144,69 @@ const signUpRoute = createRoute({
 });
 
 /**
+ * Whether this document was opened on a plan URL. A bookmarked plan starts fetching the frame and the
+ * plan screen at boot, beside the session request: the router only asks for a route's chunk once
+ * `beforeLoad` has resolved, which on this path put the whole chunk wave a `/me` round trip late
+ * (`docs/specs/route-code-splitting/m0-measurement.md`, 2026-10-02 pass). A signed-out visitor to a
+ * plan URL pays those bytes before the redirect to sign-in — accepted, because a plan URL is the one
+ * place where the destination is known before the session is.
+ */
+const PLAN_DEEP_LINK = /^\/orgs\/[^/]+\/plans\/[^/]+/.test(window.location.pathname);
+if (PLAN_DEEP_LINK) {
+  void AuthedLayout.preload?.();
+  void PlanDetailScreen.preload?.();
+}
+
+/** Whether the hierarchy warm-up has run; it only ever needs to. */
+let warmed = false;
+
+/**
+ * Fetch the hierarchy chunks while the organisations query is still in flight.
+ *
+ * `indexRoute` reaches the organisation overview by a **programmatic redirect**, so no link was ever
+ * hovered and intent-preloading structurally cannot cover the one navigation every sign-in makes
+ * (`docs/specs/route-code-splitting/` M2-T2). Fired once the session is known to exist rather than
+ * beside the session query: a signed-out visitor is redirected to `/sign-in` and should not pay
+ * for screens they will not reach. A reader who only ever opens `/account` pays the same bytes they
+ * paid eagerly before the split, one wave later and off the critical path.
+ *
+ * No error handling is needed here: `lazyRouteComponent`'s loader catches its own import failure and
+ * resolves (`lazyRouteComponent.js:28-31`), so the returned promise never rejects, and the real
+ * navigation re-requests the chunk and reaches `RouteErrorScreen` if it is genuinely missing.
+ */
+function warmHierarchyScreens(): void {
+  // `_authed`'s `beforeLoad` runs on every navigation beneath it, so without this the four-screen
+  // fetch was re-issued on each one. A repeat is cheap (the loaders are memoised) but it was also
+  // re-scheduled each time, and the first call is the only one that does anything.
+  if (warmed) return;
+  warmed = true;
+  // A plan URL opened directly is going to the plan, not up through the hierarchy: warming four
+  // screens beside its chunks only queues them ahead of the bytes that are on the critical path.
+  if (PLAN_DEEP_LINK) return;
+  for (const screen of [OrgHomeScreen, ClientsScreen, ClientDetailScreen, ProjectDetailScreen]) {
+    void screen.preload?.();
+  }
+  // The plan is the last stop of the walk the hierarchy warm-up serves. Without this its chunks were
+  // fetched on the click that opens it, which put the whole plan graph on the in-app critical path.
+  void PlanDetailScreen.preload?.();
+}
+
+/**
+ * Run `task` once the browser has nothing better to do, so a warm-up never competes with the route
+ * the user actually opened for the connection pool (six per origin under HTTP/1.1). `timeout` bounds
+ * the wait on a page that never goes idle; Safari has no `requestIdleCallback`, so a short timer
+ * stands in.
+ */
+function deferUntilIdle(task: () => void): void {
+  if (warmed) return;
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 2000 });
+  } else {
+    window.setTimeout(task, 300);
+  }
+}
+
+/**
  * Pathless layout route that guards everything under it. `beforeLoad` ensures
  * the session (from the shared `/me` query) and redirects unauthenticated users
  * to sign-in with a `redirect` back to where they were headed. The API always
@@ -113,6 +222,7 @@ const authedRoute = createRoute({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: '/sign-in', search: { redirect: location.href } });
     }
+    deferUntilIdle(warmHierarchyScreens);
     return { session };
   },
   component: AuthedLayout,
@@ -511,6 +621,9 @@ export const router = createRouter({
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: RouteErrorScreen,
+  // The timing (1000 ms before it shows, 500 ms minimum) is the library default, left unset on
+  // purpose — see `route-pending.tsx`.
+  defaultPendingComponent: RoutePending,
 });
 
 declare module '@tanstack/react-router' {
