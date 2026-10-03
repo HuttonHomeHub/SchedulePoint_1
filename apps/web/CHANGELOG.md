@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.158.1
+
+### Patch Changes
+
+- [#762](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/762) [`342a041`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/342a04115636ab98b1304de084924cbec0967bf0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram no longer lets you drag the start edge of an activity that has already started or finished. That edge did nothing useful there: the schedule uses the actual start, so the drag only changed the duration and moved the finish. The start edge now offers no grab handle, and if a start-edge change is attempted anyway the diagram says why it can't be done, matching the Gantt.
+
 ## 0.158.0
 
 ### Minor Changes
