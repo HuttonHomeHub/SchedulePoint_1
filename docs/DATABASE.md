@@ -94,9 +94,16 @@
 ## Soft deletes
 
 - Default to **soft delete** via a nullable `deleted_at timestamptz`. Deletes set
-  the timestamp; **all queries exclude soft-deleted rows by default** (a Prisma
-  extension/base repository enforces this centrally — never rely on every caller
-  remembering).
+  the timestamp. Twenty models carry `deleted_at`, and **filtering is per query**:
+  nothing excludes soft-deleted rows centrally (there is no Prisma extension,
+  middleware or base repository — `PrismaService` is a bare `PrismaClient`).
+  Each read **and write** states its rule itself — through the repository's
+  `active()` helper, a shared predicate, or an explicit `deletedAt` key — and a
+  query that must see deleted rows on purpose (restore, the recycle bin, the
+  retention sweep, an engine input) says so with a reason. A structural gate that
+  refuses a query stating neither is being introduced by ADR-0172 (milestones
+  M2–M5 of `docs/specs/soft-delete-filter/`); **until it lands, review is the
+  only check**. Creates and to-one relation reads are outside it.
 - Unique constraints that must ignore deleted rows use **partial unique indexes**
   (`WHERE deleted_at IS NULL`).
 - **Hard deletes** are reserved for compliance/erasure requests and are explicit,

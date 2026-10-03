@@ -432,3 +432,8 @@ narrowed one, which the Background-processing entry now states.**
   current approach is that one forgotten `deletedAt: null` leaks deleted rows;
   the cost of the extension is a less obvious query path. Worth designing before
   building.
+  _**Taken up 2026-10-03 and not as an extension**: ADR-0172 chose a computed gate over
+  the extension (an extension would break restore and the hours-per-day lookup, and
+  cannot see raw SQL or nested reads). Spec and plan:
+  `docs/specs/soft-delete-filter/`; this row closes when the gate's last milestone
+  (M5) lands._

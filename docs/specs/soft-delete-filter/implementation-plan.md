@@ -99,6 +99,7 @@ is recorded.
 > **Complexity:** M
 > **Dependencies:** M1.
 > **Risks:**
+>
 > - Scanner false negatives (a read form it does not recognise passes silently) → pinned synthetic
 >   cases for every receiver shape (`this.prisma.`, `db.`, `tx.`, `client.`), every operation, and the
 >   multi-line form; a pinned assertion that ≥ 150 read sites were examined (the §0 floor was 175).
@@ -106,8 +107,8 @@ is recorded.
 >   only files that mention a roster accessor (a cheap text pre-filter).
 > - Over-strict on composed `where`s → false alarms are the designed failure direction; each costs a
 >   declaration, and the count is visible.
-> **Testing requirements:** scanner unit tests on synthetic sources (pass and fail per rule); the
-> repository scan; verified red (below); `pnpm prepush`; `scripts/e2e-local.sh api`.
+>   **Testing requirements:** scanner unit tests on synthetic sources (pass and fail per rule); the
+>   repository scan; verified red (below); `pnpm prepush`; `scripts/e2e-local.sh api`.
 
 ##### Task M2-T1 — Roster derivation and scanner, synthetic tests only
 
@@ -189,6 +190,7 @@ soft-deletable model with no `deletedAt` stance fails the gate (spec US-7, §4.1
 > **Complexity:** M
 > **Dependencies:** M2.
 > **Risks:**
+>
 > - Function-level declarations become a blanket → they cover only writes of the declared kind
 >   (`any-state` / `deleted-only`) inside the one function, and the listing prints the covered-call
 >   count beside each; security-reviewer reads them.
@@ -196,10 +198,10 @@ soft-deletable model with no `deletedAt` stance fails the gate (spec US-7, §4.1
 >   `invitation.repository.ts:65`) → declare with the evidence (spec §0 F6); do not add a filter in
 >   this milestone, because on `update`/`delete` an added filter turns a match into a thrown P2025 —
 >   a behaviour change, which goes through the leak-fix route if wanted.
-> **Testing requirements:** synthetic cases per operation and per intent (edit via `active()`, stamp
-> guarded on `deletedAt: null`, restore declared, unguarded `updateMany` failing, nested `updateMany`
-> inside `data` failing, function-level declaration covering three calls, stale function declaration
-> failing); real-tree scan; verified red; `pnpm prepush`; `scripts/e2e-local.sh api`.
+>   **Testing requirements:** synthetic cases per operation and per intent (edit via `active()`, stamp
+>   guarded on `deletedAt: null`, restore declared, unguarded `updateMany` failing, nested `updateMany`
+>   inside `data` failing, function-level declaration covering three calls, stale function declaration
+>   failing); real-tree scan; verified red; `pnpm prepush`; `scripts/e2e-local.sh api`.
 
 ##### Task M3-T1 — Write operations, nested writes, function-level declarations
 
@@ -224,7 +226,7 @@ soft-deletable model with no `deletedAt` stance fails the gate (spec US-7, §4.1
      and the failure count equals the covered count the listing printed.
   4. Add a throwaway nested `data: { steps: { updateMany: { where: {}, data: {} } } }` in a scratch
      edit → fails as a nested write; revert.
-  Then `pnpm prepush`; `scripts/e2e-local.sh api` — 79 specs green, none edited.
+     Then `pnpm prepush`; `scripts/e2e-local.sh api` — 79 specs green, none edited.
 - **Development steps:**
   1. Extend the operation set; reuse the stance classifier.
   2. Function-level declaration scope + covered-count in the listing.
@@ -248,8 +250,8 @@ soft-deletable model with no `deletedAt` stance fails the gate (spec US-7, §4.1
 > **Risks:** relation names differ from model names (`activities` → `BaselineActivity` on `Baseline`)
 > → derive the target model from the relation field's type in `schema.prisma`, never from the name.
 > **Testing requirements:** synthetic cases (`include: { rel: true }` fail; `include: { rel: { where: {
-> deletedAt: null } } }` pass; `_count: { select: { rel: true } }` fail; `_count: { select: { rel: {
-> where: { deletedAt: null } } } }` pass; to-one include ignored); real-tree scan; verified red.
+deletedAt: null } } }` pass; `_count: { select: { rel: true } }` fail; `_count: { select: { rel: {
+where: { deletedAt: null } } } }` pass; to-one include ignored); real-tree scan; verified red.
 
 ##### Task M4-T1 — Nested to-many and `_count` rule
 
@@ -289,6 +291,7 @@ the gate; the epic's docs are final.
 > **Complexity:** S
 > **Dependencies:** M4.
 > **Risks:**
+>
 > - A template that filters one table and not another (a join) → the rule is per table named: each
 >   soft-deletable table in the text needs a `<alias>.deleted_at` or bare `deleted_at` mention. This is
 >   a text heuristic and is stated as such in the docblock; it can be fooled by a `deleted_at` that
@@ -298,8 +301,8 @@ the gate; the epic's docs are final.
 >   (passes on the text); advisory locks name no table (pass).
 > - Interaction with `staff-boundary.structural.spec.ts`, which already polices raw SQL under
 >   `modules/staff/` → no overlap in rule, only in subject; both run.
-> **Testing requirements:** synthetic cases; verified red by removing `AND p.deleted_at IS NULL` from
-> `overview.repository.ts:197`; real scan; `pnpm prepush`; `scripts/e2e-local.sh api`.
+>   **Testing requirements:** synthetic cases; verified red by removing `AND p.deleted_at IS NULL` from
+>   `overview.repository.ts:197`; real scan; `pnpm prepush`; `scripts/e2e-local.sh api`.
 
 ##### Task M5-T1 — Raw-SQL rule
 
@@ -349,15 +352,15 @@ spec edited" stated.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                 | Likelihood | Impact | Mitigation                                                                                                   |
-| --------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| Scanner misses a read form (false negative)                                        | med        | med    | Pinned synthetic cases per shape; pinned minimum examined-site count; verified red on real sites               |
-| Declarations become a rubber stamp                                                 | med        | med    | Reason required and grammar-checked; listing printed every run; security-reviewer reads the list in M2/M3/M5   |
-| A wrong stance (`{ not: null }` for `null`) passes                                 | low        | med    | Stated blind spot; same for every option; reviewers                                                            |
+| Risk / assumption                                                                   | Likelihood | Impact | Mitigation                                                                                                     |
+| ----------------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| Scanner misses a read form (false negative)                                         | med        | med    | Pinned synthetic cases per shape; pinned minimum examined-site count; verified red on real sites               |
+| Declarations become a rubber stamp                                                  | med        | med    | Reason required and grammar-checked; listing printed every run; security-reviewer reads the list in M2/M3/M5   |
+| A wrong stance (`{ not: null }` for `null`) passes                                  | low        | med    | Stated blind spot; same for every option; reviewers                                                            |
 | Function-level write labels hide a new unguarded write added later to that function | med        | med    | Label is scoped to one function and one declared kind; covered-call count printed, so a rise shows in the diff |
 | Creates attaching to a deleted parent unchecked                                     | low        | low    | Out of scope (spec §4.11); revisit trigger in spec §4.8                                                        |
 | Triage finds a real leak                                                            | low        | med    | Separate fix PR with Supertest regression and changeset (PO question 3)                                        |
 | Gate slows `pnpm test`                                                              | low        | low    | Measured in M2; text pre-filter if > 10 s                                                                      |
 | The gate is advisory at merge (unprotected `main`)                                  | certain    | low    | Same as every gate here; prepush is where it bites (CLAUDE.md §8, §19.9)                                       |
-| Prisma 7 migration (TECH_DEBT #11) changes client API                              | low        | low    | The gate reads source text and the schema file, not the client — unaffected                                   |
+| Prisma 7 migration (TECH_DEBT #11) changes client API                               | low        | low    | The gate reads source text and the schema file, not the client — unaffected                                    |
 | Assumption: no consumer outside `apps/api/src` reads Postgres through Prisma        | —          | —      | Seed CLI uses REST (`packages/seed-http`); re-checked in M2-T2                                                 |
