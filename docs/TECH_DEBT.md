@@ -11523,6 +11523,22 @@ criterion (10 consecutive green CI runs) is unchanged.
 failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
 runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
 holds it until spec M3.1 signs up once per worker.
+### 440. `updatePlacements` and the recalculation write may deadlock each other
+
+**Status:** open · **Verified:** 2026-10-03 (read, **not reproduced**: `activities.service.ts` `updatePlacements`
+→ `activity.repository.ts` `updatePlacements`, an `UPDATE activities … FROM unnest` over up to 2,000 rows taken
+**without** the plan advisory lock; `schedule.repository.ts` `writeResults`, the same shape under it) ·
+**Raised:** 2026-10-03 (database-architect, designing ADR-0174's history lock) · **Size:** S · **Owner:** api
+
+Both statements row-lock many activities of one plan in **no defined order**, and `UPDATE … FROM unnest` takes
+its row locks in whatever order the join produces. A placement batch holding row A and waiting for row B,
+against a recalculation holding B and waiting for A, is a deadlock Postgres resolves by aborting one of them
+with `40P01`. **Not established:** whether the planner's join order makes the two orders agree in practice, or
+whether the user-visible symptom would be a 500 on a drag. Nothing measured either way; the activity-history
+recorder neither adds to this nor depends on it (it takes no row lock, ADR-0174 D4), and its 200-round
+concurrency test passes, which is evidence about the recorder and not about this pair.
+**Next:** on a recurrence, `ORDER BY id` the two `unnest` joins so both lock in id order, with a concurrent
+two-connection test written red-first. **Trigger:** a `40P01` in the API logs.
 
 ### 441. A baseline's activity count compiles to a grouped subquery the planner may not restrict to the page
 

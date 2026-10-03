@@ -19,8 +19,10 @@ import {
   useDeleteActivity,
   useDissolveSummary,
 } from '@/features/activities';
+import { ActivityHistoryPanel } from '@/features/activity-history';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
+import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -156,6 +158,29 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planActivitiesError={model.activities.isError}
         activity={intended}
         {...(model.editorIntent ? { intent: model.editorIntent } : {})}
+        {...(intended
+          ? {
+              // The History tab (ADR-0174). Unflagged (ADR-0088 D1), and composed here because the
+              // panel reads the plan's calendars and currency and this root is where the editor's
+              // other cross-feature panels are wired. The day factor is the one the Duration field
+              // reads, so a duration is worded identically in both.
+              historySlot: (
+                <ActivityHistoryPanel
+                  orgSlug={orgSlug}
+                  activityId={intended.id}
+                  activityCreatedAt={intended.createdAt}
+                  context={{
+                    hoursPerDay: activitySchedulingHoursPerDay(
+                      model.calendars.data ?? [],
+                      intended,
+                      model.plan.data?.calendarId,
+                    ),
+                    currencyCode: model.plan.data?.currencyCode ?? null,
+                  }}
+                />
+              ),
+            }
+          : {})}
         {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
           ? {
               // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before

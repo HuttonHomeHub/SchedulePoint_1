@@ -84,6 +84,16 @@ export const activityKeys = {
     [...activityKeys.all(orgSlug), 'detail', activityId] as const,
 };
 
+/**
+ * An activity's change history (ADR-0174). Keyed by the activity so one save can invalidate exactly
+ * the timeline it changed; the org-wide prefix exists for a write that touches several activities.
+ */
+export const activityHistoryKeys = {
+  all: (orgSlug: string) => ['activity-history', orgSlug] as const,
+  byActivity: (orgSlug: string, activityId: string) =>
+    [...activityHistoryKeys.all(orgSlug), 'activity', activityId] as const,
+};
+
 export const stepKeys = {
   all: (orgSlug: string) => ['activity-steps', orgSlug] as const,
   // Keyed by the activity the steps hang off — the bulk replace invalidates the one

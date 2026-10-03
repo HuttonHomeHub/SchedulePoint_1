@@ -187,11 +187,16 @@ dragging bars for an afternoon generates arbitrarily many, while a 5,000-activit
 programme generates a bounded number of deletes. Recording it is the cheapest way to
 make the log unreadable.
 
-The cost is explicit rather than hidden: **"who changed this duration?" is
-unanswerable**, and both screens say so in those words rather than saying "not yet".
-The feature that would answer it is per-activity **plan revision history** — a
-different feature with a different table, retention story and read model, on
-[`BACKLOG.md`](BACKLOG.md). Naming it is part of the decision; building it is not.
+The cost was explicit rather than hidden: **"who changed this duration?" was
+unanswerable** from the audit log, which is still so. It is answered by a **different
+feature with a different table, retention story and read model** — per-activity change
+history ([ADR-0174](adr/0174-an-activitys-history-is-working-memory-not-an-audit-trail.md)),
+from the activity editor's **History** tab. That table is a **second attributed store**:
+it is deliberately mutable (entries merge and can disappear when a change is undone), it is
+**not tamper-resistant and is never called an audit trail**, it holds the opaque user id only
+(erasure by anonymisation of the user row, ADR-0085 D1, applies unchanged), and it is readable
+by every organisation member but never by an External Guest, with money withheld server-side
+from anyone without `cost:read`.
 
 **A failed sign-in is readable by the account it named, and by nobody else** — not by
 an Org Admin. An attacker chooses which tenant to appear in by choosing which address

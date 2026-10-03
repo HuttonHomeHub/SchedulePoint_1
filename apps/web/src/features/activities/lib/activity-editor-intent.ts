@@ -23,6 +23,8 @@ export type ActivityEditorTab =
   | 'cost'
   | 'resources'
   | 'notes'
+  /** Who changed this activity, its links and its resources (ADR-0174) — read-only for every role. */
+  | 'history'
   /** A WBS summary's membership (`VITE_WBS_IMPROVEMENTS`) — present only on a `WBS_SUMMARY`. */
   | 'members';
 
@@ -34,6 +36,7 @@ export type ActivityEditorPurpose =
   | 'logic'
   | 'resources'
   | 'notes'
+  | 'history'
   /** Manage a WBS summary's membership — only ever raised for a `WBS_SUMMARY`. */
   | 'members'
   /**
@@ -90,6 +93,8 @@ export function openActivityEditor(
       return { activityId: activity.id, tab: 'resources' };
     case 'members':
       return { activityId: activity.id, tab: 'members' };
+    case 'history':
+      return { activityId: activity.id, tab: 'history' };
     // **Add note** used to open the Logic dialog and then scroll + focus its Notes section, because
     // notes had no home of their own. With a tab, the intent is the reveal *visually* — the focus
     // half still has to be asked for, which is what `focusNotes` does (`docs/TECH_DEBT.md` #68).

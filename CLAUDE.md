@@ -19,8 +19,8 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 73 migrations, 1435 web
+> **Current stage: the application is substantially built.** 25 API modules
+> (`apps/api/src/modules/`), 35 Prisma models across 73 migrations, 1442 web
 > source files with 47 Playwright suites beside the base journey, and
 > 174 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -111,7 +111,7 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   24 feature modules
+│   │   ├── src/modules/      #   25 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
 │   │   ├── prisma/           #   Schema (35 models) + 73 migrations
@@ -571,6 +571,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0172** _(Accepted)_ — A soft-delete filter is stated at the query, and the build refuses a read that states none → [`0172-a-soft-delete-filter-is-stated-at-the-query.md`](docs/adr/0172-a-soft-delete-filter-is-stated-at-the-query.md)
 - **ADR-0175** _(Accepted)_ — A spent budget is reported as a spent budget → [`0175-a-spent-budget-is-reported-as-a-spent-budget.md`](docs/adr/0175-a-spent-budget-is-reported-as-a-spent-budget.md)
 - **ADR-0173** _(Accepted)_ — A column's width is the planner's, kept on their device, and its drag has a typed twin → [`0173-a-columns-width-is-the-planners.md`](docs/adr/0173-a-columns-width-is-the-planners.md)
+- **ADR-0174** _(Accepted)_ — An activity's history is working memory, not an audit trail → [`0174-an-activitys-history-is-working-memory-not-an-audit-trail.md`](docs/adr/0174-an-activitys-history-is-working-memory-not-an-audit-trail.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)

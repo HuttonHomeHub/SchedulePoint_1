@@ -53,7 +53,7 @@ There is deliberately **no cache, queue, or object store in the running system**
 
 - Layered: **controllers** (HTTP + validation) → **services** (business logic)
   → **repositories** → **Prisma** (persistence). One Nest module per feature;
-  24 feature modules under `src/modules/` (this said 20 until the 2026-08-09
+  25 feature modules under `src/modules/` (this said 20 until the 2026-08-09
   pass, which added this file to `pnpm check:counts` — so the parenthetical's
   own "has never covered this file" stopped being true in the commit that wrote
   it, and the 2026-08-20 pass then found the model and migration figures

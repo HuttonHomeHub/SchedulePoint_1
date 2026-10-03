@@ -44,6 +44,9 @@ export {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_STATUS_LABELS,
   CONSTRAINT_TYPE_LABELS,
+  DURATION_TYPE_LABELS,
+  PERCENT_COMPLETE_TYPE_LABELS,
+  ACCRUAL_TYPE_LABELS,
   isMilestoneType,
   isDurationDerivedType,
 } from './schemas/activity-schemas';

@@ -262,6 +262,11 @@ a product idea that has not yet earned a roadmap line:
   nothing, because a baseline snapshot has no actor, so the entry's own headline
   question is unaffected. Worth knowing before somebody scopes this as "add an
   actor column": the two halves live in different models.)_
+  _(**Started 2026-10-03** at the product owner's request — ADR-0174, spec in
+  `docs/specs/activity-change-history/`. The first milestone (single-object writes: fields, links and
+  resource assignments, with the editor's **History** tab) has landed; group moves, batch re-parent,
+  cross-plan links and the knock-on effects of deletes are the second. This entry is removed when that
+  milestone ships.)_
 
 ## Platform foundations not yet built
 

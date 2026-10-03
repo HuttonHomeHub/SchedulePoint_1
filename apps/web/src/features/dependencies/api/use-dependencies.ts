@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
-import { dependencyKeys } from '@/lib/query/hierarchy-keys';
+import { activityHistoryKeys, dependencyKeys } from '@/lib/query/hierarchy-keys';
 
 export { dependencyKeys };
 
@@ -113,6 +113,9 @@ function invalidateAll(
   queryClient: ReturnType<typeof useQueryClient>,
   orgSlug: string,
 ): Promise<void> {
+  // A link write is recorded on BOTH of its activities (ADR-0174); the mutation does not know which
+  // two, so the org's history cache is dropped with the dependency keys — coarse for the same reason.
+  void queryClient.invalidateQueries({ queryKey: activityHistoryKeys.all(orgSlug) });
   return queryClient.invalidateQueries({ queryKey: dependencyKeys.all(orgSlug) });
 }
 
