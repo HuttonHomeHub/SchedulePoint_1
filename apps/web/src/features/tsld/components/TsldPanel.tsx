@@ -52,7 +52,13 @@ import {
   wbsGroupClause,
 } from '../render/a11y';
 import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
-import { isStartEdgeFrozen, START_EDGE_FROZEN_REASON } from '../render/hit-test';
+import {
+  isStartEdgeFrozen,
+  START_EDGE_FROZEN_REASON,
+  START_NOT_CHANGED_NOTE,
+  startFrozenPluralReason,
+  STARTS_NOT_CHANGED_NOTE,
+} from '../render/hit-test';
 import {
   buildBaselineGhosts,
   buildLevelledGhosts,
@@ -2038,7 +2044,8 @@ export function TsldPanel({
     dataDate,
     setGhost: setPendingReposition,
     // A nudge conflict is a stale-version reject (refreshable); null clears the banner.
-    setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
+    setConflict: (message, refreshable) =>
+      message === null ? clearConflict() : showConflict(message, refreshable),
     announce,
     isPointerBusy: () => pointerRepositionBusyRef.current,
   });
@@ -2498,6 +2505,20 @@ export function TsldPanel({
     if (intent.kind === 'reposition') {
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedReposition) return;
+      // A started activity's drag never carries a day (the gesture holds its ghost in its column);
+      // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
+      // data — and the banner's `role="alert"` says it, as the start-edge backstop does.
+      if (intent.sidewaysRefused) {
+        const selected =
+          CANVAS_MULTI_SELECT_ENABLED && selection.ids.includes(intent.activityId)
+            ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
+            : [];
+        showConflict(
+          selected.length > 1 ? startFrozenPluralReason(selected.length) : START_EDGE_FROZEN_REASON,
+          false,
+        );
+        return;
+      }
       clearConflict();
 
       // **The plural drag** (`docs/TECH_DEBT.md` #108). When the dragged bar is part of a selection
@@ -2511,6 +2532,13 @@ export function TsldPanel({
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
       if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
         const rows = activities.filter((a) => pluralIds.includes(a.id));
+        // One started bar in the set would be slid sideways with the rest, writing a placement the
+        // schedule ignores (#431): refuse the whole sideways batch rather than move some of it.
+        const startedCount = rows.filter(isStartEdgeFrozen).length;
+        if (intent.startDay !== undefined && startedCount > 0) {
+          showConflict(startFrozenPluralReason(startedCount), false);
+          return;
+        }
         // The gesture's `startDay` is measured off the DRAWN bar, so the delta must be too: from
         // the early start, a placed primary shifted every selected bar by its own drift as well
         // as by the drag (reported 2026-09-23).
@@ -2546,7 +2574,12 @@ export function TsldPanel({
           .then((outcome) => {
             setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict);
-            else announce(`${String(rows.length)} activities moved.`);
+            else
+              announce(
+                `${String(rows.length)} activities moved.${
+                  intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''
+                }`,
+              );
           })
           .catch((err: unknown) => {
             setPendingReposition(null);
@@ -2623,17 +2656,18 @@ export function TsldPanel({
                 : null;
             // One sentence builder for every move (`reposition-announcement.ts`), so this path and
             // the keyboard nudge cannot state the landed lane differently.
-            announce(
-              repositionAnnouncement({
-                name: activity.name,
-                snappedDate,
-                timeChanged,
-                laneChanged,
-                requested: laneIndex,
-                landed: outcome.laneIndex ?? laneIndex,
-                original: activity.laneIndex,
-              }),
-            );
+            // A started bar's sideways part was dropped by the gesture: say so, politely, in the
+            // same sentence — a second announce would replace the move's own.
+            const moved = repositionAnnouncement({
+              name: activity.name,
+              snappedDate,
+              timeChanged,
+              laneChanged,
+              requested: laneIndex,
+              landed: outcome.laneIndex ?? laneIndex,
+              original: activity.laneIndex,
+            });
+            announce(intent.sidewaysDiscarded ? `${moved} ${START_NOT_CHANGED_NOTE}` : moved);
           }
         })
         .catch((err: unknown) => {

@@ -67,7 +67,9 @@ Separately, the Gantt throws away every bar write's outcome: the host calls
   2026-10-03 (product owner, #431): the diagram now refuses the start edge too** — no start grab zone
   on a started bar, a spoken refusal if a start write is attempted anyway — through the same
   `isStartEdgeFrozen` rule and reason sentence, which now live in `features/tsld/render/hit-test.ts`
-  and are imported by the Gantt. A **move** of a started activity is still allowed in both views.
+  and are imported by the Gantt. **Amended again 2026-10-03 (product owner, #431): a sideways move of a started activity is refused too, in both
+  views, with the same sentence** — `barMoveGate` on the Gantt; on the diagram the drag keeps its lane but never its day,
+  and `Alt+←/→` refuses aloud. A lane move still works.
 - **D4 — The keyboard route is the typed `Start` cell; no new chord** (CQ-3: not answered, default
   stands). `F2` → `Start` → type → `Enter` already makes the start-edge write
   (`cell-commit.ts:196-210`), so ADR-0095 D4's rule — the keyboard route lands before the pointer
@@ -113,7 +115,7 @@ Separately, the Gantt throws away every bar write's outcome: the host calls
   re-pointed at `[data-bar-edge="finish"]`, because a second handle makes it 2.
 - The diagram's start-edge and move writes on a started activity remained inert and were filed as
   debt (M1-T3). The start-edge half is closed (amended 2026-10-03, #431: one shared rule, the diagram
-  refuses too); the move half stays open in `docs/TECH_DEBT.md` #431.
+  refuses too); the move half closed the same day (#431 is in the Closed numbers ledger).
 - M1 and M2 shipped together in web 0.157.0 (#757, 2026-10-02). CLAUDE.md §1's "substantially … the
   start-edge resize is deliberately absent (ADR-0095 D4)" was revisited in M3 from the code and now
   says the Gantt delivers the brief's §8 Must-have. The deferral sentence lives in ADR-0095's closing

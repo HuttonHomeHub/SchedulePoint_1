@@ -1607,7 +1607,13 @@ function GanttRowView({
   const barDrag = useBarPointerDrag({
     enabled: moveGate?.movable === true && geometry !== null,
     onCommit: commitDrag,
+    // A drag on a bar that cannot move SAYS why, on the channel the keyboard nudge refuses on —
+    // summary, started and read-only alike, so no refused gesture is silent (#431).
+    onRefused: () => {
+      if (moveGate?.reason) drag?.announce(moveGate.reason);
+    },
   });
+  const moveRefusal = moveGate !== null && !moveGate.movable ? moveGate.reason : null;
 
   /**
    * The finish-edge resize: the start is held and the duration is the WORKING days from it to
@@ -1980,7 +1986,9 @@ function GanttRowView({
                     : {}
                   : { transform: `translateX(${String(barDrag.deltaX)}px)`, opacity: 0.75 }),
                 ...(moveGate?.movable === true ? { cursor: 'grab', pointerEvents: 'auto' } : {}),
+                ...(moveRefusal === null ? {} : { cursor: 'not-allowed', pointerEvents: 'auto' }),
               }}
+              title={moveRefusal ?? undefined}
               onPointerDown={barDrag.onPointerDown}
             >
               {geometry.progress > 0 ? (

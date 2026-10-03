@@ -75,11 +75,16 @@ export const NUDGE_DAYS = 1;
  * never masked by one about the reader.
  */
 export function barMoveGate(
-  activity: Pick<ActivitySummary, 'type'>,
+  activity: Pick<ActivitySummary, 'type' | 'actualStart' | 'actualFinish'>,
   drag: Pick<GanttBarDrag, 'canEdit' | 'reason'>,
 ): { movable: boolean; reason: string | null } {
   if (activity.type === 'WBS_SUMMARY') {
     return { movable: false, reason: 'A summary follows the activities inside it.' };
+  }
+  // A started or finished activity is drawn from its actual, so a sideways move would save a
+  // placement the schedule never uses (docs/TECH_DEBT.md #431) — refused as the start edge is.
+  if (isStartEdgeFrozen(activity)) {
+    return { movable: false, reason: START_EDGE_FROZEN_REASON };
   }
   if (!drag.canEdit) {
     return { movable: false, reason: drag.reason };

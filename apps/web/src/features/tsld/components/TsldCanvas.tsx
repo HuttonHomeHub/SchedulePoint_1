@@ -668,7 +668,13 @@ function bodyGrab(
   if (!a || a.earlyStart === null) return undefined;
   const startDay = axisDayOf(a.type, dataDate, a.earlyStart);
   const endDay = a.earlyFinish === null ? startDay : axisDayOf(a.type, dataDate, a.earlyFinish);
-  return { id, startDay, endDay, laneIndex: a.laneIndex };
+  return {
+    id,
+    startDay,
+    endDay,
+    laneIndex: a.laneIndex,
+    ...(a.startFrozen ? { startFrozen: true } : {}),
+  };
 }
 
 /**
@@ -2047,6 +2053,7 @@ export function TsldCanvas({
       }
       if (gestureActiveRef.current) {
         gestureActiveRef.current = false;
+        if (canvasRef.current) canvasRef.current.style.cursor = '';
         gestureRef.current = reduce(
           gestureRef.current,
           { type: 'escape' },
@@ -2422,6 +2429,11 @@ export function TsldCanvas({
             gestureRef.current = state;
             syncGestureSource();
             interactionDirtyRef.current = true;
+            // A started bar's drag holds its day: say so under the pointer while it is being
+            // refused (docs/TECH_DEBT.md #431). An inline write, cleared on release.
+            if (state.kind === 'repositioning' && canvasRef.current) {
+              canvasRef.current.style.cursor = state.sidewaysBlocked === true ? 'not-allowed' : '';
+            }
             return;
           }
           if (!drag.current) {
@@ -2513,6 +2525,7 @@ export function TsldCanvas({
             gestureRef.current = state;
             syncGestureSource();
             interactionDirtyRef.current = true;
+            if (canvasRef.current) canvasRef.current.style.cursor = '';
             // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
             setActiveLagId(null);
             // A marquee is a SELECTION, not an edit, so it leaves through the selection channel:
@@ -2594,6 +2607,7 @@ export function TsldCanvas({
           if (!gestureActiveRef.current) return;
           gestureActiveRef.current = false;
           drag.current = null;
+          if (canvasRef.current) canvasRef.current.style.cursor = '';
           gestureRef.current = reduce(gestureRef.current, { type: 'escape' }, machineCtx()).state;
           syncGestureSource();
           interactionDirtyRef.current = true;

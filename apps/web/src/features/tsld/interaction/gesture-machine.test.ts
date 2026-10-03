@@ -268,6 +268,8 @@ describe('gesture-machine: reposition-in-time', () => {
       laneIndex: 1,
       currentStartDay: 2,
       currentLaneIndex: 1,
+      dayLocked: false,
+      sidewaysBlocked: false,
     });
   });
 
@@ -356,6 +358,55 @@ describe('gesture-machine: free-2D drag (M4)', () => {
     const up = reduce(move(grab(), 25, 40 + LANE_HEIGHT), { type: 'pointerUp' }, ctx('select'));
     expect(up.state).toEqual(IDLE);
     expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+  });
+
+  describe('a started activity (docs/TECH_DEBT.md #431)', () => {
+    const frozen = (): GestureState =>
+      reduce(
+        IDLE,
+        {
+          type: 'pointerDown',
+          point: { x: 25, y: 40 },
+          hit: { kind: 'body', id: 'a' },
+          body: { ...body, startFrozen: true },
+        },
+        ctx('select'),
+      ).state;
+
+    it('keeps the ghost in its day column while the pointer travels sideways', () => {
+      expect(move(frozen(), 85, 40)).toMatchObject({
+        currentStartDay: 2,
+        movedPastThreshold: true,
+        sidewaysBlocked: true,
+      });
+    });
+
+    it('still moves lane, and a diagonal drop sends the lane with no startDay', () => {
+      const up = reduce(move(frozen(), 85, 40 + LANE_HEIGHT), { type: 'pointerUp' }, ctx('select'));
+      expect(up.intent).toEqual({
+        kind: 'reposition',
+        activityId: 'a',
+        laneIndex: 2,
+        sidewaysDiscarded: true,
+      });
+    });
+
+    it('flags a diagonal drop so the host can say the sideways part was dropped', () => {
+      const up = reduce(move(frozen(), 85, 40 + LANE_HEIGHT), { type: 'pointerUp' }, ctx('select'));
+      expect(up.intent).toMatchObject({ laneIndex: 2, sidewaysDiscarded: true });
+    });
+
+    it('a sideways-only drop emits a refusal and no startDay', () => {
+      const up = reduce(move(frozen(), 85, 40), { type: 'pointerUp' }, ctx('select'));
+      expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', sidewaysRefused: true });
+    });
+
+    it('dragging back to the grabbed column is a plain select, not a refusal', () => {
+      const out = move(move(frozen(), 85, 40), 25, 40);
+      const up = reduce(out, { type: 'pointerUp' }, ctx('select'));
+      expect(up.intent).toBeUndefined();
+      expect(up.select).toBe('a');
+    });
   });
 
   it('commits both axes in one intent when the drag changed day and lane', () => {

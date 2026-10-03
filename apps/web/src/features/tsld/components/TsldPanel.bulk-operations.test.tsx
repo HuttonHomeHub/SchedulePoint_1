@@ -277,3 +277,121 @@ describe('the panel drives the bulk bar', () => {
     });
   });
 });
+
+/**
+ * **A sideways drop that would move a started activity is refused, whole** (docs/TECH_DEBT.md #431).
+ * One started bar in a plural selection would be slid sideways with the rest and save a placement
+ * the schedule never uses, so the batch is withheld and the banner says why. A lane-only drop
+ * moves nothing sideways and still goes through.
+ */
+describe('a plural drag that includes a started activity', () => {
+  const wide = (id: string, name: string, lane: number, over: Partial<ActivitySummary> = {}) => ({
+    ...activity(id, name, lane, '2026-01-01'),
+    earlyFinish: '2026-01-06',
+    ...over,
+  });
+  // 14 px a day from x 40: the bars span x 40..124, so x 80 is body on every lane.
+  const laneY = (lane: number) => 40 + 27 + lane * 60;
+
+  function renderDrag(rows: ActivitySummary[]) {
+    const moveMany = vi.fn(() => Promise.resolve({ conflict: null }));
+    const { container } = render(
+      <TsldPanel
+        activities={rows}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        bulk={{
+          gate: { writable: true, reason: null },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+          moveMany,
+        }}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    const canvas = container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    return { canvas, moveMany };
+  }
+
+  const dragFrom = (canvas: Element, lane: number, dx: number, dy: number): void => {
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(lane), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 80 + dx, clientY: laneY(lane) + dy, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 80 + dx, clientY: laneY(lane) + dy, pointerId: 1 });
+  };
+
+  const rows = () => [
+    wide('a', 'Excavate', 0),
+    wide('b', 'Pour', 1),
+    wide('c', 'Cure', 2, { actualStart: '2026-01-02' }),
+  ];
+
+  it('refuses a sideways drop of a not-started primary, in the plural sentence', () => {
+    const { canvas, moveMany } = renderDrag(rows());
+    dragFrom(canvas, 0, 42, 0);
+    expect(moveMany).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '1 of the selected activities has started, so its start is its actual start and cannot be moved.',
+    );
+  });
+
+  it('still moves the batch when the drop is lane-only', () => {
+    const { canvas, moveMany } = renderDrag(rows());
+    dragFrom(canvas, 0, 0, 60);
+    expect(moveMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a sideways drop when the dragged primary is the started one', () => {
+    const { canvas, moveMany } = renderDrag([
+      wide('a', 'Excavate', 0, { actualFinish: '2026-01-06' }),
+      wide('b', 'Pour', 1),
+    ]);
+    dragFrom(canvas, 0, 42, 0);
+    expect(moveMany).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/actual start/);
+  });
+
+  it('shows a not-allowed cursor while a started bar is dragged sideways, and clears it on drop', () => {
+    const { canvas } = renderDrag([wide('a', 'Excavate', 0, { actualStart: '2026-01-01' })]);
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(0), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 122, clientY: laneY(0), pointerId: 1 });
+    expect((canvas as HTMLElement).style.cursor).toBe('not-allowed');
+    fireEvent.pointerUp(canvas, { clientX: 122, clientY: laneY(0), pointerId: 1 });
+    expect((canvas as HTMLElement).style.cursor).toBe('');
+  });
+
+  it.each([
+    ['pointercancel', (c: Element) => fireEvent.pointerCancel(c, { pointerId: 1 })],
+    ['Escape', () => fireEvent.keyDown(window, { key: 'Escape' })],
+  ])('clears the not-allowed cursor when the drag is cancelled by %s', (_name, cancel) => {
+    const { canvas } = renderDrag([wide('a', 'Excavate', 0, { actualStart: '2026-01-01' })]);
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(0), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 122, clientY: laneY(0), pointerId: 1 });
+    expect((canvas as HTMLElement).style.cursor).toBe('not-allowed');
+    cancel(canvas);
+    expect((canvas as HTMLElement).style.cursor).toBe('');
+  });
+
+  it('says the sideways part was dropped when a started primary moves lane and column', async () => {
+    announceSpy.mockClear();
+    const { canvas, moveMany } = renderDrag([
+      wide('a', 'Excavate', 0, { actualFinish: '2026-01-06' }),
+      wide('b', 'Pour', 1),
+    ]);
+    dragFrom(canvas, 0, 42, 120);
+    expect(moveMany).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /activities moved\. Starts of activities that have started were not changed\./,
+        ),
+      ),
+    );
+  });
+});
