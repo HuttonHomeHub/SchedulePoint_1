@@ -3783,3 +3783,5 @@ export interface PlacementMigrationReport {
   /** One row per converted constraint, oldest first. Empty when the plan had none. */
   readonly rows: readonly PlacementMigrationRow[];
 }
+
+export * from './activity-history.js';
