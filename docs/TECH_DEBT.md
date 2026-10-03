@@ -11461,3 +11461,28 @@ is the cause of the regression and h2 removes the limit. Record the result here 
 or file the build step that would write the plan's chunks into the HTML for plan URLs.
 
 **Trigger.** The next change to chunking or preloads, or a planner reporting slow refreshes.
+
+### 434. The WBS dissolve dialog says "its 1 activity move up"
+
+**Status:** open · **Verified:** 2026-10-03 (read in `apps/web/src/features/activities/lib/delete-activity-copy.ts:83-87`) ·
+**Raised:** 2026-10-03 (the resource-group dissolve UX review) · **Size:** XS · **Owner:** web
+
+`dissolveSummaryDescription` builds `its 1 activity` for a one-child summary and then always writes
+`move up to …` and `put them back`, so a single child reads "its 1 activity move up". The resource-group
+dissolve copy (`features/resources/lib/group-action-copy.ts`) chooses the verb and pronoun by count; this
+one should too, with a singular test. Left out of that change on purpose so it stayed inside its spec.
+**Trigger.** The next change to that copy module, or any WBS dissolve work.
+
+### 435. Two end-to-end shards failed once each after route code-splitting, in code no PR touched
+
+**Status:** open · **Verified:** 2026-10-03 (CI logs: run `37112521524` web shard 4 on `main`; run `37133783585` web shard 1 on #762) ·
+**Raised:** 2026-10-03 (driving #762) · **Size:** S · **Owner:** web
+
+Both appeared after #760 (ADR-0171) changed how screens load. On `main` after #761, web shard 4 failed in
+`test:e2e:activity-editor`. On #762, web shard 1 failed `e2e/auth.spec.ts` on **Firefox only**, on all
+three attempts (`/` never redirected to `/sign-in` within 5 s; the onboarding heading never appeared),
+and `baselines.spec.ts` failed once at the same onboarding step before passing; one re-run of the job
+passed, and #764 then passed every shard first time. Neither diff could reach the failing screens.
+**Not established:** whether lazy-loaded first navigation is slow enough to miss a 5 s expectation, or
+whether this is runner state. The container has no Firefox, so it was not reproduced locally.
+**Next:** on a recurrence, read the trace before changing anything. **Trigger:** a second failure of either.
