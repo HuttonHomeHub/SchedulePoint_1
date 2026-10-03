@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 /**
  * The walking-skeleton journey: an unauthenticated visitor is guarded to
