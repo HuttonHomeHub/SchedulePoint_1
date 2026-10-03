@@ -50,14 +50,14 @@ Drag +118 px (pane 584 to 702).
 | 1024     | 163 px             | 45 px             | no                   | 420 / 420                          |
 
 **Defect.** The preset keeps framing for the default pane; at 1024 px the chart is left 45 px wide.
-Filed as `docs/TECH_DEBT.md` #436.
+Filed as `docs/TECH_DEBT.md` #437.
 
 ## (c) The Gantt at 390 px
 
 The pinned block (584 px) exceeds the 390 px scroller; the document itself does not overflow
 (`scrollWidth` 390). The chart is **0 px visible at scroll 0 and at maximum scroll**.
 
-**Defect.** Filed as #437.
+**Defect.** Filed as #438.
 
 ## (d) Touch drag of the `Grid width` separator
 
@@ -65,9 +65,9 @@ At 1646 and 1024 px the separator moved (584 to 600), but computed `touch-action
 events were one `pointerdown`, three `pointermove`s and a `pointercancel`. At 390 px the separator is at
 x=581, outside the viewport, and cannot be touched.
 
-**Defect.** Filed as #438.
+**Defect.** Filed as #439.
 
 ## Decision
 
-Truncation is genuine (a), so **proceed to M1-T1**. (b), (c) and (d) are filed as #436 to #438 and are
+Truncation is genuine (a), so **proceed to M1-T1**. (b), (c) and (d) are filed as #437 to #439 and are
 **not** fixed in this epic, per the plan.
