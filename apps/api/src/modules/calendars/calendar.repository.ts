@@ -378,6 +378,10 @@ export class CalendarRepository {
    *
    * One `id = ANY(...)` for a whole response — never a lookup per row.
    *
+   * **The caller must pass ids it has already scoped to an organisation**: this read adds neither an
+   * organisation scope nor a deletion filter, so an id taken from a request would reach any
+   * tenant's calendar.
+   *
    * soft-delete: any-state — a soft-deleted calendar's stored hours-per-day must still be read,
    * or an activity's duration is silently reinterpreted (see above).
    */

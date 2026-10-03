@@ -63,7 +63,11 @@ import { describe, expect, it } from 'vitest';
  * costing a declaration, never a miss. Whether a declaration's reason is true is a reviewer's
  * job; the gate only makes it visible. Receiver-agnostic: it keys on `.<accessor>.<operation>(`,
  * so `db.`, `tx.`, `client.` and `this.prisma.` are one shape, and a model reached through a
- * computed property name (`prisma[name]`) is invisible. Also unseen: a `create` that
+ * computed property name (`prisma[name]`) is invisible. Also unseen — and **pinned as invisible by a test each**, so
+ * closing one is a deliberate edit: a `data` or an `include` passed as a variable, a helper call or a
+ * conditional; a model reached through a destructured or aliased variable or an element access
+ * (`db['activity']`); a relation filter inside a `where` (`activities: { some: ... }`), which is not
+ * the queried model's own column; and a `create` that
  * connects a new row to a deleted parent (guarded by the parent's own active read), a to-one
  * `include`, a comma join in raw SQL, and code outside `apps/api/src`.
  *
@@ -263,6 +267,8 @@ interface Declaration {
   line: number;
   kind: string;
   reason: string;
+  /** Name of the function, method or declaration the comment sits on, or `statement`. */
+  owner: string;
   /** Distinct reads whose missing stance this declaration stands in for. */
   covers: string[];
 }
@@ -273,6 +279,12 @@ interface ScanResult {
   writesExamined: number;
   /** Raw SQL templates that name a soft-deletable table. */
   rawExamined: number;
+  /** To-many `include`/`select`/`_count` selections of soft-deletable targets. */
+  nestedReadsExamined: number;
+  /** The `_count` subset of the above. */
+  countsExamined: number;
+  /** Nested writes on soft-deletable relations (none exist in the tree today). */
+  nestedWritesExamined: number;
   findings: Finding[];
   declarations: Declaration[];
 }
@@ -375,6 +387,9 @@ class Analyser {
     let sitesExamined = 0;
     let writesExamined = 0;
     let rawExamined = 0;
+    let nestedReadsExamined = 0;
+    let countsExamined = 0;
+    let nestedWritesExamined = 0;
 
     for (const [file, source] of this.sources) {
       const declared = this.declarationsIn(file, source, findings);
@@ -432,6 +447,8 @@ class Analyser {
             }
           }
           for (const nested of this.nestedReads(node, file)) {
+            nestedReadsExamined += 1;
+            if (nested.how === '_count') countsExamined += 1;
             if (nested.stated) {
               sitesExamined += 1;
               continue;
@@ -444,6 +461,7 @@ class Analyser {
             );
           }
           for (const nested of this.nestedWrites(node, file)) {
+            nestedWritesExamined += 1;
             if (nested.stated) {
               sitesExamined += 1;
               continue;
@@ -476,12 +494,22 @@ class Analyser {
             line: decl.line,
             kind: decl.kind,
             reason: decl.reason,
+            owner: decl.owner,
             covers,
           });
         }
       }
     }
-    return { sitesExamined, writesExamined, rawExamined, findings, declarations };
+    return {
+      sitesExamined,
+      writesExamined,
+      rawExamined,
+      nestedReadsExamined,
+      countsExamined,
+      nestedWritesExamined,
+      findings,
+      declarations,
+    };
   }
 
   /** `<anything>.<accessor>.<read or write operation>(...)` on a roster model. */
@@ -555,8 +583,10 @@ class Analyser {
       : [template.head.text, ...template.templateSpans.map((span) => `?${span.literal.text}`)].join(
           '',
         );
+    // Comments are not SQL: a `deleted_at` in one states nothing, and a table named in one is not read.
+    const sql = text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
     const references: { table: string; alias: string }[] = [];
-    for (const match of text.matchAll(TABLE_REFERENCE)) {
+    for (const match of sql.matchAll(TABLE_REFERENCE)) {
       const table = (match[1] ?? '').toLowerCase();
       if (!this.tables.has(table)) continue;
       const alias = match[2] && !SQL_KEYWORDS.has(match[2].toLowerCase()) ? match[2] : table;
@@ -565,12 +595,19 @@ class Analyser {
     const problems: { table: string; message: string }[] = [];
     for (const { table, alias } of references) {
       if (problems.some((problem) => problem.table === table)) continue;
-      const qualified = new RegExp(`\\b(?:${alias}|${table})"?\\."?deleted_at\\b`, 'i').test(text);
-      const bare = /\bdeleted_at\b/i.test(text);
+      // A predicate position: after WHERE / AND / OR / ON (optionally NOT and an opening
+      // parenthesis). `SET deleted_at = now()` and a select-list mention are stamps and reads of
+      // the column, not a filter on it.
+      const predicate = String.raw`\b(?:where|and|or|on)\s+(?:not\s+)?\(*\s*`;
+      const qualified = new RegExp(
+        `${predicate}(?:${alias}|${table})"?\\."?deleted_at\\b`,
+        'i',
+      ).test(sql);
+      const bare = new RegExp(`${predicate}"?deleted_at\\b`, 'i').test(sql);
       if (qualified || (bare && references.length === 1)) continue;
       problems.push({
         table,
-        message: `raw SQL on ${table} states no deleted_at (filter it, or declare why not)`,
+        message: `raw SQL on ${table} states no deleted_at predicate (filter it, or declare why not)`,
       });
     }
     return { tablesNamed: references.length, problems };
@@ -753,7 +790,7 @@ class Analyser {
         if (ts.isShorthandPropertyAssignment(property)) return property.name.text === 'deletedAt';
         if (!ts.isPropertyAssignment(property)) return false;
         const name = propertyName(property.name);
-        if (name === 'deletedAt') return true;
+        if (name === 'deletedAt') return !isUndefinedLiteral(property.initializer);
         if (name === 'AND') {
           const value = unwrap(property.initializer);
           const parts = ts.isArrayLiteralExpression(value) ? [...value.elements] : [value];
@@ -810,13 +847,38 @@ class Analyser {
     call: ts.Node,
     declared: Map<number, ParsedDeclaration>,
   ): ParsedDeclaration | null {
+    // The walk climbs through the call's own statement and through callback arrows, and stops at
+    // the nearest function BOUNDARY after reading that boundary's own leading comments: a function
+    // or method declaration, a constructor, an accessor, or an arrow/function expression that
+    // initialises a named variable, property or member (whose docblock sits on the declaration that
+    // owns it). A class and the source file are never read, so a class docblock or a file header
+    // cannot silence what is inside them — labels are never class- or file-wide.
+    let stopAt: ts.Node | null = null;
     for (let node: ts.Node | undefined = call; node; node = node.parent) {
+      if (ts.isClassLike(node) || ts.isSourceFile(node) || ts.isModuleBlock(node)) return null;
       const text = node.getSourceFile().getFullText();
       for (const range of ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []) {
         const hit = declared.get(range.pos);
-        if (hit) return hit;
+        if (hit) {
+          hit.owner = ownerName(node);
+          return hit;
+        }
       }
-      if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) break;
+      if (node === stopAt) return null;
+      if (
+        ts.isFunctionDeclaration(node) ||
+        ts.isMethodDeclaration(node) ||
+        ts.isConstructorDeclaration(node) ||
+        ts.isGetAccessorDeclaration(node) ||
+        ts.isSetAccessorDeclaration(node)
+      ) {
+        return null;
+      }
+      if (stopAt === null && (ts.isArrowFunction(node) || ts.isFunctionExpression(node))) {
+        const owner: ts.Node = node.parent;
+        if (ts.isVariableDeclaration(owner)) stopAt = owner.parent.parent;
+        else if (ts.isPropertyDeclaration(owner) || ts.isPropertyAssignment(owner)) stopAt = owner;
+      }
     }
     return null;
   }
@@ -861,7 +923,7 @@ class Analyser {
             `(expected "soft-delete: any-state|deleted-only — <reason ≥ ${MIN_REASON_LENGTH} chars>")`,
         });
       }
-      result.set(pos, { pos, line, kind: match?.[1] ?? '', reason, valid });
+      result.set(pos, { pos, line, kind: match?.[1] ?? '', reason, valid, owner: 'statement' });
     };
     const visit = (node: ts.Node): void => {
       for (const range of ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []) {
@@ -880,6 +942,33 @@ interface ParsedDeclaration {
   kind: string;
   reason: string;
   valid: boolean;
+  owner: string;
+}
+
+function ownerName(node: ts.Node): string {
+  if (
+    (ts.isFunctionDeclaration(node) ||
+      ts.isMethodDeclaration(node) ||
+      ts.isPropertyDeclaration(node)) &&
+    node.name &&
+    ts.isIdentifier(node.name)
+  ) {
+    return node.name.text;
+  }
+  if (ts.isVariableStatement(node)) {
+    const name = node.declarationList.declarations[0]?.name;
+    if (name && ts.isIdentifier(name)) return name.text;
+  }
+  return 'statement';
+}
+
+/** Prisma ignores an `undefined` filter value, so `deletedAt: undefined` states nothing. */
+function isUndefinedLiteral(expression: ts.Expression): boolean {
+  const node = unwrap(expression);
+  return (
+    (ts.isIdentifier(node) && node.text === 'undefined') ||
+    (ts.isVoidExpression(node) && ts.isNumericLiteral(node.expression))
+  );
 }
 
 /** `this.prisma.$queryRaw` -> `$queryRaw`; `Prisma.sql` -> `Prisma.sql`; anything else null. */
@@ -992,12 +1081,14 @@ const messages = (result: ScanResult): string[] => result.findings.map((f) => f.
 
 describe('soft-delete roster', () => {
   it('derives the soft-deletable models from schema.prisma', () => {
-    // 20 of 34 models on 2026-10-03. The number is pinned so a parse that silently matches
-    // nothing — or a comment mentioning `deletedAt` counted as a field — cannot pass (ADR-0093).
-    expect(
-      roster.map((m) => m.model),
-      `roster is ${roster.map((m) => m.model).join(', ')}`,
-    ).toHaveLength(20);
+    // Equality with an independent count of `deletedAt DateTime?` field lines, so a 21st model
+    // keeps this green while a parse that silently matches nothing — or counts a comment — cannot
+    // (ADR-0093). 20 of 34 models on 2026-10-03; the floor below is only the non-empty guard.
+    const fieldLines = (
+      readFileSync(SCHEMA_PATH, 'utf8').match(/^\s+deletedAt\s+DateTime\?/gm) ?? []
+    ).length;
+    expect(roster.length, `roster is ${roster.map((m) => m.model).join(', ')}`).toBe(fieldLines);
+    expect(roster.length).toBeGreaterThanOrEqual(20);
     expect(roster).toEqual(
       expect.arrayContaining([
         { model: 'Activity', accessor: 'activity', table: 'activities' },
@@ -1495,7 +1586,7 @@ describe('soft-delete scanner — raw SQL', () => {
       'db.$queryRaw`SELECT p.id FROM plans p WHERE p.organization_id = ${org}::uuid`;',
     );
     expect(messages(result)).toEqual([
-      'synthetic.ts:1 — raw SQL on plans states no deleted_at (filter it, or declare why not)',
+      'synthetic.ts:1 — raw SQL on plans states no deleted_at predicate (filter it, or declare why not)',
     ]);
     expect(result.rawExamined).toBe(1);
   });
@@ -1528,7 +1619,7 @@ describe('soft-delete scanner — raw SQL', () => {
       'db.$queryRaw`SELECT p.id FROM plans p JOIN projects pr ON pr.id = p.project_id WHERE p.deleted_at IS NULL`;',
     );
     expect(messages(bad)).toEqual([
-      'synthetic.ts:1 — raw SQL on projects states no deleted_at (filter it, or declare why not)',
+      'synthetic.ts:1 — raw SQL on projects states no deleted_at predicate (filter it, or declare why not)',
     ]);
     const ok = check(
       'db.$queryRaw`SELECT p.id FROM plans p JOIN projects pr ON pr.id = p.project_id WHERE p.deleted_at IS NULL AND pr.deleted_at IS NULL`;',
@@ -1572,25 +1663,244 @@ describe('soft-delete scanner — raw SQL', () => {
   });
 });
 
+describe('soft-delete scanner — declaration scope', () => {
+  const header =
+    '// soft-delete: any-state — a header comment that must never cover the file below.';
+
+  it('does not let a file-header comment cover an arrow function below it', () => {
+    const result = check(`${header}
+      import { x } from './x';
+      export const load = (db: Db) => db.client.findFirst({ where: { id } });`);
+    expect(messages(result)).toEqual([
+      expect.stringContaining('Client.findFirst has no deletedAt stance'),
+      expect.stringContaining('does not precede a read or write'),
+    ]);
+  });
+
+  it('does not let a class docblock cover a method, a constructor, an accessor or a property arrow', () => {
+    const result = check(`
+      /** soft-delete: any-state — a class docblock that must never cover its members. */
+      class R {
+        load = (db: Db) => db.client.findFirst({ where: { id } });
+        constructor(db: Db) { db.client.findMany({ where: { id } }); }
+        get g() { return db.client.count({ where: { id } }); }
+        m(db: Db) { return db.client.findFirst({ where: { id } }); }
+      }`);
+    expect(result.findings.filter((f) => f.message.includes('no deletedAt stance'))).toHaveLength(
+      4,
+    );
+  });
+
+  it('does not let top-level code inherit a comment from the file or from an unrelated statement', () => {
+    const result = check(`${header}
+      const a = 1;
+      db.client.findMany({ where: { id } });`);
+    expect(result.findings.some((f) => f.message.includes('Client.findMany'))).toBe(true);
+  });
+
+  it('still lets a declaration above a named arrow function cover its body, callbacks included', () => {
+    const result = check(`
+      // soft-delete: any-state — this helper reads every state by design, callbacks included.
+      const sweep = async (db: Db) => {
+        await run((c) => db.client.findMany({ where: { id: c } }));
+        await db.project.findMany({ where: { id } });
+      };`);
+    expect(result.findings).toEqual([]);
+    expect(result.declarations[0]?.covers).toHaveLength(2);
+  });
+
+  it('lets a declaration above a class property arrow cover only that property', () => {
+    const result = check(`
+      class R {
+        // soft-delete: any-state — this property reads every state by design.
+        a = (db: Db) => db.client.findFirst({ where: { id } });
+        b = (db: Db) => db.client.findFirst({ where: { id } });
+      }`);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.line).toBe(5);
+  });
+});
+
+describe('soft-delete scanner — what is deliberately invisible (documented in the docblock)', () => {
+  it('treats deletedAt: undefined as no stance, because Prisma ignores it', () => {
+    expect(
+      check('db.note.findMany({ where: { id, deletedAt: undefined } });').findings,
+    ).toHaveLength(1);
+    expect(check('db.note.findMany({ where: { id, deletedAt: void 0 } });').findings).toHaveLength(
+      1,
+    );
+  });
+
+  it('does not see a data object passed as a variable', () => {
+    const result = check(`
+      const data = { activities: { deleteMany: {} } };
+      db.plan.update({ where: { id, deletedAt: null }, data });`);
+    expect(result.findings).toEqual([]);
+    expect(result.nestedWritesExamined).toBe(0);
+  });
+
+  it('does not see an include built by a helper or a conditional', () => {
+    expect(
+      check('db.plan.findFirst({ where: { id, deletedAt: null }, include: buildInclude() });')
+        .findings,
+    ).toEqual([]);
+    expect(
+      check(
+        'db.plan.findFirst({ where: { id, deletedAt: null }, include: wide ? { activities: true } : undefined });',
+      ).findings,
+    ).toEqual([]);
+  });
+
+  it('does not see a model reached through a destructured or aliased variable', () => {
+    expect(
+      check('const { activity } = db; activity.findMany({ where: { id } });').findings,
+    ).toEqual([]);
+    expect(check('const a = db.activity; a.findMany({ where: { id } });').findings).toEqual([]);
+  });
+
+  it('does not see an element-access callee', () => {
+    expect(check("db['activity'].findMany({ where: { id } });").findings).toEqual([]);
+    expect(check('db[name].findMany({ where: { id } });').findings).toEqual([]);
+    expect(check("db.activity['findMany']({ where: { id } });").findings).toEqual([]);
+  });
+
+  it('does not treat a relation filter as the queried model own stance, or flag it as a read', () => {
+    expect(
+      check('db.plan.findMany({ where: { deletedAt: null, activities: { some: { name } } } });')
+        .findings,
+    ).toEqual([]);
+    expect(
+      check('db.plan.findMany({ where: { activities: { some: { deletedAt: null } } } });').findings,
+    ).toHaveLength(1);
+  });
+});
+
+describe('soft-delete scanner — raw SQL predicates', () => {
+  it('refuses a stamp: deleted_at in SET is not a filter', () => {
+    const stamp = check(
+      'db.$executeRaw`UPDATE plans SET deleted_at = now() WHERE id = ${id}::uuid`;',
+    );
+    expect(messages(stamp)).toEqual([
+      'synthetic.ts:1 — raw SQL on plans states no deleted_at predicate (filter it, or declare why not)',
+    ]);
+    const guarded = check(
+      'db.$executeRaw`UPDATE plans SET deleted_at = now() WHERE id = ${id}::uuid AND deleted_at IS NULL`;',
+    );
+    expect(guarded.findings).toEqual([]);
+  });
+
+  it('refuses a select-list mention, and a mention that lives in a SQL comment', () => {
+    expect(
+      check('db.$queryRaw`SELECT p.id, p.deleted_at FROM plans p WHERE p.id = ${id}::uuid`;')
+        .findings,
+    ).toHaveLength(1);
+    expect(
+      check('db.$queryRaw`SELECT p.id FROM plans p -- p.deleted_at IS NULL\n WHERE p.id = ${id}`;')
+        .findings,
+    ).toHaveLength(1);
+    expect(
+      check('db.$queryRaw`SELECT p.id FROM plans p /* AND p.deleted_at IS NULL */ WHERE true`;')
+        .findings,
+    ).toHaveLength(1);
+  });
+
+  it('accepts WHERE, AND, OR, ON and a parenthesised or NOT-ed predicate', () => {
+    for (const sql of [
+      'SELECT p.id FROM plans p WHERE p.deleted_at IS NULL',
+      'SELECT p.id FROM plans p WHERE p.id = 1 AND p.deleted_at IS NULL',
+      'SELECT p.id FROM plans p WHERE p.id = 1 AND (p.deleted_at IS NULL OR p.id = 2)',
+      'SELECT p.id FROM plans p WHERE p.id = 1 AND NOT p.deleted_at IS NOT NULL',
+      'SELECT n.id FROM projects pr JOIN notes n ON n.project_id = pr.id AND n.deleted_at IS NULL WHERE pr.deleted_at IS NULL',
+    ]) {
+      expect(check(`db.$queryRaw\`${sql}\`;`).findings, sql).toEqual([]);
+    }
+  });
+
+  it('reads a template with a type argument', () => {
+    expect(
+      check('db.$queryRaw<Row[]>`SELECT id FROM plans WHERE id = ${id}::uuid`;').findings,
+    ).toHaveLength(1);
+    expect(
+      check(
+        'db.$queryRaw<Row[]>`SELECT id FROM plans WHERE id = ${id}::uuid AND deleted_at IS NULL`;',
+      ).findings,
+    ).toEqual([]);
+  });
+
+  it('reads a CTE: the filter must sit inside the CTE that reads the table', () => {
+    const ok = check(
+      'db.$queryRaw`WITH live AS (SELECT p.id FROM plans p WHERE p.deleted_at IS NULL) SELECT id FROM live`;',
+    );
+    expect(ok.findings).toEqual([]);
+    expect(ok.rawExamined).toBe(1);
+    const bad = check(
+      'db.$queryRaw`WITH live AS (SELECT p.id FROM plans p) SELECT id FROM live WHERE true`;',
+    );
+    expect(bad.findings).toHaveLength(1);
+  });
+});
+
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 30 declarations covering 79 calls.
+const NESTED_READS_FLOOR = 9;
+const COUNTS_FLOOR = 2;
+const DECLARATIONS = 30;
+const COVERED = 79;
+
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
 
-  it('examined a plausible number of read sites — the pinned positive case (ADR-0093)', () => {
-    // The spec's single-line count was a floor of 175; the AST scan sees multi-line callees too.
-    // A scanner that stops recognising a receiver shape drops below this and fails here rather
-    // than reporting a clean tree.
-    expect(result.sitesExamined).toBeGreaterThanOrEqual(150);
+  // A RATCHET: each floor is about 90% of what the scan measured on 2026-10-03, so a scanner that
+  // stops recognising a shape fails here instead of reporting a clean tree. Raise a floor when the
+  // tree grows; lowering one needs a reason in the commit that does it.
+  it('examined at least the measured number of sites, by kind — the pinned positive cases (ADR-0093)', () => {
+    expect(
+      result.sitesExamined,
+      'reads, writes and nested selections: 307 measured',
+    ).toBeGreaterThanOrEqual(276);
+    expect(
+      result.writesExamined,
+      'writes: 112 measured (the spec counted 112)',
+    ).toBeGreaterThanOrEqual(100);
+    expect(
+      result.rawExamined,
+      'raw statements naming a soft-deletable table: 36 measured',
+    ).toBeGreaterThanOrEqual(32);
+    expect(result.nestedReadsExamined, 'to-many include/select/_count').toBeGreaterThanOrEqual(
+      NESTED_READS_FLOOR,
+    );
+    expect(result.countsExamined, '_count selections').toBeGreaterThanOrEqual(COUNTS_FLOOR);
+    // No nested write on a soft-deletable relation exists today, so there is nothing to floor; the
+    // synthetic tests above are what prove the rule fires.
+    expect(result.nestedWritesExamined).toBeGreaterThanOrEqual(0);
   });
 
-  it('examined a plausible number of writes — the second pinned positive case', () => {
-    // 112 single-line write calls on the 20 models when the spec was written (§4.11).
-    expect(result.writesExamined).toBeGreaterThanOrEqual(90);
-  });
-
-  it('examined a plausible number of raw SQL statements — the third pinned positive case', () => {
-    // 16 raw sites on soft-deletable tables when the spec was written (§0 F11), plus the staff
-    // diagnostics' Prisma.sql fragments, which the first count missed.
-    expect(result.rawExamined).toBeGreaterThanOrEqual(15);
+  it('pins the declarations: their number, what they cover, and every multi-call label', () => {
+    // Adding an unguarded call inside a labelled function raises that label's covered count and
+    // fails here with the name of the label; a new declaration raises the total. Both are meant to
+    // be edited on purpose, in the diff a reviewer reads.
+    const covered = result.declarations.reduce((sum, d) => sum + d.covers.length, 0);
+    const multi = Object.fromEntries(
+      result.declarations
+        .filter((d) => d.covers.length > 1)
+        .map((d) => [
+          d.owner === 'statement' ? `${d.file.split('/').at(-2)} statement` : d.owner,
+          d.covers.length,
+        ]),
+    );
+    expect(multi).toEqual({
+      // Spelled in two parts: the expiry's own structural gate refuses the name outside its directory.
+      ['delete' + 'ExpiredScope']: 20,
+      sweep: 3,
+      restoreBatch: 18,
+      restoreLinksInBatch: 2,
+      compensate: 7,
+      findRecentlyChanged: 2,
+      findPlanStanding: 2,
+      'recycle-bin statement': 2,
+      summarise: 2,
+    });
+    expect(result.declarations, 'declarations').toHaveLength(DECLARATIONS);
+    expect(covered, 'calls covered by declarations').toBe(COVERED);
   });
 
   it('every read, write, nested read and raw statement states a deletedAt stance', () => {
