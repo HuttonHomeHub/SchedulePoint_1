@@ -60,7 +60,7 @@ change does not compile without the copy entry (spec E15).
 - **Complexity:** S
 - **Dependencies:** —
 - **Risks:** wide groups → chunked re-read (`common/db/id-chunks.ts:27`); the tree lock is
-  org-wide, so keep the transaction to the six statements in the spec's sequence diagram.
+  org-wide, so keep the transaction to a fixed handful of statements (about nine as built — lock, re-read, child ids, one `UPDATE`, the child-count backstop, soft delete, destination read, audit insert, chunked re-read — none of them per child; backend-performance review, 2026-10-03).
 - **Testing:**
   - `resources.service.spec.ts`: gate order 403 → 404 → 422; tree lock acquired before the
     children read; destination taken from the **re-read** row (stub a re-read that differs from
@@ -262,7 +262,7 @@ Docker build, CI, changelog, version impact). "Tests" means `pnpm prepush` was *
 | Children promoted to a stale parent after a concurrent reparent of the group | low            | med    | Re-read under the tree lock; unit test with a differing re-read.                                                            |
 | A concurrent create-into-group leaves an active child under a deleted group  | low            | high   | Every `parentId` write takes the tree lock (spec E6); defence count before soft-delete; e2e concurrency invariant.          |
 | A schedule changes because of a dissolve                                     | very low       | high   | Engine never reads `parent_id` — pinned by `resource-tree-parity.structural.spec.ts:34-54`; e2e recalculation before/after. |
-| Org-wide tree lock held longer for very wide groups                          | low            | low    | Six statements, one `UPDATE` by indexed `parent_id`; chunked re-read; backend-performance review.                           |
+| Org-wide tree lock held longer for very wide groups                          | low            | low    | About nine fixed statements, one `UPDATE` by indexed `parent_id`; chunked re-read; backend-performance review.              |
 | Dialog count wrong under a filter or hidden archived members                 | med (if naive) | low    | Unfiltered `archived: 'include'` read while the dialog is open; server count is what the announcement uses.                 |
 | "Stack by Group" histogram bands change after dissolving a top-level group   | certain        | low    | Presentation only (spec E16); expected and stated in the spec.                                                              |
 | The ADR-0053 "restore unit" wording keeps misleading readers                 | med            | low    | Corrected in the M2 amendment paragraph.                                                                                    |

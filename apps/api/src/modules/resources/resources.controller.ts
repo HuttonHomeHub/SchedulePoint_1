@@ -220,7 +220,12 @@ export class ResourcesController {
   @ApiOkResponse({ type: DissolveResourceGroupResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
-    description: 'The resource is not a group (RESOURCE_NOT_A_GROUP).',
+    description: 'The resource is not a group (RESOURCE_NOT_A_GROUP; `details.reason` says why).',
+  })
+  @ApiConflictResponse({
+    description:
+      'Backstop only, not an optimistic-lock clash: an active child remained after the promotion ' +
+      '(RESOURCE_GROUP_HAS_CHILDREN). Nothing was written; refetch and retry.',
   })
   async dissolve(
     @CurrentUser() principal: Principal,
