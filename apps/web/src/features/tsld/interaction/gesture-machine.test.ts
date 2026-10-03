@@ -383,7 +383,17 @@ describe('gesture-machine: free-2D drag (M4)', () => {
 
     it('still moves lane, and a diagonal drop sends the lane with no startDay', () => {
       const up = reduce(move(frozen(), 85, 40 + LANE_HEIGHT), { type: 'pointerUp' }, ctx('select'));
-      expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+      expect(up.intent).toEqual({
+        kind: 'reposition',
+        activityId: 'a',
+        laneIndex: 2,
+        sidewaysDiscarded: true,
+      });
+    });
+
+    it('flags a diagonal drop so the host can say the sideways part was dropped', () => {
+      const up = reduce(move(frozen(), 85, 40 + LANE_HEIGHT), { type: 'pointerUp' }, ctx('select'));
+      expect(up.intent).toMatchObject({ laneIndex: 2, sidewaysDiscarded: true });
     });
 
     it('a sideways-only drop emits a refusal and no startDay', () => {

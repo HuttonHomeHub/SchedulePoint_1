@@ -176,6 +176,9 @@ export type EditIntent =
       /** Set on a started activity's drag that went sideways and nowhere else: there is nothing to
        * write, but the host owes the planner the reason (docs/TECH_DEBT.md #431). */
       sidewaysRefused?: true;
+      /** Set when a started activity's drag changed lane AND went sideways: the lane is written, the
+       * sideways part dropped, and the host says so politely. */
+      sidewaysDiscarded?: true;
     }
   | {
       /**
@@ -680,6 +683,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             activityId: state.activityId,
             ...(dayChanged ? { startDay: state.currentStartDay } : {}),
             ...(laneChanged ? { laneIndex: state.currentLaneIndex } : {}),
+            ...(state.sidewaysBlocked === true && laneChanged ? { sidewaysDiscarded: true } : {}),
           },
         };
       }

@@ -52,7 +52,11 @@ import {
   wbsGroupClause,
 } from '../render/a11y';
 import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
-import { isStartEdgeFrozen, START_EDGE_FROZEN_REASON } from '../render/hit-test';
+import {
+  isStartEdgeFrozen,
+  START_EDGE_FROZEN_REASON,
+  startFrozenPluralReason,
+} from '../render/hit-test';
 import {
   buildBaselineGhosts,
   buildLevelledGhosts,
@@ -2503,7 +2507,14 @@ export function TsldPanel({
       // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
       // data — and the banner's `role="alert"` says it, as the start-edge backstop does.
       if (intent.sidewaysRefused) {
-        showConflict(START_EDGE_FROZEN_REASON, false);
+        const selected =
+          CANVAS_MULTI_SELECT_ENABLED && selection.ids.includes(intent.activityId)
+            ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
+            : [];
+        showConflict(
+          selected.length > 1 ? startFrozenPluralReason(selected.length) : START_EDGE_FROZEN_REASON,
+          false,
+        );
         return;
       }
       clearConflict();
@@ -2521,8 +2532,9 @@ export function TsldPanel({
         const rows = activities.filter((a) => pluralIds.includes(a.id));
         // One started bar in the set would be slid sideways with the rest, writing a placement the
         // schedule ignores (#431): refuse the whole sideways batch rather than move some of it.
-        if (intent.startDay !== undefined && rows.some(isStartEdgeFrozen)) {
-          showConflict(START_EDGE_FROZEN_REASON, false);
+        const startedCount = rows.filter(isStartEdgeFrozen).length;
+        if (intent.startDay !== undefined && startedCount > 0) {
+          showConflict(startFrozenPluralReason(startedCount), false);
           return;
         }
         // The gesture's `startDay` is measured off the DRAWN bar, so the delta must be too: from
@@ -2560,7 +2572,12 @@ export function TsldPanel({
           .then((outcome) => {
             setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict);
-            else announce(`${String(rows.length)} activities moved.`);
+            else
+              announce(
+                `${String(rows.length)} activities moved.${
+                  intent.sidewaysDiscarded ? ` ${START_EDGE_FROZEN_REASON}` : ''
+                }`,
+              );
           })
           .catch((err: unknown) => {
             setPendingReposition(null);
@@ -2637,17 +2654,18 @@ export function TsldPanel({
                 : null;
             // One sentence builder for every move (`reposition-announcement.ts`), so this path and
             // the keyboard nudge cannot state the landed lane differently.
-            announce(
-              repositionAnnouncement({
-                name: activity.name,
-                snappedDate,
-                timeChanged,
-                laneChanged,
-                requested: laneIndex,
-                landed: outcome.laneIndex ?? laneIndex,
-                original: activity.laneIndex,
-              }),
-            );
+            // A started bar's sideways part was dropped by the gesture: say so, politely, in the
+            // same sentence — a second announce would replace the move's own.
+            const moved = repositionAnnouncement({
+              name: activity.name,
+              snappedDate,
+              timeChanged,
+              laneChanged,
+              requested: laneIndex,
+              landed: outcome.laneIndex ?? laneIndex,
+              original: activity.laneIndex,
+            });
+            announce(intent.sidewaysDiscarded ? `${moved} ${START_EDGE_FROZEN_REASON}` : moved);
           }
         })
         .catch((err: unknown) => {

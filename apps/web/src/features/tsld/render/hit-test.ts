@@ -97,6 +97,13 @@ export function isResizeEligibleType(type: ActivityType): boolean {
 export const START_EDGE_FROZEN_REASON =
   'This activity has started, so its start is its actual start and cannot be moved here.';
 
+/** The same refusal for a plural drag: `count` of the selected activities are started. */
+export function startFrozenPluralReason(count: number): string {
+  return `${String(count)} of the selected activities ${count === 1 ? 'has' : 'have'} started, so ${
+    count === 1 ? 'its start is its actual start' : 'their starts are their actual starts'
+  } and cannot be moved.`;
+}
+
 /**
  * True when an activity's start is frozen by its actuals (ADR-0170 D3): any `actualStart` or
  * `actualFinish`. Mirrors the engine's `isFrozenByActuals` — an activity with an actual is drawn

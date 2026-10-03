@@ -377,6 +377,43 @@ describe('moving a bar from the keyboard', () => {
     expect(announce).toHaveBeenCalledWith(expect.stringMatching(/summary/i));
   });
 
+  describe('a pointer drag on a bar that cannot move (docs/TECH_DEBT.md #431)', () => {
+    const REASON =
+      'This activity has started, so its start is its actual start and cannot be moved here.';
+    const dragSideways = (el: Element): void => {
+      fireEvent.pointerDown(el, { button: 0, clientX: 100 });
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 130 }));
+      window.dispatchEvent(new PointerEvent('pointerup'));
+    };
+
+    it('gives a started bar no grab cursor, writes nothing, and says why', () => {
+      const moveTo = vi.fn();
+      const announce = vi.fn();
+      renderWithDrag(dragBundle({ moveTo, announce }), [activity({ actualStart: '2026-01-05' })]);
+      const bar = screen.getByTitle(REASON);
+      expect(bar.style.cursor).not.toBe('grab');
+      dragSideways(bar);
+      expect(moveTo).not.toHaveBeenCalled();
+      expect(announce).toHaveBeenCalledExactlyOnceWith(REASON);
+    });
+
+    it('stays quiet for a press that never travels', () => {
+      const announce = vi.fn();
+      renderWithDrag(dragBundle({ announce }), [activity({ actualFinish: '2026-01-09' })]);
+      const bar = screen.getByTitle(REASON);
+      fireEvent.pointerDown(bar, { button: 0, clientX: 100 });
+      window.dispatchEvent(new PointerEvent('pointerup'));
+      expect(announce).not.toHaveBeenCalled();
+    });
+
+    it('says the summary and read-only reasons too, rather than ignoring the drag', () => {
+      const announce = vi.fn();
+      renderWithDrag(dragBundle({ announce }), [activity({ type: 'WBS_SUMMARY' })]);
+      dragSideways(screen.getByTitle(/summary/i));
+      expect(announce).toHaveBeenCalledWith(expect.stringMatching(/summary/i));
+    });
+  });
+
   it('does nothing at all with no drag bundle — the read-only chart', () => {
     renderGrid(undefined);
     // No throw, no binding. The parity contract `editing` carries, one prop along.

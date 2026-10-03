@@ -29,11 +29,18 @@ export interface BarPointerDrag {
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 }
 
+/** How far (px) a press on a refused bar must travel before it counts as a drag attempt. */
+const REFUSED_DRAG_THRESHOLD_PX = 4;
+
 export function useBarPointerDrag({
   enabled,
   onCommit,
+  onRefused,
 }: {
   enabled: boolean;
+  /** Called once per press that travels past a few pixels on a bar that is NOT draggable
+   * (`enabled` false), so the refusal can be spoken instead of the bar silently ignoring a drag. */
+  onRefused?: () => void;
   /** Called once, on release, with the total x movement. Never called for a cancelled drag. */
   onCommit: (deltaX: number) => void;
 }): BarPointerDrag {
@@ -71,7 +78,35 @@ export function useBarPointerDrag({
     (event: React.PointerEvent<HTMLElement>) => {
       // Primary button only. A right-click opening a context menu must not also start a drag, and a
       // middle-click must not scroll-and-drag at once.
-      if (!enabled || event.button !== 0) return;
+      if (event.button !== 0) return;
+      if (!enabled) {
+        if (!onRefused) return;
+        const refusedId = event.pointerId;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const end = (): void => {
+          window.removeEventListener('pointermove', onRefusedMove);
+          window.removeEventListener('pointerup', onRefusedEnd);
+          window.removeEventListener('pointercancel', onRefusedEnd);
+        };
+        const onRefusedMove = (moveEvent: PointerEvent): void => {
+          if (moveEvent.pointerId !== refusedId) return;
+          const travelled = Math.max(
+            Math.abs(moveEvent.clientX - startX),
+            Math.abs(moveEvent.clientY - startY),
+          );
+          if (travelled <= REFUSED_DRAG_THRESHOLD_PX) return;
+          end();
+          onRefused();
+        };
+        const onRefusedEnd = (endEvent: PointerEvent): void => {
+          if (endEvent.pointerId === refusedId) end();
+        };
+        window.addEventListener('pointermove', onRefusedMove);
+        window.addEventListener('pointerup', onRefusedEnd);
+        window.addEventListener('pointercancel', onRefusedEnd);
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
 
@@ -142,7 +177,7 @@ export function useBarPointerDrag({
       window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
-    [enabled, onCommit, stop],
+    [enabled, onCommit, onRefused, stop],
   );
 
   return { deltaX, dragging: deltaX !== null, onPointerDown };
