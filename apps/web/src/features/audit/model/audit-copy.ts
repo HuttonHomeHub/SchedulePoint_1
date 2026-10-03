@@ -80,6 +80,8 @@ const TITLES: Record<AuditAction, string> = {
   'calendar.unarchived': 'Calendar back in use',
   'calendar.scope_changed': 'Calendar sharing changed',
   'resource.deleted': 'Resource deleted',
+  // "Dissolved", not "deleted": the grouping went, the resources stayed.
+  'resource.dissolved': 'Group dissolved',
   'resource.archived': 'Resource retired',
   'resource.unarchived': 'Resource back in use',
   // "Imported", not "Plan created": a reader scanning this feed needs to see at a glance that this
@@ -259,6 +261,14 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
         kind === null ? null : resourceKindName(kind),
       ].filter((part) => part !== null);
       return parts.length === 0 ? null : parts.join(' · ');
+    }
+    case 'resource.dissolved': {
+      const kept = count(changes?.before, 'promotedChildCount');
+      if (kept === null) return null;
+      // `destinationName` is null for the top level — a determined fact for a single destination,
+      // so a missing name reads as "the top level" rather than as unknown.
+      const name = field(changes?.before, 'destinationName');
+      return `${plural(kept, 'resource', 'resources')} kept · moved to ${name ?? 'the top level'}`;
     }
     case 'resource.archived':
     case 'resource.unarchived': {

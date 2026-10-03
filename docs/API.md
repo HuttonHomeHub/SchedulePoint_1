@@ -1554,6 +1554,16 @@ controller's 30 / 60 s per handler.
   derive which activities were children, so a bare 204 would leave every cached child stale and
   409-ing on its next save for a reason the user did not cause (the cross-resource-recompute rule
   above, applied to the WBS tree).
+- `POST …/resources/:resourceId/dissolve` (**200**, no request body; returns `{ promoted }`) is the same act for the **resource**
+  tree: a `GROUP`'s direct children take its own parent (or the top level), then the group is
+  soft-deleted, under the organisation's resource-tree lock. Permission `resource:delete`; a
+  non-group is `422 RESOURCE_NOT_A_GROUP`, an unknown, deleted or other-organisation id is `404`.
+  It returns `{ promoted: [{ id, parentId, version }] }` for the same reason as the WBS dissolve —
+  every promoted child's `version` is bumped. **Unlike the WBS dissolve it cannot be undone from a
+  recycle bin**: resources have no restore endpoint, so the way back is to create the group again
+  and move the resources into it. Audited as one `resource.dissolved` row, never `resource.deleted`. A
+  **409 `RESOURCE_GROUP_HAS_CHILDREN`** is a backstop only (an active child remained after the
+  promotion), not an optimistic-lock clash: nothing was written, and a refetch and retry is safe.
 - A batch whose items are individually valid may still be **jointly** invalid. `parents` is checked
   against the **resulting** tree, not the current one, so `[{A→B}, {B→A}]` — two rows that each
   file a childless top-level summary under another — is a `409 PARENT_CYCLE`. Validate the state a

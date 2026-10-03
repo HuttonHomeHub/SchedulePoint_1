@@ -32,6 +32,7 @@ import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateResourceDto } from './dto/create-resource.dto';
+import { DissolveResourceGroupResponseDto } from './dto/dissolve-resource-group-response.dto';
 import { ListResourcesQueryDto } from './dto/list-resources-query.dto';
 import { ResourceResponseDto } from './dto/resource-response.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
@@ -199,6 +200,41 @@ export class ResourcesController {
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.setArchived(principal, orgSlug, resourceId, false, dto.version, context);
+  }
+
+  @Post(':resourceId/dissolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Dissolve a resource group — remove the grouping, keep the resources.',
+    description:
+      'Promotes the group’s direct children to its own parent (or the top level), then ' +
+      'soft-deletes the now-childless group, in one transaction under the organisation’s ' +
+      'resource-tree lock. The deliberate opposite of DELETE, which takes the whole branch. ' +
+      'Resources have no restore endpoint, so a dissolved group cannot be restored — create it ' +
+      'again to regroup (its name is free again). ' +
+      '**This write mutates sibling rows**: every promoted child’s `parentId` changes and its ' +
+      'optimistic-lock `version` is incremented, so a client holding a cached copy of one would ' +
+      'otherwise 409 on its next save with no explanation. The response returns those rows at ' +
+      'their new versions. No request body; Planner or Org Admin.',
+  })
+  @ApiOkResponse({ type: DissolveResourceGroupResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The resource is not a group (RESOURCE_NOT_A_GROUP; `details.reason` says why).',
+  })
+  @ApiConflictResponse({
+    description:
+      'Backstop only, not an optimistic-lock clash: an active child remained after the promotion ' +
+      '(RESOURCE_GROUP_HAS_CHILDREN). Nothing was written; refetch and retry.',
+  })
+  async dissolve(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @RequestContext() context: RequestContext,
+  ): Promise<DissolveResourceGroupResponseDto> {
+    const { promoted } = await this.service.dissolveGroup(principal, orgSlug, resourceId, context);
+    return { promoted };
   }
 
   @Delete(':resourceId')

@@ -23,6 +23,9 @@ import { clearBaselineTree } from './clear-baseline-tree';
  *  - the kind-change guards in both directions (assigned → GROUP, GROUP-with-children → LABOUR);
  *  - the subtree delete: blocked by a descendant's assignment (with the SUBTREE count), otherwise
  *    soft-deleting the whole branch under ONE `delete_batch_id` (the restore unit);
+ *  - DISSOLVING a group (`POST …/:id/dissolve`): children promoted to the group's own parent, the
+ *    group soft-deleted, versions bumped, leaf 422, permissions, archived rows, schedule parity,
+ *    and the "nothing active left under a dissolved group" invariant under a concurrent create;
  *  - CONCURRENT MIRROR REPARENTS, which is the only reason the tree lock is org-scoped;
  *  - the two DB CHECKs, exercised from RAW SQL so the database is proven to be the last line of
  *    defence even if the service were bypassed — including the FAIL-CLOSED round-trip over every
@@ -470,6 +473,273 @@ describe.skipIf(!hasDatabase)('Resource hierarchy (e2e)', () => {
     // of the two carries a parent.
     const rows = await prisma.resource.findMany({ where: { id: { in: [a.id, b.id] } } });
     expect(rows.filter((r) => r.parentId !== null)).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // Dissolve a GROUP (ADR-0053 §3) — remove the grouping, keep the resources
+  // -------------------------------------------------------------------------
+
+  describe('dissolve a group', () => {
+    const dissolveUrl = (id: string) => `${base}/${id}/dissolve`;
+    const activeCount = () => prisma.resource.count({ where: { deletedAt: null } });
+
+    interface Promoted {
+      id: string;
+      parentId: string | null;
+      version: number;
+    }
+
+    async function getRow(
+      actor: Actor,
+      id: string,
+    ): Promise<{ parentId: string | null; version: number }> {
+      const res = await actor.agent.get(`${base}/${id}`).expect(200);
+      return res.body.data as { parentId: string | null; version: number };
+    }
+
+    it('promotes a top-level group’s children to the top level and removes only the group', async () => {
+      const { actor } = await adminWithOrg();
+      const group = await create(actor, { name: 'Groundworks', kind: 'GROUP' });
+      const a = await create(actor, { name: 'Crew A', kind: 'LABOUR', parentId: group.id });
+      const b = await create(actor, { name: 'Crew B', kind: 'LABOUR', parentId: group.id });
+      const before = await activeCount();
+
+      const res = await actor.agent.post(dissolveUrl(group.id)).expect(200);
+      const promoted = res.body.data.promoted as Promoted[];
+      expect(promoted.map((r) => r.id)).toEqual([a.id, b.id].sort());
+      for (const row of promoted) {
+        expect(row).toMatchObject({ parentId: null, version: 2 });
+      }
+
+      await actor.agent.get(`${base}/${group.id}`).expect(404);
+      expect(await activeCount()).toBe(before - 1);
+      expect(await getRow(actor, a.id)).toMatchObject({ parentId: null, version: 2 });
+    });
+
+    it('promotes to the group’s OWN parent; grandchildren stay under their own parent', async () => {
+      const { actor } = await adminWithOrg();
+      const g1 = await create(actor, { name: 'G1', kind: 'GROUP' });
+      const g2 = await create(actor, { name: 'G2', kind: 'GROUP', parentId: g1.id });
+      const a = await create(actor, { name: 'A', kind: 'LABOUR', parentId: g2.id });
+      const b = await create(actor, { name: 'B', kind: 'LABOUR', parentId: g2.id });
+      const g3 = await create(actor, { name: 'G3', kind: 'GROUP', parentId: g2.id });
+      const c = await create(actor, { name: 'C', kind: 'LABOUR', parentId: g3.id });
+
+      await actor.agent.post(dissolveUrl(g2.id)).expect(200);
+
+      for (const id of [a.id, b.id, g3.id]) {
+        expect((await getRow(actor, id)).parentId).toBe(g1.id);
+      }
+      // C was a grandchild: it keeps its parent and is not touched at all.
+      expect(await getRow(actor, c.id)).toMatchObject({ parentId: g3.id, version: 1 });
+    });
+
+    it('dissolves an empty group to an empty promotion', async () => {
+      const { actor } = await adminWithOrg();
+      const group = await create(actor, { name: 'Empty', kind: 'GROUP' });
+      const res = await actor.agent.post(dissolveUrl(group.id)).expect(200);
+      expect(res.body.data.promoted).toEqual([]);
+      await actor.agent.get(`${base}/${group.id}`).expect(404);
+    });
+
+    it('422s RESOURCE_NOT_A_GROUP for a leaf and changes nothing', async () => {
+      const { actor } = await adminWithOrg();
+      const leaf = await create(actor, { name: 'Crew', kind: 'LABOUR' });
+      const before = await activeCount();
+      const res = await actor.agent.post(dissolveUrl(leaf.id)).expect(422);
+      expect(res.body.error.details.reason).toBe('RESOURCE_NOT_A_GROUP');
+      expect(await activeCount()).toBe(before);
+      expect(await getRow(actor, leaf.id)).toMatchObject({ version: 1 });
+      expect(await prisma.auditEvent.count({ where: { action: 'resource.dissolved' } })).toBe(0);
+    });
+
+    it('403s a Contributor and a Viewer, 404s another org’s group and an already-dissolved one', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const group = await create(actor, { name: 'G', kind: 'GROUP' });
+      const child = await create(actor, { name: 'Crew', kind: 'LABOUR', parentId: group.id });
+
+      const viewer = await signUp('viewer@example.com');
+      await prisma.orgMember.create({
+        data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+      });
+      const contributor = await signUp('contributor@example.com');
+      await prisma.orgMember.create({
+        data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+      });
+      for (const member of [viewer, contributor]) {
+        await member.agent.post(dissolveUrl(group.id)).expect(403);
+      }
+      // Nothing moved on a refusal.
+      expect(await getRow(actor, child.id)).toMatchObject({ parentId: group.id, version: 1 });
+
+      // A group in ANOTHER organisation is a 404 for an outsider — never an existence oracle.
+      const outsider = await signUp('outsider@example.com');
+      await outsider.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
+      await outsider.agent
+        .post(`/api/v1/organizations/other/resources/${group.id}/dissolve`)
+        .expect(404);
+
+      await actor.agent.post(dissolveUrl(group.id)).expect(200);
+      await actor.agent.post(dissolveUrl(group.id)).expect(404);
+      expect(await prisma.auditEvent.count({ where: { action: 'resource.dissolved' } })).toBe(1);
+    });
+
+    it('moves an archived child and keeps it archived; an archived group dissolves too', async () => {
+      const { actor } = await adminWithOrg();
+      const group = await create(actor, { name: 'G', kind: 'GROUP' });
+      const child = await create(actor, { name: 'Retired', kind: 'LABOUR', parentId: group.id });
+      await actor.agent
+        .post(`${base}/${child.id}/archive`)
+        .send({ version: child.version })
+        .expect(204);
+      const groupRow = await getRow(actor, group.id);
+      await actor.agent
+        .post(`${base}/${group.id}/archive`)
+        .send({ version: groupRow.version })
+        .expect(204);
+
+      const res = await actor.agent.post(dissolveUrl(group.id)).expect(200);
+      expect((res.body.data.promoted as Promoted[]).map((r) => r.id)).toEqual([child.id]);
+
+      const row = await prisma.resource.findUniqueOrThrow({ where: { id: child.id } });
+      expect(row.parentId).toBeNull();
+      expect(row.archivedAt).not.toBeNull();
+      expect(row.deletedAt).toBeNull();
+    });
+
+    it('refuses a stale child PATCH made from a form opened before the dissolve', async () => {
+      const { actor } = await adminWithOrg();
+      const group = await create(actor, { name: 'G', kind: 'GROUP' });
+      const child = await create(actor, { name: 'Crew', kind: 'LABOUR', parentId: group.id });
+
+      await actor.agent.post(dissolveUrl(group.id)).expect(200);
+
+      // The version bump is what turns a save that does not name the parent into a clean 409,
+      // rather than a silent overwrite of the promotion.
+      await actor.agent
+        .patch(`${base}/${child.id}`)
+        .send({ name: 'Crew renamed', version: child.version })
+        .expect(409);
+      // The edit form DOES send `parentId` every time. The parent check runs before the version
+      // check, so that save is refused as a 404 on the deleted group — also clean, and it can
+      // never put the child back under it.
+      await actor.agent
+        .patch(`${base}/${child.id}`)
+        .send({ name: 'Crew renamed', parentId: group.id, version: child.version })
+        .expect(404);
+      expect(await getRow(actor, child.id)).toMatchObject({ parentId: null, version: 2 });
+    });
+
+    it('leaves a child’s assignment and the plan’s computed schedule exactly as they were', async () => {
+      const { actor } = await adminWithOrg();
+      const client = await actor.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201);
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${client.body.data.id as string}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201);
+      const plan = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${project.body.data.id as string}/plans`)
+        .send({ name: 'Programme', plannedStart: '2026-01-05' })
+        .expect(201);
+      const planId = plan.body.data.id as string;
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
+        .send({})
+        .expect(200);
+      const activityIds: string[] = [];
+      for (const name of ['Dig', 'Pour']) {
+        const res = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+          .send({ name, durationDays: 3 })
+          .expect(201);
+        activityIds.push(res.body.data.id as string);
+      }
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: activityIds[0], successorId: activityIds[1], type: 'FS' })
+        .expect(201);
+
+      const group = await create(actor, { name: 'Groundworks', kind: 'GROUP' });
+      const crew = await create(actor, { name: 'Crew', kind: 'LABOUR', parentId: group.id });
+      await actor.agent
+        .post(`/api/v1/organizations/acme/activities/${activityIds[0]}/assignments`)
+        .send({ resourceId: crew.id, budgetedUnits: 8 })
+        .expect(201);
+
+      const recalculate = async (): Promise<unknown> => {
+        const summary = await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+          .send({})
+          .expect(200);
+        const list = await actor.agent
+          .get(`/api/v1/organizations/acme/plans/${planId}/activities?limit=100`)
+          .expect(200);
+        // Only the engine-owned outputs: `version` and timestamps legitimately move on a recalc.
+        const schedule = (list.body.data as Record<string, unknown>[])
+          .map((a) => ({
+            id: a.id,
+            earlyStart: a.earlyStart,
+            earlyFinish: a.earlyFinish,
+            lateStart: a.lateStart,
+            lateFinish: a.lateFinish,
+            totalFloat: a.totalFloat,
+            freeFloat: a.freeFloat,
+            isCritical: a.isCritical,
+          }))
+          .sort((x, y) => String(x.id).localeCompare(String(y.id)));
+        return { summary: summary.body.data, schedule };
+      };
+
+      const before = await recalculate();
+      const assignmentsBefore = await prisma.resourceAssignment.findMany({
+        where: { resourceId: crew.id },
+        select: { id: true, activityId: true, version: true },
+      });
+
+      await actor.agent.post(dissolveUrl(group.id)).expect(200);
+
+      expect(
+        await prisma.resourceAssignment.findMany({
+          where: { resourceId: crew.id },
+          select: { id: true, activityId: true, version: true },
+        }),
+      ).toEqual(assignmentsBefore);
+      expect(await recalculate()).toEqual(before);
+    });
+
+    // **Scope note, in the register of `docs/TECH_DEBT.md` #70.** Two requests fired with
+    // `Promise.all` were measured not to overlap in the danger window for the mirror-reparent case
+    // above, so this does NOT prove the tree lock — removing the lock would not turn it red. It pins
+    // the OUTCOME the lock exists for, through the real stack: whatever order the two land in,
+    // nothing active is left under the dissolved group. The lock's own gate is the unit suite, which
+    // asserts it is taken before the children are read.
+    it('leaves no active resource under a dissolved group, whatever the interleaving', async () => {
+      const { actor } = await adminWithOrg();
+      const group = await create(actor, { name: 'G', kind: 'GROUP' });
+      await create(actor, { name: 'Existing', kind: 'LABOUR', parentId: group.id });
+
+      const [dissolved, created] = await Promise.all([
+        actor.agent.post(dissolveUrl(group.id)),
+        actor.agent.post(base).send({ name: 'Racer', kind: 'LABOUR', parentId: group.id }),
+      ]);
+      expect(dissolved.status).toBe(200);
+      // Either the create landed first (and was promoted with the rest) or it lost the race and
+      // its parent check 404'd — never a third outcome.
+      expect([201, 404]).toContain(created.status);
+
+      expect(await prisma.resource.count({ where: { parentId: group.id, deletedAt: null } })).toBe(
+        0,
+      );
+      if (created.status === 201) {
+        const racer = await prisma.resource.findUniqueOrThrow({
+          where: { id: created.body.data.id as string },
+        });
+        expect(racer.parentId).toBeNull();
+      }
+    });
   });
 
   // -------------------------------------------------------------------------

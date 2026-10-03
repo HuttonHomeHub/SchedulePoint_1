@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
-import { RESOURCE_ERROR, type PageMeta } from '@repo/types';
+import { RESOURCE_ERROR, type DissolveResourceGroupResult, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -506,6 +506,124 @@ export class ResourcesService {
       },
       'resource deleted',
     );
+  }
+
+  /**
+   * Dissolve a `GROUP`: promote its direct children to the group's own parent (or the top level),
+   * then soft-delete the now-childless group — remove the grouping, keep the resources
+   * (ADR-0053 §3; the resource-tree counterpart of the WBS `dissolveSummary`, ADR-0063 §8).
+   *
+   * Deliberately NOT folded into {@link remove}: that method's contract is "a group's removal takes
+   * its branch", and this is its exact inverse. Behind one name the destructive reading could be
+   * reached by a flag, which is what two routes exist to prevent.
+   *
+   * Only the org tree lock is taken — NOT the per-resource assign locks `remove` takes. Those
+   * serialise the `RESOURCE_IN_USE` count against a concurrent assign, and dissolve has no such
+   * count: it deletes only the group, and a group can never be assigned
+   * (`resource-assignment.service.ts`, GROUP_NOT_ASSIGNABLE), so the children's assignments are
+   * untouched and nothing the engine reads changes. The lock order stays a subset of `remove`'s
+   * (tree lock first), so the two cannot deadlock.
+   *
+   * Resources have no restore endpoint, so unlike the WBS dissolve this cannot be undone from a
+   * recycle bin; the audit row carries the batch id a future restore would key on.
+   */
+  async dissolveGroup(
+    principal: Principal,
+    orgSlug: string,
+    resourceId: string,
+    context?: RequestContext,
+  ): Promise<DissolveResourceGroupResult> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    // Gate order is 403, then 404, then 422 — the same as `remove`, so a caller without the
+    // permission is never told whether an id exists or what kind it is.
+    this.assertCan(principal, 'resource:delete', organization.id);
+
+    const existing = await this.resources.findActiveByIdInOrg(resourceId, organization.id);
+    if (!existing) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+    if (existing.kind !== 'GROUP') this.throwNotAGroup();
+
+    const promoted = await this.prisma.$transaction(async (tx) => {
+      await acquireResourceTreeWriteLock(tx, organization.id);
+
+      // Re-read the group UNDER the lock and take the children's destination from THAT row. The
+      // read above happened before the lock, and a concurrent reparent (which takes the same lock)
+      // may have moved the group meanwhile: using the pre-lock `parentId` would promote the
+      // children to a parent the group no longer has — a silently wrong tree from a transaction
+      // that looks correctly serialised (the `dissolveSummary` lesson). The kind is re-checked for
+      // the same reason: a kind change on an empty group can land in the same window.
+      const locked = await this.resources.findActiveByIdInOrg(resourceId, organization.id, tx);
+      if (!locked) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+      if (locked.kind !== 'GROUP') this.throwNotAGroup();
+
+      const childIds = await this.resources.findActiveChildIdsOf([resourceId], organization.id, tx);
+      await this.resources.promoteChildren(
+        resourceId,
+        organization.id,
+        locked.parentId,
+        principal.userId,
+        tx,
+      );
+
+      // Backstop, not a branch: every write that sets a `parentId` takes the tree lock we hold, so
+      // nothing can have added a child since the `UPDATE`. If one ever did, soft-deleting would
+      // strand an active resource under a deleted parent — failing the transaction is the only
+      // acceptable outcome.
+      if ((await this.resources.countActiveChildrenOf(resourceId, organization.id, tx)) > 0) {
+        throw new ConflictError(RESOURCE_ERROR.RESOURCE_GROUP_HAS_CHILDREN, {
+          reason: RESOURCE_CONFLICT.RESOURCE_GROUP_HAS_CHILDREN,
+        });
+      }
+      const batchId = await this.resources.softDelete(resourceId, principal.userId, tx);
+
+      // The destination's name as it was, `null` for the top level. One destination, so `null` is a
+      // determined fact rather than an absence (the ADR-0073 `parentCount` lesson).
+      const destination =
+        locked.parentId === null
+          ? null
+          : await this.resources.findActiveByIdInOrg(locked.parentId, organization.id, tx);
+
+      // ONE row, and deliberately NOT `resource.deleted`: the grouping went and the resources
+      // stayed, so recording a deletion would send somebody looking for lost resources.
+      await this.audit.record(
+        {
+          action: 'resource.dissolved',
+          outcome: 'SUCCESS',
+          organizationId: organization.id,
+          subjectType: 'RESOURCE',
+          subjectId: resourceId,
+          subjectLabel: locked.name,
+          before: {
+            name: locked.name,
+            promotedChildCount: childIds.length,
+            destinationName: destination?.name ?? null,
+            deleteBatchId: batchId,
+          },
+          ...auditActor(principal, context),
+        },
+        tx,
+      );
+
+      // Re-read so the response carries the NEW versions — `updateMany` reports only a count, and
+      // the caller never knew which rows were children.
+      return this.resources.findPromotedByIds(childIds, organization.id, tx);
+    });
+
+    this.logger.info(
+      {
+        organizationId: organization.id,
+        resourceId,
+        userId: principal.userId,
+        promoted: promoted.length,
+      },
+      'resource group dissolved',
+    );
+    return { promoted };
+  }
+
+  private throwNotAGroup(): never {
+    throw new ValidationError(RESOURCE_ERROR.RESOURCE_NOT_A_GROUP, {
+      reason: 'RESOURCE_NOT_A_GROUP',
+    });
   }
 
   /**
