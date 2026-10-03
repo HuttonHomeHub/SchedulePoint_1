@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 34
-> models across 72 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 35
+> models across 73 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1790,7 +1790,7 @@ keyed on a migration's `finished_at`:
 - **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
   `finished_at`, and every matching plan computed before then would be recalculated again. That is
   harmless but unrequested.
-- **The #421 pending read, measured** (PostgreSQL 16.13, all 72 migrations applied, 10
+- **The #421 pending read, measured** (PostgreSQL 16.13, all `72 migrations` applied, 10
   organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
   plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
   the fixture's arithmetic). The query is the one the M2 builder brief specifies: the marker as a
