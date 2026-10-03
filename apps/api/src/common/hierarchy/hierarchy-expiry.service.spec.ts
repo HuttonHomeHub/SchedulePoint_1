@@ -98,9 +98,13 @@ beforeEach(() => {
   logger.info.mockReset();
   logger.warn.mockReset();
   logger.error.mockReset();
-  deleteScope = vi
-    .spyOn(runner, 'deleteExpiredScope')
-    .mockResolvedValue({ clients: 1, projects: 1, plans: 1, activities: 10 });
+  deleteScope = vi.spyOn(runner, 'deleteExpiredScope').mockResolvedValue({
+    clients: 1,
+    projects: 1,
+    plans: 1,
+    activities: 10,
+    activityHistoryEntries: 4,
+  });
 });
 
 afterEach(() => {
@@ -187,15 +191,39 @@ describe('which subtrees expire', () => {
       actorType: 'SYSTEM',
       subjectType: 'plan',
       subjectId: 'p1',
-      after: expect.objectContaining({ activityCount: 10, retentionDays: 90 }),
+      after: expect.objectContaining({
+        activityCount: 10,
+        activityHistoryCount: 4,
+        retentionDays: 90,
+      }),
     });
   });
 });
 
 describe('the budget and the failure path', () => {
   it('stops once the activity budget is spent, leaving the rest for the next tick', async () => {
-    deleteScope.mockResolvedValue({ clients: 1, projects: 0, plans: 1, activities: 20_000 });
+    deleteScope.mockResolvedValue({
+      clients: 1,
+      projects: 0,
+      plans: 1,
+      activities: 20_000,
+      activityHistoryEntries: 0,
+    });
     const { service } = build({ clients: [client('c1'), client('c2'), client('c3')] });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('charges history rows to the activity budget, not only the activities', async () => {
+    // 100 activities but 19,900 history rows is a 20,000 charge at ratio 1: the next scope waits.
+    deleteScope.mockResolvedValue({
+      clients: 1,
+      projects: 0,
+      plans: 1,
+      activities: 100,
+      activityHistoryEntries: 19_900,
+    });
+    const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);
     expect(deleteScope).toHaveBeenCalledTimes(1);
   });
@@ -228,7 +256,14 @@ describe('the budget and the failure path', () => {
     deleteScope.mockImplementation(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ clients: 1, projects: 0, plans: 0, activities: 1 });
+          release = () =>
+            resolve({
+              clients: 1,
+              projects: 0,
+              plans: 0,
+              activities: 1,
+              activityHistoryEntries: 0,
+            });
         }),
     );
     const { service } = build({ clients: [client('c1')] });
@@ -251,7 +286,13 @@ describe('the budget and the failure path', () => {
   it('stops once the scope budget is spent, however small each deletion is', async () => {
     // The mirror of the activity budget, and the shape a real backlog has: hundreds of ordinary
     // deletions carrying no activities at all, which the activity budget never bounds.
-    deleteScope.mockResolvedValue({ clients: 0, projects: 0, plans: 1, activities: 0 });
+    deleteScope.mockResolvedValue({
+      clients: 0,
+      projects: 0,
+      plans: 1,
+      activities: 0,
+      activityHistoryEntries: 0,
+    });
     const plans = Array.from({ length: 2_100 }, (_, i) => plan(`p${i}`, `proj-${i}`));
     const { service } = build({ plans });
     await service.sweepNow(NOW);

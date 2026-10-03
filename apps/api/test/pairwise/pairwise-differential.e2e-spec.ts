@@ -10,6 +10,7 @@ import { configureHttpApp } from '../../src/app-setup';
 import { computeSchedule } from '../../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { clearAuditEvents } from '../audit-reset';
+import { clearActivityTree } from '../clear-activity-tree';
 
 import { COMPARED_FIELDS, formatDivergences, type Divergence } from './divergence';
 import { specToEngineInput } from './spec-to-engine';
@@ -111,7 +112,7 @@ describe.skipIf(!hasDatabase)('Pairwise differential (e2e)', () => {
     await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.note.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planLock.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

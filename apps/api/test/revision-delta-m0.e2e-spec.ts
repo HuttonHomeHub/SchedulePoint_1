@@ -18,6 +18,7 @@ import { computeSchedule } from '../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -164,7 +165,7 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // reset depends on what ran before it in the shared database, which is the #119a shape.
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planLock.deleteMany();
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();

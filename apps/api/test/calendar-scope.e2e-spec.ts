@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -81,7 +82,7 @@ describe.skipIf(!hasDatabase)('Calendar scope tiers (e2e)', () => {
     await prisma.activityStep.deleteMany();
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.plan.deleteMany();
     await prisma.calendarExceptionWindow.deleteMany();
     await prisma.calendarException.deleteMany();

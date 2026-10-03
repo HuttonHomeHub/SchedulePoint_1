@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -63,7 +64,7 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   // `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a).
   await prisma.activityStep.deleteMany();
   await prisma.resourceAssignment.deleteMany();
-  await prisma.activity.deleteMany();
+  await clearActivityTree(prisma);
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.
   await clearBaselineTree(prisma);

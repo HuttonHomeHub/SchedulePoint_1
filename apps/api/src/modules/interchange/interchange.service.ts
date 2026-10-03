@@ -1287,6 +1287,9 @@ export class InterchangeService {
       // Assignments reference both activities and (import-created) resources, so they go first.
       await tx.resourceAssignment.deleteMany({ where: { activity: { planId } } });
       await tx.activityDependency.deleteMany({ where: { planId } });
+      // History is RESTRICT into activities (ADR-0174 D8). An import records none, so this is a
+      // no-op today; it is named so the day an import path records, the rollback does not 23503.
+      await tx.activityHistoryEntry.deleteMany({ where: { activity: { planId } } });
       await tx.activity.deleteMany({ where: { planId } });
       // The pen we took for the recalc is released best-effort before this runs; clear any residual
       // lock row too so the plan delete can't FK-fail on plan_lock.

@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -67,7 +68,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.note.deleteMany();
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.plan.deleteMany();
     await prisma.resource.deleteMany();
     await prisma.calendarException.deleteMany();
@@ -161,6 +162,23 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.note.create({
       data: { organizationId: orgId, entityType: 'ACTIVITY', planId, activityId, body: 'Watch it' },
     });
+    // History is RESTRICT into activities (ADR-0174 D8): the runner must delete it first, and count
+    // it so the sweep can charge it to its budget.
+    const recordedAt = new Date('2026-02-01T10:00:00.000Z');
+    for (const [i, name] of ['name', 'durationMinutes'].entries()) {
+      await prisma.activityHistoryEntry.create({
+        data: {
+          organizationId: orgId,
+          activityId,
+          actorUserId: actor.userId,
+          scope: 'DEFINITION',
+          firstRecordedAt: new Date(recordedAt.getTime() + i * 1000),
+          lastRecordedAt: new Date(recordedAt.getTime() + i * 1000),
+          hasNonCostChange: true,
+          changes: { [name]: { from: 1, to: 2 } },
+        },
+      });
+    }
     await prisma.crossPlanDependency.create({
       data: {
         organizationId: orgId,
@@ -193,7 +211,14 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       deleteExpiredScope(tx, { clientIds: [clientId], projectIds: [projectId], planIds: [planId] }),
     );
 
-    expect(counts).toEqual({ clients: 1, projects: 1, plans: 1, activities: 1 });
+    expect(counts).toEqual({
+      clients: 1,
+      projects: 1,
+      plans: 1,
+      activities: 1,
+      activityHistoryEntries: 2,
+    });
+    expect(await prisma.activityHistoryEntry.count()).toBe(0);
     expect(await prisma.client.findUnique({ where: { id: clientId } })).toBeNull();
     expect(await prisma.plan.findUnique({ where: { id: planId } })).toBeNull();
     expect(await prisma.activity.findUnique({ where: { id: activityId } })).toBeNull();
