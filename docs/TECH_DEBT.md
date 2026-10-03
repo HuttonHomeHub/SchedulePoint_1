@@ -10798,6 +10798,17 @@ than opportunistically, because the cheap half — correcting nine comments to m
 **Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-J,
 from #360's corrected diagnosis) · **Size:** S · **Owner:** web
 
+**Figures corrected 2026-10-03 (§19.11):** there are **53** `apps/web/playwright*.config.ts`, and **eight**
+raise `RATE_LIMIT_LIMIT` to `100000` (overview, netpoint-grammar, measure-gantt, gantt-editing,
+measure-route-splitting, gantt, arrange, workspace-chrome); the "four of 49" below is the count when the
+row was raised. The remedy is specified in `docs/specs/e2e-throttle-visibility/` (ADR-0175): M1 (the guarded
+`test` fixture in `apps/web/e2e-support/test.ts`, its self-test and the ADR) has landed for the base suite
+only; the row stays **open** until every journey uses it (M2) and the `100000` ceilings are measured (M3).
+**M0 measurement, 2026-10-03:** `e2e-activity-editor` run against a default-limit API with request logging:
+844 requests, **zero 429s**, busiest handler `GET /me` at **64** per 60 s (activities list 39, baseline
+variance 32, schedule summary 26, edit-lock 24). Local evidence only; a faster machine over-reports exposure,
+so this neither confirms nor excludes a 429 in CI.
+
 Four of the 49 Playwright configs now raise `RATE_LIMIT_LIMIT` for their own harness. Three did it
 after hitting the wall; the fourth (`playwright.overview.config.ts`) did it on 2026-09-21 after the
 wall was hit, mis-diagnosed as pre-existing, published as such, and only then measured (#360).
@@ -11493,6 +11504,15 @@ pinned by `router-splitting.structural.test.ts` S2), and every wait for the onbo
 the Firefox `/me` limb is untested. **Next:** confirm no recurrence over 10 CI runs on `main`/PRs, then
 delete this row and add #435 to the ledger; a recurrence after this change means the diagnosis is
 incomplete, so read the trace before widening anything further. **Trigger:** any recurrence.
+
+**Recurrence, 2026-10-03:** CI run `37158874019` (#774), web shard 4, `e2e-activity-editor`: J1 failed at
+`support.ts:19` (the onboarding heading not visible in 15 s), J3 and the Escape test were flaky. The widening
+and preload above were therefore not the whole cause. **Measured (M0 of `docs/specs/e2e-throttle-visibility/`):**
+the suite run locally against a default-limit API made 844 requests with **zero 429s**, peak `GET /me` 64 per
+60 s (64 % of the bucket). That does not establish the throttler (CI is slower and retries run in the same
+window), and it does not exclude it. The CI trace of that run is still unread. ADR-0175's fixture (M1) makes
+the next 429 in the base suite fail by name; the other suites follow in M2. Row stays **open**; its exit
+criterion (10 consecutive green CI runs) is unchanged.
 
 ### 441. A baseline's activity count compiles to a grouped subquery the planner may not restrict to the page
 
