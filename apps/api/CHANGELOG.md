@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.84.1
+
+### Patch Changes
+
+- [#772](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/772) [`f780ea6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f780ea63135239dba0ed51165494bdc341c3cece) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A removed member's name no longer appears on the organisation overview, and the staff console no longer counts a removed membership.
+
 ## 0.84.0
 
 ### Minor Changes
