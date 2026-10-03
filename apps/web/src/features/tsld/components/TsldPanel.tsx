@@ -2654,10 +2654,10 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       // The start edge of a started activity writes an inert placement and moves the finish
-      // (ADR-0170 D3). The grab zone is withheld, so this is the backstop: refuse out loud.
+      // (ADR-0170 D3). The grab zone is withheld, so this is the backstop: refuse out loud. Not
+      // refreshable — a rule, not stale data — and the banner's `role="alert"` speaks it.
       if (intent.edge === 'start' && isStartEdgeFrozen(activity)) {
-        showConflict(START_EDGE_FROZEN_REASON);
-        announce(START_EDGE_FROZEN_REASON);
+        showConflict(START_EDGE_FROZEN_REASON, false);
         return;
       }
       clearConflict();
