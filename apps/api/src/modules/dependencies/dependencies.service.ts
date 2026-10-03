@@ -16,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
 import { loadDrivingCalendarMap } from '../activities/driving-calendars';
+import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -72,6 +73,7 @@ export class DependenciesService {
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly history: ActivityHistoryRecorder,
     @InjectPinoLogger(DependenciesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -302,6 +304,20 @@ export class DependenciesService {
           tx,
         );
 
+        // One `link:` item on EACH endpoint (ADR-0174 D5): "who hung this on my activity?" is asked
+        // from the predecessor and "who took the link off this milestone?" from the successor.
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'LOGIC',
+          writes: await this.history.linkWrites(tx, {
+            id: created.id,
+            predecessorId: created.predecessorId,
+            successorId: created.successorId,
+            before: null,
+            after: created,
+          }),
+        });
+
         /*
          * A create that earns a row — the one exception to "a create is already durably
          * attributed" (spec Test 1), because a link passes Test 2 instead: it re-dates everything
@@ -397,15 +413,35 @@ export class DependenciesService {
     }
 
     try {
-      const changed = await this.dependencies.updateIfVersionMatches(
-        dependencyId,
-        dto.version,
-        patch,
-        principal.userId,
-      );
-      if (changed === 0) {
-        throw new ConflictError('This dependency was changed elsewhere. Refresh and try again.');
-      }
+      // A transaction since ADR-0174: the history entry must commit or roll back with the write, and
+      // the before-values are read inside it, ahead of the version-gated update they describe.
+      await this.prisma.$transaction(async (tx) => {
+        const before = await tx.activityDependency.findFirst({
+          where: { id: dependencyId, organizationId: organization.id, deletedAt: null },
+        });
+        const changed = await this.dependencies.updateIfVersionMatches(
+          dependencyId,
+          dto.version,
+          patch,
+          principal.userId,
+          tx,
+        );
+        if (changed === 0 || !before) {
+          throw new ConflictError('This dependency was changed elsewhere. Refresh and try again.');
+        }
+        const after = await tx.activityDependency.findFirstOrThrow({ where: { id: dependencyId } });
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'LOGIC',
+          writes: await this.history.linkWrites(tx, {
+            id: dependencyId,
+            predecessorId: after.predecessorId,
+            successorId: after.successorId,
+            before,
+            after,
+          }),
+        });
+      });
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -435,6 +471,26 @@ export class DependenciesService {
         dependencyId,
         principal.userId,
       );
+      // Recorded only by the transaction that made the transition: `counts.dependencies` is 1 for the
+      // one that stamped the row and 0 for a concurrent delete that lost, so two removes record one
+      // "removed", not two. The state is read AFTER the stamp, from the row that was removed — a
+      // concurrent lag edit that committed first is therefore the state recorded, not a stale read.
+      if (cascade.counts.dependencies === 1) {
+        const removed = await tx.activityDependency.findFirstOrThrow({
+          where: { id: dependencyId },
+        });
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'LOGIC',
+          writes: await this.history.linkWrites(tx, {
+            id: dependencyId,
+            predecessorId: removed.predecessorId,
+            successorId: removed.successorId,
+            before: removed,
+            after: null,
+          }),
+        });
+      }
       // The link that disappeared, named by its endpoints in direction order — the same shape as
       // the create, so the two read as a pair rather than as two unrelated facts about an id
       // nothing can now resolve.

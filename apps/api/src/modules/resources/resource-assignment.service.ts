@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
@@ -42,6 +43,21 @@ export const ASSIGNMENT_ERROR = {
   UNITS_PER_HOUR_ZERO: 'UNITS_PER_HOUR_ZERO',
 } as const;
 
+/** One assignment's before and after, for the history (ADR-0174); `null` is "did not exist". */
+interface AssignmentPair {
+  before: ResourceAssignment | null;
+  after: ResourceAssignment | null;
+}
+
+/**
+ * The displaced drivers of a set-driver MOVE as history pairs. The repository reports each row as it
+ * is after the clear, and `isDriving` is the only thing the clear changes, so "before" is the same
+ * row with the flag still true.
+ */
+function displacedPairs(displaced: readonly ResourceAssignment[]): AssignmentPair[] {
+  return displaced.map((after) => ({ before: { ...after, isDriving: true }, after }));
+}
+
 /** A pending optimistic-locked write of an activity's server-derived duration (ADR-0040 §3). */
 interface ActivityDurationUpdate {
   id: string;
@@ -67,6 +83,7 @@ export class ResourceAssignmentService {
     private readonly assignments: ResourceAssignmentRepository,
     private readonly prisma: PrismaService,
     private readonly editLock: PlanEditLockService,
+    private readonly history: ActivityHistoryRecorder,
     @InjectPinoLogger(ResourceAssignmentService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -178,9 +195,9 @@ export class ResourceAssignmentService {
         if (confirmed.archivedAt !== null) throw this.resourceArchivedError();
         // Setting a driver is a MOVE: clear any other driver on this activity first so the
         // ≤1-driver partial-unique never trips a P2002.
-        if (isDriving) {
-          await this.assignments.clearDrivingForActivity(activityId, principal.userId, tx);
-        }
+        const displaced = isDriving
+          ? await this.assignments.clearDrivingForActivity(activityId, principal.userId, tx)
+          : [];
         const created = await this.assignments.create(
           {
             // Copy the org id from the endpoints (both verified in-org), never from input.
@@ -208,6 +225,10 @@ export class ResourceAssignmentService {
         );
         // Persist a units-driven derived duration on the activity (optimistic-locked in the same tx).
         await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
+        await this.recordHistory(tx, principal, activity, {
+          pairs: [{ before: null, after: created }, ...displacedPairs(displaced)],
+          duration: activityDurationUpdate,
+        });
         return created;
       });
       this.logger.info(
@@ -313,15 +334,21 @@ export class ResourceAssignmentService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        // Read inside the transaction, ahead of the version-gated update it describes, so the history
+        // diffs the row this write actually replaced (ADR-0174 D4).
+        const before = await tx.resourceAssignment.findFirst({
+          where: { id: assignmentId, organizationId: organization.id, deletedAt: null },
+        });
         // "Set driver" is a MOVE: clear every OTHER driver on this activity first.
-        if (dto.isDriving === true) {
-          await this.assignments.clearDrivingForActivity(
-            existing.activityId,
-            principal.userId,
-            tx,
-            assignmentId,
-          );
-        }
+        const displaced =
+          dto.isDriving === true
+            ? await this.assignments.clearDrivingForActivity(
+                existing.activityId,
+                principal.userId,
+                tx,
+                assignmentId,
+              )
+            : [];
         const changed = await this.assignments.updateIfVersionMatches(
           assignmentId,
           dto.version,
@@ -329,12 +356,17 @@ export class ResourceAssignmentService {
           principal.userId,
           tx,
         );
-        if (changed === 0) {
+        if (changed === 0 || !before) {
           throw new ConflictError('This assignment was changed elsewhere. Refresh and try again.');
         }
         // Persist a units-driven derived duration on the activity — same tx, optimistic-locked, so a
         // stale version on EITHER row rolls the whole write back (409).
         await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
+        const after = await tx.resourceAssignment.findFirstOrThrow({ where: { id: assignmentId } });
+        await this.recordHistory(tx, principal, activity, {
+          pairs: [{ before, after }, ...displacedPairs(displaced)],
+          duration: activityDurationUpdate,
+        });
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateAssignmentError();
@@ -358,11 +390,58 @@ export class ResourceAssignmentService {
     const activity = await this.loadActiveActivity(existing.activityId, organization.id);
     await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
 
-    await this.assignments.softDelete(assignmentId, principal.userId);
+    await this.prisma.$transaction(async (tx) => {
+      // Recorded only by the transaction that made the transition (count 1): two concurrent removes
+      // record one "removed". The state is read after the stamp, from the row that was removed.
+      const removed = await this.assignments.softDelete(assignmentId, principal.userId, tx);
+      if (removed === 1) {
+        const before = await tx.resourceAssignment.findFirstOrThrow({
+          where: { id: assignmentId },
+        });
+        await this.recordHistory(tx, principal, activity, {
+          pairs: [{ before, after: null }],
+          duration: null,
+        });
+      }
+    });
     this.logger.info(
       { organizationId: organization.id, assignmentId, userId: principal.userId },
       'resource unassigned',
     );
+  }
+
+  /**
+   * Record an assignment write on its activity (ADR-0174), scope `RESOURCES`: the assignment item, the
+   * displaced driver's, and — when the units triad rewrote the activity's duration in the same request —
+   * that duration change, in the SAME entry. The person made one change and it had two effects.
+   */
+  private async recordHistory(
+    tx: Prisma.TransactionClient,
+    principal: Principal,
+    activity: { id: string; planId: string; durationMinutes: number },
+    write: { pairs: AssignmentPair[]; duration: ActivityDurationUpdate | null },
+  ): Promise<void> {
+    await this.history.record(tx, {
+      actorUserId: principal.userId,
+      scope: 'RESOURCES',
+      writes: [
+        {
+          activityId: activity.id,
+          planId: activity.planId,
+          changes: {
+            ...(await this.history.assignmentChanges(tx, write.pairs)),
+            ...(write.duration
+              ? {
+                  durationMinutes: {
+                    from: activity.durationMinutes,
+                    to: write.duration.durationMinutes,
+                  },
+                }
+              : {}),
+          },
+        },
+      ],
+    });
   }
 
   /**

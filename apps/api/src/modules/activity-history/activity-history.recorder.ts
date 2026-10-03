@@ -1,12 +1,45 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type ActivityDependency, type ResourceAssignment } from '@prisma/client';
 import type { ActivityHistoryScope } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { acquireActivityHistoryLocks } from '../../common/db/activity-history-lock';
 
-import { hasNonCostChange, planRecord, type RecordPlan } from './activity-history.diff';
+import {
+  assignmentChange,
+  assignmentItem,
+  assignmentKey,
+  assignmentState,
+  changedReferenceIds,
+  diffActivity,
+  hasNonCostChange,
+  isNetZero,
+  linkItem,
+  linkKey,
+  linkState,
+  planRecord,
+  type ActivityRecordedRow,
+  type RecordPlan,
+} from './activity-history.diff';
 import type { LatestEntry, StoredChanges } from './activity-history.types';
+
+/** The assignment columns a state is built from (the row Prisma returns satisfies it). */
+export type AssignmentRow = Pick<
+  ResourceAssignment,
+  | 'id'
+  | 'resourceId'
+  | 'budgetedUnits'
+  | 'unitsPerHour'
+  | 'actualUnits'
+  | 'isDriving'
+  | 'curveType'
+  | 'lagMinutes'
+  | 'budgetedCost'
+  | 'actualCost'
+>;
+
+/** The link columns a state is built from. */
+export type LinkRow = Pick<ActivityDependency, 'type' | 'lagMinutes' | 'lagCalendar'>;
 
 /** One activity's share of a write: what changed on it, and the plan it belongs to (for the lock). */
 export interface RecordedActivityWrite {
@@ -119,6 +152,125 @@ export class ActivityHistoryRecorder {
         'activity history recorded',
       );
     }
+  }
+
+  /**
+   * The activity's own recorded changes between two reads of it, with the names of any calendar or
+   * WBS parent that changed read in the same transaction (the entry names them as they are now).
+   */
+  async activityFieldChanges(
+    tx: Prisma.TransactionClient,
+    before: ActivityRecordedRow,
+    after: ActivityRecordedRow,
+  ): Promise<StoredChanges> {
+    const { calendarIds, parentIds } = changedReferenceIds(before, after);
+    const [calendars, parents] = await Promise.all([
+      calendarIds.length === 0
+        ? []
+        : tx.calendar.findMany({
+            where: { id: { in: calendarIds } },
+            select: { id: true, name: true },
+          }),
+      parentIds.length === 0
+        ? []
+        : tx.activity.findMany({
+            where: { id: { in: parentIds } },
+            select: { id: true, name: true },
+          }),
+    ]);
+    return diffActivity(before, after, {
+      calendars: new Map(calendars.map((c) => [c.id, c.name])),
+      parents: new Map(parents.map((p) => [p.id, p.name])),
+    });
+  }
+
+  /**
+   * One `assignment:<id>` item per `(before, after)` pair, naming the resource as it is now. A pair
+   * with `before: null` is an add, with `after: null` a removal; a change that moved nothing a planner
+   * can set (a version bump alone) yields no item.
+   */
+  async assignmentChanges(
+    tx: Prisma.TransactionClient,
+    pairs: ReadonlyArray<{ before: AssignmentRow | null; after: AssignmentRow | null }>,
+  ): Promise<StoredChanges> {
+    const resourceIds = [
+      ...new Set(
+        pairs.flatMap((p) => [p.before?.resourceId, p.after?.resourceId]).filter((id) => !!id),
+      ),
+    ] as string[];
+    const resources =
+      resourceIds.length === 0
+        ? []
+        : await tx.resource.findMany({
+            where: { id: { in: resourceIds } },
+            select: { id: true, code: true, name: true },
+          });
+    const byId = new Map(resources.map((r) => [r.id, r]));
+
+    const changes: StoredChanges = {};
+    for (const { before, after } of pairs) {
+      const row = after ?? before;
+      if (!row) continue;
+      const resource = byId.get(row.resourceId);
+      if (!resource) throw new Error(`ActivityHistoryRecorder: resource ${row.resourceId} is gone`);
+      const from = before ? assignmentState(before) : null;
+      const to = after ? assignmentState(after) : null;
+      const item =
+        from === null || to === null
+          ? assignmentItem(resource, from, to)
+          : assignmentChange(resource, from, to);
+      if (item) changes[assignmentKey(row.id)] = item;
+    }
+    return changes;
+  }
+
+  /**
+   * The two writes a link change records — one on each endpoint — with each end naming the other as
+   * it is named now, in this transaction. `from: null` is an add, `to: null` a removal.
+   */
+  async linkWrites(
+    tx: Prisma.TransactionClient,
+    link: {
+      id: string;
+      predecessorId: string;
+      successorId: string;
+      before: LinkRow | null;
+      after: LinkRow | null;
+    },
+  ): Promise<RecordedActivityWrite[]> {
+    const endpoints = await tx.activity.findMany({
+      where: { id: { in: [link.predecessorId, link.successorId] } },
+      select: { id: true, planId: true, code: true, name: true },
+    });
+    const byId = new Map(endpoints.map((e) => [e.id, e]));
+    const predecessor = byId.get(link.predecessorId);
+    const successor = byId.get(link.successorId);
+    if (!predecessor || !successor) {
+      throw new Error(`ActivityHistoryRecorder: an endpoint of link ${link.id} is gone`);
+    }
+    const from = link.before ? linkState(link.before) : null;
+    const to = link.after ? linkState(link.after) : null;
+    // A PATCH that re-sent the same type and lag changed nothing: no item, so no entry.
+    if (
+      from !== null &&
+      to !== null &&
+      isNetZero(linkKey(link.id), linkItem('IN', predecessor, from, to))
+    ) {
+      return [];
+    }
+    const end = (a: typeof predecessor) => ({ id: a.id, code: a.code, name: a.name });
+    return [
+      {
+        activityId: predecessor.id,
+        planId: predecessor.planId,
+        changes: { [linkKey(link.id)]: linkItem('OUT', end(successor), from, to) },
+      },
+      {
+        activityId: successor.id,
+        planId: successor.planId,
+        changes: { [linkKey(link.id)]: linkItem('IN', end(predecessor), from, to) },
+      },
+    ];
   }
 
   /**

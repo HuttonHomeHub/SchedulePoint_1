@@ -12,6 +12,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -262,12 +263,15 @@ describe('ActivitiesService', () => {
           $executeRaw: txExecuteRaw,
           activity: {
             findFirst: txParentFindFirst,
+            // The history diff's after-read (ADR-0174); the stub recorder below ignores its value.
+            findFirstOrThrow: vi.fn().mockResolvedValue({}),
             findMany: txActivityFindMany,
             count: txActivityCount,
           },
           activityDependency: { count: txDependencyCount },
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
+            findFirstOrThrow: vi.fn().mockResolvedValue({}),
             updateMany: txDrivingUpdateMany,
           },
         }),
@@ -292,6 +296,13 @@ describe('ActivitiesService', () => {
     // stub exists so the unit specs can keep asserting the scheduling behaviour they were written
     // for.
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    // The history recorder is proven against a real table by `activity-history.e2e-spec.ts`; the
+    // unit specs only need it to be callable inside the transaction.
+    const history = {
+      record: vi.fn().mockResolvedValue(undefined),
+      activityFieldChanges: vi.fn().mockResolvedValue({}),
+      assignmentChanges: vi.fn().mockResolvedValue({}),
+    };
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
@@ -301,6 +312,7 @@ describe('ActivitiesService', () => {
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
+      history as unknown as ActivityHistoryRecorder,
       logger,
     );
   });
