@@ -55,9 +55,10 @@ What is true, measured on 2026-10-03:
 
 **Delivery.** The gate is delivered in milestones M2–M5 of the spec's plan, and each milestone's PR
 flips the standards' wording for the rule it adds to present tense. **M2 (2026-10-03) delivered the top-level read rule** and the declaration grammar, in
-`apps/api/src/common/query/soft-delete-filter.structural.spec.ts`; **M3 (2026-10-03) added writes**
-(`update*`, `upsert`, `delete*`, nested writes). **Nested reads and `_count` (M4) and raw SQL (M5)
-are not yet gated**, and the standards say so.
+`apps/api/src/common/query/soft-delete-filter.structural.spec.ts`; **M3 added writes** (`update*`,
+`upsert`, `delete*`, nested writes); **M4 added to-many `include`/`select`/`_count`**, and its one
+finding was fixed by stating the filter (`baseline.repository.ts`, two `_count`s). **Raw SQL (M5) is
+not yet gated**, and the standards say so.
 
 ## Alternatives considered
 

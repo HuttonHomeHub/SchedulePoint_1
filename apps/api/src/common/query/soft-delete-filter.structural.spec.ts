@@ -31,8 +31,12 @@ import { describe, expect, it } from 'vitest';
  * soft-deletable. A write's stance means the same as a read's: an edit of a live row goes through
  * `active()`, a soft-delete stamp is guarded on `deletedAt: null`, and a restore or a hard delete by
  * ownership scope is declared. `create`/`createMany` are not checked (a new row has no deleted
- * state). Nested `include`/`select`/`_count` and raw SQL are later milestones of the same plan; a
- * green run says nothing about them.
+ * state). **Nested reads** are an `include`, `select` or `_count` of a **to-many** relation whose
+ * target is soft-deletable, on any call: `true` and an object with no `where` stating a stance both
+ * fail, because the relation's own `where` is the only place a stance can live. A shared fragment
+ * held in a local `const` and spread into the options is followed. To-one relations are out of
+ * scope (Prisma cannot filter them; TECH_DEBT #139 is the known exception). Raw SQL is a later
+ * milestone of the same plan; a green run says nothing about it.
  *
  * **A declaration on a function covers every call of the declared kind inside it** — one label
  * for a restore routine rather than one per `updateMany`. The listing prints the covered count
@@ -149,12 +153,15 @@ interface SchemaInfo {
   accessors: Map<string, string>;
   /** model → relation field → target model, from the field's declared type, never its name. */
   relations: Map<string, Map<string, string>>;
+  /** `Model.field` for every list-typed (to-many) relation field. */
+  toMany: Set<string>;
 }
 
 function deriveSchema(schema: string): SchemaInfo {
   const models = [...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1] as string);
   const names = new Set(models);
   const relations = new Map<string, Map<string, string>>();
+  const toMany = new Set<string>();
   let current: string | null = null;
   for (const line of schema.split('\n')) {
     const open = /^model\s+(\w+)\s*\{/.exec(line);
@@ -171,12 +178,14 @@ function deriveSchema(schema: string): SchemaInfo {
     const field = /^\s+(\w+)\s+(\w+)(\[\])?\??(\s|$)/.exec(line);
     if (field && names.has(field[2] as string)) {
       relations.get(current)?.set(field[1] as string, field[2] as string);
+      if (field[3]) toMany.add(`${current}.${field[1]}`);
     }
   }
   return {
     roster: deriveRoster(schema),
     accessors: new Map(models.map((m) => [m.charAt(0).toLowerCase() + m.slice(1), m])),
     relations,
+    toMany,
   };
 }
 
@@ -280,6 +289,7 @@ class Analyser {
   private readonly accessors: Map<string, string>;
   private readonly allAccessors: Map<string, string>;
   private readonly relations: Map<string, Map<string, string>>;
+  private readonly toMany: Set<string>;
   private readonly rosterModels: Set<string>;
 
   constructor(sources: Sources, schema: SchemaInfo, extraHelperSources: Sources = {}) {
@@ -292,6 +302,7 @@ class Analyser {
     this.accessors = new Map(schema.roster.map((m) => [m.accessor, m.model]));
     this.allAccessors = schema.accessors;
     this.relations = schema.relations;
+    this.toMany = schema.toMany;
     this.rosterModels = new Set(schema.roster.map((m) => m.model));
   }
 
@@ -333,6 +344,18 @@ class Analyser {
             } else {
               sitesExamined += 1;
             }
+          }
+          for (const nested of this.nestedReads(node, file)) {
+            if (nested.stated) {
+              sitesExamined += 1;
+              continue;
+            }
+            flag(
+              nested.node,
+              `${nested.target}.${nested.field}`,
+              `${nested.how} of ${nested.parent}.${nested.field} (${nested.target}) has no ` +
+                'deletedAt filter (filter it, or declare why not)',
+            );
           }
           for (const nested of this.nestedWrites(node, file)) {
             if (nested.stated) {
@@ -427,6 +450,106 @@ class Analyser {
       if (ts.isObjectLiteralExpression(value)) this.walkData(value, parent, file, found);
     }
     return found;
+  }
+
+  /**
+   * To-many relations of a soft-deletable target read through `include`, `select` or `_count` on
+   * **any** call. The relation's own `where` is the only place a stance can live, so `true` and an
+   * object without one both fail. To-one relations are out of scope (spec §4.8): Prisma cannot
+   * filter them, and the cascade keeps parent and child consistent bar TECH_DEBT #139.
+   */
+  private nestedReads(
+    call: ts.CallExpression,
+    file: string,
+  ): {
+    node: ts.Node;
+    parent: string;
+    field: string;
+    target: string;
+    how: string;
+    stated: boolean;
+  }[] {
+    const callee = call.expression;
+    if (!ts.isPropertyAccessExpression(callee) || !ts.isIdentifier(callee.name)) return [];
+    const receiver = callee.expression;
+    if (!ts.isPropertyAccessExpression(receiver) || !ts.isIdentifier(receiver.name)) return [];
+    const model = this.allAccessors.get(receiver.name.text);
+    const options = call.arguments[0] && objectOf(call.arguments[0], call);
+    if (model === undefined || !options) return [];
+    const found: ReturnType<Analyser['nestedReads']> = [];
+    this.walkSelection(options, model, file, found, 0);
+    return found;
+  }
+
+  private walkSelection(
+    options: ts.ObjectLiteralExpression,
+    model: string,
+    file: string,
+    found: ReturnType<Analyser['nestedReads']>,
+    depth: number,
+  ): void {
+    if (depth > HELPER_DEPTH_LIMIT) return;
+    for (const property of this.flatten(options)) {
+      const key = propertyName(property.name);
+      if (key !== 'include' && key !== 'select') continue;
+      const selection = objectOf(property.initializer, property);
+      if (!selection) continue;
+      for (const entry of this.flatten(selection)) {
+        const field = propertyName(entry.name);
+        if (field === null) continue;
+        if (field === '_count') {
+          const counted = objectOf(entry.initializer, entry);
+          const inner =
+            counted && this.flatten(counted).find((p) => propertyName(p.name) === 'select');
+          const relationsCounted = inner && objectOf(inner.initializer, inner);
+          for (const rel of relationsCounted ? this.flatten(relationsCounted) : []) {
+            this.checkRelation(rel, model, propertyName(rel.name), '_count', file, found);
+          }
+          continue;
+        }
+        const target = this.relations.get(model)?.get(field);
+        if (target === undefined) continue;
+        this.checkRelation(entry, model, field, key, file, found);
+        const nested = objectOf(entry.initializer, entry);
+        if (nested) this.walkSelection(nested, target, file, found, depth + 1);
+      }
+    }
+  }
+
+  private checkRelation(
+    entry: ts.PropertyAssignment,
+    model: string,
+    field: string | null,
+    how: string,
+    file: string,
+    found: ReturnType<Analyser['nestedReads']>,
+  ): void {
+    const target = field === null ? undefined : this.relations.get(model)?.get(field);
+    if (field === null || target === undefined) return;
+    if (!this.toMany.has(`${model}.${field}`) || !this.rosterModels.has(target)) return;
+    const value = objectOf(entry.initializer, entry);
+    const where = value ? whereOf(value) : null;
+    found.push({
+      node: entry,
+      parent: model,
+      field,
+      target,
+      how,
+      stated: where !== null && this.stance(where, file, 0, entry),
+    });
+  }
+
+  /** Property assignments of an object literal, following spreads of local constants. */
+  private flatten(object: ts.ObjectLiteralExpression, depth = 0): ts.PropertyAssignment[] {
+    const result: ts.PropertyAssignment[] = [];
+    for (const property of object.properties) {
+      if (ts.isPropertyAssignment(property)) result.push(property);
+      else if (ts.isSpreadAssignment(property) && depth < HELPER_DEPTH_LIMIT) {
+        const spread = objectOf(property.expression, property);
+        if (spread) result.push(...this.flatten(spread, depth + 1));
+      }
+    }
+    return result;
   }
 
   private walkData(
@@ -641,6 +764,18 @@ function parse(file: string, text: string): ts.SourceFile {
 
 const lineOf = (source: ts.SourceFile, node: ts.Node): number =>
   source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+
+/** An object literal, or the one a local `const` names (a shared `include` fragment). */
+function objectOf(expression: ts.Expression, at: ts.Node): ts.ObjectLiteralExpression | null {
+  const node = unwrap(expression);
+  if (ts.isObjectLiteralExpression(node)) return node;
+  if (!ts.isIdentifier(node)) return null;
+  for (const init of resolveLocal(node, at)) {
+    const resolved = unwrap(init);
+    if (ts.isObjectLiteralExpression(resolved)) return resolved;
+  }
+  return null;
+}
 
 /** The `where` of a Prisma call's first argument, or null when it has none we can read. */
 function whereOf(arg: ts.Expression | undefined): ts.Expression | null {
@@ -1132,6 +1267,91 @@ describe('soft-delete scanner — writes', () => {
       }`);
     expect(result.findings).toEqual([]);
     expect(result.declarations).toHaveLength(1);
+  });
+});
+
+describe('soft-delete scanner — nested reads and _count', () => {
+  it('fails an include of a to-many soft-deletable relation with no filter, and passes a filtered one', () => {
+    const bad = check(
+      'db.plan.findFirst({ where: { id, deletedAt: null }, include: { activities: true } });',
+    );
+    expect(messages(bad)).toEqual([
+      'synthetic.ts:1 — include of Plan.activities (Activity) has no deletedAt filter (filter it, or declare why not)',
+    ]);
+    const noWhere = check(
+      'db.plan.findFirst({ where: { id, deletedAt: null }, include: { activities: { orderBy: { id: "asc" } } } });',
+    );
+    expect(noWhere.findings).toHaveLength(1);
+    const ok = check(
+      'db.plan.findFirst({ where: { id, deletedAt: null }, include: { activities: { where: { deletedAt: null } } } });',
+    );
+    expect(ok.findings).toEqual([]);
+  });
+
+  it('checks select the same way, and a _count in either position', () => {
+    expect(
+      check('db.plan.findMany({ where: { deletedAt: null }, select: { activities: true } });')
+        .findings,
+    ).toHaveLength(1);
+    const bad = check(
+      'db.baseline.findFirst({ where: { id, deletedAt: null }, include: { _count: { select: { activities: true } } } });',
+    );
+    expect(messages(bad)).toEqual([expect.stringContaining('_count of Baseline.activities')]);
+    const ok = check(
+      'db.baseline.findFirst({ where: { id, deletedAt: null }, include: { _count: { select: { activities: { where: { deletedAt: null } } } } } });',
+    );
+    expect(ok.findings).toEqual([]);
+  });
+
+  it('follows a relation by its declared type and reaches an include inside an include', () => {
+    // `activities` on Baseline is BaselineActivity, not Activity.
+    const typed = check(
+      'db.baseline.findFirst({ where: { id, deletedAt: null }, include: { activities: true } });',
+    );
+    expect(messages(typed)).toEqual([expect.stringContaining('(BaselineActivity)')]);
+    const deep = check(`
+      db.client.findFirst({
+        where: { id, deletedAt: null },
+        include: { projects: { where: { deletedAt: null }, include: { plans: true } } },
+      });`);
+    expect(messages(deep)).toEqual([expect.stringContaining('include of Project.plans (Plan)')]);
+  });
+
+  it('ignores a to-one include, a to-many of a non-soft-deletable model and a scalar select', () => {
+    expect(
+      check('db.activity.findFirst({ where: { id, deletedAt: null }, include: { plan: true } });')
+        .findings,
+    ).toEqual([]);
+    expect(
+      check('db.plan.findFirst({ where: { id, deletedAt: null }, include: { planLocks: true } });')
+        .findings,
+    ).toEqual([]);
+    expect(
+      check('db.plan.findFirst({ where: { id, deletedAt: null }, select: { name: true } });')
+        .findings,
+    ).toEqual([]);
+  });
+
+  it('follows a shared include fragment held in a local constant', () => {
+    const result = check(`
+      const withActivities = { include: { activities: true } };
+      db.plan.findMany({ where: { deletedAt: null }, ...withActivities });`);
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it('also inspects an include on a write, and accepts a declaration', () => {
+    expect(
+      check(
+        'db.plan.update({ where: { id, deletedAt: null }, data: {}, include: { activities: true } });',
+      ).findings,
+    ).toHaveLength(1);
+    const declared = check(`
+      function f() {
+        // soft-delete: any-state — the bin shows a plan's activities in every state on purpose.
+        return db.plan.findFirst({ where: { id, deletedAt: null }, include: { activities: true } });
+      }`);
+    expect(declared.findings).toEqual([]);
+    expect(declared.declarations).toHaveLength(1);
   });
 });
 

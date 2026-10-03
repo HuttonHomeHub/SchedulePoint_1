@@ -104,14 +104,13 @@
   `// soft-delete: any-state — <reason>` (or `deleted-only`) beside the call or in
   the docblock of the enclosing method. **A structural gate refuses a top-level
   read** (`find*`, `count`, `aggregate`, `groupBy`) **or write** (`update*`, `upsert`,
-  `delete*`, and a nested write inside `data` on a soft-deletable relation) **on a
-  soft-deletable model that states neither**:
+  `delete*`, and a nested write inside `data`), **and a to-many `include`, `select` or
+  `_count`, on a soft-deletable model that states neither**:
   `apps/api/src/common/query/soft-delete-filter.structural.spec.ts` (ADR-0172), which
   derives the model list from `schema.prisma`. A declaration on a method covers the
   calls of that kind inside it, and the run prints how many. **It does not yet cover
-  nested `include`/`select`/`_count` reads or raw SQL** — milestones M4 and M5 of
-  `docs/specs/soft-delete-filter/`, and until each lands review is the only check for
-  it. Creates and to-one relation reads are outside
+  raw SQL** — milestone M5 of `docs/specs/soft-delete-filter/`, and until it lands
+  review is the only check for it. Creates and to-one relation reads are outside
   the gate by decision.
 - Unique constraints that must ignore deleted rows use **partial unique indexes**
   (`WHERE deleted_at IS NULL`).
