@@ -77,7 +77,7 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
     .first()
     .getByRole('listitem');
   await expect(editor.getByText('Resource added: Tower crane — 40 units')).toBeVisible();
-  await expect(editor.getByText('Link added: FS 0d from Excavate')).toBeVisible();
+  await expect(editor.getByText('Link added: Finish to Start from Excavate')).toBeVisible();
   await expect(editor.getByText(/Duration .* → 9d/)).toBeVisible();
   await expect(editor.getByText('Editor Tester').first()).toBeVisible();
   expect(await entries.count()).toBeGreaterThanOrEqual(3);
@@ -92,5 +92,5 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
   // 5. The other end of the link tells the same story from the predecessor's side.
   await openEditor(page, 'Excavate', 'Edit');
   await editor.getByRole('tab', { name: 'History' }).click();
-  await expect(editor.getByText('Link added: FS 0d to Pour slab')).toBeVisible();
+  await expect(editor.getByText('Link added: Finish to Start to Pour slab')).toBeVisible();
 });

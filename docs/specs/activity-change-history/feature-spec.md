@@ -223,15 +223,15 @@ Recorded items are **inputs** — what a person sets — and never the engine's 
 
 **Links (CQ-3; M1 for the in-plan routes, M2 for cross-plan and side-effects)**
 
-- A link change is recorded on **both** activities it joins: the successor reads _"Link added: FS +2 d
-  from 1020 Steel erection"_, the predecessor reads _"Link added: FS +2 d to 1040 Cladding"_. Each end
+- A link change is recorded on **both** activities it joins: the successor reads _"Link added: Finish to Start +2d
+  from 1020 Steel erection"_, the predecessor reads _"Link added: Finish to Start +2d to 1040 Cladding"_. Each end
   gets its own entry in scope `LOGIC`, so each end's merge rule works on its own timeline. Why both:
   "who took the link off this milestone?" is asked from the successor and "who hung this on my
   activity?" from the predecessor; recording one end makes one of those questions unanswerable.
   _(database-architect to confirm — §4.4 item O1.)_
 - Recorded items: link added (from nothing), removed (to nothing), type changed, lag changed, lag
   calendar changed. Each link is one item keyed by the link's id, so add-then-fix-lag within the
-  window is one item (_"Link added: SS +3 d"_), and add-then-remove is net-zero and dropped.
+  window is one item (_"Link added: Start to Start +3d"_), and add-then-remove is net-zero and dropped.
 - The other end is named **as it was at the time** (code + name), so a later rename or deletion of
   that activity does not rewrite history (§4.4 item O2).
 - **Not recorded:** the engine's `is_driving` flag on a link — it is an output.
@@ -320,10 +320,10 @@ different link row.
 
 > **US-4** — As a **Planner**, I want link changes on both activities.
 >
-> - **Given** Tom adds an FS link from A to B **then** A's History shows _"Link added: FS to B"_ and B's
->   shows _"Link added: FS from A"_, both by Tom.
+> - **Given** Tom adds an FS link from A to B **then** A's History shows _"Link added: Finish to Start to B"_ and B's
+>   shows _"Link added: Finish to Start from A"_, both by Tom.
 > - **Given** Tom adds the link and changes its lag to +2 d within the minute **then** each end shows
->   one entry: _"Link added: FS +2 d …"_.
+>   one entry: _"Link added: Finish to Start +2d …"_.
 > - **Given** Tom removes the link **then** both ends show _"Link removed"_ naming the other activity as
 >   it was named then.
 > - **Given** activity A is deleted **then** B's History shows _"Link removed — A was deleted"_ (M2).

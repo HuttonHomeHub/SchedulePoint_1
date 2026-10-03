@@ -53,8 +53,8 @@ and knock-on changes arrive in M2.
 **Journey:** `apps/web/e2e/` (new `activity-history.spec.ts`): as a Planner holding the pen, open
 activity B, change its duration on General and save; on the Logic tab add an FS link from A; on the
 Resources tab assign a resource; choose **History** and assert three entries by the signed-in user
-(_Duration X d → Y d_, _Link added: FS from A_, _Resource added: …_); open A → **History** and assert
-_Link added: FS to B_. Sign in as a Viewer, open B, assert the entries are visible and a cost change
+(_Duration X d → Y d_, _Link added: Finish to Start from A_, _Resource added: …_); open A → **History** and assert
+_Link added: Finish to Start to B_. Sign in as a Viewer, open B, assert the entries are visible and a cost change
 made by the Planner is not. axe check on the open tab.
 
 ---
