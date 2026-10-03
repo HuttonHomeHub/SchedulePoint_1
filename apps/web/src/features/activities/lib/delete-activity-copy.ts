@@ -80,11 +80,14 @@ export function dissolveSummaryDescription(
     );
   }
 
-  const moved =
-    children.length === 1 ? 'its 1 activity' : `its ${String(children.length)} activities`;
+  // Verb and pronoun follow the count, as the resource-group dissolve copy does: "its 1 activity
+  // moves up … put that activity back", never "its 1 activity move up … put them back". Not
+  // "put it back under it": two pronouns there would name two different things.
+  const single = children.length === 1;
+  const moved = single ? 'its 1 activity moves' : `its ${String(children.length)} activities move`;
   return (
-    `Dissolve ${name}? This removes the grouping and keeps the work — ${moved} move up to ` +
-    `${destination}. Restoring the summary later will NOT put them back under it.`
+    `Dissolve ${name}? This removes the grouping and keeps the work — ${moved} up to ` +
+    `${destination}. Restoring the summary later will NOT put ${single ? 'that activity' : 'them'} back under it.`
   );
 }
 
