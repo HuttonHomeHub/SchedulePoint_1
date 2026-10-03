@@ -130,6 +130,7 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': ['calendar.archived'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': ['calendar.unarchived'],
   'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': ['resource.deleted'],
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/dissolve': ['resource.dissolved'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': ['resource.archived'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': ['resource.unarchived'],
   // — ADR-0073 C3.4, family G: provenance. The dry-run stays unaudited beside it — it reads a file

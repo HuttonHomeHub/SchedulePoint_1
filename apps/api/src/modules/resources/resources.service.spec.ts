@@ -93,6 +93,8 @@ describe('ResourcesService', () => {
     countActiveAssignmentsUsingAny: ReturnType<typeof vi.fn>;
     countActiveChildrenOf: ReturnType<typeof vi.fn>;
     findActiveChildIdsOf: ReturnType<typeof vi.fn>;
+    promoteChildren: ReturnType<typeof vi.fn>;
+    findPromotedByIds: ReturnType<typeof vi.fn>;
   };
   let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
@@ -115,6 +117,8 @@ describe('ResourcesService', () => {
       countActiveAssignmentsUsingAny: vi.fn().mockResolvedValue(0),
       countActiveChildrenOf: vi.fn().mockResolvedValue(0),
       findActiveChildIdsOf: vi.fn().mockResolvedValue([]),
+      promoteChildren: vi.fn().mockResolvedValue(0),
+      findPromotedByIds: vi.fn().mockResolvedValue([]),
     };
     calendars = { findActiveByIdInOrg: vi.fn() };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by create/update).
@@ -444,6 +448,110 @@ describe('ResourcesService', () => {
         details: { reason: 'RESOURCE_IN_USE', count: 3, subtreeSize: 2 },
       });
       expect(resources.softDeleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dissolveGroup', () => {
+    const group = (overrides: Partial<Resource> = {}): Resource =>
+      resource({ id: 'grp', name: 'Groundworks crews', kind: 'GROUP', ...overrides });
+
+    it('takes the tree lock BEFORE reading the children, and no assign locks', async () => {
+      const executeRaw = vi.fn().mockResolvedValue(1);
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: executeRaw }),
+      );
+      resources.findActiveByIdInOrg.mockResolvedValue(group());
+      resources.findActiveChildIdsOf.mockResolvedValue(['c-1']);
+      resources.softDelete.mockResolvedValue('batch-1');
+      await service.dissolveGroup(principalWith(ALL), 'acme', 'grp');
+      // Exactly ONE lock statement: the org tree lock. `remove`'s per-resource assign locks are a
+      // second `$executeRaw`, and a group can never be assigned, so there is nothing to serialise.
+      expect(executeRaw).toHaveBeenCalledTimes(1);
+      // Vitest's global invocation counter orders calls ACROSS mocks, which is the property here.
+      const lockedAt = executeRaw.mock.invocationCallOrder[0]!;
+      expect(lockedAt).toBeLessThan(resources.findActiveChildIdsOf.mock.invocationCallOrder[0]!);
+      expect(lockedAt).toBeLessThan(resources.promoteChildren.mock.invocationCallOrder[0]!);
+    });
+
+    it('promotes to the parent re-read UNDER the lock, not the pre-lock one', async () => {
+      // First read (pre-lock) says the group sits under 'old-parent'; the re-read under the lock
+      // says a concurrent reparent moved it to 'new-parent'.
+      resources.findActiveByIdInOrg
+        .mockResolvedValueOnce(group({ parentId: 'old-parent' }))
+        .mockResolvedValueOnce(group({ parentId: 'new-parent' }))
+        .mockResolvedValueOnce(resource({ id: 'new-parent', name: 'Civils', kind: 'GROUP' }));
+      resources.findActiveChildIdsOf.mockResolvedValue(['c-1', 'c-2']);
+      resources.softDelete.mockResolvedValue('batch-1');
+      resources.findPromotedByIds.mockResolvedValue([
+        { id: 'c-1', parentId: 'new-parent', version: 2 },
+        { id: 'c-2', parentId: 'new-parent', version: 2 },
+      ]);
+      const result = await service.dissolveGroup(principalWith(ALL), 'acme', 'grp');
+      expect(resources.promoteChildren).toHaveBeenCalledWith(
+        'grp',
+        ORG_ID,
+        'new-parent',
+        USER_ID,
+        expect.anything(),
+      );
+      expect(result.promoted).toHaveLength(2);
+    });
+
+    it('404s when the group vanished between the pre-lock read and the re-read', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValueOnce(group()).mockResolvedValueOnce(null);
+      await expect(service.dissolveGroup(principalWith(ALL), 'acme', 'grp')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(resources.promoteChildren).not.toHaveBeenCalled();
+      expect(resources.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('422s a leaf and writes nothing', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ kind: 'LABOUR' }));
+      await expect(
+        service.dissolveGroup(principalWith(ALL), 'acme', 'res-1'),
+      ).rejects.toMatchObject({ details: { reason: 'RESOURCE_NOT_A_GROUP' } });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(resources.promoteChildren).not.toHaveBeenCalled();
+      expect(resources.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('422s when the kind changed under the lock, and writes nothing', async () => {
+      resources.findActiveByIdInOrg
+        .mockResolvedValueOnce(group())
+        .mockResolvedValueOnce(group({ kind: 'LABOUR' }));
+      await expect(service.dissolveGroup(principalWith(ALL), 'acme', 'grp')).rejects.toMatchObject({
+        details: { reason: 'RESOURCE_NOT_A_GROUP' },
+      });
+      expect(resources.promoteChildren).not.toHaveBeenCalled();
+    });
+
+    it('gates 403 before 404 before 422', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.dissolveGroup(principalWith(['resource:read']), 'acme', 'grp'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(resources.findActiveByIdInOrg).not.toHaveBeenCalled();
+      await expect(service.dissolveGroup(principalWith(ALL), 'acme', 'grp')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+    });
+
+    it('dissolves an empty group to an empty promotion', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(group());
+      resources.softDelete.mockResolvedValue('batch-1');
+      const result = await service.dissolveGroup(principalWith(ALL), 'acme', 'grp');
+      expect(result).toEqual({ promoted: [] });
+      expect(resources.softDelete).toHaveBeenCalledWith('grp', USER_ID, expect.anything());
+    });
+
+    it('refuses to soft-delete a group that still has an active child', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(group());
+      resources.countActiveChildrenOf.mockResolvedValue(1);
+      await expect(service.dissolveGroup(principalWith(ALL), 'acme', 'grp')).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+      expect(resources.softDelete).not.toHaveBeenCalled();
     });
   });
 

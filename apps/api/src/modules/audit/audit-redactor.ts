@@ -155,6 +155,9 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   `resourceCount` is the subtree a GROUP delete swept (ADR-0053 §3) — one row for the branch,
   //   never one per descendant, the same rule family D applies to a WBS summary.
   'resource.deleted': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
+  //   `destinationName` is the parent group the members moved up to, `null` for the top level — a
+  //   determined fact (one destination), so the allow-list carries the null rather than dropping it.
+  'resource.dissolved': ['name', 'promotedChildCount', 'destinationName', 'deleteBatchId'],
   'resource.archived': ['name', 'kind'],
   'resource.unarchived': ['name', 'kind'],
   // — Provenance (ADR-0073 family G). `sourceFilename` is the reader's whole route back to the

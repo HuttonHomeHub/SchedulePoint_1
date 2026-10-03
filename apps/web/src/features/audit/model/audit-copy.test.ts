@@ -184,6 +184,22 @@ describe('the coverage rung’s detail lines', () => {
     expect(line).toContain('14 resources');
   });
 
+  it('says a group dissolve KEPT its resources and where they went', () => {
+    expect(auditEventCopy(event({ action: 'resource.dissolved' })).title).toBe('Group dissolved');
+    expect(
+      detail('resource.dissolved', {
+        before: { name: 'Crews', promotedChildCount: 4, destinationName: 'Groundworks' },
+      }),
+    ).toBe('4 resources kept · moved to Groundworks');
+    expect(
+      detail('resource.dissolved', {
+        before: { name: 'Plant', promotedChildCount: 1, destinationName: null },
+      }),
+    ).toBe('1 resource kept · moved to the top level');
+    // A row with no payload says nothing rather than inventing a count.
+    expect(detail('resource.dissolved', {})).toBeNull();
+  });
+
   it('names the calendar tier a scope change moved between', () => {
     const line = detail('calendar.scope_changed', {
       before: { scope: 'ORG' },

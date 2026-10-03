@@ -694,6 +694,61 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
       });
     });
 
+    it('records ONE resource.dissolved row naming the group, what was kept and where it went', async () => {
+      const { actor } = await setup();
+      const make = async (body: Record<string, unknown>): Promise<string> => {
+        const res = await actor.agent
+          .post('/api/v1/organizations/acme/resources')
+          .send(body)
+          .expect(201);
+        return res.body.data.id as string;
+      };
+      const parentId = await make({ name: 'Groundworks', kind: 'GROUP' });
+      const nestedId = await make({ name: 'Crews', kind: 'GROUP', parentId });
+      for (const name of ['Crew A', 'Crew B']) {
+        await make({ name, kind: 'LABOUR', parentId: nestedId });
+      }
+      const topId = await make({ name: 'Plant', kind: 'GROUP' });
+      await make({ name: 'Excavator', kind: 'EQUIPMENT', parentId: topId });
+
+      await actor.agent
+        .post(`/api/v1/organizations/acme/resources/${nestedId}/dissolve`)
+        .expect(200);
+      await actor.agent.post(`/api/v1/organizations/acme/resources/${topId}/dissolve`).expect(200);
+
+      // Never `resource.deleted`: the resources were kept, and one row per act, not per child.
+      expect(await rows('resource.deleted')).toHaveLength(0);
+      const written = await rows('resource.dissolved');
+      expect(written).toHaveLength(2);
+      const bySubject = new Map(written.map((row) => [row.subjectId, row]));
+      expect(bySubject.get(nestedId)?.changes?.before).toMatchObject({
+        name: 'Crews',
+        promotedChildCount: 2,
+        destinationName: 'Groundworks',
+        deleteBatchId: expect.any(String),
+      });
+      // A top-level group has ONE destination, so `null` is a determined fact the redactor must
+      // carry rather than drop.
+      const top = bySubject.get(topId)?.changes?.before;
+      expect(top).toMatchObject({ name: 'Plant', promotedChildCount: 1, destinationName: null });
+      expect(top).toHaveProperty('destinationName', null);
+    });
+
+    it('writes NOTHING for a refused dissolve (422 leaf, 404 unknown)', async () => {
+      const { actor } = await setup();
+      const leaf = await actor.agent
+        .post('/api/v1/organizations/acme/resources')
+        .send({ name: 'Crane', kind: 'EQUIPMENT' })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/resources/${leaf.body.data.id as string}/dissolve`)
+        .expect(422);
+      await actor.agent
+        .post('/api/v1/organizations/acme/resources/00000000-0000-4000-8000-000000000000/dissolve')
+        .expect(404);
+      expect(await rows('resource.dissolved')).toHaveLength(0);
+    });
+
     it('records a resource archive and unarchive', async () => {
       const { actor } = await setup();
       const res = await actor.agent

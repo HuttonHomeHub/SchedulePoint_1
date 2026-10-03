@@ -1,6 +1,6 @@
 # Implementation Plan: Dissolve a resource group — remove the grouping, keep the resources
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) (Draft — awaiting approval before implementation)
+- **Feature spec:** [./feature-spec.md](./feature-spec.md)
 - **Status:** Approved — by the product owner, 2026-10-03, as written. Q1 **yes**: ship Dissolve without a resource restore, with the honest copy; defaults D1–D8 stand.
 - **Owner:** product owner (approval); build by the **builder** agent per milestone
 

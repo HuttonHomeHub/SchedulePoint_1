@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
 
+import { chunkIds } from '../../common/db/id-chunks';
 import {
   archivedFilterWhere,
   escapeLikePattern,
@@ -371,6 +372,56 @@ export class ResourceRepository {
     return db.resource.count({
       where: this.active({ organizationId, parentId: resourceId }),
     });
+  }
+
+  /**
+   * Re-parent every ACTIVE direct child of `groupId` to `newParentId` (`null` = the top level) —
+   * the write behind a group dissolve (ADR-0053 §3). One `UPDATE` by the indexed `parent_id`,
+   * org-scoped (anti-IDOR). `version` increments so a client holding a stale copy of a promoted
+   * child gets a clean 409 on its next save instead of silently undoing the promotion: the edit
+   * form sends `parentId` on every save, so a form left open would otherwise put the child back
+   * under a group that no longer exists. Archived children move too and stay archived.
+   *
+   * Callers MUST hold the org resource-tree lock; the destination is only a valid parent because
+   * nothing can re-shape the tree between reading it and this write.
+   */
+  async promoteChildren(
+    groupId: string,
+    organizationId: string,
+    newParentId: string | null,
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const result = await db.resource.updateMany({
+      where: this.active({ organizationId, parentId: groupId }),
+      data: { parentId: newParentId, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return result.count;
+  }
+
+  /**
+   * The promoted rows at their NEW parent and version, in id order — what a dissolve returns, since
+   * `updateMany` reports only a count and the caller cannot derive the versions. Chunked: a group's
+   * fan-out is unbounded and Prisma refuses an `in` list past the bind-variable ceiling
+   * (`common/db/id-chunks.ts`). Chunks are consecutive slices of an id-sorted list, so concatenating
+   * them keeps the global id order.
+   */
+  async findPromotedByIds(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ id: string; parentId: string | null; version: number }[]> {
+    const rows: { id: string; parentId: string | null; version: number }[] = [];
+    for (const chunk of chunkIds([...ids].sort())) {
+      rows.push(
+        ...(await db.resource.findMany({
+          where: this.active({ organizationId, id: { in: chunk } }),
+          select: { id: true, parentId: true, version: true },
+          orderBy: { id: 'asc' },
+        })),
+      );
+    }
+    return rows;
   }
 
   /**

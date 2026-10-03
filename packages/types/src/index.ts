@@ -2094,6 +2094,23 @@ export interface ResourceSummary {
 }
 
 /**
+ * One resource a group dissolve promoted, at its **new** parent and version (ADR-0053 §3). The
+ * write mutates rows the caller never named, so the response carries the new `version`s — without
+ * them every cached child would 409 on its next save with no explanation.
+ */
+export interface PromotedResource {
+  id: string;
+  /** The dissolved group's own former parent; `null` when the resource is now top-level. */
+  parentId: string | null;
+  version: number;
+}
+
+/** The response of `POST …/resources/:resourceId/dissolve`. `promoted` is in id order. */
+export interface DissolveResourceGroupResult {
+  promoted: PromotedResource[];
+}
+
+/**
  * A resource assignment tying an activity to a resource with a budgeted quantity
  * (M7.1, ADR-0039). `budgetedUnits` is an exact quantity carried as a `number` in the
  * API (the DB stores `DECIMAL(18,4)`; `>= 0`, N14). `isDriving` designates THE driving
@@ -2247,6 +2264,8 @@ export const RESOURCE_ERROR = {
    * Reparent them first; the ADR-0038 type-change precedent (a WBS summary with descendants).
    */
   RESOURCE_GROUP_HAS_CHILDREN: 'Move the resources out of this group first.',
+  /** Only a `GROUP` can be dissolved; the target is an ordinary resource (→ 422). */
+  RESOURCE_NOT_A_GROUP: 'Only a resource group can be dissolved.',
   /** The referenced resource does not exist in this organisation (→ 404). */
   RESOURCE_NOT_FOUND: 'Resource not found.',
   /** The referenced assignment does not exist in this organisation (→ 404). */
@@ -2423,6 +2442,10 @@ export const AUDIT_ACTIONS = [
   'calendar.unarchived',
   'calendar.scope_changed',
   'resource.deleted',
+  //   `resource.dissolved` is NOT a deletion: the group goes and its members are kept, so filing it
+  //   under `resource.deleted` would tell somebody hunting for lost resources that a whole crew
+  //   list went away (the `activity.dissolved` reasoning, ADR-0073 family D).
+  'resource.dissolved',
   'resource.archived',
   'resource.unarchived',
   // — Provenance (ADR-0073 family G). The catalogue's only import. A plan created by hand is a
@@ -2568,6 +2591,9 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
   'calendar.scope_changed': 'settings',
+  // Library governance beside `resource.archived`, not `deletions`: the resources are kept,
+  // so a reader scanning for removals must not stop on it (ADR-0073, as `activity.dissolved`).
+  'resource.dissolved': 'settings',
   'resource.archived': 'settings',
   'resource.unarchived': 'settings',
   // An import is the one CREATE that is also a structural fact: it is how a whole plan's shape
