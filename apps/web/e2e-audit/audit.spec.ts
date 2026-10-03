@@ -71,7 +71,11 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await admin.getByLabel('Password').fill('correct-horse-battery');
   await admin.getByRole('button', { name: /create an account/i }).click();
 
-  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+
+  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await admin.getByLabel('Organisation name').fill(orgName);
   await admin.getByRole('button', { name: /create organisation/i }).click();
   await expect(admin).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
@@ -93,7 +97,10 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await mate.getByLabel('Email').fill(mateEmail);
   await mate.getByLabel('Password').fill('correct-horse-battery');
   await mate.getByRole('button', { name: /create an account/i }).click();
-  await expect(mate.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(mate.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await mate.goto(acceptUrl);
   await mate.getByRole('button', { name: /accept and join/i }).click();
   await expect(mate).toHaveURL(new RegExp(`/orgs/${orgSlug}`));

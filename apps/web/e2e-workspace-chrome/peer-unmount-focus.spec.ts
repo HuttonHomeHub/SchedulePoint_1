@@ -98,7 +98,10 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
   await a.getByLabel('Email').fill(`chrome-${stamp}@example.com`);
   await a.getByLabel('Password').fill(PEER_PASSWORD);
   await a.getByRole('button', { name: /create an account/i }).click();
-  await expect(a.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(a.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await a.getByLabel('Organisation name').fill(`Chrome Co ${stamp}`);
   await a.getByRole('button', { name: /create organisation/i }).click();
   await expect(a).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
@@ -140,7 +143,10 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
   // `goto` races the sign-up POST and the accept page renders signed-out, where there is no
   // "Accept and join" at all — which is how the first run of this journey failed, in its fixture
   // rather than in its subject.
-  await expect(b.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(b.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await b.goto(acceptUrl);
   await b.getByRole('button', { name: /accept and join/i }).click();
   await expect(b).toHaveURL(/\/orgs\//);

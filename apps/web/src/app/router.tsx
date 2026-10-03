@@ -98,6 +98,21 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
 });
 
+/**
+ * Fetch the onboarding chunk while a signed-out visitor is still typing their credentials.
+ *
+ * Everyone who has just signed up (and every member with no organisation) is redirected to
+ * `/onboarding`, but that screen was fetched cold at the redirect, inside the wait of whoever was
+ * watching: `warmHierarchyScreens` is only reached by users who hold an organisation, and the
+ * redirect is programmatic so no link was hovered to intent-preload it. Four e2e shards died on
+ * that wait within a whisker of 5 s (`docs/TECH_DEBT.md` #435). Sign-in and sign-up are the only
+ * screens that lead there, and `deferUntilIdle` keeps the fetch off the screen's own critical path.
+ * The loader catches its own import failure (see `warmHierarchyScreens`), so nothing can reject.
+ */
+function warmOnboardingScreen(): void {
+  deferUntilIdle(() => void OnboardingScreen.preload?.());
+}
+
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-in',
@@ -105,6 +120,7 @@ const signInRoute = createRoute({
   // guard, so it is ours — but it is also whatever a person types or a mail client mangles, and
   // `?redirect=1` parses to the NUMBER 1 and was silently dropped. Being applied on three of six
   // public routes was drift, not a decision.
+  beforeLoad: warmOnboardingScreen,
   validateSearch: (search: Record<string, unknown>): { redirect?: string; signedOut?: string } => {
     // **Same-origin by shape** (`docs/TECH_DEBT.md` #102(1)). The value is spent at
     // `routes/sign-in.tsx:28` as `router.history.push(search.redirect ?? '/')`, and until this check
@@ -140,6 +156,7 @@ const signInRoute = createRoute({
 const signUpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-up',
+  beforeLoad: warmOnboardingScreen,
   component: SignUpScreen,
 });
 
@@ -198,7 +215,6 @@ function warmHierarchyScreens(): void {
  * stands in.
  */
 function deferUntilIdle(task: () => void): void {
-  if (warmed) return;
   if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(task, { timeout: 2000 });
   } else {
@@ -222,7 +238,7 @@ const authedRoute = createRoute({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: '/sign-in', search: { redirect: location.href } });
     }
-    deferUntilIdle(warmHierarchyScreens);
+    if (!warmed) deferUntilIdle(warmHierarchyScreens);
     return { session };
   },
   component: AuthedLayout,

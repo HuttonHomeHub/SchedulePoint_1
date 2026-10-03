@@ -21,7 +21,11 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await admin.getByLabel('Password').fill('correct-horse-battery');
   await admin.getByRole('button', { name: /create an account/i }).click();
 
-  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+
+  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await admin.getByLabel('Organisation name').fill(orgName);
   await admin.getByRole('button', { name: /create organisation/i }).click();
 
@@ -49,7 +53,10 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await invitee.getByLabel('Email').fill(inviteeEmail);
   await invitee.getByLabel('Password').fill('correct-horse-battery');
   await invitee.getByRole('button', { name: /create an account/i }).click();
-  await expect(invitee.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(invitee.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   await invitee.goto(acceptUrl);
   await expect(invitee.getByRole('heading', { name: new RegExp(`Join ${orgName}`) })).toBeVisible();

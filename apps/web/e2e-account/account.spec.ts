@@ -73,14 +73,20 @@ test('a locked-out member recovers their account, and the old session dies', asy
   const ownContext = await browser.newContext();
   const own = await ownContext.newPage();
   await signUp(own, email, 'Reset Subject');
-  await expect(own.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(own.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // A second, separate session for the same account — this is the one B2 has to kill. It has to be
   // a real browser context with its own cookie jar, or it is not a session at all.
   const otherContext = await browser.newContext();
   const other = await otherContext.newPage();
   await signIn(other, email, PASSWORD);
-  await expect(other.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(other.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // ---------------------------------------------------------------- ask for a link, from signed out
   const strangerContext = await browser.newContext();
@@ -142,12 +148,16 @@ test('a locked-out member recovers their account, and the old session dies', asy
 
   // ---------------------------------------------------------------- B2: the other session is dead
   await other.goto('/');
-  await expect(other).toHaveURL(/\/sign-in/);
+  // 15 s, not 5 s: the redirect waits on the /me round trip under CI load (docs/TECH_DEBT.md #182, #435).
+  await expect(other).toHaveURL(/\/sign-in/, { timeout: 15_000 });
   await expect(other.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
   // ---------------------------------------------------------------- and the new password works
   await signIn(stranger, email, NEW_PASSWORD);
-  await expect(stranger.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(stranger.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The old one does not.
   const staleContext = await browser.newContext();
@@ -177,12 +187,18 @@ test('a signed-in member changes their password from /account', async ({ browser
   const firstContext = await browser.newContext();
   const first = await firstContext.newPage();
   await signUp(first, email, 'Account Subject');
-  await expect(first.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(first.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   const secondContext = await browser.newContext();
   const second = await secondContext.newPage();
   await signIn(second, email, PASSWORD);
-  await expect(second.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(second.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Reached the way a person reaches it — through the account menu, not a typed URL.
   await first.getByRole('button', { name: /Account:/ }).click();
@@ -211,9 +227,13 @@ test('a signed-in member changes their password from /account', async ({ browser
 
   // The other session is gone; this one survives.
   await second.goto('/');
-  await expect(second).toHaveURL(/\/sign-in/);
+  // 15 s, not 5 s: the redirect waits on the /me round trip under CI load (docs/TECH_DEBT.md #182, #435).
+  await expect(second).toHaveURL(/\/sign-in/, { timeout: 15_000 });
   await first.goto('/');
-  await expect(first.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(first.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
 
   await firstContext.close();
   await secondContext.close();
