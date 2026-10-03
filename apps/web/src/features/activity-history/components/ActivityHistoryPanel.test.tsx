@@ -60,24 +60,43 @@ describe('ActivityHistoryPanel', () => {
     renderPanel();
     expect(screen.getByText('Loading history…')).toBeInTheDocument();
     settle({ data: [], meta: META });
-    expect(await screen.findByText(/No changes recorded/)).toBeInTheDocument();
+    expect(await screen.findByText(/No changes have been recorded/)).toBeInTheDocument();
   });
 
   it('says since when recording began when there is nothing yet', async () => {
     vi.mocked(apiFetchEnvelope).mockResolvedValue({ data: [], meta: META });
     renderPanel();
     expect(
-      await screen.findByText('No changes recorded since history began on 03 Oct 2026.'),
+      await screen.findByText(
+        'No changes have been recorded for this activity. History recorded since 03 Oct 2026.',
+      ),
     ).toBeInTheDocument();
   });
 
-  it('offers Retry on a failed load, and the rest still renders after it succeeds', async () => {
+  it('has no accessibility violations in the empty and error states', async () => {
+    vi.mocked(apiFetchEnvelope).mockResolvedValueOnce({ data: [], meta: META });
+    const empty = renderPanel();
+    await screen.findByText(/No changes have been recorded/);
+    expect((await axe(empty.container)).violations).toEqual([]);
+    empty.unmount();
+
+    vi.mocked(apiFetchEnvelope).mockRejectedValueOnce(new Error('boom'));
+    const failed = renderPanel();
+    await screen.findByText('Couldn’t load history. Please try again.');
+    expect((await axe(failed.container)).violations).toEqual([]);
+  });
+
+  it('offers Try again on a failed load, and the rest still renders after it succeeds', async () => {
     vi.mocked(apiFetchEnvelope).mockRejectedValueOnce(new Error('boom'));
     renderPanel();
-    expect(await screen.findByText('Couldn’t load history.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t load history. Please try again.')).toBeInTheDocument();
     vi.mocked(apiFetchEnvelope).mockResolvedValue({ data: [entry()], meta: META });
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('Jane Smith')).toBeInTheDocument();
+    // The retry button unmounted with the error: focus must not be left on <body>.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'History' })),
+    );
   });
 
   it('renders entries newest-first as a list with a time element and the change', async () => {
@@ -97,10 +116,10 @@ describe('ActivityHistoryPanel', () => {
     const items = await screen.findAllByRole('listitem');
     const first = items[0] as HTMLElement;
     expect(within(first).getByText('Tom Lee')).toBeInTheDocument();
-    expect(within(first).getByText('· 3 edits')).toBeInTheDocument();
+    expect(within(first).getByText(/3 edits/)).toBeInTheDocument();
     expect(screen.getByText('Duration 5d → 9d')).toBeInTheDocument();
     expect(container.querySelectorAll('time')).toHaveLength(2);
-    expect(screen.getByText(/Start of recorded history/)).toBeInTheDocument();
+    expect(screen.getByText('History recorded since 03 Oct 2026.')).toBeInTheDocument();
   });
 
   it('says a group move was one write, and never says audit', async () => {
@@ -109,7 +128,9 @@ describe('ActivityHistoryPanel', () => {
       meta: META,
     });
     const { container } = renderPanel();
-    expect(await screen.findByText('· with 39 other activities')).toBeInTheDocument();
+    expect(await screen.findByText(/saved together with 39 other activities/)).toBeInTheDocument();
+    // The separator is for the eye only.
+    expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe('·');
     expect(container.textContent?.toLowerCase()).not.toContain('audit');
   });
 
@@ -130,6 +151,28 @@ describe('ActivityHistoryPanel', () => {
     expect(await screen.findByText('Older Person')).toBeInTheDocument();
     expect(vi.mocked(apiFetchEnvelope).mock.calls[1]?.[0]).toContain('cursor=c1');
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 entries loaded.'));
+    // That was the last page, so the button unmounted: focus moves to the end-of-history sentence.
+    expect(screen.queryByRole('button', { name: 'Load older' })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByText('History recorded since 03 Oct 2026.')),
+    );
+  });
+
+  it('does not fetch a second page twice while one is in flight', async () => {
+    let release: (v: { data: ActivityHistoryEntry[]; meta: typeof META }) => void = () => {};
+    vi.mocked(apiFetchEnvelope)
+      .mockResolvedValueOnce({
+        data: [entry()],
+        meta: { ...META, nextCursor: 'c1', hasMore: true },
+      })
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    renderPanel();
+    const button = await screen.findByRole('button', { name: 'Load older' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(vi.mocked(apiFetchEnvelope)).toHaveBeenCalledTimes(2);
+    release({ data: [], meta: META });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Load older' })).toBeNull());
   });
 
   it('has no accessibility violations with entries showing', async () => {

@@ -87,16 +87,16 @@ describe('formatHistoryItem — fields', () => {
 describe('formatHistoryItem — links', () => {
   it('words an add on each end with its direction and the other end as named then', () => {
     expect(text('link:1', { dir: 'IN', other: OTHER, from: null, to: FS })).toBe(
-      'Link added: FS 0d from 1020 Steel erection',
+      'Link added: Finish to Start from 1020 Steel erection',
     );
     expect(
       text('link:1', { dir: 'OUT', other: OTHER, from: null, to: { ...FS, lagMinutes: 960 } }),
-    ).toBe('Link added: FS +2d to 1020 Steel erection');
+    ).toBe('Link added: Finish to Start +2d to 1020 Steel erection');
   });
 
   it('words a removal and a change of type, lag and lag calendar', () => {
     expect(text('link:1', { dir: 'IN', other: OTHER, from: FS, to: null })).toBe(
-      'Link removed: FS 0d from 1020 Steel erection',
+      'Link removed: Finish to Start from 1020 Steel erection',
     );
     expect(
       text('link:1', {
@@ -106,7 +106,7 @@ describe('formatHistoryItem — links', () => {
         to: { type: 'SS', lagMinutes: -240, lagCalendar: 'TWENTY_FOUR_HOUR' },
       }),
     ).toBe(
-      'Link changed: Finish → Start → Start → Start, lag 0d → −4h, lag calendar changed from 1020 Steel erection',
+      'Link changed: type Finish to Start → Start to Start, lag none → −4h, lag calendar changed from 1020 Steel erection',
     );
   });
 
@@ -118,7 +118,7 @@ describe('formatHistoryItem — links', () => {
         from: null,
         to: FS,
       }),
-    ).toBe('Link added: FS 0d from Pour');
+    ).toBe('Link added: Finish to Start from Pour');
   });
 
   it('names the other plan for a cross-plan link', () => {
@@ -129,7 +129,21 @@ describe('formatHistoryItem — links', () => {
         from: null,
         to: FS,
       }),
-    ).toBe('Link added: FS 0d to 1020 Steel erection (Phase 2)');
+    ).toBe('Link added: Finish to Start to 1020 Steel erection (Phase 2)');
+  });
+});
+
+describe('formatHistoryItem — guards', () => {
+  it('carries the stored key, and never prints a zero lag as a hard-coded 0d', () => {
+    const line = formatHistoryItem('link:9', { dir: 'IN', other: OTHER, from: null, to: FS }, CTX);
+    expect(line.key).toBe('link:9');
+    expect(line.text).not.toContain('0d');
+  });
+
+  it('says a link changed even when no visible difference is stored', () => {
+    expect(text('link:1', { dir: 'IN', other: OTHER, from: FS, to: { ...FS } })).toBe(
+      'Link changed from 1020 Steel erection',
+    );
   });
 });
 
@@ -166,6 +180,13 @@ describe('formatHistoryItem — resource assignments', () => {
     );
   });
 
+  it('shows no dangling dash when every difference was money withheld from this reader', () => {
+    // A Viewer's page: both sides arrive with the money stripped and nothing else differing.
+    expect(text('assignment:1', { resource, from: state(), to: state() })).toBe(
+      'Resource changed: Tower crane',
+    );
+  });
+
   it('lists exactly what changed, and shows money only when the server sent it', () => {
     expect(
       text('assignment:1', {
@@ -173,7 +194,9 @@ describe('formatHistoryItem — resource assignments', () => {
         from: state(),
         to: state({ budgetedUnits: '50.0000', isDriving: true, unitsPerHour: '2.0000' }),
       }),
-    ).toBe('Resource changed: Tower crane — units 40 → 50; units per hour none → 2; now driving');
+    ).toBe(
+      'Resource changed: Tower crane — budgeted units 40 → 50; units / time none → 2; now driving',
+    );
     expect(
       text('assignment:1', {
         resource,

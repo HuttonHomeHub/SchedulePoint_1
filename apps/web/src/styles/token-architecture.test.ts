@@ -632,7 +632,13 @@ describe('weight is a governed axis', () => {
   // weights are still placed — just no longer by a screen, which is the distinction this ratchet
   // exists to measure. FC-4 asked for a fall of at least ten against a derived thirteen; the
   // remaining two are M2's three `<h2>` sites minus the one `SectionCard` reintroduces.
-  const SCREEN_WEIGHT_CEILING = 157;
+  // ...and 157 -> 158 (activity history, ADR-0174): ONE weight, the actor's name on each History entry.
+  // It is the only channel that separates WHO from WHAT: the line beneath is the same `text-sm` in the
+  // same colour, the timestamp beside it is the muted one, and a screen-reader user hears the structure
+  // while a sighted one scanning a long timeline for a person has nothing else to find them by. The
+  // panel's heading carries none (it sits under the tab that already names it), which is the other
+  // weight this change declined.
+  const SCREEN_WEIGHT_CEILING = 158;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

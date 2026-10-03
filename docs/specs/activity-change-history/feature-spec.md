@@ -198,7 +198,7 @@ back — the entry is removed. Equality is exact: descriptions compare by length
 id (never by the name stored beside it).
 
 **Multi-activity writes** write **one entry per affected activity**, sharing one **batch id** and a
-batch size. The tab shows _"moved with 39 other activities"_.
+batch size. The tab shows _"saved together with 39 other activities"_ (neutral: a batch does not record which action it was).
 
 **Only real differences are recorded.** The server compares stored values before and after, item by
 item (the ADR-0073 C3.2 "diff by value" rule: the editor resends whole scopes, so _sent_ is not
@@ -296,8 +296,11 @@ different link row.
 >   choose **History** **then** the newest entry reads Jane, the time, and _Duration 10 d → 15 d_.
 > - **Given** the activity has 120 entries **when** I press **Load older** to the end **then** older
 >   entries load in pages of 50 and the list says when there are no more.
-> - **Given** the activity has no entries **then** I see _"No changes recorded since history began on
->   <date>"_ and _"Created by <name> on <date>"_.
+> - **Given** the activity has no entries **then** I see _"No changes have been recorded for this
+>   activity. History recorded since <date>."_ _(Amended after M1 review: "Created by <name> on <date>" is
+>   not shown. The activity response carries `createdAt` but no creator, so the name is not derivable on the
+>   client; surfacing it needs an API field and is a follow-on. The same "History recorded since <date>."
+>   sentence also ends a list that has been loaded to the start.)_
 
 > **US-2** — As a **Planner**, I want a drag-and-adjust to be one entry, so that the history is
 > readable.

@@ -84,7 +84,8 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
 
   // The open tab is accessible.
   expect(
-    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze())
+      .violations,
   ).toEqual([]);
   await page.keyboard.press('Escape');
 

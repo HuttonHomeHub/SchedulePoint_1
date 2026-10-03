@@ -44,7 +44,9 @@ export interface HistoryFormatContext {
 }
 
 export interface HistoryLine {
-  /** The sentence, e.g. `Duration 5d → 9d` or `Link added: FS from 1020 Steel erection`. */
+  /** The stored item key (a field name, `link:<id>`, `assignment:<id>`): unique within an entry. */
+  key: string;
+  /** The sentence, e.g. `Duration 5d → 9d` or `Link added: Finish to Start from 1020 Steel erection`. */
   text: string;
 }
 
@@ -155,15 +157,30 @@ function fieldValueText(
   }
 }
 
-/** A signed lag the way the Logic tab prints one: `0d`, `+2d`, `−4h`. */
-function lagText(minutes: number, hoursPerDay: number | undefined): string {
-  if (minutes === 0) return '0d';
+/**
+ * A link type in words. The Logic tab's labels carry an arrow (`Finish → Start`), which would collide
+ * with the arrow a change uses between its two sides, so the history reads them as `Finish to Start`.
+ */
+function typeText(type: ActivityHistoryLinkState['type']): string {
+  return DEPENDENCY_TYPE_LABELS[type].replace(' → ', ' to ');
+}
+
+/**
+ * `formatLag` is not used here, deliberately: it formats a **row** and wants the server-computed
+ * `lagDays` on it, while an entry stores only the signed working minutes it was written with. This
+ * renders those minutes with the same duration formatter and the same typographic minus.
+ */
+function lagWords(minutes: number, hoursPerDay: number | undefined): string {
+  if (minutes === 0) return 'none';
   const magnitude = minutesText(Math.abs(minutes), hoursPerDay);
   return minutes > 0 ? `+${magnitude}` : `−${magnitude}`;
 }
 
+/** The state of an added or removed link: its type, and its lag only when it has one. */
 function linkStateText(state: ActivityHistoryLinkState, ctx: HistoryFormatContext): string {
-  return `${state.type} ${lagText(state.lagMinutes, ctx.hoursPerDay)}`;
+  return state.lagMinutes === 0
+    ? typeText(state.type)
+    : `${typeText(state.type)} ${lagWords(state.lagMinutes, ctx.hoursPerDay)}`;
 }
 
 /** The other end as it was named when recorded: `1020 Steel erection`. */
@@ -184,19 +201,20 @@ function linkLine(change: ActivityHistoryLinkChange, ctx: HistoryFormatContext):
   if (change.from !== null && change.to !== null) {
     const parts: string[] = [];
     if (change.from.type !== change.to.type) {
-      parts.push(
-        `${DEPENDENCY_TYPE_LABELS[change.from.type]} → ${DEPENDENCY_TYPE_LABELS[change.to.type]}`,
-      );
+      parts.push(`type ${typeText(change.from.type)} → ${typeText(change.to.type)}`);
     }
     if (change.from.lagMinutes !== change.to.lagMinutes) {
       parts.push(
-        `lag ${lagText(change.from.lagMinutes, ctx.hoursPerDay)} → ${lagText(change.to.lagMinutes, ctx.hoursPerDay)}`,
+        `lag ${lagWords(change.from.lagMinutes, ctx.hoursPerDay)} → ${lagWords(change.to.lagMinutes, ctx.hoursPerDay)}`,
       );
     }
     if (change.from.lagCalendar !== change.to.lagCalendar) parts.push('lag calendar changed');
-    return `Link changed: ${parts.join(', ')} ${other}`;
+    // A change with no visible difference (the server drops these, so this is a stored-data guard).
+    return parts.length === 0
+      ? `Link changed ${other}`
+      : `Link changed: ${parts.join(', ')} ${other}`;
   }
-  return `Link: ${other}`;
+  return `Link ${other}`;
 }
 
 /** `40.0000` → `40`, `2.5000` → `2.5`: the canonical fixed-4 string without its padding. */
@@ -222,11 +240,13 @@ function assignmentLine(
   const { from, to } = change;
   const parts: string[] = [];
   if (from.budgetedUnits !== to.budgetedUnits) {
-    parts.push(`units ${decimalText(from.budgetedUnits)} → ${decimalText(to.budgetedUnits)}`);
+    parts.push(
+      `budgeted units ${decimalText(from.budgetedUnits)} → ${decimalText(to.budgetedUnits)}`,
+    );
   }
   if (from.unitsPerHour !== to.unitsPerHour) {
     const text = (v: string | null) => (v === null ? NONE : decimalText(v));
-    parts.push(`units per hour ${text(from.unitsPerHour)} → ${text(to.unitsPerHour)}`);
+    parts.push(`units / time ${text(from.unitsPerHour)} → ${text(to.unitsPerHour)}`);
   }
   if (from.actualUnits !== to.actualUnits) {
     parts.push(`actual units ${decimalText(from.actualUnits)} → ${decimalText(to.actualUnits)}`);
@@ -254,7 +274,11 @@ function assignmentLine(
       `actual cost ${formatMoney(from.actualCost, ctx.currencyCode)} → ${formatMoney(to.actualCost ?? null, ctx.currencyCode)}`,
     );
   }
-  return `Resource changed: ${name} — ${parts.join('; ')}`;
+  // Every difference may have been money withheld from this reader; say only that it changed rather
+  // than dangle a dash after the name.
+  return parts.length === 0
+    ? `Resource changed: ${name}`
+    : `Resource changed: ${name} — ${parts.join('; ')}`;
 }
 
 /**
@@ -267,20 +291,22 @@ export function formatHistoryItem(
   change: ActivityHistoryChange,
   ctx: HistoryFormatContext,
 ): HistoryLine {
+  return { key, text: itemText(key, change, ctx) };
+}
+
+function itemText(key: string, change: ActivityHistoryChange, ctx: HistoryFormatContext): string {
   switch (activityHistoryItemKind(key)) {
     case 'link':
     case 'xlink':
-      return { text: linkLine(change as ActivityHistoryLinkChange, ctx) };
+      return linkLine(change as ActivityHistoryLinkChange, ctx);
     case 'assignment':
-      return { text: assignmentLine(change as ActivityHistoryAssignmentChange, ctx) };
+      return assignmentLine(change as ActivityHistoryAssignmentChange, ctx);
     case 'field': {
-      if (!(key in ACTIVITY_HISTORY_FIELDS)) return { text: `${key} changed` };
+      if (!(key in ACTIVITY_HISTORY_FIELDS)) return `${key} changed`;
       const field = key as ActivityHistoryFieldKey;
-      if ('changed' in change) return { text: `${FIELD_LABELS[field]} changed` };
+      if ('changed' in change) return `${FIELD_LABELS[field]} changed`;
       const { from, to } = change as ActivityHistoryFieldChange;
-      return {
-        text: `${FIELD_LABELS[field]} ${fieldValueText(field, from, ctx)} → ${fieldValueText(field, to, ctx)}`,
-      };
+      return `${FIELD_LABELS[field]} ${fieldValueText(field, from, ctx)} → ${fieldValueText(field, to, ctx)}`;
     }
   }
 }
