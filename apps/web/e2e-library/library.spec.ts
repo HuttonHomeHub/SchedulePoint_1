@@ -26,6 +26,9 @@ import {
  * 2. **Archive is not delete.** An archived resource keeps the assignment it already has — the row
  *    is still there, still budgeted — while disappearing from the picker that would create new ones.
  *    That distinction is the feature's single biggest usability risk, so it is asserted, not assumed.
+ * 3. **Dissolving a group keeps its resources** (`docs/specs/resource-group-dissolve/`). The group
+ *    leaves the library, its members stay — one of them still assigned in a plan — and the Delete
+ *    confirmation for a group says it deletes everything inside and points at Dissolve.
  *
  * Serial (one org, two projects and a shared plan mutate throughout); Chromium only (TECH_DEBT #25a).
  */
@@ -33,7 +36,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await createClient(page, 'Northgate');
 
   // ---------------------------------------------------------------- 1. Project-scoped calendar
@@ -192,6 +195,90 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   );
   expect(offered).toContain('Crew B');
   expect(offered).not.toContain('Crew A');
+
+  // ------------------------------------------------------------------- 3. Dissolve a group
+  // Two Escapes, as `calendarPickerOptions` does: the first closes only the picker's popup.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(reopened).toBeHidden();
+
+  // Seeded through the API with the browser's own session, as the public-screens suite does: this
+  // step is about what the library's menu does with a group, not about authoring one. The pen is
+  // still held here, so the assignment write below is not refused by the plan edit-lock.
+  const api = `/api/v1/organizations/${orgSlug}`;
+  const post = async (path: string, data: unknown): Promise<{ id: string }> => {
+    const res = await page.request.post(`${api}${path}`, { data });
+    expect(res.ok(), `POST ${path}: ${res.status()}`).toBe(true);
+    return ((await res.json()) as { data: { id: string } }).data;
+  };
+  const activeResourceCount = async (): Promise<number> => {
+    const res = await page.request.get(`${api}/resources?limit=100`);
+    expect(res.ok()).toBe(true);
+    return ((await res.json()) as { data: unknown[] }).data.length;
+  };
+  const group = await post('/resources', { name: 'Site crews', kind: 'GROUP' });
+  const keptAndAssigned = await post('/resources', {
+    name: 'Crew C',
+    kind: 'LABOUR',
+    parentId: group.id,
+  });
+  await post('/resources', { name: 'Crew D', kind: 'LABOUR', parentId: group.id });
+  const other = await post('/resources', { name: 'Night crews', kind: 'GROUP' });
+  await post('/resources', { name: 'Crew E', kind: 'LABOUR', parentId: other.id });
+
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+  expect(planId).not.toBe('');
+  const activities = await page.request.get(`${api}/plans/${planId}/activities?limit=100`);
+  expect(activities.ok()).toBe(true);
+  const activityId = ((await activities.json()) as { data: { id: string; name: string }[] }).data[0]
+    ?.id;
+  expect(activityId).toBeTruthy();
+  await post(`/activities/${activityId}/assignments`, {
+    resourceId: keptAndAssigned.id,
+    budgetedUnits: 8,
+  });
+
+  const before = await activeResourceCount();
+
+  await navLink(page, 'Resources').click();
+  // The library was cached before the seeding above, so reload for the rows the API just made.
+  await page.reload();
+  await expect(page.getByText('In Site crews')).toHaveCount(2);
+
+  await page.getByRole('button', { name: 'Actions for Site crews' }).click();
+  await page.getByRole('menuitem', { name: 'Dissolve' }).click();
+  const dissolveDialog = page.getByRole('alertdialog', { name: 'Dissolve group' });
+  // The counted fragments rather than the whole sentence, so a copy tweak does not break the journey.
+  await expect(dissolveDialog).toContainText('2 resources');
+  await expect(dissolveDialog).toContainText('the top level');
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+  ).toEqual([]);
+  await dissolveDialog.getByRole('button', { name: 'Dissolve' }).click();
+  await expect(dissolveDialog).toBeHidden();
+
+  // The group is gone; both members are listed, no longer under it.
+  await expect(page.getByRole('row', { name: /Site crews/ })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Crew C', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crew D', exact: true })).toBeVisible();
+  await expect(page.getByText('In Site crews')).toHaveCount(0);
+  // Exactly the group left the library — nothing a member owns went with it.
+  expect(await activeResourceCount()).toBe(before - 1);
+  // …and the member's assignment in the plan is untouched.
+  const assignments = await page.request.get(`${api}/activities/${activityId}/assignments`);
+  expect(assignments.ok()).toBe(true);
+  const assigned = ((await assignments.json()) as { data: { resourceId: string }[] }).data;
+  expect(assigned.map((a) => a.resourceId)).toContain(keptAndAssigned.id);
+
+  // Delete on a group says what it deletes and points at the way to keep it; then back out.
+  await page.getByRole('button', { name: 'Actions for Night crews' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  const deleteDialog = page.getByRole('alertdialog', { name: 'Delete group' });
+  await expect(deleteDialog).toContainText('deletes everything in it');
+  await expect(deleteDialog).toContainText('dissolve the group instead');
+  await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(deleteDialog).toBeHidden();
+  await expect(page.getByRole('cell', { name: /Night crews/ })).toBeVisible();
 });
 
 /** Create a library resource from the Resources screen (defaults to the Labour kind). */

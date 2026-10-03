@@ -1,5 +1,6 @@
 import type {
   ArchivedFilter,
+  DissolveResourceGroupResult,
   EditedField,
   HistogramGranularity,
   PageMeta,
@@ -320,6 +321,43 @@ export function useDeleteResource(orgSlug: string) {
   return useMutation({
     mutationFn: (resourceId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/resources/${resourceId}`, { method: 'DELETE' }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
+  });
+}
+
+/**
+ * Dissolve a resource GROUP: remove the grouping and keep the resources in it (ADR-0053 §3,
+ * `POST …/resources/:id/dissolve`).
+ *
+ * The write mutates rows the caller never named — every direct child is re-parented and has its
+ * `version` bumped — so `onSuccess` patches the cached plain lists with the returned `promoted`
+ * rows before the invalidation refetches. Without that, a child edited in the gap would send its
+ * pre-dissolve version and 409 with no explanation. Only plain-array entries are patched: the
+ * picker's search entries are infinite-query pages, which the invalidation alone covers.
+ */
+export function useDissolveResourceGroup(orgSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      apiFetch<DissolveResourceGroupResult>(
+        `/organizations/${orgSlug}/resources/${groupId}/dissolve`,
+        { method: 'POST' },
+      ),
+    onSuccess: (result, groupId) => {
+      const promoted = new Map(result.promoted.map((p) => [p.id, p]));
+      queryClient.setQueriesData<unknown>(
+        { queryKey: resourceKeys.list(orgSlug) },
+        (cached: unknown) => {
+          if (!Array.isArray(cached)) return cached;
+          return (cached as ResourceSummary[])
+            .filter((r) => r.id !== groupId)
+            .map((r) => {
+              const next = promoted.get(r.id);
+              return next ? { ...r, parentId: next.parentId, version: next.version } : r;
+            });
+        },
+      );
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
   });
 }

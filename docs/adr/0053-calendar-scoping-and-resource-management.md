@@ -204,10 +204,32 @@ at 12.
 **Delete of a `GROUP` is a subtree cascade** (the ADR-0038 precedent): the whole active branch
 is counted for `RESOURCE_IN_USE` (the 409 carries the **subtree** count, so an empty-looking
 group gives an honest message) and soft-deleted under **one** `delete_batch_id`, making the
-branch the restore unit. A `GROUP` delete also takes the tree lock — a concurrent reparent
+branch the unit a **future** restore would bring back (resources have no restore today — see
+the 2026-10-03 amendment below). A `GROUP` delete also takes the tree lock — a concurrent reparent
 could otherwise move a row into the branch between the subtree walk and the write, leaving an
 active child under a deleted parent. Lock order is fixed at **org tree lock → per-resource
 assign locks in ascending id order**, so the delete and reparent paths cannot deadlock.
+
+**Dissolve of a `GROUP` _(2026-10-03, `docs/specs/resource-group-dissolve/`)_** — the resource
+tree gets the "remove the grouping, keep the work" action the WBS tree has had since ADR-0063 §8,
+closing that ADR's stated asymmetry. `POST …/resources/:resourceId/dissolve` promotes the group's
+**direct** children to the group's own parent (or the top level), bumps their versions, soft-deletes
+the now-childless group under the same org tree lock a delete takes, and writes one
+`resource.dissolved` audit row (category `settings` — library governance, not a deletion, since the
+resources are kept). Permission is `resource:delete`; a non-group is refused with 422
+`RESOURCE_NOT_A_GROUP`. No schedule can change: the engine never reads `parent_id`
+(`resource-tree-parity.structural.spec.ts`), and a group can never be assigned. The Resources
+library offers it as **Dissolve** in a group row's `⋯` menu, immediately before Delete and omitted
+on a leaf, behind a confirmation that is not destructive-styled and says the resources are kept,
+where they go, and that it cannot be undone.
+
+**This amendment also corrects the "restore unit" wording above.** It described a restore that
+does not exist: there is no resource restore route and the recycle bin lists clients, projects and
+plans only. `delete_batch_id` is recorded so a future restore could bring a branch back together;
+until then a deleted group's resources are not recoverable, and neither is a dissolved group —
+the name is free again, so the way back is to create the group and move the resources in. The
+group **Delete** confirmation now says it deletes everything inside, counted down the whole
+branch, and points at Dissolve (it read `Delete "<name>"?` for every kind before).
 
 **The name namespace stays org-wide and shared with leaf resources** (`uq_resources_org_name`):
 a group named "Excavators" collides with an equipment resource of the same name, and "Crew A"

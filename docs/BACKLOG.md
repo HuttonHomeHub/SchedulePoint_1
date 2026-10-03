@@ -339,12 +339,10 @@ narrowed one, which the Background-processing entry now states.**
 
 ## WBS follow-ons (ADR-0063)
 
-- `S` **Dissolve for a resource `GROUP`** — the resource tree (ADR-0053 §3) has the same shape as
-  the WBS tree and the same problem: deleting a group takes its subtree with it, and there is no
-  way to remove the grouping alone. Deliberately out of scope for ADR-0063 (spec C-6), which was
-  about the WBS; the asymmetry is a stated decision, not an oversight, and this is where it gets
-  closed. The service-side shape is already proven — re-parent the children under the lock, then
-  soft-delete the now-childless node.
+- `S` ~~**Dissolve for a resource `GROUP`**~~ **— DONE 2026-10-03**
+  (`docs/specs/resource-group-dissolve/`; ADR-0053 §3 amended). The API shipped first
+  (`POST …/resources/:id/dissolve`, audited as `resource.dissolved`), then the Resources library's
+  row menu and an honest group Delete confirmation. Resources still have no restore.
 - `S` **Nest a summary from the Members panel** — spec C-1b deliberately kept WBS nesting in the
   Breakdown picker, because a checklist that can restructure the tree needs cycle feedback a
   checklist cannot express well. Worth revisiting with a design for that feedback rather than by

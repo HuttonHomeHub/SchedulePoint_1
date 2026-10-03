@@ -13,9 +13,15 @@ import { flushSync } from 'react-dom';
 import {
   useArchiveResource,
   useDeleteResource,
+  useDissolveResourceGroup,
   useResources,
   useUnarchiveResource,
 } from '../api/use-resources';
+import {
+  deleteResourceDescription,
+  deleteResourceTitle,
+  dissolveGroupDescription,
+} from '../lib/group-action-copy';
 import {
   ANY_RESOURCE_KIND,
   DEFAULT_RESOURCE_LIBRARY_FILTERS,
@@ -76,6 +82,14 @@ function deleteErrorMessage(error: unknown): string {
     : 'Couldn’t delete this resource. Please try again.';
 }
 
+/** Friendly message for a dissolve the server refused. */
+function dissolveErrorMessage(error: unknown): string {
+  if (error instanceof ApiFetchError && error.status === 404) {
+    return 'This group was already removed. Refresh the library.';
+  }
+  return error instanceof Error ? error.message : 'Couldn’t dissolve this group. Please try again.';
+}
+
 /**
  * The organisation's resources as a table (name, kind, code, calendar). Writers
  * (`canWrite`) get Edit + Delete; everyone else gets a read-only View. A delete
@@ -130,6 +144,7 @@ export function ResourcesTable({
     ...(kindFilter === ANY_RESOURCE_KIND ? {} : { kind: kindFilter }),
   });
   const deleteResource = useDeleteResource(orgSlug);
+  const dissolveGroup = useDissolveResourceGroup(orgSlug);
   const archiveResource = useArchiveResource(orgSlug);
   const unarchiveResource = useUnarchiveResource(orgSlug);
   const announce = useAnnounce();
@@ -145,7 +160,21 @@ export function ResourcesTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ResourceSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Its own confirm state, not a mode on `deleting`: the two dialogs have opposite contracts and
+  // sharing one slot would let a dissolve render with a delete's copy for a frame.
+  const [dissolving, setDissolving] = useState<ResourceSummary | null>(null);
+  const [dissolveError, setDissolveError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  // The group dialogs' counts come from their own read — unfiltered and INCLUDING archived rows —
+  // because the table's rows follow its filters and the archived default, and the server moves or
+  // deletes archived members too. Idle until a dialog opens, so nothing fetches for a library
+  // nobody is dissolving from.
+  const groupDialogLibrary = useResources(
+    orgSlug,
+    { archived: 'include' },
+    dissolving !== null || deleting !== null,
+  );
 
   const editing = editingId ? resources.data?.find((r) => r.id === editingId) : undefined;
 
@@ -197,7 +226,7 @@ export function ResourcesTable({
     }
     return toResourceTreeRows(data);
   }, [resources.data, filtersActive]);
-  // The parent group's name per row, for the read-only Group column — resolved from the loaded
+  // The parent group's name per row, for the "In <group>" line — resolved from the loaded
   // list, mirroring how `ActivitiesTable` resolves its WBS parent label (no extra fetch).
   const groupNameById = useMemo(
     () => new Map((resources.data ?? []).map((r) => [r.id, r.name])),
@@ -368,6 +397,19 @@ export function ResourcesTable({
             <MenuItem onSelect={() => toggleArchived(resource)}>
               {isArchivedRow(resource) ? 'Unarchive' : 'Archive'}
             </MenuItem>
+            {/* Dissolve sits immediately BEFORE Delete — neighbours in intent, opposites in effect —
+                and exists only on a group: an action that does not apply to the object is omitted,
+                not shaded (`docs/UX_STANDARDS.md` "Row / node actions"). */}
+            {isResourceGroup(resource) ? (
+              <MenuItem
+                onSelect={() => {
+                  setDissolveError(null);
+                  setDissolving(resource);
+                }}
+              >
+                Dissolve
+              </MenuItem>
+            ) : null}
             <MenuItem
               destructive
               onSelect={() => {
@@ -407,6 +449,28 @@ export function ResourcesTable({
         regionRef.current?.focus();
       },
       onError: (err) => setDeleteError(deleteErrorMessage(err)),
+    });
+  };
+
+  const confirmDissolve = (): void => {
+    if (!dissolving) return;
+    const name = dissolving.name;
+    dissolveGroup.mutate(dissolving.id, {
+      onSuccess: (result) => {
+        // The group's row unmounts with this, so focus is handed to the region (ADR-0135), after
+        // the dialog has closed synchronously.
+        flushSync(() => {
+          setDissolving(null);
+          setDissolveError(null);
+        });
+        // Names what happened, with the server's own count of what moved.
+        const kept = result.promoted.length;
+        announce(
+          `Group “${name}” dissolved. Its ${kept === 1 ? '1 resource was' : `${String(kept)} resources were`} kept.`,
+        );
+        regionRef.current?.focus();
+      },
+      onError: (err) => setDissolveError(dissolveErrorMessage(err)),
     });
   };
 
@@ -486,7 +550,7 @@ export function ResourcesTable({
           <p id={explainerId} className="text-muted-foreground text-sm">
             {ARCHIVE_EXPLAINER}
             {filtersActive
-              ? ' While a filter is active the list is flat — the Group column still names each match’s group.'
+              ? ' While a filter is active the list is flat — each row still says which group it is in.'
               : ''}
           </p>
           {archiveError ? (
@@ -545,19 +609,45 @@ export function ResourcesTable({
           {...(editing ? { resource: editing } : {})}
         />
         {canWrite ? (
-          <ConfirmDialog
-            open={deleting !== null}
-            onClose={() => {
-              setDeleting(null);
-              setDeleteError(null);
-            }}
-            onConfirm={confirmDelete}
-            title="Delete resource"
-            description={deleting ? `Delete “${deleting.name}”?` : ''}
-            pending={deleteResource.isPending}
-            pendingLabel="Deleting…"
-            error={deleteError}
-          />
+          <>
+            <ConfirmDialog
+              open={deleting !== null}
+              onClose={() => {
+                setDeleting(null);
+                setDeleteError(null);
+              }}
+              onConfirm={confirmDelete}
+              title={deleting ? deleteResourceTitle(deleting) : 'Delete resource'}
+              description={
+                deleting ? deleteResourceDescription(deleting, groupDialogLibrary.data ?? []) : ''
+              }
+              pending={deleteResource.isPending}
+              pendingLabel="Deleting…"
+              error={deleteError}
+            />
+            {/* Deliberately NOT the destructive variant: dissolve removes a grouping and keeps every
+              resource in it, and dressing it in the delete red would say, in the channel read
+              fastest, the opposite of the copy. */}
+            <ConfirmDialog
+              open={dissolving !== null}
+              onClose={() => {
+                setDissolving(null);
+                setDissolveError(null);
+              }}
+              onConfirm={confirmDissolve}
+              title="Dissolve group"
+              description={
+                dissolving
+                  ? dissolveGroupDescription(dissolving, groupDialogLibrary.data ?? [])
+                  : ''
+              }
+              confirmLabel="Dissolve"
+              confirmVariant="default"
+              pending={dissolveGroup.isPending}
+              pendingLabel="Dissolving…"
+              error={dissolveError}
+            />
+          </>
         ) : null}
       </div>
     </SectionCard>
