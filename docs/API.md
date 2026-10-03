@@ -637,7 +637,7 @@ only** — engine-calculated dates and flags, a link's `is_driving` and the deri
 | ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `…/activities/:activityId/history` | The activity's history, newest-first, keyset-paginated · 404 foreign / deleted activity · 422 bad cursor or `limit`. `activity:read`. |
 
-`limit` is 1–100 (default 50); `cursor` is opaque. The response is the usual `{ data, meta }`:
+`limit` is 1–100 (default 50); `cursor` is opaque. **A page may be short** — entries a reader may not see are removed after the scan — so follow `meta.hasMore`, never the page length. The response is the usual `{ data, meta }`:
 
 - `data[]` — `{ id, actor: { id, name }, scope, firstRecordedAt, lastRecordedAt, editCount, batch, origin,
 changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `RESOURCES`. `actor.name` is

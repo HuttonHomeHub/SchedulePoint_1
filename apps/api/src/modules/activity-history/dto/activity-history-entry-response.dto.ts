@@ -27,7 +27,7 @@ export class ActivityHistoryBatchDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
-  @ApiProperty({ description: 'How many activities the one write recorded.' })
+  @ApiProperty({ type: 'integer', description: 'How many activities the one write recorded.' })
   size!: number;
 }
 
@@ -47,7 +47,10 @@ export class ActivityHistoryEntryResponseDto implements ActivityHistoryEntry {
   @ApiProperty({ format: 'date-time', description: 'When the latest merged save was recorded.' })
   lastRecordedAt!: string;
 
-  @ApiProperty({ description: 'How many saves this entry absorbed (1 = one save).' })
+  @ApiProperty({
+    type: 'integer',
+    description: 'How many saves this entry absorbed (1 = one save).',
+  })
   editCount!: number;
 
   @ApiProperty({ type: ActivityHistoryBatchDto, nullable: true })

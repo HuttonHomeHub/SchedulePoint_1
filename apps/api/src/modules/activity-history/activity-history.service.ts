@@ -23,6 +23,9 @@ import type { StoredChanges } from './activity-history.types';
  */
 const HISTORY_MIGRATION = '20261003120000_activity_history_entries';
 
+/** When this database began recording; `null` until first read. */
+let recordingStartedAt: Date | null = null;
+
 const UNKNOWN_ACTOR = 'Unknown user';
 
 interface EntryRow {
@@ -123,12 +126,22 @@ export class ActivityHistoryService {
 
   /** The later of the activity's creation and the day this database started recording. */
   private async recordingSince(createdAt: Date): Promise<Date> {
+    // The migration's `finished_at` never changes once the table exists, so it is read once per
+    // process rather than on every page (a miss — before the migration, which cannot happen on a
+    // running API — is not cached).
+    if (recordingStartedAt === null) {
+      recordingStartedAt = await this.readRecordingStart();
+    }
+    const startedAt = recordingStartedAt;
+    return startedAt !== null && startedAt > createdAt ? startedAt : createdAt;
+  }
+
+  private async readRecordingStart(): Promise<Date | null> {
     const rows = await this.prisma.$queryRaw<{ startedAt: Date | null }[]>`
       SELECT m."finished_at" AS "startedAt" FROM "_prisma_migrations" m
        WHERE m."migration_name" = ${HISTORY_MIGRATION}
          AND m."finished_at" IS NOT NULL AND m."rolled_back_at" IS NULL`;
-    const startedAt = rows[0]?.startedAt ?? null;
-    return startedAt !== null && startedAt > createdAt ? startedAt : createdAt;
+    return rows[0]?.startedAt ?? null;
   }
 
   /** One batched lookup for the page's actors; an erased user resolves to the tombstone name. */

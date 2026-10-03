@@ -102,8 +102,11 @@ function fieldValuesEqual(
  * Diff two reads of one activity, by value. Only the recorded inputs are compared, so the engine
  * rewriting an early date, or the derived `status` moving with the percentage, is never a change.
  *
- * A lane-only change returns nothing (CQ-4): the diagram's auto-pack moves lanes without the
- * planner having decided anything. A lane change that travels with another recorded change is kept.
+ * A lane change is returned like any other; whether it earns an entry is {@link isLaneOnly}'s and
+ * {@link planRecord}'s decision (CQ-4): the diagram's auto-pack moves lanes without the planner having
+ * decided anything, so a lane-only save never creates an entry, but one that travels with another
+ * recorded change is kept — and a lane-only save joins an entry that already holds a lane item, so the
+ * lane going back reads as the same lane and is not left as a stale "1 → 2".
  */
 export function diffActivity(
   before: ActivityRecordedRow,
@@ -117,9 +120,13 @@ export function diffActivity(
     const to = fieldValue(key, kind, after, names);
     if (!fieldValuesEqual(kind, from, to)) changes[key] = { from, to };
   }
-  const keys = Object.keys(changes);
-  if (keys.length === 1 && keys[0] === 'laneIndex') return {};
   return changes;
+}
+
+/** Whether a diff changed only the lane (CQ-4). */
+export function isLaneOnly(changes: StoredChanges): boolean {
+  const keys = Object.keys(changes);
+  return keys.length === 1 && keys[0] === 'laneIndex';
 }
 
 /** The ids of the references a diff would name, so the caller reads only those names. */
@@ -207,7 +214,7 @@ export function assignmentChange(
 }
 
 /** Plain structural equality for the two state objects (flat, JSON-safe, no names inside). */
-function statesEqual(a: object | null, b: object | null): boolean {
+export function statesEqual(a: object | null, b: object | null): boolean {
   if (a === null || b === null) return a === b;
   const x = a as Record<string, unknown>;
   const y = b as Record<string, unknown>;
@@ -304,15 +311,21 @@ export function planRecord(
 ): RecordPlan {
   if (Object.keys(write.changes).length === 0) return { action: 'none' };
 
-  if (
+  const joinable =
     latest !== null &&
     latest.batchId === null &&
     !write.isBatch &&
     latest.actorUserId === write.actorUserId &&
     latest.scope === write.scope &&
     now.getTime() - latest.lastRecordedAt.getTime() <= MERGE_QUIET_GAP_MS &&
-    now.getTime() - latest.firstRecordedAt.getTime() <= MERGE_MAX_SPAN_MS
-  ) {
+    now.getTime() - latest.firstRecordedAt.getTime() <= MERGE_MAX_SPAN_MS;
+
+  // A lane-only save never creates an entry (CQ-4); it may only update a lane item an entry already has.
+  if (isLaneOnly(write.changes) && !(joinable && 'laneIndex' in latest.changes)) {
+    return { action: 'none' };
+  }
+
+  if (joinable) {
     const merged = mergeChanges(latest.changes, write.changes);
     if (Object.keys(merged).length === 0) return { action: 'drop', entryId: latest.id };
     if (keyedCount(merged) <= MAX_KEYED_ITEMS_PER_ENTRY) {

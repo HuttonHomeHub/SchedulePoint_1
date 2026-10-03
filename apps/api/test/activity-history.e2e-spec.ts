@@ -240,6 +240,18 @@ describe.skipIf(!hasDatabase)('Activity history (e2e)', () => {
       expect((await history(admin, a)).data).toHaveLength(0);
     });
 
+    it('lets a lane that went back cancel inside an entry that already held it', async () => {
+      const { admin, ids } = await setup('Excavate');
+      const a = ids[0] as string;
+      await edit(admin, a, { visualStart: '2026-03-04', laneIndex: 1 });
+      await edit(admin, a, { laneIndex: 2 });
+      expect((await history(admin, a)).data[0]?.changes.laneIndex).toEqual({ from: 0, to: 2 });
+      await edit(admin, a, { laneIndex: 0 });
+      const { data } = await history(admin, a);
+      expect(data).toHaveLength(1);
+      expect(Object.keys(data[0]?.changes as Json)).toEqual(['visualStart']);
+    });
+
     it('records nothing when the write fails: a stale version 409s and leaves no entry', async () => {
       const { admin, ids } = await setup('Excavate');
       const a = ids[0] as string;

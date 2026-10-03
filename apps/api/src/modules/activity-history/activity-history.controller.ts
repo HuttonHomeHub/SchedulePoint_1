@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiCookieAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -41,6 +42,7 @@ export class ActivityHistoryController {
       'Working memory, not an audit trail: entries merge and can disappear when undone.',
   })
   @ApiOkResponse({ type: ActivityHistoryEntryResponseDto, isArray: true })
+  @ApiBadRequestResponse({ description: 'The activity id is not a valid UUID.' })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({ description: 'A malformed cursor or page size.' })
   async list(

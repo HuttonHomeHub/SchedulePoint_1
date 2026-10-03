@@ -101,6 +101,7 @@ export type ActivityHistoryFieldKey = keyof typeof ACTIVITY_HISTORY_FIELDS;
 /** Prefixes of the keyed-object items; the prefix says which table the id belongs to. */
 export const ACTIVITY_HISTORY_KEY_PREFIXES = {
   link: 'link:',
+  /** Reserved for cross-plan links, which are recorded from the second milestone (M2-T3). */
   crossPlanLink: 'xlink:',
   assignment: 'assignment:',
 } as const;
@@ -209,7 +210,7 @@ export interface ActivityHistoryEntry {
   /** Set for a multi-activity write: how many activities the one write recorded. */
   batch: { id: string; size: number } | null;
   origin: ActivityHistoryOrigin | null;
-  /** Keyed by item: a field key, `link:<id>`, `xlink:<id>` or `assignment:<id>`. */
+  /** Keyed by item: a field key, `link:<id>` or `assignment:<id>` (`xlink:<id>` is reserved for M2). */
   changes: Record<string, ActivityHistoryChange>;
 }
 

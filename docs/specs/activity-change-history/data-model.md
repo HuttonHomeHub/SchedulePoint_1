@@ -1,9 +1,8 @@
 # Data model: Activity change history
 
-- **Status:** **Input to M1-T1.** The feature spec was approved by the product owner on 2026-10-03,
+- **Status:** **Implemented** — the table and migration in `7372ec7`, the recorder and routes in M1 (ADR-0174). Amended 2026-10-03 after review where §3, §4.1–4.4 say so. Originally **input to M1-T1.** The feature spec was approved by the product owner on 2026-10-03,
   including CQ-3 (links and resources from the first release) and three follow-ups (links recorded on
-  both ends; names stored as they were at the time; knock-on entries on survivors). Paper only: no
-  `schema.prisma` edit and no migration exist yet.
+  both ends; names stored as they were at the time; knock-on entries on survivors). (When first written this was paper only; the model and migration have since landed.)
 - **Revisions:** first draft by **database-architect** (CLAUDE.md §19.3), 2026-10-03; extended the
   same day by database-architect for plan task **M1-T0** (spec §4.4 items O1–O7, §10 below). The
   extension changed five things in the first draft, each marked **(M1-T0)** where it lands and listed
@@ -294,9 +293,13 @@ but the shape is unchanged.
 `organization_id → organizations` **`RESTRICT`**, like every org-scoped table. No FK on
 `actor_user_id` (house convention; §5).
 
-**Same-org (R5).** No composite FK. The recorder writes `organization_id` from the activity row
-(`INSERT … SELECT a.organization_id … FROM activities a WHERE a.id = …`), never from request context,
-and an e2e test proves that a foreign-org write cannot plant a row. For cross-plan links each endpoint's
+**Same-org (R5).** No composite FK. **As built**, the recorder reads `organization_id` from the
+activity row in its probe statement — under the history lock, inside the write's transaction — and
+writes it onto the entry with a Prisma `create`, never from request context. That is equivalent to the
+`INSERT … SELECT a.organization_id FROM activities a` the first draft proposed: an activity's
+organisation never changes, and both read the same row in the same transaction. The `SELECT` form was
+dropped only because the entry then needs a Prisma-generated v7 id and the probe already reads the
+activity. An e2e test proves that a foreign-org write cannot plant a row. For cross-plan links each endpoint's
 entry copies **its own** activity's org (§10 O6).
 
 ## 4. Indexes, ordering and concurrency
@@ -384,6 +387,10 @@ without the lock); (b) a link create A→B concurrent with a PATCH of B and a pl
 A and B must complete with no `40P01` across 200 iterations; (c) a concurrent assignment update and
 duration PATCH on one activity must each produce exactly their own items.
 
+> **As built (4.1).** Lock keys are `hashtext('plan:' || id)` and `hashtext('activity:' || id)` under
+> the namespace `hashtext('activity-history')`, so the two levels can never collide with each other. The
+> acquisition is one statement over a derived table ordered by `(level, id)`.
+
 ### 4.2 Recorded time (M1-T0) — corrects the first draft
 
 The first draft said "set timestamps with `now()`". **That is wrong.** `now()` is the
@@ -398,8 +405,14 @@ latest.last_recorded_at + interval '1 millisecond')`, and a merge sets `last_rec
 GREATEST(t, latest.last_recorded_at)`. This removes same-millisecond ties, which would otherwise be
   broken by an app-generated v7 id minted before the lock, and so possibly in the wrong order. It also
   covers a wall-clock step backwards.
-- The 60 s / 10 min merge tests compare `t` with the latest entry's `last_` / `first_recorded_at`, in
-  SQL.
+- The 60 s / 10 min merge tests compare `t` with the latest entry's `last_` / `first_recorded_at`.
+  **As built they run in the pure `planRecord`**, not in SQL: `t` is the database's `clock_timestamp()`
+  (never the API process clock), read in the same statement as the latest-entry probe, so the comparison
+  is between two database times and is unit-testable.
+
+> **As built (M1).** A single-object write costs three statements before its writes: the lock, the
+> probe (latest entry, organisation and the database clock in one `LATERAL` statement) and then one
+> insert, update or delete per activity.
 
 ### 4.3 Batch path (M2) — the probe survives, for ordering, not merging
 
@@ -431,6 +444,12 @@ The recorder diffs the rows the write **actually transitioned**, never what the 
 - Un-gated transitions are recorded **only if this transaction made them**: link remove
   (`updateMany … WHERE deleted_at IS NULL`, count = 1), assignment remove, and the `clearDriving`
   rows (`RETURNING id`). Two concurrent removes record one "removed", not two.
+
+**As built.** `ResourceAssignmentRepository.clearDrivingForActivity` is a raw `UPDATE … RETURNING id`
+(it stamps `updated_at` by hand, which Prisma's client-side `@updatedAt` would otherwise do) so the
+displaced driver is recorded only if this statement changed it. The duration the units triad rewrites is
+recorded with the activity's pre-read duration as `from`: `persistActivityDuration` is gated on that
+read's `version`, so a changed activity rolls the write back before the entry is written.
 
 Two existing paths have **no transaction today** and must gain one to record:
 `DependenciesService.update` and `ResourceAssignmentService.remove` (§0).

@@ -14,6 +14,7 @@ import {
   changedReferenceIds,
   diffActivity,
   hasNonCostChange,
+  isLaneOnly,
   isNetZero,
   linkItem,
   linkKey,
@@ -134,8 +135,10 @@ describe('diffActivity', () => {
     });
   });
 
-  it('does not record a lane-only change (CQ-4) but keeps a lane that travels with another', () => {
-    expect(diffActivity(row(), row({ laneIndex: 3 }), NO_NAMES)).toEqual({});
+  it('reports a lane change, which planRecord then declines to start an entry for (CQ-4)', () => {
+    const lane = diffActivity(row(), row({ laneIndex: 3 }), NO_NAMES);
+    expect(lane).toEqual({ laneIndex: { from: 0, to: 3 } });
+    expect(isLaneOnly(lane)).toBe(true);
     expect(
       diffActivity(row(), row({ laneIndex: 3, visualStart: new Date('2026-03-04') }), NO_NAMES),
     ).toMatchObject({ laneIndex: { from: 0, to: 3 }, visualStart: { to: '2026-03-04' } });
@@ -413,6 +416,32 @@ describe('planRecord', () => {
       action: 'insert',
       firstRecordedAt: NOW,
     });
+  });
+
+  it('never starts an entry for a lane-only save (CQ-4)', () => {
+    expect(planRecord(null, write({ changes: { laneIndex: { from: 0, to: 1 } } }), NOW)).toEqual({
+      action: 'none',
+    });
+    // …nor when the latest entry is joinable but holds no lane item yet.
+    expect(
+      planRecord(latest(), write({ changes: { laneIndex: { from: 0, to: 1 } } }), NOW),
+    ).toEqual({ action: 'none' });
+  });
+
+  it('joins a lane-only save to an entry that already holds a lane, so the lane going back cancels', () => {
+    const withLane = latest({
+      changes: { visualStart: { from: null, to: '2026-03-04' }, laneIndex: { from: 0, to: 1 } },
+    });
+    // The lane moves on: 1 → 2 keeps the original from.
+    expect(
+      planRecord(withLane, write({ changes: { laneIndex: { from: 1, to: 2 } } }), NOW),
+    ).toMatchObject({ action: 'merge', changes: { laneIndex: { from: 0, to: 2 } } });
+    // The lane goes back to where it started: the lane item disappears, the placement stays.
+    expect(
+      planRecord(withLane, write({ changes: { laneIndex: { from: 1, to: 0 } } }), NOW),
+    ).toMatchObject({ action: 'merge', changes: { visualStart: { to: '2026-03-04' } } });
+    const merged = planRecord(withLane, write({ changes: { laneIndex: { from: 1, to: 0 } } }), NOW);
+    expect(merged.action === 'merge' && 'laneIndex' in merged.changes).toBe(false);
   });
 
   it('drops the entry when the merge cancels out (the undo inside the window)', () => {

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityDependency, type ResourceAssignment } from '@prisma/client';
-import type { ActivityHistoryScope } from '@repo/types';
+import { activityHistoryItemKind, type ActivityHistoryScope } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { acquireActivityHistoryLocks } from '../../common/db/activity-history-lock';
 
+import { MAX_KEYED_ITEMS_PER_ENTRY } from './activity-history.constants';
 import {
   assignmentChange,
   assignmentItem,
@@ -57,6 +58,8 @@ export interface RecordInput {
 interface ProbeRow {
   activityId: string;
   organizationId: string;
+  /** Database time, read once per statement under the history lock. */
+  now: Date;
   entryId: string | null;
   actorUserId: string | null;
   scope: ActivityHistoryScope | null;
@@ -102,6 +105,12 @@ export class ActivityHistoryRecorder {
   ) {}
 
   async record(tx: Prisma.TransactionClient, input: RecordInput): Promise<void> {
+    // Fail closed: outside a transaction the lock would be released at the end of its own statement
+    // and the recorder would silently stop serialising anything. A Prisma interactive-transaction
+    // client has no `$transaction`; the root client does.
+    if ('$transaction' in tx) {
+      throw new Error('ActivityHistoryRecorder.record must be called with a transaction client.');
+    }
     if (RECORDED.has(tx)) {
       throw new Error(
         'ActivityHistoryRecorder.record was called twice in one transaction; every activity a ' +
@@ -112,24 +121,31 @@ export class ActivityHistoryRecorder {
 
     const writes = input.writes.filter((w) => Object.keys(w.changes).length > 0);
     if (writes.length === 0) return;
+    for (const w of writes) {
+      // A single-object write produces at most two keyed items for one activity; more is a caller
+      // bug (the knock-on path of the second milestone must chunk) and would risk the size CHECK.
+      const keyed = Object.keys(w.changes).filter((k) => activityHistoryItemKind(k) !== 'field');
+      if (keyed.length > MAX_KEYED_ITEMS_PER_ENTRY) {
+        throw new Error(
+          `ActivityHistoryRecorder: ${keyed.length} keyed items for one activity exceeds ${MAX_KEYED_ITEMS_PER_ENTRY}`,
+        );
+      }
+    }
 
     await acquireActivityHistoryLocks(tx, {
       planIds: writes.map((w) => w.planId),
       activityIds: writes.map((w) => w.activityId),
     });
 
-    // Read AFTER the lock is held. `now()` is the transaction's start and could date this entry
-    // before one a concurrent recorder committed while we waited; `clock_timestamp()` cannot, and
-    // `planRecord` clamps against the latest entry besides.
-    const clock = await tx.$queryRaw<{ t: Date }[]>`
-      SELECT date_trunc('milliseconds', clock_timestamp()) AS t`;
-    const t = clock[0]?.t;
-    if (!t) throw new Error('ActivityHistoryRecorder: the database returned no clock reading');
-
+    // The probe also reads the clock, so it is one statement: it runs AFTER the lock is held. `now()`
+    // is the transaction's start and could date this entry before one a concurrent recorder committed
+    // while we waited; `clock_timestamp()` cannot, and `planRecord` clamps against the latest entry.
     const probes = await this.probe(
       tx,
       writes.map((w) => w.activityId),
     );
+    const t = [...probes.values()][0]?.now;
+    if (!t) throw new Error('ActivityHistoryRecorder: the probe returned no activity or clock');
 
     for (const write of writes) {
       const row = probes.get(write.activityId);
@@ -284,6 +300,7 @@ export class ActivityHistoryRecorder {
   ): Promise<Map<string, ProbeRow>> {
     const rows = await tx.$queryRaw<ProbeRow[]>`
       SELECT a.id AS "activityId", a.organization_id AS "organizationId",
+             date_trunc('milliseconds', clock_timestamp()) AS "now",
              e.id AS "entryId", e.actor_user_id AS "actorUserId", e.scope::text AS scope,
              e.first_recorded_at AS "firstRecordedAt", e.last_recorded_at AS "lastRecordedAt",
              e.edit_count AS "editCount", e.batch_id AS "batchId", e.changes AS changes

@@ -430,6 +430,10 @@ export class ResourceAssignmentService {
           planId: activity.planId,
           changes: {
             ...(await this.history.assignmentChanges(tx, write.pairs)),
+            // `from` is the duration the activity was READ with before the transaction. That is the
+            // row replaced, not a guess: `persistActivityDuration` already succeeded, and it is
+            // gated on that same read's `version`, so a changed activity would have rolled this
+            // whole write back with a 409 before it reached here.
             ...(write.duration
               ? {
                   durationMinutes: {

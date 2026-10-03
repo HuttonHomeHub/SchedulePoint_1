@@ -8,6 +8,7 @@ import {
   type ActivityHistoryFieldChange,
 } from '@repo/types';
 
+import { statesEqual } from './activity-history.diff';
 import type {
   StoredAssignmentItem,
   StoredChanges,
@@ -70,6 +71,6 @@ function redactAssignment(
   if (canReadCost) return item;
   const from = stripMoney(item.from);
   const to = stripMoney(item.to);
-  if (from !== null && to !== null && JSON.stringify(from) === JSON.stringify(to)) return null;
+  if (from !== null && to !== null && statesEqual(from, to)) return null;
   return { resource: item.resource, from, to };
 }
