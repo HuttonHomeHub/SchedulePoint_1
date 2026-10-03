@@ -2053,6 +2053,7 @@ export function TsldCanvas({
       }
       if (gestureActiveRef.current) {
         gestureActiveRef.current = false;
+        if (canvasRef.current) canvasRef.current.style.cursor = '';
         gestureRef.current = reduce(
           gestureRef.current,
           { type: 'escape' },
@@ -2606,6 +2607,7 @@ export function TsldCanvas({
           if (!gestureActiveRef.current) return;
           gestureActiveRef.current = false;
           drag.current = null;
+          if (canvasRef.current) canvasRef.current.style.cursor = '';
           gestureRef.current = reduce(gestureRef.current, { type: 'escape' }, machineCtx()).state;
           syncGestureSource();
           interactionDirtyRef.current = true;

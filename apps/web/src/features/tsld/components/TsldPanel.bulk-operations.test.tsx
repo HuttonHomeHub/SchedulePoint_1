@@ -366,6 +366,18 @@ describe('a plural drag that includes a started activity', () => {
     expect((canvas as HTMLElement).style.cursor).toBe('');
   });
 
+  it.each([
+    ['pointercancel', (c: Element) => fireEvent.pointerCancel(c, { pointerId: 1 })],
+    ['Escape', () => fireEvent.keyDown(window, { key: 'Escape' })],
+  ])('clears the not-allowed cursor when the drag is cancelled by %s', (_name, cancel) => {
+    const { canvas } = renderDrag([wide('a', 'Excavate', 0, { actualStart: '2026-01-01' })]);
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(0), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 122, clientY: laneY(0), pointerId: 1 });
+    expect((canvas as HTMLElement).style.cursor).toBe('not-allowed');
+    cancel(canvas);
+    expect((canvas as HTMLElement).style.cursor).toBe('');
+  });
+
   it('says the sideways part was dropped when a started primary moves lane and column', async () => {
     announceSpy.mockClear();
     const { canvas, moveMany } = renderDrag([
@@ -376,7 +388,9 @@ describe('a plural drag that includes a started activity', () => {
     expect(moveMany).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/activities moved\. This activity has started/),
+        expect.stringMatching(
+          /activities moved\. Starts of activities that have started were not changed\./,
+        ),
       ),
     );
   });

@@ -97,6 +97,12 @@ export function isResizeEligibleType(type: ActivityType): boolean {
 export const START_EDGE_FROZEN_REASON =
   'This activity has started, so its start is its actual start and cannot be moved here.';
 
+/** Said after a drop that DID move a started activity between lanes and dropped its sideways part. */
+export const START_NOT_CHANGED_NOTE = 'Its start was not changed because it has started.';
+
+/** The plural form, for a batch moved between lanes with a started member among them. */
+export const STARTS_NOT_CHANGED_NOTE = 'Starts of activities that have started were not changed.';
+
 /** The same refusal for a plural drag: `count` of the selected activities are started. */
 export function startFrozenPluralReason(count: number): string {
   return `${String(count)} of the selected activities ${count === 1 ? 'has' : 'have'} started, so ${

@@ -29,7 +29,7 @@ export interface BarPointerDrag {
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 }
 
-/** How far (px) a press on a refused bar must travel before it counts as a drag attempt. */
+/** How far (px) sideways a press on a refused bar must travel before it counts as a drag attempt. */
 const REFUSED_DRAG_THRESHOLD_PX = 4;
 
 export function useBarPointerDrag({
@@ -81,9 +81,10 @@ export function useBarPointerDrag({
       if (event.button !== 0) return;
       if (!enabled) {
         if (!onRefused) return;
+        // A finger on a started bar is a scroll or a tap, never a drag attempt worth a refusal.
+        if (event.pointerType === 'touch') return;
         const refusedId = event.pointerId;
         const startX = event.clientX;
-        const startY = event.clientY;
         const end = (): void => {
           window.removeEventListener('pointermove', onRefusedMove);
           window.removeEventListener('pointerup', onRefusedEnd);
@@ -91,11 +92,8 @@ export function useBarPointerDrag({
         };
         const onRefusedMove = (moveEvent: PointerEvent): void => {
           if (moveEvent.pointerId !== refusedId) return;
-          const travelled = Math.max(
-            Math.abs(moveEvent.clientX - startX),
-            Math.abs(moveEvent.clientY - startY),
-          );
-          if (travelled <= REFUSED_DRAG_THRESHOLD_PX) return;
+          // Horizontal only: a vertical mouse drag is a text selection, not an attempt to slide the bar.
+          if (Math.abs(moveEvent.clientX - startX) <= REFUSED_DRAG_THRESHOLD_PX) return;
           end();
           onRefused();
         };

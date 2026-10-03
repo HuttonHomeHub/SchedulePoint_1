@@ -228,4 +228,53 @@ describe('useBarPointerDrag', () => {
     });
     expect(onCommit).toHaveBeenCalledExactlyOnceWith(60);
   });
+
+  describe('a press on a bar that cannot move', () => {
+    const refused = (over: Record<string, unknown> = {}) =>
+      ({ ...pointerDown(100), ...over }) as unknown as React.PointerEvent<HTMLElement>;
+    const moveXY = (clientX: number, clientY: number) =>
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY, pointerId: 1 }));
+
+    it('calls onRefused once for a sideways drag, never commits', () => {
+      const onCommit = vi.fn();
+      const onRefused = vi.fn();
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: false, onCommit, onRefused }),
+      );
+      act(() => result.current.onPointerDown(refused()));
+      act(() => {
+        move(130);
+        move(160);
+        up(1);
+      });
+      expect(onRefused).toHaveBeenCalledOnce();
+      expect(onCommit).not.toHaveBeenCalled();
+    });
+
+    it('ignores a vertical drag, which is a text selection', () => {
+      const onRefused = vi.fn();
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: false, onCommit: vi.fn(), onRefused }),
+      );
+      act(() => result.current.onPointerDown(refused({ clientY: 0 })));
+      act(() => {
+        moveXY(101, 80);
+        up(1);
+      });
+      expect(onRefused).not.toHaveBeenCalled();
+    });
+
+    it('ignores a touch, which is a scroll', () => {
+      const onRefused = vi.fn();
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: false, onCommit: vi.fn(), onRefused }),
+      );
+      act(() => result.current.onPointerDown(refused({ pointerType: 'touch' })));
+      act(() => {
+        move(160);
+        up(1);
+      });
+      expect(onRefused).not.toHaveBeenCalled();
+    });
+  });
 });

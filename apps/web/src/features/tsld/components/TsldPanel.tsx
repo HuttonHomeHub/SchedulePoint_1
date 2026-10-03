@@ -55,7 +55,9 @@ import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-sur
 import {
   isStartEdgeFrozen,
   START_EDGE_FROZEN_REASON,
+  START_NOT_CHANGED_NOTE,
   startFrozenPluralReason,
+  STARTS_NOT_CHANGED_NOTE,
 } from '../render/hit-test';
 import {
   buildBaselineGhosts,
@@ -2575,7 +2577,7 @@ export function TsldPanel({
             else
               announce(
                 `${String(rows.length)} activities moved.${
-                  intent.sidewaysDiscarded ? ` ${START_EDGE_FROZEN_REASON}` : ''
+                  intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''
                 }`,
               );
           })
@@ -2665,7 +2667,7 @@ export function TsldPanel({
               landed: outcome.laneIndex ?? laneIndex,
               original: activity.laneIndex,
             });
-            announce(intent.sidewaysDiscarded ? `${moved} ${START_EDGE_FROZEN_REASON}` : moved);
+            announce(intent.sidewaysDiscarded ? `${moved} ${START_NOT_CHANGED_NOTE}` : moved);
           }
         })
         .catch((err: unknown) => {
