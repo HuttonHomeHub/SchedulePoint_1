@@ -82,13 +82,14 @@ test('a typed column width applies, survives a reload, and resets', async ({ pag
   const tableWidth = await separator.getAttribute('aria-valuenow');
   await expect(field(page, 'Table width')).toHaveValue(tableWidth ?? '');
 
-  await field(page, 'Code width').fill('160');
+  // +60 px: Activity (180, floor 120) can give all of it, so the pane — and the chart's left edge —
+  // stays where the planner put it.
+  await field(page, 'Code width').fill('140');
   await page.keyboard.press('Enter');
 
-  await expect.poll(() => headerWidth(page, 'Code')).toBe(160);
-  // Activity gave up the room: the pane did not move, so the chart's left edge did not either.
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(140);
   await expect(separator).toHaveAttribute('aria-valuenow', tableWidth ?? '');
-  await chartMeetsGrid(page, 'after widening Code');
+  await chartMeetsGrid(page, 'after widening Code within what Activity can give');
   await expect(page.getByRole('button', { name: 'Reset widths' })).not.toHaveAttribute(
     'aria-disabled',
     'true',
@@ -99,9 +100,17 @@ test('a typed column width applies, survives a reload, and resets', async ({ pag
   await page.keyboard.press('Enter');
   await expect(field(page, 'Code width')).toHaveValue('48');
   await expect.poll(() => headerWidth(page, 'Code')).toBe(48);
+
+  // +80 px: Activity can give only 60 before its 120 px floor, so the table pushes the other 20 into
+  // the chart — the floor wins (spec §2.4). The pane grows by exactly the overflow, the divider's
+  // minimum rises to match, and the pinned columns still end where the chart begins.
   await field(page, 'Code width').fill('160');
   await page.keyboard.press('Enter');
   await expect.poll(() => headerWidth(page, 'Code')).toBe(160);
+  const pushed = Number(tableWidth) + 20;
+  await expect(separator).toHaveAttribute('aria-valuenow', String(pushed));
+  await expect(separator).toHaveAttribute('aria-valuemin', String(pushed));
+  await chartMeetsGrid(page, 'after widening Code past what Activity can give');
 
   // axe over the open Columns group — the spinbuttons, their labels and the hint.
   const results = await new AxeBuilder({ page })
