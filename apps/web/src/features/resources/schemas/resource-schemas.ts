@@ -66,7 +66,7 @@ export interface ResourceTreeRow {
   resource: ResourceSummary;
   /**
    * 0 for a top-level row; +1 per `parentId` hop. Drives the row's visual indentation. Nesting is
-   * never conveyed by indentation alone — the always-present **Group** column names each row's
+   * never conveyed by indentation alone — the "In <group>" line under a row's name states its
    * parent in text, which is what carries the relationship non-visually (WCAG 1.3.1).
    */
   depth: number;

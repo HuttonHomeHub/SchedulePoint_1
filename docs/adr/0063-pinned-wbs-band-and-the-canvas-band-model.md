@@ -143,6 +143,10 @@ client records dissolve as a **non-undoable boundary** that truncates the undo s
 ADR-0048 M2 cascade-delete rule), because an inverse composed from the existing mutations would
 re-create a _different_ summary under a new id.
 
+The resource tree's `GROUP` has the same action as of 2026-10-03 (ADR-0053 §3, amended): the
+asymmetry spec C-6 stated for this ADR is closed, with one difference — resources have no restore
+at all, so a dissolved group is not restorable even as an empty shell.
+
 ### 9. One derivation feeds both the screen and the picture (M5)
 
 The band's height decides where the scene starts; the summaries it lifts out decide what the scene

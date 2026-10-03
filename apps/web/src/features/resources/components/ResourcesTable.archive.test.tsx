@@ -130,8 +130,8 @@ describe('ResourcesTable — search, filters & archive (flag on)', () => {
 
     fireEvent.change(screen.getByLabelText('Search resources'), { target: { value: 'crew' } });
     await waitFor(() => expect(indentWidths().every((style) => style === null)).toBe(true));
-    // The hierarchy is not lost — it moves into the Group column's text.
-    expect(screen.getByText(/the Group column still names each match/)).toBeInTheDocument();
+    // The hierarchy is not lost — it stays in each row's "In <group>" text.
+    expect(screen.getByText(/each row still says which group it is in/)).toBeInTheDocument();
   });
 
   it('archives with the row version and unarchives an archived row', async () => {
