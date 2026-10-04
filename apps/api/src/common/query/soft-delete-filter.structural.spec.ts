@@ -1840,11 +1840,11 @@ describe('soft-delete scanner — raw SQL predicates', () => {
   });
 });
 
-// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04).
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04); 30 covering 83 with the second milestone's plan join in the probe and the restore's returning statement (2026-10-04).
 const NESTED_READS_FLOOR = 9;
 const COUNTS_FLOOR = 2;
 const DECLARATIONS = 30;
-const COVERED = 81;
+const COVERED = 83;
 
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
@@ -1891,13 +1891,13 @@ describe('soft-delete gate — the repository tree', () => {
       // Spelled in two parts: the expiry's own structural gate refuses the name outside its directory.
       ['delete' + 'ExpiredScope']: 20,
       sweep: 3,
-      restoreBatch: 18,
+      restoreBatch: 19,
       restoreLinksInBatch: 2,
       compensate: 7,
       findRecentlyChanged: 2,
       findPlanStanding: 2,
       'recycle-bin statement': 2,
-      'activity-history statement': 3,
+      'activity-history statement': 4,
       summarise: 2,
     });
     expect(result.declarations, 'declarations').toHaveLength(DECLARATIONS);

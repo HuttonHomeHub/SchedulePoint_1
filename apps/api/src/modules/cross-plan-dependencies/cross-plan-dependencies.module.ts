@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ActivitiesModule } from '../activities/activities.module';
+import { ActivityHistoryModule } from '../activity-history/activity-history.module';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlansModule } from '../plans/plans.module';
@@ -22,7 +23,7 @@ import { PlanCrossPlanDependenciesController } from './plan-cross-plan-dependenc
  * derivation seam + programme recalc are F4/F5).
  */
 @Module({
-  imports: [OrganizationsModule, PlansModule, ActivitiesModule],
+  imports: [OrganizationsModule, PlansModule, ActivitiesModule, ActivityHistoryModule],
   controllers: [
     CrossPlanDependenciesController,
     PlanCrossPlanDependenciesController,

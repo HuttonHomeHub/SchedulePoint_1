@@ -303,6 +303,10 @@ describe('ActivitiesService', () => {
       record: vi.fn().mockResolvedValue(undefined),
       activityFieldChanges: vi.fn().mockReturnValue(noChanges()),
       assignmentChanges: vi.fn().mockReturnValue(noChanges()),
+      // The batch builders and the knock-on: nothing to record in a unit spec.
+      placementWrites: vi.fn().mockReturnValue([]),
+      parentWrites: vi.fn().mockReturnValue([]),
+      recordKnockOn: vi.fn().mockResolvedValue(undefined),
     };
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
@@ -1542,6 +1546,8 @@ describe('ActivitiesService', () => {
         'activity',
         ACTIVITY_ID,
         USER_ID,
+        undefined,
+        expect.anything(), // the knock-on collector (ADR-0174)
       );
     });
 
@@ -1746,6 +1752,7 @@ describe('ActivitiesService', () => {
         'activity',
         'a',
         USER_ID,
+        expect.anything(), // the knock-on collector (ADR-0174)
       );
     });
 
@@ -1778,6 +1785,7 @@ describe('ActivitiesService', () => {
         'activity',
         ACTIVITY_ID,
         USER_ID,
+        expect.anything(), // the knock-on collector (ADR-0174)
       );
       expect(result.activity.id).toBe(ACTIVITY_ID);
     });

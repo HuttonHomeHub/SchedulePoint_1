@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * **The coverage census** (ADR-0174 D9) — every code path that writes an activity's input columns, a
- * link or a resource assignment is either **recorded** in the activity's history, **pending** (a
- * snapshot queue the second milestone empties; the ADR-0073 `PENDING_COVERAGE` precedent), or
- * **exempt with a reason**, and the two sets together are exactly the writes that exist.
+ * link or a resource assignment is either **recorded** in the activity's history or **exempt with a
+ * reason**, and the two sets together are exactly the writes that exist. (Until the second milestone
+ * a third status, `pending-m2`, held the batch and knock-on paths; the queue is empty and deleted.)
  *
  * **Why it exists.** A write that should record and does not looks identical to one where nothing
  * happened: the timeline simply has a gap nobody can see. No test of any recorder can catch a path
@@ -30,7 +30,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = join(__dirname, '..', '..');
 
-type Status = 'recorded' | 'pending-m2' | 'exempt';
+type Status = 'recorded' | 'exempt';
 
 interface Site {
   status: Status;
@@ -42,6 +42,7 @@ interface Site {
 const ACTIVITIES = 'modules/activities/activities.service.ts';
 const DEPENDENCIES = 'modules/dependencies/dependencies.service.ts';
 const ASSIGNMENTS = 'modules/resources/resource-assignment.service.ts';
+const CROSS_PLAN = 'modules/cross-plan-dependencies/cross-plan-dependencies.service.ts';
 
 const SITES: Record<string, Site> = {
   // — activities: the activity's own inputs ——————————————————————————————————————————————
@@ -56,12 +57,16 @@ const SITES: Record<string, Site> = {
     reason: 'Lane only: the diagram auto-packs lanes without the planner deciding anything (CQ-4).',
   },
   'modules/activities/activity.repository.ts::updatePlacements::activities.UPDATE': {
-    status: 'pending-m2',
-    reason: 'Batch placement: one entry per activity, scope PLACEMENT, never merging (M2-T2).',
+    status: 'recorded',
+    reason:
+      'Batch placement (canvas and Gantt group moves, levelling apply): one entry per activity, ' +
+      'scope PLACEMENT, never merging.',
+    recordedBy: [`${ACTIVITIES}::updatePlacements`],
   },
   'modules/activities/activity.repository.ts::updateParents::activities.UPDATE': {
-    status: 'pending-m2',
-    reason: 'Batch re-parent: scope PLACEMENT (M2-T2).',
+    status: 'recorded',
+    reason: 'Batch re-parent: one entry per activity, scope PLACEMENT.',
+    recordedBy: [`${ACTIVITIES}::updateParents`],
   },
   'modules/activities/activity.repository.ts::create::activity.create': {
     status: 'exempt',
@@ -81,8 +86,9 @@ const SITES: Record<string, Site> = {
       recordedBy: [`${ACTIVITIES}::update`],
     },
   'modules/activities/activities.service.ts::dissolveSummary::activity.updateMany': {
-    status: 'pending-m2',
-    reason: 'Dissolve re-parents the children: scope PLACEMENT, origin SUMMARY_DISSOLVED (M2-T2).',
+    status: 'recorded',
+    reason: 'Dissolve re-parents the children: scope PLACEMENT, origin SUMMARY_DISSOLVED.',
+    recordedBy: [`${ACTIVITIES}::dissolveSummary`],
   },
   'modules/activities/activity-steps.service.ts::replace::activity.updateMany': {
     status: 'exempt',
@@ -106,31 +112,44 @@ const SITES: Record<string, Site> = {
     },
   'modules/cross-plan-dependencies/cross-plan-dependency.repository.ts::create::crossPlanDependency.create':
     {
-      status: 'pending-m2',
-      reason: 'Cross-plan link create, on both endpoints in their own plans (M2-T3).',
+      status: 'recorded',
+      reason: 'Cross-plan link create, on both endpoints in their own plans.',
+      recordedBy: [`${CROSS_PLAN}::create`],
     },
   'modules/cross-plan-dependencies/cross-plan-dependency.repository.ts::softDelete::crossPlanDependency.updateMany':
     {
-      status: 'pending-m2',
-      reason: 'Cross-plan link delete, on both endpoints (M2-T3).',
+      status: 'recorded',
+      reason: 'Cross-plan link delete, on both endpoints in their own plans.',
+      recordedBy: [`${CROSS_PLAN}::remove`],
+    },
+  'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDelete::activityDependency.updateManyAndReturn':
+    {
+      status: 'recorded',
+      reason:
+        'Deleting an activity removes its links to surviving activities: a knock-on entry on each ' +
+        'survivor, from the rows this statement returns.',
+      recordedBy: [`${ACTIVITIES}::remove`],
     },
   'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDelete::activityDependency.updateMany':
     {
-      status: 'pending-m2',
+      status: 'recorded',
       reason:
-        'Deleting an activity removes its links to surviving activities: a knock-on entry on each ' +
-        'survivor (M2-T4). The directly-deleted link branch of the same method is recorded by ' +
-        'DependenciesService.remove, which calls it.',
+        'The directly-deleted link branch is recorded by DependenciesService.remove, which calls it. ' +
+        'The plan, project and client branches delete every link with every endpoint, so there is ' +
+        "no survivor to tell; the activity branch's non-returning fallback (a caller passing no " +
+        'knock-on) is dissolve, whose summary carries no logic (ADR-0035 §24).',
+      recordedBy: [`${DEPENDENCIES}::remove`],
     },
   'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDelete::activity.updateMany': {
     status: 'exempt',
     reason:
       'Delete of the subject itself: in the audit log, and a deleted activity cannot be opened.',
   },
-  'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDeleteActivityLeaves::activityDependency.updateMany':
+  'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDeleteActivityLeaves::activityDependency.updateManyAndReturn':
     {
-      status: 'pending-m2',
-      reason: 'Bulk delete removes links to survivors: a knock-on entry on each (M2-T4).',
+      status: 'recorded',
+      reason: 'Bulk delete removes links to survivors: a knock-on entry on each, set-based.',
+      recordedBy: [`${ACTIVITIES}::bulkDelete`],
     },
   'common/hierarchy/hierarchy-lifecycle.service.ts::cascadeSoftDeleteActivityLeaves::activity.updateMany':
     {
@@ -140,6 +159,12 @@ const SITES: Record<string, Site> = {
   'common/hierarchy/hierarchy-lifecycle.service.ts::restoreBatch::activity.updateMany': {
     status: 'exempt',
     reason: 'Restore of the subjects themselves: in the audit log.',
+  },
+  'common/hierarchy/hierarchy-lifecycle.service.ts::restoreBatch::activity.updateManyAndReturn': {
+    status: 'exempt',
+    reason:
+      'Restore of the subjects themselves: in the audit log. The ids it returns are what the ' +
+      "knock-on uses to tell the survivors, and are recorded by restoreLinksInBatch's callers.",
   },
   'common/hierarchy/hierarchy-lifecycle.service.ts::restoreBatch::activity.update': {
     status: 'exempt',
@@ -153,9 +178,11 @@ const SITES: Record<string, Site> = {
   },
   'common/hierarchy/hierarchy-lifecycle.service.ts::restoreLinksInBatch::activityDependency.updateMany':
     {
-      status: 'pending-m2',
+      status: 'recorded',
       reason:
-        'Restoring an activity brings its links back: a knock-on entry on each survivor (M2-T4).',
+        'Restoring an activity brings its links back: a knock-on entry on each survivor. A plan, ' +
+        'project or client restore brings back links whose both ends return with it: no survivor.',
+      recordedBy: [`${ACTIVITIES}::restore`, `${ACTIVITIES}::restoreDeleteBatch`],
     },
   // — resource assignments ——————————————————————————————————————————————————————————————
   'modules/resources/resource-assignment.repository.ts::create::resourceAssignment.create': {
@@ -328,7 +355,7 @@ describe('activity history coverage census (ADR-0174 D9)', () => {
       for (const ref of entry.recordedBy ?? []) {
         const [file, method] = ref.split('::') as [string, string];
         const body = methodBody(file, method);
-        if (!/history\.record\(|this\.recordHistory\(/.test(body))
+        if (!/history\.record(?:KnockOn)?\(|this\.recordHistory\(/.test(body))
           unrecorded.push(`${site} ← ${ref}`);
       }
     }
@@ -337,12 +364,16 @@ describe('activity history coverage census (ADR-0174 D9)', () => {
     );
   });
 
-  it('keeps the pending queue honest: every entry names the milestone that empties it', () => {
-    const pending = Object.entries(SITES).filter(([, s]) => s.status === 'pending-m2');
-    expect(pending.length).toBeGreaterThan(0);
-    for (const [site, entry] of pending) {
-      expect(entry.reason, `${site} is pending but names no task`).toMatch(/\(M2-T\d\)/);
-    }
+  it('finds no resource-library write to an assignment, which is why it has no origin (O4)', () => {
+    // The library's delete refuses while a resource is in use, archive writes no assignment, and
+    // dissolve acts on groups, which can never be assigned. If a library action ever touches an
+    // assignment this fails, and the origin label is a two-migration ALTER TYPE (data-model §10 O4).
+    const libraryWrites = discoverSites().filter(
+      (site) =>
+        site.startsWith('modules/resources/') &&
+        !/resource-assignment\.(service|repository)\.ts::/.test(site),
+    );
+    expect(libraryWrites).toEqual([]);
   });
 
   it('gives every exemption a reason', () => {

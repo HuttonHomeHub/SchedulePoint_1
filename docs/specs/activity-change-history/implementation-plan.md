@@ -448,6 +448,12 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
 - **Dependencies:** M1-T2.
 - **Testing:** unit for grouping; Supertest for 1, 40 and 2,000 rows; three drags of one 40-bar
   selection → three entries per activity.
+- **Status: built 2026-10-04, differently from the description above in two ways.** The batch is not a
+  second recorder method but `RecordInput.batch` on the one `record()`: **three statements** (lock,
+  probe, one write) for one row or forty, pinned by `activity-history-statements.e2e-spec.ts` (a per-row
+  statement was verified to fail it at 43). There is no "multi-row update", because a batch never merges.
+  The before-values cost no statement: `updatePlacements` widens the read it already makes, `updateParents`
+  and a dissolve knows the before-parent (the summary) and the after-parent from the rows it already reads. The after-values are the request's.
 
 ##### Task M2-T2 — wire the batch routes
 
@@ -459,6 +465,9 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
 - **Dependencies:** M2-T1.
 - **Testing:** Supertest per route; dissolve records a WBS-parent change on each promoted child; a 409
   mid-batch leaves no entries.
+- **Status: built 2026-10-04** (`activity-history-batch.e2e-spec.ts`, including a 2,000-row move and a
+  race of a group move against single edits of the same activities). The census's `pending-m2` status and
+  its queue are deleted.
 
 #### Feature M2-B: Cross-plan links and knock-on changes
 
@@ -476,6 +485,8 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
 - **Description:** `cross-plan-dependencies` create / delete record `LOGIC` items on both endpoints, each
   in its own plan's activity history, organisation copied from each activity (O6).
 - **Testing:** Supertest: both ends recorded; a reader in either plan sees only that activity's entry.
+- **Status: built 2026-10-04.** `CrossPlanDependenciesService.create` / `remove` record `xlink:` items; the
+  other end is named with its plan from the probe (one extra join, no statement).
 
 ##### Task M2-T4 — knock-on entries on survivors
 
@@ -484,6 +495,13 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
   O4 (e.g. _"… was deleted"_). The deleted subject itself is not given an entry (audit log).
 - **Testing:** Supertest: delete A linked to B → B shows _Link removed — A was deleted_; restore A → B
   shows _Link restored_; census queue **pending M2** is now empty and its constant deleted.
+- **Status: built 2026-10-04, with one finding.** Activity delete, bulk delete and both restores record
+  the knock-on through `ActivityHistoryRecorder.recordKnockOn`, fed by the rows the lifecycle's sweeps now
+  `RETURNING` (an out-parameter, so a plan, project or client delete pays nothing). **The resource half of
+  this task has nothing to record**, as data-model O4 predicted and the census now pins: no resource
+  delete, archive or dissolve writes an assignment. A restore of a plan, project or client brings back
+  links whose both ends return with it, so it records nothing. A hub that lost more than 16 links gets
+  entries of at most 16 sharing the batch id.
 
 ##### Task M2-T5 — measure at 2,000
 
@@ -492,6 +510,11 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
   added time ≤ 25 % of the route's own time and ≤ 150 ms absolute. A miss returns to database-architect.
 - **Complexity:** S
 - **Dependencies:** M2-T2, M2-T4.
+- **Status: measured 2026-10-04 — the placement passes; the branch delete passes the absolute bar and
+  misses the relative one.** Numbers, machine and the in-process split are in ADR-0174 Consequences
+  (harness `test/measure/activity-history-batch.measure.ts`). Per the rule above, the miss is for
+  database-architect and the product owner to read, not for the builder to redesign: the recording is
+  one 2,000-row insert, about 50 µs a row, against a route that is a handful of set-based statements.
 
 ##### Task M2-T6 — rendering, journey, gates, release
 
@@ -499,6 +522,11 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
   (backend-performance and security mandatory); changesets; remove the backlog entry.
 - **Complexity:** S
 - **Dependencies:** M2-T1 … M2-T5.
+- **Status: wording and journey built 2026-10-04; the specialist reviews and the release are the
+  orchestrator's.** The journey (`apps/web/e2e-activity-editor/activity-history.spec.ts`) moves two
+  activities through the placements route rather than a canvas drag, because that suite's plan page has
+  no canvas; it then deletes a linked neighbour from the table's row menu and reads the knock-on back.
+  The backlog entry is removed.
 
 ---
 

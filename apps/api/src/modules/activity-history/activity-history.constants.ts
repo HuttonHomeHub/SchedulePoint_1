@@ -30,7 +30,9 @@ export const MERGE_MAX_SPAN_MS = 600_000;
  * 5 KB of field items plus 16 of them is about 29 KB (data-model §2 "Bound"). A merge that would
  * take an entry past the cap inserts a new entry instead — merging is an optimisation, so declining
  * one loses nothing. A single-object write produces at most two keyed items for one activity (a
- * link; or an assignment plus the driver it displaced), so nothing in the first milestone can exceed
- * it on its own; the knock-on path of the second milestone must chunk.
+ * link; or an assignment plus the driver it displaced), so no single-object write can exceed it on
+ * its own. A knock-on on a hub activity can, and the batch recorder then splits it into entries of at
+ * most this many sharing the write's batch id (`chunkChanges`) rather than refusing the delete or
+ * restore that caused it.
  */
 export const MAX_KEYED_ITEMS_PER_ENTRY = 16;

@@ -32,7 +32,8 @@ scheduling behaviours still to build).
 > file this long: background processing, caching, object storage, metrics & tracing (none of the
 > seven dependencies is installed; `pino-http` is, which is exactly what
 > [CLAUDE.md](../CLAUDE.md) §17 claims), resource-`GROUP` dissolve (dissolve exists for activities
-> only), the soft-delete filter (no Prisma `$extends` anywhere), and per-activity revision history.
+> only), the soft-delete filter (no Prisma `$extends` anywhere), and per-activity revision history
+> (built since — ADR-0174, 2026-10-04 — and its entry removed).
 >
 > **The contrast with the register is the reason to keep sweeping this file.** In the same session,
 > four `docs/TECH_DEBT.md` rows were re-derived and **none** was wrong; nine re-derived here produced
@@ -243,30 +244,6 @@ a product idea that has not yet earned a roadmap line:
   its entry point named (`/me/notifications` off the account chip), and the riskiest task is already
   isolated (the import producer must **not** sit in its transaction, because phase 2 hard-deletes
   the plan on recalculation failure). Three `database-architect` tasks are mandatory at M1/M4/M5.
-
-- `L` **Per-activity plan revision history.** "Who changed this duration?" is
-  unanswerable and will stay that way, because the audit log deliberately and
-  **permanently** excludes ordinary content edits (ADR-0073 §3): an activity's
-  own name, dates, duration, lane or progress changes nothing outside that
-  activity, and it is the one class that scales with **interactions** rather
-  than with the size of the programme — a planner dragging bars for an afternoon
-  generates arbitrarily many, which is the cheapest way to make an audit log
-  unreadable. Named here so the gap is not re-litigated as audit coverage: it is
-  a **different feature**, with a different table, a different retention story
-  and a different read model (a per-activity timeline, not an organisation
-  feed). Worth building on evidence that planners ask for it, not before.
-  _(Re-read 2026-09-11 and it stands, with one thing now true that was not when
-  it was written: the revision-comparison programme — ADR-0125/0126/0127/0129 —
-  answers the **what** half between two named revisions, including logic,
-  constraints, calendar, WBS parent, lane and progress. It answers **who** for
-  nothing, because a baseline snapshot has no actor, so the entry's own headline
-  question is unaffected. Worth knowing before somebody scopes this as "add an
-  actor column": the two halves live in different models.)_
-  _(**Started 2026-10-03** at the product owner's request — ADR-0174, spec in
-  `docs/specs/activity-change-history/`. The first milestone (single-object writes: fields, links and
-  resource assignments, with the editor's **History** tab) has landed; group moves, batch re-parent,
-  cross-plan links and the knock-on effects of deletes are the second. This entry is removed when that
-  milestone ships.)_
 
 ## Platform foundations not yet built
 

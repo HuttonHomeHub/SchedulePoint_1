@@ -37,6 +37,12 @@ import { resetThrottleCounters } from './throttle-reset';
  *
  * The second half is the feature's own reads: the version-gated update returns the row it wrote, so
  * the transaction holds no re-read of it (ADR-0022 keeps the one read BEFORE).
+ *
+ * **The batch paths are bounded the same way, whatever the row count** (milestone M2): a group move,
+ * a re-parent, a dissolve, a delete or restore that takes links from survivors, and a cross-plan
+ * link each issue the same three recorder statements for one row and for forty. A statement per row
+ * is the failure this exists to catch — at 2,000 rows it is a second of round trips inside a
+ * transaction that holds the plan lock.
  */
 const SINGLE_OBJECT_RECORDER_STATEMENTS = 3;
 const LINK_RECORDER_STATEMENTS = 3;
@@ -51,6 +57,18 @@ const OWN_ASSIGNMENT_PATCH = 2;
 const OWN_LINK_CREATE = 7;
 const OWN_LINK_EDIT = 3;
 const OWN_LINK_REMOVE = 3;
+// The batch paths' own statements, measured 2026-10-04 with forty rows and independent of that
+// number: the placements route is one read (which now also carries the before-values) and one
+// UPDATE; the re-parent reads the plan's tree once; the rest are each route's existing cascade.
+const OWN_PLACEMENTS = 2;
+const OWN_PARENTS = 5;
+const OWN_DISSOLVE = 11;
+const OWN_DELETE = 6;
+const OWN_RESTORE = 19;
+const OWN_BULK_DELETE = 8;
+const OWN_BATCH_RESTORE = 20;
+const BATCH_RECORDER_STATEMENTS = 3;
+const CROSS_PLAN_RECORDER_STATEMENTS = 3;
 
 const ORIGIN = 'http://localhost:5173';
 const PASSWORD = 'correct-horse-battery';
@@ -306,5 +324,183 @@ describe.skipIf(!hasDatabase)('Activity history statement budget (e2e)', () => {
         .expect(200),
     );
     expect(statements, statements.join('\n---\n')).toEqual([]);
+  });
+
+  /** `count` activities in `planId`, created straight into the table: an API call each would be the test. */
+  async function seedActivities(planId: string, count: number, prefix: string): Promise<Json[]> {
+    const plan = await prisma.plan.findFirstOrThrow({ where: { id: planId } });
+    await prisma.activity.createMany({
+      data: Array.from({ length: count }, (_, i) => ({
+        organizationId: plan.organizationId,
+        planId,
+        name: `${prefix} ${i}`,
+        durationMinutes: 7200,
+      })),
+    });
+    return prisma.activity.findMany({
+      where: { planId, name: { startsWith: `${prefix} ` } },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  const placement = (a: Json, day: string) => ({
+    id: a.id,
+    version: a.version,
+    constraintType: 'SNET',
+    constraintDate: day,
+    visualStart: day,
+    laneIndex: null,
+  });
+
+  it.each([1, 40])(
+    'a group move of %i activities issues three recorder statements, however many rows',
+    async (count) => {
+      const { admin, planId } = await setup();
+      const rows = await seedActivities(planId, count, 'Bar');
+      const statements = await recorderStatements(() =>
+        admin
+          .patch(`${API}/plans/${planId}/activities/placements`)
+          .send({ placements: rows.map((r) => placement(r, '2026-02-02')) })
+          .expect(200),
+      );
+      expect(statements, statements.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+      expect(inserts(statements)).toHaveLength(1);
+      expect(await prisma.activityHistoryEntry.count()).toBe(count);
+      expect(serviceOwn(), 'own statements, placements').toBe(OWN_PLACEMENTS);
+    },
+  );
+
+  it.each([1, 40])(
+    'a batch re-parent of %i activities issues three recorder statements',
+    async (count) => {
+      const { admin, planId } = await setup();
+      const summary = (
+        await admin
+          .post(`${API}/plans/${planId}/activities`)
+          .send({ name: 'Phase', type: 'WBS_SUMMARY' })
+          .expect(201)
+      ).body.data as Json;
+      const rows = await seedActivities(planId, count, 'Bar');
+      const statements = await recorderStatements(() =>
+        admin
+          .patch(`${API}/plans/${planId}/activities/parents`)
+          .send({
+            parents: rows.map((r) => ({ id: r.id, parentId: summary.id, version: r.version })),
+          })
+          .expect(200),
+      );
+      expect(statements, statements.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+      expect(await prisma.activityHistoryEntry.count()).toBe(count);
+      expect(serviceOwn(), 'own statements, parents').toBe(OWN_PARENTS);
+    },
+  );
+
+  it('a dissolve issues three recorder statements for all its promoted children', async () => {
+    const { admin, planId } = await setup();
+    const summary = (
+      await admin
+        .post(`${API}/plans/${planId}/activities`)
+        .send({ name: 'Phase', type: 'WBS_SUMMARY' })
+        .expect(201)
+    ).body.data as Json;
+    const rows = await seedActivities(planId, 40, 'Bar');
+    await admin
+      .patch(`${API}/plans/${planId}/activities/parents`)
+      .send({ parents: rows.map((r) => ({ id: r.id, parentId: summary.id, version: r.version })) })
+      .expect(200);
+    await prisma.activityHistoryEntry.deleteMany();
+    const statements = await recorderStatements(() =>
+      admin.post(`${API}/activities/${summary.id}/dissolve`).expect(200),
+    );
+    expect(statements, statements.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+    expect(await prisma.activityHistoryEntry.count()).toBe(40);
+    expect(serviceOwn(), 'own statements, dissolve').toBe(OWN_DISSOLVE);
+  });
+
+  it('a delete and its restore each issue three recorder statements for every survivor', async () => {
+    const { admin, planId, a } = await setup();
+    const survivors = await seedActivities(planId, 40, 'Survivor');
+    await prisma.activityDependency.createMany({
+      data: survivors.map((sv) => ({
+        organizationId: sv.organizationId,
+        planId,
+        predecessorId: a.id,
+        successorId: sv.id,
+      })),
+    });
+    const removed = await recorderStatements(() =>
+      admin.delete(`${API}/activities/${a.id}`).expect(200),
+    );
+    expect(removed, removed.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+    expect(await prisma.activityHistoryEntry.count()).toBe(40);
+    expect(serviceOwn(), 'own statements, delete').toBe(OWN_DELETE);
+
+    const restored = await recorderStatements(() =>
+      admin.post(`${API}/activities/${a.id}/restore`).expect(200),
+    );
+    expect(restored, restored.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+    expect(await prisma.activityHistoryEntry.count()).toBe(80);
+    expect(serviceOwn(), 'own statements, restore').toBe(OWN_RESTORE);
+  });
+
+  it('a bulk delete and its batch restore issue three recorder statements each', async () => {
+    const { admin, planId, a, b } = await setup();
+    const doomed = await seedActivities(planId, 40, 'Doomed');
+    await prisma.activityDependency.createMany({
+      data: doomed.map((d) => ({
+        organizationId: d.organizationId,
+        planId,
+        predecessorId: d.id,
+        successorId: b.id,
+      })),
+    });
+    const deleted = { id: '' };
+    const removed = await recorderStatements(async () => {
+      const res = await admin
+        .post(`${API}/plans/${planId}/activities/bulk-delete`)
+        .send({ activities: doomed.map((d) => ({ id: d.id, version: d.version })) })
+        .expect(200);
+      deleted.id = res.body.data.deleteBatchId as string;
+    });
+    expect(removed, removed.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+    expect(await prisma.activityHistoryEntry.count({ where: { activityId: b.id } })).toBe(3);
+    expect(serviceOwn(), 'own statements, bulk delete').toBe(OWN_BULK_DELETE);
+    expect(a.id).toBeTruthy();
+
+    const restored = await recorderStatements(() =>
+      admin.post(`${API}/plans/${planId}/activities/restore-batch/${deleted.id}`).expect(200),
+    );
+    expect(restored, restored.join('\n---\n')).toHaveLength(BATCH_RECORDER_STATEMENTS);
+    expect(serviceOwn(), 'own statements, batch restore').toBe(OWN_BATCH_RESTORE);
+  });
+
+  it('a cross-plan link create and delete issue three recorder statements, both plans included', async () => {
+    const { admin, planId, a } = await setup();
+    const project = await prisma.plan.findFirstOrThrow({ where: { id: planId } });
+    const other = await admin
+      .post(`${API}/projects/${project.projectId}/plans`)
+      .send({ name: 'Phase 2', plannedStart: '2026-03-01' })
+      .expect(201);
+    const downstream = (
+      await admin
+        .post(`${API}/plans/${other.body.data.id}/activities`)
+        .send({ name: 'Fit out', durationDays: 3 })
+        .expect(201)
+    ).body.data as Json;
+    let linkId = '';
+    const created = await recorderStatements(async () => {
+      const res = await admin
+        .post(`${API}/cross-plan-dependencies`)
+        .send({ predecessorActivityId: a.id, successorActivityId: downstream.id })
+        .expect(201);
+      linkId = res.body.data.id as string;
+    });
+    expect(created, created.join('\n---\n')).toHaveLength(CROSS_PLAN_RECORDER_STATEMENTS);
+    expect(inserts(created)).toHaveLength(1);
+    expect(await prisma.activityHistoryEntry.count()).toBe(2);
+    const removed = await recorderStatements(() =>
+      admin.delete(`${API}/cross-plan-dependencies/${linkId}`).expect(204),
+    );
+    expect(removed, removed.join('\n---\n')).toHaveLength(CROSS_PLAN_RECORDER_STATEMENTS);
   });
 });

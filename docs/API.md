@@ -629,7 +629,9 @@ and `edited` (true once the body has been revised).
 "Who changed this, and when?" for one activity's own fields, its **links** (recorded on both ends)
 and its **resource assignments**. It is **working memory, not an audit trail**: consecutive saves by
 one person in one scope merge into one entry (60 s quiet gap, 10 min span), a change undone inside
-that window leaves no entry, and the table is not tamper-resistant. Recorded items are **inputs
+that window leaves no entry, and the table is not tamper-resistant. A write that records **several
+activities as one act** (a group move, levelling's apply, a batch re-parent, a dissolve) writes one
+entry per activity sharing a `batch` and **never merges**. Recorded items are **inputs
 only** — engine-calculated dates and flags, a link's `is_driving` and the derived status never appear
 — and a failed write records nothing, because the entry is written in the write's own transaction.
 
@@ -641,10 +643,17 @@ only** — engine-calculated dates and flags, a link's `is_driving` and the deri
 
 - `data[]` — `{ id, actor: { id, name }, scope, firstRecordedAt, lastRecordedAt, editCount, batch, origin,
 changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `RESOURCES`. `actor.name` is
-  resolved at read time, so an erased user reads as the anonymised tombstone (ADR-0085).
+  resolved at read time, so an erased user reads as the anonymised tombstone (ADR-0085). `batch` is
+  `{ id, size }` for an entry written with others (`size` is the number of entries the write made) and
+  `null` otherwise. `origin` is `null` for a change made to this activity directly, and otherwise says
+  why an entry exists that the actor did not make to it: `ACTIVITY_DELETED` / `ACTIVITY_RESTORED` (a
+  link to a **surviving** activity went or came back because the other end was deleted or restored) and
+  `SUMMARY_DISSOLVED` (a child promoted when its summary was dissolved). A deleted or restored activity
+  has no entry of its own for that: it is in the audit log.
 - `changes` is an object **keyed by item**: a field name (`durationMinutes`, `name`, …) holding
-  `{ from, to }`; `link:<id>` holding `{ dir: 'IN' | 'OUT', other: { id, code, name }, from, to }`; and
-  `assignment:<id>` holding `{ resource: { id, code, name }, from, to }`. For a link or assignment,
+  `{ from, to }`; `link:<id>` holding `{ dir: 'IN' | 'OUT', other: { id, code, name }, from, to }`;
+  `xlink:<id>` for a **cross-plan** link, the same shape with `other` also carrying `planId` and
+  `planName`; and `assignment:<id>` holding `{ resource: { id, code, name }, from, to }`. For a link or assignment,
   `from: null` means **added** and `to: null` means **removed**, and the other end or resource is
   named **as it was when recorded** — a later rename never rewrites an entry. Quantities on an
   assignment are canonical fixed-4 decimal **strings** (`"40.0000"`). A description is `{ changed: true }`
@@ -660,10 +669,15 @@ absent, and an entry that changed only cost is not returned at all — without s
 because the filter is part of the keyset scan. A reader without `cost:read` still sees an assignment
 **added or removed**, just without the money.
 
-**What is not recorded yet.** Single-object writes only: group moves, levelling apply, batch
-re-parent, dissolve, cross-plan links and the knock-on effects of deleting an activity are queued for
-the second milestone (the coverage census, `activity-history-coverage.structural.spec.ts`, lists each
-as pending).
+**What is recorded, and what is not.** Every write to an activity's inputs, a link (in-plan or
+cross-plan) or a resource assignment is recorded or exempted with a reason, and the coverage census
+(`activity-history-coverage.structural.spec.ts`) fails on a write that is neither. A **delete or
+restore of an activity** tells each surviving activity its link went or came back, one entry per
+survivor (split into entries of at most 16 links for a hub). **No resource-library action produces an
+entry**, because none touches an assignment today (delete is refused while a resource is in use,
+archive writes no assignment, dissolve acts on groups, which cannot be assigned); the census fails if
+one starts to. A deleted cross-plan link's other end is not told when an activity is deleted, because
+the cross-plan link is not removed by that delete (`docs/TECH_DEBT.md` #139).
 
 ### External-Guest share links (ADR-0051)
 

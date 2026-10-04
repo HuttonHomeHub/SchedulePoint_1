@@ -25,6 +25,7 @@ import {
 import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
+  type KnockOn,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
@@ -966,7 +967,17 @@ export class ActivitiesService {
       // both answered from it, and it is bounded by the batch, not by the plan.
       const existing = await tx.activity.findMany({
         where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
-        select: { id: true, type: true },
+        // The placement columns ride on the read this route already makes, so the history's
+        // before-values cost no statement (ADR-0174 D4: inside this transaction, at the versions the
+        // write below requires — a row that moved since is its 409).
+        select: {
+          id: true,
+          type: true,
+          constraintType: true,
+          constraintDate: true,
+          visualStart: true,
+          laneIndex: true,
+        },
       });
       const byId = new Map(existing.map((a) => [a.id, a]));
       // 404 BEFORE the type check, so a caller naming a foreign id is told it is not here rather
@@ -997,6 +1008,32 @@ export class ActivitiesService {
           'This plan changed since you opened it — nothing was moved. Refresh and try again.',
         );
       }
+      // One entry per activity that moved, sharing a batch id; a lane-only move records nothing
+      // (CQ-4). The "after" is what the UPDATE above wrote: the request's values, with an absent lane
+      // meaning "leave it". Levelling's apply goes through this route (ADR-0167 D6).
+      await this.history.record(tx, {
+        actorUserId: principal.userId,
+        scope: 'PLACEMENT',
+        batch: {},
+        writes: this.history.placementWrites(
+          planId,
+          dto.placements.map((p) => {
+            // Every id was proven present above.
+            const before = byId.get(p.id)!;
+            return {
+              id: p.id,
+              before,
+              after: {
+                constraintType: p.constraintType,
+                constraintDate:
+                  p.constraintDate === null ? null : parseCalendarDate(p.constraintDate),
+                visualStart: p.visualStart === null ? null : parseCalendarDate(p.visualStart),
+                laneIndex: p.laneIndex ?? before.laneIndex,
+              },
+            };
+          }),
+        ),
+      });
     });
 
     this.logger.info(
@@ -1102,6 +1139,21 @@ export class ActivitiesService {
           'This plan changed since you opened it — nothing was moved. Refresh and try again.',
         );
       }
+      // The before-values are the tree read above, taken under the plan lock; the after is the
+      // request. Recorded last, in this transaction, ahead of the audit row.
+      await this.history.record(tx, {
+        actorUserId: principal.userId,
+        scope: 'PLACEMENT',
+        batch: {},
+        writes: this.history.parentWrites(
+          planId,
+          rows.map((r) => ({
+            id: r.id,
+            before: byId.get(r.id)?.parentId ?? null,
+            after: r.parentId,
+          })),
+        ),
+      });
 
       /*
        * ONE row for the batch — the reparent is the user's single act, however many activities it
@@ -1393,12 +1445,19 @@ export class ActivitiesService {
     // the client never learnt it and could not restore what it had just deleted. That is why
     // undoing a band copy had no redo: `restoreDeleteBatch` needs an id nobody was told.
     const deleteBatchId = await this.prisma.$transaction(async (tx) => {
+      const knockOn: KnockOn = { links: [], activityIds: [] };
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
         'activity',
         activityId,
         principal.userId,
+        undefined,
+        knockOn,
       );
+      // The links the delete took from SURVIVING activities are a change to those activities; the
+      // deleted subject has no entry (it is in the audit log, below). Recorded last, in this
+      // transaction, so a failure rolls the delete back rather than leaving a gap.
+      await this.history.recordKnockOn(tx, principal.userId, knockOn, 'removed');
       // ONE row for the whole subtree, inside the cascade's own transaction. Deleting a WBS
       // summary sweeps its descendants and their links (ADR-0038); forty-one rows would bury the
       // fact that a person did one thing, so the counts ride the payload instead — taken from the
@@ -1512,12 +1571,16 @@ export class ActivitiesService {
         // leaf, and a leaf's subtree is itself, so the per-id subtree walk was resolving a
         // single-element set two thousand times. The lifecycle method re-asserts that rather than
         // trusting this caller.
+        const knockOn: KnockOn = { links: [], activityIds: [] };
         const cascade = await this.lifecycle.cascadeSoftDeleteActivityLeaves(
           tx,
           ids,
           principal.userId,
           batchId,
+          knockOn,
         );
+        // Set-based: one entry per surviving activity that lost links, however many were deleted.
+        await this.history.recordKnockOn(tx, principal.userId, knockOn, 'removed');
         const activityCount = cascade.activities;
         const dependencyCount = cascade.dependencies;
 
@@ -1629,7 +1692,15 @@ export class ActivitiesService {
       // ONE call restores the whole batch: `restoreBatch` reads the anchor's `deleteBatchId` and
       // sweeps every table on it, then reactivates the links whose BOTH endpoints are live again.
       // Calling it per member would be N redundant sweeps of the same batch.
-      const counts = await this.lifecycle.restoreBatch(tx, 'activity', anchorId, principal.userId);
+      const knockOn: KnockOn = { links: [], activityIds: [] };
+      const counts = await this.lifecycle.restoreBatch(
+        tx,
+        'activity',
+        anchorId,
+        principal.userId,
+        knockOn,
+      );
+      await this.history.recordKnockOn(tx, principal.userId, knockOn, 'restored');
       await this.audit.record(
         {
           action: 'activity.restored',
@@ -1765,6 +1836,18 @@ export class ActivitiesService {
       });
       // The summary is childless now, so the cascade has nothing left to take with it.
       await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
+      // Each promoted child's WBS parent changed, from the summary to its grandparent: one entry per
+      // child, saved together. (The summary carries no logic, so the cascade removed no link whose
+      // other end needs a knock-on — a summary may not be a dependency endpoint, ADR-0035 §24.)
+      await this.history.record(tx, {
+        actorUserId: principal.userId,
+        scope: 'PLACEMENT',
+        batch: { origin: 'SUMMARY_DISSOLVED' },
+        writes: this.history.parentWrites(
+          existing.planId,
+          rows.map((r) => ({ id: r.id, before: activityId, after: locked.parentId })),
+        ),
+      });
 
       // ONE row, and deliberately NOT `activity.deleted` — a dissolve removes the grouping and
       // KEEPS the work, so recording it as a deletion would tell somebody looking for lost work
@@ -1829,12 +1912,15 @@ export class ActivitiesService {
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
     await this.prisma.$transaction(async (tx) => {
+      const knockOn: KnockOn = { links: [], activityIds: [] };
       const counts = await this.lifecycle.restoreBatch(
         tx,
         'activity',
         activityId,
         principal.userId,
+        knockOn,
       );
+      await this.history.recordKnockOn(tx, principal.userId, knockOn, 'restored');
       // `existing.deleteBatchId` is read before the transaction, and that is safe for the reason
       // the hierarchy producers give: `restoreBatch` re-reads the root inside the transaction and
       // throws unless it is still soft-deleted, so a stale read cannot survive to be recorded.

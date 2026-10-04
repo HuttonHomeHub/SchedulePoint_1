@@ -54,7 +54,7 @@ function describe(text: string): { len: number; h: string } {
 function fieldValue(
   key: ActivityHistoryFieldKey,
   kind: ActivityHistoryFieldKind,
-  row: ActivityRecordedRow,
+  row: Partial<ActivityRecordedRow>,
   names: ReferenceNames,
 ): StoredFieldValue {
   const raw = row[key];
@@ -113,8 +113,28 @@ export function diffActivity(
   after: ActivityRecordedRow,
   names: ReferenceNames,
 ): StoredChanges {
+  return diffFields(
+    Object.keys(ACTIVITY_HISTORY_FIELDS) as ActivityHistoryFieldKey[],
+    before,
+    after,
+    names,
+  );
+}
+
+/**
+ * {@link diffActivity} over only the named fields — for a batch write that touches a few columns and
+ * reads (or is given) only those, so a 2,000-row placement does not load forty columns per row. The
+ * row types are `Pick`s of the same keys, so a field read that is not supplied is a compile error
+ * rather than an `undefined` mistaken for a cleared value.
+ */
+export function diffFields<K extends ActivityHistoryFieldKey>(
+  keys: readonly K[],
+  before: Pick<ActivityRecordedRow, K>,
+  after: Pick<ActivityRecordedRow, K>,
+  names: ReferenceNames,
+): StoredChanges {
   const changes: StoredChanges = {};
-  for (const key of Object.keys(ACTIVITY_HISTORY_FIELDS) as ActivityHistoryFieldKey[]) {
+  for (const key of keys) {
     const { kind } = ACTIVITY_HISTORY_FIELDS[key];
     const from = fieldValue(key, kind, before, names);
     const to = fieldValue(key, kind, after, names);

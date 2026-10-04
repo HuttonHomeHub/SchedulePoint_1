@@ -32,7 +32,7 @@ baseline has no author) can say who changed one activity's duration, link or cra
   it an audit trail or an "audit log".
 - **D2 — What one entry is.** One person's continuous work on one activity in one of five scopes:
   `DEFINITION` (the editor's General / Scheduling / Cost saves, Gantt cell edits, single-bar drags,
-  an editor WBS-parent change), `PROGRESS`, `PLACEMENT` (batch moves, batch re-parent, dissolve — M2),
+  an editor WBS-parent change), `PROGRESS`, `PLACEMENT` (batch moves, batch re-parent, dissolve),
   `LOGIC` (link create / change / delete) and `RESOURCES` (assignment create / change / delete, and the
   duration change the ADR-0040 triad makes in the same write). A write **merges into the activity's
   latest entry** when that entry is by the same user, in the same scope, quiet for at most
@@ -94,8 +94,8 @@ baseline has no author) can say who changed one activity's duration, link or cra
   nothing is lost and expiry ships disabled.
 - **D9 — A coverage census, no flag, engine untouched.** `activity-history-coverage.structural.spec.ts`
   lists every write to an activity's input columns and to `dependencies`, `cross_plan_dependencies` and
-  `resource_assignments`, and requires each to be **recorded**, **pending M2** (a snapshot queue the
-  second milestone empties) or **exempt with a reason**. No `VITE_` flag (ADR-0088 D1): rollback is the
+  `resource_assignments`, and requires each to be **recorded** or **exempt with a reason**. (It had a third status, `pending-m2`, until
+  the second milestone emptied that queue and deleted it.) No `VITE_` flag (ADR-0088 D1): rollback is the
   commit boundary, with D8's hazard. History is a side record of inputs — no column on a scheduling
   table, no DTO field, nothing `computeSchedule` reads — and a structural spec pins that history imports
   nothing from `schedule/engine` and `schedule/` imports nothing from history.
@@ -120,9 +120,9 @@ baseline has no author) can say who changed one activity's duration, link or cra
 ## Consequences
 
 - "Who changed this, and when?" is answerable from the activity editor's **History** tab for every
-  single-activity field, link and resource change made after this ships. Group moves, batch re-parent,
-  dissolve, cross-plan links and the knock-on effects of deleting something else are the second
-  milestone; until then they are queued in the census, not silently absent.
+  field, link (in-plan and cross-plan) and resource change made after this ships, including group
+  moves, a batch re-parent and a dissolve, and including the links a survivor lost or regained when
+  somebody deleted or restored the activity at their other end (second milestone, below).
 - A second attributed store exists. It is mutable, so it can be wrong in ways the audit log cannot, and
   the UI says calculated dates are not listed and never says "audit".
 - Every new write path to an activity, link or assignment must be recorded or exempted with a reason, or
@@ -186,6 +186,32 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
   machine-independent. The millisecond figures stay recorded as **missed on this machine** rather than
   restated again, and re-measuring on the deployed host (where the unattributed 2–4 ms may or may not
   appear) is `docs/TECH_DEBT.md` #443.
+- **Second milestone (2026-10-04): batches and knock-ons, recorded in the same three statements.**
+  A batch (`RecordInput.batch`) holds the plan's history lock **exclusively** with no activity lock (one
+  lock slot however many rows), never merges into or receives a merge from anything, and carries its
+  origin: `PLACEMENT` for `updatePlacements` (which levelling's apply goes through), `updateParents` and a
+  dissolve's promoted children; `LOGIC` with `ACTIVITY_DELETED` / `ACTIVITY_RESTORED` for the links a
+  delete or restore took from or gave back to **surviving** activities, one entry per survivor, split
+  into entries of at most 16 keyed items when a hub lost more. The deleted or restored subject has no
+  entry. A cross-plan link is recorded on both endpoints as `xlink:` items, each in its own plan's
+  history. **No resource-library action records anything**, because none touches an assignment; the
+  census now pins that. The before-values cost no statement: the placements route widens a read it
+  already makes, the re-parent uses the tree read it already makes, and the delete and restore sweeps
+  `RETURNING` the rows they stamp instead of counting them. Every path issues **three recorder statements
+  for one row or forty** (`activity-history-statements.e2e-spec.ts`; the per-row alternative measured 43
+  for forty).
+- **Measured 2026-10-04 (M2-T5), added time of a 2,000-row batch** — machine: 4 vCPU Intel Xeon @ 2.10 GHz,
+  15 GB, PostgreSQL 16.14 (not 17), one host, a fresh scratch database per run, two runs, 8 interleaved
+  pairs each, harness `apps/api/test/measure/activity-history-batch.measure.ts`. **A 2,000-row placement:**
+  1,573 / 1,590 ms without recording, +80 / +68 ms with (5.1 % / 4.3 %): inside both bars (≤ 25 % and ≤ 150
+  ms). **Deleting a WBS summary of 200 children with 2,000 outbound links, so 2,000 survivors:** 92 / 99 ms
+  without, +114 / +98 ms with (124 % / 99 %): **inside the 150 ms absolute bar and outside the 25 % relative
+  bar**, because the route's own work is a few set-based statements and the recording writes 2,000 rows.
+  In-process, one 2,000-row call splits as lock 1.4–5.1 ms, probe 19–41, building and merging the plan
+  in TypeScript 11–38, one entry insert 51–62. The 2,000-row placement route's own 1.5 s is far above the
+  13 ms the ADR-0053 M6 note records for the same shape on a fresh table and is not attributed here (a
+  freshly bulk-loaded table with no statistics is the first suspect); it is the same in both arms. The
+  plan's rule for a miss is that it returns to database-architect; it was not redesigned here.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 
