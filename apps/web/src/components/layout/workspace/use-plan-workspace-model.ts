@@ -586,6 +586,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     announce,
     onLockLost: pen.onWriteRejected,
+    // `autoRecalc` is declared just below; the callback only runs on a replay, long after render.
+    onReplayed: () => autoRecalc.notify(),
   });
   /**
    * Bumped when a recalculation hold expires (ADR-0064 T7) — the canvas drops any open link pick,
@@ -671,9 +673,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // input — it is what Pass 2 solves from — so it belongs here on the rule this comment already
   // states; what kept it out was that it used to be a VISUAL-mode-only field.
   //
-  // The net this signature casts is what used to catch **undo**. No undo path calls `notify()` —
-  // every one of the ten call sites is a forward seam — so an inverse has always relied on landing
-  // in a watched field. Before the collapse a drag wrote an `SNET`, which is watched two fields to
+  // The net this signature casts is what used to catch **undo**, and it is no longer the only thing:
+  // a successful undo/redo now calls `notify()` itself (`onReplayed`, above), because the signature
+  // cannot see every field an inverse restores — a sub-day duration, a lag in minutes or a calendar
+  // change leaves it unchanged, so those undos never recalculated. It still matters for the
+  // `visualStart` case below, which it catches on its own. Lane-only replays (`affectsSchedule:
+  // false`) are the one kind that does not notify.
+  //
+  // Before the collapse a drag wrote an `SNET`, which is watched two fields to
   // the left, so undoing one changed the signature and the recalculation followed. After it a drag
   // writes a `visualStart`, which was watched by nothing, so `PATCH …/activities/placements`
   // restored the INPUT and left `visualEffectiveStart` describing the edit just reversed.

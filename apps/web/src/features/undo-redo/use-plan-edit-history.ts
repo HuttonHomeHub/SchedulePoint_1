@@ -36,6 +36,12 @@ export interface PlanEditHistory {
   undo: () => Promise<string | null>;
   /** Re-apply the top redo command, then move it back to the undo stack. Resolves/rejects like {@link undo}. */
   redo: () => Promise<string | null>;
+  /**
+   * The step the next undo / redo would run, without running it — so {@link usePlanUndoRedo} can read
+   * {@link Command.affectsSchedule} before the replay moves the command across.
+   */
+  peekUndo: () => Command | undefined;
+  peekRedo: () => Command | undefined;
   /** Drop both stacks (plan switch, and — wired by the M3 surface — pen loss). */
   clear: () => void;
   /**
@@ -155,6 +161,15 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     [],
   );
 
+  const peekUndo = useCallback(
+    (): Command | undefined => undoStackRef.current[undoStackRef.current.length - 1],
+    [],
+  );
+  const peekRedo = useCallback(
+    (): Command | undefined => redoStackRef.current[redoStackRef.current.length - 1],
+    [],
+  );
+
   const undo = useCallback(async (): Promise<string | null> => {
     if (runningRef.current) return null;
     const command = undoStackRef.current[undoStackRef.current.length - 1];
@@ -206,6 +221,8 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     () => ({
       record,
       isTop,
+      peekUndo,
+      peekRedo,
       undo,
       redo,
       clear,
@@ -216,6 +233,20 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       undoLabel,
       redoLabel,
     }),
-    [record, isTop, undo, redo, clear, clearRedo, ledger, canUndo, canRedo, undoLabel, redoLabel],
+    [
+      record,
+      isTop,
+      peekUndo,
+      peekRedo,
+      undo,
+      redo,
+      clear,
+      clearRedo,
+      ledger,
+      canUndo,
+      canRedo,
+      undoLabel,
+      redoLabel,
+    ],
   );
 }

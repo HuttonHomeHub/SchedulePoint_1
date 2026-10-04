@@ -103,8 +103,16 @@ export function usePlanUndoRedo(params: {
    * not import the plan-lock feature (features depend downward on shared code only).
    */
   onLockLost: (err: unknown) => void;
+  /**
+   * Called after a replay that SUCCEEDED and whose command can change the schedule (everything but
+   * {@link Command.affectsSchedule} `=== false`). The workspace wires it to the auto-recalc `notify()`:
+   * an inverse restoring a field the structure signature does not watch (a sub-day duration, a lag
+   * in minutes, a calendar) would otherwise leave the engine-computed dates describing the edit
+   * just reversed. Not called on a failed or no-op replay.
+   */
+  onReplayed?: () => void;
 }): PlanUndoRedo {
-  const { history, orgSlug, planId, announce, onLockLost } = params;
+  const { history, orgSlug, planId, announce, onLockLost, onReplayed } = params;
   const queryClient = useQueryClient();
 
   // Refetch server truth after a 409/404, mirroring the recalculate mutation's invalidation set: the
@@ -154,6 +162,7 @@ export function usePlanUndoRedo(params: {
 
   const undo = useCallback((): void => {
     void (async () => {
+      const command = history.peekUndo();
       let label: string | null;
       try {
         label = await history.undo();
@@ -161,12 +170,15 @@ export function usePlanUndoRedo(params: {
         handleFailure('undo', err);
         return;
       }
-      if (label !== null) announce(`Undid ${phrase(label)}.`);
+      if (label === null) return;
+      announce(`Undid ${phrase(label)}.`);
+      if (command?.affectsSchedule !== false) onReplayed?.();
     })();
-  }, [history, handleFailure, announce]);
+  }, [history, handleFailure, announce, onReplayed]);
 
   const redo = useCallback((): void => {
     void (async () => {
+      const command = history.peekRedo();
       let label: string | null;
       try {
         label = await history.redo();
@@ -174,9 +186,11 @@ export function usePlanUndoRedo(params: {
         handleFailure('redo', err);
         return;
       }
-      if (label !== null) announce(`Redid ${phrase(label)}.`);
+      if (label === null) return;
+      announce(`Redid ${phrase(label)}.`);
+      if (command?.affectsSchedule !== false) onReplayed?.();
     })();
-  }, [history, handleFailure, announce]);
+  }, [history, handleFailure, announce, onReplayed]);
 
   return useMemo(
     () => ({

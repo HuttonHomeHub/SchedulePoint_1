@@ -3,7 +3,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createVersionLedger } from './commands';
+import {
+  autoArrangeCommand,
+  createVersionLedger,
+  dependencyEditCommand,
+  relaneCommand,
+} from './commands';
 import type { PlanEditHistory } from './use-plan-edit-history';
 import {
   REDO_CONFLICT_MESSAGE,
@@ -35,6 +40,8 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
   return {
     record: vi.fn(),
     isTop: vi.fn().mockReturnValue(false),
+    peekUndo: vi.fn().mockReturnValue(undefined),
+    peekRedo: vi.fn().mockReturnValue(undefined),
     undo: vi.fn().mockResolvedValue('Move activity'),
     redo: vi.fn().mockResolvedValue('Add link'),
     clear: vi.fn(),
@@ -51,15 +58,17 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
 function setup(history: PlanEditHistory) {
   const announce = vi.fn();
   const onLockLost = vi.fn();
+  const onReplayed = vi.fn();
   const queryClient = new QueryClient();
   const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
   const { result } = renderHook(
-    () => usePlanUndoRedo({ history, orgSlug: 'acme', planId: 'p1', announce, onLockLost }),
+    () =>
+      usePlanUndoRedo({ history, orgSlug: 'acme', planId: 'p1', announce, onLockLost, onReplayed }),
     { wrapper },
   );
-  return { result, announce, onLockLost, invalidateSpy };
+  return { result, announce, onLockLost, onReplayed, invalidateSpy };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -79,6 +88,87 @@ describe('usePlanUndoRedo — success', () => {
     expect(result.current.canRedo).toBe(false);
     expect(result.current.undoLabel).toBe('Move activity');
     expect(result.current.redoLabel).toBeNull();
+  });
+});
+
+/**
+ * F-2 (undo-redo-best-in-class M0-T2): the structure signature cannot see a sub-day duration, a lag
+ * in minutes or a calendar, so an inverse that restores one never recalculated. A successful replay
+ * now says so itself, except for the layout-only commands that declare `affectsSchedule: false`.
+ */
+describe('usePlanUndoRedo — recalculation after a replay', () => {
+  const noop = vi.fn();
+  const lag = dependencyEditCommand({
+    updateDependency: noop,
+    before: { id: 'd1', type: 'FS', lagMinutes: 0, version: 1 },
+    after: { id: 'd1', type: 'FS', lagMinutes: 90, version: 2 },
+    label: 'Edit link',
+  } as unknown as Parameters<typeof dependencyEditCommand>[0]);
+  const relane = relaneCommand({
+    repositionLane: noop,
+    activityId: 'a1',
+    fromLaneIndex: 0,
+    toLaneIndex: 1,
+    version: 1,
+  });
+  const arrange = autoArrangeCommand({
+    batchPositions: noop,
+    before: [],
+    after: [],
+    versions: new Map(),
+  });
+
+  it('a schedule-affecting command defaults to affecting the schedule', () => {
+    expect(lag.affectsSchedule).not.toBe(false);
+  });
+
+  it('the two layout-only builders declare they do not', () => {
+    expect(relane.affectsSchedule).toBe(false);
+    expect(arrange.affectsSchedule).toBe(false);
+  });
+
+  it('notifies after a successful undo and redo of a schedule-affecting step', async () => {
+    const { result, onReplayed } = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(lag),
+        peekRedo: vi.fn().mockReturnValue(lag),
+      }),
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onReplayed).toHaveBeenCalledTimes(1));
+    act(() => result.current.redo());
+    await waitFor(() => expect(onReplayed).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not notify after a lane-only replay', async () => {
+    const { result, announce, onReplayed } = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(relane),
+        peekRedo: vi.fn().mockReturnValue(arrange),
+      }),
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('Undid move activity.'));
+    act(() => result.current.redo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('Redid add link.'));
+    expect(onReplayed).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the replay failed or there was nothing to replay', async () => {
+    const failing = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(lag),
+        undo: vi.fn().mockRejectedValue(err(500)),
+      }),
+    );
+    act(() => failing.result.current.undo());
+    await waitFor(() => expect(failing.announce).toHaveBeenCalledWith(UNDO_FAILED_MESSAGE));
+    expect(failing.onReplayed).not.toHaveBeenCalled();
+
+    const empty = setup(fakeHistory({ undo: vi.fn().mockResolvedValue(null) }));
+    act(() => empty.result.current.undo());
+    await waitFor(() => expect(empty.result.current.canUndo).toBe(true));
+    expect(empty.onReplayed).not.toHaveBeenCalled();
   });
 });
 
