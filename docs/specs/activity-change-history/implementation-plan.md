@@ -516,6 +516,11 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
   database-architect and the product owner to read, not for the builder to redesign: the recording is
   one 2,000-row insert, about 50 µs a row, against a route that is a handful of set-based statements.
 
+###### Product-owner decision, 2026-10-04 (third): ship M2 on the absolute bar
+
+Ship M2 as built. For knock-on recording from a delete or restore the 150 ms absolute bar binds; group
+moves keep both bars. The lookup trim below is `docs/TECH_DEBT.md` #444.
+
 ###### Diagnosis (database-architect), 2026-10-04
 
 **Method.** A scratch database (`prisma migrate deploy` at `159271da`, PostgreSQL 16.14, the same

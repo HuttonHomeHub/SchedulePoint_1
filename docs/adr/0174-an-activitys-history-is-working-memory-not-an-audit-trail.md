@@ -208,10 +208,19 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
   without, +114 / +98 ms with (124 % / 99 %): **inside the 150 ms absolute bar and outside the 25 % relative
   bar**, because the route's own work is a few set-based statements and the recording writes 2,000 rows.
   In-process, one 2,000-row call splits as lock 1.4–5.1 ms, probe 19–41, building and merging the plan
-  in TypeScript 11–38, one entry insert 51–62. The 2,000-row placement route's own 1.5 s is far above the
-  13 ms the ADR-0053 M6 note records for the same shape on a fresh table and is not attributed here (a
-  freshly bulk-loaded table with no statistics is the first suspect); it is the same in both arms. The
-  plan's rule for a miss is that it returns to database-architect; it was not redesigned here.
+  in TypeScript 11–38, one entry insert 51–62. The 2,000-row placement route's own 1.5 s is the same in both
+  arms; database-architect re-measured it at 0.42–0.65 s with and without `ANALYZE`, so missing
+  statistics are not the cause, and the ADR-0053 M6 13 ms note measures a different operation (a
+  resource-group delete's lock step), not this shape. The miss returned to database-architect (plan
+  M2-T5 diagnosis): any design that keeps "every affected activity shows what happened" writes one row
+  per survivor, which alone costs more than half of this route's own work, so the 25 % bar is not
+  reachable without a cap or post-commit recording, both rejected.
+- **Shipped on the absolute bar, by product-owner decision (2026-10-04, third decision that day).** For
+  knock-on recording from a delete or restore, the **150 ms absolute** bar is binding; group moves keep
+  both bars (they pass). On this host the added cost grows about 50 µs per affected activity, so a
+  single delete reaches 150 ms at about 3,000 survivors — beyond a 2,000-activity plan, within reach of
+  an imported 10,000-activity programme. The lookup trim the diagnosis proposes is
+  `docs/TECH_DEBT.md` #444.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 

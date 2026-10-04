@@ -11586,6 +11586,18 @@ slow cores), Prisma's interactive-transaction overhead, or something in the requ
 product owner's machine) and record the result in ADR-0174. **Trigger:** a planner reports slow saves, or the
 next performance pass on the write paths.
 
+### 444. A batch history probe reads each activity's whole latest entry when it only needs the timestamp
+
+**Status:** open · **Verified:** 2026-10-04 (database-architect diagnosis, `docs/specs/activity-change-history/implementation-plan.md` M2-T5; `activity-history.recorder.ts` probe) ·
+**Raised:** 2026-10-04 (product-owner decision to ship M2 on the absolute bar) · **Size:** S · **Owner:** api
+
+A batch entry never merges, yet the recorder's probe fetches each affected activity's latest entry in full,
+including its stored change list. For a 2,000-survivor delete the probe measured 19–41 ms; the diagnosis
+estimates 5–15 ms saved by reading only the timestamp, more on real plans whose survivors carry long
+histories (the harness's survivors had almost none, so this was under-measured). Code only, no schema change.
+**Next:** narrow the batch probe to the latest `recorded_at`, re-measure with the M2 harness, and record the
+figure in ADR-0174. **Trigger:** a slow delete or restore of a large summary, or the next history change.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·
