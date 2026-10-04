@@ -53,9 +53,10 @@ migration of the remaining spec files (spec milestone M2), because lint cannot g
 that have not moved. Until then only the base suite (`apps/web/e2e/`) uses the guarded `test`.
 
 **A stated gap.** `APIRequestContext` (`page.request`, the `request` fixture) emits no `response`
-event, so a 429 on one of those calls is not seen; they assert their own status. A page opened by
-`browser.newPage()` creates its context internally and is not seen either. In-page `fetch` and
-contexts from `browser.newContext()` are covered.
+event, so a 429 on one of those calls is not seen; they assert their own status. A context opened in
+`beforeAll`/`afterAll` is outside the test's scope, and a response still in flight when the body ends
+can be missed. In-page `fetch`, contexts from `browser.newContext()`, and pages from
+`browser.newPage()` (which calls `this.newContext()`, playwright-core 1.63.0) are covered.
 
 ### D2 — A deliberate 429 opts out per test, never per suite
 

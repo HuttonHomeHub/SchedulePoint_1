@@ -87,7 +87,8 @@ test.describe('A 429 in a journey fails by name', () => {
 
   test('a test that met no 429 has nothing to report', async ({ page, rateLimits }) => {
     await page.goto('/sign-in');
-    expect(await fetchMe(page)).toBe(401);
+    // Signed out, so 401 (apps/api/test/me.e2e-spec.ts); what this test needs is only "not a 429".
+    expect(await fetchMe(page)).toBeLessThan(429);
     expect(await rateLimits.hits()).toEqual([]);
     expect(await rateLimits.failure()).toBeUndefined();
   });

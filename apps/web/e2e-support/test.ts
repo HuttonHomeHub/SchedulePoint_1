@@ -22,14 +22,17 @@ import { test as base, expect, type Browser, type BrowserContext } from '@playwr
  *
  * Teardown rather than the moment of the 429, because a `response` listener cannot abort a running
  * test body and throwing inside it is an unhandled runner error, not a test failure. The test still
- * waits out its current expectation; what changes is that the report leads with the cause.
+ * waits out its current expectation. A test that otherwise passed fails with the 429 as its only
+ * error; one that also failed an expectation carries the 429 as a second error, after the symptom.
  *
  * ## The stated gap
  *
  * `APIRequestContext` (`page.request`, the `request` fixture) emits no `response` event, so a 429 on
  * one of those calls is not seen. Those calls assert their own status. In-page `fetch` (including
- * `page.evaluate`) is covered, and so is a context opened by `browser.newContext()`; a page opened by
- * `browser.newPage()` creates its context internally and is not.
+ * `page.evaluate`) is covered, and so is a context opened by `browser.newContext()` — and a page from
+ * `browser.newPage()`, which calls `this.newContext()` (playwright-core 1.63.0, `coreBundle.js`).
+ * A context opened in `beforeAll`/`afterAll` is outside the test's scope and is not watched, and a
+ * response still in flight when the test body ends (an unawaited autosave or poll) can be missed.
  *
  * ## Opting out
  *
@@ -41,7 +44,9 @@ import { test as base, expect, type Browser, type BrowserContext } from '@playwr
  * `E2E_THROTTLE_CENSUS=1` prints, when the worker finishes, the peak number of requests per
  * `METHOD path-template` in any rolling 60 s window, highest first. That is the quantity a bucket
  * limits, so it is what a limit raise or a suite slimming should be sized from. Each worker prints
- * its own tally, which is the whole suite under the `workers: 1` the API-backed configs use.
+ * its own tally, which is the whole suite under the `workers: 1` the API-backed configs use. With
+ * several local workers sharing one IP each tally understates the bucket, and route-fulfilled
+ * (mocked) responses are counted too, which overstates it for specs that mock.
  */
 
 /** The window `ThrottlerGuard` counts in (`RATE_LIMIT_TTL`'s default). */
