@@ -166,7 +166,9 @@ export class ResourceAssignmentRepository {
         ${exceptId ? Prisma.sql`AND id <> ${exceptId}::uuid` : Prisma.empty}
       RETURNING id`;
     if (cleared.length === 0) return [];
-    return db.resourceAssignment.findMany({ where: { id: { in: cleared.map((r) => r.id) } } });
+    return db.resourceAssignment.findMany({
+      where: this.active({ id: { in: cleared.map((r) => r.id) } }),
+    });
   }
 
   /**

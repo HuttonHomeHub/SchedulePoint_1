@@ -180,6 +180,7 @@ export class ActivityHistoryRecorder {
     after: ActivityRecordedRow,
   ): Promise<StoredChanges> {
     const { calendarIds, parentIds } = changedReferenceIds(before, after);
+    // soft-delete: any-state — names the calendar and WBS parent as they are now, and a deleted one still has a name.
     const [calendars, parents] = await Promise.all([
       calendarIds.length === 0
         ? []
@@ -214,6 +215,7 @@ export class ActivityHistoryRecorder {
         pairs.flatMap((p) => [p.before?.resourceId, p.after?.resourceId]).filter((id) => !!id),
       ),
     ] as string[];
+    // soft-delete: any-state — a removed assignment's resource may itself be deleted, and the entry still names it.
     const resources =
       resourceIds.length === 0
         ? []
@@ -254,6 +256,7 @@ export class ActivityHistoryRecorder {
       after: LinkRow | null;
     },
   ): Promise<RecordedActivityWrite[]> {
+    // soft-delete: any-state — a link removed by an activity's own delete has a deleted endpoint, and both ends must still be named.
     const endpoints = await tx.activity.findMany({
       where: { id: { in: [link.predecessorId, link.successorId] } },
       select: { id: true, planId: true, code: true, name: true },
@@ -298,6 +301,7 @@ export class ActivityHistoryRecorder {
     tx: Prisma.TransactionClient,
     activityIds: readonly string[],
   ): Promise<Map<string, ProbeRow>> {
+    // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, so the row must still be found.
     const rows = await tx.$queryRaw<ProbeRow[]>`
       SELECT a.id AS "activityId", a.organization_id AS "organizationId",
              date_trunc('milliseconds', clock_timestamp()) AS "now",

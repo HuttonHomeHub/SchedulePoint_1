@@ -429,7 +429,9 @@ export class DependenciesService {
         if (changed === 0 || !before) {
           throw new ConflictError('This dependency was changed elsewhere. Refresh and try again.');
         }
-        const after = await tx.activityDependency.findFirstOrThrow({ where: { id: dependencyId } });
+        const after = await tx.activityDependency.findFirstOrThrow({
+          where: { id: dependencyId, deletedAt: null },
+        });
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'LOGIC',
@@ -476,6 +478,7 @@ export class DependenciesService {
       // "removed", not two. The state is read AFTER the stamp, from the row that was removed — a
       // concurrent lag edit that committed first is therefore the state recorded, not a stale read.
       if (cascade.counts.dependencies === 1) {
+        // soft-delete: any-state — the row was stamped deleted a statement ago and the entry records its last state.
         const removed = await tx.activityDependency.findFirstOrThrow({
           where: { id: dependencyId },
         });

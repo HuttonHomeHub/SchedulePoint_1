@@ -362,7 +362,9 @@ export class ResourceAssignmentService {
         // Persist a units-driven derived duration on the activity — same tx, optimistic-locked, so a
         // stale version on EITHER row rolls the whole write back (409).
         await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
-        const after = await tx.resourceAssignment.findFirstOrThrow({ where: { id: assignmentId } });
+        const after = await tx.resourceAssignment.findFirstOrThrow({
+          where: { id: assignmentId, deletedAt: null },
+        });
         await this.recordHistory(tx, principal, activity, {
           pairs: [{ before, after }, ...displacedPairs(displaced)],
           duration: activityDurationUpdate,
@@ -395,6 +397,7 @@ export class ResourceAssignmentService {
       // record one "removed". The state is read after the stamp, from the row that was removed.
       const removed = await this.assignments.softDelete(assignmentId, principal.userId, tx);
       if (removed === 1) {
+        // soft-delete: any-state — the row was stamped deleted a statement ago and the entry records its last state.
         const before = await tx.resourceAssignment.findFirstOrThrow({
           where: { id: assignmentId },
         });

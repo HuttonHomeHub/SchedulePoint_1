@@ -755,7 +755,9 @@ export class ActivitiesService {
         );
         // Recorded last, and in this transaction: a rolled-back write leaves no entry, and an entry
         // that cannot be written fails the write rather than leaving a gap nobody can see.
-        const after = await tx.activity.findFirstOrThrow({ where: { id: activityId } });
+        const after = await tx.activity.findFirstOrThrow({
+          where: { id: activityId, deletedAt: null },
+        });
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'DEFINITION',
@@ -845,7 +847,9 @@ export class ActivitiesService {
     // Returned for the history entry: the version gate above means `driving` is the row replaced.
     return {
       before: driving,
-      after: await tx.resourceAssignment.findFirstOrThrow({ where: { id: driving.id } }),
+      after: await tx.resourceAssignment.findFirstOrThrow({
+        where: { id: driving.id, deletedAt: null },
+      }),
     };
   }
 
@@ -1338,7 +1342,9 @@ export class ActivitiesService {
       if (changed === 0 || !before) {
         throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
       }
-      const after = await tx.activity.findFirstOrThrow({ where: { id: activityId } });
+      const after = await tx.activity.findFirstOrThrow({
+        where: { id: activityId, deletedAt: null },
+      });
       await this.history.record(tx, {
         actorUserId: principal.userId,
         scope: 'PROGRESS',
