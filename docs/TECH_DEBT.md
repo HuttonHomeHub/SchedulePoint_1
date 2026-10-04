@@ -11567,6 +11567,20 @@ step sufficient for a divider (it is asked before release, CLAUDE.md §19.13). *
 consumer a typed or stepped control in the surface that owns it, as the Gantt's `View ▾` does. **Trigger:** the
 reviewer's ruling, or a complaint from a pointer-only user.
 
+### 443. Activity history's added write cost was measured only on a shared 4-vCPU container
+
+**Status:** open · **Verified:** 2026-10-04 (ADR-0174 Consequences; plan M1-T7, two runs on a 2.10 GHz 4 vCPU container with the API and Postgres 16.14 on one host) ·
+**Raised:** 2026-10-04 (product-owner decision to ship on the statement count) · **Size:** S · **Owner:** api
+
+Recording history adds about 5.7–7.2 ms p50 to a single-object save and 3.0–4.9 ms p50 to a link create on
+that machine, against the restated 3 ms / 4 ms bars; the four statements it issues sum to 3.3 ms p50 measured
+alone, so roughly 2–4 ms per save is **unattributed** and was not guessed at. The binding bar is now the
+three-statement test. **Not established:** whether the gap is the container (Node and Postgres sharing four
+slow cores), Prisma's interactive-transaction overhead, or something in the request path. **Next:** run
+`apps/api/test/measure/activity-history.measure.ts` against a disposable database on the deployed host (or the
+product owner's machine) and record the result in ADR-0174. **Trigger:** a planner reports slow saves, or the
+next performance pass on the write paths.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·

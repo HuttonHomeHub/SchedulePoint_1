@@ -391,6 +391,10 @@ idx_activity_history_activity_recorded` for the probe (under a `Limit`) and for 
 
 ##### Task M1-T8 — tab, gating and list (≈ one PR)
 
+- **Product-owner decision, 2026-10-04 (second): ship on the statement count.** M1-T7 closes with the
+  three-statement test (`activity-history-statements.e2e-spec.ts`) as the binding bar; the millisecond
+  results above stand as recorded misses on this machine, not as a restated bar. Re-measuring on the
+  deployed host is `docs/TECH_DEBT.md` #443.
 - **Description:** `'history'` in `ActivityEditorTab` / `ActivityEditorPurpose`, last in tab order;
   readable-never-writable gating; `features/activity-history/` with `useActivityHistory` (invalidated
   after any activity, link or assignment save touching this activity), `ActivityHistoryPanel`,

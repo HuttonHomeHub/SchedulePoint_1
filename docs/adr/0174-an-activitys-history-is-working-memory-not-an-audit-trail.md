@@ -179,6 +179,13 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
   single-object save measure 0.67 + 0.67 + 1.01 + 0.98 = 3.3 ms p50 in isolation against a 5.7–7.2 ms
   request delta; the gap is unattributed. The design was not changed further and this returns to the
   product owner. Method and the per-operation statement counts before and after are in the plan's M1-T7.
+- **Shipped on the statement count, by product-owner decision (2026-10-04, second decision that day).**
+  After the rebuild's re-measurement above, the product owner chose to ship M1 with **the statement
+  count as the binding bar**: a single-object save or a link write adds **at most three recorder
+  statements**, pinned by `apps/api/test/activity-history-statements.e2e-spec.ts`, which is
+  machine-independent. The millisecond figures stay recorded as **missed on this machine** rather than
+  restated again, and re-measuring on the deployed host (where the unattributed 2–4 ms may or may not
+  appear) is `docs/TECH_DEBT.md` #443.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 
