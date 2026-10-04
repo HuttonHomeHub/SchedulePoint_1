@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.160.0
+
+### Minor Changes
+
+- [#778](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/778) [`da9ab08`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/da9ab08ba2cfc1ff291038f8363c712f3cb283b4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt's columns can now be sized. In the plan workspace's Gantt view, open `View ▾` and the Columns group shows a width field beside each shown column (Code, Duration, Start, Finish, Float left and Predecessors), a Table width field that matches the Grid width divider, and a Reset widths button. Type a width from 48 to 400 pixels and press Enter, or step it with the arrow keys; the Activity column gives up the room and the chart stays where it was. Widths are remembered on this computer and browser for every plan, and Reset widths puts every column and the table back to the standard layout. The printed programme keeps its standard page layout.
+
 ## 0.159.3
 
 ### Patch Changes
