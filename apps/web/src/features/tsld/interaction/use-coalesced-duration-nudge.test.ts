@@ -191,4 +191,69 @@ describe('useCoalescedDurationNudge (ADR-0052 M2)', () => {
     act(() => unmount());
     expect(deps.onResize).toHaveBeenCalledWith({ activityId: 'a1', durationDays: 4 });
   });
+
+  describe('a committed edit is not replayed or extended once the props move on (#448)', () => {
+    const rowAt = (durationDays: number): ActivitySummary[] => [activity({ durationDays })];
+
+    async function committedThenUndone() {
+      const deps = makeDeps({ activities: rowAt(1) });
+      const hook = renderHook((d: CoalescedDurationNudgeDeps) => useCoalescedDurationNudge(d), {
+        initialProps: deps,
+      });
+      act(() => hook.result.current(deps.activities[0]!, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onResize).toHaveBeenCalledTimes(1);
+      expect(deps.onResize).toHaveBeenLastCalledWith({ activityId: 'a1', durationDays: 2 });
+      // The refetch reflects the write, then Undo restores the old value.
+      hook.rerender({ ...deps, activities: rowAt(2) });
+      const undone = { ...deps, activities: rowAt(1) };
+      hook.rerender(undone);
+      return { deps, undone, hook };
+    }
+
+    it('does not re-send the committed write on unmount after an undo', async () => {
+      const { deps, hook } = await committedThenUndone();
+      act(() => hook.unmount());
+      expect(deps.onResize).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the next nudge from the current row, not the surviving target', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.activities[0]!, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onResize).toHaveBeenCalledTimes(2);
+      expect(deps.onResize).toHaveBeenLastCalledWith({ activityId: 'a1', durationDays: 2 });
+    });
+
+    it('still flushes a pending (debounced) nudge on unmount after an earlier commit', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.activities[0]!, 1));
+      act(() => hook.unmount());
+      expect(deps.onResize).toHaveBeenCalledTimes(2);
+      expect(deps.onResize).toHaveBeenLastCalledWith({ activityId: 'a1', durationDays: 2 });
+    });
+
+    it('flushes a delta queued behind an in-flight write on unmount', async () => {
+      let resolveFirst: () => void = () => {};
+      const onResize = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise((r) => (resolveFirst = () => r({ applied: true, conflict: null }))),
+        )
+        .mockResolvedValue({ applied: true, conflict: null });
+      const deps = makeDeps({ onResize, activities: rowAt(1) });
+      const a = deps.activities[0]!;
+      const { result, unmount } = renderHook(() => useCoalescedDurationNudge(deps));
+      act(() => result.current(a, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      act(() => result.current(a, 1)); // queued behind the in-flight write
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      act(() => unmount());
+      await act(async () => {
+        resolveFirst();
+        await Promise.resolve();
+      });
+      expect(onResize).toHaveBeenNthCalledWith(2, { activityId: 'a1', durationDays: 3 });
+    });
+  });
 });

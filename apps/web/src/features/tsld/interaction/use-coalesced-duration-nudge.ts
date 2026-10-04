@@ -58,8 +58,10 @@ export interface CoalescedDurationNudgeDeps {
  * exactly like the sibling `useCoalescedNudge` — this accumulates the **absolute** target duration
  * across the burst, debounces the commit, and **serializes** writes so a burst is ONE minimal
  * PATCH read at the live version. The duration clamps at ≥ 1 day (the floor announces and no-ops,
- * mirroring the top-lane boundary message). All mutable state lives in refs; a pending nudge is
- * flushed on unmount rather than dropped. Returns the `nudge(activity, delta)` handler.
+ * mirroring the top-lane boundary message). All mutable state lives in refs. The target outlives
+ * its write only until `activities` next changes with nothing pending, so an undo or another edit
+ * is honoured by the next nudge; a pending (uncommitted) nudge is flushed on unmount rather than
+ * dropped, but a target already written never is. Returns the `nudge(activity, delta)` handler.
  */
 export function useCoalescedDurationNudge(
   deps: CoalescedDurationNudgeDeps,
@@ -77,12 +79,24 @@ export function useCoalescedDurationNudge(
   // delta queued *behind* an in-flight write isn't dropped (the #25c fix, inherited).
   const inFlightRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
+  // True only while the target holds a delta no write has captured yet; a target already written
+  // is NOT dirty and the unmount flush must not replay it (it re-sent an undone edit, #448).
+  const dirtyRef = useRef(false);
+
+  // The cross-burst target only has to outlive its write until the refetch that reflects it. When
+  // `activities` next changes (an undo, a dialog or Gantt save) they are the truth, so the next
+  // nudge must start from them rather than extend a stale target (#448).
+  useEffect(() => {
+    if (dirtyRef.current || busyRef.current) return;
+    targetRef.current = null;
+  }, [deps.activities]);
 
   const commit = (): void => {
     const t = targetRef.current;
     const { onResize, activities, setGhost, setConflict, announce } = depsRef.current;
     if (!t || !onResize) {
       targetRef.current = null;
+      dirtyRef.current = false;
       setGhost(null);
       return;
     }
@@ -94,11 +108,13 @@ export function useCoalescedDurationNudge(
     const input = buildResize(t, activities);
     if (!input) {
       targetRef.current = null;
+      dirtyRef.current = false;
       setGhost(null);
       return; // deleted elsewhere, or props caught up — no write needed
     }
     const finalDuration = t.durationDays;
     const { name } = t;
+    dirtyRef.current = false; // this write now owns the delta
     busyRef.current = true;
     inFlightRef.current = onResize(input)
       .then((outcome) => {
@@ -111,6 +127,7 @@ export function useCoalescedDurationNudge(
         if (outcome.applied) {
           // NB: targetRef deliberately survives here (the absolute-target cross-burst rule the
           // sibling hook documents), so a fast follow-up nudge extends from it, not a stale prop.
+          // The effect above retires it when `activities` next changes.
           announce(
             `Resized “${name}” to ${finalDuration} ${finalDuration === 1 ? 'day' : 'days'}; dates will update.`,
           );
@@ -125,6 +142,12 @@ export function useCoalescedDurationNudge(
       .finally(() => {
         busyRef.current = false;
         inFlightRef.current = null;
+        // The refetch may have landed while the write was still settling, with nothing left to
+        // change the props and retire the target.
+        const row = depsRef.current.activities.find((a) => a.id === t.activityId);
+        if (!dirtyRef.current && row?.durationDays === targetRef.current?.durationDays) {
+          targetRef.current = null;
+        }
       });
   };
 
@@ -133,7 +156,9 @@ export function useCoalescedDurationNudge(
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
-      if (!targetRef.current) return;
+      // Only an UNCOMMITTED delta is flushed; a target already written is stale and replaying it
+      // re-applied an undone edit (#448).
+      if (!targetRef.current || !dirtyRef.current) return;
       // Flush a queued nudge so a pending edit isn't silently dropped on unmount / plan switch.
       const flushFinal = (): void => {
         const t = targetRef.current;
@@ -181,6 +206,7 @@ export function useCoalescedDurationNudge(
     }
     t = { ...t, durationDays: next };
     targetRef.current = t;
+    dirtyRef.current = true;
     setConflict(null);
     // Optimistic ghost tracks the burst for sighted users; AT hears the net result on commit.
     setGhost({

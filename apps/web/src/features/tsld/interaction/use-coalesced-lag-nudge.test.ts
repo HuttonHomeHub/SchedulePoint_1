@@ -119,4 +119,69 @@ describe('useCoalescedLagNudge (ADR-0052 M3)', () => {
     act(() => unmount());
     expect(deps.onLag).toHaveBeenCalledWith({ dependencyId: 'd1', lagDays: 3 });
   });
+
+  describe('a committed edit is not replayed or extended once the props move on (#448)', () => {
+    const rowAt = (lagDays: number): DependencySummary[] => [dependency({ lagDays })];
+
+    async function committedThenUndone() {
+      const deps = makeDeps({ dependencies: rowAt(1) });
+      const hook = renderHook((d: CoalescedLagNudgeDeps) => useCoalescedLagNudge(d), {
+        initialProps: deps,
+      });
+      act(() => hook.result.current(deps.dependencies[0]!, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onLag).toHaveBeenCalledTimes(1);
+      expect(deps.onLag).toHaveBeenLastCalledWith({ dependencyId: 'd1', lagDays: 2 });
+      // The refetch reflects the write, then Undo restores the old value.
+      hook.rerender({ ...deps, dependencies: rowAt(2) });
+      const undone = { ...deps, dependencies: rowAt(1) };
+      hook.rerender(undone);
+      return { deps, undone, hook };
+    }
+
+    it('does not re-send the committed write on unmount after an undo', async () => {
+      const { deps, hook } = await committedThenUndone();
+      act(() => hook.unmount());
+      expect(deps.onLag).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the next nudge from the current row, not the surviving target', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.dependencies[0]!, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onLag).toHaveBeenCalledTimes(2);
+      expect(deps.onLag).toHaveBeenLastCalledWith({ dependencyId: 'd1', lagDays: 2 });
+    });
+
+    it('still flushes a pending (debounced) nudge on unmount after an earlier commit', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.dependencies[0]!, 1));
+      act(() => hook.unmount());
+      expect(deps.onLag).toHaveBeenCalledTimes(2);
+      expect(deps.onLag).toHaveBeenLastCalledWith({ dependencyId: 'd1', lagDays: 2 });
+    });
+
+    it('flushes a delta queued behind an in-flight write on unmount', async () => {
+      let resolveFirst: () => void = () => {};
+      const onLag = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise((r) => (resolveFirst = () => r({ applied: true, conflict: null }))),
+        )
+        .mockResolvedValue({ applied: true, conflict: null });
+      const deps = makeDeps({ onLag, dependencies: rowAt(1) });
+      const d = deps.dependencies[0]!;
+      const { result, unmount } = renderHook(() => useCoalescedLagNudge(deps));
+      act(() => result.current(d, 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      act(() => result.current(d, 1)); // queued behind the in-flight write
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      act(() => unmount());
+      await act(async () => {
+        resolveFirst();
+        await Promise.resolve();
+      });
+      expect(onLag).toHaveBeenNthCalledWith(2, { dependencyId: 'd1', lagDays: 3 });
+    });
+  });
 });

@@ -77,8 +77,11 @@ export interface CoalescedNudgeDeps {
  *   is unsettled), and each commit sends the **absolute** target diffed against the *current
  *   persisted* value (read live from `activities`), so a fast re-nudge before the refetch lands
  *   still commits the correct net position rather than clobbering it from a stale baseline.
+ *   That holds only between a write and the refetch that reflects it: once `activities` next
+ *   changes with nothing pending, the target is dropped, so an undo or another edit is honoured.
  * - Writes serialize (`busyRef`), so the version a commit reads is always post-refetch-fresh.
- * - A pending nudge is **flushed on unmount** (e.g. a `key={planId}` remount) rather than dropped.
+ * - A pending nudge is **flushed on unmount** (e.g. a `key={planId}` remount) rather than dropped —
+ *   but only an **uncommitted** one (`dirtyRef`): a target already written is never replayed.
  * - A keyboard nudge bails while a pointer reposition is in flight (`isPointerBusy`), and vice-versa
  *   (the caller's pointer path skips while the optimistic ghost is set) — no concurrent writes.
  *
@@ -101,12 +104,35 @@ export function useCoalescedNudge(
   // queued *behind* an in-flight write isn't dropped (#25c).
   const inFlightRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
+  // True only while the target holds a delta no write has captured yet (a nudge landed and `commit`
+  // has not read it, or a newer nudge landed behind an in-flight write). A target that was already
+  // written is NOT dirty, and the unmount flush must not replay it — that re-sent an undone edit
+  // (#448).
+  const dirtyRef = useRef(false);
+
+  // Do the props already show the target? Then the write has been reflected and the target served.
+  const propsShowTarget = (): boolean => {
+    const t = targetRef.current;
+    const { activities, dataDate, barDateSource } = depsRef.current;
+    return (
+      !!t && dataDate !== null && buildReposition(t, activities, dataDate, barDateSource) === null
+    );
+  };
+
+  // The cross-burst target only has to outlive its write until the refetch that reflects it. When
+  // the props change after that (an undo, a dialog or Gantt save) they are the truth, so the next
+  // nudge must start from them rather than extend a stale target (#448).
+  useEffect(() => {
+    if (dirtyRef.current || busyRef.current) return;
+    targetRef.current = null;
+  }, [deps.activities]);
 
   const commit = (): void => {
     const t = targetRef.current;
     const { onReposition, activities, dataDate, setGhost, setConflict, announce } = depsRef.current;
     if (!t || !onReposition || dataDate === null) {
       targetRef.current = null;
+      dirtyRef.current = false;
       setGhost(null);
       return;
     }
@@ -118,6 +144,7 @@ export function useCoalescedNudge(
     const input = buildReposition(t, activities, dataDate, depsRef.current.barDateSource);
     if (!input) {
       targetRef.current = null;
+      dirtyRef.current = false;
       setGhost(null);
       return; // deleted elsewhere, or props caught up — no write needed
     }
@@ -128,6 +155,7 @@ export function useCoalescedNudge(
     // lane" from "found no free lane at all" (`reposition-announcement.ts`).
     const originalLane = activities.find((a) => a.id === t.activityId)?.laneIndex ?? finalLane;
     const { name } = t;
+    dirtyRef.current = false; // this write now owns the delta
     busyRef.current = true;
     inFlightRef.current = onReposition(input)
       .then((outcome) => {
@@ -147,7 +175,8 @@ export function useCoalescedNudge(
           // NB: deliberately do NOT null targetRef here. It's the absolute target and must survive
           // the window before `activities` refetches, so a fast follow-up nudge extends from it
           // rather than re-seeding from a stale prop (that would re-introduce the cross-burst
-          // clobber this hook fixes). Once props catch up, the next commit's caught-up check no-ops.
+          // clobber this hook fixes). The window closes when the props next change (the effect
+          // above), after which an undo or another edit is honoured.
           announce(
             repositionAnnouncement({
               name,
@@ -170,6 +199,9 @@ export function useCoalescedNudge(
       .finally(() => {
         busyRef.current = false;
         inFlightRef.current = null;
+        // The refetch may have landed while the write was still settling, with nothing left to
+        // change the props and retire the target.
+        if (!dirtyRef.current && propsShowTarget()) targetRef.current = null;
       });
   };
 
@@ -178,7 +210,9 @@ export function useCoalescedNudge(
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
-      if (!targetRef.current) return;
+      // Only an UNCOMMITTED delta is flushed. A target that was already written is stale by now —
+      // replaying it re-applied an undone edit, or sent a stale version and showed a conflict (#448).
+      if (!targetRef.current || !dirtyRef.current) return;
       // Flush a queued nudge so a pending edit isn't silently dropped on unmount / plan switch.
       // `flushFinal` is a best-effort absolute write that touches no React state (safe post-unmount).
       const flushFinal = (): void => {
@@ -244,6 +278,7 @@ export function useCoalescedNudge(
       t = { ...t, startDay: t.startDay + delta };
     }
     targetRef.current = t;
+    dirtyRef.current = true;
     setConflict(null);
     // Optimistic ghost tracks the burst for sighted users; AT hears the net result on commit.
     setGhost({ startDay: t.startDay, endDay: t.startDay + t.span, laneIndex: t.laneIndex });
