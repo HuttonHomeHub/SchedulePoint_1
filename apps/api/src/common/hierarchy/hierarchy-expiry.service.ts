@@ -28,12 +28,16 @@ const ACTIVITY_BUDGET_PER_RUN = 20_000;
 /**
  * How many history rows cost as much, in the activity budget, as one activity (ADR-0174 D8).
  *
- * **1 is deliberately pessimistic and unmeasured**: a history row is one indexed delete with no
- * child of its own, so it is almost certainly cheaper than an activity, which is why a ratio above
- * 1 is expected. It stays at 1 until M3-T1 measures the real per-row cost, because charging too
- * much only slows a backlog's drain while charging too little overruns the 60 s batch transaction.
+ * **Measured 2026-10-04 (M3-T1), on a shared 4-vCPU container, not the deployed host** —
+ * `docs/specs/activity-change-history/m3-measurement.md`, `test/measure/hierarchy-expiry-history.measure.ts`.
+ * One 2,000-activity scope with a link chain deleted in 67–90 µs per activity; a history row cost
+ * 3.6–4.7 µs steady (2–7.5 µs at the extremes of the noise) from 100,000 to 2,000,000 rows. The
+ * quotient is 11–25 rows per activity, and **10 is the pessimistic end rounded down**: charging too
+ * much only slows a backlog's drain, charging too little overruns the 60 s batch transaction. The
+ * rows were warm in cache, so a long-binned scope is likely dearer per row, which is a second reason
+ * not to round up. TECH_DEBT #443's caveat applies: re-measure on the deployed host.
  */
-export const HISTORY_ROWS_PER_ACTIVITY = 1;
+export const HISTORY_ROWS_PER_ACTIVITY = 10;
 
 /** What one expired scope costs the run's activity budget: its activities plus its history rows. */
 function budgetCharge(counts: ExpiryCounts): number {

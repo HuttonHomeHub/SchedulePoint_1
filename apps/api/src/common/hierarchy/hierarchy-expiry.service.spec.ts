@@ -5,7 +5,7 @@ import type { AuditService } from '../../modules/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
 import * as runner from './hierarchy-expiry.runner';
-import { HierarchyExpiryService } from './hierarchy-expiry.service';
+import { HISTORY_ROWS_PER_ACTIVITY, HierarchyExpiryService } from './hierarchy-expiry.service';
 
 /**
  * **Which subtrees the sweep picks, and when it arms.** What it actually deletes is proven against
@@ -215,13 +215,14 @@ describe('the budget and the failure path', () => {
   });
 
   it('charges history rows to the activity budget, not only the activities', async () => {
-    // 100 activities but 19,900 history rows is a 20,000 charge at ratio 1: the next scope waits.
+    // 100 activities plus enough history rows to cost 19,900 more activity-equivalents is a 20,000
+    // charge: the next scope waits. Derived from the ratio so re-measuring it does not break this.
     deleteScope.mockResolvedValue({
       clients: 1,
       projects: 0,
       plans: 1,
       activities: 100,
-      activityHistoryEntries: 19_900,
+      activityHistoryEntries: 19_900 * HISTORY_ROWS_PER_ACTIVITY,
     });
     const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);

@@ -102,7 +102,7 @@ made by the Planner is not. axe check on the open tab.
   1. Migration + model; CHECKs appended by hand with comments; `pnpm check:counts` updates the banner.
   2. **Expiry runner:** chunked `activityHistoryEntry.deleteMany` before activity-keyed children;
      `ExpiryCounts.activityHistoryEntries`; budget charge
-     `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio `1` with its justification.
+     `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio `1` with its justification (measured to `10` by M3-T1).
   3. **Interchange compensation** (`interchange.service.ts:1285`): delete history for the plan's
      activities before `activity.deleteMany`.
   4. **Test harness:** a DMMF-derived "children of `activities`" cleanup helper on the
@@ -647,6 +647,14 @@ mis-cited.**
   If a realistic scope can reach it, raise the chunked pre-pass with database-architect as a new decision.
 - **Dependencies:** M1-T1.
 - **Testing:** expiry e2e asserts history rows are gone and counted.
+- **Status: measured 2026-10-04; T2 stays open.** `m3-measurement.md` has the readings. On a shared
+  4-vCPU container a 2,000-activity scope expired at 67–90 µs per activity and 3.6–4.7 µs per history
+  row (500,000 rows: 1.2–3.7 s; 2,000,000: 7.7–8.6 s, linear), so `HISTORY_ROWS_PER_ACTIVITY` is **10**.
+  A single scope reaches the 60 s timeout at roughly 8–15 million rows (extrapolated past 2M), 8× above
+  CQ-2's 1,000,000-entry trigger, so no pre-pass is raised. Not covered: cold cache, hub-concentrated
+  history, link/knock-on entry content. The e2e already asserted the rows gone and counted
+  (`hierarchy-expiry.e2e-spec.ts`; the audit-row count is in `hierarchy-expiry.service.spec.ts`), and the
+  budget unit test now derives its row count from the constant.
 
 ##### Task M3-T2 — the real row rate
 
