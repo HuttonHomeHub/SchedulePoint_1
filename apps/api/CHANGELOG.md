@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.86.1
+
+### Patch Changes
+
+- [#789](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/789) [`3a9bfb7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3a9bfb77a9f4de31d9476bb3831a7eff5f449fa5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Permanent deletion of old deleted work now counts an activity's change history at its measured cost. A
+  history row is charged at a fifth of an activity's cost to delete, so one hourly run now clears five
+  times as many history rows before it stops and waits for the next one. Nothing changes for planners.
+
 ## 0.86.0
 
 ### Minor Changes
