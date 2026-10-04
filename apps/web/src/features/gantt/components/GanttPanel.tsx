@@ -465,17 +465,28 @@ function GanttPanelBody({
   // component knows whether a baseline column is showing, what the pane is, and how wide the
   // scroller is. Applied at typing time only — nothing is shrunk automatically afterwards.
   const registerGuard = columnWidths?.registerGuard;
+  // Read through a ref so the guard registers once, not on every drag frame (each frame changes
+  // `widths` or `gridWidth`); the effect below keeps the ref current after every commit.
+  const guardInputs = useRef({ COLUMNS, widths, showVariance, gridWidth });
+  useEffect(() => {
+    guardInputs.current = { COLUMNS, widths, showVariance, gridWidth };
+  }, [COLUMNS, widths, showVariance, gridWidth]);
   useEffect(() => {
     if (registerGuard === undefined) return undefined;
     return registerGuard((key: ResizableColumnKey, candidate: number): number => {
-      const others = COLUMNS.filter((c) => c.key !== key);
+      const current = guardInputs.current;
+      const others = current.COLUMNS.filter((c) => c.key !== key);
       return chartGuard(candidate, {
-        fixedWithoutColumn: ganttFixedWidth(others, widths, variancePinnedWidth(showVariance)),
-        pane: gridWidth,
+        fixedWithoutColumn: ganttFixedWidth(
+          others,
+          current.widths,
+          variancePinnedWidth(current.showVariance),
+        ),
+        pane: current.gridWidth,
         scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
       });
     });
-  }, [registerGuard, COLUMNS, widths, showVariance, gridWidth]);
+  }, [registerGuard]);
 
   // The header edges (ADR-0173 M2). A resizable column's edge changes that column's width and
   // Activity gives up the difference; **Activity's own edge is the table width** — the value the
@@ -1142,6 +1153,8 @@ function GanttPanelBody({
                           isResizableKey(column.key) ? resolveColumnWidth(column) : gridWidth
                         }
                         onDrag={(width) => dragColumnEdge(column.key, width)}
+                        // The Activity edge writes through gridPrefs.setSize (the Grid width path), so
+                        // its commit is a no-op commit.
                         onCommit={columnWidths.commit}
                         onReset={() => resetColumnEdge(column.key)}
                       />

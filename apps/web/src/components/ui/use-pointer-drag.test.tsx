@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePointerDrag } from './use-pointer-drag';
@@ -88,5 +89,63 @@ describe('usePointerDrag', () => {
     fireEvent.pointerMove(h, { pointerId: 1, clientX: 3 });
     unmount();
     expect(cancelAnimationFrame).toHaveBeenCalled();
+  });
+
+  it('reports the end on pointercancel', () => {
+    const onEnd = vi.fn();
+    render(<Handle onValue={vi.fn()} onEnd={onEnd} />);
+    const h = screen.getByTestId('h');
+    fireEvent.pointerDown(h, { pointerId: 1 });
+    fireEvent.pointerCancel(h, { pointerId: 1 });
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies a queued value once on release and cancels its frame', () => {
+    const onValue = vi.fn();
+    render(<Handle onValue={onValue} />);
+    const h = screen.getByTestId('h');
+    fireEvent.pointerDown(h, { pointerId: 1 });
+    fireEvent.pointerMove(h, { pointerId: 1, clientX: 21 });
+    fireEvent.pointerUp(h, { pointerId: 1 });
+    expect(onValue).toHaveBeenCalledTimes(1);
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1);
+    // The stale frame firing late must not apply the value a second time.
+    act(() => frames[0]!(0));
+    expect(onValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a move after release', () => {
+    const onValue = vi.fn();
+    render(<Handle onValue={onValue} />);
+    const h = screen.getByTestId('h');
+    fireEvent.pointerDown(h, { pointerId: 1 });
+    fireEvent.pointerUp(h, { pointerId: 1 });
+    fireEvent.pointerMove(h, { pointerId: 1, clientX: 50 });
+    expect(frames).toHaveLength(0);
+    expect(onValue).not.toHaveBeenCalled();
+  });
+
+  it('does not call onEnd when unmounted mid-drag', () => {
+    const onEnd = vi.fn();
+    const { unmount } = render(<Handle onValue={vi.fn()} onEnd={onEnd} />);
+    fireEvent.pointerDown(screen.getByTestId('h'), { pointerId: 1 });
+    unmount();
+    expect(onEnd).not.toHaveBeenCalled();
+  });
+
+  it('drags normally under StrictMode', () => {
+    const onValue = vi.fn();
+    const onEnd = vi.fn();
+    render(
+      <StrictMode>
+        <Handle onValue={onValue} onEnd={onEnd} />
+      </StrictMode>,
+    );
+    const h = screen.getByTestId('h');
+    fireEvent.pointerDown(h, { pointerId: 1 });
+    fireEvent.pointerMove(h, { pointerId: 1, clientX: 8 });
+    fireEvent.pointerUp(h, { pointerId: 1 });
+    expect(onValue).toHaveBeenCalledWith(8);
+    expect(onEnd).toHaveBeenCalledTimes(1);
   });
 });

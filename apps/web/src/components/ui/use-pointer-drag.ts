@@ -29,7 +29,7 @@ export interface PointerDragHandlers<E extends HTMLElement> {
  * itself; a handle that wants keys owns them. Pointer contract: `pointerdown` captures;
  * `pointermove` while captured is coalesced to one `onValue` per animation frame; `pointerup` and
  * `pointercancel` apply the last value immediately and release capture; unmount cancels a queued
- * frame.
+ * frame and does NOT call `onEnd` (the gesture never finished, and its owner is gone).
  *
  * Pointer moves fire faster than paint (120Hz+ on some devices), and each `onValue` re-renders the
  * caller, so coalescing keeps a drag smooth (ADR-0030 perf review).
@@ -88,10 +88,14 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
     [flush, onEnd],
   );
 
-  // Cancel a queued frame if the handle unmounts mid-drag.
+  // Cancel a queued frame if the handle unmounts mid-drag. Cleared too, so a StrictMode
+  // re-mount (which reuses the refs) does not resume a drag nobody is holding.
   useEffect(
     () => () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      pendingRef.current = null;
+      draggingRef.current = false;
     },
     [],
   );

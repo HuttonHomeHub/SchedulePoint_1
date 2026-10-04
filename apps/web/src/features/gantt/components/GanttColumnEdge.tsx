@@ -75,7 +75,7 @@ export function GanttColumnEdge({
         onReset();
       }}
     >
-      <span className="group-hover:bg-ring absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-transparent" />
+      <span className="group-hover:bg-ring group-active:bg-ring absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-transparent" />
     </span>
   );
 }
