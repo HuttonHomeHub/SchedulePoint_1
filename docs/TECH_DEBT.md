@@ -11523,6 +11523,7 @@ criterion (10 consecutive green CI runs) is unchanged.
 failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
 runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
 holds it until spec M3.1 signs up once per worker.
+
 ### 440. `updatePlacements` and the recalculation write may deadlock each other
 
 **Status:** open · **Verified:** 2026-10-03 (read, **not reproduced**: `activities.service.ts` `updatePlacements`
