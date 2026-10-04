@@ -377,8 +377,11 @@ although the engine reads none of them.
   with the database clock, in the last statement of the edit's transaction (`markScheduleInputsChanged`).
   `schedule_computed_at` takes `now()`, the transaction's start; an edit stamped with `now()` that began
   before a recalculation and committed after it would read as already calculated, so the edit uses the
-  wall clock and what remains of the race fails toward a spurious flag. Over-reporting is the safe
-  direction; under-reporting is the defect.
+  wall clock. The race that remains runs both ways: an edit that stamps before a recalculation starts
+  and commits after the recalculation's read is missed (an edit that does not take the plan advisory
+  lock), and a recalculation queued behind a lock-taking edit leaves a spurious flag until the next
+  recalculation (`docs/TECH_DEBT.md` #449). Over-reporting is the safe direction; under-reporting is
+  the defect.
 - **Not `updated_at`, and not engine-owned.** Stamped by a raw `UPDATE plans` that leaves
   `version`/`updated_at`/`updated_by` alone (the `stampScheduleComputedAt` shape), so an activity
   edit cannot 409 a plan-settings save; never accepted from a DTO; never written by the

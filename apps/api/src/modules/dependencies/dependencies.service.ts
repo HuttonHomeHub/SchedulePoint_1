@@ -323,9 +323,6 @@ export class DependenciesService {
             after: created,
           }),
         });
-        // A new link is new logic: always a scheduling-input change.
-        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
-
         /*
          * A create that earns a row — the one exception to "a create is already durably
          * attributed" (spec Test 1), because a link passes Test 2 instead: it re-dates everything
@@ -356,6 +353,9 @@ export class DependenciesService {
           },
           tx,
         );
+        // A new link is new logic: always a scheduling-input change. After every child write, so
+        // the plan row is locked last (the recalculation's order).
+        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
         return created;
       });
       this.logger.info(
@@ -508,8 +508,6 @@ export class DependenciesService {
           }),
         });
       }
-      // A deleted link is changed logic, which the old read could not see (it filtered deleted rows).
-      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       // The link that disappeared, named by its endpoints in direction order — the same shape as
       // the create, so the two read as a pair rather than as two unrelated facts about an id
       // nothing can now resolve.
@@ -532,6 +530,11 @@ export class DependenciesService {
         },
         tx,
       );
+      // A deleted link is changed logic, which the old read could not see (it filtered deleted rows).
+      // Only the transaction that made the transition stamps, like its history entry.
+      if (cascade.counts.dependencies === 1) {
+        await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+      }
     });
     this.logger.info(
       { organizationId: organization.id, dependencyId, userId: principal.userId },

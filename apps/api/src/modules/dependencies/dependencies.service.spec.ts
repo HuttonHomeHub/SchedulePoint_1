@@ -496,8 +496,16 @@ describe('DependenciesService', () => {
   });
 
   describe('remove', () => {
+    it('stamps nothing when a concurrent delete already took the dependency', async () => {
+      deps.findActiveByIdInOrg.mockResolvedValue(dependency());
+      lifecycle.cascadeSoftDelete.mockResolvedValue({ batchId: 'b1', counts: { dependencies: 0 } });
+      await service.remove(principalWith(ALL), 'acme', DEP_ID);
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
     it('soft-deletes an existing dependency via the lifecycle', async () => {
       deps.findActiveByIdInOrg.mockResolvedValue(dependency());
+      lifecycle.cascadeSoftDelete.mockResolvedValue({ batchId: 'b1', counts: { dependencies: 1 } });
       await service.remove(principalWith(ALL), 'acme', DEP_ID);
       expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledWith(
         expect.anything(),

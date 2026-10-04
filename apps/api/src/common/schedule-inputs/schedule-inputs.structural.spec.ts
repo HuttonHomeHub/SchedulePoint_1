@@ -149,3 +149,37 @@ describe('the write paths that stamp', () => {
     }
   });
 });
+
+describe('where the stamp sits', () => {
+  it('is never imported under modules/schedule/, whose transactions stamp schedule_computed_at', () => {
+    // `clock_timestamp()` here is always later than the same transaction's `now()`, so one call
+    // beside `stampScheduleComputedAt` would leave the plan permanently flagged.
+    const importers = sourceFiles(join(MODULES, 'schedule')).filter((file) =>
+      /markScheduleInputsChanged|mark-schedule-inputs-changed/.test(readFileSync(file, 'utf8')),
+    );
+    expect(importers.map((file) => relative(SRC, file))).toEqual([]);
+  });
+
+  it('is skipped by the transaction that lost the race to soft-delete a link', () => {
+    // The history entry and the stamp share one guard, so two concurrent removes do one of each.
+    const between = (body: string, guard: string) => {
+      const from = body.indexOf(guard);
+      const stamp = body.indexOf('markScheduleInputsChanged(', from);
+      expect(from).toBeGreaterThan(-1);
+      expect(stamp).toBeGreaterThan(from);
+      return body.slice(from, stamp);
+    };
+    expect(
+      between(
+        methodBody('cross-plan-dependencies/cross-plan-dependencies.service.ts', 'remove'),
+        'if (stamped === 1)',
+      ),
+    ).not.toMatch(/\n {6}\}\n/);
+    expect(
+      between(methodBody('dependencies/dependencies.service.ts', 'remove'), "'dependency.deleted'"),
+    ).not.toMatch(/\n {6}\}\n/);
+    expect(methodBody('dependencies/dependencies.service.ts', 'remove')).toMatch(
+      /if \(cascade\.counts\.dependencies === 1\) \{\s+await markScheduleInputsChanged/,
+    );
+  });
+});

@@ -117,8 +117,10 @@ See §6. There is one critical question. Every other point has a stated default.
   flagged even though the inputs are back to what was calculated. This is conservative and
   accepted. Comparing against a computed snapshot is a content digest, and the digest approach was
   rejected (§4.6).
-- **Concurrent edit and recalculation.** See D-2. With `clock_timestamp()` the remaining race fails
-  towards a spurious flag, not a missed one.
+- **Concurrent edit and recalculation.** See D-2. With `clock_timestamp()` the remaining race runs
+  both ways: an edit that stamps before a recalculation starts and commits after its read is missed
+  (only edits that do not take the plan advisory lock), and a recalculation queued behind a
+  lock-taking edit leaves a spurious flag until the next one (TECH_DEBT #449).
 - **Cross-plan link create/delete.** Both plans are flagged.
 - **Interchange import.** The new plan gets the column default. Phase 2's recalculation stamps
   `schedule_computed_at` after it, so a fresh import reads current.

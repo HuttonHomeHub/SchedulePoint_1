@@ -286,7 +286,7 @@ describe('CrossPlanDependenciesService', () => {
       });
       expect(result.id).toBe(LINK_ID);
       // Both plans' figures may have moved, so both are flagged.
-      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN]]);
+      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN].sort()]);
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationId: ORG_ID,
@@ -578,7 +578,14 @@ describe('CrossPlanDependenciesService', () => {
       await service.remove(principalWith(ALL), 'acme', LINK_ID);
       expect(editLock.assertHoldsPen).toHaveBeenCalledWith(expect.anything(), SUCC_PLAN, ORG_ID);
       expect(repo.softDelete).toHaveBeenCalledWith(LINK_ID, USER_ID, expect.anything());
-      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN]]);
+      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN].sort()]);
+    });
+
+    it('stamps nothing when a concurrent delete already took the link', async () => {
+      repo.findActiveByIdInOrg.mockResolvedValue(link());
+      repo.softDelete.mockResolvedValue(0);
+      await service.remove(principalWith(ALL), 'acme', LINK_ID);
+      expect(stampedPlanIds()).toEqual([]);
     });
 
     it('404s (and does not delete) when the link is missing', async () => {

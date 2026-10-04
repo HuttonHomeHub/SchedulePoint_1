@@ -296,11 +296,12 @@ export class CrossPlanDependenciesService {
             after: null,
           }),
         });
+        // Both plans' schedules read the edge; only the transaction that made the transition stamps.
+        await markScheduleInputsChanged(tx, organization.id, [
+          existing.predecessorPlanId,
+          existing.successorPlanId,
+        ]);
       }
-      await markScheduleInputsChanged(tx, organization.id, [
-        existing.predecessorPlanId,
-        existing.successorPlanId,
-      ]);
     });
     this.logger.info(
       { organizationId: organization.id, crossPlanDependencyId: id, userId: principal.userId },
