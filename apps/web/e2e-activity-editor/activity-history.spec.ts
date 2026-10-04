@@ -96,3 +96,73 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
   await editor.getByRole('tab', { name: 'History' }).click();
   await expect(editor.getByText('Link added: Finish to Start to Pour slab')).toBeVisible();
 });
+
+/**
+ * The **History** tab journey, second milestone (ADR-0174): what a group move and somebody else's
+ * deletion leave on the activities they touched. The suite's plan page has no canvas to drag on, so
+ * the group move goes through the placements route as the signed-in planner — the same route a
+ * canvas drag or levelling's apply calls — and what this proves is the seam the unit suites cannot:
+ * a real batch write, a real cascade delete, and the editor reading both back.
+ */
+test('a group move and a deleted neighbour show in History', async ({ account, page }) => {
+  const stamp = Date.now();
+  const { orgSlug } = account;
+  await enterOrg(page, orgSlug);
+  await openProject(page, stamp);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  for (const name of ['Excavate', 'Pour slab', 'Cure']) await addActivity(page, name);
+
+  const planId = new URL(page.url()).pathname.split('/plans/')[1]?.split('/')[0];
+  const base = `/api/v1/organizations/${orgSlug}/plans/${planId}`;
+  const listed = await page.request.get(`${base}/activities`);
+  const rows = ((await listed.json()) as { data: { id: string; name: string; version: number }[] })
+    .data;
+  const byName = (name: string) => rows.find((row) => row.name === name);
+  const excavate = byName('Excavate');
+  const pour = byName('Pour slab');
+  const cure = byName('Cure');
+  expect(excavate && pour && cure).toBeTruthy();
+
+  // Excavate → Cure, so deleting Cure is something that happens TO Excavate.
+  const linked = await page.request.post(`${base}/dependencies`, {
+    data: { predecessorId: excavate?.id, successorId: cure?.id },
+  });
+  expect(linked.ok()).toBe(true);
+
+  // 1. Two bars moved together.
+  const moved = await page.request.patch(`${base}/activities/placements`, {
+    data: {
+      placements: [excavate, pour].map((row) => ({
+        id: row?.id,
+        version: row?.version,
+        constraintType: 'SNET',
+        constraintDate: '2026-02-02',
+        visualStart: '2026-02-02',
+        laneIndex: null,
+      })),
+    },
+  });
+  expect(moved.ok()).toBe(true);
+
+  await openEditor(page, 'Excavate', 'Edit');
+  const editor = activityEditor(page);
+  await editor.getByRole('tab', { name: 'History' }).click();
+  await expect(editor.getByText(/saved together with 1 other activity/)).toBeVisible();
+  await expect(editor.getByText(/Placed start none → 02 Feb 2026/)).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // 2. A neighbour deleted from the table: Excavate is told, in words, why its link went.
+  await page.getByRole('button', { name: 'Actions for Cure' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('button', { name: 'Actions for Cure' })).toHaveCount(0);
+
+  await openEditor(page, 'Excavate', 'Edit');
+  await editor.getByRole('tab', { name: 'History' }).click();
+  await expect(editor.getByText('Link removed — Cure was deleted')).toBeVisible();
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze())
+      .violations,
+  ).toEqual([]);
+});

@@ -134,6 +134,32 @@ describe('ActivityHistoryPanel', () => {
     expect(container.textContent?.toLowerCase()).not.toContain('audit');
   });
 
+  it('words a knock-on by its cause and does not call it a group move', async () => {
+    vi.mocked(apiFetchEnvelope).mockResolvedValue({
+      data: [
+        entry({
+          scope: 'LOGIC',
+          batch: { id: 'b', size: 5 },
+          origin: 'ACTIVITY_DELETED',
+          changes: {
+            'link:1': {
+              dir: 'IN',
+              other: { id: 'x', code: '1020', name: 'Steel erection' },
+              from: { type: 'FS', lagMinutes: 0, lagCalendar: 'PROJECT_DEFAULT' },
+              to: null,
+            },
+          },
+        }),
+      ],
+      meta: META,
+    });
+    renderPanel();
+    expect(
+      await screen.findByText('Link removed — 1020 Steel erection was deleted'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/saved together/)).not.toBeInTheDocument();
+  });
+
   it('loads older entries on request, keeps focus on the control and announces the total', async () => {
     vi.mocked(apiFetchEnvelope)
       .mockResolvedValueOnce({

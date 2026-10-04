@@ -4,12 +4,16 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityDependency, type ResourceAssignment } from '@prisma/client';
 import {
   activityHistoryItemKind,
+  ACTIVITY_HISTORY_KEY_PREFIXES,
+  type ActivityHistoryLinkEnd,
+  type ActivityHistoryOrigin,
   type ActivityHistoryResourceRef,
   type ActivityHistoryScope,
 } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { acquireActivityHistoryLocks } from '../../common/db/activity-history-lock';
+import type { KnockOn, StampedLink } from '../../common/hierarchy/hierarchy-lifecycle.service';
 
 import { MAX_KEYED_ITEMS_PER_ENTRY } from './activity-history.constants';
 import {
@@ -19,6 +23,7 @@ import {
   assignmentState,
   changedReferenceIds,
   diffActivity,
+  diffFields,
   hasNonCostChange,
   isNetZero,
   linkItem,
@@ -30,6 +35,8 @@ import {
 } from './activity-history.diff';
 import {
   combineChanges,
+  fixedChanges,
+  NO_REFS,
   type PendingChanges,
   type ResolvedNames,
 } from './activity-history.pending';
@@ -53,6 +60,13 @@ export type AssignmentRow = Pick<
 /** The link columns a state is built from. */
 export type LinkRow = Pick<ActivityDependency, 'type' | 'lagMinutes' | 'lagCalendar'>;
 
+/** The columns of an activity a batch move supplies, before and after (all a placement writes). */
+export type PlacementRow = Pick<
+  ActivityRecordedRow,
+  'constraintType' | 'constraintDate' | 'visualStart' | 'laneIndex'
+>;
+const PLACEMENT_KEYS = ['constraintType', 'constraintDate', 'visualStart', 'laneIndex'] as const;
+
 /** One activity's share of a write: what changed on it, and the plan it belongs to (for the lock). */
 export interface RecordedActivityWrite {
   activityId: string;
@@ -64,11 +78,22 @@ export interface RecordInput {
   actorUserId: string;
   scope: ActivityHistoryScope;
   writes: readonly RecordedActivityWrite[];
+  /**
+   * Present for a write that records several activities as one act (a group move, a re-parent, a
+   * dissolve) or records a knock-on on activities other than the one acted on. Its entries share a
+   * batch id and size, **never merge** into or receive a merge from anything (spec rule 6), carry the
+   * `origin` when the cause is somebody else's action, and hold the plan's history lock in
+   * **exclusive** mode with no per-activity lock — so a 2,000-row batch costs one lock slot.
+   *
+   * Every activity may appear in `writes` only once: the caller groups what it records per activity.
+   */
+  batch?: { origin?: ActivityHistoryOrigin };
 }
 
 interface ProbeRow {
   activityId: string;
   organizationId: string;
+  planId: string;
   /** Database time, read once per statement under the history lock. */
   now: Date;
   entryId: string | null;
@@ -82,6 +107,8 @@ interface ProbeRow {
   /** The activity's own code and name: the other end of a link names this one. */
   code: string | null;
   name: string;
+  /** The activity's plan, by name: a cross-plan link's other end names the plan it lies in. */
+  planName: string;
   /** The reference names the writes asked for, on one row per statement (the others are null). */
   names: ProbedNames | null;
 }
@@ -90,6 +117,8 @@ interface ProbedNames {
   calendars: Record<string, string>;
   parents: Record<string, string>;
   resources: Record<string, { code: string | null; name: string }>;
+  /** Activities named by an item but not recorded by the call (a knock-on's deleted other end). */
+  others: Record<string, { code: string | null; name: string }>;
 }
 
 /**
@@ -143,20 +172,27 @@ export class ActivityHistoryRecorder {
 
     const writes = input.writes.filter((w) => w.changes.keys.length > 0);
     if (writes.length === 0) return;
-    for (const w of writes) {
-      // A single-object write produces at most two keyed items for one activity; more is a caller
-      // bug (the knock-on path of the second milestone must chunk) and would risk the size CHECK.
-      const keyed = w.changes.keys.filter((k) => activityHistoryItemKind(k) !== 'field');
-      if (keyed.length > MAX_KEYED_ITEMS_PER_ENTRY) {
-        throw new Error(
-          `ActivityHistoryRecorder: ${keyed.length} keyed items for one activity exceeds ${MAX_KEYED_ITEMS_PER_ENTRY}`,
-        );
+    if (new Set(writes.map((w) => w.activityId)).size !== writes.length) {
+      throw new Error('ActivityHistoryRecorder: an activity appears twice in one call.');
+    }
+    const batch = input.batch;
+    if (!batch) {
+      for (const w of writes) {
+        // A single-object write produces at most two keyed items for one activity; more is a caller
+        // bug and would risk the size CHECK. A batch chunks them instead (see `chunkChanges`).
+        const keyed = w.changes.keys.filter((k) => activityHistoryItemKind(k) !== 'field');
+        if (keyed.length > MAX_KEYED_ITEMS_PER_ENTRY) {
+          throw new Error(
+            `ActivityHistoryRecorder: ${keyed.length} keyed items for one activity exceeds ${MAX_KEYED_ITEMS_PER_ENTRY}`,
+          );
+        }
       }
     }
 
     await acquireActivityHistoryLocks(tx, {
       planIds: writes.map((w) => w.planId),
       activityIds: writes.map((w) => w.activityId),
+      exclusive: batch !== undefined,
     });
 
     // The probe also reads the clock, so it is one statement: it runs AFTER the lock is held. `now()`
@@ -166,7 +202,7 @@ export class ActivityHistoryRecorder {
     const t = [...probes.rows.values()][0]?.now;
     if (!t) throw new Error('ActivityHistoryRecorder: the probe returned no activity or clock');
 
-    const batch: WriteBatch = { drop: [], merge: [], insert: [] };
+    const staged: WriteBatch = { drop: [], merge: [], insert: [] };
     for (const write of writes) {
       const row = probes.rows.get(write.activityId);
       if (!row) {
@@ -177,18 +213,38 @@ export class ActivityHistoryRecorder {
         {
           actorUserId: input.actorUserId,
           scope: input.scope,
-          isBatch: false,
+          isBatch: batch !== undefined,
           changes: write.changes.build(probes.names),
         },
         t,
       );
-      stage(batch, plan, row, write.activityId);
+      stage(staged, plan, row, write.activityId, batch !== undefined);
       this.logger.debug(
         { activityId: write.activityId, scope: input.scope, historyEntry: plan.action },
         'activity history recorded',
       );
     }
-    await this.flush(tx, batch, input);
+    await this.flush(tx, staged, input, batch);
+  }
+
+  /**
+   * Record what an activity delete or restore did to the **survivors**' links, as one batch (scope
+   * `LOGIC`, origin `ACTIVITY_DELETED` / `ACTIVITY_RESTORED`): the whole of a knock-on is this one
+   * call, so a transaction that deletes or restores activities spends the recorder's single call here.
+   * With no survivor it issues no statement.
+   */
+  async recordKnockOn(
+    tx: Prisma.TransactionClient,
+    actorUserId: string,
+    knockOn: KnockOn,
+    kind: 'removed' | 'restored',
+  ): Promise<void> {
+    await this.record(tx, {
+      actorUserId,
+      scope: 'LOGIC',
+      batch: { origin: kind === 'removed' ? 'ACTIVITY_DELETED' : 'ACTIVITY_RESTORED' },
+      writes: this.knockOnLinkWrites(knockOn.links, new Set(knockOn.activityIds), kind),
+    });
   }
 
   /**
@@ -200,7 +256,7 @@ export class ActivityHistoryRecorder {
     const refs = changedReferenceIds(before, after);
     return {
       keys: Object.keys(diffActivity(before, after, NO_NAMES)),
-      refs: { ...refs, resourceIds: [] },
+      refs: { ...NO_REFS, ...refs },
       build: (names) =>
         diffActivity(before, after, { calendars: names.calendars, parents: names.parents }),
     };
@@ -239,7 +295,7 @@ export class ActivityHistoryRecorder {
     ] as string[];
     return {
       keys: Object.keys(items((row) => ({ id: row.resourceId, code: null, name: '' }))),
-      refs: { calendarIds: [], parentIds: [], resourceIds },
+      refs: { ...NO_REFS, resourceIds },
       build: (names) =>
         items((row) => {
           const resource = names.resources.get(row.resourceId);
@@ -285,7 +341,7 @@ export class ActivityHistoryRecorder {
       };
     const pending = (dir: 'IN' | 'OUT', otherId: string): PendingChanges => ({
       keys: [key],
-      refs: { calendarIds: [], parentIds: [], resourceIds: [] },
+      refs: NO_REFS,
       build: end(dir, otherId),
     });
     return [
@@ -303,6 +359,155 @@ export class ActivityHistoryRecorder {
   }
 
   /**
+   * The two writes a **cross-plan** link change records, one on each endpoint in its own plan, each
+   * naming the other end with its plan as they are now (O6). The routes are create and delete only,
+   * so the item is always an add (`from: null`) or a removal (`to: null`).
+   */
+  crossPlanLinkWrites(link: {
+    id: string;
+    predecessorId: string;
+    successorId: string;
+    predecessorPlanId: string;
+    successorPlanId: string;
+    before: LinkRow | null;
+    after: LinkRow | null;
+  }): RecordedActivityWrite[] {
+    const from = link.before ? linkState(link.before) : null;
+    const to = link.after ? linkState(link.after) : null;
+    const key = `${ACTIVITY_HISTORY_KEY_PREFIXES.crossPlanLink}${link.id}`;
+    const end = (dir: 'IN' | 'OUT', otherId: string, planId: string): RecordedActivityWrite => ({
+      activityId: dir === 'OUT' ? link.predecessorId : link.successorId,
+      planId,
+      changes: {
+        keys: [key],
+        refs: NO_REFS,
+        build: (names) => {
+          const other = names.activities.get(otherId);
+          const otherPlan = names.plans.get(otherId);
+          if (!other || !otherPlan) {
+            throw new Error(`ActivityHistoryRecorder: an endpoint of link ${link.id} is gone`);
+          }
+          return {
+            [key]: linkItem(
+              dir,
+              { ...other, planId: otherPlan.id, planName: otherPlan.name },
+              from,
+              to,
+            ),
+          };
+        },
+      },
+    });
+    return [
+      end('OUT', link.successorId, link.predecessorPlanId),
+      end('IN', link.predecessorId, link.successorPlanId),
+    ];
+  }
+
+  /**
+   * One write per **surviving** endpoint of links that a delete removed (`removed`) or a restore
+   * brought back (`restored`), each holding one `link:` item per such link, naming the activity that
+   * went or returned as it is named now (the probe reads it, deleted or not). The deleted subject
+   * itself gets nothing: it is in the audit log and cannot be opened (spec "Out of scope").
+   *
+   * `gone` is every activity the delete took or the restore returned. A link both of whose ends are in
+   * it has no survivor and writes nothing; so a plan-level restore, whose links are all internal,
+   * records nothing.
+   */
+  knockOnLinkWrites(
+    links: readonly StampedLink[],
+    gone: ReadonlySet<string>,
+    kind: 'removed' | 'restored',
+  ): RecordedActivityWrite[] {
+    const bySurvivor = new Map<
+      string,
+      { planId: string; items: Array<{ link: StampedLink; otherId: string; dir: 'IN' | 'OUT' }> }
+    >();
+    for (const link of links) {
+      const ends = [
+        { survivor: link.predecessorId, otherId: link.successorId, dir: 'OUT' as const },
+        { survivor: link.successorId, otherId: link.predecessorId, dir: 'IN' as const },
+      ];
+      for (const { survivor, otherId, dir } of ends) {
+        if (gone.has(survivor)) continue;
+        const group = bySurvivor.get(survivor) ?? { planId: link.planId, items: [] };
+        group.items.push({ link, otherId, dir });
+        bySurvivor.set(survivor, group);
+      }
+    }
+    return [...bySurvivor].map(([activityId, { planId, items }]) => ({
+      activityId,
+      planId,
+      changes: {
+        keys: items.map((i) => linkKey(i.link.id)),
+        refs: { ...NO_REFS, activityIds: items.map((i) => i.otherId) },
+        build: (names) => {
+          const changes: StoredChanges = {};
+          for (const { link, otherId, dir } of items) {
+            const other = names.activities.get(otherId);
+            if (!other) {
+              throw new Error(`ActivityHistoryRecorder: an endpoint of link ${link.id} is gone`);
+            }
+            const state = linkState(link);
+            changes[linkKey(link.id)] = linkItem(
+              dir,
+              other,
+              kind === 'removed' ? state : null,
+              kind === 'removed' ? null : state,
+            );
+          }
+          return changes;
+        },
+      },
+    }));
+  }
+
+  /**
+   * One write per activity a batch move changed. Only the placement columns are compared, and only
+   * those are supplied, so a 2,000-row move reads no more of each row than the move writes. A row
+   * whose placement did not change yields no key, so it records nothing.
+   */
+  placementWrites(
+    planId: string,
+    rows: ReadonlyArray<{ id: string; before: PlacementRow; after: PlacementRow }>,
+  ): RecordedActivityWrite[] {
+    return rows.map(({ id, before, after }) => ({
+      activityId: id,
+      planId,
+      changes: fixedChanges(diffFields(PLACEMENT_KEYS, before, after, NO_NAMES)),
+    }));
+  }
+
+  /**
+   * One write per activity a batch re-parent or a dissolve moved to another WBS parent, naming both
+   * parents as they are now (the probe reads them; a dissolved summary is deleted by then and still
+   * has a name).
+   */
+  parentWrites(
+    planId: string,
+    rows: ReadonlyArray<{ id: string; before: string | null; after: string | null }>,
+  ): RecordedActivityWrite[] {
+    return rows.map(({ id, before, after }) => ({
+      activityId: id,
+      planId,
+      changes: {
+        keys: before === after ? [] : ['parentId'],
+        refs: {
+          ...NO_REFS,
+          parentIds: before === after ? [] : [before, after].filter((p): p is string => p !== null),
+        },
+        build: (names) =>
+          diffFields(
+            ['parentId'],
+            { parentId: before },
+            { parentId: after },
+            { calendars: NO_NAMES.calendars, parents: names.parents },
+          ),
+      },
+    }));
+  }
+
+  /**
    * The latest entry for each activity (whoever made it), the activity's organisation and its own
    * name, and the reference names the writes asked for — in one statement. The organisation is read
    * here, from the activity row, and copied onto the entry — never taken from the request, so a write
@@ -315,7 +520,7 @@ export class ActivityHistoryRecorder {
     writes: readonly RecordedActivityWrite[],
   ): Promise<{ rows: Map<string, ProbeRow>; names: ResolvedNames }> {
     const refs = combineChanges(...writes.map((w) => w.changes)).refs;
-    // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, and names the calendar, WBS parent and resource as they are now (a deleted one still has a name), so no row may be filtered out.
+    // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, and names the calendar, WBS parent, resource, plan and a knock-on's other end as they are now (a deleted one still has a name), so no row may be filtered out.
     const rows = await tx.$queryRaw<ProbeRow[]>`
       WITH names AS (
         SELECT jsonb_build_object(
@@ -326,11 +531,15 @@ export class ActivityHistoryRecorder {
           'resources', COALESCE((SELECT jsonb_object_agg(r.id,
                                    jsonb_build_object('code', r.code, 'name', r.name))
                                  FROM resources r
-                                 WHERE r.id = ANY(${[...refs.resourceIds]}::uuid[])), '{}'::jsonb)
+                                 WHERE r.id = ANY(${[...refs.resourceIds]}::uuid[])), '{}'::jsonb),
+          'others', COALESCE((SELECT jsonb_object_agg(o.id,
+                                jsonb_build_object('code', o.code, 'name', o.name))
+                              FROM activities o
+                              WHERE o.id = ANY(${[...refs.activityIds]}::uuid[])), '{}'::jsonb)
         ) AS j
       )
-      SELECT a.id AS "activityId", a.organization_id AS "organizationId",
-             a.code AS code, a.name AS name,
+      SELECT a.id AS "activityId", a.organization_id AS "organizationId", a.plan_id AS "planId",
+             a.code AS code, a.name AS name, pl.name AS "planName",
              date_trunc('milliseconds', clock_timestamp()) AS "now",
              e.id AS "entryId", e.actor_user_id AS "actorUserId", e.scope::text AS scope,
              e.first_recorded_at AS "firstRecordedAt", e.last_recorded_at AS "lastRecordedAt",
@@ -338,6 +547,7 @@ export class ActivityHistoryRecorder {
              CASE WHEN u.ord = 1 THEN names.j END AS names
       FROM unnest(${writes.map((w) => w.activityId)}::uuid[]) WITH ORDINALITY AS u(id, ord)
       JOIN activities a ON a.id = u.id
+      JOIN plans pl ON pl.id = a.plan_id
       CROSS JOIN names
       LEFT JOIN LATERAL (
         SELECT * FROM activity_history_entries h
@@ -348,6 +558,14 @@ export class ActivityHistoryRecorder {
     const byActivity = new Map(rows.map((r) => [r.activityId, r]));
     const probed = rows.find((r) => r.names !== null)?.names;
     const resources = new Map<string, ActivityHistoryResourceRef>();
+    // The recorded activities name themselves; an activity only named (the other end of a knock-on) is
+    // read beside them. A recorded one wins, so a link between two recorded ends reads as it always did.
+    const activities = new Map<string, ActivityHistoryLinkEnd>();
+    for (const [id, o] of Object.entries(probed?.others ?? {})) {
+      activities.set(id, { id, code: o.code, name: o.name });
+    }
+    for (const r of rows)
+      activities.set(r.activityId, { id: r.activityId, code: r.code, name: r.name });
     for (const [id, r] of Object.entries(probed?.resources ?? {})) {
       resources.set(id, { id, code: r.code, name: r.name });
     }
@@ -357,9 +575,8 @@ export class ActivityHistoryRecorder {
         calendars: new Map(Object.entries(probed?.calendars ?? {})),
         parents: new Map(Object.entries(probed?.parents ?? {})),
         resources,
-        activities: new Map(
-          rows.map((r) => [r.activityId, { id: r.activityId, code: r.code, name: r.name }]),
-        ),
+        activities,
+        plans: new Map(rows.map((r) => [r.activityId, { id: r.planId, name: r.planName }])),
       },
     };
   }
@@ -372,13 +589,20 @@ export class ActivityHistoryRecorder {
    */
   private async flush(
     tx: Prisma.TransactionClient,
-    batch: WriteBatch,
+    staged: WriteBatch,
     input: RecordInput,
+    batch: RecordInput['batch'],
   ): Promise<void> {
-    if (batch.drop.length + batch.merge.length + batch.insert.length === 0) return;
-    const dropIds = batch.drop;
-    const merge = batch.merge;
-    const insert = batch.insert;
+    if (staged.drop.length + staged.merge.length + staged.insert.length === 0) return;
+    const dropIds = staged.drop;
+    const merge = staged.merge;
+    const insert = staged.insert;
+    // A batch's entries share one id, and its size is the entries it wrote (not the rows it moved:
+    // a row whose placement did not change has none, and a hub activity may have several chunks).
+    // Never both set on a single-object write, which is what `ck_activity_history_batch_pair` checks.
+    const batchId = batch ? uuidV7(new Date()) : null;
+    const batchSize = batch ? insert.length : null;
+    const origin = batch?.origin ?? null;
     await tx.$executeRaw`
       WITH dropped AS (
         DELETE FROM activity_history_entries WHERE id = ANY(${dropIds}::uuid[])
@@ -394,11 +618,13 @@ export class ActivityHistoryRecorder {
       )
       INSERT INTO activity_history_entries (
         id, organization_id, activity_id, actor_user_id, scope,
-        first_recorded_at, last_recorded_at, has_non_cost_change, changes
+        first_recorded_at, last_recorded_at, has_non_cost_change, changes,
+        batch_id, batch_size, origin
       )
       SELECT v.id, v.organization_id, v.activity_id, ${input.actorUserId},
              ${input.scope}::activity_history_scope, v.at::timestamptz, v.at::timestamptz,
-             v.non_cost, v.changes::jsonb
+             v.non_cost, v.changes::jsonb,
+             ${batchId}::uuid, ${batchSize}::int, ${origin}::activity_history_origin
       FROM unnest(
         ${insert.map((i) => i.id)}::uuid[], ${insert.map((i) => i.organizationId)}::uuid[],
         ${insert.map((i) => i.activityId)}::uuid[], ${insert.map((i) => i.changes)}::text[],
@@ -422,8 +648,36 @@ interface WriteBatch {
 
 const NO_NAMES = { calendars: new Map<string, string>(), parents: new Map<string, string>() };
 
+/**
+ * Split one activity's changes into entries of at most {@link MAX_KEYED_ITEMS_PER_ENTRY} keyed
+ * items, the field items going with the first. Merging is an optimisation a batch never does, so the
+ * size CHECK is held by splitting here: refusing would fail the deletion that caused the entry.
+ */
+function chunkChanges(changes: StoredChanges): StoredChanges[] {
+  const keys = Object.keys(changes);
+  const keyed = keys.filter((k) => activityHistoryItemKind(k) !== 'field');
+  if (keyed.length <= MAX_KEYED_ITEMS_PER_ENTRY) return [changes];
+  const chunks: StoredChanges[] = [];
+  for (let i = 0; i < keyed.length; i += MAX_KEYED_ITEMS_PER_ENTRY) {
+    chunks.push(
+      Object.fromEntries(
+        keyed.slice(i, i + MAX_KEYED_ITEMS_PER_ENTRY).map((k) => [k, changes[k]!]),
+      ),
+    );
+  }
+  for (const k of keys)
+    if (activityHistoryItemKind(k) === 'field') Object.assign(chunks[0]!, { [k]: changes[k]! });
+  return chunks;
+}
+
 /** Stage one activity's plan into the call's single write statement. */
-function stage(batch: WriteBatch, plan: RecordPlan, row: ProbeRow, activityId: string): void {
+function stage(
+  batch: WriteBatch,
+  plan: RecordPlan,
+  row: ProbeRow,
+  activityId: string,
+  chunk: boolean,
+): void {
   switch (plan.action) {
     case 'none':
       return;
@@ -439,14 +693,16 @@ function stage(batch: WriteBatch, plan: RecordPlan, row: ProbeRow, activityId: s
       });
       return;
     case 'insert':
-      batch.insert.push({
-        id: uuidV7(plan.firstRecordedAt),
-        organizationId: row.organizationId,
-        activityId,
-        changes: JSON.stringify(plan.changes),
-        at: plan.firstRecordedAt.toISOString(),
-        nonCost: hasNonCostChange(plan.changes),
-      });
+      for (const changes of chunk ? chunkChanges(plan.changes) : [plan.changes]) {
+        batch.insert.push({
+          id: uuidV7(plan.firstRecordedAt),
+          organizationId: row.organizationId,
+          activityId,
+          changes: JSON.stringify(changes),
+          at: plan.firstRecordedAt.toISOString(),
+          nonCost: hasNonCostChange(changes),
+        });
+      }
       return;
   }
 }

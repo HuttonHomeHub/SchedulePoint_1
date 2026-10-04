@@ -21,7 +21,7 @@ import { Prisma } from '@prisma/client';
  *  2. each recorded **activity** in **exclusive** mode, ascending activity id.
  *
  * Two single-object recorders therefore contend only if they share an activity, while a batch
- * (second milestone: the plan lock in **exclusive** mode, no activity locks, so it costs one
+ * (`exclusive`: the plan lock in **exclusive** mode, no activity locks, so it costs one
  * lock-table slot however many rows it has) excludes every single recorder in its plan.
  *
  * ## Why it cannot deadlock
@@ -40,16 +40,24 @@ const HISTORY_LOCK_NAMESPACE = 'activity-history';
 
 export async function acquireActivityHistoryLocks(
   db: Prisma.TransactionClient,
-  scope: { planIds: readonly string[]; activityIds: readonly string[] },
+  scope: {
+    planIds: readonly string[];
+    activityIds: readonly string[];
+    /** A batch or knock-on: each plan in exclusive mode, and no activity locks (data-model §4.1). */
+    exclusive?: boolean;
+  },
 ): Promise<void> {
   const planIds = [...new Set(scope.planIds)];
-  const activityIds = [...new Set(scope.activityIds)];
+  const activityIds = scope.exclusive ? [] : [...new Set(scope.activityIds)];
   if (planIds.length === 0 && activityIds.length === 0) return;
+  const planMode = scope.exclusive ? 'exclusive' : 'shared';
   // Ordered by (level, id) in the derived table, so the database — not just the caller's sort —
   // evaluates the lock calls in the fixed order the protocol relies on.
   await db.$executeRaw`
-    SELECT CASE WHEN lvl = 0
+    SELECT CASE WHEN lvl = 0 AND ${planMode}::text = 'shared'
         THEN pg_advisory_xact_lock_shared(hashtext(${HISTORY_LOCK_NAMESPACE}), hashtext('plan:' || id))
+        WHEN lvl = 0
+        THEN pg_advisory_xact_lock(hashtext(${HISTORY_LOCK_NAMESPACE}), hashtext('plan:' || id))
         ELSE pg_advisory_xact_lock(hashtext(${HISTORY_LOCK_NAMESPACE}), hashtext('activity:' || id))
       END
     FROM (

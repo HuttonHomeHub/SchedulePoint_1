@@ -11586,6 +11586,33 @@ slow cores), Prisma's interactive-transaction overhead, or something in the requ
 product owner's machine) and record the result in ADR-0174. **Trigger:** a planner reports slow saves, or the
 next performance pass on the write paths.
 
+### 444. A batch history probe reads each activity's whole latest entry when it only needs the timestamp
+
+**Status:** open · **Verified:** 2026-10-04 (database-architect diagnosis, `docs/specs/activity-change-history/implementation-plan.md` M2-T5; `activity-history.recorder.ts` probe) ·
+**Raised:** 2026-10-04 (product-owner decision to ship M2 on the absolute bar) · **Size:** S · **Owner:** api
+
+A batch entry never merges, yet the recorder's probe fetches each affected activity's latest entry in full,
+including its stored change list. For a 2,000-survivor delete the probe measured 19–41 ms; the diagnosis
+estimates 5–15 ms saved by reading only the timestamp, more on real plans whose survivors carry long
+histories (the harness's survivors had almost none, so this was under-measured). Code only, no schema change.
+**Next:** narrow the batch probe to the latest `recorded_at`, re-measure with the M2 harness, and record the
+figure in ADR-0174. **Trigger:** a slow delete or restore of a large summary, or the next history change.
+
+### 445. A history entry keeps a deleted neighbour's name, and an xlink entry keeps the other plan's name
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-04 (`docs/specs/activity-change-history/`, M2; the entries are written by `activity-history.recorder.ts`) ·
+**Raised:** 2026-10-04 (M2 review) · **Size:** S · **Owner:** api
+
+A knock-on entry (a link lost because the other end was deleted) and a dissolve entry copy the deleted
+neighbour's code and name into the **survivor's** history, and an `xlink:<id>` entry snapshots the other
+plan's name. ADR-0096 retention later hard-deletes the neighbour, but its name stays in the survivor's
+history for as long as the survivor lives. It is not a new exposure today: a reader of the survivor could
+already see the neighbour on the link. It matters to a right-to-erasure request about content, and to any
+future per-plan access model, where the other plan's name would be visible to somebody who may not see
+that plan. **Next:** decide whether retention scrubs the names from surviving entries or the entry stores
+only the id and resolves at read time. **Trigger:** an erasure request that reaches content, or per-plan
+permissions being introduced. Related theme: #118a.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·

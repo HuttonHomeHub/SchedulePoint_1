@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
 
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
 
@@ -52,6 +52,47 @@ export interface CascadeDeleteResult {
   counts: CascadeCounts;
 }
 
+/**
+ * A link a delete stamped or a restore reactivated, as the activity history needs it to tell a
+ * **surviving** endpoint what happened to it (ADR-0174 D9).
+ */
+export interface StampedLink {
+  id: string;
+  planId: string;
+  predecessorId: string;
+  successorId: string;
+  type: DependencyType;
+  lagMinutes: number;
+  lagCalendar: LagCalendarSource;
+}
+
+/**
+ * What an activity delete or restore changed beyond the rows it was asked about, handed back through
+ * an optional out-parameter so the many callers that do not record history are unchanged and pay for
+ * nothing: each method fills it from rows it already touches, with no statement of its own.
+ */
+export interface KnockOn {
+  /** The links removed (delete) or brought back (restore). */
+  links: StampedLink[];
+  /** Every activity the operation took or returned, so the caller can tell the survivors. */
+  activityIds: string[];
+}
+
+/** `push(...items)` throws a RangeError past ~100,000 arguments; a subtree can be that large. */
+function appendAll<T>(into: T[], items: readonly T[]): void {
+  for (const item of items) into.push(item);
+}
+
+const stampedLinkSelect = {
+  id: true,
+  planId: true,
+  predecessorId: true,
+  successorId: true,
+  type: true,
+  lagMinutes: true,
+  lagCalendar: true,
+} as const;
+
 /** Machine-readable reasons carried in a {@link ConflictError}'s `details`. */
 export const HIERARCHY_CONFLICT = {
   /** Tried to restore a row whose parent is still soft-deleted (restore top-down). */
@@ -94,6 +135,7 @@ export class HierarchyLifecycleService {
     id: string,
     actorId: string,
     injectedBatchId?: string,
+    knockOn?: KnockOn,
   ): Promise<CascadeDeleteResult> {
     const batchId = injectedBatchId ?? randomUUID();
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
@@ -175,15 +217,22 @@ export class HierarchyLifecycleService {
     // (the summary itself carries no logic, but its descendant tasks do).
     const deleteLinksForActivities = async (activityIds: string[]): Promise<number> => {
       if (activityIds.length === 0) return 0;
-      return (
-        await tx.activityDependency.updateMany({
-          where: {
-            deletedAt: null,
-            OR: [{ predecessorId: { in: activityIds } }, { successorId: { in: activityIds } }],
-          },
+      const where = {
+        deletedAt: null,
+        OR: [{ predecessorId: { in: activityIds } }, { successorId: { in: activityIds } }],
+      };
+      if (knockOn) {
+        // The same statement, returning the rows it stamped: they are what a surviving endpoint's
+        // history is told (the caller works out which endpoints survive).
+        const stamped = await tx.activityDependency.updateManyAndReturn({
+          where,
           data: stamp,
-        })
-      ).count;
+          select: stampedLinkSelect,
+        });
+        appendAll(knockOn.links, stamped);
+        return stamped.length;
+      }
+      return (await tx.activityDependency.updateMany({ where, data: stamp })).count;
     };
 
     // Soft-delete the active steps of the activities under a set of plans (M7 rung 5, ADR-0044 §2),
@@ -385,6 +434,7 @@ export class HierarchyLifecycleService {
       // link incident to any of them, all under the one batch id so a restore of
       // the root reactivates the subtree together.
       const subtreeIds = await resolveActivitySubtree(id);
+      if (knockOn) appendAll(knockOn.activityIds, subtreeIds);
       counts.dependencies = await deleteLinksForActivities(subtreeIds);
       counts.steps = await deleteStepsForActivities(subtreeIds);
       counts.notes = await deleteNotesForActivities(subtreeIds);
@@ -430,6 +480,7 @@ export class HierarchyLifecycleService {
     ids: readonly string[],
     actorId: string,
     batchId: string,
+    knockOn: KnockOn,
   ): Promise<CascadeCounts> {
     const counts: CascadeCounts = {
       clients: 0,
@@ -462,15 +513,20 @@ export class HierarchyLifecycleService {
 
     // Four set-wise sweeps for the whole batch, in the same order the per-id path used: links
     // before the rows they join, so nothing observes a dangling edge mid-transaction.
-    counts.dependencies = (
-      await tx.activityDependency.updateMany({
-        where: {
-          deletedAt: null,
-          OR: [{ predecessorId: { in: list } }, { successorId: { in: list } }],
-        },
-        data: stamp,
-      })
-    ).count;
+    // Returning the stamped rows is what a surviving endpoint's history is told. Required, not
+    // optional: this sweep's only caller records the knock-on, and a caller that did not would leave
+    // the gap the history exists to prevent.
+    appendAll(knockOn.activityIds, list);
+    const stamped = await tx.activityDependency.updateManyAndReturn({
+      where: {
+        deletedAt: null,
+        OR: [{ predecessorId: { in: list } }, { successorId: { in: list } }],
+      },
+      data: stamp,
+      select: stampedLinkSelect,
+    });
+    appendAll(knockOn.links, stamped);
+    counts.dependencies = stamped.length;
     counts.steps = (
       await tx.activityStep.updateMany({
         where: { activityId: { in: list }, deletedAt: null },
@@ -505,6 +561,7 @@ export class HierarchyLifecycleService {
     entity: HierarchyEntity,
     id: string,
     actorId: string,
+    knockOn?: KnockOn,
   ): Promise<CascadeCounts> {
     const root = await this.loadDeletedRoot(tx, entity, id);
     await this.assertParentActive(tx, entity, root);
@@ -538,9 +595,24 @@ export class HierarchyLifecycleService {
         counts.plans = (
           await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
-        counts.activities = (
-          await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
+        if (knockOn) {
+          // The same statement, returning the ids it reactivated: the caller tells the survivors by
+          // what is NOT among them.
+          const restored = await tx.activity.updateManyAndReturn({
+            where: { deleteBatchId: batchId },
+            data: restore,
+            select: { id: true },
+          });
+          appendAll(
+            knockOn.activityIds,
+            restored.map((a) => a.id),
+          );
+          counts.activities = restored.length;
+        } else {
+          counts.activities = (
+            await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+          ).count;
+        }
         // Restore the batch's baselines and their snapshot rows (M7, ADR-0025). The
         // batch is self-consistent — at most one baseline was active when deleted — so
         // the one-active partial unique cannot collide on restore.
@@ -606,7 +678,7 @@ export class HierarchyLifecycleService {
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
         // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).
-        counts.dependencies = await this.restoreLinksInBatch(tx, batchId, restore);
+        counts.dependencies = await this.restoreLinksInBatch(tx, batchId, restore, knockOn);
       } else {
         // Defensive: a soft-deleted row should always carry a batch id.
         if (entity === 'client') {
@@ -654,10 +726,11 @@ export class HierarchyLifecycleService {
     tx: Prisma.TransactionClient,
     batchId: string,
     restore: { deletedAt: null; deleteBatchId: null; updatedBy: string },
+    knockOn?: KnockOn,
   ): Promise<number> {
     const links = await tx.activityDependency.findMany({
       where: { deleteBatchId: batchId },
-      select: { id: true, predecessorId: true, successorId: true },
+      select: stampedLinkSelect,
     });
     if (links.length === 0) return 0;
 
@@ -670,10 +743,12 @@ export class HierarchyLifecycleService {
         })
       ).map((a) => a.id),
     );
-    const restorable = links
-      .filter((l) => active.has(l.predecessorId) && active.has(l.successorId))
-      .map((l) => l.id);
+    const restorableLinks = links.filter(
+      (l) => active.has(l.predecessorId) && active.has(l.successorId),
+    );
+    const restorable = restorableLinks.map((l) => l.id);
     if (restorable.length === 0) return 0;
+    if (knockOn) appendAll(knockOn.links, restorableLinks);
 
     return (
       await tx.activityDependency.updateMany({ where: { id: { in: restorable } }, data: restore })

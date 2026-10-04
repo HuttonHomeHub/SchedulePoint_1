@@ -9,6 +9,7 @@ import {
   type ActivityHistoryLinkChange,
   type ActivityHistoryLinkEnd,
   type ActivityHistoryLinkState,
+  type ActivityHistoryOrigin,
   type ActivityHistoryValue,
 } from '@repo/types';
 
@@ -189,7 +190,31 @@ function endText(end: ActivityHistoryLinkEnd): string {
   return end.planName ? `${base} (${end.planName})` : base;
 }
 
-function linkLine(change: ActivityHistoryLinkChange, ctx: HistoryFormatContext): string {
+/**
+ * A link that changed because somebody deleted or restored the activity at its other end says so,
+ * naming that activity as it was then; the entry's own actor did that, and the line is how a reader
+ * knows nothing was done to this activity directly (ADR-0174 D9).
+ */
+function knockOnLinkLine(
+  change: ActivityHistoryLinkChange,
+  origin: ActivityHistoryOrigin | null,
+): string | null {
+  if (origin === 'ACTIVITY_DELETED' && change.to === null) {
+    return `Link removed — ${endText(change.other)} was deleted`;
+  }
+  if (origin === 'ACTIVITY_RESTORED' && change.from === null) {
+    return `Link restored — ${endText(change.other)} was restored`;
+  }
+  return null;
+}
+
+function linkLine(
+  change: ActivityHistoryLinkChange,
+  ctx: HistoryFormatContext,
+  origin: ActivityHistoryOrigin | null,
+): string {
+  const knockOn = knockOnLinkLine(change, origin);
+  if (knockOn !== null) return knockOn;
   const direction = change.dir === 'IN' ? 'from' : 'to';
   const other = `${direction} ${endText(change.other)}`;
   if (change.from === null && change.to !== null) {
@@ -290,15 +315,21 @@ export function formatHistoryItem(
   key: string,
   change: ActivityHistoryChange,
   ctx: HistoryFormatContext,
+  origin: ActivityHistoryOrigin | null = null,
 ): HistoryLine {
-  return { key, text: itemText(key, change, ctx) };
+  return { key, text: itemText(key, change, ctx, origin) };
 }
 
-function itemText(key: string, change: ActivityHistoryChange, ctx: HistoryFormatContext): string {
+function itemText(
+  key: string,
+  change: ActivityHistoryChange,
+  ctx: HistoryFormatContext,
+  origin: ActivityHistoryOrigin | null,
+): string {
   switch (activityHistoryItemKind(key)) {
     case 'link':
     case 'xlink':
-      return linkLine(change as ActivityHistoryLinkChange, ctx);
+      return linkLine(change as ActivityHistoryLinkChange, ctx, origin);
     case 'assignment':
       return assignmentLine(change as ActivityHistoryAssignmentChange, ctx);
     case 'field': {
@@ -306,7 +337,10 @@ function itemText(key: string, change: ActivityHistoryChange, ctx: HistoryFormat
       const field = key as ActivityHistoryFieldKey;
       if ('changed' in change) return `${FIELD_LABELS[field]} changed`;
       const { from, to } = change as ActivityHistoryFieldChange;
-      return `${FIELD_LABELS[field]} ${fieldValueText(field, from, ctx)} → ${fieldValueText(field, to, ctx)}`;
+      const line = `${FIELD_LABELS[field]} ${fieldValueText(field, from, ctx)} → ${fieldValueText(field, to, ctx)}`;
+      return origin === 'SUMMARY_DISSOLVED' && field === 'parentId'
+        ? `${line} — its summary was dissolved`
+        : line;
     }
   }
 }
@@ -315,6 +349,7 @@ function itemText(key: string, change: ActivityHistoryChange, ctx: HistoryFormat
 export function formatHistoryEntry(
   changes: Record<string, ActivityHistoryChange>,
   ctx: HistoryFormatContext,
+  origin: ActivityHistoryOrigin | null = null,
 ): HistoryLine[] {
   const fieldOrder = Object.keys(ACTIVITY_HISTORY_FIELDS);
   const rank = (key: string): number => {
@@ -323,5 +358,5 @@ export function formatHistoryEntry(
   };
   return Object.keys(changes)
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-    .map((key) => formatHistoryItem(key, changes[key] as ActivityHistoryChange, ctx));
+    .map((key) => formatHistoryItem(key, changes[key] as ActivityHistoryChange, ctx, origin));
 }

@@ -25,6 +25,8 @@ export interface NameRefs {
   readonly calendarIds: readonly string[];
   readonly parentIds: readonly string[];
   readonly resourceIds: readonly string[];
+  /** Activities that are not recorded by this call but are named by an item: a knock-on's other end. */
+  readonly activityIds: readonly string[];
 }
 
 /** Names read under the history lock. */
@@ -32,11 +34,21 @@ export interface ResolvedNames {
   readonly calendars: ReadonlyMap<string, string>;
   readonly parents: ReadonlyMap<string, string>;
   readonly resources: ReadonlyMap<string, ActivityHistoryResourceRef>;
-  /** The activities the write records — a link end names the other end from here. */
+  /**
+   * The activities the write records, and any it asked for by {@link NameRefs.activityIds} — a link
+   * end names the other end from here, whether the other end is recorded too or has just been deleted.
+   */
   readonly activities: ReadonlyMap<string, ActivityHistoryLinkEnd>;
+  /** The plan each of those activities belongs to, for a cross-plan link's other end. */
+  readonly plans: ReadonlyMap<string, { id: string; name: string }>;
 }
 
-const NO_REFS: NameRefs = { calendarIds: [], parentIds: [], resourceIds: [] };
+export const NO_REFS: NameRefs = {
+  calendarIds: [],
+  parentIds: [],
+  resourceIds: [],
+  activityIds: [],
+};
 
 /** Nothing to record: used where one part of a combined write has no change. */
 export function noChanges(): PendingChanges {
@@ -59,6 +71,7 @@ export function combineChanges(...parts: readonly PendingChanges[]): PendingChan
       calendarIds: union((r) => r.calendarIds),
       parentIds: union((r) => r.parentIds),
       resourceIds: union((r) => r.resourceIds),
+      activityIds: union((r) => r.activityIds),
     },
     build: (names) => Object.assign({}, ...parts.map((p) => p.build(names))) as StoredChanges,
   };

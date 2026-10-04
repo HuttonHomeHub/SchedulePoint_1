@@ -12,6 +12,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
+import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -261,6 +262,10 @@ describe('CrossPlanDependenciesService', () => {
       prisma as unknown as PrismaService,
       logger,
       calendars as unknown as CalendarRepository,
+      {
+        record: vi.fn().mockResolvedValue(undefined),
+        crossPlanLinkWrites: vi.fn().mockReturnValue([]),
+      } as unknown as ActivityHistoryRecorder,
     );
   });
 

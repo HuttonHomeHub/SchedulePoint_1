@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
+import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import type { WithLagDayFactor } from '../dependencies/lag-day-factor';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -64,6 +65,7 @@ export class CrossPlanDependenciesService {
     private readonly prisma: PrismaService,
     @InjectPinoLogger(CrossPlanDependenciesService.name) private readonly logger: PinoLogger,
     private readonly calendars: CalendarRepository,
+    private readonly history: ActivityHistoryRecorder,
   ) {}
 
   /**
@@ -229,6 +231,21 @@ export class CrossPlanDependenciesService {
           },
           tx,
         );
+        // Recorded last, in this transaction, on BOTH endpoints, each in its own plan's history
+        // (ADR-0174 O6): an entry that cannot be written fails the create rather than leaving a gap.
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'LOGIC',
+          writes: this.history.crossPlanLinkWrites({
+            id: created.id,
+            predecessorId: created.predecessorId,
+            successorId: created.successorId,
+            predecessorPlanId,
+            successorPlanId,
+            before: null,
+            after: created,
+          }),
+        });
         return { ...created, lagDayFactorMinutes };
       });
       this.logger.info(
@@ -257,9 +274,26 @@ export class CrossPlanDependenciesService {
     // edge bounds (ADR-0045 §6), symmetric with create.
     await this.editLock.assertHoldsPen(principal, existing.successorPlanId, organization.id);
 
-    await this.prisma.$transaction((tx) =>
-      this.crossPlanDependencies.softDelete(id, principal.userId, tx),
-    );
+    await this.prisma.$transaction(async (tx) => {
+      // Recorded only by the transaction that made the transition: a concurrent delete that lost
+      // stamps nothing, so two removes record one "removed", not two (the in-plan link's rule).
+      const stamped = await this.crossPlanDependencies.softDelete(id, principal.userId, tx);
+      if (stamped === 1) {
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'LOGIC',
+          writes: this.history.crossPlanLinkWrites({
+            id,
+            predecessorId: existing.predecessorId,
+            successorId: existing.successorId,
+            predecessorPlanId: existing.predecessorPlanId,
+            successorPlanId: existing.successorPlanId,
+            before: existing,
+            after: null,
+          }),
+        });
+      }
+    });
     this.logger.info(
       { organizationId: organization.id, crossPlanDependencyId: id, userId: principal.userId },
       'cross-plan dependency deleted',
