@@ -295,6 +295,6 @@ findings are `docs/TECH_DEBT.md` #140–#141.
 > **Amended 2026-10-03 by [ADR-0174](0174-an-activitys-history-is-working-memory-not-an-audit-trail.md) D8.**
 > The runner now deletes `activity_history_entries` explicitly, before the activities it is `RESTRICT`ed
 > into, counts the rows (`ExpiryCounts.activityHistoryEntries`), charges them to the run's activity budget
-> at `HISTORY_ROWS_PER_ACTIVITY` per activity (measured at `10` by ADR-0174 M3-T1, 2026-10-04) and reports them as
+> at `HISTORY_ROWS_PER_ACTIVITY` per activity (measured at `5` by ADR-0174 M3-T1, 2026-10-04, interleaved and warm) and reports them as
 > `activityHistoryCount` on `hierarchy.expired`. `hierarchy-expiry.structural.spec.ts` is what made the
 > omission impossible to ship.

@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -21,7 +22,16 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
  * `K` history rows per activity written by SQL (not the API: the point is the delete, and 500k
  * recorded saves would take hours), then times `deleteExpiredScope` inside one transaction with the
  * 60 s batch timeout lifted so a slow case reports its real duration rather than a timeout. The
- * result is a set of numbers for a human to read; the harness asserts nothing.
+ * result is a set of numbers for a human to read; the one thing the harness asserts is that the
+ * returned `activityHistoryEntries` equals the rows seeded, so a silent partial delete cannot pass
+ * as a fast one.
+ *
+ * Each density runs in two physical orders (`MEASURE_ORDER`, default both). `clustered` is what a
+ * `CROSS JOIN generate_series` produces: every activity's rows adjacent on disk, so the
+ * `activity_id IN (…)` delete walks contiguous pages. `interleaved` writes one row per activity per
+ * "minute" with the series outermost and a random order inside each minute, so an activity's rows
+ * are scattered over the whole heap as real history, accrued over months across all the activities,
+ * would be. The interleaved reading is the measured bound for the physical-order caveat.
  *
  * Two things the figures do NOT cover, stated here so a reader does not assume them: the rows are
  * bulk-loaded moments before the delete, so they are warm in the buffer cache (a scope that expires
@@ -33,11 +43,14 @@ const ACTIVITIES = 2000;
 const ROWS_PER_ACTIVITY = (process.env.MEASURE_K ?? '0,50,125,250,500')
   .split(',')
   .map((n) => Number(n));
+type RowOrder = 'clustered' | 'interleaved';
+const ORDERS = (process.env.MEASURE_ORDER ?? 'clustered,interleaved').split(',') as RowOrder[];
 const REPS = Number(process.env.MEASURE_ITER ?? 2);
 const CASE_TIMEOUT_MS = 3_600_000;
 
 interface Reading {
   historyRows: number;
+  order: RowOrder;
   rep: number;
   ms: number;
   counts: Record<string, number>;
@@ -72,6 +85,7 @@ describe.skipIf(!process.env.DATABASE_URL)('hierarchy expiry with history measur
   async function seedScope(
     orgId: string,
     rowsPerActivity: number,
+    order: RowOrder,
     tag: string,
   ): Promise<{ clientId: string; projectId: string; planId: string }> {
     const client = await prisma.client.create({
@@ -115,6 +129,9 @@ describe.skipIf(!process.env.DATABASE_URL)('hierarchy expiry with history measur
       })),
     });
     if (rowsPerActivity > 0) {
+      // The two orders differ only in the join's outer side and an explicit sort: Postgres writes
+      // rows in the order the SELECT yields them, which is the physical order being measured.
+      const orderBy = order === 'interleaved' ? Prisma.sql`ORDER BY g, random()` : Prisma.empty;
       // ~0.4 KB per entry, the spec's estimate: a three-field change set with a long-ish string.
       await prisma.$executeRaw`
         INSERT INTO activity_history_entries
@@ -127,8 +144,10 @@ describe.skipIf(!process.env.DATABASE_URL)('hierarchy expiry with history measur
                  'name', jsonb_build_object('from', 'Excavate ' || g, 'to', 'Excavate ' || (g + 1)),
                  'durationMinutes', jsonb_build_object('from', g, 'to', g + 1),
                  'notes', jsonb_build_object('from', repeat('x', 120), 'to', repeat('y', 120)))
-        FROM activities a CROSS JOIN generate_series(1, ${rowsPerActivity}::int) AS g
-        WHERE a.plan_id = ${plan.id}::uuid`;
+        FROM generate_series(1, ${rowsPerActivity}::int) AS g
+        CROSS JOIN activities a
+        WHERE a.plan_id = ${plan.id}::uuid
+        ${orderBy}`;
     }
     await prisma.$executeRawUnsafe('ANALYZE activity_history_entries');
     await prisma.$executeRawUnsafe('ANALYZE activities');
@@ -142,23 +161,30 @@ describe.skipIf(!process.env.DATABASE_URL)('hierarchy expiry with history measur
       select: { id: true },
     });
     for (const k of ROWS_PER_ACTIVITY) {
-      for (let rep = 1; rep <= REPS; rep += 1) {
-        const scope = await seedScope(org.id, k, `k${k}r${rep}`);
-        const t0 = performance.now();
-        const counts = await prisma.$transaction(
-          (tx) =>
-            deleteExpiredScope(tx, {
-              clientIds: [scope.clientId],
-              projectIds: [scope.projectId],
-              planIds: [scope.planId],
-            }),
-          { timeout: CASE_TIMEOUT_MS, maxWait: 60_000 },
-        );
-        const ms = performance.now() - t0;
-        readings.push({ historyRows: k * ACTIVITIES, rep, ms, counts: { ...counts } });
-        console.warn(
-          `history=${k * ACTIVITIES} rep=${rep} ms=${ms.toFixed(0)} counts=${JSON.stringify(counts)}`,
-        );
+      // Order is meaningless with no rows, so the empty scope is measured once.
+      for (const order of k === 0 ? ORDERS.slice(0, 1) : ORDERS) {
+        for (let rep = 1; rep <= REPS; rep += 1) {
+          const scope = await seedScope(org.id, k, order, `k${k}${order}r${rep}`);
+          const t0 = performance.now();
+          const counts = await prisma.$transaction(
+            (tx) =>
+              deleteExpiredScope(tx, {
+                clientIds: [scope.clientId],
+                projectIds: [scope.projectId],
+                planIds: [scope.planId],
+              }),
+            { timeout: CASE_TIMEOUT_MS, maxWait: 60_000 },
+          );
+          const ms = performance.now() - t0;
+          readings.push({ historyRows: k * ACTIVITIES, order, rep, ms, counts: { ...counts } });
+          console.warn(
+            `history=${k * ACTIVITIES} order=${order} rep=${rep} ms=${ms.toFixed(0)} counts=${JSON.stringify(counts)}`,
+          );
+          if (counts.activityHistoryEntries !== k * ACTIVITIES)
+            throw new Error(
+              `partial delete: seeded ${k * ACTIVITIES} history rows, expiry counted ${counts.activityHistoryEntries}`,
+            );
+        }
       }
     }
   });

@@ -83,8 +83,9 @@ baseline has no author) can say who changed one activity's duration, link or cra
 - **D8 — Retention and deletion.** An entry lives as long as its activity (CQ-2); there is no age sweep.
   The foreign key into `activities` is `ON DELETE RESTRICT` and the three permanent-deletion sites delete
   history **explicitly**: the ADR-0096 expiry runner (counted in `ExpiryCounts.activityHistoryEntries`,
-  charged to the run's activity budget at `HISTORY_ROWS_PER_ACTIVITY` rows per activity (**10**, measured
-  2026-10-04 by M3-T1: a history row costs 3.6–4.7 µs against 67–90 µs for an activity, on a container),
+  charged to the run's activity budget at `HISTORY_ROWS_PER_ACTIVITY` rows per activity (**5**, measured
+  2026-10-04 by M3-T1: a history row costs 3.6–4.7 µs against 67–90 µs for an activity when written in
+  activity order and 5–7.8 µs when interleaved in time, on a container; 5 leaves headroom for cold rows),
   and reported as `activityHistoryCount` on the
   `hierarchy.expired` audit row), the interchange compensation, and a schema-derived test-cleanup helper
   (`test/clear-activity-tree.ts`). `RESTRICT` rather than `CASCADE` because a cascade runs uncounted
@@ -161,12 +162,17 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
     never reaches.
     **Expiry cost per history row, measured 2026-10-04 (M3-T1, container figures,
     `docs/specs/activity-change-history/m3-measurement.md`):** a 2,000-activity scope with 500,000 rows
-    expired in 1.2–3.7 s, 1,000,000 in 3.6–4.7 s and 2,000,000 in 7.7–8.6 s, linear, so
-    `HISTORY_ROWS_PER_ACTIVITY` is now 10 (was an unmeasured 1). A single scope would reach the 60 s batch
-    timeout at roughly 8–15 million rows, extrapolated past the largest case measured; against CQ-2's
-    1,000,000-entry trigger that is not a realistic scope, so no pre-pass is built. Warm cache, evenly
-    spread rows and one machine are the stated limits. The real entry rate (the spec's estimate is
-    0.3–0.5 KB per entry and 6–55 MB a year on a busy plan, plus 20–40 % for links and resources)
+    expired in 0.7–1.1 s written in activity order and 2.5–2.8 s interleaved in time; 1,000,000 rows in
+    3.5–4.7 s and 7.6–7.8 s; 2,000,000 clustered in 7.7–8.6 s. The interleaved order is the realistic one and
+    costs about twice as much, so the per-activity to per-row quotient is **8.3–10.4**, not the 17 the
+    clustered rows gave, and `HISTORY_ROWS_PER_ACTIVITY` is now **5** (was an unmeasured 1). Both figures
+    are **warm cache**; cold or scattered rows cost more per row, which pushes the quotient down, so a
+    higher constant would be the unsafe move. At 7.5–7.8 µs per row a scope reaches the 60 s batch
+    timeout at about 7.7 million interleaved warm rows (likely optimistic: per-row cost rose from 5.0–5.6
+    µs at 500,000 to 7.6–7.8 µs at 1,000,000). The spec's row rate, re-derived, is about 18k–190k rows a
+    year on a busy plan (6–55 MB, plus 20–40 % for links and resources, at 0.3–0.5 KB), so CQ-2's
+    1,000,000-entry trigger is about five years at the pessimistic rate. **No pre-pass is proposed until a
+    scope is measured cold and interleaved on the deployed host (TECH_DEBT #443).** The real entry rate
     remains an estimate until M3-T2.
 - **Bars restated by the product owner, 2026-10-04.** After the first pass missed on every operation, the
   database-architect's diagnosis (`implementation-plan.md` M1-T7) showed over 90 % of the added cost was

@@ -30,14 +30,17 @@ const ACTIVITY_BUDGET_PER_RUN = 20_000;
  *
  * **Measured 2026-10-04 (M3-T1), on a shared 4-vCPU container, not the deployed host** —
  * `docs/specs/activity-change-history/m3-measurement.md`, `test/measure/hierarchy-expiry-history.measure.ts`.
- * One 2,000-activity scope with a link chain deleted in 67–90 µs per activity; a history row cost
- * 3.6–4.7 µs steady (2–7.5 µs at the extremes of the noise) from 100,000 to 2,000,000 rows. The
- * quotient is 11–25 rows per activity, and **10 is the pessimistic end rounded down**: charging too
- * much only slows a backlog's drain, charging too little overruns the 60 s batch transaction. The
- * rows were warm in cache, so a long-binned scope is likely dearer per row, which is a second reason
- * not to round up. TECH_DEBT #443's caveat applies: re-measure on the deployed host.
+ * One 2,000-activity scope with a link chain deleted in 65–90 µs per activity. A history row cost
+ * 3.6–4.7 µs when the rows were written in activity order, and **5–7.8 µs when they were interleaved
+ * across the activities in time**, which is how real history lands on disk. The quotient is 17–25
+ * clustered and **8.3–10.4 interleaved**, both warm. Rows cold in the cache cost more per row still,
+ * which pushes the quotient lower and was not measured, so **5 leaves about 1.7–2× headroom** for it.
+ * Charging too much only slows a backlog's drain (an hourly run is 20,000 activity-equivalents, now
+ * 100,000 history rows, against a busy plan's 18k–190k rows a year); charging too little overruns
+ * the 60 s batch transaction, so a higher constant is the unsafe move. TECH_DEBT #443: re-measure
+ * cold and interleaved on the deployed host.
  */
-export const HISTORY_ROWS_PER_ACTIVITY = 10;
+export const HISTORY_ROWS_PER_ACTIVITY = 5;
 
 /** What one expired scope costs the run's activity budget: its activities plus its history rows. */
 function budgetCharge(counts: ExpiryCounts): number {

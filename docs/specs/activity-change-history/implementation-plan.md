@@ -102,7 +102,7 @@ made by the Planner is not. axe check on the open tab.
   1. Migration + model; CHECKs appended by hand with comments; `pnpm check:counts` updates the banner.
   2. **Expiry runner:** chunked `activityHistoryEntry.deleteMany` before activity-keyed children;
      `ExpiryCounts.activityHistoryEntries`; budget charge
-     `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio `1` with its justification (measured to `10` by M3-T1).
+     `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio `1` with its justification (measured to `5` by M3-T1).
   3. **Interchange compensation** (`interchange.service.ts:1285`): delete history for the plan's
      activities before `activity.deleteMany`.
   4. **Test harness:** a DMMF-derived "children of `activities`" cleanup helper on the
@@ -648,13 +648,17 @@ mis-cited.**
 - **Dependencies:** M1-T1.
 - **Testing:** expiry e2e asserts history rows are gone and counted.
 - **Status: measured 2026-10-04; T2 stays open.** `m3-measurement.md` has the readings. On a shared
-  4-vCPU container a 2,000-activity scope expired at 67–90 µs per activity and 3.6–4.7 µs per history
-  row (500,000 rows: 1.2–3.7 s; 2,000,000: 7.7–8.6 s, linear), so `HISTORY_ROWS_PER_ACTIVITY` is **10**.
-  A single scope reaches the 60 s timeout at roughly 8–15 million rows (extrapolated past 2M), 8× above
-  CQ-2's 1,000,000-entry trigger, so no pre-pass is raised. Not covered: cold cache, hub-concentrated
-  history, link/knock-on entry content. The e2e already asserted the rows gone and counted
-  (`hierarchy-expiry.e2e-spec.ts`; the audit-row count is in `hierarchy-expiry.service.spec.ts`), and the
-  budget unit test now derives its row count from the constant.
+  4-vCPU container a 2,000-activity scope expired at 65–90 µs per activity and, per history row, 3.6–4.7 µs
+  when the rows were written in activity order and 5–7.8 µs when interleaved in time (1,000,000 rows:
+  3.5–4.7 s clustered, 7.6–7.8 s interleaved). The interleaved quotient is 8.3–10.4, and cold rows cost
+  more, so `HISTORY_ROWS_PER_ACTIVITY` is **5**. A single scope reaches the 60 s timeout at about 7.7
+  million interleaved warm rows (likely optimistic). The corrected row rate is about 18k–190k a year, so
+  CQ-2's 1,000,000-entry trigger is about five years at the pessimistic rate, but that is a warm-cache
+  figure: **no pre-pass is proposed until measured cold and interleaved on the deployed host (TECH_DEBT
+  #443)**. Not covered: cold cache, hub-concentrated history, link/knock-on entry content. The e2e
+  already asserted the rows gone and counted (`hierarchy-expiry.e2e-spec.ts`; the audit-row count is in
+  `hierarchy-expiry.service.spec.ts`), the harness now also asserts the counted rows equal the rows seeded,
+  and the budget unit test derives its row count from the constant.
 
 ##### Task M3-T2 — the real row rate
 
