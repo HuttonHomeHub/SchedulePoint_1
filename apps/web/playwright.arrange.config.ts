@@ -60,12 +60,12 @@ export default defineConfig({
               // On CI the eleventh journey met a 429 on every page load after `recalculate`, so the
               // workspace never rendered (PR #669, three runs). Lowering the limit to 50 locally
               // reproduces that symptom exactly.
-              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s): the busiest
-              // handler, GET /api/v1/me, peaks at 84 requests per 60 s. Ceiling 350 is about 4x
-              // that peak, rounded up to the next 50 — not 2x, because CI runners spent more than
-              // 100 per 60 s on activity-editor where the local peak was 64. Raised for this
-              // harness only; the guard is untouched and no other suite or environment sees this
-              // value.
+              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s, census counting one handler
+              // across organisations): the busiest handler, GET /api/v1/me,
+              // peaks at 77 requests per 60 s. Ceiling 350 is about 4x that peak, rounded up to the next 50 —
+              // not 2x, because CI runners spent more than 100 per 60 s on activity-editor where the local
+              // peak was 64. Raised for this harness only; the guard is untouched and no other suite or
+              // environment sees this value.
               RATE_LIMIT_LIMIT: '350',
             },
           },

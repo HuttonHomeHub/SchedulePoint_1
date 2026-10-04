@@ -53,13 +53,13 @@ export default defineConfig({
               // The scale journey seeds hundreds of activities through the API to reach a plan size
               // worth measuring, which trips the global throttler (100/60s) that exists to deny
               // abusive traffic.
-              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s): the busiest
-              // handler, POST /api/v1/…/plans/:id/activities (seeding), peaks at 300 requests per
-              // 60 s. Ceiling 1200 is about 4x that peak, rounded up to the next 50 — not 2x,
-              // because CI runners spent more than 100 per 60 s on activity-editor where the local
-              // peak was 64. Raised for this harness only; the guard is untouched and no other
-              // suite or environment sees this value.
-              RATE_LIMIT_LIMIT: '1200',
+              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s, census counting one handler
+              // across organisations): the busiest handler, POST /api/v1/organizations/:org/plans/:id/activities (seeding),
+              // peaks at 315 requests per 60 s. Ceiling 1300 is about 4x that peak, rounded up to the next 50 —
+              // not 2x, because CI runners spent more than 100 per 60 s on activity-editor where the local
+              // peak was 64. Raised for this harness only; the guard is untouched and no other suite or
+              // environment sees this value.
+              RATE_LIMIT_LIMIT: '1300',
             },
           },
           {
