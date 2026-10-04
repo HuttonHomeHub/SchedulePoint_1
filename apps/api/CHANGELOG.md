@@ -1,5 +1,22 @@
 # @repo/api
 
+## 0.85.0
+
+### Minor Changes
+
+- [#784](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/784) [`8454c39`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8454c396f378cf2396b65d7e04e83d6c2db29bc9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Record who changed an activity, and when. Every single-activity write now writes its change, in its own
+  transaction, to a per-activity history: the editor's definition and progress saves, a link created, edited
+  or deleted (on both of its activities) and a resource assignment created, edited or removed, including the
+  duration the units triad derives in the same request. Consecutive saves by one person merge, and a change
+  undone inside the window leaves no entry. `GET /organizations/:orgSlug/activities/:activityId/history`
+  serves it to every member, with money withheld from anyone without `cost:read`. This is working memory, not
+  an audit trail (ADR-0174). Permanent deletion of an activity now removes its history first and counts it.
+
+### Patch Changes
+
+- Updated dependencies [[`8454c39`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8454c396f378cf2396b65d7e04e83d6c2db29bc9)]:
+  - @repo/types@0.41.0
+
 ## 0.84.2
 
 ### Patch Changes
