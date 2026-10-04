@@ -27,6 +27,9 @@ import {
  * widths are read off the rendered header boxes rather than restated: the grid is what a planner
  * sees, so it is what is asserted.
  *
+ * **M2 adds the drag** (`aria-hidden` edges on the headers, pointer only), with the typed field as
+ * its stated equivalent, and a coarse-pointer case asserting the edges are not rendered at all.
+ *
  * Serial; Chromium only (TECH_DEBT #25a). One org per test.
  */
 
@@ -279,4 +282,97 @@ test('the pinned columns still end where the chart begins at every width, with a
   await page.getByRole('button', { name: 'Reset widths' }).click();
   await expect.poll(() => headerWidth(page, 'Code')).toBe(80);
   await chartMeetsGrid(page, 'with a baseline, after Reset widths');
+});
+
+/** The Code header's right edge, as a point a mouse can press: the strip is centred on it. */
+async function codeEdge(page: Page): Promise<{ x: number; y: number }> {
+  const box = await header(page, 'Code').boundingBox();
+  if (box === null) throw new Error('no box for the Code header');
+  return { x: box.x + box.width, y: box.y + box.height / 2 };
+}
+
+test('dragging a column edge widens it, Activity gives way, and it is remembered', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await ganttPlan(page);
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(80);
+  const separator = page.getByRole('separator', { name: 'Grid width' });
+  const tableWidth = await separator.getAttribute('aria-valuenow');
+  const activityBefore = await headerWidth(page, 'Activity');
+  const sortBefore = await header(page, 'Code').getAttribute('aria-sort');
+  const chartLeft = (await header(page, 'Timeline').boundingBox())?.x;
+
+  // The strip is a 24 × 24-or-larger target, measured directly: it is `aria-hidden` and has no role,
+  // so the deck sweep's selector never sees it.
+  const strip = ganttGrid(page).locator('[data-gantt-column-edge]').first();
+  const stripBox = await strip.boundingBox();
+  expect(stripBox?.width).toBeGreaterThanOrEqual(24);
+  expect(stripBox?.height).toBeGreaterThanOrEqual(24);
+
+  const edge = await codeEdge(page);
+  await page.mouse.move(edge.x, edge.y);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + 30, edge.y, { steps: 6 });
+  await page.mouse.move(edge.x + 60, edge.y, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(140);
+  // Activity gave up exactly what Code took, and the divider the planner placed did not move.
+  await expect.poll(() => headerWidth(page, 'Activity')).toBe(activityBefore - 60);
+  await expect(separator).toHaveAttribute('aria-valuenow', tableWidth ?? '');
+  expect((await header(page, 'Timeline').boundingBox())?.x).toBe(chartLeft);
+  await chartMeetsGrid(page, 'after dragging the Code edge');
+  // A drag is not a click on the sort control beside it.
+  await expect(header(page, 'Code')).toHaveAttribute('aria-sort', sortBefore ?? 'none');
+
+  await page.reload();
+  await expect(ganttGrid(page)).toBeVisible();
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(140);
+
+  const again = await codeEdge(page);
+  await page.mouse.dblclick(again.x, again.y);
+  await expect.poll(() => headerWidth(page, 'Code')).toBe(80);
+  await chartMeetsGrid(page, 'after a double-click reset');
+
+  // Activity's edge is the table width: the Grid width divider follows it.
+  const activity = await header(page, 'Activity').boundingBox();
+  if (activity === null) throw new Error('no box for the Activity header');
+  const ay = activity.y + activity.height / 2;
+  await page.mouse.move(activity.x + activity.width, ay);
+  await page.mouse.down();
+  await page.mouse.move(activity.x + activity.width + 40, ay, { steps: 8 });
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute('aria-valuenow', String(Number(tableWidth) + 40));
+  await chartMeetsGrid(page, 'after dragging the Activity edge');
+});
+
+test('under a coarse pointer there are no edges, and the typed field is a 44 px target', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  // `hasTouch` must be given to the context that builds THIS page, never via `test.use()`
+  // (`e2e-workspace-fit/command-surface.spec.ts`'s coarse fixture records why).
+  const page = await browser.newPage({ viewport: { width: 1646, height: 1097 }, hasTouch: true });
+  try {
+    await ganttPlan(page);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(
+      pointer,
+      'this context did not report a coarse pointer — the case is about nothing',
+    ).toBe('coarse');
+
+    // Present in the DOM, but not rendered: `pointer-coarse:hidden` (ADR-0173 D3).
+    const strips = ganttGrid(page).locator('[data-gantt-column-edge]');
+    expect(await strips.count()).toBeGreaterThan(0);
+    for (const strip of await strips.all()) await expect(strip).toBeHidden();
+
+    await openView(page);
+    const box = await field(page, 'Code width').boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  } finally {
+    await page.close();
+  }
 });

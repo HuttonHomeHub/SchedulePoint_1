@@ -55,16 +55,61 @@ describe('useGanttColumnWidths', () => {
 
   it('applies the guard the panel published, and stops applying it when withdrawn', () => {
     const { result } = renderHook(() => useGanttColumnWidths());
-    result.current.guardRef.current = (_key, candidate) => Math.min(candidate, 100);
+    const withdraw = result.current.registerGuard((_key, candidate) => Math.min(candidate, 100));
     act(() => {
       result.current.setWidth('code', 300);
     });
     expect(result.current.widths.code).toBe(100);
-    result.current.guardRef.current = null;
+    withdraw();
     act(() => {
       result.current.setWidth('code', 300);
     });
     expect(result.current.widths.code).toBe(300);
+  });
+
+  it('a drag stores exactly once: 30 transient moves write nothing, the commit writes one', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const { result } = renderHook(() => useGanttColumnWidths());
+    for (let i = 1; i <= 30; i += 1) {
+      act(() => {
+        result.current.setTransient('code', 80 + i * 2);
+      });
+    }
+    expect(result.current.widths.code).toBe(140);
+    expect(setItem).not.toHaveBeenCalled();
+    act(() => result.current.commit());
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY) ?? 'null')).toEqual({
+      v: 1,
+      widths: { code: 140 },
+    });
+  });
+
+  it('a commit with nothing transient stores nothing (a double-click is a press and a release)', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const { result } = renderHook(() => useGanttColumnWidths());
+    act(() => result.current.commit());
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('a transient width is clamped and guarded like a typed one', () => {
+    const { result } = renderHook(() => useGanttColumnWidths());
+    result.current.registerGuard((_key, candidate) => Math.min(candidate, 200));
+    act(() => {
+      result.current.setTransient('code', 900);
+    });
+    expect(result.current.widths.code).toBe(200);
+  });
+
+  it('an older registration cleaning up does not withdraw a newer guard', () => {
+    const { result } = renderHook(() => useGanttColumnWidths());
+    const withdrawOld = result.current.registerGuard((_key, c) => Math.min(c, 100));
+    result.current.registerGuard((_key, c) => Math.min(c, 150));
+    withdrawOld();
+    act(() => {
+      result.current.setWidth('code', 300);
+    });
+    expect(result.current.widths.code).toBe(150);
   });
 
   it('reset REMOVES the stored key rather than writing the defaults', () => {

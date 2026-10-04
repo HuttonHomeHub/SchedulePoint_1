@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import {
   COLUMN_WIDTHS_STORAGE_KEY,
@@ -28,7 +28,18 @@ export interface GanttColumnWidthsBundle {
   setWidth: (key: ResizableColumnKey, width: number) => number;
   /** Put every column back to its standard width and **delete** the stored preference. */
   reset: () => void;
-  guardRef: MutableRefObject<ColumnWidthGuard | null>;
+  /**
+   * Change a width **for the frames of a drag**: state only, clamped and chart-guarded like
+   * `setWidth`, but nothing is stored. Returns the width applied.
+   */
+  setTransient: (key: ResizableColumnKey, width: number) => number;
+  /** End a drag: store what `setTransient` left, once. A no-op when nothing was changed. */
+  commit: () => void;
+  /**
+   * Publish the panel's chart guard; returns the function that withdraws it. A registration rather
+   * than a writable ref, so a host cannot clear or replace the panel's guard by accident.
+   */
+  registerGuard: (guard: ColumnWidthGuard) => () => void;
 }
 
 function readFromStorage(): ColumnWidths {
@@ -55,26 +66,64 @@ function readFromStorage(): ColumnWidths {
 export function useGanttColumnWidths(): GanttColumnWidthsBundle {
   const [widths, setWidths] = useState<ColumnWidths>(readFromStorage);
   const guardRef = useRef<ColumnWidthGuard | null>(null);
+  // True between a `setTransient` and the `commit` that stores it.
+  const dirty = useRef(false);
   // The latest value, so a second change in the same tick builds on the first rather than on a
   // stale render's copy.
   const latest = useRef(widths);
 
-  const setWidth = useCallback((key: ResizableColumnKey, width: number): number => {
-    const asked = clampColumnWidth(width);
-    const applied = clampColumnWidth(guardRef.current?.(key, asked) ?? asked);
-    const next: ColumnWidths = { ...latest.current, [key]: applied };
-    latest.current = next;
-    setWidths(next);
+  const persist = useCallback((next: ColumnWidths) => {
     try {
       localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, serialiseWidths(next));
     } catch {
       // Storage full or disabled — the widths apply for the session and will not persist.
     }
+  }, []);
+
+  const apply = useCallback((key: ResizableColumnKey, width: number): number => {
+    const asked = clampColumnWidth(width);
+    const applied = clampColumnWidth(guardRef.current?.(key, asked) ?? asked);
+    const next: ColumnWidths = { ...latest.current, [key]: applied };
+    latest.current = next;
+    setWidths(next);
     return applied;
+  }, []);
+
+  const setWidth = useCallback(
+    (key: ResizableColumnKey, width: number): number => {
+      const applied = apply(key, width);
+      dirty.current = false;
+      persist(latest.current);
+      return applied;
+    },
+    [apply, persist],
+  );
+
+  const setTransient = useCallback(
+    (key: ResizableColumnKey, width: number): number => {
+      dirty.current = true;
+      return apply(key, width);
+    },
+    [apply],
+  );
+
+  const commit = useCallback(() => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    persist(latest.current);
+  }, [persist]);
+
+  const registerGuard = useCallback((guard: ColumnWidthGuard) => {
+    guardRef.current = guard;
+    return () => {
+      // Withdraw only our own registration: a newer panel's guard must survive an older one's cleanup.
+      if (guardRef.current === guard) guardRef.current = null;
+    };
   }, []);
 
   const reset = useCallback(() => {
     latest.current = {};
+    dirty.current = false;
     setWidths({});
     try {
       localStorage.removeItem(COLUMN_WIDTHS_STORAGE_KEY);
@@ -83,5 +132,5 @@ export function useGanttColumnWidths(): GanttColumnWidthsBundle {
     }
   }, []);
 
-  return { widths, setWidth, reset, guardRef };
+  return { widths, setWidth, setTransient, commit, reset, registerGuard };
 }

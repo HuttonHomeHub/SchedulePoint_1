@@ -243,4 +243,15 @@ describe('the Gantt grid width', () => {
     expect(measure![1]).toContain('DEFAULT_GRID_WIDTH');
     expect(measure![1]).not.toMatch(/gridWidth|FIXED_WIDTH|columnWidths/);
   });
+
+  it("keeps storage out of the edge: one write per gesture is the hook's, not the strip's", () => {
+    // The edge only reports frames and one end; persisting is `useGanttColumnWidths.commit`. A
+    // `localStorage` read here would be a second writer racing the single one (ADR-0173 M2-T2).
+    for (const file of [
+      'src/features/gantt/components/GanttColumnEdge.tsx',
+      'src/components/ui/use-pointer-drag.ts',
+    ]) {
+      expect(scan(file), `${file} touches storage`).not.toMatch(/localStorage|sessionStorage/);
+    }
+  });
 });

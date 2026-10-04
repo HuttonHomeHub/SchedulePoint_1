@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { COLUMN_WIDTHS_STORAGE_KEY } from '../layout/column-widths';
 import { GANTT_COLUMNS } from '../layout/grid-columns';
@@ -116,5 +116,110 @@ describe('GanttPanel — column widths', () => {
     expect(Number(separator.getAttribute('aria-valuemax'))).toBeGreaterThanOrEqual(
       Number(separator.getAttribute('aria-valuemin')),
     );
+  });
+
+  describe('header edges (ADR-0173 M2)', () => {
+    let frames: FrameRequestCallback[] = [];
+    beforeEach(() => {
+      frames = [];
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+      HTMLElement.prototype.setPointerCapture = vi.fn();
+      HTMLElement.prototype.releasePointerCapture = vi.fn();
+      HTMLElement.prototype.hasPointerCapture = vi.fn(() => true);
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    const edges = (): HTMLElement[] => [
+      ...document.querySelectorAll<HTMLElement>('[data-gantt-column-edge]'),
+    ];
+    const edgeOf = (label: string): HTMLElement =>
+      screen
+        .getByRole('columnheader', { name: label })
+        .querySelector<HTMLElement>('[data-gantt-column-edge]')!;
+
+    it('puts an edge on each resizable column and on Activity — and none without a host', () => {
+      const bare = render(<GanttPanel activities={ACTIVITIES} />);
+      expect(edges()).toHaveLength(0);
+      bare.unmount();
+      render(<Host />);
+      // Code, Activity, Duration, Start, Finish, Float.
+      expect(edges()).toHaveLength(6);
+      expect(screen.queryAllByRole('separator', { name: /width/i })).toHaveLength(1);
+    });
+
+    it('is hidden from assistive technology, unfocusable, and withheld under a coarse pointer', () => {
+      render(<Host />);
+      for (const edge of edges()) {
+        expect(edge).toHaveAttribute('aria-hidden', 'true');
+        expect(edge).not.toHaveAttribute('tabindex');
+        expect(edge.className).toContain('pointer-coarse:hidden');
+        expect(edge.className).toContain('touch-none');
+      }
+      // The header's accessible names are exactly what they were.
+      expect(screen.getByRole('columnheader', { name: 'Code' })).toBeInTheDocument();
+    });
+
+    it('drags Code 60 wider: Activity gives it up, the pane stays, and one write follows the release', () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      render(<Host />);
+      const edge = edgeOf('Code');
+      fireEvent.pointerDown(edge, { pointerId: 1, clientX: 100 });
+      for (let dx = 2; dx <= 60; dx += 2) {
+        fireEvent.pointerMove(edge, { pointerId: 1, clientX: 100 + dx });
+        act(() => frames.splice(0).forEach((cb) => cb(0)));
+      }
+      expect(headerWidths()).toEqual([140, 120, 84, 90, 90, 60]);
+      expect(headerWidths().reduce((a, b) => a + b, 0)).toBe(584);
+      expect(setItem.mock.calls.filter(([k]) => k === COLUMN_WIDTHS_STORAGE_KEY)).toHaveLength(0);
+      fireEvent.pointerUp(edge, { pointerId: 1, clientX: 160 });
+      expect(setItem.mock.calls.filter(([k]) => k === COLUMN_WIDTHS_STORAGE_KEY)).toHaveLength(1);
+      expect(JSON.parse(localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY) ?? 'null')).toEqual({
+        v: 1,
+        widths: { code: 140 },
+      });
+    });
+
+    it('never sorts: a drag leaves every aria-sort as it was', () => {
+      render(<Host />);
+      const before = screen.getAllByRole('columnheader').map((h) => h.getAttribute('aria-sort'));
+      const edge = edgeOf('Code');
+      fireEvent.pointerDown(edge, { pointerId: 1, clientX: 10 });
+      fireEvent.pointerMove(edge, { pointerId: 1, clientX: 50 });
+      fireEvent.pointerUp(edge, { pointerId: 1, clientX: 50 });
+      fireEvent.click(edge);
+      expect(screen.getAllByRole('columnheader').map((h) => h.getAttribute('aria-sort'))).toEqual(
+        before,
+      );
+    });
+
+    it('double-clicking an edge returns that column to its standard width', () => {
+      localStorage.setItem(
+        COLUMN_WIDTHS_STORAGE_KEY,
+        JSON.stringify({ v: 1, widths: { code: 160 } }),
+      );
+      render(<Host />);
+      expect(headerWidths()[0]).toBe(160);
+      fireEvent.doubleClick(edgeOf('Code'));
+      expect(headerWidths()[0]).toBe(80);
+    });
+
+    it("Activity's edge is the table width: the separator follows it", () => {
+      render(<Host />);
+      const edge = edgeOf('Activity');
+      fireEvent.pointerDown(edge, { pointerId: 1, clientX: 0 });
+      fireEvent.pointerMove(edge, { pointerId: 1, clientX: 40 });
+      fireEvent.pointerUp(edge, { pointerId: 1, clientX: 40 });
+      expect(screen.getByRole('separator', { name: 'Grid width' })).toHaveAttribute(
+        'aria-valuenow',
+        '624',
+      );
+      expect(headerWidths()[1]).toBe(220);
+      fireEvent.doubleClick(edge);
+      expect(screen.getByRole('separator', { name: 'Grid width' })).toHaveAttribute(
+        'aria-valuenow',
+        '584',
+      );
+    });
   });
 });
