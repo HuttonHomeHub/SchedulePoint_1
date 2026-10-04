@@ -55,7 +55,15 @@ export default defineConfig({
             url: 'http://localhost:3000/api/v1/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: { LOG_LEVEL: 'silent', PLAN_EDIT_LOCK_ENFORCED: 'true' },
+            env: {
+              LOG_LEVEL: 'silent',
+              PLAN_EDIT_LOCK_ENFORCED: 'true',
+              // TEMPORARY — see #361. CI run 37195968342 (2026-10-04) refused GET /api/v1/me with a
+              // named 429 here: on a runner this suite spends more than the default 100 per 60 s,
+              // against a local census peak of 64 (spec M0). 200 is about twice the CI floor that
+              // was exceeded (ADR-0175 rung 3). M3 removes it by signing up once per worker.
+              RATE_LIMIT_LIMIT: '200',
+            },
           },
           {
             command: 'pnpm dev',

@@ -154,7 +154,12 @@ the base suite adopts it in this milestone. **Entry point:** ships dark (harness
 The full local sweep (2026-10-04, `scripts/e2e-local.sh` once per suite, chromium, the 48
 `test:e2e:*` suites plus the base journey) came back **49 of 49 green with zero 429s**, including
 `activity-editor` — so no `TEMPORARY` ceiling was needed. That does not clear #435/#361: the CI
-failures happened on CI runners, and the guard now names a 429 there if it is the cause.
+failures happened on CI runners, and the guard now names a 429 there if it is the cause. **It did, on the PR's first
+CI run** (run 37195968342, web shard 4): J1 and J3 of `activity-editor` failed with `429
+RATE_LIMITED on GET /api/v1/me`, so the throttler is confirmed as #435's cause on CI runners, and the
+M0 risk's assumption (a local peak is higher than CI's) is **wrong for this suite**: CI spent more
+than 100 per 60 s where local peaked at 64. The suite carries a `TEMPORARY` 200 ceiling (rung 3)
+until M3.1's per-worker account removes it; M3.2 should not take a local 2× as conservative.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.
