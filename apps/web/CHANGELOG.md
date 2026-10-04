@@ -1,5 +1,16 @@
 # @repo/web
 
+## 0.162.0
+
+### Minor Changes
+
+- [#784](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/784) [`8454c39`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8454c396f378cf2396b65d7e04e83d6c2db29bc9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A new History tab in the activity editor shows who changed an activity, its links and its resources, and when, newest first: for example "Duration 5d → 9d", "Link added: Finish to Start from Excavate" and "Resource added: Tower crane — 40 units". Consecutive saves by one person appear as one entry ("3 edits"), a link shows on both of its activities, and anyone in the organisation can read it, with money left out for roles that cannot see cost. Entries load fifty at a time with Load older. Changes made before this release are not listed, and the tab says when recording began.
+
+### Patch Changes
+
+- Updated dependencies [[`8454c39`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8454c396f378cf2396b65d7e04e83d6c2db29bc9)]:
+  - @repo/types@0.41.0
+
 ## 0.161.0
 
 ### Minor Changes
