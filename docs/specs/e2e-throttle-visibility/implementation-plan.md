@@ -150,8 +150,11 @@ the base suite adopts it in this milestone. **Entry point:** ships dark (harness
 
 ### Milestone M2 — Every journey, enforced
 
-**Status:** built. 83 spec files moved to the guarded `test` and the lint rule is live; the full
-Playwright sweep, and any measured `TEMPORARY` ceilings it calls for, are the orchestrator's.
+**Status:** built and swept. 83 spec files moved to the guarded `test` and the lint rule is live.
+The full local sweep (2026-10-04, `scripts/e2e-local.sh` once per suite, chromium, the 48
+`test:e2e:*` suites plus the base journey) came back **49 of 49 green with zero 429s**, including
+`activity-editor` — so no `TEMPORARY` ceiling was needed. That does not clear #435/#361: the CI
+failures happened on CI runners, and the guard now names a 429 there if it is the cause.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.
