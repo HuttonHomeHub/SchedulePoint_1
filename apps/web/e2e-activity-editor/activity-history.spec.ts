@@ -104,10 +104,11 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
  * canvas drag or levelling's apply calls — and what this proves is the seam the unit suites cannot:
  * a real batch write, a real cascade delete, and the editor reading both back.
  */
-test('a group move and a deleted neighbour show in History', async ({ page }) => {
+test('a group move and a deleted neighbour show in History', async ({ account, page }) => {
   const stamp = Date.now();
-  const orgSlug = await onboard(page, stamp);
-  await openProject(page);
+  const { orgSlug } = account;
+  await enterOrg(page, orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   for (const name of ['Excavate', 'Pour slab', 'Cure']) await addActivity(page, name);
