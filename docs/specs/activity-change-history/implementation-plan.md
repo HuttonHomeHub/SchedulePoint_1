@@ -516,6 +516,106 @@ reopen the first's **History**, assert _Link removed — … was deleted_.
   database-architect and the product owner to read, not for the builder to redesign: the recording is
   one 2,000-row insert, about 50 µs a row, against a route that is a handful of set-based statements.
 
+###### Diagnosis (database-architect), 2026-10-04
+
+**Method.** A scratch database (`prisma migrate deploy` at `159271da`, PostgreSQL 16.14, the same
+host), created and dropped for this; nothing touched `app` or `app_test`. Seeded in SQL to the
+harness's shape: one plan, 200 children, 2,000 survivors, one link each, 18,000 earlier history rows.
+Each statement ran as `EXPLAIN (ANALYZE)` in a rolled-back transaction, the recorder's exact `INSERT …
+FROM unnest(…)` as a prepared statement with the six arrays bound. Parts were attributed by dropping
+them inside the rolled-back transaction (FKs, secondary indexes, CHECKs) or shrinking the payload.
+Single runs, not a benchmark. Figures are milliseconds for 2,000 rows.
+
+**1. Attribution of the delete's added time.**
+
+- **The insert: about 45 database-side, out of 51–62 in-process.** psql wall 44.5 / 45.4. Execution
+  31–39, planning 4–8 (a custom plan over 2,000-element constant arrays). Inside execution:
+  - **FK checks: 14–18, the largest single part.** `activity_id_fkey` 7.3–10.0 and
+    `organization_id_fkey` 6.6–7.5, 2,000 calls each. Dropping both: execution 16.4.
+  - **Heap insert, `unnest` and casts: about 10.**
+  - **Parsing the `changes` jsonb: about 3.** The average payload is 239 bytes: 12.9 with a
+    production-shaped payload against 10.1 with `{"k":1}`, constraints and indexes all dropped.
+  - **Index maintenance and the six CHECKs: 2–4.** Dropping the organisation index alone changed
+    nothing measurable (16.4 against 15.8–22.2). Dropping both secondary indexes and every CHECK took
+    16.4 to 12.9–14.5.
+  - **The rest of the in-process 51–62: Prisma binding six 2,000-element arrays.** About 600 KB of
+    text parameters.
+- **Row width is not the cost.** Neither is index maintenance.
+- **The probe: 9–12 database-side, out of 19–41 in-process.** Execution 5.8–7.7, planning 2.4–4.7,
+  with the latest-entry `LATERAL` an `Index Scan` on `idx_activity_history_activity_recorded` (2,000
+  loops, about 1 µs each) both with and without statistics. The remainder is Prisma decoding 2,000
+  rows. Each row carries the latest entry's whole `changes` document, which a batch never uses.
+- **TypeScript planning (11–38) and the lock (1.4–5.1) are what the builder reported.** Not
+  re-measured.
+- **So of the added 98–114, roughly 55 is database work and roughly 45 is Node and Prisma.** The
+  database half is dominated by two per-row FK checks, not by anything the schema could trim.
+
+**Is the 25 % bar meaningful here? Not for a fan-out.** The route's own largest statement is the link
+sweep. That is `UPDATE dependencies … RETURNING` over the same 2,000 rows: **27.6 execution**, against
+2.7 for the 200 activities. Recording writes **one new row per survivor**, so it is the same
+cardinality as the sweep, with two FKs and three indexes besides. Any design that keeps "one entry
+per surviving activity, in the delete's transaction" costs at least as much as the route's biggest
+statement. That is more than half the route by construction, whatever the implementation. The
+relative bar measures how little the route does, not what recording costs. The bar fits a placement,
+whose route also does per-row work (validation, a 3 MB response), and that one passes.
+
+**2. Options.** Savings are against the measured +98–114 on a route of about 95.
+
+| Option                                                                                                                                                       | Expected saving                                                                                              | Reaches ≤ 25 %?            | Changes the schema? | Changes an ADR-0174 decision?                                                                                                                                  | Risk                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Batch probe reads only `last_recorded_at` from the latest entry: no `changes`, no other columns (a batch never merges)                                    | 5–15 here; more on a real plan where every survivor's latest entry carries a document (up to 32 KB by CHECK) | No                         | No                  | No                                                                                                                                                             | Low: code only, statement count unchanged. **Recommended regardless**, because the harness's survivors had almost no history, so the real cost of decoding 2,000 documents is under-measured. |
+| B. Pass the insert as one `jsonb` parameter (`jsonb_to_recordset`) instead of six arrays                                                                     | Unmeasured; parameter binding is about 6–17 of the insert                                                    | No                         | No                  | No                                                                                                                                                             | Low. Measure before doing it.                                                                                                                                                                 |
+| C. Build the knock-on entries in SQL: one `INSERT … SELECT` joining the stamped links to the activities, with no probe round trip and no TypeScript planning | About 40–55 (floor about 45–55 database-side)                                                                | No: about 50–60 %          | No                  | **Yes.** It writes the persisted item vocabulary (data-model §2) from SQL as well as from the pure `activity-history.diff.ts`, which today is its only encoder | Medium: two encoders of one persisted vocabulary                                                                                                                                              |
+| D. Drop both FKs on `activity_history_entries`                                                                                                               | 14–18                                                                                                        | No: about 40 % even with C | **Yes**             | Yes                                                                                                                                                            | **Rejected.** It weakens integrity, and the activity FK's `RESTRICT` is what the expiry census counts (data-model §3)                                                                         |
+| E. Drop `idx_activity_history_organization_id`                                                                                                               | 0–2                                                                                                          | No                         | Yes                 | No                                                                                                                                                             | **Rejected.** It backs the organisation FK's `RESTRICT` (DATABASE.md "index every FK"), for nothing measurable                                                                                |
+| F. Narrower rows or `changes`                                                                                                                                | About 3 at most                                                                                              | No                         | Possibly            | Possibly                                                                                                                                                       | Not worth it: 239 bytes is already small                                                                                                                                                      |
+| G. Cap: above N survivors, write one summary entry                                                                                                           | Proportional to the cap: the only option that reaches 25 %                                                   | Yes                        | Possibly            | **Yes.** It breaks M2-T4's one entry per surviving activity                                                                                                    | **Not recommended.** It creates the silent gap the spec forbids (§2 "Error scenarios")                                                                                                        |
+| H. Defer the knock-on to after commit                                                                                                                        | All of it                                                                                                    | Yes                        | No                  | **Yes**, plus infrastructure: no job runner exists (ADR-0009 unimplemented)                                                                                    | **Rejected.** A failed record would no longer fail the write                                                                                                                                  |
+
+**No schema change is warranted.** Nothing that keeps the spec's semantics reaches 25 %. The two
+options that do (G, H) give up the property the feature exists for.
+
+**Scaling to know about.** The recording is linear at about 50 µs per survivor on this host. The
+150 ms absolute bar is reached at about **3,000 survivors** of one delete. A 2,000-activity plan
+(the ADR-0066 scale case) cannot produce that many. An imported programme of 10,000 activities could:
+a delete that cuts 10,000 links would add about half a second, on a rare action whose own sweep
+also grows linearly.
+
+**3. Recommendation, for the product owner.** **Ship M2 as built.** Make the **150 ms absolute bar
+the binding one for knock-on recording** (deletes and restores). Keep the 25 % relative bar for batch
+moves, which pass it. Record why: a delete that unlinks 2,000 activities must write 2,000 history
+rows, and that costs about what the delete's own largest step costs. No implementation keeps "every
+affected activity is told" and gets under 25 %, short of a cap or a deferral, and both would let an
+activity lose a link without its history saying so. Option A is a small code-only follow-up worth
+filing as a tech-debt row. It is not a blocker, and it does not touch the schema.
+
+**4. The ~1.5 s placement route: statistics are not the cause, and the ADR-0053 comparison is
+mis-cited.**
+
+- **Statistics.** A never-analysed `activities` (`pg_statistic` rows deleted, `reltuples = -1`) changes
+  the plan but not the cost. The pre-read goes from a seq scan (0.7 ms) to an index scan (1.3 ms); the
+  2,000-row placement `UPDATE` from 45.8 to 57.1. The API, measured in process on 2,000 activities
+  `createMany`-loaded with no `ANALYZE`, gave route 649 / 535 / 418 ms. After `ANALYZE activities` it
+  gave 423 / 499 / 468, so no change. The measure used a temporary, uncommitted harness, since deleted.
+  Autovacuum also analysed the scratch `activities` within about a minute of the bulk load.
+- **Where the route's time goes**, from that run:
+  - validation of the 2,000-row body alone: 41–127 ms;
+  - the service: 325–474 ms, of which the transaction is 185–269. The transaction holds the
+    `IN (…)` pre-read, the 2,000-row `UPDATE` with its ten activity indexes, and the recorder;
+  - decoration: 9–56;
+  - the rest: a re-read of 2,000 full rows, scope, plan and pen checks, and a **3 MB JSON response**.
+
+  It is per-row Node and Prisma work, the same in both arms.
+
+- **The ADR-0053 "13 ms" is a different operation.** It is the GROUP-delete advisory-lock loop over a
+  2,000-row subtree (ADR-0053, backend-performance), not a placement batch. So there is no
+  13 ms → 1.5 s discrepancy to explain, and ADR-0174 Consequences should stop calling it "the same
+  shape".
+- **Not established:** why the builder's run took about 1.5 s where this host gave 0.42–0.65 s a few
+  hours later. Concurrent browser tests on the same machine are the obvious candidate. That is not
+  shown, and nothing here depends on it: both arms paid it equally, and the placement passes either
+  way. At 450 ms the +68–80 ms would be about 15–18 %, still inside 25 %.
+
 ##### Task M2-T6 — rendering, journey, gates, release
 
 - **Description:** _"with N other activities"_ and knock-on wording; the M2 journey; reviews
