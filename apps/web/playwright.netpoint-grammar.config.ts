@@ -54,9 +54,14 @@ export default defineConfig({
               // planner would.
               PLAN_EDIT_LOCK_ENFORCED: 'true',
               // Seeding a 58-activity plan through the public API is well over the global throttler's
-              // 100 requests a minute. Raised for this harness only, as the arrange, gantt and measure
-              // harnesses do. The guard itself is untouched.
-              RATE_LIMIT_LIMIT: '100000',
+              // 100 requests a minute.
+              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s, census counting one handler
+              // across organisations): the busiest handler, GET /api/v1/me,
+              // peaks at 72 requests per 60 s. Ceiling 300 is about 4x that peak, rounded up to the next 50 —
+              // not 2x, because CI runners spent more than 100 per 60 s on activity-editor where the local
+              // peak was 64. Raised for this harness only; the guard is untouched and no other suite or
+              // environment sees this value.
+              RATE_LIMIT_LIMIT: '300',
             },
           },
           {

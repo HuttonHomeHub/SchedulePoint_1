@@ -76,9 +76,14 @@ export default defineConfig({
               // seconds for an `Accept and join` button that the product is correct not to draw.
               // `playwright.measure-gantt.config.ts` records the same shape one screen along.
               //
-              // Raised for this harness only — the guard is untouched, the product default stays
-              // 100/60 s, and no other suite or environment sees this value.
-              RATE_LIMIT_LIMIT: '100000',
+              // Measured 2026-10-04 (E2E_THROTTLE_CENSUS=1, all green, zero 429s, census counting one handler
+              // across organisations): the busiest handler, GET /api/v1/me,
+              // peaks at 89 requests per 60 s. Ceiling 400 is about 4x that peak, rounded up to the next 50 —
+              // not 2x, because CI runners spent more than 100 per 60 s on activity-editor where the local
+              // peak was 64. Raised for this harness only; the guard is untouched and no other suite or
+              // environment sees this value.
+              // The product default stays 100/60 s.
+              RATE_LIMIT_LIMIT: '400',
             },
           },
           {

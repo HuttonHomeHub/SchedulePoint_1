@@ -163,13 +163,43 @@ until M3.1's per-worker account removes it; M3.2 should not take a local 2× as 
 
 ### Milestone M3 status
 
-**Task 3.1 built, not yet run.** `e2e-activity-editor/fixtures.ts` adds a worker-scoped `account` fixture
-(one sign-up and onboarding per worker, saved `storageState`, applied through the `storageState` option).
-All 19 tests (15 in `activity-editor.spec.ts`, 3 in `activity-create.spec.ts`, 1 in `activity-history.spec.ts`) stopped signing up; each
-enters the shared organisation and `openProject` stamp-suffixes its client and project. No test in the
-directory mints a second actor (the Contributor journey lives in the notes suite), so none needed to.
-The `TEMPORARY` `RATE_LIMIT_LIMIT: '200'` is removed from the config. #435 and #361 stay open; the
-orchestrator's three local runs, the census and ten green CI runs are outstanding. Task 3.2 not started.
+**Task 3.1 shipped in #786 (2026-10-04).** `e2e-activity-editor/fixtures.ts` adds a worker-scoped `account`
+fixture (one sign-up and onboarding per worker, saved `storageState`, applied through the `storageState`
+option); all 19 tests stopped signing up. Three local runs came back 19/19, the census peak was `GET /me` at
+**49 per 60 s** against the production limit of 100, the `TEMPORARY` 200 ceiling is removed, and CI was green
+on all four shards.
+
+**Task 3.2 done (2026-10-04): six ceilings measured, two harness configs kept at `100000`.** Each suite was run locally with
+`E2E_THROTTLE_CENSUS=1` (all green, zero 429s) and its `RATE_LIMIT_LIMIT` replaced the blind `100000`. Figures are
+from the re-run of 2026-10-04 with the census counting one handler across organisations:
+
+| Config                                  | Busiest handler                         | Corrected peak / 60 s | Ceiling |
+| --------------------------------------- | --------------------------------------- | --------------------- | ------- |
+| `playwright.arrange.config.ts`          | `GET /api/v1/me`                        | 77                    | 350     |
+| `playwright.gantt.config.ts`            | `POST …/plans/:id/activities` (seeding) | 315                   | 1300    |
+| `playwright.gantt-editing.config.ts`    | `GET /api/v1/me`                        | 84                    | 350     |
+| `playwright.netpoint-grammar.config.ts` | `GET /api/v1/me`                        | 72                    | 300     |
+| `playwright.overview.config.ts`         | `GET /api/v1/me`                        | 89                    | 400     |
+| `playwright.workspace-chrome.config.ts` | `POST …/plans/:id/activities` (seeding) | 306                   | 1250    |
+
+The first figures were taken with a census that split one handler by organisation slug, and `workspace-chrome`
+failed at its resulting 300 ceiling as a result; the census now templates the slug as `:org`, with a unit test.
+
+The rule is about **4x the local peak, rounded up to the next 50**, not the 2x this plan first proposed: M2's
+status above records CI runners spending more than 100 per 60 s on `activity-editor` where the local peak was 64,
+so a local 2x is not conservative for CI. Each suite was then re-run locally at its new ceiling, all green with zero 429s: arrange 12/12, gantt 9/9,
+gantt-editing 36/36, netpoint-grammar 11/11, overview 9/9, workspace-chrome 27/27.
+
+The two `measure-*` harness configs (`playwright.measure-gantt.config.ts`,
+`playwright.measure-route-splitting.config.ts`) keep `100000`, by decision: they are manual measurement
+harnesses (not CI steps, per their own docblocks), they seed hundreds to thousands of activities by design,
+their output is timing that a throttle refusal would contaminate, and their specs import `test` from
+`@playwright/test` rather than the guarded fixture, so the census cannot count them and the lint rule's `e2e*`
+scope does not cover them. Their comments now say so; the product default stays 100 per 60 s.
+
+**Task 3.3 done (2026-10-04).** #361 is closed and ledgered. #435 stays open on its own rule (ten consecutive
+green CI runs): the cause is remedied by #786 and the count started on 2026-10-04 at 2 of 10. The NAT
+observation from spec section 4 is #446, deferred on a trigger.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.
