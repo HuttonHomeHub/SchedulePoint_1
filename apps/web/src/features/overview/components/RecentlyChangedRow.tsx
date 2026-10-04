@@ -22,17 +22,15 @@ import { ListRow, RowSubject, rowLinkClass } from '@/components/ui/page';
  * **The freshness line is silent when the plan is current, and that is the design.** Three states:
  * never calculated, edited since it was calculated, and current — which renders NOTHING. A line
  * reading "up to date" on most rows would be decoration on all-but-a-few, and worse, it would claim
- * more than the data supports: the check knows only that nothing has been WRITTEN since the
- * calculation, not that the dates are right. The spec's copy contract forbids "up to date", "on
- * time", "on schedule" and "late" for exactly that reason, and
- * `freshness-copy.structural.test.ts` enforces it.
+ * more than the data supports: the server knows only that no scheduling INPUT has changed since the
+ * calculation, not that the dates are right (a calendar edit, for one, is not tracked). The spec's
+ * copy contract forbids "up to date", "on time", "on schedule" and "late" for exactly that reason,
+ * and `freshness-copy.structural.test.ts` enforces it.
  *
- * **Auto-arrange is a known false positive.** `packLanes` writes `lane_index` on every activity it
- * moves, which stamps `updated_at`, so pressing Auto-arrange after a recalculation makes every row
- * of that plan report as edited-since — truthfully, by the rule, and misleadingly to a reader who
- * changed no dates. Named here rather than discovered later as a defect; narrowing the rule to
- * "edited in a way that could move a date" would mean the client holding a second opinion about
- * what a scheduling input is, which is the thing R1 exists not to do.
+ * **What counts as "edited" is the server's decision, not this component's.** The API sets
+ * `editedSinceCalculated` from the plan's scheduling-input stamp, so a lane move, Auto-arrange, a
+ * rename, a cost or a steps edit leaves the line silent, and a duration, a link, progress or a
+ * deletion shows it. The client holds no second opinion about what a scheduling input is.
  */
 /**
  * Whether this plan's dates answer the question somebody is currently asking of it.

@@ -10,6 +10,11 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  PLAN_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { auditActor } from '../audit/audit-actor';
@@ -211,6 +216,11 @@ export class PlansService {
         );
         if (changed === 0) {
           throw new ConflictError('This plan was changed elsewhere. Refresh and try again.');
+        }
+        // Only the scheduling options and the data date count: a rename or a currency change
+        // cannot move a date. `existing` is the row the version gate just proved current.
+        if (changedInputs(PLAN_FIELD_CLASS, existing, patch)) {
+          await markScheduleInputsChanged(tx, organization.id, [planId]);
         }
 
         /*

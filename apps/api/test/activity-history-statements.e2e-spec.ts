@@ -52,21 +52,28 @@ const LINK_RECORDER_STATEMENTS = 3;
 // assignment save is the read BEFORE and the gated update (the old "after" read is gone); a link
 // create is the plan lock, the edge load, the insert, its re-read with both endpoints, and the audit
 // row. A change that adds one is a decision to make here, not a drift to wave through.
-const OWN_ACTIVITY_PATCH = 5;
-const OWN_ASSIGNMENT_PATCH = 2;
-const OWN_LINK_CREATE = 7;
-const OWN_LINK_EDIT = 3;
-const OWN_LINK_REMOVE = 3;
+//
+// Each count below includes ONE more statement than it did on that date: the scheduling-input stamp
+// (`markScheduleInputsChanged`), a primary-key UPDATE of the plan row that every write which changes
+// an input issues last. It is not the recorder's, and it is paid only by a write that could move a
+// date. These saves all change an input (a duration, a rate, a link, a placement, a re-parent, a
+// delete), so they all pay it; a lane-only or rename-only save would not.
+const OWN_ACTIVITY_PATCH = 6;
+const OWN_ASSIGNMENT_PATCH = 3;
+const OWN_LINK_CREATE = 8;
+const OWN_LINK_EDIT = 4;
+const OWN_LINK_REMOVE = 4;
 // The batch paths' own statements, measured 2026-10-04 with forty rows and independent of that
-// number: the placements route is one read (which now also carries the before-values) and one
-// UPDATE; the re-parent reads the plan's tree once; the rest are each route's existing cascade.
-const OWN_PLACEMENTS = 2;
-const OWN_PARENTS = 5;
-const OWN_DISSOLVE = 11;
-const OWN_DELETE = 6;
-const OWN_RESTORE = 19;
-const OWN_BULK_DELETE = 8;
-const OWN_BATCH_RESTORE = 20;
+// number: the placements route is one read (which now also carries the before-values), one UPDATE
+// and the stamp; the re-parent reads the plan's tree once; the rest are each route's existing
+// cascade. The stamp is one statement per route however many rows.
+const OWN_PLACEMENTS = 3;
+const OWN_PARENTS = 6;
+const OWN_DISSOLVE = 12;
+const OWN_DELETE = 7;
+const OWN_RESTORE = 20;
+const OWN_BULK_DELETE = 9;
+const OWN_BATCH_RESTORE = 21;
 const BATCH_RECORDER_STATEMENTS = 3;
 const CROSS_PLAN_RECORDER_STATEMENTS = 3;
 

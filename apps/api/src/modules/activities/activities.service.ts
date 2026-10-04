@@ -27,6 +27,12 @@ import {
   HierarchyLifecycleService,
   type KnockOn,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  ACTIVITY_FIELD_CLASS,
+  ASSIGNMENT_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
 import { combineChanges, noChanges } from '../activity-history/activity-history.pending';
@@ -383,7 +389,7 @@ export class ActivitiesService {
                 tx,
               ),
             ));
-        return this.activities.create(
+        const created = await this.activities.create(
           {
             // Copy the organisation id from the parent plan, never from input.
             organizationId: plan.organizationId,
@@ -451,6 +457,9 @@ export class ActivitiesService {
           },
           tx,
         );
+        // A new activity is a new node in the network: always a scheduling-input change.
+        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
+        return created;
       });
       this.logger.info(
         {
@@ -775,6 +784,19 @@ export class ActivitiesService {
             },
           ],
         });
+        // Last, after every child write: only a value the engine reads counts, so a lane move or a
+        // rename leaves the plan reading as calculated. The triad's rewrite of the driving
+        // assignment is an input change when it moved the units or the rate.
+        if (
+          changedInputs(ACTIVITY_FIELD_CLASS, before, patch) ||
+          (recomputed !== null &&
+            changedInputs(ASSIGNMENT_FIELD_CLASS, recomputed.before, {
+              budgetedUnits: recomputed.after.budgetedUnits.toNumber(),
+              unitsPerHour: recomputed.after.unitsPerHour?.toNumber() ?? null,
+            }))
+        ) {
+          await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+        }
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -1008,6 +1030,19 @@ export class ActivitiesService {
           'This plan changed since you opened it — nothing was moved. Refresh and try again.',
         );
       }
+      // A lane-only batch (Arrange, the overlap resolve) changes no value the engine reads, so it
+      // must not make the plan read as edited; a time shift in the batch does.
+      if (
+        dto.placements.some((p) =>
+          changedInputs(ACTIVITY_FIELD_CLASS, byId.get(p.id)!, {
+            constraintType: p.constraintType,
+            constraintDate: p.constraintDate === null ? null : parseCalendarDate(p.constraintDate),
+            visualStart: p.visualStart === null ? null : parseCalendarDate(p.visualStart),
+          }),
+        )
+      ) {
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
+      }
       // One entry per activity that moved, sharing a batch id; a lane-only move records nothing
       // (CQ-4). The "after" is what the UPDATE above wrote: the request's values, with an absent lane
       // meaning "leave it". Levelling's apply goes through this route (ADR-0167 D6).
@@ -1154,6 +1189,11 @@ export class ActivitiesService {
           })),
         ),
       });
+
+      // A re-file that leaves every activity under the parent it had is not an edit.
+      if (rows.some((r) => r.parentId !== (byId.get(r.id)?.parentId ?? null))) {
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
+      }
 
       /*
        * ONE row for the batch — the reparent is the user's single act, however many activities it
@@ -1405,6 +1445,11 @@ export class ActivitiesService {
           },
         ],
       });
+      // Progress is an engine input (actuals, percent, remaining, resume); `status` and the suspend
+      // date are not, and the report resends all of them, so compare by value.
+      if (changedInputs(ACTIVITY_FIELD_CLASS, before, patch)) {
+        await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+      }
     });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
@@ -1458,6 +1503,9 @@ export class ActivitiesService {
       // deleted subject has no entry (it is in the audit log, below). Recorded last, in this
       // transaction, so a failure rolls the delete back rather than leaving a gap.
       await this.history.recordKnockOn(tx, principal.userId, knockOn, 'removed');
+      // A deleted activity (and the links and assignments the cascade took) leaves the network a
+      // different shape from the one last calculated.
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       // ONE row for the whole subtree, inside the cascade's own transaction. Deleting a WBS
       // summary sweeps its descendants and their links (ADR-0038); forty-one rows would bury the
       // fact that a person did one thing, so the counts ride the payload instead — taken from the
@@ -1581,6 +1629,7 @@ export class ActivitiesService {
         );
         // Set-based: one entry per surviving activity that lost links, however many were deleted.
         await this.history.recordKnockOn(tx, principal.userId, knockOn, 'removed');
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
         const activityCount = cascade.activities;
         const dependencyCount = cascade.dependencies;
 
@@ -1701,6 +1750,7 @@ export class ActivitiesService {
         knockOn,
       );
       await this.history.recordKnockOn(tx, principal.userId, knockOn, 'restored');
+      await markScheduleInputsChanged(tx, organization.id, [planId]);
       await this.audit.record(
         {
           action: 'activity.restored',
@@ -1836,6 +1886,8 @@ export class ActivitiesService {
       });
       // The summary is childless now, so the cascade has nothing left to take with it.
       await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
+      // The children's WBS parent changed, which the engine's summary rollup reads.
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       // Each promoted child's WBS parent changed, from the summary to its grandparent: one entry per
       // child, saved together. (The summary carries no logic, so the cascade removed no link whose
       // other end needs a knock-on — a summary may not be a dependency endpoint, ADR-0035 §24.)
@@ -1921,6 +1973,7 @@ export class ActivitiesService {
         knockOn,
       );
       await this.history.recordKnockOn(tx, principal.userId, knockOn, 'restored');
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       // `existing.deleteBatchId` is read before the transaction, and that is safe for the reason
       // the hierarchy producers give: `restoreBatch` re-reads the root inside the transaction and
       // throws unless it is still soft-deleted, so a stale read cannot survive to be recorded.

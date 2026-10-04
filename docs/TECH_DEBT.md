@@ -11585,6 +11585,27 @@ mix, then decide between a larger per-handler limit, a per-user key for authenti
 carrying more than about 10 concurrent users (the point where a scripted 49 to 89 per minute each stops being
 a safe upper bound for the shared bucket).
 
+### 449. A calendar or a resource-limit edit does not mark the plans that use it as edited since they were calculated
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-04 (`docs/specs/edited-since-calculated/`; the stamp is `markScheduleInputsChanged`, called only from the activity, dependency, cross-plan, assignment and plan services, so `calendars` and `resources` services never reach it) ·
+**Raised:** 2026-10-04 (the edited-since-calculated epic, CQ-1 (a), product owner) · **Size:** M · **Owner:** api
+
+`plans.schedule_inputs_changed_at` is stamped by the writes that change a scheduling input **of one plan**. Two
+kinds of input live elsewhere and are not stamped: a calendar's shifts, exceptions and working days, and a
+resource's `maxUnitsPerHour` or `calendarId`. One calendar can serve many plans, directly
+or through an activity or a resource, so stamping means a fan-out `UPDATE` across every plan that uses it. The old
+rule (`GREATEST(updated_at, …)`) missed these too, so this is not a regression, but it is a known silent case: a
+planner who edits a calendar after a recalculation sees the overview read as current.
+
+A second, smaller gap is a race. `clock_timestamp()` is read in the edit's last statement, not at commit, so an
+edit that stamps just before a recalculation takes its snapshot and commits just after it can read as current. It
+fails toward a spurious flag in the other ordering, and the window is the time between that statement and commit.
+
+**Next:** design the fan-out (which plans a calendar or resource reaches, what it costs on an organisation with
+many plans) with the database-architect, then call the same helper from the calendar and resource services.
+**Trigger:** a planner reporting a stale-but-silent overview after a calendar or resource-limit edit, or the
+helper gaining a second caller that already knows its plan set.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·

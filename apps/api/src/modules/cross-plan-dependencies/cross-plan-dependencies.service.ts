@@ -11,6 +11,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
@@ -246,6 +247,9 @@ export class CrossPlanDependenciesService {
             after: created,
           }),
         });
+        // The edge bounds the successor plan's dates and is read by the predecessor plan's
+        // dependants, so both plans' figures may have moved.
+        await markScheduleInputsChanged(tx, organization.id, [predecessorPlanId, successorPlanId]);
         return { ...created, lagDayFactorMinutes };
       });
       this.logger.info(
@@ -293,6 +297,10 @@ export class CrossPlanDependenciesService {
           }),
         });
       }
+      await markScheduleInputsChanged(tx, organization.id, [
+        existing.predecessorPlanId,
+        existing.successorPlanId,
+      ]);
     });
     this.logger.info(
       { organizationId: organization.id, crossPlanDependencyId: id, userId: principal.userId },

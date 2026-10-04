@@ -373,9 +373,11 @@ instant of the latest write that **may** have changed one of the plan's scheduli
 latest dependency updated_at)`, which a lane move, Arrange, a rename or a cost edit all advanced
 although the engine reads none of them.
 
-- **An upper bound, never a claim of change.** Writers stamp `GREATEST(column, now())` with the
-  database clock — the clock and transaction-start semantics of `schedule_computed_at` — so an
-  input write and a recalculation in one transaction compare equal. Over-reporting is the safe
+- **An upper bound, never a claim of change.** Writers stamp `GREATEST(column, clock_timestamp())`
+  with the database clock, in the last statement of the edit's transaction (`markScheduleInputsChanged`).
+  `schedule_computed_at` takes `now()`, the transaction's start; an edit stamped with `now()` that began
+  before a recalculation and committed after it would read as already calculated, so the edit uses the
+  wall clock and what remains of the race fails toward a spurious flag. Over-reporting is the safe
   direction; under-reporting is the defect.
 - **Not `updated_at`, and not engine-owned.** Stamped by a raw `UPDATE plans` that leaves
   `version`/`updated_at`/`updated_by` alone (the `stampScheduleComputedAt` shape), so an activity

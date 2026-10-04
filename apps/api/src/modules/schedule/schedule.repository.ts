@@ -26,6 +26,36 @@ import {
   placedFinishSql,
 } from './placed-finish';
 
+/**
+ * What the engine reads of an activity. Exported because it is the definition of a scheduling
+ * INPUT: `common/schedule-inputs` classifies every activity patch field against these keys, and a
+ * structural spec holds the two equal, so a column added here cannot be left unclassified.
+ */
+export const ENGINE_ACTIVITY_SELECT = {
+  id: true,
+  durationMinutes: true,
+  type: true,
+  // The WBS containment tree (ADR-0038) — see `ScheduleActivityRow.parentId` for why omitting
+  // it produces a wrong schedule rather than an inert one.
+  parentId: true,
+  constraintType: true,
+  constraintDate: true,
+  secondaryConstraintType: true,
+  secondaryConstraintDate: true,
+  externalEarlyStart: true,
+  externalLateFinish: true,
+  visualStart: true,
+  scheduleAsLateAsPossible: true,
+  calendarId: true,
+  actualStart: true,
+  actualFinish: true,
+  percentComplete: true,
+  remainingDurationMinutes: true,
+  resumeDate: true,
+  expectedFinish: true,
+  levelingPriority: true,
+} satisfies Prisma.ActivitySelect;
+
 /** The minimal activity shape the CPM engine reads (a plan's active nodes). */
 export interface ScheduleActivityRow {
   id: string;
@@ -283,30 +313,7 @@ export class ScheduleRepository {
   ): Promise<ScheduleActivityRow[]> {
     return db.activity.findMany({
       where: { organizationId, planId, deletedAt: null },
-      select: {
-        id: true,
-        durationMinutes: true,
-        type: true,
-        // The WBS containment tree (ADR-0038) — see `ScheduleActivityRow.parentId` for why omitting
-        // it produces a wrong schedule rather than an inert one.
-        parentId: true,
-        constraintType: true,
-        constraintDate: true,
-        secondaryConstraintType: true,
-        secondaryConstraintDate: true,
-        externalEarlyStart: true,
-        externalLateFinish: true,
-        visualStart: true,
-        scheduleAsLateAsPossible: true,
-        calendarId: true,
-        actualStart: true,
-        actualFinish: true,
-        percentComplete: true,
-        remainingDurationMinutes: true,
-        resumeDate: true,
-        expectedFinish: true,
-        levelingPriority: true,
-      },
+      select: ENGINE_ACTIVITY_SELECT,
     });
   }
 

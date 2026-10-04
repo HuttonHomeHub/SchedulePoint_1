@@ -58,6 +58,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     scheduleCriticalFloatThresholdMinutes: null,
     scheduleTotalFloatMode: null,
     scheduleMakeOpenEndsCritical: null,
+    scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -215,6 +216,12 @@ describe('CrossPlanDependenciesService', () => {
     resourceAssignment: { findMany: ReturnType<typeof vi.fn> };
   };
   let service: CrossPlanDependenciesService;
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // The plan ids the scheduling-input stamp named (its parameters: the organisation, then the ids).
+  const stampedPlanIds = (): string[][] =>
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
+      .map((call) => call[2] as string[]);
 
   beforeEach(() => {
     organizations = {
@@ -250,7 +257,8 @@ describe('CrossPlanDependenciesService', () => {
     // The tx handle carries `$executeRaw` because the service takes the org-scoped advisory lock
     // (acquireOrgCrossPlanLock) directly on it before loading the adjacency.
     const resourceAssignment = { findMany: vi.fn().mockResolvedValue([]) };
-    const tx = { $executeRaw: vi.fn().mockResolvedValue(1), resourceAssignment };
+    txExecuteRaw = vi.fn().mockResolvedValue(1);
+    const tx = { $executeRaw: txExecuteRaw, resourceAssignment };
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(tx)), resourceAssignment };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new CrossPlanDependenciesService(
@@ -277,6 +285,8 @@ describe('CrossPlanDependenciesService', () => {
         successorActivityId: SUCC_ID,
       });
       expect(result.id).toBe(LINK_ID);
+      // Both plans' figures may have moved, so both are flagged.
+      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN]]);
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationId: ORG_ID,
@@ -568,6 +578,7 @@ describe('CrossPlanDependenciesService', () => {
       await service.remove(principalWith(ALL), 'acme', LINK_ID);
       expect(editLock.assertHoldsPen).toHaveBeenCalledWith(expect.anything(), SUCC_PLAN, ORG_ID);
       expect(repo.softDelete).toHaveBeenCalledWith(LINK_ID, USER_ID, expect.anything());
+      expect(stampedPlanIds()).toEqual([[PRED_PLAN, SUCC_PLAN]]);
     });
 
     it('404s (and does not delete) when the link is missing', async () => {

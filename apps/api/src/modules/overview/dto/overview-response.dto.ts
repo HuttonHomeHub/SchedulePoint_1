@@ -63,9 +63,12 @@ export class RecentlyChangedPlanDto {
 
   @ApiProperty({
     description:
-      'Whether the plan has been touched since that computation, so its dates answer an older ' +
-      'question. `false` for a plan that has never been calculated — there is no "since" — which ' +
-      'that plan reports through a null `scheduleComputedAt` instead.',
+      'Whether a scheduling input of the plan changed since that computation, so its dates ' +
+      'answer an older question: a duration, a link, a constraint, progress, a plan setting, or ' +
+      'an activity, link or assignment added, removed or restored. Moving a bar to another row, ' +
+      'a rename, a cost or a steps edit does not count. Calendar and resource-limit edits do ' +
+      'not count either. `false` for a plan that has never been calculated — there is no ' +
+      '"since" — which that plan reports through a null `scheduleComputedAt` instead.',
   })
   editedSinceCalculated!: boolean;
 
@@ -254,7 +257,9 @@ export class PlanStandingDto {
   scheduleComputedAt!: string | null;
 
   @ApiProperty({
-    description: 'The plan has been touched since that calculation, so its figures are behind.',
+    description:
+      'A scheduling input of the plan changed since that calculation, so its figures are behind. ' +
+      'A layout-only edit does not set this.',
   })
   editedSinceCalculated!: boolean;
 

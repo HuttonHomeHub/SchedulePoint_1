@@ -12,6 +12,11 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  DEPENDENCY_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
@@ -318,6 +323,8 @@ export class DependenciesService {
             after: created,
           }),
         });
+        // A new link is new logic: always a scheduling-input change.
+        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
 
         /*
          * A create that earns a row — the one exception to "a create is already durably
@@ -445,6 +452,10 @@ export class DependenciesService {
             after,
           }),
         });
+        // Every mutable field of a link is an input, but a resave of the values it holds is not.
+        if (changedInputs(DEPENDENCY_FIELD_CLASS, before, patch)) {
+          await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+        }
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -497,6 +508,8 @@ export class DependenciesService {
           }),
         });
       }
+      // A deleted link is changed logic, which the old read could not see (it filtered deleted rows).
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       // The link that disappeared, named by its endpoints in direction order — the same shape as
       // the create, so the two read as a pair rather than as two unrelated facts about an id
       // nothing can now resolve.

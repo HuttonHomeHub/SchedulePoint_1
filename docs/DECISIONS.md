@@ -10,6 +10,33 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-04 — "Edited since it was calculated" is a scheduling input changing, stamped by the writers
+
+**What.** The overview's `editedSinceCalculated` compares `schedule_computed_at` with a new plan column,
+`plans.schedule_inputs_changed_at`, in both of its sections. The activity, dependency, cross-plan, assignment and
+plan services stamp it through one helper, `markScheduleInputsChanged`, only when a field the engine reads changed
+value, plus on every create, delete and restore. A lane move, Arrange, the overlap resolve, a rename, a cost and a
+steps edit do not stamp it. Calendar, shift and exception edits and resource limits are not stamped yet
+(`docs/TECH_DEBT.md` #449; product owner, CQ-1 (a)). Spec: `docs/specs/edited-since-calculated/`.
+
+**Why.** `updated_at` answers "was a row written", so a lane move after a recalculation made the overview say the
+figures "may have moved" about figures that cannot have. The rule also missed deletions, because its laterals
+filtered deleted rows.
+
+**D-2: `clock_timestamp()`, not `now()`.** `now()` is the edit transaction's start, so an edit that began before a
+recalculation and committed after it was stamped earlier than `schedule_computed_at` and was missed. The wall clock
+in the edit's last statement fails toward a spurious flag instead. The database-architect's first design used `now()`.
+
+**D-4: no ADR.** It narrows one read-model flag inside ADR-0098 and adds no pattern other modules must copy beyond a
+helper whose obligation the compiler (`Record<keyof …Patch, …>` classification maps) and a structural spec enforce.
+
+**Rejected.** Layout writes that skip `updated_at` (breaks the `@updatedAt` rule and hides lane moves from Recently
+changed, fails open for the next layout field); a content digest compared at read time (a per-plan scan on every
+overview load); a database trigger on input columns (DATABASE.md forbids triggers for application logic, and its
+column lists would duplicate the engine select with no compile-time tie).
+
+---
+
 ## 2026-10-01 — Levelling follows the links, and the product owner chose to make the worst case fast before shipping
 
 **What.** The logic-aware levelling epic (`docs/specs/logic-aware-levelling/`, ADR-0168) shipped as M0 (measure
