@@ -55,8 +55,7 @@ names its entry point and lands a journey in `apps/web/e2e-undo/` under the exis
 **Outcome:** after fix (a), an undo can never silently overwrite a colleague's edit made during a pen
 hand-off; and undoing a sub-day duration/lag or a calendar change recalculates the dates.
 **Entry point:** the existing toolbar **Undo** / **Redo** and Ctrl+Z — no new surface.
-**Journey:** `e2e-undo/undo.spec.ts` — new case: change a link's lag by 90 minutes via the Logic tab,
-press Undo, poll the REST API until the successor's `earlyStart` returns to its pre-edit value.
+**Journey:** none — measured, not assumed (2026-10-04). On a stock plan the REST dates are whole days, and lag edits of `1d 1h 30m`, `1d 3h`, `1d 5h` and `1d 11h` all left the successor's `earlyStart` and `earlyFinish` unchanged, so a journey asserting on dates cannot tell the defect from the fix (an ADR-0076 Class 3 test). The proof is the unit tier: a replay notifies the recalculation unless the command declares `affectsSchedule: false` (`use-plan-undo-redo.test.ts`).
 
 #### Feature: M0 safety
 

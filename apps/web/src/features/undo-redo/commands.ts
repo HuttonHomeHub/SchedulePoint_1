@@ -48,6 +48,13 @@ export interface Command {
    * coalesce.
    */
   readonly coalescing?: CommandCoalescing;
+  /**
+   * Whether replaying this step can change what the scheduling engine would compute. Defaults to
+   * `true` when omitted — a replay that forgot to say is recalculated, never silently skipped. Only
+   * the two layout-only builders ({@link relaneCommand}, {@link autoArrangeCommand}) say `false`:
+   * a lane index is not a scheduling input, so recalculating after one is wasted work.
+   */
+  readonly affectsSchedule?: boolean;
 }
 
 /**
@@ -257,6 +264,7 @@ export function relaneCommand(params: {
     undo: (versions) => move(fromLaneIndex, versions),
     redo: (versions) => move(toLaneIndex, versions),
     seedVersions: (versions) => versions.observe(activityId, params.version),
+    affectsSchedule: false,
   };
   return coalescable(command, {
     key: `relane:${activityId}`,
@@ -1033,6 +1041,7 @@ export function autoArrangeCommand(params: {
     seedVersions: (ledger) => {
       for (const [id, version] of versions) ledger.observe(id, version);
     },
+    affectsSchedule: false,
   };
 }
 

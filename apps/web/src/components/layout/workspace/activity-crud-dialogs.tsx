@@ -74,8 +74,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
     const snapshot = deleting;
     deleteActivity.mutate(deleting.id, {
       onSuccess: (result) => {
-        // Record the delete for undo (leaf → id-stable restore of `result.deleteBatchId`; cascade →
-        // history truncation). Only the user edit is recorded here, never the follow-up recalc. A
+        // Record the delete for undo (an id-stable restore of `result.deleteBatchId`, for a leaf and
+        // a cascade alike — ADR-0048's 2026-09-02 amendment). Only the user edit is recorded here, never the follow-up recalc. A
         // no-op when `VITE_UNDO_REDO` is off.
         model.recordActivityDelete(snapshot, result.deleteBatchId);
         // Close synchronously before the announcement so focus/AT state settles in one paint (as

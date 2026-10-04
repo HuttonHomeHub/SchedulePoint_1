@@ -57,6 +57,24 @@ describe('usePlanEditHistory', () => {
     expect(result.current.canRedo).toBe(false);
   });
 
+  it('peeks the step the next undo / redo would run, without running it', async () => {
+    const log: string[] = [];
+    const a = cmd('a', log);
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    expect(result.current.peekUndo()).toBeUndefined();
+
+    act(() => result.current.record(a));
+    expect(result.current.peekUndo()).toBe(a);
+    expect(result.current.peekRedo()).toBeUndefined();
+    expect(log).toEqual([]);
+
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.peekUndo()).toBeUndefined();
+    expect(result.current.peekRedo()).toBe(a);
+  });
+
   it('undoes in LIFO order across several commands', async () => {
     const log: string[] = [];
     const { result } = renderHook(() => usePlanEditHistory('pl1'));

@@ -483,8 +483,10 @@ export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOO
  * manual sweep is the same operator gate `VITE_TSLD_EDITING` used (docs/TECH_DEBT.md #25) — do it before
  * wide rollout.
  *
- * Set `VITE_UNDO_REDO=false` to ship it inert (no store, no keybindings, placeholder toolbar items) —
- * byte-for-byte the prior behaviour (emergency rollback / opt-out).
+ * Building with `VITE_UNDO_REDO=false` ships it inert (no store, no keybindings, placeholder toolbar
+ * items) — byte-for-byte the prior behaviour. That is a developer's build-time switch, not an
+ * operator's rollback: Vite inlines the value and no published image sets it (ADR-0088 D1), so on a
+ * deployed host the rollback is pinning the previous image tag.
  *
  * @enabled 2026-07-19
  */
