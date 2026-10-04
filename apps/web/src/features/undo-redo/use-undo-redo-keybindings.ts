@@ -25,6 +25,12 @@ import { useCallback, useEffect, useRef } from 'react';
  * while a modal dialog is open (`modalOpen`) — otherwise `Ctrl+Z` would mutate plan state
  * underneath an open `ConfirmDialog`/`ActivityCreateDialog` (e.g. focus on a confirm's Cancel
  * button, which isn't a text field).
+ *
+ * **Disabled is not silent when there was something to undo** (undo-redo M1-T4). A planner who
+ * presses `Ctrl+Z` without the pen — or with the Late-start overlay on — used to get nothing at all,
+ * which reads as "undo is broken". `onBlocked` lets the host say why; it returns whether it had a
+ * step to refuse, and only then does the key's browser default get pre-empted. An empty history
+ * leaves `Ctrl+Z` to the browser, exactly as before.
  */
 export function useUndoRedoKeybindings(params: {
   /** Handle only when the feature is on AND the user can author (holds the pen; not read-only). */
@@ -37,19 +43,29 @@ export function useUndoRedoKeybindings(params: {
   modalOpen?: boolean;
   undo: () => void;
   redo: () => void;
+  /**
+   * The accelerator fired while {@link enabled} is false. Return `true` when there was a step it
+   * would have run and the refusal has been posted; `false` to leave the key alone.
+   */
+  onBlocked?: (direction: 'undo' | 'redo') => boolean;
 }): React.KeyboardEventHandler<HTMLElement> {
-  const { enabled, modalOpen = false, undo, redo } = params;
+  const { enabled, modalOpen = false, undo, redo, onBlocked } = params;
   // Track `modalOpen` in a ref so the handler identity does not change every time a dialog opens
   // (it is composed with the `?` scope and bound once on the workspace root). Synced in an effect,
   // never during render.
   const modalOpenRef = useRef(modalOpen);
+  // `onBlocked` is held the same way: the host builds it fresh each render, and depending on it
+  // would rebind the root handler on every one.
+  const onBlockedRef = useRef(onBlocked);
   useEffect(() => {
     modalOpenRef.current = modalOpen;
-  }, [modalOpen]);
+    onBlockedRef.current = onBlocked;
+  }, [modalOpen, onBlocked]);
+  const hasBlocked = onBlocked !== undefined;
 
   return useCallback(
     (event: React.KeyboardEvent<HTMLElement>): void => {
-      if (!enabled) return;
+      if (!enabled && !hasBlocked) return;
       // Never fire while a modal dialog is open — an undo would mutate plan state under the modal.
       if (modalOpenRef.current) return;
       // Undo/redo are always modified (Cmd on macOS, Ctrl elsewhere) — bail early on a bare key.
@@ -58,6 +74,19 @@ export function useUndoRedoKeybindings(params: {
       // Never hijack an undo the user is typing into a form field (the native edit-undo owns it there).
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+
+      if (!enabled) {
+        const direction =
+          key === 'z'
+            ? event.shiftKey
+              ? 'redo'
+              : 'undo'
+            : key === 'y' && event.ctrlKey && !event.metaKey
+              ? 'redo'
+              : null;
+        if (direction !== null && onBlockedRef.current?.(direction)) event.preventDefault();
+        return;
+      }
 
       if (key === 'z' && event.shiftKey) {
         // Cmd/Ctrl+Shift+Z → redo.
@@ -73,6 +102,6 @@ export function useUndoRedoKeybindings(params: {
         redo();
       }
     },
-    [enabled, undo, redo],
+    [enabled, undo, redo, hasBlocked],
   );
 }

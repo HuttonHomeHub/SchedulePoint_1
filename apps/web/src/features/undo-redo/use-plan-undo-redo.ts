@@ -1,6 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
+import {
+  historyResultMessage,
+  type HistoryOutcome,
+  type PostedHistoryResult,
+} from './history-result';
 import type { PlanEditHistory } from './use-plan-edit-history';
 
 import { ApiFetchError } from '@/lib/api/client';
@@ -12,38 +17,6 @@ import {
 } from '@/lib/query/hierarchy-keys';
 
 /**
- * The conflict/pen-loss contract copy (ADR-0048 M3.1). Announced via the shared polite live region
- * (`useAnnounce`) so a screen-reader user hears why an undo/redo didn't apply — the visual canvas
- * change is otherwise silent to AT (WCAG 4.1.3). Exported for the unit tests.
- */
-export const UNDO_CONFLICT_MESSAGE =
-  'This plan changed since you opened it — your undo wasn’t applied. Refresh to see the latest.';
-export const REDO_CONFLICT_MESSAGE =
-  'This plan changed since you opened it — your redo wasn’t applied. Refresh to see the latest.';
-export const UNDO_FAILED_MESSAGE = 'Couldn’t undo just now. Please try again.';
-export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.';
-/**
- * The 409 that means "a phase this was filed under has since been deleted" (`docs/TECH_DEBT.md`
- * #230 M2). The server refuses the restore rather than re-parenting the subtree to the top level,
- * which would silently discard the planner's structure — and refusing is correct, so the only thing
- * missing was words.
- *
- * It gets its own message because the general one is **actively wrong here**: "Refresh to see the
- * latest" is what a reader is told, and refreshing does not help. Restoring the phase does. This
- * says which action recovers it.
- *
- * **It does not name the phase, and that is a decision rather than an omission.** The client cannot:
- * the 409 carries only a reason, and the ancestor is itself soft-deleted, so it is not in the
- * activity list the client holds. Naming it needs the server to say which row blocked — real work,
- * for a state the UI cannot reach in one pen session (`apps/web/e2e-undo/undo.spec.ts` drives the
- * spec's own alternate flow and both undos succeed). Deferred with that reason rather than built.
- */
-export const UNDO_PARENT_DELETED_MESSAGE =
-  'Couldn’t undo — a phase this was filed under has since been deleted. Restore that phase first, then undo again.';
-export const REDO_PARENT_DELETED_MESSAGE =
-  'Couldn’t redo — a phase this was filed under has since been deleted. Restore that phase first, then try again.';
-
-/**
  * The machine-readable reason on a `{ error: { details } }` envelope, when it carries one.
  *
  * Read rather than assumed (ADR-0076): `ApiFetchError` carries the whole envelope error as
@@ -53,11 +26,6 @@ export const REDO_PARENT_DELETED_MESSAGE =
  */
 function reasonOf(err: ApiFetchError): string | undefined {
   return (err.error.details as { reason?: string } | undefined)?.reason;
-}
-
-/** Lowercase a command label's first letter so it reads naturally after "Undid "/"Redid ". */
-function phrase(label: string): string {
-  return label.length > 0 ? `${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
 }
 
 /** The user-visible undo/redo surface (ADR-0048 M3): the store wrapped in the conflict contract. */
@@ -90,7 +58,9 @@ export interface PlanUndoRedo {
  *   branch is cleared, and a status is announced. No auto-retry, no client-side merge.
  * - **Anything else.** A generic status is announced; the stacks are left intact (retryable).
  *
- * On success the executed step's label is announced ("Undid move activity.").
+ * On success the executed step's label is announced ("Undid move activity.") and a `done` result is
+ * handed to {@link onResult}. A failure is a result too, and is **not** announced when a host takes
+ * results (the strip is `role="alert"`, so announcing as well would say it twice — ADR-0132).
  */
 export function usePlanUndoRedo(params: {
   history: PlanEditHistory;
@@ -111,8 +81,15 @@ export function usePlanUndoRedo(params: {
    * just reversed. Not called on a failed or no-op replay.
    */
   onReplayed?: () => void;
+  /**
+   * Where a press's outcome goes to be SEEN — the dock strip (undo-redo M1). Kept as a callback
+   * rather than returned state because this hook's return value feeds the toolbar-context memo
+   * (`use-plan-edit-history.ts`'s identity invariant): a result held here would rebuild the
+   * toolbar on every press. Absent, a failure is announced instead, as before.
+   */
+  onResult?: (result: PostedHistoryResult) => void;
 }): PlanUndoRedo {
-  const { history, orgSlug, planId, announce, onLockLost, onReplayed } = params;
+  const { history, orgSlug, planId, announce, onLockLost, onReplayed, onResult } = params;
   const queryClient = useQueryClient();
 
   // Refetch server truth after a 409/404, mirroring the recalculate mutation's invalidation set: the
@@ -125,8 +102,17 @@ export function usePlanUndoRedo(params: {
     void queryClient.invalidateQueries({ queryKey: scheduleKeys.all(orgSlug) });
   }, [queryClient, orgSlug, planId]);
 
+  const report = useCallback(
+    (result: PostedHistoryResult): void => {
+      if (result.outcome === 'done') announce(historyResultMessage(result));
+      if (onResult) onResult(result);
+      else if (result.outcome !== 'done') announce(historyResultMessage(result));
+    },
+    [announce, onResult],
+  );
+
   const handleFailure = useCallback(
-    (direction: 'undo' | 'redo', err: unknown): void => {
+    (direction: 'undo' | 'redo', label: string, err: unknown): void => {
       if (err instanceof ApiFetchError && err.status === 423) {
         // Pen lost — the history belongs to the pen session, so drop it whole; the shared pen contract
         // shows the lost-control banner + refetches the lock. That banner is its own `role="status"`
@@ -136,61 +122,42 @@ export function usePlanUndoRedo(params: {
         history.clear();
         return;
       }
+      let outcome: HistoryOutcome = 'failed';
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {
         // Row moved / deleted — abort non-destructively, refetch, and drop the stale redo branch.
         // Everything below is unchanged for every reason; only the WORDS branch, and only for the
         // one reason whose recovery is a different action (#230 M2).
         refetchServerTruth();
         history.clearRedo();
-        const parentDeleted = reasonOf(err) === 'PARENT_DELETED';
-        announce(
-          direction === 'undo'
-            ? parentDeleted
-              ? UNDO_PARENT_DELETED_MESSAGE
-              : UNDO_CONFLICT_MESSAGE
-            : parentDeleted
-              ? REDO_PARENT_DELETED_MESSAGE
-              : REDO_CONFLICT_MESSAGE,
-        );
-        return;
+        outcome = reasonOf(err) === 'PARENT_DELETED' ? 'parent-deleted' : 'conflict';
       }
-      // Anything else — leave the stacks intact so the user can retry.
-      announce(direction === 'undo' ? UNDO_FAILED_MESSAGE : REDO_FAILED_MESSAGE);
+      // Anything else — the stacks stay intact so the user can retry.
+      report({ direction, outcome, label });
     },
-    [announce, history, onLockLost, refetchServerTruth],
+    [history, onLockLost, refetchServerTruth, report],
   );
 
-  const undo = useCallback((): void => {
-    void (async () => {
-      const command = history.peekUndo();
-      let label: string | null;
-      try {
-        label = await history.undo();
-      } catch (err) {
-        handleFailure('undo', err);
-        return;
-      }
-      if (label === null) return;
-      announce(`Undid ${phrase(label)}.`);
-      if (command?.affectsSchedule !== false) onReplayed?.();
-    })();
-  }, [history, handleFailure, announce, onReplayed]);
+  const run = useCallback(
+    (direction: 'undo' | 'redo'): void => {
+      void (async () => {
+        const command = direction === 'undo' ? history.peekUndo() : history.peekRedo();
+        let label: string | null;
+        try {
+          label = await (direction === 'undo' ? history.undo() : history.redo());
+        } catch (err) {
+          handleFailure(direction, command?.label ?? '', err);
+          return;
+        }
+        if (label === null) return;
+        report({ direction, outcome: 'done', label, ...(command ? { command } : {}) });
+        if (command?.affectsSchedule !== false) onReplayed?.();
+      })();
+    },
+    [history, handleFailure, report, onReplayed],
+  );
 
-  const redo = useCallback((): void => {
-    void (async () => {
-      const command = history.peekRedo();
-      let label: string | null;
-      try {
-        label = await history.redo();
-      } catch (err) {
-        handleFailure('redo', err);
-        return;
-      }
-      if (label === null) return;
-      announce(`Redid ${phrase(label)}.`);
-      if (command?.affectsSchedule !== false) onReplayed?.();
-    })();
-  }, [history, handleFailure, announce, onReplayed]);
+  const undo = useCallback((): void => run('undo'), [run]);
+  const redo = useCallback((): void => run('redo'), [run]);
 
   return useMemo(
     () => ({

@@ -198,9 +198,11 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       source.indexOf('    ) : ('),
     );
     expect(ganttBranch.length, 'could not locate the Gantt branch').toBeGreaterThan(200);
-    // Rendered alone, or as the fallback of the overlap notice that outranks it (NetPoint M3).
+    // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1).
     expect(
-      /\{(?:layoutResolvedNotice \?\? )?placementMigrationNotice\}/.test(ganttBranch),
+      /\{(?:historyResultNotice\?\.node \?\? )?(?:layoutResolvedNotice \?\? )?placementMigrationNotice\}/.test(
+        ganttBranch,
+      ),
       'the Gantt view no longer renders the placement-migration notice',
     ).toBe(true);
   });
@@ -220,6 +222,22 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       ganttBranch.includes('layoutResolvedNotice'),
       'the Gantt view no longer renders it',
     ).toBe(true);
+  });
+
+  /**
+   * **What undo or redo just did is a plan fact in both views** (undo-redo M1). The strip is the
+   * only visible account of the press, and a planner who works in the Gantt presses `Ctrl+Z` there
+   * as readily as on the diagram.
+   */
+  it('renders the undo/redo result strip in both the canvas and the Gantt', () => {
+    expect(tsld.has('historyResultNotice'), 'TsldPanel no longer receives it').toBe(true);
+    const ganttBranch = source.slice(
+      source.indexOf("ctx.planView === 'gantt'"),
+      source.indexOf('    ) : ('),
+    );
+    expect(ganttBranch.includes('historyResultNotice'), 'the Gantt view no longer renders it').toBe(
+      true,
+    );
   });
 });
 

@@ -23,13 +23,21 @@ const redo = vi.fn();
 function Host({
   enabled = true,
   modalOpen = false,
+  onBlocked,
   container,
 }: {
   enabled?: boolean;
   modalOpen?: boolean;
+  onBlocked?: (direction: 'undo' | 'redo') => boolean;
   container: HTMLElement;
 }): React.ReactElement {
-  const onKeyDown = useUndoRedoKeybindings({ enabled, modalOpen, undo, redo });
+  const onKeyDown = useUndoRedoKeybindings({
+    enabled,
+    modalOpen,
+    undo,
+    redo,
+    ...(onBlocked ? { onBlocked } : {}),
+  });
   return (
     // An event-delegation root, mirroring the production workspace root: no role, no tabIndex
     // and no click handler, so it is never focusable and never behaves like a control.
@@ -136,5 +144,63 @@ describe('useUndoRedoKeybindings', () => {
     mount();
     for (const target of targets()) expect(press({ key: 'y', metaKey: true }, target)).toBe(false);
     expect(redo).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * M1-T4: a disabled accelerator is not silent when there was a step to refuse. The matrix is the
+ * hazard — pre-empting the browser's `Ctrl+Z` is only right when the host has something to say.
+ */
+describe('useUndoRedoKeybindings — blocked (undo-redo M1-T4)', () => {
+  function mountBlocked(onBlocked: (d: 'undo' | 'redo') => boolean, modalOpen = false): void {
+    render(
+      <Host enabled={false} modalOpen={modalOpen} onBlocked={onBlocked} container={portalHost} />,
+    );
+  }
+
+  it('reports the direction and suppresses the browser default when there was a step', () => {
+    const onBlocked = vi.fn().mockReturnValue(true);
+    mountBlocked(onBlocked);
+    const target = screen.getByRole('button', { name: 'in-tree' });
+    expect(press({ key: 'z', ctrlKey: true }, target)).toBe(true);
+    expect(press({ key: 'z', ctrlKey: true, shiftKey: true }, target)).toBe(true);
+    expect(press({ key: 'y', ctrlKey: true }, target)).toBe(true);
+    expect(onBlocked.mock.calls.map((c) => c[0])).toEqual(['undo', 'redo', 'redo']);
+    expect(undo).not.toHaveBeenCalled();
+    expect(redo).not.toHaveBeenCalled();
+  });
+
+  it('works from the portalled toolbar too', () => {
+    const onBlocked = vi.fn().mockReturnValue(true);
+    mountBlocked(onBlocked);
+    expect(press({ key: 'z', ctrlKey: true }, screen.getByTestId('portalled'))).toBe(true);
+    expect(onBlocked).toHaveBeenCalledWith('undo');
+  });
+
+  it('leaves the key to the browser when there is nothing to refuse', () => {
+    mountBlocked(vi.fn().mockReturnValue(false));
+    expect(
+      press({ key: 'z', ctrlKey: true }, screen.getByRole('button', { name: 'in-tree' })),
+    ).toBe(false);
+  });
+
+  it('never fires in a text field, under a modal, on a bare key or on an unrelated chord', () => {
+    const onBlocked = vi.fn().mockReturnValue(true);
+    mountBlocked(onBlocked);
+    expect(press({ key: 'z', ctrlKey: true }, screen.getByLabelText('note'))).toBe(false);
+    const button = screen.getByRole('button', { name: 'in-tree' });
+    expect(press({ key: 'z' }, button)).toBe(false);
+    expect(press({ key: 'c', ctrlKey: true }, button)).toBe(false);
+    expect(press({ key: 'y', metaKey: true }, button)).toBe(false);
+    expect(onBlocked).not.toHaveBeenCalled();
+  });
+
+  it('is inert under a modal', () => {
+    const onBlocked = vi.fn().mockReturnValue(true);
+    mountBlocked(onBlocked, true);
+    expect(
+      press({ key: 'z', ctrlKey: true }, screen.getByRole('button', { name: 'in-tree' })),
+    ).toBe(false);
+    expect(onBlocked).not.toHaveBeenCalled();
   });
 });

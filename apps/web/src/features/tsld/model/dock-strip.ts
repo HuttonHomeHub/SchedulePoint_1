@@ -3,6 +3,7 @@ import type { CanvasModeStatement } from '../components/CanvasModeBand';
 /** Which of the canvas dock's mutually-exclusive strips is showing, or none. */
 export type DockStrip =
   | 'conflict'
+  | 'history'
   | 'mode'
   | 'layout-resolved'
   | 'empty'
@@ -44,6 +45,16 @@ export interface DockStripInput {
    * the top undo step (NetPoint-layout M3). Precedence only; the sentence is the host's.
    */
   readonly hasLayoutResolvedNotice: boolean;
+  /**
+   * What the last undo/redo press left in the dock (undo-redo M1): `'failure'` for a step that did
+   * not apply or a press that was refused, `'success'` for one that ran, `null` for neither. A
+   * three-way value rather than two booleans because the two cases rank on opposite sides of the
+   * mode band, and this function decides precedence, not content.
+   *
+   * A success that loses to the mode band is not withdrawn, only hidden: when the tool disarms and
+   * the strip finally mounts, its 15 s window starts then, not when the press happened.
+   */
+  readonly historyResult: 'success' | 'failure' | null;
 }
 
 /**
@@ -75,7 +86,23 @@ export interface DockStripInput {
  */
 export function resolveDockStrip(input: DockStripInput): DockStrip {
   if (input.hasConflict) return 'conflict';
+  /**
+   * **A refused or failed undo ranks with `conflict`, directly under it.** It reports a write that
+   * did NOT happen and needs dismissing — the same class as a conflict, and the only strip beside it
+   * that carries a consequence rather than an instruction. It outranks an armed tool because the
+   * planner pressed `Ctrl+Z` expecting something and got nothing: the sentence saying why must not
+   * be the one a mode band covers.
+   */
+  if (input.historyResult === 'failure') return 'history';
   if (input.modeStatement) return 'mode';
+  /**
+   * **A successful undo/redo ranks directly below `mode`, and above `layout-resolved`.** It
+   * reports the planner's last act, and yields to an armed tool for the same reason the
+   * layout-resolved notice does (they have moved on; the step stays one `Ctrl+Z` away). It replaces
+   * `layout-resolved` because both describe the top of the stack and only one can be true: undoing
+   * the step a layout notice is bound to withdraws that notice anyway.
+   */
+  if (input.historyResult === 'success') return 'history';
   /**
    * **Directly below `mode`, above everything that is not about the planner's last act.** It reports
    * the consequence of the edit they just made — a bar they did not touch changed lane — and its

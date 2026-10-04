@@ -28,6 +28,8 @@ export function usePlanWorkspaceKeyScope(params: {
   undoRedoEnabled: boolean;
   undo: () => void;
   redo: () => void;
+  /** An undo/redo accelerator fired while it is off; true when there was a step to refuse. */
+  onUndoRedoBlocked?: (direction: 'undo' | 'redo') => boolean;
   /** Copy/paste are live only when the copy flag is on AND the planner can create activities. */
   clipboardEnabled: boolean;
   onCopy: () => void;
@@ -39,6 +41,7 @@ export function usePlanWorkspaceKeyScope(params: {
     undoRedoEnabled,
     undo,
     redo,
+    onUndoRedoBlocked,
     clipboardEnabled,
     onCopy,
     onPaste,
@@ -49,6 +52,7 @@ export function usePlanWorkspaceKeyScope(params: {
     modalOpen,
     undo,
     redo,
+    ...(onUndoRedoBlocked ? { onBlocked: onUndoRedoBlocked } : {}),
   });
 
   const onClipboardKeyDown = useClipboardKeybindings({

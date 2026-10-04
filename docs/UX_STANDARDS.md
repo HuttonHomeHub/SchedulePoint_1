@@ -123,6 +123,16 @@ entry stops being needed.
   its `Undo` can never reverse an edit its sentence does not describe. A bar the
   planner **moved** onto an occupied row goes on in the direction it was moving; a
   bar the engine **pushed** has no direction, so it takes the nearest free row.
+- **Undo and redo show what they did, and say why they did nothing** (undo-redo M1). Every
+  press leaves one strip in the dock under the plan, in the diagram and in the Gantt: "Undid
+  edit “Excavate”." with **Redo** (and "Redid …" with **Undo**). A success has no live-region role
+  — the announcer says it once — withdraws when anything else is on top of the stack, and
+  otherwise after 15 s, paused while the pointer or focus is on it. A failure or refusal is
+  `role="alert"`, is **not** also announced, and stays until dismissed. `Ctrl+Z` with a step to
+  undo but no right to edit (no pen, or the Late-start overlay on) says so instead of doing
+  nothing; with nothing to undo the key is left to the browser. The tooltip, accessible name, strip
+  and announcement all come from `historyPhrase`, which lower-cases the first letter only, so an
+  activity keeps its own capitalisation.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

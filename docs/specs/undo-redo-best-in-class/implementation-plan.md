@@ -111,7 +111,7 @@ hand-off; and undoing a sub-day duration/lag or a calendar change recalculates t
 **Outcome:** a sighted planner sees every undo/redo outcome in both views; labels read correctly.
 **Entry point:** toolbar **Undo** / **Redo** (Plan commands toolbar, Row 2) and Ctrl+Z, in the
 **Diagram** and the **Gantt**; the result appears in the canvas dock strip.
-**Journey:** `e2e-undo/feedback.spec.ts` — draw two tasks, click Undo → dock shows "Undid Add
+**Journey:** `e2e-undo/undo.spec.ts` ("a planner sees what undo and redo did") — draw two tasks, click Undo → dock shows "Undid Add
 “Foundations”." with a **Redo** button; click it → "Redid Add “Foundations”."; switch to Gantt, press
 Ctrl+Z → strip visible there; turn on the Late-dates overlay and press Ctrl+Z → the strip states the
 refusal; axe on the strip. (The no-pen variant of that sentence is asserted in M2's journey: until M2
@@ -186,7 +186,7 @@ nextLabel? } | null` (stable identity per result) and a `dismissResult()`; annou
 
 ##### Task M1-T5 — Journey + docs
 
-- **Description:** `e2e-undo/feedback.spec.ts` as above; `PlanShortcutsHelp.tsx` notes where results
+- **Description:** the journey in `e2e-undo/undo.spec.ts` as above; `PlanShortcutsHelp.tsx` notes where results
   appear; changeset (`@repo/web` minor).
 - **Complexity:** S · **Dependencies:** M1-T3, M1-T4
 - **Testing:** `scripts/e2e-local.sh web:undo` before push (CLAUDE.md §19.8).

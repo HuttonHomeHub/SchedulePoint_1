@@ -37,6 +37,7 @@ import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
 import { repositionAnnouncement } from '../model/reposition-announcement';
+import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -389,6 +390,17 @@ export interface TsldPanelProps {
    */
   layoutResolvedNotice?: React.ReactNode | null | undefined;
   /**
+   * What the last undo/redo press left behind (undo-redo M1), built by the host for the reason
+   * `layoutResolvedNotice` is: the step and its lifetime belong to the workspace model, and the Gantt
+   * dock renders the same strip. `kind` is what the panel needs for precedence — a failure outranks
+   * an armed tool, a success yields to it — and `id` + `message` let the panel speak a failure the
+   * strip cannot show (a conflict banner outranks it). Null when there is nothing to say.
+   */
+  historyResultNotice?:
+    | { id: number; kind: 'success' | 'failure'; message: string; node: React.ReactNode }
+    | null
+    | undefined;
+  /**
    * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
    * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
    * cannot move the bars between the planner's two clicks. Absent ⇒ today's cadence exactly.
@@ -636,6 +648,7 @@ export function TsldPanel({
   onUndoLastEdit,
   placementMigrationNotice,
   layoutResolvedNotice,
+  historyResultNotice,
   recalcHold,
   dropLinkPickSignal = 0,
   recalcPending = false,
@@ -1751,7 +1764,10 @@ export function TsldPanel({
     hasPlacementMigrationNotice: placementMigrationNotice != null,
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
+    historyResult: historyResultNotice?.kind ?? null,
   });
+
+  useUnshownHistoryAnnouncement(historyResultNotice, dockStrip, announce);
 
   // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
   // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,
@@ -3146,6 +3162,8 @@ export function TsldPanel({
             )}
           </NoticeStrip>
         ) : null}
+
+        {dockStrip === 'history' ? historyResultNotice?.node : null}
 
         {/*
           **The `Arrange` offer** (diagram-legibility M-C2), closing `docs/TECH_DEBT.md` #363's

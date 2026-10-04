@@ -246,6 +246,8 @@ export function relaneCommand(params: {
   fromLaneIndex: number;
   toLaneIndex: number;
   version: number;
+  /** The moved activity's name, so the default label says whose lane it was (M1-T1). */
+  activityName: string;
   label?: string;
 }): Command {
   const { repositionLane, activityId, fromLaneIndex, toLaneIndex } = params;
@@ -260,7 +262,7 @@ export function relaneCommand(params: {
     versions?.observe(activityId, saved.version);
   };
   const command: Command = {
-    label: params.label ?? 'Move activity to lane',
+    label: params.label ?? `Move “${params.activityName}” to lane`,
     undo: (versions) => move(fromLaneIndex, versions),
     redo: (versions) => move(toLaneIndex, versions),
     seedVersions: (versions) => versions.observe(activityId, params.version),
@@ -279,6 +281,7 @@ export function relaneCommand(params: {
         fromLaneIndex: from,
         toLaneIndex: to,
         version,
+        activityName: params.activityName,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
   });
@@ -352,6 +355,8 @@ export function typeChangeCommand(params: {
   before: ActivityType;
   after: ActivityType;
   version: number;
+  /** The converted activity's name, so the default label names its subject (M1-T1). */
+  activityName: string;
   label?: string;
 }): Command {
   let version = params.version;
@@ -365,7 +370,7 @@ export function typeChangeCommand(params: {
     versions?.observe(params.activityId, saved.version);
   };
   return {
-    label: params.label ?? 'Make milestone',
+    label: params.label ?? `Make “${params.activityName}” a milestone`,
     undo: (versions) => set(params.before, versions),
     redo: (versions) => set(params.after, versions),
     seedVersions: (versions) => versions.observe(params.activityId, params.version),
@@ -573,6 +578,11 @@ function dependencyToggle(params: {
   });
 }
 
+/** A link step's default label, naming both endpoints like {@link dependencyEditCommand}'s. */
+function linkLabel(verb: string, dependency: DependencySummary): string {
+  return `${verb} “${dependency.predecessor.name}” → “${dependency.successor.name}”`;
+}
+
 /**
  * Reverse a dependency **add** — undo removes the just-created edge; redo re-creates it (a new id)
  * from the captured endpoints/type/lag. The follow-up recalc is never recorded (ADR-0048).
@@ -590,7 +600,7 @@ export function dependencyAddCommand(params: {
     deleteDependency: params.deleteDependency,
   });
   return {
-    label: params.label ?? 'Add link',
+    label: params.label ?? linkLabel('Add link', params.dependency),
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
     seedVersions: (versions) => versions.observe(params.dependency.id, params.dependency.version),
@@ -615,7 +625,7 @@ export function dependencyRemoveCommand(params: {
     deleteDependency: params.deleteDependency,
   });
   return {
-    label: params.label ?? 'Remove link',
+    label: params.label ?? linkLabel('Remove link', params.dependency),
     undo: toggle.ensurePresent,
     redo: toggle.ensureAbsent,
   };
@@ -716,6 +726,8 @@ export function visualStartCommand(params: {
   before: VisualPlacement;
   after: VisualPlacement;
   version: number;
+  /** The placed activity's name, so the default label names its subject (M1-T1). */
+  activityName: string;
   label?: string;
 }): Command {
   const { setVisualStart, activityId, before, after } = params;
@@ -731,7 +743,7 @@ export function visualStartCommand(params: {
     versions?.observe(activityId, saved.version);
   };
   const command: Command = {
-    label: params.label ?? 'Move activity',
+    label: params.label ?? `Move “${params.activityName}”`,
     undo: (versions) => place(before, versions),
     redo: (versions) => place(after, versions),
     seedVersions: (versions) => versions.observe(activityId, params.version),
@@ -747,6 +759,7 @@ export function visualStartCommand(params: {
         before: b,
         after: a,
         version,
+        activityName: params.activityName,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
   });
@@ -1035,7 +1048,9 @@ export function autoArrangeCommand(params: {
     }
   };
   return {
-    label: params.label ?? 'Auto-arrange lanes',
+    label:
+      params.label ??
+      `Auto-arrange ${params.after.length === 1 ? '1 activity' : `${params.after.length} activities`}`,
     undo: (ledger) => apply(params.before, ledger),
     redo: (ledger) => apply(params.after, ledger),
     seedVersions: (ledger) => {

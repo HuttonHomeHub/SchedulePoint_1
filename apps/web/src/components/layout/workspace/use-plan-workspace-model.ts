@@ -128,6 +128,7 @@ import {
   visualStartCommand,
   usePlanEditHistory,
   usePlanUndoRedo,
+  useHistoryResult,
   type LanePlacement,
 } from '@/features/undo-redo';
 import {
@@ -580,11 +581,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
   // recording seams above push onto). Inert unless `VITE_UNDO_REDO` is on — the wrapper only acts when
   // the user invokes undo/redo, which the flag-gated surface never does when off, so byte-identical.
+  // What a press came to, held for the dock strip (undo-redo M1) — a sibling of the wrapper rather
+  // than part of its return value, so a press does not rebuild the toolbar-context memo.
+  const historyResult = useHistoryResult(editHistory, planId);
   const plainUndoRedo = usePlanUndoRedo({
     history: editHistory,
     orgSlug,
     planId,
     announce,
+    onResult: historyResult.post,
     onLockLost: pen.onWriteRejected,
     // `autoRecalc` is declared just below; the callback only runs on a replay, long after render.
     onReplayed: () => autoRecalc.notify(),
@@ -1262,6 +1267,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               fromLaneIndex: activity.laneIndex,
               toLaneIndex: landed,
               version: saved.version,
+              activityName: activity.name,
             }),
           );
         }
@@ -1335,6 +1341,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
             after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
             version: saved.version,
+            activityName: activity.name,
           }),
         );
       }
@@ -1772,6 +1779,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               },
               after: { visualStart: null, laneIndex: activity?.laneIndex ?? 0 },
               version: saved.version,
+              activityName: name,
             }),
           );
         }
@@ -1904,7 +1912,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             before: activity.type,
             after: type,
             version: saved.version,
-            label: `Make “${activity.name}” a milestone`,
+            activityName: activity.name,
           }),
         );
       }
@@ -2557,6 +2565,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
     undoRedo,
+    /** What the last undo/redo press came to, for the dock's `'history'` strip (undo-redo M1). */
+    historyResult,
     /**
      * What the dock says after an edit moved a bar clear of an overlap (NetPoint-layout M3), or
      * null. Its `Undo` is `undoRedo.undo`, and it is withdrawn the moment anything else is on top of

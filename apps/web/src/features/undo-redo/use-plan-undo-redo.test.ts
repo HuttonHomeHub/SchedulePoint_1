@@ -9,7 +9,6 @@ import {
   dependencyEditCommand,
   relaneCommand,
 } from './commands';
-import type { PlanEditHistory } from './use-plan-edit-history';
 import {
   REDO_CONFLICT_MESSAGE,
   REDO_FAILED_MESSAGE,
@@ -17,8 +16,10 @@ import {
   UNDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
   UNDO_PARENT_DELETED_MESSAGE,
-  usePlanUndoRedo,
-} from './use-plan-undo-redo';
+  type PostedHistoryResult,
+} from './history-result';
+import type { PlanEditHistory } from './use-plan-edit-history';
+import { usePlanUndoRedo } from './use-plan-undo-redo';
 
 import { ApiFetchError } from '@/lib/api/client';
 
@@ -55,7 +56,7 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
   };
 }
 
-function setup(history: PlanEditHistory) {
+function setup(history: PlanEditHistory, onResult?: (result: PostedHistoryResult) => void) {
   const announce = vi.fn();
   const onLockLost = vi.fn();
   const onReplayed = vi.fn();
@@ -65,7 +66,15 @@ function setup(history: PlanEditHistory) {
     createElement(QueryClientProvider, { client: queryClient }, children);
   const { result } = renderHook(
     () =>
-      usePlanUndoRedo({ history, orgSlug: 'acme', planId: 'p1', announce, onLockLost, onReplayed }),
+      usePlanUndoRedo({
+        history,
+        orgSlug: 'acme',
+        planId: 'p1',
+        announce,
+        onLockLost,
+        onReplayed,
+        ...(onResult ? { onResult } : {}),
+      }),
     { wrapper },
   );
   return { result, announce, onLockLost, onReplayed, invalidateSpy };
@@ -110,6 +119,7 @@ describe('usePlanUndoRedo — recalculation after a replay', () => {
     fromLaneIndex: 0,
     toLaneIndex: 1,
     version: 1,
+    activityName: 'Excavate',
   });
   const arrange = autoArrangeCommand({
     batchPositions: noop,
@@ -288,5 +298,97 @@ describe('usePlanUndoRedo — other errors (leave stacks intact)', () => {
     const { result, announce } = setup(history);
     act(() => result.current.undo());
     await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_FAILED_MESSAGE));
+  });
+});
+
+/**
+ * M1-T2: an outcome is handed to the dock as a RESULT, and each event is spoken exactly once — a
+ * success through the polite region, a failure by the strip's `role="alert"` (ADR-0132).
+ */
+describe('usePlanUndoRedo — results for the dock strip', () => {
+  const step = { label: 'Edit “Excavate”', undo: vi.fn(), redo: vi.fn() };
+
+  it('a success posts a `done` result bound to its step and announces once', async () => {
+    const onResult = vi.fn();
+    const { result, announce } = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(step),
+        undo: vi.fn().mockResolvedValue(step.label),
+      }),
+      onResult,
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult).toHaveBeenCalledWith({
+      direction: 'undo',
+      outcome: 'done',
+      label: step.label,
+      command: step,
+    });
+    expect(announce).toHaveBeenCalledExactlyOnceWith('Undid edit “Excavate”.');
+  });
+
+  it('a redo success posts the redo direction', async () => {
+    const onResult = vi.fn();
+    const { result } = setup(
+      fakeHistory({
+        peekRedo: vi.fn().mockReturnValue(step),
+        redo: vi.fn().mockResolvedValue(step.label),
+      }),
+      onResult,
+    );
+    act(() => result.current.redo());
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'redo', outcome: 'done' }),
+    );
+  });
+
+  const failures: [string, unknown, string][] = [
+    ['a 409', err(409), 'conflict'],
+    ['a 404', err(404), 'conflict'],
+    ['a 409 PARENT_DELETED', err(409, { reason: 'PARENT_DELETED' }), 'parent-deleted'],
+    ['a 500', err(500), 'failed'],
+    ['a thrown Error', new Error('boom'), 'failed'],
+  ];
+  for (const [name, error, outcome] of failures) {
+    it(`${name} posts a \`${outcome}\` result and is NOT also announced`, async () => {
+      const onResult = vi.fn();
+      const { result, announce } = setup(
+        fakeHistory({
+          peekUndo: vi.fn().mockReturnValue(step),
+          undo: vi.fn().mockRejectedValue(error),
+        }),
+        onResult,
+      );
+      act(() => result.current.undo());
+      await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+      expect(onResult).toHaveBeenCalledWith({
+        direction: 'undo',
+        outcome,
+        label: step.label,
+      });
+      expect(announce).not.toHaveBeenCalled();
+    });
+  }
+
+  it('a lost pen posts nothing — the pen banner is its one announcer', async () => {
+    const onResult = vi.fn();
+    const { result, onLockLost } = setup(
+      fakeHistory({ undo: vi.fn().mockRejectedValue(err(423)) }),
+      onResult,
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onLockLost).toHaveBeenCalledTimes(1));
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it('nothing to undo posts nothing', async () => {
+    const onResult = vi.fn();
+    const history = fakeHistory({ undo: vi.fn().mockResolvedValue(null) });
+    const { result } = setup(history, onResult);
+    act(() => result.current.undo());
+    await waitFor(() => expect(history.undo).toHaveBeenCalled());
+    expect(onResult).not.toHaveBeenCalled();
   });
 });
