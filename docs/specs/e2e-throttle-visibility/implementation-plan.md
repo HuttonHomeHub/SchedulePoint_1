@@ -163,13 +163,29 @@ until M3.1's per-worker account removes it; M3.2 should not take a local 2× as 
 
 ### Milestone M3 status
 
-**Task 3.1 built, not yet run.** `e2e-activity-editor/fixtures.ts` adds a worker-scoped `account` fixture
-(one sign-up and onboarding per worker, saved `storageState`, applied through the `storageState` option).
-All 19 tests (15 in `activity-editor.spec.ts`, 3 in `activity-create.spec.ts`, 1 in `activity-history.spec.ts`) stopped signing up; each
-enters the shared organisation and `openProject` stamp-suffixes its client and project. No test in the
-directory mints a second actor (the Contributor journey lives in the notes suite), so none needed to.
-The `TEMPORARY` `RATE_LIMIT_LIMIT: '200'` is removed from the config. #435 and #361 stay open; the
-orchestrator's three local runs, the census and ten green CI runs are outstanding. Task 3.2 not started.
+**Task 3.1 shipped in #786 (2026-10-04).** `e2e-activity-editor/fixtures.ts` adds a worker-scoped `account`
+fixture (one sign-up and onboarding per worker, saved `storageState`, applied through the `storageState`
+option); all 19 tests stopped signing up. Three local runs came back 19/19, the census peak was `GET /me` at
+**49 per 60 s** against the production limit of 100, the `TEMPORARY` 200 ceiling is removed, and CI was green
+on all four shards.
+
+**Task 3.2: six of eight ceilings measured (2026-10-04).** Each suite was run locally with
+`E2E_THROTTLE_CENSUS=1` (all green, zero 429s) and its `RATE_LIMIT_LIMIT` replaced the blind `100000`:
+
+| Config                                  | Busiest handler                         | Local peak / 60 s | Ceiling |
+| --------------------------------------- | --------------------------------------- | ----------------- | ------- |
+| `playwright.arrange.config.ts`          | `GET /api/v1/me`                        | 84                | 350     |
+| `playwright.gantt.config.ts`            | `POST …/plans/:id/activities` (seeding) | 300               | 1200    |
+| `playwright.gantt-editing.config.ts`    | `GET /api/v1/me`                        | 86                | 350     |
+| `playwright.netpoint-grammar.config.ts` | `GET /api/v1/me`                        | 76                | 350     |
+| `playwright.overview.config.ts`         | `GET /api/v1/me`                        | 95                | 400     |
+| `playwright.workspace-chrome.config.ts` | `GET /api/v1/me`                        | 74                | 300     |
+
+The rule is about **4x the local peak, rounded up to the next 50**, not the 2x this plan first proposed: M2's
+status above records CI runners spending more than 100 per 60 s on `activity-editor` where the local peak was 64,
+so a local 2x is not conservative for CI. The two `measure-*` harness configs
+(`playwright.measure-gantt.config.ts`, `playwright.measure-route-splitting.config.ts`) are still pending and
+keep `100000`. #435 and #361 stay open pending ten consecutive green CI runs and M3.3.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.

@@ -10799,11 +10799,12 @@ than opportunistically, because the cheap half — correcting nine comments to m
 from #360's corrected diagnosis) · **Size:** S · **Owner:** web
 
 **Figures corrected 2026-10-03 (§19.11):** there are **53** `apps/web/playwright*.config.ts`, and **eight**
-raise `RATE_LIMIT_LIMIT` to `100000` (overview, netpoint-grammar, measure-gantt, gantt-editing,
-measure-route-splitting, gantt, arrange, workspace-chrome); the "four of 49" below is the count when the
+raised `RATE_LIMIT_LIMIT` to `100000` (overview, netpoint-grammar, measure-gantt, gantt-editing,
+measure-route-splitting, gantt, arrange, workspace-chrome). **Six of those now carry measured ceilings
+(2026-10-04, task 3.2)**; only measure-gantt and measure-route-splitting still carry `100000`; the "four of 49" below is the count when the
 row was raised. The remedy is specified in `docs/specs/e2e-throttle-visibility/` (ADR-0175): M1 (the guarded
 `test` fixture in `apps/web/e2e-support/test.ts`, its self-test and the ADR) has landed for the base suite
-only; the row stays **open** until every journey uses it (M2) and the `100000` ceilings are measured (M3).
+only; the row stays **open** until every journey uses it (M2) and the remaining `100000` ceilings are measured (M3).
 **M0 measurement, 2026-10-03:** `e2e-activity-editor` run against a default-limit API with request logging:
 844 requests, **zero 429s**, busiest handler `GET /me` at **64** per 60 s (activities list 39, baseline
 variance 32, schedule summary 26, edit-lock 24). Local evidence only; a faster machine over-reports exposure,
