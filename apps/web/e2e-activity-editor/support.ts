@@ -7,35 +7,35 @@ import { expect, type Page } from '@playwright/test';
  * editor is opened from a row's actions menu.
  */
 
-/** Sign up + create an organisation; returns the org slug. The actor is the org's Org Admin. */
-export async function onboard(page: Page, stamp: number): Promise<string> {
-  const orgSlug = `editor-co-${stamp}`;
-  await page.goto('/sign-up');
-  await page.getByLabel('Full name').fill('Editor Tester');
-  await page.getByLabel('Email').fill(`editor-${stamp}@example.com`);
-  await page.getByLabel('Password').fill('correct-horse-battery');
-  await page.getByRole('button', { name: /create an account/i }).click();
-  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+/**
+ * Land on the shared account's organisation. Sign-up happens once per worker in `fixtures.ts`, so a
+ * test that began with `onboard` now begins here, and waits on the shell's own link rather than a
+ * heading the sign-up flow drew.
+ */
+export async function enterOrg(page: Page, orgSlug: string): Promise<void> {
+  await page.goto(`/orgs/${orgSlug}`);
+  await expect(page.getByRole('link', { name: 'Clients', exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByLabel('Organisation name').fill(`Editor Co ${stamp}`);
-  await page.getByRole('button', { name: /create organisation/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-  return orgSlug;
 }
 
-/** Create a client + project and land on the project page (where plans are created). */
-export async function openProject(page: Page): Promise<void> {
+/**
+ * Create a client + project and land on the project page (where plans are created). Both names carry
+ * the test's `stamp`: the organisation is shared across the worker's tests, and a bare name would
+ * match every earlier test's link.
+ */
+export async function openProject(page: Page, stamp: number): Promise<void> {
+  const client = `Northgate ${stamp}`;
+  const project = `Riverside ${stamp}`;
   await page.getByRole('link', { name: 'Clients', exact: true }).click();
   await page.getByRole('main').getByRole('button', { name: 'New client' }).click();
-  await page.getByRole('dialog').getByLabel('Name').fill('Northgate');
+  await page.getByRole('dialog').getByLabel('Name').fill(client);
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
-  await page.getByRole('link', { name: 'Northgate' }).click();
+  await page.getByRole('link', { name: client, exact: true }).click();
   await page.getByRole('button', { name: 'New project' }).click();
-  await page.getByRole('dialog').getByLabel('Name').fill('Riverside');
+  await page.getByRole('dialog').getByLabel('Name').fill(project);
   await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
-  await page.getByRole('link', { name: 'Riverside' }).click();
+  await page.getByRole('link', { name: project, exact: true }).click();
 }
 
 /** Create a plan under the current project and open it. */

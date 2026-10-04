@@ -16,7 +16,8 @@ import { defineConfig, devices } from '@playwright/test';
  * intent (ADR-0060 §7), which the unit suite pins; duplicating that here would test the selection
  * bar, not the editor.
  *
- * Chromium only (TECH_DEBT #25a), serial (one org's plan is mutated throughout). Like every flag-on
+ * Chromium only (TECH_DEBT #25a), serial (one organisation per worker, signed up once in
+ * `e2e-activity-editor/fixtures.ts`). Like every flag-on
  * config the flags bake at `webServer` start, so this is a separate config on the same ports and
  * runs as its own CI step after the prior suites tear down.
  */
@@ -58,11 +59,6 @@ export default defineConfig({
             env: {
               LOG_LEVEL: 'silent',
               PLAN_EDIT_LOCK_ENFORCED: 'true',
-              // TEMPORARY — see #361. CI run 37195968342 (2026-10-04) refused GET /api/v1/me with a
-              // named 429 here: on a runner this suite spends more than the default 100 per 60 s,
-              // against a local census peak of 64 (spec M0). 200 is about twice the CI floor that
-              // was exceeded (ADR-0175 rung 3). M3 removes it by signing up once per worker.
-              RATE_LIMIT_LIMIT: '200',
             },
           },
           {
