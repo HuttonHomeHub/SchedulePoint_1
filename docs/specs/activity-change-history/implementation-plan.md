@@ -216,6 +216,25 @@ made by the Planner is not. axe check on the open tab.
 - **Complexity:** S
 - **Dependencies:** M1-T3 … M1-T6.
 - **Risks:** one machine state quoted as general (CLAUDE.md §17) → record the machine; run twice.
+- **Status: measured 2026-10-04 — read and lookup PASS, added write cost MISSED; M1 stops here and
+  returns to database-architect.** Numbers and machine are in ADR-0174 Consequences. Summary (run 1 /
+  run 2, 4 vCPU Xeon 2.8 GHz, 16 GB, **PostgreSQL 16.14**, not 17; 1,000,000 rows, 1,000 per activity):
+
+  | Bar                           | Result (p95, ms)                                                                                       | Verdict        |
+  | ----------------------------- | ------------------------------------------------------------------------------------------------------ | -------------- |
+  | read page < 50                | 17.2 / 24.7 first page; 23.3 / 25.8 deep; non-cost 20.7 / 23.0                                         | pass           |
+  | merge lookup is an index scan | Index Scan, 4 buffers, 0.19 / 0.28 ms                                                                  | pass           |
+  | single-object write added ≤ 2 | PATCH merge 4.8 / 3.8; PATCH new entry 8.4 / 3.0; assignment merge 5.5 / 4.1; assignment new 5.5 / 5.3 | **miss**       |
+  | link write added ≤ 4          | 7.8 / 14.4 (p50 6.3 / 6.9)                                                                             | **miss**       |
+  | HOT / fillfactor (no bar)     | 95 % of live merges HOT at default; 0 % on aged full pages, 10 % at 90, 23 % at 80                     | none warranted |
+
+  Method: `apps/api/test/measure/activity-history.measure.ts` (run with `vitest.measure.config.mts`
+  against a disposable database). "Without recording" stubs the recorder's four methods on the
+  singleton instance in the harness — there is no production toggle. 200 paired writes per operation
+  (150 for links), arms interleaved in random order on different activities. Writes are measured over
+  HTTP, so the figures include the request, and only the **difference** is the recording cost. The
+  `EXPLAIN (ANALYZE, BUFFERS)` plans, run twice, are `Index Scan using
+idx_activity_history_activity_recorded` for the probe (under a `Limit`) and for every read page.
 
 #### Feature M1-D: The History tab
 

@@ -127,11 +127,39 @@ baseline has no author) can say who changed one activity's duration, link or cra
   the UI says calculated dates are not listed and never says "audit".
 - Every new write path to an activity, link or assignment must be recorded or exempted with a reason, or
   the census fails.
-- **Unmeasured, and stated as such.** The recording cost (target ≤ 2 ms p95 per single-object write,
-  ≤ 4 ms for a link write), the read p95 (< 50 ms at 1,000 entries), the expiry cost per history row
-  (replacing `HISTORY_ROWS_PER_ACTIVITY = 1`) and the real entry rate (the spec's estimate is 0.3–0.5 KB
-  per entry and 6–55 MB a year on a busy plan, plus 20–40 % for links and resources) are estimates
-  until their measurement tasks run; this ADR will be amended with the numbers.
+- **Measured 2026-10-04 (M1-T7), and one bar is missed.** Machine: 4 vCPU Intel Xeon @ 2.80 GHz,
+  16 GB, **PostgreSQL 16.14** (not 17; `shared_buffers` 128 MB, `fsync` and `synchronous_commit` on),
+  Node 22.22, API and database on the same host, a fresh scratch database per run, two full runs. Table:
+  1,000,000 entries, 1,000 per activity across 1,000 activities (710 MB heap, 140 MB indexes). Harness:
+  `apps/api/test/measure/activity-history.measure.ts` (`pnpm --filter @repo/api exec vitest run --config
+vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` text in the plan's M1-T7.
+  - **Read page: PASS.** HTTP p95 over 200 runs of `GET …/history?limit=50` on a 1,000-entry activity:
+    17.2 / 24.7 ms (cost reader, runs 1 / 2), 20.7 / 23.0 (non-cost reader), 23.3 / 25.8 (page ~500
+    entries deep); bar < 50 ms. The history query itself is 0.06–0.24 ms in the database: the rest is the
+    request (session, scope, activity lookup, actor names, serialisation).
+  - **Merge lookup: PASS.** The recorder's probe is an `Index Scan` on `idx_activity_history_activity_recorded`
+    under a `Limit` (4 buffers, 0.19 / 0.28 ms execution), and every read page is an `Index Scan` on the
+    same index with `organization_id` as a filter — never a sequential scan, with a custom or a generic
+    plan, with and without `has_non_cost_change`, first page and deep keyset page.
+  - **Added write cost: MISSED on every operation.** Added p95 over 200 paired writes (150 for links),
+    runs 1 / 2: activity PATCH merging into the open entry 4.8 / 3.8 ms; PATCH opening a new entry
+    8.4 / 3.0; assignment update merging 5.5 / 4.1, opening 5.5 / 5.3; **link create 7.8 / 14.4** (bar 4).
+    Bars are ≤ 2 ms for a single-object write and ≤ 4 ms for a link. The medians say it is not tail noise:
+    added p50 was 2.9–4.9 ms for activity and assignment writes and 6.3 / 6.9 ms for a link create, in
+    both runs. "Without" is the same service path with the recorder's four methods stubbed on the
+    instance (no production toggle exists or was added), so it still pays the services' own before/after
+    reads; the cost is the recorder's extra round trips (lock, probe, entry write, and the name lookups).
+    The per-statement split was not measured. The design is unchanged and this goes back to
+    database-architect, as the plan requires of a miss.
+  - **HOT: yes for what a merge actually touches; no `fillfactor` warranted.** 380 of 400 merge updates
+    (95 %, run 2; 378 of 400 in run 1) were heap-only at the default fillfactor, because a merge extends
+    the newest entry and that row is still on a page with room. A merge forced onto 300 sampled rows
+    from the bulk-loaded (full-page) region was 0 % HOT; `fillfactor` 90 raised that to 10 % and 80 to
+    23 %, at 10 % and 22 % more heap — and those rows are older than the merge window, which a merge
+    never reaches.
+    The expiry cost per history row (replacing `HISTORY_ROWS_PER_ACTIVITY = 1`) and the real entry rate
+    (the spec's estimate is 0.3–0.5 KB per entry and 6–55 MB a year on a busy plan, plus 20–40 % for links
+    and resources) remain estimates until M3-T2.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 

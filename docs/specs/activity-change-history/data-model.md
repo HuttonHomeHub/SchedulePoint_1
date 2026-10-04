@@ -312,8 +312,8 @@ entry copies **its own** activity's org (§10 O6).
 
 **Sort on `first_recorded_at`.** Entries for one activity are non-overlapping intervals: a merge only
 ever extends the latest one. `first_recorded_at` never changes, so keyset cursors stay stable during a
-merge, and a merge UPDATE touches **no indexed column**, which makes it HOT-eligible. `fillfactor` is a
-M1-T7 measurement.
+merge, and a merge UPDATE touches **no indexed column**, which makes it HOT-eligible. Measured in M1-T7: 95 % of live merges are HOT
+at the default `fillfactor`, so none is set (ADR-0174 Consequences).
 
 **Not indexed, on purpose:** `batch_id`, `actor_user_id`, recency (CQ-2 chose no age sweep), and
 `plan_id` (not stored).
