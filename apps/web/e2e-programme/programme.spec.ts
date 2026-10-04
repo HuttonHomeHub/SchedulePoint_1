@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { expect, test } from '../e2e-support/test';
 
 import {
   addActivity,

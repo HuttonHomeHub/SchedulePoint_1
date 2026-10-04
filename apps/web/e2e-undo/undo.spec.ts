@@ -1,5 +1,4 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
 
 import {
   apiActivities,
@@ -7,6 +6,7 @@ import {
   seedActivities,
   seedLink,
 } from '../e2e-copy-paste/support';
+import { expect, test } from '../e2e-support/test';
 
 import {
   addLink,

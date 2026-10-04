@@ -1,5 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 /**
  * **The narrow shell** (`docs/specs/narrow-shell-journey/`, closes `docs/TECH_DEBT.md` #172).

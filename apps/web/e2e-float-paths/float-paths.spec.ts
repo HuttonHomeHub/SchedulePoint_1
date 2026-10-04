@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from '../e2e-support/test';
 import { revealToolbarCommand } from '../e2e-support/toolbar';
 
 import {

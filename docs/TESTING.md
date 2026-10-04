@@ -673,8 +673,10 @@ journey times out on a heading. ADR-0175 makes that visible.
   not `test` from `@playwright/test`. A test whose page, or any context it opens
   with `browser.newContext()`, receives a 429 from `/api/` **fails at teardown**
   with `API rate limit hit: 429 … on GET /api/v1/me at +41.2s (ThrottlerGuard …)`,
-  even if it otherwise passed. Only the base suite (`apps/web/e2e/`) uses it so
-  far; the rest follow in the spec's M2, with a lint rule.
+  even if it otherwise passed. Every journey uses it, and `apps/web/eslint.config.js`
+  refuses a `test` imported from `@playwright/test` under `e2e*/` (`e2e-support/`
+  exempt), so `pnpm lint` is the enforcement. A suite-local `test.extend` extends
+  the shared `test`, never the stock one.
 - **The gap.** `APIRequestContext` (`page.request`, `request`) emits no `response`
   event and is not seen. In-page `fetch` is.
 - **The opt-out.** A test that provokes a 429 on purpose uses

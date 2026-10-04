@@ -1,4 +1,6 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { type Browser, type BrowserContext, type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 import { addActivity, showActivities, openNewPlan, setPlannedStart, startEditing } from './support';
 

@@ -1,4 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 /**
  * A keyboard focus ring is visible under Windows High Contrast (`docs/TECH_DEBT.md` #324).

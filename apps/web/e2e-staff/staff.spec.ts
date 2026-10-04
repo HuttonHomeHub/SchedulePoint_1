@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
 
 import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
+import { expect, test } from '../e2e-support/test';
 
 /**
  * The **staff console** journey (ADR-0086, staff-console M3).

@@ -10839,6 +10839,11 @@ never appears) rather than at an assertion. Before diagnosing the screen, count 
 **Not to be answered by raising the limit again** — that is the fourth time, and it treats the
 symptom each time while leaving the next suite to rediscover it from scratch.
 
+**Confirmed on CI, 2026-10-04:** with ADR-0175's guard on every journey (#783), CI run `37195968342` web shard 4
+failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
+runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
+holds it until spec M3.1 signs up once per worker.
+
 ### 366. Four findings from the Part C gate pass that are not defects in the diff
 
 **Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
@@ -11513,6 +11518,11 @@ the suite run locally against a default-limit API made 844 requests with **zero 
 window), and it does not exclude it. The CI trace of that run is still unread. ADR-0175's fixture (M1) makes
 the next 429 in the base suite fail by name; the other suites follow in M2. Row stays **open**; its exit
 criterion (10 consecutive green CI runs) is unchanged.
+
+**Confirmed on CI, 2026-10-04:** with ADR-0175's guard on every journey (#783), CI run `37195968342` web shard 4
+failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
+runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
+holds it until spec M3.1 signs up once per worker.
 
 ### 441. A baseline's activity count compiles to a grouped subquery the planner may not restrict to the page
 
