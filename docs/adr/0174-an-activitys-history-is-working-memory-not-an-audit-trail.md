@@ -127,7 +127,8 @@ baseline has no author) can say who changed one activity's duration, link or cra
   the UI says calculated dates are not listed and never says "audit".
 - Every new write path to an activity, link or assignment must be recorded or exempted with a reason, or
   the census fails.
-- **Measured 2026-10-04 (M1-T7), and one bar is missed.** Machine: 4 vCPU Intel Xeon @ 2.80 GHz,
+- **Measured 2026-10-04 (M1-T7), first pass — one bar missed;
+  see "Rebuilt and re-measured" below.** Machine: 4 vCPU Intel Xeon @ 2.80 GHz,
   16 GB, **PostgreSQL 16.14** (not 17; `shared_buffers` 128 MB, `fsync` and `synchronous_commit` on),
   Node 22.22, API and database on the same host, a fresh scratch database per run, two full runs. Table:
   1,000,000 entries, 1,000 per activity across 1,000 activities (710 MB heap, 140 MB indexes). Harness:
@@ -160,6 +161,24 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
     The expiry cost per history row (replacing `HISTORY_ROWS_PER_ACTIVITY = 1`) and the real entry rate
     (the spec's estimate is 0.3–0.5 KB per entry and 6–55 MB a year on a busy plan, plus 20–40 % for links
     and resources) remain estimates until M3-T2.
+- **Bars restated by the product owner, 2026-10-04.** After the first pass missed on every operation, the
+  database-architect's diagnosis (`implementation-plan.md` M1-T7) showed over 90 % of the added cost was
+  the per-statement round trip, not database work, and that the 2 ms figure had priced neither a round
+  trip nor the feature's own before/after reads. The decision: build the recorder-internal reduction
+  and the read trim, **keep the link bar at ≤ 4 ms p95**, **restate the single-object bar as ≤ 3 ms p95
+  (slow end) including the before/after reads the feature added**, add an automatic statement-count
+  check, and make no schema change, migration or database function.
+- **Rebuilt and re-measured 2026-10-04 — the single-object bar is still MISSED; the link bar passed in
+  run 1 and missed in run 2.** Machine: 4 vCPU Intel Xeon @ 2.10 GHz, 15 GB, PostgreSQL 16.14 (not 17),
+  Node 22.22, one host, a fresh scratch database per run, two runs, 1,000,000 entries; the harness
+  baseline now also omits the feature's `before` read. Added p50 / p95 ms, run 1 / run 2: activity PATCH
+  merging 5.9 / 5.6 and 7.2 / 6.0; PATCH opening an entry 7.2 / 6.5 and 7.2 / 13.9; assignment update
+  merging 5.7 / 4.3 and 5.7 / 6.0, opening 5.3 / 6.8 and 6.0 / 8.6; **link create 3.0 / 3.4 and 4.9 / 6.1**
+  (the rebuild took 2–3 ms off it: it was 6.3 / 6.9 p50 and 7.8 / 14.4 p95). Read page p95 25.3 / 26.9
+  ms first page, 21.4 / 22.3 deep (pass); 93–94 % of merge updates HOT. The four statements of a
+  single-object save measure 0.67 + 0.67 + 1.01 + 0.98 = 3.3 ms p50 in isolation against a 5.7–7.2 ms
+  request delta; the gap is unattributed. The design was not changed further and this returns to the
+  product owner. Method and the per-operation statement counts before and after are in the plan's M1-T7.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 

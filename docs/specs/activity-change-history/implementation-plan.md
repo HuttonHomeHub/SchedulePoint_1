@@ -211,8 +211,9 @@ made by the Planner is not. axe check on the open tab.
   activity with 1,000 entries in a 1M-row table; (c) added p95 of a single-activity PATCH, a link create
   (two endpoints, with the O5 locks) and an assignment update, with and without recording; (d) whether a
   merge UPDATE is HOT and whether a `fillfactor` is warranted (data-model §4). **Pass bars:** read p95
-  < 50 ms; lookup an index scan; added write cost ≤ 2 ms p95 per single-object write (≤ 4 ms for a link
-  write). A miss stops M1 and returns to database-architect.
+  < 50 ms; lookup an index scan; added write cost ≤ 3 ms p95 per single-object write, **counting the
+  before/after reads the feature added** (≤ 4 ms for a link write) — restated from 2 ms by the product
+  owner on 2026-10-04, see the status blocks below. A miss stops M1 and returns to database-architect.
 - **Complexity:** S
 - **Dependencies:** M1-T3 … M1-T6.
 - **Risks:** one machine state quoted as general (CLAUDE.md §17) → record the machine; run twice.
@@ -321,6 +322,63 @@ idx_activity_history_activity_recorded` for the probe (under a `Limit`) and for 
   three statements for a single-object write (counted with Prisma's `query` event, so it cannot drift
   with the machine). If the 2 ms figure must stand, option 2 is the route, with the honest note that
   it is marginal at p95 and the bar would still have to say whether the re-reads count.
+
+- **Product-owner decision (2026-10-04) and the rebuild.** Build options 1 and 3, keep the link bar at
+  ≤ 4 ms p95, **restate the single-object bar as ≤ 3 ms p95 (slow end) including the before/after reads
+  the feature added**, and add an automatic statement-count check. No schema change, no migration, no
+  database function (option 2 declined). Built that day:
+  - _Option 1._ Entries are written with plain parameterised SQL (`$executeRaw`, no `RETURNING`), **one
+    statement for every entry of a call** (a link's two ends included, as a data-modifying CTE over
+    `unnest`); the reference names (calendar, WBS parent, resource) are read **in the probe**, and a link
+    end names the other end from the probe's own activity rows, so a name lookup is no longer a
+    statement. The builders (`activityFieldChanges`, `assignmentChanges`, `linkWrites`) take no
+    transaction and return a `PendingChanges` (keys decided without a name, names supplied under the
+    lock). Lock order, merge rules, net-zero and every ADR-0174 decision are unchanged.
+  - _Option 3._ The version-gated update of an activity and of an assignment returns the row it wrote
+    (`updateManyAndReturn`), which is the history's "after"; the "before" read stays (ADR-0022).
+  - _Statement count._ `test/activity-history-statements.e2e-spec.ts` counts Prisma `query` events
+    between entering and leaving `record`: **three** for an activity save (new entry or merge, with or
+    without a calendar change), an assignment save, and a link create / edit / removal; **none** for a
+    save with nothing to record. It also pins the statements the write's own transaction issues
+    besides the recorder (5 activity, 2 assignment, 7 link create, 3 link edit, 3 link removal), so a
+    lookup or a re-read added beside the recorder moves a number a reader sees.
+  - _Statements added by the feature per request, before → after:_ activity PATCH 3 + before and after
+    reads = 5 → 3 + before read = **4** (a calendar or parent change added 1–2 more name reads before,
+    none now); assignment update 4 + 2 reads = 6 → **4**; link create 5 → **3**; link edit 5 + 2 reads
+    = 7 → 3 + 2 reads = 5 (the link edit's reads were left as they were); link removal 5 + 1 read = 6 →
+    **4**. (Before-figures for the PATCH, the assignment update and the link create are the diagnosis above,
+    counted from the same events; the link edit and removal before-figures are **inferred** from the
+    same statement set — the diagnosis did not run them.)
+- **Measured again 2026-10-04 (after the rebuild) — the single-object bar is still MISSED; the link bar
+  passed in run 1 and missed in run 2.** Machine: 4 vCPU Intel Xeon @ 2.10 GHz (the diagnosis machine
+  was 2.80 GHz), 15 GB, PostgreSQL 16.14 (not 17), Node 22.22, API and database on one host, a fresh
+  scratch database per run (created and dropped), 1,000,000 entries, 200 paired writes per operation
+  (150 for links), two full runs. A bare `SELECT 1` inside an interactive transaction measures
+  0.28 ms p50 / 0.44 p95 here. **The baseline changed:** the harness's "without" arm now also elides
+  the feature's `before` read (a stub on the transaction's first `activity.findFirst` /
+  `resourceAssignment.findFirst`), so the difference is everything the feature adds, as the restated
+  bar requires. The version-gated update returns the row in both arms (the pre-feature `updateMany`
+  returned a count; that difference is not separable). Added cost, p50 / p95 ms, run 1 / run 2:
+
+  | Bar (restated)                | Result                                                                                                                                                          | Verdict           |
+  | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+  | read page < 50                | first page 25.3 / 26.9 p95; non-cost 21.2 / 23.4; deep 21.4 / 22.3                                                                                              | pass              |
+  | single-object write added ≤ 3 | PATCH merge 5.9 / 5.6 and 7.2 / 6.0; PATCH new entry 7.2 / 6.5 and 7.2 / 13.9; assignment merge 5.7 / 4.3 and 5.7 / 6.0; assignment new 5.3 / 6.8 and 6.0 / 8.6 | **miss**          |
+  | link write added ≤ 4          | 3.0 / 3.4 (run 1: pass); 4.9 / 6.1 (run 2: **miss**)                                                                                                            | **miss** in run 2 |
+  | HOT (no bar)                  | 280 and 281 of 300 merge updates HOT (93 %, 94 %)                                                                                                               | none warranted    |
+
+  Link create was 6.3 / 6.9 p50 and 7.8 / 14.4 p95 before the rebuild, so the rebuild took 2–3 ms off
+  it; the single-object writes did not improve in this measurement because the baseline now removes
+  the feature's read (about 0.7 ms) and the read page, the merge lookup and the HOT result are as
+  before. **Where the time goes, measured separately (300 transactions, same machine, p50 / p95 ms):**
+  the before read 0.67 / 1.25, history lock 0.67 / 1.43, probe 1.01 / 1.42, entry write 0.98 / 1.58 —
+  the four sum to 3.3 p50 against a measured request delta of 5.7–7.2 p50. **That gap of roughly 2–4
+  ms is not attributed and is not guessed at here.** The run to run spread (PATCH new entry p95 6.5
+  then 13.9) says one pair of runs is not a stable tail. Two small savings remain unspent inside
+  option 1 and together are about 0.3 ms (naming-lookup sub-selects planned only when there is
+  something to look up: 0.3 against 0.12 ms planning; the unused CTEs of the write statement: 0.16
+  against 0.06 ms). Neither closes a 3 ms gap. Per the instruction, the design was not changed
+  further; this goes back to the product owner.
 
 #### Feature M1-D: The History tab
 

@@ -139,8 +139,12 @@ into it.
   fixing its lag within the minute produces **one** link entry on each end. Proven by API tests that
   replay the bursts.
 - The History read answers in **p95 < 50 ms** for an activity with 1,000 entries (M1-T7 measures it).
-- Recording adds **≤ 2 ms p95** to a single-object write and **≤ 25 % (and ≤ 150 ms absolute)** to a
-  2,000-row batch placement write at the 2,000-activity scale plan (M1-T7, M2-T3 measure them).
+- Recording adds **≤ 3 ms p95** to a single-object write (the slow end, **including** the before-value
+  read the feature adds) and **≤ 4 ms p95** to a link write, and **≤ 25 % (and ≤ 150 ms absolute)** to a
+  2,000-row batch placement write at the 2,000-activity scale plan (M1-T7, M2-T3 measure them). The
+  single-object bar was 2 ms until the product owner restated it on 2026-10-04, after M1-T7 priced a
+  round trip: see the plan's M1-T7. A single-object save also issues **at most three recorder
+  statements**, checked by a count (`test/activity-history-statements.e2e-spec.ts`).
 - The CPM engine's output is **byte-identical** with and without the feature (§3, parity).
 
 ---
