@@ -1,5 +1,18 @@
 # @repo/types
 
+## 0.42.0
+
+### Minor Changes
+
+- [#787](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/787) [`1deab9d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1deab9dd239c224f93664d26e13f37e9eb602e9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Record the changes that touch several activities at once, and the ones somebody else's action causes. A
+  group move, levelling's apply, a batch re-parent and a dissolve now write one history entry per activity,
+  saved together and never merged; a cross-plan link is recorded on both of its activities, each in its own
+  plan; and when an activity is deleted or restored, every surviving activity that was linked to it gets an
+  entry saying its link went or came back (the deleted activity itself stays in the audit log). The history
+  route returns these entries with their `batch` and a new `origin`, and `xlink:` items for cross-plan links.
+  A batch holds its plan's history lock exclusively and issues the same three recorder statements for one
+  row or two thousand.
+
 ## 0.41.0
 
 ### Minor Changes
