@@ -1,11 +1,11 @@
 import { activityEditor } from '../e2e-support/activity-editor';
-import { expect, test } from '../e2e-support/test';
 
+import { expect, test } from './fixtures';
 import {
   addActivity,
   createAndOpenPlan,
   ensurePen,
-  onboard,
+  enterOrg,
   openEditor,
   openProject,
   showActivities,
@@ -32,11 +32,12 @@ import {
  */
 test.describe('the create dialog and the editor agree', () => {
   test('a WBS summary is explained, and its parent picker named, identically on both', async ({
+    account,
     page,
   }) => {
     const stamp = Date.now();
-    await onboard(page, stamp);
-    await openProject(page);
+    await enterOrg(page, account.orgSlug);
+    await openProject(page, stamp);
     await createAndOpenPlan(page, 'Convergence');
     await ensurePen(page);
 
@@ -81,10 +82,10 @@ test.describe('the create dialog and the editor agree', () => {
     await expect(editor.getByLabel('WBS summary', { exact: true })).toHaveCount(0);
   });
 
-  test('a summary is offered by code and name wherever it is chosen', async ({ page }) => {
+  test('a summary is offered by code and name wherever it is chosen', async ({ account, page }) => {
     const stamp = Date.now();
-    await onboard(page, stamp);
-    await openProject(page);
+    await enterOrg(page, account.orgSlug);
+    await openProject(page, stamp);
     await createAndOpenPlan(page, 'Breakdown');
     await ensurePen(page);
 
@@ -126,10 +127,10 @@ test.describe('the create dialog and the editor agree', () => {
     await expect(editor.getByLabel('Parent WBS summary', { exact: true })).not.toHaveValue('');
   });
 
-  test('the duration type is explained the same way on both', async ({ page }) => {
+  test('the duration type is explained the same way on both', async ({ account, page }) => {
     const stamp = Date.now();
-    await onboard(page, stamp);
-    await openProject(page);
+    await enterOrg(page, account.orgSlug);
+    await openProject(page, stamp);
     await createAndOpenPlan(page, 'Duration type');
     await ensurePen(page);
     await addActivity(page, 'Excavate');

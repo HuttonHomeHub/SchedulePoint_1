@@ -1,13 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { expect, test } from '../e2e-support/test';
 
+import { expect, test } from './fixtures';
 import {
   addActivity,
   createAndOpenPlan,
+  enterOrg,
   ensurePen,
-  onboard,
   openEditor,
   openProject,
 } from './support';
@@ -25,11 +25,13 @@ import {
  * withheld) is proven by `test/activity-history.e2e-spec.ts` against the same route.
  */
 test('a planner sees their duration edit, a link on both ends and a resource in History', async ({
+  account,
   page,
 }) => {
   const stamp = Date.now();
-  const orgSlug = await onboard(page, stamp);
-  await openProject(page);
+  const { orgSlug } = account;
+  await enterOrg(page, orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Excavate');

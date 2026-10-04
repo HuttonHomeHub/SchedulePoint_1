@@ -161,6 +161,16 @@ M0 risk's assumption (a local peak is higher than CI's) is **wrong for this suit
 than 100 per 60 s where local peaked at 64. The suite carries a `TEMPORARY` 200 ceiling (rung 3)
 until M3.1's per-worker account removes it; M3.2 should not take a local 2× as conservative.
 
+### Milestone M3 status
+
+**Task 3.1 built, not yet run.** `e2e-activity-editor/fixtures.ts` adds a worker-scoped `account` fixture
+(one sign-up and onboarding per worker, saved `storageState`, applied through the `storageState` option).
+All 19 tests (15 in `activity-editor.spec.ts`, 3 in `activity-create.spec.ts`, 1 in `activity-history.spec.ts`) stopped signing up; each
+enters the shared organisation and `openProject` stamp-suffixes its client and project. No test in the
+directory mints a second actor (the Contributor journey lives in the notes suite), so none needed to.
+The `TEMPORARY` `RATE_LIMIT_LIMIT: '200'` is removed from the config. #435 and #361 stay open; the
+orchestrator's three local runs, the census and ten green CI runs are outstanding. Task 3.2 not started.
+
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.
 

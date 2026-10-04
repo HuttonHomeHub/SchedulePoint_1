@@ -1,13 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { expect, test } from '../e2e-support/test';
 
+import { expect, test } from './fixtures';
 import {
   addActivity,
   createAndOpenPlan,
   ensurePen,
-  onboard,
+  enterOrg,
   openEditor,
   openProject,
   releasePen,
@@ -29,11 +29,12 @@ import {
  *    proved end to end rather than argued from a gating table.
  */
 test('a planner edits two scopes in one session, and the second save carries the new version', async ({
+  account,
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Erect frame');
@@ -67,10 +68,13 @@ test('a planner edits two scopes in one session, and the second save carries the
   await expect(page.getByRole('cell', { name: 'Erect steel frame', exact: true })).toBeVisible();
 });
 
-test('Report progress and Steps open the same editor on the Progress tab', async ({ page }) => {
+test('Report progress and Steps open the same editor on the Progress tab', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Pour slab');
@@ -107,10 +111,13 @@ test('Report progress and Steps open the same editor on the Progress tab', async
   await expect(editor.getByRole('heading', { name: 'Weighted steps' })).toBeVisible();
 });
 
-test('weighted steps save, then take over the physical % with a reason', async ({ page }) => {
+test('weighted steps save, then take over the physical % with a reason', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Fit windows');
@@ -139,10 +146,13 @@ test('weighted steps save, then take over the physical % with a reason', async (
   await expect(editor.getByText(/Weighted steps are setting this to 60%/)).toBeVisible();
 });
 
-test('losing the pen shuts the definition scopes and leaves progress open', async ({ page }) => {
+test('losing the pen shuts the definition scopes and leaves progress open', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Strip formwork');
@@ -178,10 +188,10 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await expect(editor.getByRole('button', { name: 'Save general' })).toBeDisabled();
 });
 
-test('asks before discarding unsaved work on Escape', async ({ page }) => {
+test('asks before discarding unsaved work on Escape', async ({ account, page }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Backfill');
@@ -223,11 +233,12 @@ test('asks before discarding unsaved work on Escape', async ({ page }) => {
  *   because a link is durable the moment it is added. That is the save model, end to end.
  */
 test('a planner adds a link from the Logic tab, and the row appears in Predecessors', async ({
+  account,
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Excavate');
@@ -258,11 +269,12 @@ test('a planner adds a link from the Logic tab, and the row appears in Predecess
 });
 
 test('without the pen, the Logic tab is read-only and the server refuses a write', async ({
+  account,
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Excavate');
@@ -278,7 +290,7 @@ test('without the pen, the Logic tab is read-only and the server refuses a write
 
   // The client's gate is a courtesy; the server is the trust boundary. A direct POST is 423 even
   // though the UI would not have sent it.
-  const orgSlug = `editor-co-${stamp}`;
+  const { orgSlug } = account;
   // The plan id comes from the URL rather than a list read: there is no org-level plans route, and
   // guessing at one is how a test ends up asserting its own fetch instead of the server's rule.
   const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
@@ -307,10 +319,10 @@ test('without the pen, the Logic tab is read-only and the server refuses a write
   expect(status).toBe(423);
 });
 
-test('a resource assigned from the Resources tab persists', async ({ page }) => {
+test('a resource assigned from the Resources tab persists', async ({ account, page }) => {
   const stamp = Date.now();
-  const orgSlug = await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Pour slab');
@@ -322,7 +334,7 @@ test('a resource assigned from the Resources tab persists', async ({ page }) => 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Crew A', kind: 'LABOUR' }),
     });
-  }, orgSlug);
+  }, account.orgSlug);
 
   await openEditor(page, 'Pour slab', 'Resources');
   const editor = activityEditor(page);
@@ -360,11 +372,12 @@ test('a resource assigned from the Resources tab persists', async ({ page }) => 
  * authors — the orchestrator runs them centrally (`scripts/e2e-local.sh web:activity-editor`).
  */
 test('J2 — a discarded draft leaves nothing armed for the next opening', async ({
+  account,
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Backfill');
@@ -405,10 +418,13 @@ test('J2 — a discarded draft leaves nothing armed for the next opening', async
   await expect(page.getByRole('cell', { name: 'Backfill', exact: true })).toBeVisible();
 });
 
-test('a clean Close returns focus to the control that opened the editor', async ({ page }) => {
+test('a clean Close returns focus to the control that opened the editor', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Compact fill');
@@ -430,10 +446,13 @@ test('a clean Close returns focus to the control that opened the editor', async 
  * the product reaches. Both are acceptable; a third — editor gone with a confirmation armed for the
  * next opening, or dirty work lost with no prompt — is the defect.
  */
-test('Escape, Escape, Escape on a dirty editor ends in a consistent state', async ({ page }) => {
+test('Escape, Escape, Escape on a dirty editor ends in a consistent state', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Screed');
@@ -482,11 +501,12 @@ test('Escape, Escape, Escape on a dirty editor ends in a consistent state', asyn
 });
 
 test('J4 — a Progress draft and a weighted step survive a visit to another tab', async ({
+  account,
   page,
 }) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Fit windows');
@@ -523,10 +543,13 @@ test('J4 — a Progress draft and a weighted step survive a visit to another tab
  * alert. That alert used to survive Cancel, Discard and the next opening; the form is now built per
  * opening, so the reopened dialog is clean and creating from it succeeds.
  */
-test('J5 — New activity opens clean after a failed submit was discarded', async ({ page }) => {
+test('J5 — New activity opens clean after a failed submit was discarded', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await showActivities(page);
@@ -570,10 +593,13 @@ test('J5 — New activity opens clean after a failed submit was discarded', asyn
  * J1 is a regression guard: `fill` lands in the opening's first task and the value must still be
  * there to save. The jsdom window probe is the proof; M0 could not show a driver reaching it.
  */
-test('J1 — a name typed the moment the editor opens is the name that saves', async ({ page }) => {
+test('J1 — a name typed the moment the editor opens is the name that saves', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Set out');
@@ -590,10 +616,13 @@ test('J1 — a name typed the moment the editor opens is the name that saves', a
   await expect(page.getByRole('cell', { name: 'Set out grid', exact: true })).toBeVisible();
 });
 
-test('J3 — "Saved." belongs to the opening that saved, not the next one', async ({ page }) => {
+test('J3 — "Saved." belongs to the opening that saved, not the next one', async ({
+  account,
+  page,
+}) => {
   const stamp = Date.now();
-  await onboard(page, stamp);
-  await openProject(page);
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
   await ensurePen(page);
   await addActivity(page, 'Excavate');

@@ -10841,8 +10841,10 @@ symptom each time while leaving the next suite to rediscover it from scratch.
 
 **Confirmed on CI, 2026-10-04:** with ADR-0175's guard on every journey (#783), CI run `37195968342` web shard 4
 failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
-runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
-holds it until spec M3.1 signs up once per worker.
+runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. Spec M3.1 (rung 2) has since
+signed up once per worker (`e2e-activity-editor/fixtures.ts`) and removed the `TEMPORARY` 200 ceiling; the 19
+tests no longer sign up and name their own client/project/plan. Row stays **open**: no CI run has yet shown the
+remedy working, and the 10-consecutive-green exit criterion has not started.
 
 ### 366. Four findings from the Part C gate pass that are not defects in the diff
 
@@ -11521,8 +11523,10 @@ criterion (10 consecutive green CI runs) is unchanged.
 
 **Confirmed on CI, 2026-10-04:** with ADR-0175's guard on every journey (#783), CI run `37195968342` web shard 4
 failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the throttler is the cause on CI
-runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
-holds it until spec M3.1 signs up once per worker.
+runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. Spec M3.1 (rung 2) has since
+signed up once per worker (`e2e-activity-editor/fixtures.ts`) and removed the `TEMPORARY` 200 ceiling; the 19
+tests no longer sign up and name their own client/project/plan. Row stays **open**: no CI run has yet shown the
+remedy working, and the 10-consecutive-green exit criterion has not started.
 
 ### 440. `updatePlacements` and the recalculation write may deadlock each other
 
