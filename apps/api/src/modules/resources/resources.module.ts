@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 
+import { ActivityHistoryModule } from '../activity-history/activity-history.module';
 import { CalendarsModule } from '../calendars/calendars.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 
@@ -29,7 +30,7 @@ import { ResourcesService } from './resources.service';
  * is injected globally instead (see `PlanLockModule`'s `@Global`).
  */
 @Module({
-  imports: [OrganizationsModule, forwardRef(() => CalendarsModule)],
+  imports: [OrganizationsModule, forwardRef(() => CalendarsModule), ActivityHistoryModule],
   controllers: [ResourcesController, ResourceAssignmentsController],
   providers: [
     ResourcesService,

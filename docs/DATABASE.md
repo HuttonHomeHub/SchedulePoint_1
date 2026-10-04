@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 34
-> models across 72 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 35
+> models across 73 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1464,6 +1464,47 @@ table create).
   enforces shape, not value equality — a unit-tested service invariant, like every
   denormalised-scope sibling).
 
+### ActivityHistoryEntry: an activity's change history (ADR-0174)
+
+`activity_history_entries` answers "who changed this, and when?" for one activity's own fields, its
+links and its resource assignments. It is **working memory, not an audit trail**, and the difference
+is structural: `audit_events` refuses `UPDATE` and `DELETE` in the database, while this table is an
+**ordinary mutable table** — a merge `UPDATE`s an entry, a net-zero change `DELETE`s it, expiry
+`DELETE`s it — with no trigger, so it is not tamper-resistant and must never be called an audit
+trail. Departures from the house template, each deliberate: no `version` (no client edits a row;
+recorders are serialised by the history lock), no `deleted_at` (a row lives exactly as long as its
+activity), no `created_by`/`updated_by`/`created_at`/`updated_at` (`actor_user_id` is the attribution;
+`first_recorded_at`/`last_recorded_at` are the times).
+
+- **One entry** is one person's continuous work on one activity in one scope (`DEFINITION`,
+  `PROGRESS`, `PLACEMENT`, `LOGIC`, `RESOURCES`). `changes` is a JSONB **object keyed by item** — a field
+  name, `link:<id>`, `xlink:<id>` or `assignment:<id>` — each `{ from, to }`, so a merge is "keep
+  `from`, overwrite `to`". Quantities are exact: decimals are canonical fixed-4 strings, a description is
+  `{ len, h }` (never the text). The key vocabulary is persisted: **add, never rename**.
+- **Six CHECKs, in the migration only** (Prisma cannot express them): `changes` is a non-empty object
+  (`ck_activity_history_changes_object`), at most 32 KiB uncompressed
+  (`ck_activity_history_changes_size`, derived in data-model §2), `edit_count >= 1`, `last_recorded_at >=
+first_recorded_at`, `batch_id`/`batch_size` set together, and the fail-closed
+  `ck_activity_history_origin` — a label added to the origin enum without a branch there is rejected.
+- **Foreign keys are `RESTRICT`, not `CASCADE`.** A cascade runs uncounted inside `DELETE FROM
+activities`, so the expiry budget could not see it. The three permanent-deletion sites therefore name
+  the table first: the ADR-0096 expiry runner (counted, charged to the run's activity budget, reported
+  as `activityHistoryCount` on `hierarchy.expired`), the interchange compensation, and the test helper
+  `test/clear-activity-tree.ts`, which asks `Prisma.dmmf` for the children of `Activity` rather than
+  listing them. **Rollback hazard:** a pre-feature image run after entries exist fails expiry and import
+  compensation with `23503` on plans that have history until the image moves forward; nothing is lost
+  and expiry ships disabled.
+- **Concurrency is a two-level advisory lock** (`common/db/activity-history-lock.ts`), not row locks:
+  plans shared then activities exclusive, ascending, taken once as the transaction's last lock, with
+  times from `clock_timestamp()` read under it. ADR-0174 D4 states why it cannot deadlock.
+- **Two full indexes.** `idx_activity_history_activity_recorded (activity_id, first_recorded_at DESC, id
+DESC)` serves the latest-entry probe, the keyset read page, the `activity_id` FK `RESTRICT` check and
+  the runner's `activity_id IN (…)` delete — `first_recorded_at` never changes, so a merge `UPDATE`
+  touches no indexed column. `idx_activity_history_organization_id (organization_id)` serves the
+  organisation FK check. Nothing else is indexed on purpose: not `batch_id`, not `actor_user_id`, not
+  recency (no age sweep, CQ-2).
+- **No `plan_id`.** Bulk removal works from activity ids, which the runner already resolves.
+
 ### PlanShare: External-Guest per-plan share links (ADR-0051)
 
 The `plan_shares` table (Stage F, ADR-0051) is the grant behind the fifth product role
@@ -1790,7 +1831,7 @@ keyed on a migration's `finished_at`:
 - **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
   `finished_at`, and every matching plan computed before then would be recalculated again. That is
   harmless but unrequested.
-- **The #421 pending read, measured** (PostgreSQL 16.13, all 72 migrations applied, 10
+- **The #421 pending read, measured** (PostgreSQL 16.13, all `72 migrations` applied, 10
   organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
   plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
   the fixture's arithmetic). The query is the one the M2 builder brief specifies: the marker as a

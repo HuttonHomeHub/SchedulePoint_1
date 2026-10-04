@@ -140,7 +140,7 @@ describe.skipIf(!hasDatabase)('WBS re-parent race (below HTTP)', () => {
     const b = await summary('B');
 
     const me = await agent.get('/api/v1/me').expect(200);
-    const principal = new Principal(me.body.data.id as string, [
+    const principal = new Principal(me.body.data.user.id as string, [
       { organizationId: orgId, role: 'PLANNER', permissions: permissionsForRole('PLANNER') },
     ]);
 

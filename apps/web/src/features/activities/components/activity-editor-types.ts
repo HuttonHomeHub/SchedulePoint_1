@@ -74,6 +74,12 @@ export interface ActivityEditorDialogProps {
    * Absent ⇒ no Notes tab, which is what a host without the flag wants.
    */
   notesSlot?: React.ReactNode;
+  /**
+   * The **History** tab's panel (ADR-0174), passed by the composition root because it needs the plan's
+   * calendars and currency and this feature must not import the history feature sideways (it reads
+   * this feature's labels). Absent ⇒ no History tab. Unflagged: ADR-0088 D1.
+   */
+  historySlot?: React.ReactNode;
 }
 
 /** What the frame can ask of the session it hosts: close the way the footer Close does. */

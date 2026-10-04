@@ -212,6 +212,9 @@ model Organization {
   // the link; the row dies with the link's home (successor) plan. `xplan` only keeps the field
   // inside this block's column width, as `fmDateMigrations` does.
   xplanLagMigrations   CrossPlanLagMigration[]
+  // Per-activity change history (ADR-0174). organization_id is copied from the activity row
+  // inside the recording transaction, never from the request — the ActivityStep pattern.
+  activityHistory      ActivityHistoryEntry[]
 
   @@map("organizations")
 }
@@ -1525,6 +1528,11 @@ model Activity {
   // activity sweeps its active notes by activity_id under the same delete_batch_id
   // (HierarchyLifecycleService, Task 1.4) — the incident-dependency / step precedent.
   notes Note[]
+
+  // The change history of this activity (ADR-0174). RESTRICT FK: a row lives exactly as long
+  // as its activity, and every hard-delete path names the table explicitly before deleting
+  // activities — see ActivityHistoryEntry for why not CASCADE.
+  historyEntries ActivityHistoryEntry[]
 
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
@@ -3524,6 +3532,95 @@ model ActivityStep {
   @@index([activityId], map: "idx_activity_steps_activity_id_fk")
   @@index([organizationId])
   @@map("activity_steps")
+}
+
+// ---------------------------------------------------------------------------
+// Per-activity change history (ADR-0174; docs/specs/activity-change-history/data-model.md).
+// ---------------------------------------------------------------------------
+
+/// The write scope an entry records — the route's scope, not the field's (data-model §9 item 15).
+/// All five labels ship in the table's initial CREATE TYPE, so the epic needs no
+/// `ALTER TYPE … ADD VALUE` (which would cost two migrations: Postgres cannot use a new label
+/// in the transaction that added it).
+enum ActivityHistoryScope {
+  DEFINITION
+  PROGRESS
+  PLACEMENT
+  LOGIC
+  RESOURCES
+
+  @@map("activity_history_scope")
+}
+
+/// Why an entry exists that the actor did not make directly to this activity (a knock-on).
+/// NULL on every ordinary entry. Each label implies one scope and a batch — enforced by the
+/// fail-closed ck_activity_history_origin, so a label added here without a branch there is
+/// REJECTED, not admitted.
+enum ActivityHistoryOrigin {
+  /// A link to this activity was removed because its other end was deleted.
+  ACTIVITY_DELETED
+  /// … and came back when that end was restored.
+  ACTIVITY_RESTORED
+  /// This activity's WBS parent changed because its summary was dissolved.
+  SUMMARY_DISSOLVED
+
+  @@map("activity_history_origin")
+}
+
+/// One person's continuous work on one activity in one write scope (ADR-0174 D2).
+/// An ORDINARY mutable table: a merge UPDATEs it, a net-zero edit DELETEs it, expiry DELETEs it.
+/// It is NOT an audit trail and carries no triggers. Departures from the house template, each
+/// deliberate:
+/// 1. No `version` — no client edits a row; recorders are serialised by the transaction-scoped
+/// `activity-history` advisory lock (data-model §4.1), which the migration header restates.
+/// 2. No `deleted_at` / `delete_batch_id` — a row lives exactly as long as its activity;
+/// soft-deleting the activity leaves its history untouched, so restore needs nothing.
+/// 3. No `created_by` / `updated_by` — `actor_user_id` IS the attribution.
+/// 4. No `created_at` / `updated_at` — `first_recorded_at` / `last_recorded_at` are, and they
+/// are `clock_timestamp()` read under the lock, not `now()` (data-model §4.2).
+/// Raw-SQL CHECKs, migration only (Prisma cannot express them): ck_activity_history_changes_object,
+/// ck_activity_history_changes_size (32,768 B), ck_activity_history_edit_count_positive,
+/// ck_activity_history_recorded_order, ck_activity_history_batch_pair, ck_activity_history_origin.
+model ActivityHistoryEntry {
+  id               String                 @id @default(uuid(7)) @db.Uuid
+  /// Copied from the activity row inside the write transaction, never from the request (R5).
+  organizationId   String                 @map("organization_id") @db.Uuid
+  activityId       String                 @map("activity_id") @db.Uuid
+  /// Opaque Better Auth id. No FK — the house attribution convention (ADR-0085 D1): erasure
+  /// scrubs the users row in place and the entry resolves to the tombstone at read time.
+  actorUserId      String                 @map("actor_user_id")
+  scope            ActivityHistoryScope
+  /// clock_timestamp() read UNDER the history lock, strictly increasing per activity. Set on
+  /// INSERT and never changed, so it is the keyset sort key and a merge stays HOT-eligible.
+  firstRecordedAt  DateTime               @map("first_recorded_at") @db.Timestamptz(3)
+  /// clock_timestamp() of the latest merged save, under the same lock.
+  lastRecordedAt   DateTime               @map("last_recorded_at") @db.Timestamptz(3)
+  editCount        Int                    @default(1) @map("edit_count")
+  /// Set together for a multi-activity write; batchSize = entries the write recorded.
+  batchId          String?                @map("batch_id") @db.Uuid
+  batchSize        Int?                   @map("batch_size")
+  origin           ActivityHistoryOrigin?
+  /// False iff every change in `changes` is cost-only, so a reader without cost:read skips
+  /// cost-only rows inside the keyset scan rather than post-filtering a short page.
+  hasNonCostChange Boolean                @map("has_non_cost_change")
+  /// { "<itemKey>": <item>, … } — field keys plus `link:` / `xlink:` / `assignment:` items.
+  /// The key vocabulary is persisted: a key may be added, never renamed (data-model §2).
+  changes          Json                   @db.JsonB
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  // RESTRICT, not CASCADE: the expiry runner and interchange compensation delete this table
+  // explicitly and COUNT it, so the expiry budget can charge for it, and the expiry's DMMF
+  // census fails until they do (data-model §3). A cascade would hide the cost inside the
+  // activities DELETE.
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Restrict)
+
+  // Full index, so declared here (TECH_DEBT #54 is about PARTIAL ones). Serves the latest-entry
+  // probe, the read page's keyset `(first_recorded_at, id) < ($t, $id)`, the activity FK's
+  // RESTRICT check, and the expiry's `activity_id IN (…)` delete.
+  @@index([activityId, firstRecordedAt(sort: Desc), id(sort: Desc)], map: "idx_activity_history_activity_recorded")
+  // Backs the organization FK's RESTRICT check (DATABASE.md "index every FK").
+  @@index([organizationId], map: "idx_activity_history_organization_id")
+  @@map("activity_history_entries")
 }
 
 // A Note — one authored, timestamped entry in an entity's append-accumulating

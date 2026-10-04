@@ -26,6 +26,21 @@ import { deleteExpiredScope, type ExpiryCounts } from './hierarchy-expiry.runner
 const ACTIVITY_BUDGET_PER_RUN = 20_000;
 
 /**
+ * How many history rows cost as much, in the activity budget, as one activity (ADR-0174 D8).
+ *
+ * **1 is deliberately pessimistic and unmeasured**: a history row is one indexed delete with no
+ * child of its own, so it is almost certainly cheaper than an activity, which is why a ratio above
+ * 1 is expected. It stays at 1 until M3-T1 measures the real per-row cost, because charging too
+ * much only slows a backlog's drain while charging too little overruns the 60 s batch transaction.
+ */
+export const HISTORY_ROWS_PER_ACTIVITY = 1;
+
+/** What one expired scope costs the run's activity budget: its activities plus its history rows. */
+function budgetCharge(counts: ExpiryCounts): number {
+  return counts.activities + Math.ceil(counts.activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY);
+}
+
+/**
  * The most scopes one run will expire, however small each one is.
  *
  * The activity budget bounds the **big-batch** case and says nothing about the mirror one, which is
@@ -235,7 +250,7 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
         projectIds,
         planIds: planRows.map((p) => p.id),
       });
-      if (counts) activityBudget -= counts.activities;
+      if (counts) activityBudget -= budgetCharge(counts);
     }
 
     for (const project of projects) {
@@ -251,7 +266,7 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
         projectIds: [project.id],
         planIds: planRows.map((p) => p.id),
       });
-      if (counts) activityBudget -= counts.activities;
+      if (counts) activityBudget -= budgetCharge(counts);
     }
 
     for (const plan of plans) {
@@ -263,7 +278,7 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
         projectIds: [],
         planIds: [plan.id],
       });
-      if (counts) activityBudget -= counts.activities;
+      if (counts) activityBudget -= budgetCharge(counts);
     }
   }
 
@@ -312,6 +327,7 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
                 projectCount: result.projects,
                 planCount: result.plans,
                 activityCount: result.activities,
+                activityHistoryCount: result.activityHistoryEntries,
               },
             },
             tx,

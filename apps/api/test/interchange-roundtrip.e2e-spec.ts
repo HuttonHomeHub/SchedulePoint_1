@@ -11,6 +11,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -109,7 +110,7 @@ describe.skipIf(!hasDatabase)('Interchange round-trip fidelity (e2e)', () => {
     // reset depends on what ran before it in the shared database, which is the #119a shape.
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planLock.deleteMany();
     // Baselines and shares hold the plan too. The database is shared with every other e2e file, so
     // this must clear whatever THEY left as well as its own — the first run tripped on a baseline

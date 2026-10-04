@@ -12,6 +12,8 @@ import {
 } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { noChanges } from '../activity-history/activity-history.pending';
+import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -231,7 +233,7 @@ describe('ActivitiesService', () => {
       findActiveByIdInOrg: vi.fn(),
       findByIdInOrg: vi.fn(),
       findManyActiveByPlan: vi.fn(),
-      updateIfVersionMatches: vi.fn(),
+      updateIfVersionMatches: vi.fn().mockResolvedValue({}),
       findPlanWbsTree: vi.fn().mockResolvedValue([]),
       updateParents: vi.fn(),
       updatePlacements: vi.fn(),
@@ -262,12 +264,15 @@ describe('ActivitiesService', () => {
           $executeRaw: txExecuteRaw,
           activity: {
             findFirst: txParentFindFirst,
+            // The history diff's after-read (ADR-0174); the stub recorder below ignores its value.
+            findFirstOrThrow: vi.fn().mockResolvedValue({}),
             findMany: txActivityFindMany,
             count: txActivityCount,
           },
           activityDependency: { count: txDependencyCount },
           resourceAssignment: {
             findFirst: txDrivingFindFirst,
+            findFirstOrThrow: vi.fn().mockResolvedValue({}),
             updateMany: txDrivingUpdateMany,
           },
         }),
@@ -292,6 +297,13 @@ describe('ActivitiesService', () => {
     // stub exists so the unit specs can keep asserting the scheduling behaviour they were written
     // for.
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    // The history recorder is proven against a real table by `activity-history.e2e-spec.ts`; the
+    // unit specs only need it to be callable inside the transaction.
+    const history = {
+      record: vi.fn().mockResolvedValue(undefined),
+      activityFieldChanges: vi.fn().mockReturnValue(noChanges()),
+      assignmentChanges: vi.fn().mockReturnValue(noChanges()),
+    };
     service = new ActivitiesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
@@ -301,6 +313,7 @@ describe('ActivitiesService', () => {
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
+      history as unknown as ActivityHistoryRecorder,
       logger,
     );
   });
@@ -633,7 +646,7 @@ describe('ActivitiesService', () => {
     it('a Contributor reporting progress never sees cost (updateProgress fails closed)', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(withCost);
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       // A Contributor holds activity:update_progress but NOT cost:read.
       const res = await service.updateProgress(
         principalWith(['activity:update_progress']),
@@ -649,7 +662,7 @@ describe('ActivitiesService', () => {
   describe('update', () => {
     it('clears code/description on an empty string and constraint on null', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
         code: '',
         description: '',
@@ -671,7 +684,7 @@ describe('ActivitiesService', () => {
 
     it('patches Earned-Value inputs and clears the nullable ones on null (EV1, ADR-0042)', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
         percentCompleteType: 'UNITS',
         physicalPercentComplete: null,
@@ -693,7 +706,7 @@ describe('ActivitiesService', () => {
 
     it('coerces duration to 0 when the type is changed to a milestone', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
         type: 'FINISH_MILESTONE',
         version: 1,
@@ -717,7 +730,7 @@ describe('ActivitiesService', () => {
 
     it('409s on a stale version', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      activities.updateIfVersionMatches.mockResolvedValue(0);
+      activities.updateIfVersionMatches.mockResolvedValue(null);
       await expect(
         service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { version: 1 }),
       ).rejects.toBeInstanceOf(ConflictError);
@@ -743,7 +756,7 @@ describe('ActivitiesService', () => {
           .mockResolvedValueOnce(activity())
           .mockResolvedValueOnce(activity({ id: 'sum-1', type: 'WBS_SUMMARY', parentId: null }))
           .mockResolvedValue(activity({ parentId: 'sum-1' }));
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
       }
 
       it('takes the plan write lock when re-parenting to a summary', async () => {
@@ -757,7 +770,7 @@ describe('ActivitiesService', () => {
 
       it('takes NO plan lock on an ordinary edit that omits parentId', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 });
         expect(locksTaken()).not.toContain('dependency-plan');
       });
@@ -766,7 +779,7 @@ describe('ActivitiesService', () => {
       // pay for the lock either.
       it('takes NO plan lock when clearing the parent to top level', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
           parentId: null,
           version: 1,
@@ -831,7 +844,7 @@ describe('ActivitiesService', () => {
         activities.findActiveByIdInOrg.mockResolvedValue(
           activity({ type: 'WBS_SUMMARY', parentId: null }),
         );
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txActivityCount.mockResolvedValue(0);
         await expect(
           service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'TASK', version: 1 }),
@@ -841,7 +854,7 @@ describe('ActivitiesService', () => {
 
       it('accepts a change INTO WBS_SUMMARY when it has no active dependencies', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDependencyCount.mockResolvedValue(0);
         await expect(
           service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
@@ -854,7 +867,7 @@ describe('ActivitiesService', () => {
 
       it('runs neither count when type is unchanged', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { name: 'New', version: 1 });
         expect(txActivityCount).not.toHaveBeenCalled();
         expect(txDependencyCount).not.toHaveBeenCalled();
@@ -864,14 +877,14 @@ describe('ActivitiesService', () => {
         activities.findActiveByIdInOrg.mockResolvedValue(
           activity({ type: 'WBS_SUMMARY', parentId: null }),
         );
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, { type: 'TASK', version: 1 });
         expect(locksTaken()).toContain('dependency-plan');
       });
 
       it('takes the plan write lock for a type change into WBS_SUMMARY', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity({ type: 'TASK' }));
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
           type: 'WBS_SUMMARY',
           version: 1,
@@ -899,7 +912,7 @@ describe('ActivitiesService', () => {
         activities.findActiveByIdInOrg.mockResolvedValue(
           activity({ durationType: 'FIXED_DURATION_AND_UNITS_TIME' }),
         );
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDrivingFindFirst.mockResolvedValue(driving({ unitsPerHour: new Prisma.Decimal(4) }));
 
         // 10 working days → 14 400 min → D = 240 h; U := D × R = 240 × 4 = 960 (duration held).
@@ -924,7 +937,7 @@ describe('ActivitiesService', () => {
 
       it('recomputes the driving assignment’s RATE on a duration edit for a FIXED_UNITS activity', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity({ durationType: 'FIXED_UNITS' }));
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         // U = 300 held; edit duration to 10 d → D = 240 h; R := U / D = 300 / 240 = 1.25.
         txDrivingFindFirst.mockResolvedValue(
           driving({ budgetedUnits: new Prisma.Decimal(300), unitsPerHour: new Prisma.Decimal(30) }),
@@ -944,7 +957,7 @@ describe('ActivitiesService', () => {
 
       it('leaves the assignment untouched when there is no driving assignment (parity)', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDrivingFindFirst.mockResolvedValue(null); // no driver
 
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
@@ -961,7 +974,7 @@ describe('ActivitiesService', () => {
 
       it('leaves the assignment untouched when the driving assignment has no rate (parity)', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDrivingFindFirst.mockResolvedValue(driving({ unitsPerHour: null }));
 
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
@@ -974,7 +987,7 @@ describe('ActivitiesService', () => {
 
       it('does NOT recompute when only the durationType is set (US-1 — no duration edit)', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
 
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
           durationType: 'FIXED_UNITS',
@@ -992,7 +1005,7 @@ describe('ActivitiesService', () => {
 
       it('does NOT recompute when the edit makes the activity a (zero-duration) milestone', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(activity());
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDrivingFindFirst.mockResolvedValue(driving());
 
         await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
@@ -1008,7 +1021,7 @@ describe('ActivitiesService', () => {
         activities.findActiveByIdInOrg.mockResolvedValue(
           activity({ durationType: 'FIXED_DURATION_AND_UNITS_TIME' }),
         );
-        activities.updateIfVersionMatches.mockResolvedValue(1);
+        activities.updateIfVersionMatches.mockResolvedValue({});
         txDrivingFindFirst.mockResolvedValue(driving());
         txDrivingUpdateMany.mockResolvedValue({ count: 0 }); // stale assignment version
 
@@ -1360,7 +1373,7 @@ describe('ActivitiesService', () => {
 
     it('derives IN_PROGRESS from a partial percentage', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
         percentComplete: 40,
         version: 1,
@@ -1374,7 +1387,7 @@ describe('ActivitiesService', () => {
     });
 
     it('derives COMPLETE from 100% and IN_PROGRESS from a start date at 0%', async () => {
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
 
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
       await service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
@@ -1429,7 +1442,7 @@ describe('ActivitiesService', () => {
     });
 
     it('repairs a complete activity with no actual finish to the data date (M2 N08)', async () => {
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
       const { warnings } = await service.updateProgress(
         principalWith(PROGRESS),
@@ -1454,7 +1467,7 @@ describe('ActivitiesService', () => {
     });
 
     it('repairs remaining > 0 on a complete activity to 0 (M2 N18)', async () => {
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
       const { warnings } = await service.updateProgress(
         principalWith(PROGRESS),
@@ -1478,7 +1491,7 @@ describe('ActivitiesService', () => {
     });
 
     it('converts remaining days to stored minutes for an in-progress activity (M2), no warnings', async () => {
-      activities.updateIfVersionMatches.mockResolvedValue(1);
+      activities.updateIfVersionMatches.mockResolvedValue({});
       activities.findActiveByIdInOrg.mockResolvedValue(activity({ percentComplete: 0 }));
       const { warnings } = await service.updateProgress(
         principalWith(PROGRESS),
@@ -1510,7 +1523,7 @@ describe('ActivitiesService', () => {
 
     it('409s on a stale version', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
-      activities.updateIfVersionMatches.mockResolvedValue(0);
+      activities.updateIfVersionMatches.mockResolvedValue(null);
       await expect(
         service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
           percentComplete: 50,

@@ -17,6 +17,7 @@ describe('openActivityEditor', () => {
     ['logic', { activityId: 'act-1', tab: 'logic' }],
     ['resources', { activityId: 'act-1', tab: 'resources' }],
     ['notes', { activityId: 'act-1', tab: 'notes', focusNotes: true }],
+    ['history', { activityId: 'act-1', tab: 'history' }],
   ];
 
   it.each(CASES)('maps %s to its intent', (purpose, expected) => {

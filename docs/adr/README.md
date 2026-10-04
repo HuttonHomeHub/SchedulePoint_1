@@ -197,4 +197,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0171](0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md)                      | Routes load when they are opened, and the chunk groups that keep that fast                 | Accepted           |
 | [0172](0172-a-soft-delete-filter-is-stated-at-the-query.md)                                     | A soft-delete filter is stated at the query, and the build refuses a read that states none | Accepted           |
 | [0173](0173-a-columns-width-is-the-planners.md)                                                 | A column's width is the planner's, kept on their device, and its drag has a typed twin     | Accepted           |
+| [0174](0174-an-activitys-history-is-working-memory-not-an-audit-trail.md)                       | An activity's history is working memory, not an audit trail                                | Accepted           |
 | [0175](0175-a-spent-budget-is-reported-as-a-spent-budget.md)                                    | A spent budget is reported as a spent budget                                               | Accepted           |

@@ -12,6 +12,7 @@ import {
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
+import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -230,12 +231,28 @@ describe('DependenciesService', () => {
     // every assertion below reads the arithmetic it always did.
     calendars = { findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()) };
     lifecycle = { cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }) };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    // The history reads the link inside the update's transaction (ADR-0174 D4); the stub recorder
+    // below ignores what they return, so a plain dependency row will do.
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({
+          activityDependency: {
+            findFirst: vi.fn().mockResolvedValue(dependency()),
+            findFirstOrThrow: vi.fn().mockResolvedValue(dependency()),
+          },
+        }),
+      ),
+    };
     const editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     // Stubbed for the reason the activities spec gives: the producers are proven against a real
     // table in the e2e suite, and a fake here could only assert that a fake was called.
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    // Proven against a real table in `activity-history.e2e-spec.ts`; here it only has to be callable.
+    const history = {
+      record: vi.fn().mockResolvedValue(undefined),
+      linkWrites: vi.fn().mockReturnValue([]),
+    };
     service = new DependenciesService(
       organizations as unknown as OrganizationsService,
       plans as unknown as PlanRepository,
@@ -246,6 +263,7 @@ describe('DependenciesService', () => {
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
+      history as unknown as ActivityHistoryRecorder,
       logger,
     );
   });
@@ -449,6 +467,7 @@ describe('DependenciesService', () => {
         1,
         expect.objectContaining({ lagCalendar: 'TWENTY_FOUR_HOUR' }),
         expect.anything(),
+        expect.anything(), // the transaction client the history is recorded in (ADR-0174)
       );
     });
   });

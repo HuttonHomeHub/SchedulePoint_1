@@ -590,6 +590,12 @@ keep `main` releasable.
   > and Predecessors by typing in `View ▾` or by dragging a header edge; Activity gives up the room and the
   > chart stays put; widths are remembered on the device and the printed programme keeps its own. The
   > backlog said the grid had no resize handle for a month after the table/chart divider shipped.
+  > **Per-activity change history — first milestone built 2026-10-03** (**ADR-0174**,
+  > `docs/specs/activity-change-history/`). "Who changed this, and when?" is answered from a new
+  > **History** tab in the activity editor for an activity's own fields, its links (on both ends) and its
+  > resource assignments, with consecutive saves merged and money withheld from anyone without
+  > `cost:read`. It is working memory, not an audit trail. Group moves, batch re-parent, dissolve,
+  > cross-plan links and the knock-on effects of deleting something else are the second milestone.
 
 ## Delivered — operations & supportability
 

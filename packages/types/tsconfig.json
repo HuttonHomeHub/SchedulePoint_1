@@ -1,5 +1,9 @@
 {
-  "extends": "@repo/config/tsconfig/base.json",
+  // Extended via a direct relative path (not the "@repo/config" package name): Vite's dependency
+  // optimizer looks this file up once `dist/index.js` re-exports a sibling module, and its Oxc
+  // resolver can't follow a tsconfig `extends` through pnpm's node_modules symlink (mirrors
+  // packages/interchange). tsc resolves either form.
+  "extends": "../config/tsconfig/base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist"

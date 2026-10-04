@@ -8,7 +8,7 @@ import type { ActivityFormValues } from '../schemas/activity-schemas';
 import { useCreateActivity, useDeleteActivity, useUpdateActivity } from './use-activities';
 
 import { apiFetch } from '@/lib/api/client';
-import { activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
+import { activityHistoryKeys, activityKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -41,6 +41,17 @@ describe('use-activities invalidation shapes (#24e)', () => {
         JSON.stringify(activityKeys.detail('acme', 'a1')),
       ]),
     );
+  });
+
+  it('useUpdateActivity also invalidates that activity’s history (ADR-0174)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, 'invalidateQueries').mockResolvedValue();
+    const { result } = renderHook(() => useUpdateActivity('acme', 'p1'), { wrapper: wrapper(qc) });
+
+    await result.current.mutateAsync({ activityId: 'a1', version: 1, ...FORM });
+
+    const keys = invalidate.mock.calls.map(([arg]) => JSON.stringify(arg?.queryKey));
+    expect(keys).toContain(JSON.stringify(activityHistoryKeys.byActivity('acme', 'a1')));
   });
 
   it('useCreateActivity invalidates the list + baseline variance', async () => {

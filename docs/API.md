@@ -624,6 +624,47 @@ enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
 v1). The response carries `authorId`, the server-resolved `authorName` (or null),
 and `edited` (true once the body has been revised).
 
+### Activity change history (ADR-0174)
+
+"Who changed this, and when?" for one activity's own fields, its **links** (recorded on both ends)
+and its **resource assignments**. It is **working memory, not an audit trail**: consecutive saves by
+one person in one scope merge into one entry (60 s quiet gap, 10 min span), a change undone inside
+that window leaves no entry, and the table is not tamper-resistant. Recorded items are **inputs
+only** — engine-calculated dates and flags, a link's `is_driving` and the derived status never appear
+— and a failed write records nothing, because the entry is written in the write's own transaction.
+
+| Method | Path                               | Notes                                                                                                                                 |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/activities/:activityId/history` | The activity's history, newest-first, keyset-paginated · 404 foreign / deleted activity · 422 bad cursor or `limit`. `activity:read`. |
+
+`limit` is 1–100 (default 50); `cursor` is opaque. **A page may be short** — entries a reader may not see are removed after the scan — so follow `meta.hasMore`, never the page length. The response is the usual `{ data, meta }`:
+
+- `data[]` — `{ id, actor: { id, name }, scope, firstRecordedAt, lastRecordedAt, editCount, batch, origin,
+changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `RESOURCES`. `actor.name` is
+  resolved at read time, so an erased user reads as the anonymised tombstone (ADR-0085).
+- `changes` is an object **keyed by item**: a field name (`durationMinutes`, `name`, …) holding
+  `{ from, to }`; `link:<id>` holding `{ dir: 'IN' | 'OUT', other: { id, code, name }, from, to }`; and
+  `assignment:<id>` holding `{ resource: { id, code, name }, from, to }`. For a link or assignment,
+  `from: null` means **added** and `to: null` means **removed**, and the other end or resource is
+  named **as it was when recorded** — a later rename never rewrites an entry. Quantities on an
+  assignment are canonical fixed-4 decimal **strings** (`"40.0000"`). A description is `{ changed: true }`
+  only: its text and digest never leave the server.
+- `meta` — `{ nextCursor, hasMore, recordingSince }`; `recordingSince` is the later of the activity's
+  creation and the moment the database began recording, which is what "no changes recorded since …"
+  must say.
+
+**Who sees what.** Every organisation member holds `activity:read`, Viewers included; there is **no
+route on the External-Guest surface**. Cost is withheld **server-side** from anyone without
+`cost:read`: monetary field items are dropped, an assignment's `budgetedCost` / `actualCost` are
+absent, and an entry that changed only cost is not returned at all — without shortening the page,
+because the filter is part of the keyset scan. A reader without `cost:read` still sees an assignment
+**added or removed**, just without the money.
+
+**What is not recorded yet.** Single-object writes only: group moves, levelling apply, batch
+re-parent, dissolve, cross-plan links and the knock-on effects of deleting an activity are queued for
+the second milestone (the coverage census, `activity-history-coverage.structural.spec.ts`, lists each
+as pending).
+
 ### External-Guest share links (ADR-0051)
 
 Revocable, read-only, per-plan **share links** for someone OUTSIDE the organisation

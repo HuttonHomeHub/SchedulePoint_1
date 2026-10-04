@@ -10,6 +10,8 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { noChanges } from '../activity-history/activity-history.pending';
+import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 
@@ -130,8 +132,8 @@ describe('ResourceAssignmentService', () => {
       create: vi.fn().mockResolvedValue(assignment()),
       findActiveByIdInOrg: vi.fn(),
       findManyActiveByActivity: vi.fn().mockResolvedValue([]),
-      clearDrivingForActivity: vi.fn(),
-      updateIfVersionMatches: vi.fn().mockResolvedValue(1),
+      clearDrivingForActivity: vi.fn().mockResolvedValue([]),
+      updateIfVersionMatches: vi.fn().mockResolvedValue(assignment()),
       softDelete: vi.fn().mockResolvedValue(1),
     };
     txActivityUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
@@ -139,7 +141,16 @@ describe('ResourceAssignmentService', () => {
       // The tx handle exposes $executeRaw (the resource advisory lock create takes) and the
       // `activity` model (the ADR-0040 units-driven derived-duration write).
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
-        cb({ $executeRaw: vi.fn(), activity: { updateMany: txActivityUpdateMany } }),
+        cb({
+          $executeRaw: vi.fn(),
+          activity: { updateMany: txActivityUpdateMany },
+          // The history reads the assignment inside the transaction (ADR-0174 D4); the stub
+          // recorder below ignores what they return.
+          resourceAssignment: {
+            findFirst: vi.fn().mockResolvedValue(assignment()),
+            findFirstOrThrow: vi.fn().mockResolvedValue(assignment()),
+          },
+        }),
       ),
       activity: { findFirst: vi.fn().mockResolvedValue(activity()) },
     };
@@ -147,12 +158,18 @@ describe('ResourceAssignmentService', () => {
     // The plan edit-lock write-gate (ADR-0028, TECH_DEBT #39) — a no-op in these unit tests
     // (enforcement is exercised in the plan-lock e2e); mocked to resolve so the write path runs.
     editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
+    // Proven against a real table in `activity-history.e2e-spec.ts`; here it only has to be callable.
+    const history = {
+      record: vi.fn().mockResolvedValue(undefined),
+      assignmentChanges: vi.fn().mockReturnValue(noChanges()),
+    };
     service = new ResourceAssignmentService(
       organizations as unknown as OrganizationsService,
       resources as unknown as ResourceRepository,
       assignments as unknown as ResourceAssignmentRepository,
       prisma as unknown as PrismaService,
       editLock as unknown as PlanEditLockService,
+      history as unknown as ActivityHistoryRecorder,
       logger,
     );
   });
@@ -356,7 +373,7 @@ describe('ResourceAssignmentService', () => {
 
     it('409s on a stale version', async () => {
       assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
-      assignments.updateIfVersionMatches.mockResolvedValue(0);
+      assignments.updateIfVersionMatches.mockResolvedValue(null);
       await expect(
         service.update(principalWith(ALL), 'acme', 'asg-1', { budgetedUnits: 5, version: 1 }),
       ).rejects.toBeInstanceOf(ConflictError);
@@ -614,7 +631,7 @@ describe('ResourceAssignmentService', () => {
     it('soft-deletes an existing assignment', async () => {
       assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
       await service.remove(principalWith(ALL), 'acme', 'asg-1');
-      expect(assignments.softDelete).toHaveBeenCalledWith('asg-1', USER_ID);
+      expect(assignments.softDelete).toHaveBeenCalledWith('asg-1', USER_ID, expect.anything());
     });
 
     it('404s when the assignment is missing', async () => {

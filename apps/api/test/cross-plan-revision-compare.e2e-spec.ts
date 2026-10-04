@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -59,7 +60,7 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
     await prisma.activityDependency.deleteMany();
     await prisma.note.deleteMany();
     await prisma.activityStep.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planShare.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

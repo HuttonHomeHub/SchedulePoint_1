@@ -146,26 +146,36 @@ export class ResourceAssignmentRepository {
    * excluding `exceptId`, the row about to be set), inside the caller's transaction. This
    * makes "set driver" a MOVE — the ≤1-driver partial-unique never trips a P2002. Bumps
    * those rows' `version`/`updatedBy` so a stale peer edit correctly 409s.
+   *
+   * Returns the rows it **actually** cleared, as they are after the write: the history records the
+   * displaced driver's `isDriving true → false` (ADR-0174), and only a statement that reports what it
+   * changed can say so truthfully when a concurrent set-driver raced it. Raw `UPDATE … RETURNING`
+   * because Prisma's `updateMany` returns a count; `updated_at` is stamped here by hand for the same
+   * reason (Prisma's `@updatedAt` is applied client-side and a raw statement bypasses it).
    */
   async clearDrivingForActivity(
     activityId: string,
     actorId: string,
     db: Prisma.TransactionClient,
     exceptId?: string,
-  ): Promise<void> {
-    await db.resourceAssignment.updateMany({
-      where: this.active({
-        activityId,
-        isDriving: true,
-        ...(exceptId ? { id: { not: exceptId } } : {}),
-      }),
-      data: { isDriving: false, updatedBy: actorId, version: { increment: 1 } },
+  ): Promise<ResourceAssignment[]> {
+    const cleared = await db.$queryRaw<{ id: string }[]>`
+      UPDATE resource_assignments
+      SET is_driving = false, updated_by = ${actorId}, version = version + 1, updated_at = now()
+      WHERE activity_id = ${activityId}::uuid AND is_driving AND deleted_at IS NULL
+        ${exceptId ? Prisma.sql`AND id <> ${exceptId}::uuid` : Prisma.empty}
+      RETURNING id`;
+    if (cleared.length === 0) return [];
+    return db.resourceAssignment.findMany({
+      where: this.active({ id: { in: cleared.map((r) => r.id) } }),
     });
   }
 
   /**
    * Optimistic-locked update: only touches the active row if its version still matches.
-   * Returns rows changed — `0` means a version conflict or the row is gone (→ 409).
+   * Returns the row as written — `null` means a version conflict or the row is gone (→ 409). The
+   * row comes back from the update itself, which is the history's "after" without a second round
+   * trip (ADR-0174 D4).
    */
   async updateIfVersionMatches(
     id: string,
@@ -173,12 +183,12 @@ export class ResourceAssignmentRepository {
     patch: AssignmentPatch,
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<number> {
-    const result = await db.resourceAssignment.updateMany({
+  ): Promise<ResourceAssignment | null> {
+    const [row] = await db.resourceAssignment.updateManyAndReturn({
       where: this.active({ id, version: expectedVersion }),
       data: { ...patch, updatedBy, version: { increment: 1 } },
     });
-    return result.count;
+    return row ?? null;
   }
 
   /** Soft-delete (unassign) one assignment. Returns rows changed (`0` if already gone). */

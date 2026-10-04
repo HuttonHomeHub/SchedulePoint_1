@@ -1840,11 +1840,11 @@ describe('soft-delete scanner — raw SQL predicates', () => {
   });
 });
 
-// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls.
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04).
 const NESTED_READS_FLOOR = 9;
 const COUNTS_FLOOR = 2;
-const DECLARATIONS = 27;
-const COVERED = 76;
+const DECLARATIONS = 30;
+const COVERED = 81;
 
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
@@ -1897,6 +1897,7 @@ describe('soft-delete gate — the repository tree', () => {
       findRecentlyChanged: 2,
       findPlanStanding: 2,
       'recycle-bin statement': 2,
+      'activity-history statement': 3,
       summarise: 2,
     });
     expect(result.declarations, 'declarations').toHaveLength(DECLARATIONS);

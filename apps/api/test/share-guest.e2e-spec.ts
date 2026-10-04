@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 import { resetThrottleCounters } from './throttle-reset';
 
@@ -105,7 +106,7 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     // reset depends on what ran before it in the shared database, which is the #119a shape.
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();

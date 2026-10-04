@@ -11524,6 +11524,23 @@ failed `activity-editor` J1/J3 with `429 RATE_LIMITED on GET /api/v1/me` — the
 runners, where the suite spends over 100 `/me` per 60 s against a local peak of 64. A `TEMPORARY` ceiling of 200
 holds it until spec M3.1 signs up once per worker.
 
+### 440. `updatePlacements` and the recalculation write may deadlock each other
+
+**Status:** open · **Verified:** 2026-10-03 (read, **not reproduced**: `activities.service.ts` `updatePlacements`
+→ `activity.repository.ts` `updatePlacements`, an `UPDATE activities … FROM unnest` over up to 2,000 rows taken
+**without** the plan advisory lock; `schedule.repository.ts` `writeResults`, the same shape under it) ·
+**Raised:** 2026-10-03 (database-architect, designing ADR-0174's history lock) · **Size:** S · **Owner:** api
+
+Both statements row-lock many activities of one plan in **no defined order**, and `UPDATE … FROM unnest` takes
+its row locks in whatever order the join produces. A placement batch holding row A and waiting for row B,
+against a recalculation holding B and waiting for A, is a deadlock Postgres resolves by aborting one of them
+with `40P01`. **Not established:** whether the planner's join order makes the two orders agree in practice, or
+whether the user-visible symptom would be a 500 on a drag. Nothing measured either way; the activity-history
+recorder neither adds to this nor depends on it (it takes no row lock, ADR-0174 D4), and its 200-round
+concurrency test passes, which is evidence about the recorder and not about this pair.
+**Next:** on a recurrence, `ORDER BY id` the two `unnest` joins so both lock in id order, with a concurrent
+two-connection test written red-first. **Trigger:** a `40P01` in the API logs.
+
 ### 441. A baseline's activity count compiles to a grouped subquery the planner may not restrict to the page
 
 **Status:** open · **Verified:** 2026-10-03 (backend-performance review of ADR-0172 M4; `EXPLAIN` on an empty `baseline_activities` chose a sequential scan) ·
@@ -11550,6 +11567,20 @@ divider); the other consumers have none. **Not established:** whether the access
 step sufficient for a divider (it is asked before release, CLAUDE.md §19.13). **Next:** if it does not, give each
 consumer a typed or stepped control in the surface that owns it, as the Gantt's `View ▾` does. **Trigger:** the
 reviewer's ruling, or a complaint from a pointer-only user.
+
+### 443. Activity history's added write cost was measured only on a shared 4-vCPU container
+
+**Status:** open · **Verified:** 2026-10-04 (ADR-0174 Consequences; plan M1-T7, two runs on a 2.10 GHz 4 vCPU container with the API and Postgres 16.14 on one host) ·
+**Raised:** 2026-10-04 (product-owner decision to ship on the statement count) · **Size:** S · **Owner:** api
+
+Recording history adds about 5.7–7.2 ms p50 to a single-object save and 3.0–4.9 ms p50 to a link create on
+that machine, against the restated 3 ms / 4 ms bars; the four statements it issues sum to 3.3 ms p50 measured
+alone, so roughly 2–4 ms per save is **unattributed** and was not guessed at. The binding bar is now the
+three-statement test. **Not established:** whether the gap is the container (Node and Postgres sharing four
+slow cores), Prisma's interactive-transaction overhead, or something in the request path. **Next:** run
+`apps/api/test/measure/activity-history.measure.ts` against a disposable database on the deployed host (or the
+product owner's machine) and record the result in ADR-0174. **Trigger:** a planner reports slow saves, or the
+next performance pass on the write paths.
 
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 

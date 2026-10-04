@@ -16,6 +16,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -651,7 +652,7 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     await prisma.activityDependency.deleteMany();
     await prisma.note.deleteMany();
     await prisma.crossPlanDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planLock.deleteMany();
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();

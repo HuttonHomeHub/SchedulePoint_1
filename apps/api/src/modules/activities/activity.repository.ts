@@ -166,8 +166,10 @@ export class ActivityRepository {
 
   /**
    * Optimistic-locked update: only touches the active row if its version still
-   * matches. Returns rows changed — `0` means a version conflict or the row is
-   * gone, which the service maps to 409.
+   * matches. Returns the row as written — `null` means a version conflict or the row
+   * is gone, which the service maps to 409. The row comes back from the update itself
+   * (`RETURNING`), which is the history's "after" without a second round trip
+   * (ADR-0174 D4).
    */
   async updateIfVersionMatches(
     id: string,
@@ -175,12 +177,12 @@ export class ActivityRepository {
     patch: ActivityPatch,
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<number> {
-    const result = await db.activity.updateMany({
+  ): Promise<Activity | null> {
+    const [row] = await db.activity.updateManyAndReturn({
       where: this.active({ id, version: expectedVersion }),
       data: { ...patch, updatedBy, version: { increment: 1 } },
     });
-    return result.count;
+    return row ?? null;
   }
 
   /**

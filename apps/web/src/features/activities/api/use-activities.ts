@@ -18,7 +18,12 @@ import {
 
 import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import { majorInputToMinor } from '@/lib/format-money';
-import { activityKeys, assignmentKeys, baselineKeys } from '@/lib/query/hierarchy-keys';
+import {
+  activityHistoryKeys,
+  activityKeys,
+  assignmentKeys,
+  baselineKeys,
+} from '@/lib/query/hierarchy-keys';
 
 export { activityKeys };
 
@@ -36,6 +41,10 @@ function invalidateActivity(
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
     queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, activityId) }),
+    // The write recorded an entry (ADR-0174), so a History tab that is open, or opens next, reads it.
+    queryClient.invalidateQueries({
+      queryKey: activityHistoryKeys.byActivity(orgSlug, activityId),
+    }),
   ]);
 }
 

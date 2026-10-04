@@ -196,6 +196,39 @@ describe('ActivityEditorDialog — the Notes tab', () => {
   });
 });
 
+describe('ActivityEditorDialog — the History tab (ADR-0174)', () => {
+  it('is absent without the root’s slot and present, last, with it', () => {
+    const { unmount } = mount();
+    expect(screen.queryByRole('tab', { name: /History/ })).not.toBeInTheDocument();
+    unmount();
+
+    mount({ historySlot: <p>Change history</p>, notesSlot: <p>Note thread</p> });
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
+    expect(tabs.at(-1)).toMatch(/History/);
+  });
+
+  it('renders the panel the root passed', () => {
+    mount({ historySlot: <p>Change history</p> });
+    fireEvent.click(screen.getByRole('tab', { name: /History/ }));
+    expect(screen.getByText('Change history')).toBeInTheDocument();
+  });
+
+  it('is open to a reader who can edit nothing, and is never marked read-only', () => {
+    const readOnly = deriveActivityEditorGating({
+      penManaged: true,
+      holdsPen: false,
+      canWrite: false,
+      canProgress: false,
+      canReadCost: false,
+    });
+    mount({ gating: readOnly, historySlot: <p>Change history</p> });
+    const tab = screen.getByRole('tab', { name: /History/ });
+    expect(tab).not.toHaveTextContent('read-only');
+    fireEvent.click(tab);
+    expect(screen.getByText('Change history')).toBeInTheDocument();
+  });
+});
+
 describe('ActivityEditorDialog — the Resources tab', () => {
   it('renders the same panel the Resources dialog renders', async () => {
     mount();

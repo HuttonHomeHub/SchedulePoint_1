@@ -7,6 +7,7 @@ import {
   type ActivityStatus,
   type ActivityType,
   type DurationType,
+  type ResourceAssignment,
 } from '@prisma/client';
 import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -27,6 +28,8 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
+import { combineChanges, noChanges } from '../activity-history/activity-history.pending';
+import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -121,6 +124,7 @@ export class ActivitiesService {
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly history: ActivityHistoryRecorder,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -721,21 +725,30 @@ export class ActivitiesService {
             ),
           );
         }
-        const changed = await this.activities.updateIfVersionMatches(
+        // The before-values the history diffs, read INSIDE this transaction at the version the gated
+        // update below requires — `existing` was read before it opened, and the diff must describe the
+        // row this write actually replaced (ADR-0174 D4). A row that moved, or went, since is the
+        // 409 the update raises; the read decides nothing by itself.
+        const before = await tx.activity.findFirst({
+          where: { id: activityId, organizationId: organization.id, deletedAt: null },
+        });
+        // The version-gated update hands back the row it wrote, which is the history's "after": no
+        // second read. The driving-assignment recompute below never writes the activity row.
+        const after = await this.activities.updateIfVersionMatches(
           activityId,
           dto.version,
           patch,
           principal.userId,
           tx,
         );
-        if (changed === 0) {
+        if (!after || !before) {
           throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
         }
         // Duration-type recompute (ADR-0040 §3, editedField = DURATION): a duration edit holds the
         // (new) duration and recomputes the DEPENDENT — never DURATION itself — on the activity's
         // DRIVING assignment. Runs in THIS transaction, optimistic-locking the assignment row too, so
         // a stale version on either row rolls the whole write back (409).
-        await this.recomputeDrivingAssignmentOnDurationEdit(
+        const recomputed = await this.recomputeDrivingAssignmentOnDurationEdit(
           tx,
           activityId,
           dto.durationDays !== undefined || dto.durationMinutes !== undefined,
@@ -743,6 +756,24 @@ export class ActivitiesService {
           patch.durationType ?? existing.durationType,
           principal.userId,
         );
+        // Recorded last, and in this transaction: a rolled-back write leaves no entry, and an entry
+        // that cannot be written fails the write rather than leaving a gap nobody can see.
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'DEFINITION',
+          writes: [
+            {
+              activityId,
+              planId: existing.planId,
+              changes: combineChanges(
+                this.history.activityFieldChanges(before, after),
+                // The triad rewrote the driving assignment's units in the same write: one change, two
+                // effects, one entry (data-model §9 item 15).
+                recomputed ? this.history.assignmentChanges([recomputed]) : noChanges(),
+              ),
+            },
+          ],
+        });
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -775,19 +806,19 @@ export class ActivitiesService {
     effectiveDurationMinutes: number | undefined,
     durationType: DurationType,
     userId: string,
-  ): Promise<void> {
+  ): Promise<{ before: ResourceAssignment; after: ResourceAssignment } | null> {
     // Only a duration edit drives this; a milestone / zero-duration activity's triad is inert.
     // Takes a boolean rather than `durationDays` because a duration can now arrive in EITHER unit
     // (TECH_DEBT #78) — keying off the day field would have made a minutes-only edit skip the
     // recompute silently, leaving Units = Duration × Units/Time false with nothing saying so.
-    if (!isDurationEdit) return;
-    if (effectiveDurationMinutes === undefined || effectiveDurationMinutes <= 0) return;
+    if (!isDurationEdit) return null;
+    if (effectiveDurationMinutes === undefined || effectiveDurationMinutes <= 0) return null;
 
     const driving = await tx.resourceAssignment.findFirst({
       where: { activityId, isDriving: true, deletedAt: null },
     });
     // No driving assignment, or a driving assignment with no rate ⇒ triad inert ⇒ byte-parity.
-    if (!driving || driving.unitsPerHour === null) return;
+    if (!driving || driving.unitsPerHour === null) return null;
 
     const resolved = resolveTriad(durationType, 'DURATION', {
       durationMinutes: effectiveDurationMinutes,
@@ -797,7 +828,7 @@ export class ActivitiesService {
     // A DURATION edit never recomputes DURATION (the dependent is Units or Units/Time), so
     // resolveTriad is always `ok` here (the zero-rate divisor N20 is a units-driven-recompute
     // concern, unreachable on this path); guard defensively and never write on the impossible branch.
-    if (!resolved.ok) return;
+    if (!resolved.ok) return null;
 
     // Persist the resolved dependent on the driving assignment (the held field is unchanged).
     // Optimistic-locked on the assignment's own version: a stale row rolls the activity write back.
@@ -813,6 +844,13 @@ export class ActivitiesService {
     if (result.count === 0) {
       throw new ConflictError('The driving assignment changed elsewhere. Refresh and try again.');
     }
+    // Returned for the history entry: the version gate above means `driving` is the row replaced.
+    return {
+      before: driving,
+      after: await tx.resourceAssignment.findFirstOrThrow({
+        where: { id: driving.id, deletedAt: null },
+      }),
+    };
   }
 
   /**
@@ -1288,15 +1326,34 @@ export class ActivitiesService {
       status: deriveStatus(percentComplete, actualStart, actualFinish),
     };
 
-    const changed = await this.activities.updateIfVersionMatches(
-      activityId,
-      dto.version,
-      patch,
-      principal.userId,
-    );
-    if (changed === 0) {
-      throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
-    }
+    // A transaction so the history entry commits or rolls back with the write (ADR-0174 D4); the
+    // before-values are read inside it, ahead of the version-gated update they describe.
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.activity.findFirst({
+        where: { id: activityId, organizationId: organization.id, deletedAt: null },
+      });
+      const after = await this.activities.updateIfVersionMatches(
+        activityId,
+        dto.version,
+        patch,
+        principal.userId,
+        tx,
+      );
+      if (!after || !before) {
+        throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
+      }
+      await this.history.record(tx, {
+        actorUserId: principal.userId,
+        scope: 'PROGRESS',
+        writes: [
+          {
+            activityId,
+            planId: existing.planId,
+            changes: this.history.activityFieldChanges(before, after),
+          },
+        ],
+      });
+    });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
       'activity progress updated',

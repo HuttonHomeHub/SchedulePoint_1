@@ -291,3 +291,10 @@ findings are `docs/TECH_DEBT.md` #140–#141.
 - A wrong FK order fails loudly (`23503`, naming the constraint) rather than corrupting anything —
   but the batch then never expires and is retried hourly forever, so `23503` must be escalated rather
   than absorbed as ordinary sweep noise.
+
+> **Amended 2026-10-03 by [ADR-0174](0174-an-activitys-history-is-working-memory-not-an-audit-trail.md) D8.**
+> The runner now deletes `activity_history_entries` explicitly, before the activities it is `RESTRICT`ed
+> into, counts the rows (`ExpiryCounts.activityHistoryEntries`), charges them to the run's activity budget
+> at `HISTORY_ROWS_PER_ACTIVITY` per activity (shipping at an unmeasured `1`) and reports them as
+> `activityHistoryCount` on `hierarchy.expired`. `hierarchy-expiry.structural.spec.ts` is what made the
+> omission impossible to ship.

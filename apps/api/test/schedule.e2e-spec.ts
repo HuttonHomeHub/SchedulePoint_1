@@ -10,6 +10,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 import { EV_UNPLACED_GOLDEN } from './fixtures/ev-unplaced-golden';
 
@@ -79,7 +80,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // reset depends on what ran before it in the shared database, which is the #119a shape.
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     // Share links, for exactly the reason the baseline note above gives — and it bit the same way.
     // `plan_shares.plan_id` is ON DELETE RESTRICT, the e2e database is shared with the Playwright
     // run, and `apps/web/e2e-share` creates a share link and leaves it there. So a `plan.deleteMany()`

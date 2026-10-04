@@ -98,6 +98,11 @@ unanswerable rather than left to look like an oversight. The feature that would 
 **per-activity plan revision history** — a different feature, with a different table, a different
 retention story and a different read model. Naming it is part of this decision; building it is not.
 
+> **Built 2026-10-03: [ADR-0174](0174-an-activitys-history-is-working-memory-not-an-audit-trail.md).**
+> That ADR is the feature this section named — a separate, deliberately mutable table that is **not** an
+> audit trail. The decision above stands unchanged: an ordinary content edit is still never an audit
+> event.
+
 ### 4. The filter precedes the coverage, and its flip gates the first producer
 
 ADR-0072's plan sequenced the filter **after** the mutation events, conditionally ("if the filter

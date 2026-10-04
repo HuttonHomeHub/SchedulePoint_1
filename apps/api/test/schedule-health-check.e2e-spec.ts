@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
@@ -57,7 +58,7 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
     // Weighted steps FK onto activities; the shared local database can hold rows a Playwright run
     // or the seed catalogue left behind (docs/TECH_DEBT.md #119's lesson, applied on day one).
     await prisma.activityStep.deleteMany();
-    await prisma.activity.deleteMany();
+    await clearActivityTree(prisma);
     await prisma.planShare.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

@@ -125,6 +125,7 @@ export function ActivityEditorSession({
   planActivitiesError = false,
   logic,
   notesSlot,
+  historySlot,
 }: ActivityEditorSessionProps): React.ReactElement {
   const announce = useAnnounce();
   const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
@@ -656,6 +657,10 @@ export function ActivityEditorSession({
     ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && NOTES_ENABLED && notesSlot
       ? [{ id: 'notes' as const, label: 'Notes' }]
       : []),
+    // History is last (subject-first order, ADR-0062 §5) and, like Notes, never marked read-only: it
+    // has no write scope at all, so a padlock would claim a gate that does not exist. Unflagged
+    // (ADR-0088 D1) — present whenever the composition root supplies the panel.
+    ...(historySlot ? [{ id: 'history' as const, label: 'History' }] : []),
   ];
 
   const facts = activityContextFacts(activity);
@@ -916,6 +921,7 @@ export function ActivityEditorSession({
                   focused a section three panels down; the reveal plumbing that did so survives
                   untouched on the flag-off path, which still needs it. */}
               {current === 'notes' ? notesSlot : null}
+              {current === 'history' ? historySlot : null}
 
               {/* The co-location (M4): three panels, three write scopes, each headed by what it
                   does to the schedule. Rendered only when a row exists — every panel writes. */}

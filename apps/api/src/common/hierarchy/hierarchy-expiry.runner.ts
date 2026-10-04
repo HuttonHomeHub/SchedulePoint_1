@@ -63,6 +63,8 @@ export interface ExpiryCounts {
   projects: number;
   plans: number;
   activities: number;
+  /** Counted so the sweep can charge them to its budget (data-model §3); see HISTORY_ROWS_PER_ACTIVITY. */
+  activityHistoryEntries: number;
 }
 
 /**
@@ -125,6 +127,12 @@ export async function deleteExpiredScope(
   );
   await deleteChunked(activityIds, (chunk) =>
     tx.activityStep.deleteMany({ where: { activityId: { in: chunk } } }),
+  );
+  // RESTRICT rather than CASCADE on purpose (ADR-0174 D8): an explicit delete returns a count, so
+  // the sweep can charge history rows to its budget; a cascade would run uncounted inside the
+  // `DELETE FROM activities` statement below. Kept by `hierarchy-expiry.structural.spec.ts`.
+  const activityHistoryEntryCount = await deleteChunked(activityIds, (chunk) =>
+    tx.activityHistoryEntry.deleteMany({ where: { activityId: { in: chunk } } }),
   );
   if (planIds.length > 0) {
     // ADR-0046 denormalises `plan_id` onto EVERY note, including an activity's — so one pass
@@ -212,5 +220,6 @@ export async function deleteExpiredScope(
     projects: projectCount,
     plans: planCount,
     activities: activityCount,
+    activityHistoryEntries: activityHistoryEntryCount,
   };
 }

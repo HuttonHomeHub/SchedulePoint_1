@@ -99,6 +99,7 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'activityDependency',
       'resourceAssignment',
       'activityStep',
+      'activityHistoryEntry',
       'note',
       'baselineAssignment',
       'baselineDependency',
