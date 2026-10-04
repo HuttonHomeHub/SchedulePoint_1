@@ -17,6 +17,8 @@ import {
   defaultGridWidth,
   ganttColumnWidth,
   ganttFixedWidth,
+  shownColumns,
+  variancePinnedWidth,
   type ColumnWidths,
   type ResizableColumnKey,
 } from '../layout/column-widths';
@@ -28,7 +30,7 @@ import {
   startDayAtChartX,
   startEdgePlacement,
 } from '../layout/drag-day';
-import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import { varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   ganttLinkPaths,
   predecessorNamesBySuccessor,
@@ -321,17 +323,13 @@ const NO_WIDTHS: ColumnWidths = {};
 function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
   const { viewState, columnWidths, varianceByActivityId } = props;
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const columns = useMemo(
-    () => GANTT_COLUMNS.filter((c) => !hiddenColumns.has(c.key)),
-    [hiddenColumns],
-  );
+  const columns = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
   const gridPrefs = useGanttGridPrefs({
     columns,
     widths: columnWidths?.widths ?? NO_WIDTHS,
-    extraPinnedWidth:
-      varianceByActivityId !== undefined && varianceByActivityId.size > 0
-        ? VARIANCE_COLUMN_WIDTH
-        : 0,
+    extraPinnedWidth: variancePinnedWidth(
+      varianceByActivityId !== undefined && varianceByActivityId.size > 0,
+    ),
   });
   return <GanttPanelBody {...props} gridPrefs={gridPrefs} />;
 }
@@ -382,10 +380,7 @@ function GanttPanelBody({
    * it is a derivation rather than a branch: there is no "columns feature off" path to keep in step.
    */
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const COLUMNS = useMemo(
-    () => GANTT_COLUMNS.filter((c) => !hiddenColumns.has(c.key)),
-    [hiddenColumns],
-  );
+  const COLUMNS = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
   const widths = columnWidths?.widths ?? NO_WIDTHS;
   /**
    * The visible columns' **default** widths, summed — and nothing a planner set. This is the zoom
@@ -425,7 +420,7 @@ function GanttPanelBody({
    * chart starting at 817 — ADR-0095's Float incident, reproduced by a column added afterwards.
    */
   const FIXED_WIDTH = useMemo(
-    () => ganttFixedWidth(COLUMNS, widths, showVariance ? VARIANCE_COLUMN_WIDTH : 0),
+    () => ganttFixedWidth(COLUMNS, widths, variancePinnedWidth(showVariance)),
     [COLUMNS, widths, showVariance],
   );
   /**
@@ -472,11 +467,7 @@ function GanttPanelBody({
     guardRef.current = (key: ResizableColumnKey, candidate: number): number => {
       const others = COLUMNS.filter((c) => c.key !== key);
       return chartGuard(candidate, {
-        fixedWithoutColumn: ganttFixedWidth(
-          others,
-          widths,
-          showVariance ? VARIANCE_COLUMN_WIDTH : 0,
-        ),
+        fixedWithoutColumn: ganttFixedWidth(others, widths, variancePinnedWidth(showVariance)),
         pane: gridWidth,
         scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
       });

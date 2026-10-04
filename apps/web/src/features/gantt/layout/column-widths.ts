@@ -1,6 +1,6 @@
 import type { GanttColumnKey } from '../model/gantt-view-state';
 
-import type { GanttColumn } from './grid-columns';
+import { GANTT_COLUMNS, type GanttColumn } from './grid-columns';
 
 /**
  * **Every width the Gantt's pinned grid is laid out from, in one pure module** (the resizable-columns
@@ -73,6 +73,20 @@ export const NAME_COLUMN_MIN_WIDTH = 120;
 
 /** Width of the variance column, shown only when a baseline is active. Not a `GanttColumn`. */
 export const VARIANCE_COLUMN_WIDTH = 72;
+
+/**
+ * The width of pinned content that is not a {@link GanttColumn}: the `vs baseline` column, present
+ * only while a baseline is active. One derivation, because three sites used to spell it and the
+ * ADR-0095 incident was two answers to "how wide is the grid".
+ */
+export function variancePinnedWidth(showVariance: boolean): number {
+  return showVariance ? VARIANCE_COLUMN_WIDTH : 0;
+}
+
+/** The columns a planner has not hidden, in declaration order. */
+export function shownColumns(hidden: ReadonlySet<GanttColumnKey>): readonly GanttColumn[] {
+  return GANTT_COLUMNS.filter((c) => !hidden.has(c.key));
+}
 
 export const COLUMN_WIDTHS_STORAGE_KEY = 'schedulepoint:gantt-column-widths';
 

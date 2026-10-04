@@ -13,6 +13,9 @@ import {
   isDefaultWidths,
   readStoredWidths,
   serialiseWidths,
+  shownColumns,
+  variancePinnedWidth,
+  VARIANCE_COLUMN_WIDTH,
 } from './column-widths';
 import { GANTT_COLUMNS } from './grid-columns';
 
@@ -125,5 +128,21 @@ describe('chartGuard', () => {
       COLUMN_MIN,
     );
     expect(CHART_MIN_WIDTH).toBe(240);
+  });
+});
+
+describe('variancePinnedWidth', () => {
+  it('is the variance column while a baseline shows, and nothing otherwise', () => {
+    expect(variancePinnedWidth(true)).toBe(VARIANCE_COLUMN_WIDTH);
+    expect(variancePinnedWidth(false)).toBe(0);
+  });
+});
+
+describe('shownColumns', () => {
+  it('drops hidden columns and keeps declaration order', () => {
+    expect(shownColumns(new Set())).toEqual(GANTT_COLUMNS);
+    expect(shownColumns(new Set(['predecessors'])).map((c) => c.key)).toEqual(
+      DEFAULT_SET.map((c) => c.key),
+    );
   });
 });

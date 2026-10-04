@@ -31,10 +31,10 @@ function limitedNotice(
   asked: number | null,
   applied: number,
 ): string | null {
-  if (asked === null) return `${subject} not changed. Enter ${min} to ${max} px.`;
+  if (asked === null) return `${subject} not changed. Enter ${min} to ${max} pixels.`;
   if (applied === asked) return null;
   return asked < min || asked > max
-    ? `${subject} limited to ${applied} px. Widths are ${min} to ${max} px.`
+    ? `${subject} limited to ${applied} px. Allowed range is ${min} to ${max} pixels.`
     : `${subject} limited to ${applied} px so the chart keeps at least ${CHART_MIN_WIDTH} px.`;
 }
 
@@ -90,6 +90,8 @@ function WidthField({
   };
 
   return (
+    // `pl-6` insets the row to the text of the CheckboxField label above it, so a width field reads
+    // as belonging to that column rather than as a sibling of the checkboxes.
     <div className="flex items-center gap-2 pl-6">
       <label htmlFor={id} className="text-muted-foreground min-w-0 flex-1 text-sm">
         {subject}
@@ -117,6 +119,8 @@ function WidthField({
             commit(event.currentTarget.value);
           } else if (event.key === 'Escape') {
             // Not stopped: Escape still closes the popover, which is what the planner asked for.
+            // Closing moves focus away and fires a blur; `discarded` makes that blur skip the commit
+            // (it is cleared by the blur itself, or by the next edit if no blur arrives).
             discarded.current = draft !== null;
             setDraft(null);
           } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -153,7 +157,18 @@ export function GanttColumnsGroup({
   const columnHintId = useId();
   const tableHintId = useId();
   const resetReasonId = useId();
-  const [notice, setNotice] = useState<string | null>(null);
+  // `id` changes on every notice so an identical message is a new node and is announced again — a
+  // live region only speaks when its content changes.
+  const [notice, setNoticeState] = useState<{ id: number; text: string } | null>(null);
+  const noticeCount = useRef(0);
+  const setNotice = (text: string | null): void => {
+    if (text === null) {
+      setNoticeState(null);
+      return;
+    }
+    noticeCount.current += 1;
+    setNoticeState({ id: noticeCount.current, text });
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -187,8 +202,8 @@ export function GanttColumnsGroup({
         );
       })}
       <p id={columnHintId} className="text-muted-foreground text-xs">
-        Widths are {COLUMN_MIN} to {COLUMN_MAX} px. Activity takes the room that is left, and the
-        chart always keeps at least {CHART_MIN_WIDTH} px.
+        Widths are {COLUMN_MIN} to {COLUMN_MAX} pixels. Activity takes the room that is left, and
+        the chart always keeps at least {CHART_MIN_WIDTH} pixels.
       </p>
       <div className="border-border flex flex-col gap-1 border-t pt-2">
         <WidthField
@@ -201,12 +216,14 @@ export function GanttColumnsGroup({
           onNotice={setNotice}
         />
         <p id={tableHintId} className="text-muted-foreground pl-6 text-xs">
-          {columns.table.min} to {columns.table.max} px. Same range as the divider between the table
-          and the chart.
+          {columns.table.min} to {columns.table.max} pixels, the same as the Grid width divider
+          between the table and the chart. Printing uses the standard layout.
         </p>
       </div>
       {/* Shaded rather than disabled (ADR-0082): it stays focusable so its reason is reachable. The
-          guard is on the handler, `aria-disabled` is what a screen reader hears. */}
+          guard is on the handler, `aria-disabled` is what a screen reader hears. No `pointer-events-none`:
+          that would also remove the hover and click that state the reason, and the button must stay
+          focusable and targetable for exactly that. */}
       <Button
         type="button"
         variant="outline"
@@ -229,7 +246,7 @@ export function GanttColumnsGroup({
       ) : null}
       {/* Always mounted: a live region has to exist before its content changes to be announced. */}
       <p role="status" className="text-muted-foreground text-xs">
-        {notice}
+        {notice === null ? null : <span key={notice.id}>{notice.text}</span>}
       </p>
     </div>
   );

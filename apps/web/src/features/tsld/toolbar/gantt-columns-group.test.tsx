@@ -43,7 +43,7 @@ describe('a column width field', () => {
     expect(code).toHaveValue(80);
     expect(code).toHaveAttribute('min', '48');
     expect(code).toHaveAttribute('max', '400');
-    expect(screen.getByText(/Widths are 48 to 400 px/)).toBeInTheDocument();
+    expect(screen.getByText(/Widths are 48 to 400 pixels/)).toBeInTheDocument();
     expect(code.getAttribute('aria-describedby')).toBeTruthy();
   });
 
@@ -136,8 +136,25 @@ describe('a typed value is never changed silently', () => {
     render(<GanttColumnsGroup columns={bundle()} />);
     fireEvent.change(field('Code width'), { target: { value: '20' } });
     fireEvent.keyDown(field('Code width'), { key: 'Enter' });
-    expect(status()).toHaveTextContent('Code width limited to 48 px. Widths are 48 to 400 px.');
+    expect(status()).toHaveTextContent(
+      'Code width limited to 48 px. Allowed range is 48 to 400 pixels.',
+    );
     expect(field('Code width')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('announces an identical notice again by replacing its node', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    const limit = (): void => {
+      fireEvent.change(field('Code width'), { target: { value: '20' } });
+      fireEvent.keyDown(field('Code width'), { key: 'Enter' });
+    };
+    limit();
+    const first = status().firstElementChild;
+    limit();
+    expect(status().firstElementChild).not.toBe(first);
+    expect(status()).toHaveTextContent(
+      'Code width limited to 48 px. Allowed range is 48 to 400 pixels.',
+    );
   });
 
   it('says so when the chart guard limited a value that was inside the bounds', () => {
@@ -154,7 +171,7 @@ describe('a typed value is never changed silently', () => {
     render(<GanttColumnsGroup columns={bundle()} />);
     fireEvent.change(field('Code width'), { target: { value: '' } });
     fireEvent.keyDown(field('Code width'), { key: 'Enter' });
-    expect(status()).toHaveTextContent('Code width not changed. Enter 48 to 400 px.');
+    expect(status()).toHaveTextContent('Code width not changed. Enter 48 to 400 pixels.');
     expect(field('Code width')).toHaveValue(80);
   });
 
@@ -172,7 +189,9 @@ describe('a typed value is never changed silently', () => {
     render(<GanttColumnsGroup columns={bundle()} />);
     fireEvent.change(field('Table width'), { target: { value: '100' } });
     fireEvent.keyDown(field('Table width'), { key: 'Enter' });
-    expect(status()).toHaveTextContent('Table width limited to 524 px. Widths are 524 to 720 px.');
+    expect(status()).toHaveTextContent(
+      'Table width limited to 524 px. Allowed range is 524 to 720 pixels.',
+    );
   });
 
   it('announces a reset', () => {
@@ -214,7 +233,7 @@ describe('the table width field', () => {
     expect(table).toHaveValue(584);
     expect(table).toHaveAttribute('min', '524');
     expect(table).toHaveAttribute('max', '720');
-    expect(screen.getByText(/524 to 720 px/)).toBeInTheDocument();
+    expect(screen.getByText(/524 to 720 pixels/)).toBeInTheDocument();
     fireEvent.change(table, { target: { value: '600' } });
     fireEvent.keyDown(table, { key: 'Enter' });
     expect(columns.table.setSize).toHaveBeenCalledExactlyOnceWith(600);

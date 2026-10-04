@@ -79,11 +79,11 @@ import {
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import {
-  VARIANCE_COLUMN_WIDTH,
   isDefaultWidths,
   resolveColumnWidths,
+  shownColumns,
+  variancePinnedWidth,
 } from '@/features/gantt/layout/column-widths';
-import { GANTT_COLUMNS } from '@/features/gantt/layout/grid-columns';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
@@ -543,16 +543,15 @@ export function ToolbarPlanWorkspace({
   // out with, from the visible columns and whether a baseline column is showing.
   const ganttColumnWidths = useGanttColumnWidths();
   const ganttVisibleColumns = useMemo(
-    () => GANTT_COLUMNS.filter((c) => !ganttViewState.hiddenColumns.has(c.key)),
+    () => shownColumns(ganttViewState.hiddenColumns),
     [ganttViewState.hiddenColumns],
   );
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
     widths: ganttColumnWidths.widths,
-    extraPinnedWidth:
-      model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0
-        ? VARIANCE_COLUMN_WIDTH
-        : 0,
+    extraPinnedWidth: variancePinnedWidth(
+      model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
+    ),
   });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 

@@ -82,4 +82,21 @@ describe('useResizablePanelPrefs', () => {
     expect(result.current.size, 'the stored preference survives the clamp').toBe(150);
     expect(JSON.parse(localStorage.getItem('test-panel')!).size).toBe(150);
   });
+
+  it('resetSize stores the default even when the bounds are stale, and reads back clamped', () => {
+    localStorage.setItem('test-panel', JSON.stringify({ collapsed: false, size: 300 }));
+    const { result, rerender } = renderHook(({ min }) => useResizablePanelPrefs({ ...OPTS, min }), {
+      initialProps: { min: 250 },
+    });
+    expect(result.current.size).toBe(300);
+
+    // The floor is 250 now, above the default of 200 — the stored value must still be the default,
+    // not the default clamped up to the floor that is about to fall away.
+    act(() => result.current.resetSize());
+    expect(JSON.parse(localStorage.getItem('test-panel')!).size).toBe(200);
+    expect(result.current.size, 'read back clamped to the bounds current now').toBe(250);
+
+    rerender({ min: 100 });
+    expect(result.current.size, 'the default itself returns once the floor drops').toBe(200);
+  });
 });
