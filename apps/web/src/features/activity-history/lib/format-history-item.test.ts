@@ -222,3 +222,68 @@ describe('formatHistoryEntry', () => {
     expect(lines[2]).toContain('Link added');
   });
 });
+
+describe('formatHistoryItem — knock-on origins', () => {
+  it('says a link went because the other end was deleted, naming it as it was then', () => {
+    expect(
+      formatHistoryItem(
+        'link:1',
+        { dir: 'IN', other: OTHER, from: FS, to: null },
+        CTX,
+        'ACTIVITY_DELETED',
+      ).text,
+    ).toBe('Link removed — 1020 Steel erection was deleted');
+  });
+
+  it('says a link came back because the other end was restored', () => {
+    expect(
+      formatHistoryItem(
+        'link:1',
+        { dir: 'OUT', other: OTHER, from: null, to: FS },
+        CTX,
+        'ACTIVITY_RESTORED',
+      ).text,
+    ).toBe('Link restored — 1020 Steel erection was restored');
+  });
+
+  it('says nothing about a cause the item does not fit, rather than a wrong one', () => {
+    expect(text('link:1', { dir: 'IN', other: OTHER, from: null, to: FS })).toBe(
+      'Link added: Finish to Start from 1020 Steel erection',
+    );
+    expect(
+      formatHistoryItem(
+        'link:1',
+        { dir: 'IN', other: OTHER, from: null, to: FS },
+        CTX,
+        'ACTIVITY_DELETED',
+      ).text,
+    ).toBe('Link added: Finish to Start from 1020 Steel erection');
+  });
+
+  it('names the plan of a cross-plan link in the knock-on wording too', () => {
+    expect(
+      formatHistoryItem(
+        'xlink:1',
+        { dir: 'IN', other: { ...OTHER, planName: 'Phase 2' }, from: FS, to: null },
+        CTX,
+        'ACTIVITY_DELETED',
+      ).text,
+    ).toBe('Link removed — 1020 Steel erection (Phase 2) was deleted');
+  });
+
+  it('says a re-parent happened because the summary was dissolved', () => {
+    const lines = formatHistoryEntry(
+      { parentId: { from: { id: 's', name: 'Inner' }, to: { id: 'o', name: 'Outer' } } },
+      CTX,
+      'SUMMARY_DISSOLVED',
+    );
+    expect(lines.map((l) => l.text)).toEqual([
+      'WBS parent Inner → Outer — its summary was dissolved',
+    ]);
+    expect(
+      formatHistoryEntry({ parentId: { from: null, to: { id: 'o', name: 'Outer' } } }, CTX).map(
+        (l) => l.text,
+      ),
+    ).toEqual(['WBS parent none → Outer']);
+  });
+});

@@ -17,14 +17,17 @@ function Dot(): React.ReactElement {
 /**
  * One entry of an activity's history: who, when, and one line per thing they changed. A merged entry
  * says how many saves it absorbed (`3 edits`), and a group move says it was saved together with others
- * (ADR-0174 D2) — the batch does not say which action it was, so the wording does not either.
+ * (ADR-0174 D2) — the batch does not say which action it was, so the wording does not either. A
+ * knock-on entry (it has an origin) says what happened in its lines instead.
  */
 export function ActivityHistoryItem({
   entry,
   context,
 }: ActivityHistoryItemProps): React.ReactElement {
-  const lines = formatHistoryEntry(entry.changes, context);
-  const others = entry.batch ? entry.batch.size - 1 : 0;
+  const lines = formatHistoryEntry(entry.changes, context, entry.origin);
+  // An entry with an origin is a consequence of somebody else's action on another activity (a delete,
+  // a restore, a dissolve), and its lines say so; "saved together" would describe a group move.
+  const others = entry.batch && entry.origin === null ? entry.batch.size - 1 : 0;
   return (
     <li className="border-border flex flex-col gap-1 rounded-lg border p-3 text-sm">
       <p className="flex flex-wrap items-baseline gap-x-2">
