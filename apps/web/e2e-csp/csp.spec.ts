@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import {
   createPlan,
@@ -8,6 +8,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-arrange/support';
+import { expect, test } from '../e2e-support/test';
 
 import { deployedCspPolicy } from './csp-policy';
 

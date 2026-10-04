@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../e2e-support/test';
 
 import { addActivity, showActivities, onboard, openNewPlan, startEditing } from './support';
 

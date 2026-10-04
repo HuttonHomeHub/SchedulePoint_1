@@ -1,5 +1,4 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
 
 import {
   createClient,
@@ -13,6 +12,7 @@ import {
   startEditing,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { expect, test } from '../e2e-support/test';
 import { recalculate, toolbarOffers } from '../e2e-support/toolbar';
 
 /**

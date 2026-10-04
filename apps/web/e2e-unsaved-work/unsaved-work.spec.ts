@@ -1,10 +1,9 @@
-import { expect, test } from '@playwright/test';
-
 import {
   ensurePen as reacquirePen,
   openEditor,
   showActivities,
 } from '../e2e-activity-editor/support';
+import { expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,

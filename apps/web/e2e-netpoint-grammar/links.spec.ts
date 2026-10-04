@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import {
   createPlan,
@@ -11,6 +11,7 @@ import {
   seedDependency,
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
+import { expect, test } from '../e2e-support/test';
 
 /**
  * **NetPoint grammar M3 — the link language on the real canvas** (spec §4.2 G5, G6, G12).

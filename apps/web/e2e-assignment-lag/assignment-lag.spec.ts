@@ -1,7 +1,6 @@
-import { expect, test } from '@playwright/test';
-
 import { chooseComboboxOption } from '../e2e/combobox';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { expect, test } from '../e2e-support/test';
 
 import {
   addActivity,

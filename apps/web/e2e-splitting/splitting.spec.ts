@@ -2,7 +2,9 @@ import { existsSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 import { countWaves, type TimedRequest } from './waves';
 

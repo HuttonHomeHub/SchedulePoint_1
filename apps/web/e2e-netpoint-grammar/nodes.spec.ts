@@ -1,7 +1,5 @@
 import { resolve } from 'node:path';
 
-import { expect, test } from '@playwright/test';
-
 import {
   createPlan,
   ensurePen,
@@ -11,6 +9,7 @@ import {
   seedActivities,
   seedDependency,
 } from '../e2e-arrange/support';
+import { expect, test } from '../e2e-support/test';
 
 import { openReferencePlan, sceneCanvasToken } from './support';
 

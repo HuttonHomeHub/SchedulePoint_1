@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import {
   createClient,
@@ -13,6 +13,7 @@ import {
   syncClient,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
 /**

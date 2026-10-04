@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import {
   createPlan,
@@ -9,6 +9,7 @@ import {
   recalculate,
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
+import { expect, test } from '../e2e-support/test';
 
 /**
  * **NetPoint grammar M4 — the canvas's text, on the real canvas** (spec §4.2 G7, G11).

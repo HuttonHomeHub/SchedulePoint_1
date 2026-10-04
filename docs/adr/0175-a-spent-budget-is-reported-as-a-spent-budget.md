@@ -48,9 +48,10 @@ a running test body, and a throw inside it is an unhandled runner error rather t
 The test still waits out its current expectation; the report now leads with the cause, which is what
 #361 asked for.
 
-**The enforcement half is lint** (`no-restricted-imports` over `e2e*/`), and it lands with the
-migration of the remaining spec files (spec milestone M2), because lint cannot go red on 82 files
-that have not moved. Until then only the base suite (`apps/web/e2e/`) uses the guarded `test`.
+**The enforcement half is lint** (`no-restricted-imports` over `e2e*/`, `e2e-support/` exempt), and
+it landed with the migration of the remaining spec files (spec milestone M2), because lint cannot go
+red on files that have not moved. Every journey now takes `test` from the fixture, and a spec that
+imports `test` from `@playwright/test` fails `pnpm lint`.
 
 **A stated gap.** `APIRequestContext` (`page.request`, the `request` fixture) emits no `response`
 event, so a 429 on one of those calls is not seen; they assert their own status. A context opened in
@@ -82,7 +83,7 @@ the right instrument for a one-off local measurement, which is how M0 used it.
 ## Consequences
 
 - One fixture module, one self-test journey (`e2e/throttle-visibility.spec.ts`), and one import line
-  per spec file as M2 migrates them. No CI step changes; the lint rule rides `quality`'s `pnpm lint`
+  per spec file. No CI step changes; the lint rule rides `quality`'s `pnpm lint`
   and the fixture rides each suite's existing step.
 - Suites that were green by retrying through a 429 may go red when migrated. That is the point; M2
   gives them measured, marked-temporary ceilings so `main` stays releasable.

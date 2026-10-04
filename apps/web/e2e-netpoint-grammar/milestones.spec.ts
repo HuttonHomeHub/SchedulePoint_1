@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import {
   createPlan,
@@ -8,6 +8,7 @@ import {
   openProject,
   recalculate,
 } from '../e2e-arrange/support';
+import { expect, test } from '../e2e-support/test';
 
 /**
  * **NetPoint grammar M5 — the milestone is a downward triangle, on the real canvas** (spec §4.2 G8).

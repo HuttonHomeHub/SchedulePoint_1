@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../e2e-support/test';
 
 import {
   cardHeight,
@@ -147,6 +147,10 @@ test.describe('the states carrying an unbounded server-supplied string', () => {
 });
 
 test.describe('the throttled sign-in', () => {
+  // The 429 below is fulfilled on purpose, so the fixture's throttle guard must not fail it. Scoped to
+  // this describe: a file-wide opt-out would blind the other states to a real one (ADR-0175).
+  test.use({ allowRateLimited: true });
+
   /**
    * **The only end-to-end proof available for the 429 branch.** Better Auth's limiter is
    * `enabled: options.isProduction` (`apps/api/src/common/auth/better-auth.ts:270-274`), so no test

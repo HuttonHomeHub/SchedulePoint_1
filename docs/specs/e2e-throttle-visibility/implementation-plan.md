@@ -150,6 +150,9 @@ the base suite adopts it in this milestone. **Entry point:** ships dark (harness
 
 ### Milestone M2 — Every journey, enforced
 
+**Status:** built. 83 spec files moved to the guarded `test` and the lint rule is live; the full
+Playwright sweep, and any measured `TEMPORARY` ceilings it calls for, are the orchestrator's.
+
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.
 

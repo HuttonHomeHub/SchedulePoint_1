@@ -1,5 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { type BrowserContext, type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 import {
   armAdd,

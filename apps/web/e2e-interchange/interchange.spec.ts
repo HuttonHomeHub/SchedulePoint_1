@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
 import { drawnSpanDays } from '@repo/layout';
 
+import { expect, test } from '../e2e-support/test';
 import { revealToolbarCommand } from '../e2e-support/toolbar';
 
 import {
