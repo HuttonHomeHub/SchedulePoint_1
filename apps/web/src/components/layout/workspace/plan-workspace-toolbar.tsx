@@ -54,6 +54,7 @@ import { PanelSurface, Surface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
+import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_ACTIVITY_TYPES_ENABLED,
@@ -77,8 +78,16 @@ import {
   FLOAT_PATHS_PANEL_MIN_WIDTH,
 } from '@/features/float-paths';
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
+import {
+  isDefaultWidths,
+  resolveColumnWidths,
+  shownColumns,
+  variancePinnedWidth,
+} from '@/features/gantt/layout/column-widths';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
+import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
+import { useGanttGridPrefs } from '@/features/gantt/model/use-gantt-grid-prefs';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
 import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
@@ -528,6 +537,22 @@ export function ToolbarPlanWorkspace({
   // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
   // set were both lifted to this file to end.
   const ganttViewState = useGanttViewState();
+  // The planner's column widths and the grid pane's size (ADR-0173). Held here for the same reason as
+  // the view state: the `View ▾` fields and the grid read ONE value, and two `useState`s over one
+  // storage key do not sync. The pane's bounds derive from the same pure arithmetic the panel lays
+  // out with, from the visible columns and whether a baseline column is showing.
+  const ganttColumnWidths = useGanttColumnWidths();
+  const ganttVisibleColumns = useMemo(
+    () => shownColumns(ganttViewState.hiddenColumns),
+    [ganttViewState.hiddenColumns],
+  );
+  const ganttGridPrefs = useGanttGridPrefs({
+    columns: ganttVisibleColumns,
+    widths: ganttColumnWidths.widths,
+    extraPinnedWidth: variancePinnedWidth(
+      model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
+    ),
+  });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 
   // **One call, two surfaces** (console epic M5). Its result goes to the deck's pen item through
@@ -565,7 +590,29 @@ export function ToolbarPlanWorkspace({
     // than shaded (ADR-0082's omit branch — a thing the projection cannot do, not a permission).
     ganttColumns:
       planView === 'gantt'
-        ? { hidden: ganttViewState.hiddenColumns, setHidden: ganttViewState.onHiddenColumnsChange }
+        ? {
+            hidden: ganttViewState.hiddenColumns,
+            setHidden: ganttViewState.onHiddenColumnsChange,
+            widths: resolveColumnWidths(ganttColumnWidths.widths),
+            setWidth: ganttColumnWidths.setWidth,
+            table: {
+              size: ganttGridPrefs.size,
+              min: ganttGridPrefs.min,
+              max: ganttGridPrefs.max,
+              // Returns the width applied, like `setWidth`, so the field can say when it limited one.
+              setSize: (size: number): number => {
+                ganttGridPrefs.setSize(size);
+                return clampSize(size, ganttGridPrefs.min, ganttGridPrefs.max);
+              },
+            },
+            reset: () => {
+              ganttColumnWidths.reset();
+              ganttGridPrefs.resetSize();
+            },
+            isDefault:
+              isDefaultWidths(ganttColumnWidths.widths) &&
+              ganttGridPrefs.size === ganttGridPrefs.seed,
+          }
         : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
@@ -1455,6 +1502,10 @@ export function ToolbarPlanWorkspace({
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
           viewState={ganttViewState}
+          // Column widths and the grid pane, owned HERE so the `View ▾` fields and the grid read the
+          // same numbers (ADR-0173).
+          columnWidths={ganttColumnWidths}
+          gridPrefs={ganttGridPrefs}
           // Indent / Outdent (M5-T4). The panel resolves WHERE from its own row order; this is the
           // write.
           rowStructure={rowStructure}

@@ -240,3 +240,41 @@ export function ganttRow(page: Page, name: string): ReturnType<Page['getByRole']
     .filter({ has: page.getByRole('gridcell', { name: new RegExp(`^${name}\\b`) }) })
     .first();
 }
+
+/**
+ * **The pinned columns end exactly where the chart begins** — the invariant ADR-0095's `Float`
+ * incident violated and `grid-width.structural.test.ts` pins in arithmetic. Lifted out of
+ * `gantt.spec.ts` (where it was a closure) so the column-widths journey asserts the same thing the
+ * same way; a second copy would be two definitions of "meets" that could drift apart.
+ *
+ * Only meaningful at `scrollLeft: 0`. The pinned block is `position: sticky; left: 0`, so once the
+ * scroller moves the chart header slides UNDER it and the two edges legitimately overlap — an
+ * assertion taken mid-scroll would report the defect it is looking for.
+ *
+ * ONE equality catches both ways the arithmetic can be wrong: a column overflowing onto the chart
+ * reads as `>`, a gap between the two as `<`.
+ */
+export async function chartMeetsGrid(page: Page, where: string): Promise<void> {
+  const grid = ganttGrid(page);
+  await grid.evaluate((el) => {
+    let node = el.parentElement;
+    while (node && node.scrollWidth <= node.clientWidth) node = node.parentElement;
+    if (node) node.scrollLeft = 0;
+  });
+  const heads = await grid.getByRole('columnheader').evaluateAll((els) =>
+    els.map((el) => {
+      const box = el.getBoundingClientRect();
+      return { name: (el.textContent ?? '').trim(), left: box.left, right: box.right };
+    }),
+  );
+  // The Timeline header's text includes its ruler labels, so it is matched by prefix.
+  const timeline = heads.find((h) => h.name.startsWith('Timeline'));
+  // `Actions` is `sr-only`, so it takes no layout and its rect says nothing about the pane.
+  const pinned = heads.filter((h) => !h.name.startsWith('Timeline') && h.name !== 'Actions');
+  expect(timeline, `${where}: no Timeline column header`).toBeDefined();
+  expect(pinned.length, `${where}: no pinned column headers`).toBeGreaterThan(0);
+  expect(
+    Math.round(Math.max(...pinned.map((h) => h.right))),
+    `${where}: the pinned columns do not end where the chart begins — ${JSON.stringify(heads)}`,
+  ).toBe(Math.round(timeline?.left ?? -1));
+}

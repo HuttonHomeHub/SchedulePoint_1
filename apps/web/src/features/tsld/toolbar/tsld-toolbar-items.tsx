@@ -53,6 +53,7 @@ import type { TsldViewToggles } from '../render/paint';
 import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
+import { GanttColumnsGroup } from './gantt-columns-group';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
@@ -101,8 +102,6 @@ import {
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
-import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
-import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { PlanPenControl } from '@/features/plan-lock';
 import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
 import { cn } from '@/lib/utils';
@@ -1960,27 +1959,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
               </div>
             ) : null}
             {id === 'columns' && ctx.ganttColumns !== undefined ? (
-              <div className="flex flex-col gap-2">
-                {HIDEABLE_COLUMNS.map((key) => {
-                  const columns = ctx.ganttColumns;
-                  if (columns === undefined) return null;
-                  const shown = !columns.hidden.has(key);
-                  return (
-                    <CheckboxField
-                      key={key}
-                      label={GANTT_COLUMN_LABELS[key]}
-                      density="compact"
-                      checked={shown}
-                      onChange={() => {
-                        const next = new Set(columns.hidden);
-                        if (shown) next.add(key);
-                        else next.delete(key);
-                        columns.setHidden(next);
-                      }}
-                    />
-                  );
-                })}
-              </div>
+              <GanttColumnsGroup columns={ctx.ganttColumns} />
             ) : null}
             {id === 'insight' && CANVAS_LENSES_ENABLED ? (
               <div

@@ -12,6 +12,17 @@ import {
   spanGeometry,
 } from '../layout/bar-geometry';
 import {
+  VARIANCE_COLUMN_WIDTH,
+  chartGuard,
+  defaultGridWidth,
+  ganttColumnWidth,
+  ganttFixedWidth,
+  shownColumns,
+  variancePinnedWidth,
+  type ColumnWidths,
+  type ResizableColumnKey,
+} from '../layout/column-widths';
+import {
   columnsMoved,
   dateAtChartX,
   finishEdgePlacement,
@@ -19,7 +30,7 @@ import {
   startDayAtChartX,
   startEdgePlacement,
 } from '../layout/drag-day';
-import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import { varianceText, type GanttColumn } from '../layout/grid-columns';
 import {
   ganttLinkPaths,
   predecessorNamesBySuccessor,
@@ -54,6 +65,8 @@ import {
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
+import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
+import { useGanttGridPrefs, type GanttGridPrefs } from '../model/use-gantt-grid-prefs';
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
 
 import { GanttCell } from './GanttCell';
@@ -64,7 +77,6 @@ import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
-import { useResizablePanelPrefs } from '@/components/ui/use-resizable-panel-prefs';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
@@ -120,113 +132,11 @@ const DEFAULT_ZOOM: ZoomLevel = 'month';
 const UNSCHEDULED_ANCHOR = '1970-01-01';
 
 /**
- * The grid pane's drag ceiling (Graphite M8). A fixed number rather than a share of the container,
- * because what it protects is the **chart's** usable width — and that requirement does not shrink
- * when the window does. The floor is not a constant: it is whatever the fixed columns need, which
- * changes as columns are hidden, and is computed per render.
- */
-const GANTT_GRID_MAX_WIDTH = 720;
-
-/**
- * The **name** column's floor. Everything else is fixed, so this is the column that absorbs the
- * difference between the pane's width and its content — which is what makes a splitter mean
- * something. Without it, dragging wider adds blank space and dragging narrower paints the columns
- * over the chart (measured: at the 180 px minimum the headers still occupied 0–584 while the
- * Timeline began at 180 — the ADR-0095 defect exactly, which `m8-gantt-split.md` had named as the
- * one to avoid and which the first version of this splitter reproduced).
- */
-const NAME_COLUMN_MIN_WIDTH = 120;
-
-/** On-screen column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
-const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
-  code: 80,
-  name: 180,
-  // Wide enough for the longest realistic sub-day read-out (`12d 7h 45m`) without wrapping; the
-  // whole-day case (`5 d`) is far shorter, and a column sized for the common case would truncate
-  // exactly the values ADR-0070 exists to make visible.
-  duration: 84,
-  earlyStart: 90,
-  earlyFinish: 90,
-  totalFloat: 60,
-};
-
-const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column.key] ?? 90;
-
-/**
- * What the **fixed** columns need — the floor a resizable pane may not go below.
- *
- * Pure and exported so `grid-width.structural.test.ts` can assert the property this arithmetic
- * exists for, rather than a component test asserting a pixel it read out of the same expression.
- */
-export function ganttFixedWidth(
-  columns: readonly GanttColumn[],
-  /**
-   * Width of pinned content that is NOT one of {@link columns} — today only the `vs baseline`
-   * column, which renders inside the pinned block when a baseline is active and is deliberately
-   * not a `GanttColumn` (it is not sortable, hideable or part of the column vocabulary).
-   *
-   * **Required, never defaulted** (the ADR-0070 `hoursPerDay` rule). A default of 0 is silently
-   * wrong on exactly the plans that have a baseline, and the consequence is the ADR-0095 incident:
-   * `name` absorbs against a floor that does not know about the column, so the pinned block sums to
-   * `pane + 72` and the variance column paints on top of the chart. That shipped, and was found by
-   * a browser (`docs/TECH_DEBT.md` #151) rather than by this file's own gate, which summed
-   * `columns` alone and therefore agreed with the bug.
-   */
-  extraPinnedWidth: number,
-): number {
-  return (
-    columns.reduce(
-      (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
-      0,
-    ) + extraPinnedWidth
-  );
-}
-
-/**
- * One column's width **resolved against the pane**: `name` absorbs whatever the pane has beyond the
- * fixed columns, floored at {@link NAME_COLUMN_MIN_WIDTH}; everything else is its intrinsic width.
- *
- * The invariant worth stating, because it is the one ADR-0095's `Float` incident violated: summed
- * over the visible columns this equals the pane width whenever the pane is at or above
- * {@link ganttFixedWidth}. Columns therefore fill the grid exactly and can never paint over the
- * chart — which is what the splitter's floor is for, and what the structural test pins.
- */
-export function ganttColumnWidth(
-  column: GanttColumn,
-  paneWidth: number,
-  fixedWidth: number,
-): number {
-  return column.key === 'name'
-    ? Math.max(NAME_COLUMN_MIN_WIDTH, paneWidth - (fixedWidth - NAME_COLUMN_MIN_WIDTH))
-    : columnWidth(column);
-}
-
-/**
  * The hidden set a panel with no `viewState` uses — `predecessors` only, i.e. exactly the six
  * columns that shipped in ADR-0059. A module constant so it is one allocation rather than a new
  * Set per render, which would re-identify the `COLUMNS` memo on every pass.
  */
 const DEFAULT_HIDDEN_SET: ReadonlySet<GanttColumnKey> = new Set(DEFAULT_HIDDEN_COLUMNS);
-
-/**
- * The pinned identity/date grid's width is **derived from the columns it draws, never declared** —
- * now per render, because M5-T1 lets a planner switch columns off.
- *
- * It was once the literal `420` while the columns summed to 500, and the two were never reconciled
- * because the computed constant was exported and consumed by **nothing** — two answers to "how wide
- * is the grid", one of them dead. Measured in Chromium at 1646 on 2026-08-17: the pinned block
- * ended at x=709 while the **Float** column rendered at 729–789, so it sat 80 px **on top of the
- * chart**, the pinned block's `z-10` painting it over the bars. Every child is `shrink-0`, so the
- * flex row simply overflowed its own box.
- *
- * Nobody had reported it, and it is easy to see why: Float is the last column, the overlap lands on
- * whitespace unless a bar starts near the left edge, and the numbers involved look deliberate. It
- * was found by measuring before adding a column rather than after. Hiding a column now makes the
- * width move on every choice, which is precisely why it must stay a derivation.
- */
-
-/** Width of the variance column, shown only when a baseline is active. */
-const VARIANCE_COLUMN_WIDTH = 72;
 
 /**
  * How a row not on the selected float path recedes (audit F4).
@@ -336,6 +246,17 @@ export interface GanttPanelProps {
    * is what the print surface and every suite mounting this component outside a router rely on.
    */
   viewState?: GanttViewStateBundle | undefined;
+  /**
+   * The planner's column widths (ADR-0173), held by the host so the `View ▾` fields and this grid
+   * read one value. Absent ⇒ every column is its default width, which is the grid that shipped.
+   */
+  columnWidths?: GanttColumnWidthsBundle | undefined;
+  /**
+   * The grid pane's remembered size, **owned by the host** for the same reason: the `Table width`
+   * field and the `Grid width` divider must show one number. Absent ⇒ the panel keeps its own
+   * instance, which is what the print surface and every suite mounting this component bare rely on.
+   */
+  gridPrefs?: GanttGridPrefs | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -385,7 +306,35 @@ export interface GanttPanelProps {
  * Read-only by design for this milestone (spec Q1) — there is no mutation, no pen interaction and
  * no path into the CPM engine anywhere in this subtree.
  */
-export function GanttPanel({
+export function GanttPanel(props: GanttPanelProps): React.ReactElement {
+  // The host's instance when it supplies one, the panel's own only when mounted bare — a hook cannot
+  // be called conditionally, so the two are two components rather than one with a branch inside.
+  // Two instances over one key would not sync (each holds its own state), which is why the host's
+  // is used whole and never alongside a second.
+  return props.gridPrefs === undefined ? (
+    <BareGanttPanel {...props} />
+  ) : (
+    <GanttPanelBody {...props} gridPrefs={props.gridPrefs} />
+  );
+}
+
+const NO_WIDTHS: ColumnWidths = {};
+
+function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
+  const { viewState, columnWidths, varianceByActivityId } = props;
+  const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
+  const columns = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const gridPrefs = useGanttGridPrefs({
+    columns,
+    widths: columnWidths?.widths ?? NO_WIDTHS,
+    extraPinnedWidth: variancePinnedWidth(
+      varianceByActivityId !== undefined && varianceByActivityId.size > 0,
+    ),
+  });
+  return <GanttPanelBody {...props} gridPrefs={gridPrefs} />;
+}
+
+function GanttPanelBody({
   activities,
   varianceByActivityId,
   zoomLevel = DEFAULT_ZOOM,
@@ -404,7 +353,9 @@ export function GanttPanel({
   bringIntoViewActivityId,
   viewState,
   rowStructure,
-}: GanttPanelProps): React.ReactElement {
+  columnWidths,
+  gridPrefs,
+}: GanttPanelProps & { gridPrefs: GanttGridPrefs }): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocus = useRef(false);
@@ -429,11 +380,15 @@ export function GanttPanel({
    * it is a derivation rather than a branch: there is no "columns feature off" path to keep in step.
    */
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const COLUMNS = useMemo(
-    () => GANTT_COLUMNS.filter((c) => !hiddenColumns.has(c.key)),
-    [hiddenColumns],
-  );
-  const GRID_WIDTH = useMemo(() => COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0), [COLUMNS]);
+  const COLUMNS = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const widths = columnWidths?.widths ?? NO_WIDTHS;
+  /**
+   * The visible columns' **default** widths, summed — and nothing a planner set. This is the zoom
+   * framing's only grid input (ADR-0173 D5): making it planner-aware would rescale every bar on
+   * every frame of a column change. `grid-width.structural.test.ts` pins that it is the only thing
+   * `barRegionWidth` reads.
+   */
+  const DEFAULT_GRID_WIDTH = useMemo(() => defaultGridWidth(COLUMNS, 0), [COLUMNS]);
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
@@ -442,16 +397,17 @@ export function GanttPanel({
   useEffect(() => {
     const element = scrollRef.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
-    const measure = (): void => setBarRegionWidth(Math.max(0, element.clientWidth - GRID_WIDTH));
+    const measure = (): void =>
+      setBarRegionWidth(Math.max(0, element.clientWidth - DEFAULT_GRID_WIDTH));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-    // `GRID_WIDTH` is now a per-render value (M5-T1 made the columns hideable), so it belongs in
+    // `DEFAULT_GRID_WIDTH` is a per-render value (M5-T1 made the columns hideable), so it belongs in
     // the deps: hiding a column changes how much room the bars have, and an effect that only ever
     // measured on mount would leave `barRegionWidth` — and therefore the zoom preset's px-per-day —
     // describing a grid that is no longer there, until the next window resize happened to fix it.
-  }, [GRID_WIDTH]);
+  }, [DEFAULT_GRID_WIDTH]);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   /**
@@ -464,47 +420,25 @@ export function GanttPanel({
    * chart starting at 817 — ADR-0095's Float incident, reproduced by a column added afterwards.
    */
   const FIXED_WIDTH = useMemo(
-    () => ganttFixedWidth(COLUMNS, showVariance ? VARIANCE_COLUMN_WIDTH : 0),
-    [COLUMNS, showVariance],
+    () => ganttFixedWidth(COLUMNS, widths, variancePinnedWidth(showVariance)),
+    [COLUMNS, widths, showVariance],
   );
-  const derivedGridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
   /**
-   * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8).
+   * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8) — an instance the HOST owns
+   * (`useGanttGridPrefs`) so the `View ▾` Table width field and this divider show one number.
    *
-   * Until now this was `derivedGridWidth` — the visible columns' intrinsic widths summed — so a
-   * planner could change how much room the identity columns get only by hiding one. `design.md` §2
-   * asks for a draggable splitter, and the splitter itself needed no design: `PanelResizer` is
-   * already an APG window splitter and `useResizablePanelPrefs` already the single implementation
-   * behind the Explorer rail and the Graphite drawer.
+   * **`gridWidth` is routed as ONE value through all fourteen sites** — the header cell, every
+   * activity row, every WBS bucket row, the chart's left offset and the content width. That matters
+   * more than it sounds: ADR-0095 found `GRID_WIDTH` as a literal disagreeing with its own columns,
+   * which painted the Float column 80 px on top of the chart. A resizable width has the same
+   * failure mode and a wider blast radius, and the reason it cannot recur here is that there is
+   * nowhere else for the number to come from.
    *
-   * **`gridWidth` was already routed as ONE value through all fourteen sites** — the header cell,
-   * every activity row, every WBS bucket row, the chart's left offset and the content width — so
-   * this is a change of source, not a change of shape. That matters more than it sounds: ADR-0095
-   * found `GRID_WIDTH` as a literal disagreeing with its own columns, which painted the Float
-   * column 80 px on top of the chart. A resizable width has the same failure mode and a wider blast
-   * radius, and the reason it cannot recur here is that there is nowhere else for the number to
-   * come from.
-   *
-   * **The planner's width wins over a column change**, once there is a splitter to set one with.
-   * The stored size seeds from the derived width on first use and then stands: hiding a column
-   * afterwards does not move a divider the planner placed. That is the opposite of what this
-   * component did before — and it is the right way round only *because* the splitter exists. A
-   * width nobody can set should follow its content; a width somebody placed should not move under
-   * them.
+   * **The planner's width wins over a column change.** The stored size seeds from the default widths
+   * on first use and then stands: widening or hiding a column afterwards does not move a divider the
+   * planner placed — Activity gives up the room instead. Its floor and ceiling are the host's
+   * `min`/`max`, derived from the same `column-widths.ts` arithmetic as `FIXED_WIDTH` above.
    */
-  const gridPrefs = useResizablePanelPrefs({
-    storageKey: 'schedulepoint:gantt-grid-width',
-    // The floor keeps the identity column — code and name — readable; below that the pane stops
-    // being a grid and becomes a margin. The ceiling is a fixed number rather than a share of the
-    // container because the chart's own minimum is what is being protected, and that does not
-    // shrink with the window.
-    // **The floor is what the fixed columns need**, not a round number. A pane narrower than that
-    // cannot lay its columns out and they overflow onto the chart — measured at the first
-    // 180 px guess, which clipped nothing and painted five columns over the bars.
-    min: FIXED_WIDTH,
-    max: GANTT_GRID_MAX_WIDTH,
-    defaultSize: derivedGridWidth,
-  });
   const gridWidth = gridPrefs.size;
 
   /**
@@ -512,7 +446,7 @@ export function GanttPanel({
    * the WBS bucket rows alike.
    *
    * `name` takes whatever the pane has beyond the fixed columns, floored at
-   * {@link NAME_COLUMN_MIN_WIDTH}. That is what makes the splitter mean something in both
+   * `NAME_COLUMN_MIN_WIDTH`. That is what makes the splitter mean something in both
    * directions: wider gives the activity name more room rather than adding blank space, narrower
    * takes it back rather than pushing the columns over the chart.
    *
@@ -520,9 +454,28 @@ export function GanttPanel({
    * incident argues for: that defect was a width literal disagreeing with its own columns.
    */
   const resolveColumnWidth = useCallback(
-    (column: GanttColumn): number => ganttColumnWidth(column, gridWidth, FIXED_WIDTH),
-    [gridWidth, FIXED_WIDTH],
+    (column: GanttColumn): number => ganttColumnWidth(column, widths, gridWidth, FIXED_WIDTH),
+    [widths, gridWidth, FIXED_WIDTH],
   );
+
+  // The chart guard (ADR-0173 §2.5): published for the host's `setWidth` to apply, because only this
+  // component knows whether a baseline column is showing, what the pane is, and how wide the
+  // scroller is. Applied at typing time only — nothing is shrunk automatically afterwards.
+  const guardRef = columnWidths?.guardRef;
+  useEffect(() => {
+    if (guardRef === undefined) return undefined;
+    guardRef.current = (key: ResizableColumnKey, candidate: number): number => {
+      const others = COLUMNS.filter((c) => c.key !== key);
+      return chartGuard(candidate, {
+        fixedWithoutColumn: ganttFixedWidth(others, widths, variancePinnedWidth(showVariance)),
+        pane: gridWidth,
+        scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
+      });
+    };
+    return () => {
+      guardRef.current = null;
+    };
+  }, [guardRef, COLUMNS, widths, showVariance, gridWidth]);
 
   // The row menu occupies a COLUMN, and every index after it shifts. `role="row"` may contain only
   // cells (`gridcell`/`columnheader`/`rowheader`), so M5-T3's trigger sitting as a direct child of
@@ -1293,8 +1246,8 @@ export function GanttPanel({
         <PanelResizer
           orientation="vertical"
           size={gridWidth}
-          min={FIXED_WIDTH}
-          max={GANTT_GRID_MAX_WIDTH}
+          min={gridPrefs.min}
+          max={gridPrefs.max}
           label="Grid width"
           onResize={gridPrefs.setSize}
           // Measured from the SCROLLER's left edge, because that is what the sticky column's width

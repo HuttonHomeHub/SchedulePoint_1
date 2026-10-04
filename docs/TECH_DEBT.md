@@ -11507,3 +11507,42 @@ planner restricts the grouped scan to the page's baselines at a realistic size �
 empty table, which proves nothing about a large one. **Next:** measure the list read against about 500,000 snapshot
 rows (a few hundred baselines of a few thousand activities) and, only if it is slow, replace `_count` with a keyed
 `groupBy` over the page's baseline ids. **Trigger:** the baselines list becomes slow, or the table grows.
+
+### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
+
+**Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·
+**Raised:** 2026-10-03 (Gantt column resize, M1-T0) · **Size:** S · **Owner:** web
+
+`barRegionWidth` is `scroller.clientWidth - GRID_WIDTH` (`GanttPanel.tsx:445`), where `GRID_WIDTH` is the
+sum of the visible columns' default widths, and its effect re-measures only when that sum changes. The
+`Grid width` divider changes the pane (`gridPrefs.size`), which neither the sum nor the scroller's size
+reflects. Measured after a +118 px drag (584 to 702): at 1646 px the preset assumes 785 px of chart and 667
+remain; at 1024 px it assumes 163 and **45** remain. Quarter framed the chart at the same width before
+and after the drag (151 px at 1646, 420 px at 1024), so the preset frames for a pane the planner has
+already moved. **Next:** derive the bar region from the pane width actually rendered. **Trigger:** the
+next change to the Gantt's width model, or a report of a preset that does not fit after a drag.
+
+### 438. The Gantt shows no chart at 390 px
+
+**Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (c), container Chromium at 390 x 844) ·
+**Raised:** 2026-10-03 (Gantt column resize, M1-T0) · **Size:** M · **Owner:** web
+
+The pinned grid block is 584 px (its floor, `FIXED_WIDTH`, is 524) in a 390 px scroller, and it is
+sticky, so the chart is **0 px visible at every scroll position**; the document itself does not overflow
+(`scrollWidth` 390), so nothing signals that the chart exists. The unclamped bar region is -194 px, so
+`barRegionWidth` clamps to 0 and the preset uses the fallback px-per-day. **Next:** decide what the Gantt is at phone width (a narrower pinned
+set, a collapsible grid, or a stated desktop-only surface). **Trigger:** the next mobile-width work, or
+any column-width change that moves the floor.
+
+### 439. The Grid width divider has no touch-action rule
+
+**Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (d), Chromium touch emulation through CDP at 1646, 1024 and 390 px) ·
+**Raised:** 2026-10-03 (Gantt column resize, M1-T0) · **Size:** XS · **Owner:** web
+
+A touch drag of the separator moves it (584 to 600) but the computed `touch-action` is `auto`, and the
+browser takes the gesture over: one `pointerdown`, three `pointermove`s, then a `pointercancel`, so the
+drag stops after a few pixels rather than following the finger. At 390 px the separator sits at x=581,
+outside the viewport, and cannot be touched at all (see #438). `PanelResizer` is shared with the
+Explorer rail and the Graphite drawer, so a rule there changes their gesture too. **Next:** decide
+whether `PanelResizer` takes `touch-action: none` (a shared primitive's contract, ADR-0111) or the Gantt
+wraps it. **Trigger:** touch use of any divider, or the next change to `PanelResizer`.
