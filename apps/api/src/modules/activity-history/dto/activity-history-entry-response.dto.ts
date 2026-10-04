@@ -27,7 +27,7 @@ export class ActivityHistoryBatchDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
-  @ApiProperty({ type: 'integer', description: 'How many activities the one write recorded.' })
+  @ApiProperty({ type: 'integer', description: 'How many entries the one write made.' })
   size!: number;
 }
 
@@ -53,17 +53,32 @@ export class ActivityHistoryEntryResponseDto implements ActivityHistoryEntry {
   })
   editCount!: number;
 
-  @ApiProperty({ type: ActivityHistoryBatchDto, nullable: true })
+  @ApiProperty({
+    type: ActivityHistoryBatchDto,
+    nullable: true,
+    description:
+      'Set for an entry written together with others (a group move, a batch re-parent, a dissolve, ' +
+      'a delete or restore); `size` is the number of entries the write made. Null otherwise.',
+  })
   batch!: ActivityHistoryBatchDto | null;
 
-  @ApiProperty({ enum: ACTIVITY_HISTORY_ORIGINS, nullable: true })
+  @ApiProperty({
+    enum: ACTIVITY_HISTORY_ORIGINS,
+    nullable: true,
+    description:
+      'Null for a change made to this activity directly. Otherwise why an entry exists that the actor ' +
+      'did not make to it: `ACTIVITY_DELETED` / `ACTIVITY_RESTORED` (a link to a surviving activity ' +
+      'went or came back because the other end was deleted or restored) and `SUMMARY_DISSOLVED` (a ' +
+      'child promoted when its summary was dissolved).',
+  })
   origin!: ActivityHistoryOrigin | null;
 
   @ApiProperty({
     type: 'object',
     additionalProperties: true,
     description:
-      'Keyed by item: a field name, `link:<id>` or `assignment:<id>`. A field item is ' +
+      'Keyed by item: a field name, `link:<id>`, `xlink:<id>` (a cross-plan link, whose `other` also ' +
+      'carries `planId` and `planName`) or `assignment:<id>`. A field item is ' +
       '`{ from, to }`; a description is `{ changed: true }` only; a link or assignment carries the ' +
       'other end or resource **as it was named when recorded**, with `from: null` meaning added and ' +
       '`to: null` meaning removed. Cost items are absent without `cost:read`.',

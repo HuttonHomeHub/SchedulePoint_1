@@ -114,6 +114,25 @@ describe.skipIf(!hasDatabase)('Activity history — batches and knock-ons (e2e)'
     return (await admin.get(`${API}/activities/${id}`).expect(200)).body.data as Json;
   }
 
+  /** A Viewer of Acme, signed in on their own agent. */
+  async function viewer(): Promise<Agent> {
+    const agent: Agent = request.agent(app.getHttpServer());
+    const res = await agent
+      .post('/api/auth/sign-up/email')
+      .set('Origin', ORIGIN)
+      .send({ name: 'vera', email: 'vera@example.com', password: PASSWORD })
+      .expect(200);
+    const org = await prisma.organization.findFirstOrThrow({ where: { slug: 'acme' } });
+    await prisma.orgMember.create({
+      data: {
+        organizationId: org.id,
+        userId: (res.body as { user: { id: string } }).user.id,
+        role: 'VIEWER',
+      },
+    });
+    return agent;
+  }
+
   const link = (admin: Agent, planId: string, predecessorId: string, successorId: string) =>
     admin.post(`${API}/plans/${planId}/dependencies`).send({ predecessorId, successorId });
 
@@ -453,6 +472,32 @@ describe.skipIf(!hasDatabase)('Activity history — batches and knock-ons (e2e)'
         expect(entries).toHaveLength(2);
         expect(Object.values(entries[0]?.changes as Json)[0]).toMatchObject({ to: null });
       }
+    });
+  });
+
+  describe('a Viewer reading a batch or cross-plan entry', () => {
+    it('sees a group move and a cross-plan link: neither carries money, so neither is withheld', async () => {
+      const { admin, projectId, planId, acts } = await setup('Excavate', 'Pour slab');
+      const [a, b] = acts as [Json, Json];
+      await move(admin, planId, [placement(a, '2026-02-02'), placement(b, '2026-02-02')]).expect(
+        200,
+      );
+      const downstreamPlan = await plan(admin, projectId, 'Phase 2');
+      const c = await activity(admin, downstreamPlan, 'Fit out');
+      const created = await admin
+        .post(`${API}/cross-plan-dependencies`)
+        .send({ predecessorActivityId: a.id, successorActivityId: c.id })
+        .expect(201);
+
+      const vera = await viewer();
+      const seenOnA = await history(vera, a.id);
+      expect(seenOnA).toHaveLength(2);
+      expect(seenOnA.map((e) => e.scope).sort()).toEqual(['LOGIC', 'PLACEMENT']);
+      expect(seenOnA.find((e) => e.scope === 'PLACEMENT')?.batch).toMatchObject({ size: 2 });
+      expect(Object.keys(seenOnA.find((e) => e.scope === 'LOGIC')?.changes as Json)).toEqual([
+        `xlink:${created.body.data.id as string}`,
+      ]);
+      expect(await history(vera, c.id)).toHaveLength(1);
     });
   });
 

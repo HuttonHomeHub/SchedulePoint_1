@@ -207,7 +207,7 @@ export interface ActivityHistoryEntry {
   lastRecordedAt: string;
   /** How many saves this entry absorbed (1 = one save). */
   editCount: number;
-  /** Set for a multi-activity write: how many activities the one write recorded. */
+  /** Set for a multi-activity write: how many entries the one write made. */
   batch: { id: string; size: number } | null;
   origin: ActivityHistoryOrigin | null;
   /** Keyed by item: a field key, `link:<id>` or `assignment:<id>` (`xlink:<id>` for a cross-plan link). */
