@@ -1,7 +1,7 @@
 # Implementation Plan: "Edited since it was calculated" means a scheduling input changed
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — product owner, 2026-10-04 ("leave calendar edits out of it for now", in reply to the plain-English summary). CQ-1 answered (a): calendar, shift and exception edits and resource max-units/calendar edits stay out of scope and go to a TECH_DEBT row.
 - **Owner:** builder (Sonnet), with the database-architect re-reviewing the PR
 
 ## Breakdown
