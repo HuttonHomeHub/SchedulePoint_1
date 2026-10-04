@@ -170,7 +170,7 @@ option); all 19 tests stopped signing up. Three local runs came back 19/19, the 
 on all four shards.
 
 **Task 3.2: six of eight ceilings measured (2026-10-04).** Each suite was run locally with
-`E2E_THROTTLE_CENSUS=1` (all green, zero 429s) and its `RATE_LIMIT_LIMIT` replaced the blind `100000`:
+`E2E_THROTTLE_CENSUS=1` (all green, zero 429s) and its `RATE_LIMIT_LIMIT` replaced the blind `100000` (**superseded, see below**):
 
 | Config                                  | Busiest handler                         | Local peak / 60 s | Ceiling |
 | --------------------------------------- | --------------------------------------- | ----------------- | ------- |
@@ -186,6 +186,15 @@ status above records CI runners spending more than 100 per 60 s on `activity-edi
 so a local 2x is not conservative for CI. The two `measure-*` harness configs
 (`playwright.measure-gantt.config.ts`, `playwright.measure-route-splitting.config.ts`) are still pending and
 keep `100000`. #435 and #361 stay open pending ten consecutive green CI runs and M3.3.
+
+**Defect in the six figures above (2026-10-04).** They were taken with a census that left the organisation slug in
+the path (`/organizations/chrome-co-1791123870232/plans/:id/activities`), but the throttler counts per IP per
+handler, so one handler's traffic under many organisations is one bucket. Suites that create an organisation per
+test spread that traffic over many rows, and every figure above understates its real peak. `workspace-chrome` is
+the proof: its census reported `POST …/activities` at 61, yet `activities-panel-scroll.spec.ts` seeds 60
+activities in each of four consecutive tests, and that suite got a 429 on that route near the 300th POST under its
+300 ceiling. The census now templates the slug as `:org`, with a unit test. The six suites are being re-measured
+and the table above is not to be used until the new figures replace it.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.

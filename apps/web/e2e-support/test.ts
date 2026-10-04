@@ -95,17 +95,24 @@ export function formatRateLimitFailure(hits: readonly RateLimitHit[]): string {
 
 /**
  * Collapses the segments that vary per entity so one handler is one key: UUIDs, cuids and bare
- * numbers become `:id`. A census keyed on raw paths would list every plan as its own handler.
+ * numbers become `:id`, and the organisation slug after `organizations/` becomes `:org`. The
+ * throttler buckets by route pattern, so `/organizations/a/plans/1/activities` and
+ * `/organizations/b/plans/2/activities` are one bucket; a suite that creates an organisation per
+ * test would otherwise spread one handler's traffic over many rows and understate its peak. The slug
+ * is the only non-id path parameter in the API (`:orgSlug`; the share-guest routes carry their token
+ * outside the path), so it is the only one named here.
  */
 export function templatePath(path: string): string {
-  return path
-    .split('/')
-    .map((segment) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment) ||
-      /^c[a-z0-9]{24}$/.test(segment) ||
-      /^\d+$/.test(segment)
-        ? ':id'
-        : segment,
+  const segments = path.split('/');
+  return segments
+    .map((segment, index) =>
+      segments[index - 1] === 'organizations' && segment !== ''
+        ? ':org'
+        : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment) ||
+            /^c[a-z0-9]{24}$/.test(segment) ||
+            /^\d+$/.test(segment)
+          ? ':id'
+          : segment,
     )
     .join('/');
 }
