@@ -1,5 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 /** The organisation nav in the header — scoped so its links don't clash with breadcrumbs. */
 function navLink(page: Page, name: string): Locator {

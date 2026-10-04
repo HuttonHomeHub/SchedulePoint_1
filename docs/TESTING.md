@@ -656,11 +656,38 @@ separated "my change broke this" from "this harness is lying" — and the whole 
 passed once the API was actually being torn down between suites.
 
 So when sweeping suites yourself: kill `api/dist/main` **by that name**, wait for
-**both** ports to stop answering before starting the next config, and if you are
-running many in sequence raise `RATE_LIMIT_LIMIT` **for the local run only**. CI
-is unaffected — it starts a fresh API per suite — and the product default
-(100 / 60 s, `RATE_LIMIT_TTL` / `RATE_LIMIT_LIMIT`) must not be changed to make a
-local sweep pass.
+**both** ports to stop answering before starting the next config. Raising
+`RATE_LIMIT_LIMIT` **for the local run only** is a last resort, sized from the
+census below rather than set to a blind `100000`. CI is unaffected — it starts a
+fresh API per suite — and the product default (100 / 60 s, `RATE_LIMIT_TTL` /
+`RATE_LIMIT_LIMIT`) must not be changed to make a local sweep pass.
+
+### A 429 in a journey fails by name
+
+`ThrottlerGuard` counts **per IP and per handler**, so a suite that signs up a
+fresh user in every test can spend one handler's budget (`GET /api/v1/me` is the
+usual one) and nothing says so: the screen draws its signed-out half and the
+journey times out on a heading. ADR-0175 makes that visible.
+
+- **The fixture.** Import `test` and `expect` from `apps/web/e2e-support/test.ts`,
+  not `test` from `@playwright/test`. A test whose page, or any context it opens
+  with `browser.newContext()`, receives a 429 from `/api/` **fails at teardown**
+  with `API rate limit hit: 429 … on GET /api/v1/me at +41.2s (ThrottlerGuard …)`,
+  even if it otherwise passed. Only the base suite (`apps/web/e2e/`) uses it so
+  far; the rest follow in the spec's M2, with a lint rule.
+- **The gap.** `APIRequestContext` (`page.request`, `request`) emits no `response`
+  event and is not seen. In-page `fetch` is.
+- **The opt-out.** A test that provokes a 429 on purpose uses
+  `test.use({ allowRateLimited: true })` inside its own `describe`, never
+  file-wide.
+- **The census.** `E2E_THROTTLE_CENSUS=1` prints, when each worker finishes, the
+  peak requests per `METHOD path-template` in any rolling 60 s window. Size a
+  limit from that, at about 2x the peak and citing the figure and date in the
+  config comment.
+- **The remedy ladder** for a handler above ~80 per 60 s: remove redundant reads;
+  sign up once per worker rather than per test; only then a scoped raise.
+- **Proving it.** `e2e/throttle-visibility.spec.ts` fulfils a 429 and expects the
+  `test.fail()` twins to fail; with the fixture's throw removed they go red.
 
 ### Flipping a default changes the base suite
 

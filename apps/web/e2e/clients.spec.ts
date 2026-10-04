@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+
+import { expect, test } from '../e2e-support/test';
 
 /**
  * The hierarchy-navigation journey: a new user onboards an organisation, creates

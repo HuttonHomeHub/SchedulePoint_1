@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { expect, test } from '../e2e-support/test';
 import { recalculate, revealToolbarCommand } from '../e2e-support/toolbar';
 
 import { chooseComboboxOption, comboboxField } from './combobox';

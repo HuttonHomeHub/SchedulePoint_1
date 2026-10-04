@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../e2e-support/test';
 
 /**
  * The team-onboarding journey: an admin creates an organisation, invites a
