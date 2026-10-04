@@ -969,10 +969,16 @@ model Plan {
   /// SEMANTICS ARE AN UPPER BOUND, which is what makes the backfill honest rather than invented:
   /// every scheduling-input write to this plan happened at or before this instant. Over-reporting
   /// (a write that turned out not to move anything) is the safe direction; under-reporting is the
-  /// defect. The writers stamp `GREATEST(schedule_inputs_changed_at, now())` — DB `now()`, the SAME
-  /// clock and the same transaction-start semantics as `schedule_computed_at`, so an input write and
-  /// a recalculation in one transaction compare EQUAL (not stale), and the GREATEST keeps the column
-  /// monotone when two transactions commit out of start order.
+  /// defect. The writers stamp `GREATEST(schedule_inputs_changed_at, clock_timestamp())` in the
+  /// edit's last statement (`markScheduleInputsChanged`), NOT `now()`: `now()` is the edit
+  /// transaction's START, so an edit that began before a recalculation and committed after its read
+  /// would be stamped earlier than `schedule_computed_at` (the recalc's `now()`) and missed. The
+  /// GREATEST keeps the column monotone when two transactions commit out of order. The helper must
+  /// NEVER run inside a recalculation transaction: its `clock_timestamp()` is always later than that
+  /// transaction's `now()`, so the plan would read "edited since" permanently. The race still runs
+  /// both ways (`docs/TECH_DEBT.md` #449): an edit that stamps before a recalc starts and commits
+  /// after its read is missed, and a recalc queued on the plan lock behind an edit it then reads
+  /// leaves a spurious flag.
   ///
   /// CLIENT-NEVER, USER-INVISIBLE TO LOCKING. Stamped by a raw `UPDATE plans` that touches no
   /// `version`/`updated_at`/`updated_by` (the `stampScheduleComputedAt` shape), so an activity edit

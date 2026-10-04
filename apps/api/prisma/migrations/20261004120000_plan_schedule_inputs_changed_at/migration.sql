@@ -18,10 +18,15 @@
 -- `updated_at` keeps its house meaning and keeps ordering "Recently changed".
 --
 -- SEMANTICS: AN UPPER BOUND. Every scheduling-input write to the plan happened at or before this
--- instant. Writers stamp `GREATEST(schedule_inputs_changed_at, now())` with the DATABASE clock — the
--- same clock and transaction-start semantics as `stampScheduleComputedAt`'s `now()`, so an input write
--- and a recalculation in ONE transaction compare equal (not stale), and GREATEST keeps the column
--- monotone when two transactions commit out of start order. The recalculation never writes this
+-- instant. Writers stamp `GREATEST(schedule_inputs_changed_at, clock_timestamp())` in the edit's last
+-- statement (`markScheduleInputsChanged`), NOT `now()`: `now()` is the edit transaction's START, so an
+-- edit that began before a recalculation and committed after its read would be stamped earlier than
+-- `schedule_computed_at` (the recalc's `now()`) and missed. GREATEST keeps the column monotone when
+-- two transactions commit out of order. The helper must NEVER run inside a recalculation
+-- transaction: its `clock_timestamp()` is always later than that transaction's `now()`, so the plan
+-- would read "edited since" permanently. The race still runs both ways (`docs/TECH_DEBT.md` #449): an
+-- edit that stamps before a recalc starts and commits after its read is missed, and a recalc queued
+-- on the plan lock behind an edit it then reads leaves a spurious flag. The recalculation never writes this
 -- column, and nothing here touches `schedule_computed_at`, which cross-plan staleness compares
 -- BETWEEN plans (staleness.ts).
 --
