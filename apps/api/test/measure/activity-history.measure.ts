@@ -28,9 +28,17 @@ import { resetThrottleCounters } from '../throttle-reset';
  * recorder is a singleton, so this harness replaces its four methods ON THE INSTANCE with stubs that
  * consult a flag: `record` returns, and the three diff-builders return nothing to record. The same
  * service path then runs with and without. Each iteration runs one request of each arm, in random
- * order, on different (statistically identical) activities, so machine drift lands on both arms. What
- * the baseline still pays: the services' own before/after reads. What it does not: the diff, the
- * endpoint/resource/calendar name lookups, the history lock, the probe and the entry write.
+ * order, on different (statistically identical) activities, so machine drift lands on both arms.
+ *
+ * **The baseline carries none of the feature's reads.** The first measurement (2026-10-04) left the
+ * services' own `before` re-read inside the "without" arm, so the feature's cost was understated by
+ * a round trip (the product owner restated the bar to count it). Now the "without" arm also serves
+ * the transaction's first `activity.findFirst` / `resourceAssignment.findFirst` from a stub that
+ * returns an empty object without touching the database — that read exists only for the history —
+ * so the difference between the arms is everything the feature adds: that read, the history lock,
+ * the probe (which also reads the names) and the entry write. The version-gated update comes back as
+ * `RETURNING` in both arms; the pre-feature `updateMany` returned a count, and that difference is not
+ * separable here (it is a few extra columns on a row the statement already touched).
  */
 const ORIGIN = 'http://localhost:5173';
 const PASSWORD = 'correct-horse-battery';
@@ -119,15 +127,56 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history measurement', () =>
       assignmentChanges: recorder.assignmentChanges.bind(recorder),
       linkWrites: recorder.linkWrites.bind(recorder),
     };
+    const { noChanges } =
+      await import('../../src/modules/activity-history/activity-history.pending');
     const patched = recorder as unknown as Record<string, unknown>;
     patched.record = (...a: Parameters<typeof real.record>) =>
       recording ? real.record(...a) : Promise.resolve();
     patched.activityFieldChanges = (...a: Parameters<typeof real.activityFieldChanges>) =>
-      recording ? real.activityFieldChanges(...a) : Promise.resolve({});
+      recording ? real.activityFieldChanges(...a) : noChanges();
     patched.assignmentChanges = (...a: Parameters<typeof real.assignmentChanges>) =>
-      recording ? real.assignmentChanges(...a) : Promise.resolve({});
+      recording ? real.assignmentChanges(...a) : noChanges();
     patched.linkWrites = (...a: Parameters<typeof real.linkWrites>) =>
-      recording ? real.linkWrites(...a) : Promise.resolve([]);
+      recording ? real.linkWrites(...a) : [];
+
+    // The history's own `before` read, elided from the baseline arm (see the header). Which model's
+    // first `findFirst` that is depends on the write: an activity save reads the activity (its
+    // driving-assignment read is on the other model and is the service's own), an assignment save
+    // reads the assignment. `historyRead` names it for the operation being measured.
+    let historyRead: 'activity' | 'resourceAssignment' | null = null;
+    const realTransaction = prisma.$transaction.bind(prisma) as (
+      fn: (tx: Record<string, any>) => Promise<unknown>,
+      options?: unknown,
+    ) => Promise<unknown>;
+    (prisma as unknown as Record<string, unknown>).$transaction = (
+      arg: unknown,
+      options?: unknown,
+    ) => {
+      if (typeof arg !== 'function' || recording) return realTransaction(arg as never, options);
+      return realTransaction((tx) => {
+        const skipped = new Set<string>();
+        const delegate = (model: string) =>
+          new Proxy(tx[model], {
+            get(target, op) {
+              if (op === 'findFirst' && model === historyRead && !skipped.has(model)) {
+                skipped.add(model);
+                return () => Promise.resolve({});
+              }
+              const value = Reflect.get(target, op, target) as unknown;
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+        return (arg as (tx: unknown) => Promise<unknown>)(
+          new Proxy(tx, {
+            get(target, prop) {
+              if (prop === 'activity' || prop === 'resourceAssignment') return delegate(prop);
+              const value = Reflect.get(target, prop, target) as unknown;
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          }),
+        );
+      }, options);
+    };
 
     // ---- seed: an org, 20 plans x 50 activities, a resource, a second planner, a viewer.
     const admin = await signUp('admin@example.com');
@@ -298,12 +347,14 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history measurement', () =>
     // Warm both pools: one unmeasured write each so every measured "merge" write has a live entry
     // by the same actor to merge into (the burst case), then measure.
     const hot0 = await hotSnapshot();
+    historyRead = 'activity';
     for (const arm of ['with', 'without'] as const) {
       recording = arm === 'with';
       for (let i = 0; i < PER_PLAN; i++) await patchActivity(admin, pool(arm, i), 6);
     }
     recording = true;
     let day = 6;
+    historyRead = 'activity';
     await compare('patchActivity_merge', (arm, i) =>
       timed(() => patchActivity(admin, pool(arm, i), ++day)),
     );
@@ -325,6 +376,7 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history measurement', () =>
     out.hot_patchInsert = { before: hot1, after: hot2 };
 
     // Assignments: one per activity in plans 5/6, updated in place.
+    historyRead = null;
     const assign: Record<string, string> = {};
     for (const arm of ['with', 'without'] as const) {
       for (let i = 0; i < PER_PLAN; i++) {
@@ -340,6 +392,7 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history measurement', () =>
       }
     }
     recording = true;
+    historyRead = 'resourceAssignment';
     let units = 10;
     const updateAssignment = async (actor: typeof admin, act: string) => {
       const id = assign[act] as string;
@@ -363,6 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history measurement', () =>
 
     // Link create: disjoint pairs (i, i + 25) in plans 7 (with) and 8 (without), so no chains.
     // 25 pairs per plan, so ITER is capped by the pairs available per arm across plans.
+    historyRead = null;
     const linkPlans = { with: [7, 9, 11, 13, 15, 17], without: [8, 10, 12, 14, 16, 18] };
     let linkN = 0;
     const iterLinks = Math.min(ITER, 25 * 6);
