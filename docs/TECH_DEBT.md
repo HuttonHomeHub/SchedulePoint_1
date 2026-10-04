@@ -11528,6 +11528,19 @@ empty table, which proves nothing about a large one. **Next:** measure the list 
 rows (a few hundred baselines of a few thousand activities) and, only if it is slow, replace `_count` with a keyed
 `groupBy` over the page's baseline ids. **Trigger:** the baselines list becomes slow, or the table grows.
 
+### 442. `PanelResizer` offers no single-pointer alternative to a drag, outside the Gantt
+
+**Status:** open · **Verified:** 2026-10-04 (read of `panel-resizer.tsx` and its consumers: `grep -rl PanelResizer apps/web/src`
+finds `surface.tsx`, `explorer-column.tsx`, `plan-workspace-toolbar.tsx`, `GanttPanel.tsx` and `TsldMinimap.tsx`) ·
+**Raised:** 2026-10-04 (Gantt column resize spec §4.9, M2-T5) · **Size:** M · **Owner:** web
+
+WCAG 2.2 SC 2.5.7 asks for a single-pointer, non-dragging alternative to a drag. The splitter's arrow keys are a
+keyboard route, not that. After ADR-0173 the Gantt has one (the `Table width` field next to its `Grid width`
+divider); the other consumers have none. **Not established:** whether the accessibility-reviewer rules a keyboard
+step sufficient for a divider (it is asked before release, CLAUDE.md §19.13). **Next:** if it does not, give each
+consumer a typed or stepped control in the surface that owns it, as the Gantt's `View ▾` does. **Trigger:** the
+reviewer's ruling, or a complaint from a pointer-only user.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·
@@ -11566,3 +11579,8 @@ outside the viewport, and cannot be touched at all (see #438). `PanelResizer` is
 Explorer rail and the Graphite drawer, so a rule there changes their gesture too. **Next:** decide
 whether `PanelResizer` takes `touch-action: none` (a shared primitive's contract, ADR-0111) or the Gantt
 wraps it. **Trigger:** touch use of any divider, or the next change to `PanelResizer`.
+
+> **2026-10-04 (ADR-0173 M2).** The Gantt's new column edges set `touch-action: none` and are not rendered under
+> `pointer: coarse`, so they do not inherit this. The shared `PanelResizer` is unchanged here: M2-T1 moved its
+> pointer logic into `usePointerDrag` verbatim and added no `touch-action`. The touch reading of the new strip on a
+> fine-primary touch device is owed (`m2-measurement.md`).

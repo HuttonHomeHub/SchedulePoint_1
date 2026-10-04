@@ -585,6 +585,12 @@ keep `main` releasable.
   > is 8% slower and a refresh 17% slower there; the product owner accepted the refresh trade, and
   > `docs/TECH_DEBT.md` #433 owns re-measuring it behind the production cache headers.
 
+  > **Resizable Gantt columns** (**ADR-0173**, `docs/specs/gantt-column-resize/`; typed widths shipped in
+  > web 0.160.0, the header-edge drag follows). A planner sets Code, Duration, Start, Finish, Float left
+  > and Predecessors by typing in `View ▾` or by dragging a header edge; Activity gives up the room and the
+  > chart stays put; widths are remembered on the device and the printed programme keeps its own. The
+  > backlog said the grid had no resize handle for a month after the table/chart divider shipped.
+
 ## Delivered — operations & supportability
 
 **A theme this roadmap did not have.** Everything below was built between 2026-08-05 and
