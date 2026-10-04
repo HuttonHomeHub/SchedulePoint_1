@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createVersionLedger } from './commands';
 import type { PlanEditHistory } from './use-plan-edit-history';
 import {
   REDO_CONFLICT_MESSAGE,
@@ -38,6 +39,7 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
     redo: vi.fn().mockResolvedValue('Add link'),
     clear: vi.fn(),
     clearRedo: vi.fn(),
+    versions: createVersionLedger(),
     canUndo: true,
     canRedo: true,
     undoLabel: 'Move activity',

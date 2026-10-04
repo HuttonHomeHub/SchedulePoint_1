@@ -2,7 +2,14 @@ import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { relaneCommand, type Command, type RepositionLaneFn } from './commands';
+import {
+  durationResizeCommand,
+  relaneCommand,
+  updateCommand,
+  type Command,
+  type RepositionLaneFn,
+  type UpdateActivityFn,
+} from './commands';
 import { COALESCE_WINDOW_MS, MAX_HISTORY_DEPTH, usePlanEditHistory } from './use-plan-edit-history';
 
 /** A command whose undo/redo push a tag onto a shared log so replay order is observable. */
@@ -379,5 +386,110 @@ describe('usePlanEditHistory coalescing', () => {
     act(() => result.current.record(lane(fn, 0, 5, 30)));
     expect(result.current.canUndo).toBe(true);
     expect(result.current.canRedo).toBe(false); // the fresh edit cleared the redo branch
+  });
+});
+
+/**
+ * The version ledger (`docs/TECH_DEBT.md` #447): several steps on ONE activity each captured their own
+ * optimistic version, so the second undo sent a version the first undo had already bumped and every
+ * replay after it 409'd. A fake server that enforces the lock per row is the only honest oracle.
+ */
+describe('usePlanEditHistory version ledger', () => {
+  /** A server that 409s on any version but the row's current one, and bumps it on every write. */
+  function fakeServer(initial: number) {
+    const rows = new Map<string, number>([['a1', initial]]);
+    const write = (id: string, version: number, laneIndex: number | undefined) => {
+      if (rows.get(id) !== version) return Promise.reject(new Error('409'));
+      const next = version + 1;
+      rows.set(id, next);
+      return Promise.resolve({ id, version: next, laneIndex } as unknown as ActivitySummary);
+    };
+    const update: UpdateActivityFn = (input) =>
+      write(input.activityId, input.version, input.laneIndex);
+    const repositionLane: RepositionLaneFn = (input) =>
+      write(input.activityId, input.version, input.laneIndex);
+    return { rows, update, repositionLane };
+  }
+
+  const snapshot = (version: number, durationDays: number, laneIndex: number) =>
+    ({
+      id: 'a1',
+      name: 'Excavate',
+      version,
+      durationDays,
+      durationMinutes: durationDays * 480,
+      laneIndex,
+    }) as unknown as ActivitySummary;
+
+  /** Four edits on one activity, recorded as the seam records them (versions 2, 3, 4 and 5). */
+  function recordFour(
+    history: ReturnType<typeof usePlanEditHistory>,
+    server: ReturnType<typeof fakeServer>,
+  ) {
+    history.record(
+      updateCommand({ update: server.update, before: snapshot(1, 5, 0), after: snapshot(2, 5, 0) }),
+    );
+    history.record(
+      durationResizeCommand({
+        update: server.update,
+        before: snapshot(2, 5, 0),
+        after: snapshot(3, 6, 0),
+      }),
+    );
+    history.record(
+      updateCommand({ update: server.update, before: snapshot(3, 6, 0), after: snapshot(4, 6, 0) }),
+    );
+    history.record(
+      relaneCommand({
+        repositionLane: server.repositionLane,
+        activityId: 'a1',
+        fromLaneIndex: 0,
+        toLaneIndex: 1,
+        version: 5,
+      }),
+    );
+  }
+
+  it('replays every step on one activity — undo all, redo all, undo all — without a 409', async () => {
+    const server = fakeServer(5);
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => recordFour(result.current, server));
+
+    for (const direction of ['undo', 'redo', 'undo'] as const) {
+      for (let step = 0; step < 4; step += 1) {
+        await act(async () => {
+          await result.current[direction]();
+        });
+      }
+    }
+    expect(result.current.canUndo).toBe(false);
+    expect(result.current.canRedo).toBe(true);
+  });
+
+  it('still 409s when an UNRECORDED write bumped the row — the ledger is not a cache read', async () => {
+    const server = fakeServer(5);
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => recordFour(result.current, server));
+
+    await act(async () => {
+      await result.current.undo(); // lane: v5 → v6
+    });
+    server.rows.set('a1', 20); // somebody else wrote the row; nothing recorded it
+
+    await expect(
+      act(async () => {
+        await result.current.undo();
+      }),
+    ).rejects.toThrow('409');
+    // The failed replay left the stacks intact (the M3 conflict contract still applies).
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it('forgets every version on clear()', () => {
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    act(() => result.current.versions.observe('a1', 9));
+    expect(result.current.versions.get('a1')).toBe(9);
+    act(() => result.current.clear());
+    expect(result.current.versions.get('a1')).toBeUndefined();
   });
 });

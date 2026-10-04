@@ -165,3 +165,7 @@ member, so the restore worked only when the database happened to return the root
 ordinary rename moves a row to the end of the heap, which flips it. Fixed and released on its own
 before this milestone, so the capability was never built on top of a rare, invisible failure
 (`api-v0.55.3`).
+
+## Amendment (2026-10-04) — a replay sends the row's latest known version
+
+Each command builder threaded its own optimistic-lock `version`, which is correct only while that command is the sole writer of its row. Two steps on one activity (a move, then a resize) each captured the version their forward write returned, so undoing the newer step bumped the row and the older step's undo sent a stale number: one 409, then a 409 on every replay after it (`docs/TECH_DEBT.md` #447, reproduced in a browser with move, resize, move, lane on one activity). The history now owns a **version ledger** (`VersionLedger`, `history.versions`): a monotonic max per entity id, seeded by `record` from each command's post-edit version(s) and fed by every successful replay response, and emptied by `clear()`. A replay sends `max(its own threaded version, ledger)`. The ledger only knows versions the stack itself recorded or replayed — it never reads the query cache and never fetches — so a write the stack did not record (another path, another user) still produces the 409 that M3.1's conflict contract exists to report. Recreate-on-undo commands observe the new row's version under its new id, and restore paths (delete-batch restore, paste redo) observe the restored rows' bumped versions.
