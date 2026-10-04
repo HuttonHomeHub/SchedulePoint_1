@@ -556,8 +556,8 @@ does not restate the Prisma model. Its corrections are adopted here:
 
 1. **FK `ON DELETE RESTRICT`, not `CASCADE`, with an explicit counted delete** at three sites: the
    hierarchy-expiry runner (charged against the per-run budget as
-   `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio shipping as `1` and replaced
-   by M3-T1's measurement), interchange compensation, and a DMMF-derived test-cleanup helper for the
+   `activities + ceil(historyEntries / HISTORY_ROWS_PER_ACTIVITY)`, ratio shipped as `1`, measured and set to `5` by
+   M3-T1 on 2026-10-04), interchange compensation, and a DMMF-derived test-cleanup helper for the
    ~15 e2e files that hard-delete activities.
 2. **No `plan_id`.** Bulk removal works from activity ids, which the runner already resolves.
 3. **External early start / late finish stored as UTC instants**, not calendar dates.

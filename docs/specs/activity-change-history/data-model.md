@@ -268,13 +268,14 @@ Why `RESTRICT` beats `CASCADE`:
 
 **How the budget accounts for history.** `ExpiryCounts` gains `activityHistoryEntries`. The sweep
 charges `activities + ceil(activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY)` against
-`ACTIVITY_BUDGET_PER_RUN`. **`HISTORY_ROWS_PER_ACTIVITY` ships as `1`**, which is deliberately
-pessimistic. **M3-T1** replaces it with the measured ratio. The `hierarchy.expired` audit row's
+`ACTIVITY_BUDGET_PER_RUN`. **`HISTORY_ROWS_PER_ACTIVITY` shipped as `1`** and **M3-T1 replaced it with
+`5` on 2026-10-04** (`m3-measurement.md`: ~80 µs per activity against 4–5 µs per history row clustered and
+7.5–7.8 µs interleaved, warm container figures; cold rows cost more, so 5 keeps headroom). The `hierarchy.expired` audit row's
 flattened `after` gains `activityHistoryCount`.
 
 **The hazard the budget cannot bound.** A batch can't be split, and it runs inside the 60 s
-`BATCH_TRANSACTION_TIMEOUT_MS`. **M3-T1** must report the **history-row count at which a single scope
-reaches 60 s**. If a realistic scope can reach it, the fallback is a pre-pass that deletes the scope's
+`BATCH_TRANSACTION_TIMEOUT_MS`. **M3-T1** reported the **history-row count at which a single scope
+reaches 60 s**: about 7.7 million interleaved warm rows for 2,000 activities (extrapolated from a 1M measurement, and likely optimistic because per-row cost rose with size). At the corrected row rate of about 18k–190k a year that is not a realistic scope, but it is a warm-cache, one-machine figure, and cold or scattered rows cost more. No pre-pass is proposed until a scope is measured cold and interleaved on the deployed host (TECH_DEBT #443). If a realistic scope can reach it, the fallback is a pre-pass that deletes the scope's
 history in bounded chunks, each in its own transaction. Each chunk transaction first takes
 `SELECT … FOR UPDATE` on the scope root and re-checks `deleted_at < cutoff`. Not proposed for v1.
 CQ-3 raises the history density per activity (§10 O7), so this measurement matters more than it did,
