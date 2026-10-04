@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.163.1
+
+### Patch Changes
+
+- [#793](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/793) [`986f213`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/986f2139afeb3ad6a90c0ac47e32bf40bf0e035e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Leaving a plan no longer re-sends an earlier keyboard move or resize, which could undo an undo and show a conflict message. A keyboard nudge after an undo or another edit now starts from the row as it is now, not from the value it was nudged to before.
+
+- [#792](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/792) [`c67e3e0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c67e3e0953dab3c63de796a677ce02c11ab4a5bf) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo and redo no longer stop after one step when several edits touched the same activity.
+
 ## 0.163.0
 
 ### Minor Changes
