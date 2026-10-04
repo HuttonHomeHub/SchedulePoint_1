@@ -251,7 +251,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   ],
 
   throttleCensus: [
-    async (_fixtures, provide) => {
+    // Playwright parses this first parameter and refuses anything but a destructuring pattern.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, provide) => {
       await provide();
       if (censusEnabled) {
         printCensus();
