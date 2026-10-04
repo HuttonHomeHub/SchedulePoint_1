@@ -173,7 +173,9 @@ export class ResourceAssignmentRepository {
 
   /**
    * Optimistic-locked update: only touches the active row if its version still matches.
-   * Returns rows changed — `0` means a version conflict or the row is gone (→ 409).
+   * Returns the row as written — `null` means a version conflict or the row is gone (→ 409). The
+   * row comes back from the update itself, which is the history's "after" without a second round
+   * trip (ADR-0174 D4).
    */
   async updateIfVersionMatches(
     id: string,
@@ -181,12 +183,12 @@ export class ResourceAssignmentRepository {
     patch: AssignmentPatch,
     updatedBy: string,
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<number> {
-    const result = await db.resourceAssignment.updateMany({
+  ): Promise<ResourceAssignment | null> {
+    const [row] = await db.resourceAssignment.updateManyAndReturn({
       where: this.active({ id, version: expectedVersion }),
       data: { ...patch, updatedBy, version: { increment: 1 } },
     });
-    return result.count;
+    return row ?? null;
   }
 
   /** Soft-delete (unassign) one assignment. Returns rows changed (`0` if already gone). */

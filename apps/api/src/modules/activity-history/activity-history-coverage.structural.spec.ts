@@ -15,7 +15,8 @@ import { describe, expect, it } from 'vitest';
  * appears in neither list turns "does this record?" into a decision somebody makes.
  *
  * **The writes are found by reading the source**, not from a hand-written list: every
- * `<model>.create | createMany | update | updateMany | upsert | delete | deleteMany` on the four
+ * `<model>.create | createMany | createManyAndReturn | update | updateMany | updateManyAndReturn | upsert |
+ * delete | deleteMany` on the four
  * models, and every raw `UPDATE | INSERT INTO | DELETE FROM` on their tables, outside specs and the
  * CPM engine's directory (which only ever sees inputs and writes outputs). A site is keyed by file,
  * enclosing method and operation, so a second write added inside an already-listed method is a new,
@@ -44,11 +45,12 @@ const ASSIGNMENTS = 'modules/resources/resource-assignment.service.ts';
 
 const SITES: Record<string, Site> = {
   // — activities: the activity's own inputs ——————————————————————————————————————————————
-  'modules/activities/activity.repository.ts::updateIfVersionMatches::activity.updateMany': {
-    status: 'recorded',
-    reason: 'The version-gated single-activity write: the editor, Gantt cells, single-bar drags.',
-    recordedBy: [`${ACTIVITIES}::update`, `${ACTIVITIES}::updateProgress`],
-  },
+  'modules/activities/activity.repository.ts::updateIfVersionMatches::activity.updateManyAndReturn':
+    {
+      status: 'recorded',
+      reason: 'The version-gated single-activity write: the editor, Gantt cells, single-bar drags.',
+      recordedBy: [`${ACTIVITIES}::update`, `${ACTIVITIES}::updateProgress`],
+    },
   'modules/activities/activity.repository.ts::updateLanePositions::activities.UPDATE': {
     status: 'exempt',
     reason: 'Lane only: the diagram auto-packs lanes without the planner deciding anything (CQ-4).',
@@ -172,7 +174,7 @@ const SITES: Record<string, Site> = {
       reason: 'Setting a driver displaces the previous one; both are items of the one entry.',
       recordedBy: [`${ASSIGNMENTS}::create`, `${ASSIGNMENTS}::update`],
     },
-  'modules/resources/resource-assignment.repository.ts::updateIfVersionMatches::resourceAssignment.updateMany':
+  'modules/resources/resource-assignment.repository.ts::updateIfVersionMatches::resourceAssignment.updateManyAndReturn':
     {
       status: 'recorded',
       reason: 'An assignment edit.',
@@ -217,7 +219,8 @@ const SITES: Record<string, Site> = {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const MODELS = '(activity|activityDependency|crossPlanDependency|resourceAssignment)';
-const OPS = '(create|createMany|update|updateMany|upsert|delete|deleteMany)';
+const OPS =
+  '(create|createMany|createManyAndReturn|update|updateMany|updateManyAndReturn|upsert|delete|deleteMany)';
 const PRISMA_WRITE = new RegExp(`\\.${MODELS}\\.${OPS}\\s*\\(`);
 const RAW_WRITE =
   /\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+"?(activities|dependencies|resource_assignments|cross_plan_dependencies)\b/i;

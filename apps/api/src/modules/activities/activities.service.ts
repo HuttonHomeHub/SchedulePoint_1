@@ -28,6 +28,7 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
+import { combineChanges, noChanges } from '../activity-history/activity-history.pending';
 import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
@@ -731,14 +732,16 @@ export class ActivitiesService {
         const before = await tx.activity.findFirst({
           where: { id: activityId, organizationId: organization.id, deletedAt: null },
         });
-        const changed = await this.activities.updateIfVersionMatches(
+        // The version-gated update hands back the row it wrote, which is the history's "after": no
+        // second read. The driving-assignment recompute below never writes the activity row.
+        const after = await this.activities.updateIfVersionMatches(
           activityId,
           dto.version,
           patch,
           principal.userId,
           tx,
         );
-        if (changed === 0 || !before) {
+        if (!after || !before) {
           throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
         }
         // Duration-type recompute (ADR-0040 §3, editedField = DURATION): a duration edit holds the
@@ -755,9 +758,6 @@ export class ActivitiesService {
         );
         // Recorded last, and in this transaction: a rolled-back write leaves no entry, and an entry
         // that cannot be written fails the write rather than leaving a gap nobody can see.
-        const after = await tx.activity.findFirstOrThrow({
-          where: { id: activityId, deletedAt: null },
-        });
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'DEFINITION',
@@ -765,12 +765,12 @@ export class ActivitiesService {
             {
               activityId,
               planId: existing.planId,
-              changes: {
-                ...(await this.history.activityFieldChanges(tx, before, after)),
+              changes: combineChanges(
+                this.history.activityFieldChanges(before, after),
                 // The triad rewrote the driving assignment's units in the same write: one change, two
                 // effects, one entry (data-model §9 item 15).
-                ...(recomputed ? await this.history.assignmentChanges(tx, [recomputed]) : {}),
-              },
+                recomputed ? this.history.assignmentChanges([recomputed]) : noChanges(),
+              ),
             },
           ],
         });
@@ -1332,19 +1332,16 @@ export class ActivitiesService {
       const before = await tx.activity.findFirst({
         where: { id: activityId, organizationId: organization.id, deletedAt: null },
       });
-      const changed = await this.activities.updateIfVersionMatches(
+      const after = await this.activities.updateIfVersionMatches(
         activityId,
         dto.version,
         patch,
         principal.userId,
         tx,
       );
-      if (changed === 0 || !before) {
+      if (!after || !before) {
         throw new ConflictError('This activity was changed elsewhere. Refresh and try again.');
       }
-      const after = await tx.activity.findFirstOrThrow({
-        where: { id: activityId, deletedAt: null },
-      });
       await this.history.record(tx, {
         actorUserId: principal.userId,
         scope: 'PROGRESS',
@@ -1352,7 +1349,7 @@ export class ActivitiesService {
           {
             activityId,
             planId: existing.planId,
-            changes: await this.history.activityFieldChanges(tx, before, after),
+            changes: this.history.activityFieldChanges(before, after),
           },
         ],
       });

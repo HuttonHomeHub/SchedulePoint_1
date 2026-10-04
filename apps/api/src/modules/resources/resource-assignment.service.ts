@@ -12,6 +12,11 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  combineChanges,
+  fixedChanges,
+  noChanges,
+} from '../activity-history/activity-history.pending';
 import { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -349,22 +354,21 @@ export class ResourceAssignmentService {
                 assignmentId,
               )
             : [];
-        const changed = await this.assignments.updateIfVersionMatches(
+        // The gated update hands back the row it wrote, which is the history's "after": no second
+        // read. Nothing below writes this assignment row again.
+        const after = await this.assignments.updateIfVersionMatches(
           assignmentId,
           dto.version,
           patch,
           principal.userId,
           tx,
         );
-        if (changed === 0 || !before) {
+        if (!after || !before) {
           throw new ConflictError('This assignment was changed elsewhere. Refresh and try again.');
         }
         // Persist a units-driven derived duration on the activity — same tx, optimistic-locked, so a
         // stale version on EITHER row rolls the whole write back (409).
         await this.persistActivityDuration(tx, activityDurationUpdate, principal.userId);
-        const after = await tx.resourceAssignment.findFirstOrThrow({
-          where: { id: assignmentId, deletedAt: null },
-        });
         await this.recordHistory(tx, principal, activity, {
           pairs: [{ before, after }, ...displacedPairs(displaced)],
           duration: activityDurationUpdate,
@@ -431,21 +435,21 @@ export class ResourceAssignmentService {
         {
           activityId: activity.id,
           planId: activity.planId,
-          changes: {
-            ...(await this.history.assignmentChanges(tx, write.pairs)),
+          changes: combineChanges(
+            this.history.assignmentChanges(write.pairs),
             // `from` is the duration the activity was READ with before the transaction. That is the
             // row replaced, not a guess: `persistActivityDuration` already succeeded, and it is
             // gated on that same read's `version`, so a changed activity would have rolled this
             // whole write back with a 409 before it reached here.
-            ...(write.duration
-              ? {
+            write.duration
+              ? fixedChanges({
                   durationMinutes: {
                     from: activity.durationMinutes,
                     to: write.duration.durationMinutes,
                   },
-                }
-              : {}),
-          },
+                })
+              : noChanges(),
+          ),
         },
       ],
     });

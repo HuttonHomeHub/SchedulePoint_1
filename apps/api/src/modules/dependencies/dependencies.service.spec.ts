@@ -251,7 +251,7 @@ describe('DependenciesService', () => {
     // Proven against a real table in `activity-history.e2e-spec.ts`; here it only has to be callable.
     const history = {
       record: vi.fn().mockResolvedValue(undefined),
-      linkWrites: vi.fn().mockResolvedValue([]),
+      linkWrites: vi.fn().mockReturnValue([]),
     };
     service = new DependenciesService(
       organizations as unknown as OrganizationsService,

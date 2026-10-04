@@ -309,8 +309,9 @@ export class DependenciesService {
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'LOGIC',
-          writes: await this.history.linkWrites(tx, {
+          writes: this.history.linkWrites({
             id: created.id,
+            planId: created.planId,
             predecessorId: created.predecessorId,
             successorId: created.successorId,
             before: null,
@@ -435,8 +436,9 @@ export class DependenciesService {
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'LOGIC',
-          writes: await this.history.linkWrites(tx, {
+          writes: this.history.linkWrites({
             id: dependencyId,
+            planId: after.planId,
             predecessorId: after.predecessorId,
             successorId: after.successorId,
             before,
@@ -485,8 +487,9 @@ export class DependenciesService {
         await this.history.record(tx, {
           actorUserId: principal.userId,
           scope: 'LOGIC',
-          writes: await this.history.linkWrites(tx, {
+          writes: this.history.linkWrites({
             id: dependencyId,
+            planId: removed.planId,
             predecessorId: removed.predecessorId,
             successorId: removed.successorId,
             before: removed,

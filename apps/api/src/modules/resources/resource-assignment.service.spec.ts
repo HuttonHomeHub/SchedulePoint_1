@@ -10,6 +10,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { noChanges } from '../activity-history/activity-history.pending';
 import type { ActivityHistoryRecorder } from '../activity-history/activity-history.recorder';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
@@ -132,7 +133,7 @@ describe('ResourceAssignmentService', () => {
       findActiveByIdInOrg: vi.fn(),
       findManyActiveByActivity: vi.fn().mockResolvedValue([]),
       clearDrivingForActivity: vi.fn().mockResolvedValue([]),
-      updateIfVersionMatches: vi.fn().mockResolvedValue(1),
+      updateIfVersionMatches: vi.fn().mockResolvedValue(assignment()),
       softDelete: vi.fn().mockResolvedValue(1),
     };
     txActivityUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
@@ -160,7 +161,7 @@ describe('ResourceAssignmentService', () => {
     // Proven against a real table in `activity-history.e2e-spec.ts`; here it only has to be callable.
     const history = {
       record: vi.fn().mockResolvedValue(undefined),
-      assignmentChanges: vi.fn().mockResolvedValue({}),
+      assignmentChanges: vi.fn().mockReturnValue(noChanges()),
     };
     service = new ResourceAssignmentService(
       organizations as unknown as OrganizationsService,
@@ -372,7 +373,7 @@ describe('ResourceAssignmentService', () => {
 
     it('409s on a stale version', async () => {
       assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
-      assignments.updateIfVersionMatches.mockResolvedValue(0);
+      assignments.updateIfVersionMatches.mockResolvedValue(null);
       await expect(
         service.update(principalWith(ALL), 'acme', 'asg-1', { budgetedUnits: 5, version: 1 }),
       ).rejects.toBeInstanceOf(ConflictError);
