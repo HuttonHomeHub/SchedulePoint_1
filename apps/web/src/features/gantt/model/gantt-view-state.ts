@@ -36,9 +36,12 @@ import { searchString } from '@/lib/router/search-string';
  *
  * ## What is NOT here, and why
  *
- * **Grid width.** The plan lists it; the grid has no resize handle, so nothing can set it. Storing
- * a value no control produces is the lit-but-inert shape inverted — state that claims a capability
- * the surface does not have. It returns when the grid becomes resizable.
+ * **Grid width and column widths.** Neither is in the URL: they are per-device ergonomics, not a view
+ * worth sending (a width chosen on a wide monitor is wrong on a laptop). The divider's size lives in
+ * `useResizablePanelPrefs` (`schedulepoint:gantt-grid-width`) and each column's width in
+ * `useGanttColumnWidths` (`schedulepoint:gantt-column-widths`), both held by the host (ADR-0173 D1).
+ * This paragraph said the grid had no resize handle until the 2026-10-04 pass; it had one from
+ * Graphite M8.
  */
 
 /** Columns the chooser may hide. `name` is deliberately absent — see {@link HIDEABLE_COLUMNS}. */

@@ -572,6 +572,12 @@ migration that was withdrawn with it.
   not the law), with any surface that cannot meet it named in ADR-0118 §D1 and §D6
   alongside its non-pointer equivalent — **two entries today**, a breadcrumb crumb
   and `icon-sm`'s dense-row consumers. The fine-pointer default stays 36px.
+- **A pointer-only affordance (ADR-0173 D3).** A drag handle may be `aria-hidden` and unfocusable
+  **only** where the same view offers a typed, single-pointer equivalent that reaches every value the
+  drag reaches (WCAG 2.2 §2.5.7 — arrow keys are not one). Under `pointer: coarse` it is **omitted, not
+  enlarged**, when a 44px target would cover a neighbouring control; the equivalent is the route.
+  Example: the Gantt's column edges and the `View ▾` width fields. Its 24×24 is measured directly by
+  its journey, because it has no role for the deck sweep to find.
 - **Motion:** honour reduced-motion. **Live regions** announce async updates
   (toasts, validation, loading completion).
 

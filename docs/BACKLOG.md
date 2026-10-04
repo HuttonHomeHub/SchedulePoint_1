@@ -122,9 +122,9 @@ a product idea that has not yet earned a roadmap line:
   absence, and `clear-visual-placement` was narrowed out on 2026-08-14.
   **The start-edge resize shipped in web 0.157.0** (#757, 2026-10-02, ADR-0170): the
   left handle writes what the diagram's does, and the Gantt's finish-edge drag and
-  typed `Start`/`Finish` now count working days. **What is actually left**: the columns
-  **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
-  so nothing can set it yet — `gantt-view-state.ts:39`), and a **coarse-pointer** pass _(the citation here
+  typed `Start`/`Finish` now count working days. **Column widths shipped on 2026-10-04** (ADR-0173: typed in `View ▾`, dragged at the header edge,
+  remembered per device) — this row said the grid "has no resize handle" for a month after Graphite M8
+  shipped one. **What is actually left**: a **coarse-pointer** pass _(the citation here
   read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed
   on 2026-08-28**, and its subject was the merged command **strip**, not this
   view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
@@ -133,8 +133,8 @@ a product idea that has not yet earned a roadmap line:
   owed is deliberately **not asserted here**: ADR-0118 D6 narrowed the
   house rule to `pointer: coarse` and took the candidate set from 46 to one, and
   nobody has re-measured this view since. It has no live row, which is the
-  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; neither
-  residue above is a requirement of the brief.
+  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; the residue above is
+  not a requirement of the brief.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
   stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
   most of its length arguing was the half that was left.

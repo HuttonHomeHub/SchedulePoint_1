@@ -12,11 +12,13 @@ import {
   spanGeometry,
 } from '../layout/bar-geometry';
 import {
+  DEFAULT_COLUMN_WIDTHS,
   VARIANCE_COLUMN_WIDTH,
   chartGuard,
   defaultGridWidth,
   ganttColumnWidth,
   ganttFixedWidth,
+  isResizableKey,
   shownColumns,
   variancePinnedWidth,
   type ColumnWidths,
@@ -70,6 +72,7 @@ import { useGanttGridPrefs, type GanttGridPrefs } from '../model/use-gantt-grid-
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
 
 import { GanttCell } from './GanttCell';
+import { GanttColumnEdge } from './GanttColumnEdge';
 import { GanttLinkOverlay } from './GanttLinkOverlay';
 import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu } from './GanttRowMenu';
@@ -461,21 +464,42 @@ function GanttPanelBody({
   // The chart guard (ADR-0173 §2.5): published for the host's `setWidth` to apply, because only this
   // component knows whether a baseline column is showing, what the pane is, and how wide the
   // scroller is. Applied at typing time only — nothing is shrunk automatically afterwards.
-  const guardRef = columnWidths?.guardRef;
+  const registerGuard = columnWidths?.registerGuard;
+  // Read through a ref so the guard registers once, not on every drag frame (each frame changes
+  // `widths` or `gridWidth`); the effect below keeps the ref current after every commit.
+  const guardInputs = useRef({ COLUMNS, widths, showVariance, gridWidth });
   useEffect(() => {
-    if (guardRef === undefined) return undefined;
-    guardRef.current = (key: ResizableColumnKey, candidate: number): number => {
-      const others = COLUMNS.filter((c) => c.key !== key);
+    guardInputs.current = { COLUMNS, widths, showVariance, gridWidth };
+  }, [COLUMNS, widths, showVariance, gridWidth]);
+  useEffect(() => {
+    if (registerGuard === undefined) return undefined;
+    return registerGuard((key: ResizableColumnKey, candidate: number): number => {
+      const current = guardInputs.current;
+      const others = current.COLUMNS.filter((c) => c.key !== key);
       return chartGuard(candidate, {
-        fixedWithoutColumn: ganttFixedWidth(others, widths, variancePinnedWidth(showVariance)),
-        pane: gridWidth,
+        fixedWithoutColumn: ganttFixedWidth(
+          others,
+          current.widths,
+          variancePinnedWidth(current.showVariance),
+        ),
+        pane: current.gridWidth,
         scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
       });
-    };
-    return () => {
-      guardRef.current = null;
-    };
-  }, [guardRef, COLUMNS, widths, showVariance, gridWidth]);
+    });
+  }, [registerGuard]);
+
+  // The header edges (ADR-0173 M2). A resizable column's edge changes that column's width and
+  // Activity gives up the difference; **Activity's own edge is the table width** — the value the
+  // `Grid width` separator sets — because Activity has no width of its own. Only the pointer's
+  // frames pass through `setTransient`, so a drag stores once, on release.
+  const dragColumnEdge = (key: GanttColumn['key'], width: number): void => {
+    if (isResizableKey(key)) columnWidths?.setTransient(key, width);
+    else if (key === 'name') gridPrefs.setSize(width);
+  };
+  const resetColumnEdge = (key: GanttColumn['key']): void => {
+    if (isResizableKey(key)) columnWidths?.setWidth(key, DEFAULT_COLUMN_WIDTHS[key]);
+    else if (key === 'name') gridPrefs.resetSize();
+  };
 
   // The row menu occupies a COLUMN, and every index after it shifts. `role="row"` may contain only
   // cells (`gridcell`/`columnheader`/`rowheader`), so M5-T3's trigger sitting as a direct child of
@@ -1077,7 +1101,7 @@ function GanttPanelBody({
                             : ('none' as const),
                         }
                       : {})}
-                    className="shrink-0 px-2 pb-1"
+                    className="relative shrink-0 px-2 pb-1"
                     style={{ width: resolveColumnWidth(column) }}
                   >
                     {sortable ? (
@@ -1121,6 +1145,19 @@ function GanttPanelBody({
                       >
                         {column.label}
                       </span>
+                    )}
+                    {columnWidths === undefined ||
+                    !(isResizableKey(column.key) || column.key === 'name') ? null : (
+                      <GanttColumnEdge
+                        startWidth={() =>
+                          isResizableKey(column.key) ? resolveColumnWidth(column) : gridWidth
+                        }
+                        onDrag={(width) => dragColumnEdge(column.key, width)}
+                        // The Activity edge writes through gridPrefs.setSize (the Grid width path), so
+                        // its commit is a no-op commit.
+                        onCommit={columnWidths.commit}
+                        onReset={() => resetColumnEdge(column.key)}
+                      />
                     )}
                   </div>
                 );

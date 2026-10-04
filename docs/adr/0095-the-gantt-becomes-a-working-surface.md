@@ -221,6 +221,12 @@ against a real API. Four decisions from that work belong here rather than in a c
 - **Grid width is deliberately not stored**, though T6 names it: the grid has no resize handle, so
   nothing can set it. Storing a value no control produces is state claiming a capability the surface
   does not have. It returns when the grid becomes resizable.
+
+  > **Amended 2026-10-04 (ADR-0173).** The premise stopped being true at Graphite M8, which shipped a
+  > `Grid width` divider that is remembered in `localStorage` (`schedulepoint:gantt-grid-width`); this
+  > paragraph kept saying otherwise. The table width stays out of the URL for the reason above. What was
+  > actually missing — one column's width — now exists (ADR-0173), also per device and not in the URL.
+
 - **The collapse set is capped at 40 ids**, with the withheld count reported. Ids are 36 characters,
   and a truncated list half-restores a view while looking deliberate.
 

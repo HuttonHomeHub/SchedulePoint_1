@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1444 web
+> (`apps/api/src/modules/`), 34 Prisma models across 72 migrations, 1447 web
 > source files with 47 Playwright suites beside the base journey, and
-> 173 ADRs.
+> 174 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -570,6 +570,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0171** _(Accepted)_ — Routes load when they are opened, and the chunk groups that keep that fast → [`0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md`](docs/adr/0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md)
 - **ADR-0172** _(Accepted)_ — A soft-delete filter is stated at the query, and the build refuses a read that states none → [`0172-a-soft-delete-filter-is-stated-at-the-query.md`](docs/adr/0172-a-soft-delete-filter-is-stated-at-the-query.md)
 - **ADR-0175** _(Accepted)_ — A spent budget is reported as a spent budget → [`0175-a-spent-budget-is-reported-as-a-spent-budget.md`](docs/adr/0175-a-spent-budget-is-reported-as-a-spent-budget.md)
+- **ADR-0173** _(Accepted)_ — A column's width is the planner's, kept on their device, and its drag has a typed twin → [`0173-a-columns-width-is-the-planners.md`](docs/adr/0173-a-columns-width-is-the-planners.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)
