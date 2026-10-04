@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.163.2
+
+### Patch Changes
+
+- [#795](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/795) [`ec586cf`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ec586cff1a6234afeb2e8e6ccb9c65b5ce68d2d2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undoing a change to a sub-day duration, a lag or a calendar now recalculates the dates.
+
 ## 0.163.1
 
 ### Patch Changes
