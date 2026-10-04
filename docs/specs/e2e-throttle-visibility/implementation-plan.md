@@ -169,7 +169,7 @@ option); all 19 tests stopped signing up. Three local runs came back 19/19, the 
 **49 per 60 s** against the production limit of 100, the `TEMPORARY` 200 ceiling is removed, and CI was green
 on all four shards.
 
-**Task 3.2: six of eight ceilings measured (2026-10-04).** Each suite was run locally with
+**Task 3.2 done (2026-10-04): six ceilings measured, two harness configs kept at `100000`.** Each suite was run locally with
 `E2E_THROTTLE_CENSUS=1` (all green, zero 429s) and its `RATE_LIMIT_LIMIT` replaced the blind `100000`. Figures are
 from the re-run of 2026-10-04 with the census counting one handler across organisations:
 
@@ -187,9 +187,19 @@ failed at its resulting 300 ceiling as a result; the census now templates the sl
 
 The rule is about **4x the local peak, rounded up to the next 50**, not the 2x this plan first proposed: M2's
 status above records CI runners spending more than 100 per 60 s on `activity-editor` where the local peak was 64,
-so a local 2x is not conservative for CI. The two `measure-*` harness configs
-(`playwright.measure-gantt.config.ts`, `playwright.measure-route-splitting.config.ts`) are still pending and
-keep `100000`. #435 and #361 stay open pending ten consecutive green CI runs and M3.3.
+so a local 2x is not conservative for CI. Each suite was then re-run locally at its new ceiling, all green with zero 429s: arrange 12/12, gantt 9/9,
+gantt-editing 36/36, netpoint-grammar 11/11, overview 9/9, workspace-chrome 27/27.
+
+The two `measure-*` harness configs (`playwright.measure-gantt.config.ts`,
+`playwright.measure-route-splitting.config.ts`) keep `100000`, by decision: they are manual measurement
+harnesses (not CI steps, per their own docblocks), they seed hundreds to thousands of activities by design,
+their output is timing that a throttle refusal would contaminate, and their specs import `test` from
+`@playwright/test` rather than the guarded fixture, so the census cannot count them and the lint rule's `e2e*`
+scope does not cover them. Their comments now say so; the product default stays 100 per 60 s.
+
+**Task 3.3 done (2026-10-04).** #361 is closed and ledgered. #435 stays open on its own rule (ten consecutive
+green CI runs): the cause is remedied by #786 and the count started on 2026-10-04 at 2 of 10. The NAT
+observation from spec section 4 is #446, deferred on a trigger.
 
 **Outcome:** all 93 spec files use the guarded `test`, and lint refuses one that does not.
 **Entry point:** ships dark (harness). **Journey:** every existing suite, unchanged in behaviour.

@@ -58,6 +58,10 @@ export default defineConfig({
               API_PORT,
               CORS_ORIGINS: `http://localhost:${WEB_PORT}`,
               BETTER_AUTH_URL: `http://localhost:${WEB_PORT}`,
+              // Kept at 100000 by decision (ADR-0175 M3.2): this is a manual measurement harness, not a CI step,
+              // it seeds hundreds to thousands of activities by design, and a throttle refusal would contaminate
+              // the timing it exists to report. Its specs use `@playwright/test`'s `test`, not the guarded fixture,
+              // so the census cannot count them. The product default stays 100 per 60 s.
               RATE_LIMIT_LIMIT: '100000',
             },
           },
