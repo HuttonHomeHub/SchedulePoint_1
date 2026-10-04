@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Command } from './commands';
+import { createVersionLedger, type Command, type VersionLedger } from './commands';
 
 /**
  * Maximum reversible steps kept per direction (ADR-0048): the newest 50 edits stay undoable; older
@@ -44,6 +44,12 @@ export interface PlanEditHistory {
    * without discarding the undo history.
    */
   clearRedo: () => void;
+  /**
+   * The newest row versions this history has recorded or replayed (`docs/TECH_DEBT.md` #447). Handed
+   * to every replay so a step on a row another step already bumped sends the live version; emptied
+   * by {@link clear}.
+   */
+  versions: VersionLedger;
   canUndo: boolean;
   canRedo: boolean;
   /** The next undo step's {@link Command.label} (M3 accessible name / announcement); null when empty. */
@@ -69,6 +75,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   const undoStackRef = useRef<Command[]>([]);
   const redoStackRef = useRef<Command[]>([]);
   const runningRef = useRef(false);
+  const [ledger] = useState(createVersionLedger);
   // When the top-of-undo-stack command was recorded (epoch ms). A same-key command recorded within
   // COALESCE_WINDOW_MS folds into it; set to -Infinity to end the window (after undo/redo/clear).
   const lastRecordAtRef = useRef(Number.NEGATIVE_INFINITY);
@@ -92,8 +99,9 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     undoStackRef.current = [];
     redoStackRef.current = [];
     lastRecordAtRef.current = Number.NEGATIVE_INFINITY;
+    ledger.clear();
     sync();
-  }, [sync]);
+  }, [sync, ledger]);
 
   const clearRedo = useCallback(() => {
     redoStackRef.current = [];
@@ -108,6 +116,9 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
 
   const record = useCallback(
     (command: Command) => {
+      // Before the coalesce branch: a merged command keeps the NEWEST command's post-edit version,
+      // and seeding is a monotonic max, so seeding the incoming command is right for both paths.
+      command.seedVersions?.(ledger);
       const undoStack = undoStackRef.current;
       const now = Date.now();
       const top = undoStack[undoStack.length - 1];
@@ -135,7 +146,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       lastRecordAtRef.current = now;
       sync();
     },
-    [sync],
+    [sync, ledger],
   );
 
   const isTop = useCallback(
@@ -150,7 +161,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     if (!command) return null;
     runningRef.current = true;
     try {
-      await command.undo();
+      await command.undo(ledger);
       // Move it across only after the inverse succeeds; a throw above leaves the stacks untouched
       // and propagates out of this promise (the M3 conflict contract classifies it and the user retries).
       undoStackRef.current.pop();
@@ -164,7 +175,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     } finally {
       runningRef.current = false;
     }
-  }, [sync]);
+  }, [sync, ledger]);
 
   const redo = useCallback(async (): Promise<string | null> => {
     if (runningRef.current) return null;
@@ -172,7 +183,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     if (!command) return null;
     runningRef.current = true;
     try {
-      await command.redo();
+      await command.redo(ledger);
       redoStackRef.current.pop();
       undoStackRef.current.push(command);
       if (undoStackRef.current.length > MAX_HISTORY_DEPTH) undoStackRef.current.shift();
@@ -183,7 +194,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     } finally {
       runningRef.current = false;
     }
-  }, [sync]);
+  }, [sync, ledger]);
 
   // Return a **stable** object: the callbacks are already stable (useCallback), so identity changes
   // only when a reactive field flips. Without this memo a fresh literal every render would cascade
@@ -199,11 +210,12 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       redo,
       clear,
       clearRedo,
+      versions: ledger,
       canUndo,
       canRedo,
       undoLabel,
       redoLabel,
     }),
-    [record, isTop, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel],
+    [record, isTop, undo, redo, clear, clearRedo, ledger, canUndo, canRedo, undoLabel, redoLabel],
   );
 }

@@ -26,10 +26,18 @@ import { minorToMajorInput } from '@/lib/format-money';
 export interface Command {
   /** Human label for the edit — M3 surfaces it in the Undo/Redo controls + announcements. */
   readonly label: string;
-  /** Apply the inverse of the edit (restore the pre-edit state). */
-  undo: () => Promise<void>;
-  /** Re-apply the original edit (restore the post-edit state). */
-  redo: () => Promise<void>;
+  /**
+   * Apply the inverse of the edit (restore the pre-edit state). The history passes its
+   * {@link VersionLedger}; a command run without one (a bare unit test) threads only its own version.
+   */
+  undo: (versions?: VersionLedger) => Promise<void>;
+  /** Re-apply the original edit (restore the post-edit state). Same ledger contract as {@link undo}. */
+  redo: (versions?: VersionLedger) => Promise<void>;
+  /**
+   * Tell the history's ledger the post-edit version(s) of the row(s) this edit just wrote. Called by
+   * `record`, so a LATER replay of an OLDER step on the same row already knows the newer version.
+   */
+  readonly seedVersions?: (versions: VersionLedger) => void;
   /**
    * Optional coalescing descriptor (ADR-0048 M2.3). A pointer drag or a held-key nudge fires many
    * intermediate writes for one user gesture; the seam records a command per successful write, but
@@ -40,6 +48,41 @@ export interface Command {
    * coalesce.
    */
   readonly coalescing?: CommandCoalescing;
+}
+
+/**
+ * The newest version this history has seen for each row, whichever step produced it.
+ *
+ * Every builder below used to thread its OWN `version`, which is only right while the command is the
+ * sole writer of its row: two steps on one activity (a move, then a resize) each captured the version
+ * their forward write returned, so after the newer step's undo bumped the row the older step's undo
+ * still sent the stale number and 409'd — and so did every replay after it (`docs/TECH_DEBT.md`
+ * #447). The ledger is monotonic (max per id) and fed ONLY by writes the stack itself recorded or
+ * replayed. It deliberately never reads the query cache and never fetches: an UNRECORDED write on the
+ * same row (another path, another user) is invisible to it, so the next replay still 409s, which is
+ * the whole point of the optimistic lock (ADR-0048 M3.1).
+ */
+export interface VersionLedger {
+  get: (id: string) => number | undefined;
+  observe: (id: string, version: number) => void;
+}
+
+/** A fresh ledger; `clear` is for the history that owns it (plan switch, pen loss). */
+export function createVersionLedger(): VersionLedger & { clear: () => void } {
+  const seen = new Map<string, number>();
+  return {
+    get: (id) => seen.get(id),
+    observe: (id, version) => {
+      const known = seen.get(id);
+      if (known === undefined || version > known) seen.set(id, version);
+    },
+    clear: () => seen.clear(),
+  };
+}
+
+/** The version a replay sends: the command's own thread, unless the ledger has seen a newer one. */
+function liveVersion(versions: VersionLedger | undefined, id: string, threaded: number): number {
+  return Math.max(threaded, versions?.get(id) ?? threaded);
 }
 
 /** How a coalescable command folds into the previous same-key step. */
@@ -159,19 +202,21 @@ function definitionSnapshotCommand(params: {
 }): Command {
   const { label, update, before, after, coalesceKey } = params;
   let version = after.version;
-  const restore = async (target: ActivitySummary): Promise<void> => {
+  const restore = async (target: ActivitySummary, versions?: VersionLedger): Promise<void> => {
     const saved = await update({
       activityId: target.id,
-      version,
+      version: liveVersion(versions, target.id, version),
       ...activityDefinitionInput(target),
       laneIndex: target.laneIndex,
     });
     version = saved.version;
+    versions?.observe(target.id, saved.version);
   };
   const command: Command = {
     label,
-    undo: () => restore(before),
-    redo: () => restore(after),
+    undo: (versions) => restore(before, versions),
+    redo: (versions) => restore(after, versions),
+    seedVersions: (versions) => versions.observe(after.id, after.version),
   };
   if (coalesceKey === undefined) return command;
   return coalescable(command, {
@@ -198,14 +243,20 @@ export function relaneCommand(params: {
 }): Command {
   const { repositionLane, activityId, fromLaneIndex, toLaneIndex } = params;
   let version = params.version;
-  const move = async (laneIndex: number): Promise<void> => {
-    const saved = await repositionLane({ activityId, laneIndex, version });
+  const move = async (laneIndex: number, versions?: VersionLedger): Promise<void> => {
+    const saved = await repositionLane({
+      activityId,
+      laneIndex,
+      version: liveVersion(versions, activityId, version),
+    });
     version = saved.version;
+    versions?.observe(activityId, saved.version);
   };
   const command: Command = {
     label: params.label ?? 'Move activity to lane',
-    undo: () => move(fromLaneIndex),
-    redo: () => move(toLaneIndex),
+    undo: (versions) => move(fromLaneIndex, versions),
+    redo: (versions) => move(toLaneIndex, versions),
+    seedVersions: (versions) => versions.observe(activityId, params.version),
   };
   return coalescable(command, {
     key: `relane:${activityId}`,
@@ -296,14 +347,20 @@ export function typeChangeCommand(params: {
   label?: string;
 }): Command {
   let version = params.version;
-  const set = async (type: ActivityType): Promise<void> => {
-    const saved = await params.patch({ activityId: params.activityId, version, patch: { type } });
+  const set = async (type: ActivityType, versions?: VersionLedger): Promise<void> => {
+    const saved = await params.patch({
+      activityId: params.activityId,
+      version: liveVersion(versions, params.activityId, version),
+      patch: { type },
+    });
     version = saved.version;
+    versions?.observe(params.activityId, saved.version);
   };
   return {
     label: params.label ?? 'Make milestone',
-    undo: () => set(params.before),
-    redo: () => set(params.after),
+    undo: (versions) => set(params.before, versions),
+    redo: (versions) => set(params.after, versions),
+    seedVersions: (versions) => versions.observe(params.activityId, params.version),
   };
 }
 
@@ -334,13 +391,16 @@ export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: 
  */
 function existenceToggle(params: {
   startId: string | null;
-  create: () => Promise<string>;
+  create: (versions?: VersionLedger) => Promise<string>;
   remove: (id: string) => Promise<void>;
-}): { ensurePresent: () => Promise<void>; ensureAbsent: () => Promise<void> } {
+}): {
+  ensurePresent: (versions?: VersionLedger) => Promise<void>;
+  ensureAbsent: () => Promise<void>;
+} {
   let liveId = params.startId;
   return {
-    ensurePresent: async (): Promise<void> => {
-      if (liveId === null) liveId = await params.create();
+    ensurePresent: async (versions?: VersionLedger): Promise<void> => {
+      if (liveId === null) liveId = await params.create(versions);
     },
     ensureAbsent: async (): Promise<void> => {
       if (liveId !== null) {
@@ -365,7 +425,12 @@ export function createActivityCommand(params: {
 }): Command {
   const toggle = existenceToggle({
     startId: params.created.id,
-    create: async () => (await params.createPlaced(params.input)).id,
+    create: async (versions) => {
+      const row = await params.createPlaced(params.input);
+      // A re-created row is a NEW id; a later step on it must start from this version.
+      versions?.observe(row.id, row.version);
+      return row.id;
+    },
     // The delete now resolves with `{ deleteBatchId }` (`docs/TECH_DEBT.md` #113); this toggle
     // re-creates rather than restores, so it wants the void shape and discards the body.
     remove: async (id: string) => {
@@ -377,6 +442,7 @@ export function createActivityCommand(params: {
     label: params.label ?? `Add “${params.created.name}”`,
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
+    seedVersions: (versions) => versions.observe(params.created.id, params.created.version),
   };
 }
 
@@ -425,9 +491,11 @@ export function deleteActivityCommand(params: {
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Delete “${activity.name}”`,
-    undo: async () => {
+    undo: async (versions) => {
       if (present) return;
-      await restoreBatch({ deleteBatchId: batchId });
+      // A restore bumps the row's version, which an older step on this activity must then send.
+      const restored = await restoreBatch({ deleteBatchId: batchId });
+      for (const row of restored) versions?.observe(row.id, row.version);
       present = true;
     },
     redo: async () => {
@@ -488,7 +556,11 @@ function dependencyToggle(params: {
   const link = dependencyLinkOf(params.dependency);
   return existenceToggle({
     startId: params.startId,
-    create: async () => (await params.createDependency(link)).id,
+    create: async (versions) => {
+      const row = await params.createDependency(link);
+      versions?.observe(row.id, row.version);
+      return row.id;
+    },
     remove: params.deleteDependency,
   });
 }
@@ -513,6 +585,7 @@ export function dependencyAddCommand(params: {
     label: params.label ?? 'Add link',
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
+    seedVersions: (versions) => versions.observe(params.dependency.id, params.dependency.version),
   };
 }
 
@@ -566,8 +639,9 @@ export function createLoeSpanCommand(params: {
   const toggle = existenceToggle({
     startId: params.loe.id,
     // Redo re-composes the whole span: re-create the LOE, then its SS + FF edges (a fresh LOE id).
-    create: async (): Promise<string> => {
+    create: async (versions): Promise<string> => {
       const loe = await createPlaced(params.placedInput);
+      versions?.observe(loe.id, loe.version);
       await createDependency({
         planId,
         predecessorId: startDriverId,
@@ -597,6 +671,7 @@ export function createLoeSpanCommand(params: {
     label: params.label ?? 'Add level-of-effort span',
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
+    seedVersions: (versions) => versions.observe(params.loe.id, params.loe.version),
   };
 }
 
@@ -637,19 +712,21 @@ export function visualStartCommand(params: {
 }): Command {
   const { setVisualStart, activityId, before, after } = params;
   let version = params.version;
-  const place = async (target: VisualPlacement): Promise<void> => {
+  const place = async (target: VisualPlacement, versions?: VersionLedger): Promise<void> => {
     const saved = await setVisualStart({
       activityId,
       visualStart: target.visualStart,
       laneIndex: target.laneIndex,
-      version,
+      version: liveVersion(versions, activityId, version),
     });
     version = saved.version;
+    versions?.observe(activityId, saved.version);
   };
   const command: Command = {
     label: params.label ?? 'Move activity',
-    undo: () => place(before),
-    redo: () => place(after),
+    undo: (versions) => place(before, versions),
+    redo: (versions) => place(after, versions),
+    seedVersions: (versions) => versions.observe(activityId, params.version),
   };
   return coalescable(command, {
     key: `visual:${activityId}`,
@@ -685,20 +762,22 @@ export function visualResizeCommand(params: {
 }): Command {
   const { setVisualStart, before, after } = params;
   let version = after.version;
-  const restore = async (target: ActivitySummary): Promise<void> => {
+  const restore = async (target: ActivitySummary, versions?: VersionLedger): Promise<void> => {
     const saved = await setVisualStart({
       activityId: target.id,
       visualStart: target.visualStart,
       durationDays: target.durationDays,
-      version,
+      version: liveVersion(versions, target.id, version),
     });
     version = saved.version;
+    versions?.observe(target.id, saved.version);
   };
   const command: Command = {
     // Name the entity ("Resize “Excavate”"), matching the EARLY-mode resize label (S1).
     label: params.label ?? `Resize “${before.name}”`,
-    undo: () => restore(before),
-    redo: () => restore(after),
+    undo: (versions) => restore(before, versions),
+    redo: (versions) => restore(after, versions),
+    seedVersions: (versions) => versions.observe(after.id, after.version),
   };
   return coalescable(command, {
     key: `resize:${before.id}`,
@@ -778,23 +857,25 @@ export function lagDragCommand(params: {
   const before: CommandLagInput =
     'lagMinutes' in after ? { lagMinutes: dependency.lagMinutes } : { lagDays: dependency.lagDays };
   let version = params.version;
-  const setLag = async (lag: CommandLagInput): Promise<void> => {
+  const setLag = async (lag: CommandLagInput, versions?: VersionLedger): Promise<void> => {
     const saved = await updateDependency({
       dependencyId: dependency.id,
       type: dependency.type,
       ...lag,
       lagCalendar: dependency.lagCalendar,
-      version,
+      version: liveVersion(versions, dependency.id, version),
     });
     version = saved.version;
+    versions?.observe(dependency.id, saved.version);
   };
   const command: Command = {
     // Name both endpoints, mirroring the link labels' entity-naming convention (S1).
     label:
       params.label ??
       `Change lag “${dependency.predecessor.name}” → “${dependency.successor.name}”`,
-    undo: () => setLag(before),
-    redo: () => setLag(after),
+    undo: (versions) => setLag(before, versions),
+    redo: (versions) => setLag(after, versions),
+    seedVersions: (versions) => versions.observe(dependency.id, params.version),
   };
   return coalescable(command, {
     key: `lag:${dependency.id}`,
@@ -880,22 +961,25 @@ export function dependencyEditCommand(params: {
   let version = after.version;
   const applyState = async (
     state: Pick<DependencySummary, 'type' | 'lagMinutes' | 'lagCalendar'>,
+    versions?: VersionLedger,
   ): Promise<void> => {
     const saved = await updateDependency({
       dependencyId: before.id,
       type: state.type,
       lagMinutes: state.lagMinutes,
       lagCalendar: state.lagCalendar,
-      version,
+      version: liveVersion(versions, before.id, version),
     });
     version = saved.version;
+    versions?.observe(before.id, saved.version);
   };
   return {
     // Both endpoints named, the link labels' entity-naming convention (S1) — and deliberately the
     // same wording as a lag drag, because to the planner they are the same edit by another route.
     label: params.label ?? `Edit link “${before.predecessor.name}” → “${before.successor.name}”`,
-    undo: () => applyState(before),
-    redo: () => applyState(after),
+    undo: (versions) => applyState(before, versions),
+    redo: (versions) => applyState(after, versions),
+    seedVersions: (versions) => versions.observe(after.id, after.version),
   };
 }
 
@@ -925,19 +1009,30 @@ export function autoArrangeCommand(params: {
 }): Command {
   const { batchPositions } = params;
   const versions = new Map(params.versions);
-  const apply = async (placements: readonly LanePlacement[]): Promise<void> => {
+  const apply = async (
+    placements: readonly LanePlacement[],
+    ledger?: VersionLedger,
+  ): Promise<void> => {
     const positions = placements.flatMap((p) => {
-      const version = versions.get(p.id);
-      return version === undefined ? [] : [{ id: p.id, laneIndex: p.laneIndex, version }];
+      const threaded = versions.get(p.id);
+      return threaded === undefined
+        ? []
+        : [{ id: p.id, laneIndex: p.laneIndex, version: liveVersion(ledger, p.id, threaded) }];
     });
     if (positions.length === 0) return;
     const saved = await batchPositions({ positions });
-    for (const row of saved) versions.set(row.id, row.version);
+    for (const row of saved) {
+      versions.set(row.id, row.version);
+      ledger?.observe(row.id, row.version);
+    }
   };
   return {
     label: params.label ?? 'Auto-arrange lanes',
-    undo: () => apply(params.before),
-    redo: () => apply(params.after),
+    undo: (ledger) => apply(params.before, ledger),
+    redo: (ledger) => apply(params.after, ledger),
+    seedVersions: (ledger) => {
+      for (const [id, version] of versions) ledger.observe(id, version);
+    },
   };
 }
 
@@ -984,19 +1079,28 @@ export function bulkPlacementCommand(params: {
 }): Command {
   const { batchPlacements } = params;
   const versions = new Map(params.versions);
-  const apply = async (placements: readonly ActivityPlacement[]): Promise<void> => {
+  const apply = async (
+    placements: readonly ActivityPlacement[],
+    ledger?: VersionLedger,
+  ): Promise<void> => {
     const rows = placements.flatMap((p) => {
-      const version = versions.get(p.id);
-      return version === undefined ? [] : [{ ...p, version }];
+      const threaded = versions.get(p.id);
+      return threaded === undefined ? [] : [{ ...p, version: liveVersion(ledger, p.id, threaded) }];
     });
     if (rows.length === 0) return;
     const saved = await batchPlacements({ placements: rows });
-    for (const row of saved) versions.set(row.id, row.version);
+    for (const row of saved) {
+      versions.set(row.id, row.version);
+      ledger?.observe(row.id, row.version);
+    }
   };
   return {
     label: params.label ?? `Move ${params.after.length} activities`,
-    undo: () => apply(params.before),
-    redo: () => apply(params.after),
+    undo: (ledger) => apply(params.before, ledger),
+    redo: (ledger) => apply(params.after, ledger),
+    seedVersions: (ledger) => {
+      for (const [id, version] of versions) ledger.observe(id, version);
+    },
   };
 }
 
@@ -1035,14 +1139,23 @@ export function bulkDeleteCommand(params: {
   const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
   return {
     label: params.label ?? `Delete ${params.activities.length} activities`,
-    undo: async () => {
+    undo: async (ledger) => {
       const restored = await restoreBatch({ deleteBatchId: batchId });
-      for (const row of restored) versions.set(row.id, row.version);
+      for (const row of restored) {
+        versions.set(row.id, row.version);
+        ledger?.observe(row.id, row.version);
+      }
     },
-    redo: async () => {
-      const rows = [...versions].map(([id, version]) => ({ id, version }));
+    redo: async (ledger) => {
+      const rows = [...versions].map(([id, version]) => ({
+        id,
+        version: liveVersion(ledger, id, version),
+      }));
       const result = await bulkDelete({ activities: rows });
       batchId = result.deleteBatchId;
+    },
+    seedVersions: (ledger) => {
+      for (const [id, version] of versions) ledger.observe(id, version);
     },
   };
 }
@@ -1110,10 +1223,15 @@ export function pasteActivitiesCommand(params: {
 
   return {
     label: params.label,
-    undo: async () => {
+    undo: async (ledger) => {
       if (live === null) return;
       if (isFlat) {
-        const result = await bulkDelete({ activities: live });
+        const result = await bulkDelete({
+          activities: live.map((row) => ({
+            id: row.id,
+            version: liveVersion(ledger, row.id, row.version),
+          })),
+        });
         batchId = result.deleteBatchId;
       } else {
         // Roots only, one at a time — each cascade sweeps its own subtree. Sequential because each
@@ -1137,12 +1255,16 @@ export function pasteActivitiesCommand(params: {
       }
       live = null;
     },
-    redo: async () => {
+    redo: async (ledger) => {
       if (live === null && batchId !== null) {
         const restored = await restoreBatch({ deleteBatchId: batchId });
         live = restored.map((row) => ({ id: row.id, version: row.version }));
+        for (const row of restored) ledger?.observe(row.id, row.version);
         batchId = null;
       }
+    },
+    seedVersions: (ledger) => {
+      for (const row of params.created) ledger.observe(row.id, row.version);
     },
   };
 }
