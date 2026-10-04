@@ -50,7 +50,9 @@ export interface CoalescedLagNudgeDeps {
  * held key is ONE minimal PATCH read at the live version. No clamp: negative is a lead (the
  * server DTO bounds extremes, surfaced as a conflict). No ghost/banner — the Logic panel is a
  * modal table, so both the running value and any conflict are **announced** instead. A pending
- * nudge is flushed on unmount rather than dropped. Returns the `nudge(dependency, delta)` handler.
+ * nudge is flushed on unmount rather than dropped — but only an uncommitted one: the target outlives
+ * its write only until `dependencies` next change, so an undo is honoured and a target already
+ * written is never replayed. Returns the `nudge(dependency, delta)` handler.
  */
 export function useCoalescedLagNudge(
   deps: CoalescedLagNudgeDeps,
@@ -68,12 +70,24 @@ export function useCoalescedLagNudge(
   // delta queued *behind* an in-flight write isn't dropped (the #25c fix, inherited).
   const inFlightRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
+  // True only while the target holds a delta no write has captured yet; a target already written
+  // is NOT dirty and the unmount flush must not replay it (it re-sent an undone edit, #448).
+  const dirtyRef = useRef(false);
+
+  // The cross-burst target only has to outlive its write until the refetch that reflects it. When
+  // `dependencies` next change (an undo, a dialog save) they are the truth, so the next nudge must
+  // start from them rather than extend a stale target (#448).
+  useEffect(() => {
+    if (dirtyRef.current || busyRef.current) return;
+    targetRef.current = null;
+  }, [deps.dependencies]);
 
   const commit = (): void => {
     const t = targetRef.current;
     const { onLag, dependencies, announce } = depsRef.current;
     if (!t || !onLag) {
       targetRef.current = null;
+      dirtyRef.current = false;
       return;
     }
     // Serialize: never read a version while the previous burst's write/invalidation is in flight.
@@ -84,10 +98,12 @@ export function useCoalescedLagNudge(
     const input = buildLag(t, dependencies);
     if (!input) {
       targetRef.current = null;
+      dirtyRef.current = false;
       return; // removed elsewhere, or props caught up — no write needed
     }
     const finalLag = t.lagDays;
     const { predecessorName, successorName, type, lagCalendar } = t;
+    dirtyRef.current = false; // this write now owns the delta
     busyRef.current = true;
     inFlightRef.current = onLag(input)
       .then((outcome) => {
@@ -100,6 +116,7 @@ export function useCoalescedLagNudge(
         if (outcome.applied) {
           // NB: targetRef deliberately survives here (the absolute-target cross-burst rule the
           // sibling hooks document), so a fast follow-up nudge extends from it, not a stale prop.
+          // The effect above retires it when `dependencies` next change.
           const phrase = lagPhrase({ type, lagDays: finalLag, lagCalendar });
           announce(
             `Set the link “${predecessorName}” → “${successorName}” to ${phrase}${
@@ -116,6 +133,12 @@ export function useCoalescedLagNudge(
       .finally(() => {
         busyRef.current = false;
         inFlightRef.current = null;
+        // The refetch may have landed while the write was still settling, with nothing left to
+        // change the props and retire the target.
+        const row = depsRef.current.dependencies.find((d) => d.id === t.dependencyId);
+        if (!dirtyRef.current && row?.lagDays === targetRef.current?.lagDays) {
+          targetRef.current = null;
+        }
       });
   };
 
@@ -124,7 +147,9 @@ export function useCoalescedLagNudge(
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
-      if (!targetRef.current) return;
+      // Only an UNCOMMITTED delta is flushed; a target already written is stale and replaying it
+      // re-applied an undone edit (#448).
+      if (!targetRef.current || !dirtyRef.current) return;
       // Flush a queued nudge so a pending edit isn't silently dropped on unmount / plan switch.
       const flushFinal = (): void => {
         const t = targetRef.current;
@@ -163,6 +188,7 @@ export function useCoalescedLagNudge(
     }
     t = { ...t, lagDays: t.lagDays + delta };
     targetRef.current = t;
+    dirtyRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(commit, NUDGE_DEBOUNCE_MS);
   };

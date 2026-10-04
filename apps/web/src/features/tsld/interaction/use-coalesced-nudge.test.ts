@@ -286,4 +286,46 @@ describe('useCoalescedNudge', () => {
     });
     expect(onReposition).toHaveBeenNthCalledWith(2, { activityId: 'a1', laneIndex: 2 });
   });
+
+  describe('a committed edit is not replayed or extended once the props move on (#448)', () => {
+    const rowAt = (laneIndex: number): ActivitySummary[] => [activity({ laneIndex })];
+
+    async function committedThenUndone() {
+      const deps = makeDeps({ activities: rowAt(0) });
+      const hook = renderHook((d: CoalescedNudgeDeps) => useCoalescedNudge(d), {
+        initialProps: deps,
+      });
+      act(() => hook.result.current(deps.activities[0]!, 'lane', 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onReposition).toHaveBeenCalledTimes(1);
+      expect(deps.onReposition).toHaveBeenLastCalledWith({ activityId: 'a1', laneIndex: 1 });
+      // The refetch reflects the write, then Undo restores the old lane.
+      hook.rerender({ ...deps, activities: rowAt(1) });
+      const undone = { ...deps, activities: rowAt(0) };
+      hook.rerender(undone);
+      return { deps, undone, hook };
+    }
+
+    it('does not re-send the committed write on unmount after an undo', async () => {
+      const { deps, hook } = await committedThenUndone();
+      act(() => hook.unmount());
+      expect(deps.onReposition).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the next nudge from the current row, not the surviving target', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.activities[0]!, 'lane', 1));
+      await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+      expect(deps.onReposition).toHaveBeenCalledTimes(2);
+      expect(deps.onReposition).toHaveBeenLastCalledWith({ activityId: 'a1', laneIndex: 1 });
+    });
+
+    it('still flushes a pending (debounced) nudge on unmount after an earlier commit', async () => {
+      const { deps, undone, hook } = await committedThenUndone();
+      act(() => hook.result.current(undone.activities[0]!, 'lane', 1));
+      act(() => hook.unmount());
+      expect(deps.onReposition).toHaveBeenCalledTimes(2);
+      expect(deps.onReposition).toHaveBeenLastCalledWith({ activityId: 'a1', laneIndex: 1 });
+    });
+  });
 });
