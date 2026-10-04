@@ -236,6 +236,92 @@ made by the Planner is not. axe check on the open tab.
   `EXPLAIN (ANALYZE, BUFFERS)` plans, run twice, are `Index Scan using
 idx_activity_history_activity_recorded` for the probe (under a `Limit`) and for every read page.
 
+- **Diagnosis (database-architect, 2026-10-04) — the miss is round trips, not database work.** Nothing
+  below changes the schema, the code or ADR-0174; it is the input to a product-owner decision.
+
+  **How it was taken.** A throwaway copy of the M1-T7 harness (not committed) on the same machine
+  class (4 vCPU, 16 GB, PostgreSQL 16.14, API and database on one host), against a scratch database
+  created and dropped for it, two runs. It swapped `PrismaService` for a client with Prisma's `query`
+  event on, so every statement each request issued was counted in both arms (120 paired requests per
+  operation; 20 for links, so the link HTTP deltas are indicative only). Separately it timed each
+  recorder statement from JavaScript inside a real `prisma.$transaction`, 380 repetitions after 20 of
+  warm-up, which is what a service pays per `await tx…`.
+
+  **Measured — extra statements per request, recording against stubbed (both runs identical):**
+
+  | Write             | Statements added by the recorder                              | Added p50 (HTTP, runs 1 / 2)       |
+  | ----------------- | ------------------------------------------------------------- | ---------------------------------- |
+  | activity PATCH    | 3: history lock, probe, entry `update` or `create`            | 2.97 / 3.06 merge; 3.30 / 3.29 new |
+  | assignment update | 4: resource-name `findMany`, lock, probe, entry write         | 4.28 / 4.23                        |
+  | link create       | 5: endpoint-name `findMany`, lock, probe, two entry `create`s | 5.84 / 4.45                        |
+
+  **Measured — cost of each statement inside an interactive transaction (ms, run 2 p50 / p95; run 1
+  within 0.1):** bare `SELECT 1` 0.45 / 0.59; history lock 0.52 / 0.71; probe 0.79 / 1.06; Prisma
+  `activityHistoryEntry.create` 1.26 / 1.58; Prisma `.update` 1.14 / 1.45; resource-name `findMany`
+  0.89 / 1.10; endpoint-name `findMany` 1.16 / 1.45. The probe's own **server** execution is 0.04 ms.
+  The sums (PATCH ≈ 2.6, assignment ≈ 3.5, link ≈ 5.0 at p50) account for the HTTP deltas. So
+  **> 90 % of the added cost is the per-statement round trip through Prisma's interactive
+  transaction** (a floor of ~0.45 ms p50 / ~0.6 ms p95 even for `SELECT 1`), not index work, locking
+  or WAL. Prisma's model `create` / `update` cost about twice a raw statement because they `RETURNING`
+  every column, including the `changes` JSONB, and deserialise it.
+
+  **Measured — the harness under-counts the feature's cost.** Commit `7a2936a` also added the services'
+  `before` / `after` re-reads inside the transaction (PATCH and assignment update: one `findFirst`, one
+  `findFirstOrThrow`). The stub leaves them in the "without" arm (16 statements against 19 for a PATCH),
+  so the true added cost of the feature is about **two more round trips (~2 ms)** on those two writes
+  than the M1-T7 table shows. Link create has none (the created row is reused).
+
+  **Inferred — why this design estimate was wrong.** Data-model §10 O1 costed a link at "about 1–2 ms";
+  that priced the database work and never the round trip, and omitted the name lookup and the second
+  insert. That is this agent's error, not the builder's.
+
+  **Options, ranked (expected savings are sums of the measured statement costs above, so inferred
+  until re-measured):**
+
+  1. **Recorder-internal, no schema change (recommended first).** (a) Write entries with
+     `$executeRaw` and no `RETURNING`: create 1.26 → 0.68, update 1.14 → 0.62 measured, about −0.6 ms
+     per write. (b) Fold the name lookups (resource code/name, link endpoints' code/name, calendar and
+     WBS parent names) into the probe statement, so names are still read under the lock in this
+     transaction: −0.9 ms (assignment), −1.2 ms (link). (c) Write every endpoint's insert / update /
+     delete in **one** writable-CTE statement over `unnest(…)` — measured 0.99 ms for three rows
+     against 2 × 1.26 for two Prisma `create`s — which is also the shape M2's batch path needs.
+     Result: PATCH and assignment 3 round trips (~2.0 p50 / ~2.6 p95), link 3 (~2.4 / ~3.1).
+     **Link meets its 4 ms bar; single writes still miss 2 ms at p95.** Risk: low to moderate — the
+     diff builders take names from the probe instead of their own reads, so the recorder's API and its
+     unit tests change; the lock protocol and every ADR-0174 decision are untouched.
+  2. **Lock and probe in one round trip via a `VOLATILE` plpgsql function** (a migration, no table
+     change; `audit_events` already ships plpgsql). Measured 0.91 / 1.16 against 1.31 / 1.77 for the
+     two statements. Safe **only** as a function: a VOLATILE plpgsql function takes a fresh snapshot
+     per statement, so the probe sees an entry a concurrent recorder committed while this one waited.
+     Tested on the scratch database — function: saw the concurrent commit (1 row); the same lock and
+     read as **one plain statement: did not (0 rows)**, which would be exactly the lost update the
+     history lock exists to prevent. With option 1: single ≈ 1.55 p50 / ~2.0 p95, link ≈ 2.0 / ~2.5.
+     This is the only route that plausibly reaches 2 ms, and only just — before the re-reads above.
+     Risk: the lock order moves into SQL, so `common/db/activity-history-lock.ts` and the function must
+     agree (one gate test), and M2's exclusive-plan batch mode needs a second entry point. Changes
+     data-model §4.1's mechanism, not ADR-0174 D4's protocol.
+  3. **Trim the feature's own re-reads** (applies whichever of 1–2 is chosen). The `after` read can come
+     back from the version-gated update itself (`updateManyAndReturn`, in Prisma ≥ 6.2; this repo has
+     6.19.3): −1 round trip on PATCH and assignment update. The `before` read stays — diffing against
+     the pre-transaction `existing` row is unsafe while engine-owned writes skip `version` (ADR-0022).
+  4. **Rejected.** Lock and probe as one plain statement (shown unsafe above). The merge logic in
+     plpgsql for a single round trip (duplicates the tested pure diff in a second language). A name
+     cache (option 1b removes the round trip without one). Recording after commit or on a queue, and
+     replacing the advisory lock with row locks — both reverse ADR-0174 decisions (a failed record
+     fails the write; D4's deadlock analysis).
+
+  **Is the bar well-founded? A question for the product owner, not a decision.** The 2 ms bar
+  (feature-spec §2) was set before anyone priced a round trip, and on this stack a single extra
+  statement costs 0.45–1.3 ms. Recording safely needs at least two (lock-then-read must be separate
+  snapshots; the merge is decided in TypeScript between the read and the write), plus the `before`
+  read. For scale: these writes run 25–45 ms p95 end to end, so the measured cost is roughly 10 % of
+  a save a person makes by hand, against the 200 ms read target in CLAUDE.md §15. **Recommendation:**
+  build option 1 (+3) now, keep the 4 ms link bar, and restate the single-object bar as **≤ 3 ms p95
+  added, counting the re-reads**, plus a computed gate that fails if the recorder issues more than
+  three statements for a single-object write (counted with Prisma's `query` event, so it cannot drift
+  with the machine). If the 2 ms figure must stand, option 2 is the route, with the honest note that
+  it is marginal at p95 and the bar would still have to say whether the re-reads count.
+
 #### Feature M1-D: The History tab
 
 > **Description:** the tab, list, states and formatting for fields, links and resources.
