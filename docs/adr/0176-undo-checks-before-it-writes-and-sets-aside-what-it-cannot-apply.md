@@ -198,10 +198,14 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   shape waits for the history list (M7), the first reader that needs links as subjects.
 - **After an applied step the first subject still in the plan is selected and brought into view**, in
   whichever view is showing, through the channels duplicate and the dock presses already use: the
-  one-shot `revealActivityId` (centre the diagram on the bar's drawn start, lift the selection) and the
+  one-shot `revealActivityId` (bring the bar into view on both axes with `centerOnActivity`, lift the selection) and the
   Gantt's `bringIntoViewActivityId`. "Still in the plan" is read from the plan's list after the
   replay's own invalidation has settled, so an undone create reveals nothing and the dates centred on
   are the restored ones. A set-aside or failed step reveals nothing.
+- **The Gantt's request is withdrawn once it has scrolled** (`onBroughtIntoView`), so it cannot re-expand an
+  ancestor the planner collapses afterwards. **A select signal moves the diagram's keyboard cursor as
+  well as its selection**: with multi-select on, `aria-activedescendant` names the cursor, and the
+  signal had left it on the row the planner last walked to (found by the journey, not by a unit suite).
 - **Focus is not moved.** The diagram's select request is made with `focusListbox: false` unless focus
   has already fallen to `<body>`, in which case it is handed to the diagram (ADR-0135). Both scrolls are
   instant (`centerOnDate` is a pure pan; the Gantt calls `scrollToIndex` with no smooth behaviour), so

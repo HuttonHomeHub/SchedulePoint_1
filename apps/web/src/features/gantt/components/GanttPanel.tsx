@@ -290,6 +290,13 @@ export interface GanttPanelProps {
    * summary is expanded to first — silently doing nothing is the lit-but-inert shape.
    */
   bringIntoViewActivityId?: string | undefined;
+  /**
+   * Called after the row named by {@link bringIntoViewActivityId} has been scrolled to, so a host
+   * whose request is an EVENT (an undo's reveal) can withdraw it. Without it the id stays a standing
+   * source and this component's effect keeps re-running on every collapse and re-sort — re-expanding
+   * an ancestor the planner just collapsed.
+   */
+  onBroughtIntoView?: (() => void) | undefined;
 }
 
 /**
@@ -354,6 +361,7 @@ function GanttPanelBody({
   selectedActivityId,
   emphasisIds,
   bringIntoViewActivityId,
+  onBroughtIntoView,
   viewState,
   rowStructure,
   columnWidths,
@@ -638,13 +646,16 @@ function GanttPanelBody({
   // wired into `vite.config.ts`, so nothing is auto-memoized in the shipped bundle — but the
   // analysis does run, in the linter, and it is what refused this write.
   // The idiom is `TsldPanel.tsx:813-816`'s — a deps-free effect.
+  const onBroughtIntoViewRef = useRef(onBroughtIntoView);
   useEffect(() => {
     activitiesRef.current = activities;
+    onBroughtIntoViewRef.current = onBroughtIntoView;
   });
   useEffect(() => {
     if (bringIntoViewActivityId === undefined) return;
     if (emphasisRowIndex >= 0) {
       virtualizer.scrollToIndex(emphasisRowIndex, { align: 'center' });
+      onBroughtIntoViewRef.current?.();
       return;
     }
     // Not in `rows` — its WBS parent is collapsed. Expand every collapsed ancestor rather than

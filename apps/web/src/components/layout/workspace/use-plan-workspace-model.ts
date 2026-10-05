@@ -300,14 +300,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // paste is asked for from a menu or a dialog that has just closed, so landing in the diagram is
   // right; an undo is pressed from the toolbar (or the keyboard) and must not be moved off it.
   const [revealKeepsFocus, setRevealKeepsFocus] = useState(false);
-  // The activity the last undo/redo brought into view, kept for the Gantt (undo-redo M4): its scroll
-  // hangs off a prop that must persist across the re-render that expands a collapsed ancestor, so it
-  // cannot be a one-shot. The host only honours it while that activity is still the selection.
+  // The activity the last undo/redo asked the Gantt to bring into view (undo-redo M4). Its scroll hangs
+  // off a prop that must persist across the re-render that expands a collapsed ancestor, so it is
+  // withdrawn by the Gantt once it has actually scrolled (`onUndoRevealHandled`), not on a timer — and
+  // only honoured while that activity is still the selection.
   const [undoRevealId, setUndoRevealId] = useState<string | null>(null);
   const onRevealHandled = useCallback(() => {
     setRevealActivityId(null);
     setRevealKeepsFocus(false);
   }, []);
+  const onUndoRevealHandled = useCallback(() => setUndoRevealId(null), []);
   const onUndoReveal = useCallback((activityId: string) => {
     setRevealKeepsFocus(true);
     setRevealActivityId(activityId);
@@ -2700,6 +2702,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     revealActivityId,
     revealKeepsFocus,
     undoRevealId,
+    onUndoRevealHandled,
     onRevealHandled,
     /** The app clipboard (`docs/specs/activity-copy-paste/` M3): `Ctrl+C` / `Ctrl+V`. */
     copySelection,
