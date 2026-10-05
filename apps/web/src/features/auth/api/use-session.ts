@@ -14,6 +14,7 @@ import { forgetDismissalsForUser } from '@/features/placement-migration/model/di
 import { forgetLastActiveOrg } from '@/lib/active-org';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
+import { DEFAULT_STALE_TIME } from '@/lib/query/query-client';
 
 export const sessionKeys = {
   session: ['session'] as const,
@@ -24,6 +25,13 @@ export const sessionKeys = {
  * {@link useSession} and the router's `_authed` guard loader so both read from
  * the same cache entry. Resolves to `null` when unauthenticated (401) rather
  * than erroring, so callers branch on the value.
+ *
+ * **`staleTime: 0` is load-bearing here, and only here.** The sign-in, sign-up and
+ * change-password mutations call `fetchQuery(sessionQueryOptions)` to replace the cached
+ * `null` with the new user before they navigate; a non-zero `staleTime` would let
+ * `fetchQuery` return that cached `null` and bounce the planner back to sign-in. The
+ * observers that only DISPLAY the session use {@link SESSION_OBSERVER_STALE_TIME}
+ * instead (see {@link useSession}).
  */
 export const sessionQueryOptions = queryOptions<MeResponse | null>({
   queryKey: sessionKeys.session,
@@ -40,9 +48,23 @@ export const sessionQueryOptions = queryOptions<MeResponse | null>({
   },
 });
 
+/**
+ * How long a mounted {@link useSession} observer treats `/me` as fresh: the app's default
+ * ({@link DEFAULT_STALE_TIME}), restated because the shared options above say `0`.
+ *
+ * With `0`, every component that mounts `useSession` refetched `/me`, and every window focus did
+ * too — thirteen call sites across the shell, the plan workspace and the notes sections, so a plan
+ * switch (which remounts the workspace, `docs/TECH_DEBT.md` #451) cost a request each time. That is a per-IP, per-handler
+ * bucket of 100 per 60 s (`docs/TECH_DEBT.md` #446), and the base journey suite reached it on CI
+ * (#455). Nothing is lost: every write that changes the session invalidates or refetches it
+ * explicitly (sign-in, sign-up, a password change, sign-out, accepting an invitation, creating an
+ * organisation), and the API re-checks every request — the client copy is for display.
+ */
+export const SESSION_OBSERVER_STALE_TIME = DEFAULT_STALE_TIME;
+
 /** The single source of truth for auth state (the current user + memberships). */
 export function useSession(): UseQueryResult<MeResponse | null> {
-  return useQuery(sessionQueryOptions);
+  return useQuery({ ...sessionQueryOptions, staleTime: SESSION_OBSERVER_STALE_TIME });
 }
 
 function messageFrom(error: unknown, fallback: string): string {

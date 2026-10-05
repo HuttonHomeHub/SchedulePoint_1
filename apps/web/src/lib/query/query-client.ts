@@ -20,11 +20,14 @@ import { isRetryableStatus, readErrorStatus } from '@/lib/api/retryable-status';
  * screen now offers a way out too; the two halves of #314 ship together because neither alone is
  * enough for a bucket that stays exhausted longer than the backoff.
  */
+/** How long any query's data counts as fresh unless it says otherwise. */
+export const DEFAULT_STALE_TIME = 30_000;
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 30_000,
+        staleTime: DEFAULT_STALE_TIME,
         gcTime: 5 * 60_000,
         refetchOnWindowFocus: true,
         retry: (failureCount, error) => {
