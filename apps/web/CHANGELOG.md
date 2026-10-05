@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.164.0
+
+### Minor Changes
+
+- [#797](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/797) [`7a5618c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7a5618c9c93f0294d30e68e82d25feb73f1bae68) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo and redo now show what they did. A short message under the plan says "Undid move “Excavate”" with a Redo button (and the reverse), in both the diagram and the Gantt, and an undo that can't be applied explains why. Pressing Ctrl+Z when you can't edit now tells you why instead of doing nothing, and the Undo tooltip keeps the activity's own capitalisation.
+
 ## 0.163.2
 
 ### Patch Changes
