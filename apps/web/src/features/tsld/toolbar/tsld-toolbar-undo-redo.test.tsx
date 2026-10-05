@@ -164,8 +164,8 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
     expect(screen.getByRole('menu', { name: 'Undo history' })).toBeInTheDocument();
     expect(rowsOf().map((item) => item.textContent)).toEqual([
       'Undo Move “C”',
-      'Undo 2 steps, back to Move “B”2 steps',
-      'Undo 3 steps, back to Add “A”3 steps',
+      'Undo Move “B” and the 1 step after it',
+      'Undo Add “A” and the 2 steps after it',
       'Redo Delete “D”',
     ]);
   });
@@ -174,7 +174,7 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
     const bar = doRow(historyCtx());
     fireEvent.click(trigger(bar));
     fireEvent.click(screen.getByRole('menuitem', { name: /Add “A”/ }));
-    expect(undoTo).toHaveBeenCalledExactlyOnceWith(3);
+    expect(undoTo).toHaveBeenCalledExactlyOnceWith(3, 'Add “A”');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(trigger(bar)).toHaveFocus();
   });
@@ -183,7 +183,7 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
     const bar = doRow(historyCtx());
     fireEvent.click(trigger(bar));
     fireEvent.click(screen.getByRole('menuitem', { name: /Delete “D”/ }));
-    expect(redoTo).toHaveBeenCalledExactlyOnceWith(1);
+    expect(redoTo).toHaveBeenCalledExactlyOnceWith(1, 'Delete “D”');
     expect(undoTo).not.toHaveBeenCalled();
   });
 
@@ -246,6 +246,47 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
     expect(rowsOf()[0]).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(rowsOf()[0]!);
     expect(undoTo).not.toHaveBeenCalled();
+  });
+
+  it('every row’s accessible name contains its visible text unbroken (WCAG 2.5.3)', () => {
+    const bar = doRow(historyCtx());
+    fireEvent.click(trigger(bar));
+    for (const row of rowsOf()) {
+      const visible = row.querySelector('[title]')?.textContent ?? '';
+      expect(visible).not.toBe('');
+      expect(row).toHaveAccessibleName(expect.stringContaining(visible));
+    }
+  });
+
+  it('truncates a long label in the row and keeps it whole in the title', () => {
+    const long = 'Edit “' + 'Very long activity name '.repeat(8) + '”';
+    const bar = doRow(historyCtx({ historyEntries: () => ({ undo: [long], redo: [] }) }));
+    fireEvent.click(trigger(bar));
+    const label = rowsOf()[0]!.querySelector('[title]')!;
+    expect(label).toHaveAttribute('title', long);
+    expect(label).toHaveClass('truncate');
+  });
+
+  it('marks Undo, Redo and the history button busy while a run is in flight, and ignores them', () => {
+    const bar = doRow(historyCtx({ historyBusy: true }));
+    for (const name of ['Undo history', 'Undo move “C”', 'Redo add link']) {
+      expect(within(bar).getByRole('button', { name })).toHaveAttribute('aria-busy', 'true');
+    }
+    fireEvent.click(within(bar).getByRole('button', { name: 'Undo move “C”' }));
+    fireEvent.click(trigger(bar));
+    expect(undo).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('ArrowRight inside the open menu keeps focus in the menu', () => {
+    const bar = doRow(historyCtx());
+    trigger(bar).focus();
+    press('ArrowDown');
+    const first = rowsOf()[0];
+    press('ArrowRight');
+    press('ArrowLeft');
+    expect(first).toHaveFocus();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
   it('adds no roving stop of its own beyond the toolbar’s one', () => {

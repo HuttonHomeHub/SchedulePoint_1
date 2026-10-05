@@ -199,9 +199,11 @@ export interface TsldToolbarContext {
   /** The labels of the steps on each stack, nearest first — read when the history menu renders. */
   historyEntries: () => HistoryEntries;
   /** Undo this many steps in order (the history menu's "undo to here"). */
-  undoTo: (count: number) => void;
+  undoTo: (count: number, expectedLabel: string) => void;
   /** Redo this many steps in order. */
-  redoTo: (count: number) => void;
+  redoTo: (count: number, expectedLabel: string) => void;
+  /** A run of several steps is in flight (`aria-busy` on Undo, Redo and the history menu). */
+  historyBusy: boolean;
 
   // --- Object / plan actions (group 5) ------------------------------------------------------
   /** Whether the plan can be recalculated now (role + pen; from the model). */

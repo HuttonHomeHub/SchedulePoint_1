@@ -139,7 +139,7 @@ function rangeMessage(
   { done, total }: { done: number; total: number },
 ): string {
   const verb = result.direction === 'undo' ? 'Undid' : 'Redid';
-  if (result.outcome === 'done') return `${verb} ${done} steps.`;
+  if (result.outcome === 'done') return `${verb} ${done} ${done === 1 ? 'step' : 'steps'}.`;
   // Same lower-casing rule as `historyPhrase` (first character only), without a verb in front.
   const step = `${result.label.charAt(0).toLowerCase()}${result.label.slice(1)}`;
   const head = `${verb} ${done} of ${total} — stopped at ${step}`;

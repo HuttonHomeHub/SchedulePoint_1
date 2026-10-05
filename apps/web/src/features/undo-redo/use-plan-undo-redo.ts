@@ -6,7 +6,7 @@ import type {
   ResourceAssignmentSummary,
 } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Command } from './commands';
 import { historyResultMessage, type PostedHistoryResult } from './history-result';
@@ -50,10 +50,15 @@ export interface PlanUndoRedo {
   /**
    * Undo `count` steps in order (the history menu's "undo to here"), the nearest first. Stops at the
    * first step that does not apply and says so in ONE result — see {@link historyResultMessage}.
+   * `expectedLabel` is the label of the row the planner chose: if the entry at that position is no
+   * longer that step (the list was open while the history moved) nothing runs and the planner is
+   * told, because "undo to here" on a different step is a different edit.
    */
-  undoTo: (count: number) => void;
+  undoTo: (count: number, expectedLabel: string) => void;
   /** Redo `count` steps in order, the mirror of {@link undoTo}. */
-  redoTo: (count: number) => void;
+  redoTo: (count: number, expectedLabel: string) => void;
+  /** True while a run of several steps is in flight — the controls say so with `aria-busy`. */
+  busy: boolean;
 }
 
 /**
@@ -332,6 +337,7 @@ export function usePlanUndoRedo(params: {
   // Held across a whole run of steps: between two of them the store's own in-flight guard is down,
   // so without this a keystroke could slip a single undo into the middle of "undo to here".
   const rangeRunningRef = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   const replayOne = useCallback(
     async (direction: 'undo' | 'redo'): Promise<Step> => {
@@ -399,14 +405,24 @@ export function usePlanUndoRedo(params: {
   );
 
   const runTo = useCallback(
-    (direction: 'undo' | 'redo', count: number): void => {
+    (direction: 'undo' | 'redo', count: number, expectedLabel: string): void => {
       if (rangeRunningRef.current || count < 1) return;
+      if (history.entries()[direction][count - 1] !== expectedLabel) {
+        report({
+          direction,
+          outcome: 'blocked',
+          label: expectedLabel,
+          reason: 'The history changed — open the list again.',
+        });
+        return;
+      }
       // One step is an ordinary press, and reads as one.
       if (count === 1) {
         run(direction);
         return;
       }
       rangeRunningRef.current = true;
+      setBusy(true);
       void (async () => {
         try {
           let done = 0;
@@ -445,16 +461,23 @@ export function usePlanUndoRedo(params: {
           }
         } finally {
           rangeRunningRef.current = false;
+          setBusy(false);
         }
       })();
     },
-    [run, replayOne, report, afterApplied],
+    [history, run, replayOne, report, afterApplied],
   );
 
   const undo = useCallback((): void => run('undo'), [run]);
   const redo = useCallback((): void => run('redo'), [run]);
-  const undoTo = useCallback((count: number): void => runTo('undo', count), [runTo]);
-  const redoTo = useCallback((count: number): void => runTo('redo', count), [runTo]);
+  const undoTo = useCallback(
+    (count: number, expectedLabel: string): void => runTo('undo', count, expectedLabel),
+    [runTo],
+  );
+  const redoTo = useCallback(
+    (count: number, expectedLabel: string): void => runTo('redo', count, expectedLabel),
+    [runTo],
+  );
 
   return useMemo(
     () => ({
@@ -467,12 +490,14 @@ export function usePlanUndoRedo(params: {
       entries: history.entries,
       undoTo,
       redoTo,
+      busy,
     }),
     [
       undo,
       redo,
       undoTo,
       redoTo,
+      busy,
       history.entries,
       history.canUndo,
       history.canRedo,

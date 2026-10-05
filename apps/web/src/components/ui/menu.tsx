@@ -220,6 +220,14 @@ export function Menu({
         event.preventDefault();
         items[items.length - 1]?.focus();
         break;
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        // A vertical menu leaves these unused (APG), which is exactly why they must be claimed: the
+        // menu is portalled but its React events still bubble to an enclosing toolbar, whose
+        // roving model would move focus to its next stop and leave this menu open and orphaned.
+        event.preventDefault();
+        event.stopPropagation();
+        break;
       case 'Tab':
         // Tabbing out of a menu dismisses it (APG). The menu is portal-rendered to
         // <body>, so letting native Tab proceed would jump to the top of the document

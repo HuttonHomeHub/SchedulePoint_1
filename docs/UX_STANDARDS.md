@@ -146,11 +146,16 @@ entry stops being needed.
   sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
   `aria-keyshortcuts` lists every chord that works.
 - **Undo history jumps back several steps in one action** (undo-redo M7). A menu button beside
-  Undo, named **Undo history**, lists the undo steps newest first and then the redo steps; choosing
-  one runs every step down to it and leaves **one** strip — "Undid 3 steps." — or, when a step cannot
-  apply, "Undid 2 of 4 — stopped at ⟨step⟩: ⟨why⟩." The run stops there rather than skipping the step,
-  because the steps below it were made on top of it. It is shaded with Undo and Redo (no pen, the
-  Late-start overlay, nothing to undo) and a row says what it does by name, not by position.
+  Undo, named **Undo history**, lists the undo steps newest first and then the redo steps. A row
+  shows the step's name; past the first it adds a second line saying what else the choice takes
+  along ("and the 2 steps after it"), and a screen reader hears "Undo ⟨step⟩ and the 2 steps after
+  it" — the visible text sits unbroken in the name. Choosing one runs every step down to it and
+  leaves **one** strip — "Undid 3 steps." — or, when a step cannot apply, "Undid 2 of 4 — stopped
+  at ⟨step⟩: ⟨why⟩." The run stops there rather than skipping the step, because the steps below it
+  were made on top of it. If the history moved while the list was open, nothing runs and the strip
+  says "The history changed — open the list again." While a run is in flight Undo, Redo and the
+  button are `aria-busy`. It is shaded with Undo and Redo (no pen, the Late-start overlay, nothing
+  to undo), and a long step name is cut short in the row with the whole name in its `title`.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

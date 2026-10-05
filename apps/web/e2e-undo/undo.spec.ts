@@ -937,7 +937,7 @@ test('a planner undoes back several steps at once from the Undo history menu', a
   await expect(rows).toHaveCount(3);
   // Newest first, each row saying what choosing it does.
   await expect(rows.first()).toHaveAccessibleName('Undo Add “Framing”');
-  await expect(rows.last()).toHaveAccessibleName('Undo 3 steps, back to Add “Excavate”');
+  await expect(rows.last()).toHaveAccessibleName('Undo Add “Excavate” and the 2 steps after it');
 
   await test.step('the open menu is accessible', async () => {
     const results = await new AxeBuilder({ page })
@@ -959,7 +959,9 @@ test('a planner undoes back several steps at once from the Undo history menu', a
     await page.keyboard.press('ArrowDown');
     const redoRows = page.getByRole('menu', { name: 'Undo history' }).getByRole('menuitem');
     await expect(redoRows).toHaveCount(3);
-    await expect(redoRows.last()).toHaveAccessibleName('Redo 3 steps, up to Add “Framing”');
+    await expect(redoRows.last()).toHaveAccessibleName(
+      'Redo Add “Framing” and the 2 steps before it',
+    );
     await page.keyboard.press('End');
     await page.keyboard.press('Enter');
     await expect(diagram.getByRole('option')).toHaveCount(3, { timeout: 15_000 });

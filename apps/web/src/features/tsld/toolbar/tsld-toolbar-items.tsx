@@ -2088,8 +2088,9 @@ function UndoRedoControl({
       aria-label={label}
       aria-keyshortcuts={hint.aria}
       aria-disabled={disabled || undefined}
+      aria-busy={ctx.historyBusy || undefined}
       onClick={() => {
-        if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();
+        if (!disabled && !ctx.historyBusy) (direction === 'undo' ? ctx.undo : ctx.redo)();
       }}
       onFocus={(event) => {
         tipTrigger.onFocus(event);
@@ -2110,9 +2111,15 @@ function UndoRedoControl({
 const HISTORY_LABEL = 'Undo history';
 
 /**
- * One row of the history menu. The visible text is the step's own label and, past the first row, how
- * many steps choosing it runs; a screen reader is told the **action** as well, because "Move activity"
- * alone does not say whether it undoes or redoes, or that it takes the steps above it along.
+ * One row of the history menu. The visible text is the step's own label, with — past the first row —
+ * a second line saying what else the choice takes along ("and the 2 steps after it"). A screen reader
+ * hears the **action** in front ("Undo …"), because the label alone does not say whether it undoes or
+ * redoes. The accessible name is built so the visible text sits in it **unbroken** (WCAG 2.5.3: the
+ * name must contain what is shown): the verb goes before it, nothing is interleaved.
+ *
+ * Undo rows say "after it" (the steps made later, listed above the row) and redo rows "before it" (the
+ * steps that come back first, listed above the row) — the words a planner would use for the sequence
+ * of their own work, not a position in a list.
  */
 function HistoryMenuRow({
   verb,
@@ -2128,6 +2135,11 @@ function HistoryMenuRow({
   api: ToolbarItemRenderApi;
   onSelect: () => void;
 }): React.ReactElement {
+  const others = steps - 1;
+  const alongside =
+    others === 0
+      ? null
+      : `and the ${others === 1 ? '1 step' : `${others} steps`} ${verb === 'Undo' ? 'after' : 'before'} it`;
   return (
     <MenuItem
       onSelect={onSelect}
@@ -2136,17 +2148,20 @@ function HistoryMenuRow({
       disabled={api.disabled}
       {...(api.disabledReason ? { disabledReason: api.disabledReason } : {})}
     >
-      <span className="sr-only">
-        {steps === 1
-          ? `${verb} `
-          : `${verb} ${steps} steps, ${verb === 'Undo' ? 'back' : 'up'} to `}
-      </span>
-      <span className="truncate">{label}</span>
-      {steps > 1 ? (
-        <span aria-hidden="true" className="text-muted-foreground text-micro ml-auto pl-3">
-          {steps} steps
+      <span className="sr-only">{verb} </span>
+      {/* `min-w-0` + `max-w` + `truncate`: an activity's name can be arbitrarily long, and the menu
+          must not widen to the viewport for it. The full text stays in `title` and in the name. */}
+      <span className="flex max-w-72 min-w-0 flex-col">
+        <span className="truncate" title={label}>
+          {label}
         </span>
-      ) : null}
+        {alongside ? (
+          <>
+            {' '}
+            <span className="text-muted-foreground text-micro truncate">{alongside}</span>
+          </>
+        ) : null}
+      </span>
     </MenuItem>
   );
 }
@@ -2193,15 +2208,16 @@ function UndoHistoryControl({
         aria-expanded={open}
         aria-label={HISTORY_LABEL}
         aria-disabled={disabled || undefined}
+        aria-busy={ctx.historyBusy || undefined}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
-          if (!disabled) toggle();
+          if (!disabled && !ctx.historyBusy) toggle();
         }}
         onKeyDown={(event) => {
           // APG menu button: the vertical arrows open the menu. Left/right stay the toolbar's.
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
           event.preventDefault();
-          if (!disabled && !open) openMenu();
+          if (!disabled && !ctx.historyBusy && !open) openMenu();
         }}
         onFocus={(event) => {
           tipTrigger.onFocus(event);
@@ -2224,7 +2240,7 @@ function UndoHistoryControl({
         label={HISTORY_LABEL}
         restoreFocusRef={triggerRef}
       >
-        {entries && entries.undo.length > 0 ? <MenuSection label="Undo back to" /> : null}
+        {entries && entries.undo.length > 0 ? <MenuSection label="Undo" /> : null}
         {entries?.undo.map((label, index) => (
           <HistoryMenuRow
             // Labels repeat (two moves of one bar), so the position is the identity.
@@ -2233,11 +2249,11 @@ function UndoHistoryControl({
             label={label}
             steps={index + 1}
             api={api}
-            onSelect={() => ctx.undoTo(index + 1)}
+            onSelect={() => ctx.undoTo(index + 1, label)}
           />
         ))}
         {entries && entries.redo.length > 0 ? (
-          <MenuSection label="Redo up to" divider={entries.undo.length > 0} />
+          <MenuSection label="Redo" divider={entries.undo.length > 0} />
         ) : null}
         {entries?.redo.map((label, index) => (
           <HistoryMenuRow
@@ -2246,7 +2262,7 @@ function UndoHistoryControl({
             label={label}
             steps={index + 1}
             api={api}
-            onSelect={() => ctx.redoTo(index + 1)}
+            onSelect={() => ctx.redoTo(index + 1, label)}
           />
         ))}
       </Menu>

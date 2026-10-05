@@ -179,6 +179,10 @@ describe('historyResultMessage', () => {
       expect(run({ direction: 'redo', steps: { done: 3, total: 3 } })).toBe('Redid 3 steps.');
     });
 
+    it('says "1 step", not "1 steps"', () => {
+      expect(run({ steps: { done: 1, total: 1 } })).toBe('Undid 1 step.');
+    });
+
     it('says how far it got, where it stopped and why, when a step is set aside', () => {
       expect(
         run({

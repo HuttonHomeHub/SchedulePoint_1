@@ -238,7 +238,10 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
 - **The control is a menu button beside Undo, named "Undo history"** (the activity editor already has
   a History tab, ADR-0174): a registry item (`undo-history`, pen-gated, enabled while either stack is
   non-empty) on the shared APG `Menu`, in the toolbar both views mount. Undo above redo, nearest
-  first; each row says what it does to a screen reader ("Undo 3 steps, back to …"). Redo is in the
+  first; each row's name is "Undo ⟨step⟩ and the 2 steps after it". The row passes the label of the
+  step it was drawn for, and a run refuses ("The history changed — open the list again.") if that
+  position no longer holds that step. Undo, Redo and the button are `aria-busy` for the length of a
+  run. Redo is in the
   same list because the cost was one section and the symmetry is what a planner who has just undone
   too far reaches for.
 - **The two deferrals above did not hold.** Replaying a step recorded in an earlier render is what
