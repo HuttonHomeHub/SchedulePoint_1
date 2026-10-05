@@ -20,6 +20,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     hasPlacementMigrationNotice: false,
     hasArrangeOffer: false,
     hasLayoutResolvedNotice: false,
+    historyResult: null,
     ...overrides,
   };
 }
@@ -166,6 +167,48 @@ describe('resolveDockStrip', () => {
     it('loses to a conflict and to an armed tool', () => {
       expect(resolveDockStrip(input({ ...resolved, hasConflict: true }))).toBe('conflict');
       expect(resolveDockStrip(input({ ...resolved, modeStatement: ARMED }))).toBe('mode');
+    });
+  });
+
+  /** The undo/redo result (undo-redo M1): a failure ranks with `conflict`, a success just below `mode`. */
+  describe('the history result', () => {
+    it('shows on an otherwise settled canvas, for either outcome', () => {
+      expect(resolveDockStrip(input({ historyResult: 'success' }))).toBe('history');
+      expect(resolveDockStrip(input({ historyResult: 'failure' }))).toBe('history');
+    });
+
+    it('a failure beats an armed tool, but loses to a conflict', () => {
+      expect(resolveDockStrip(input({ historyResult: 'failure', modeStatement: ARMED }))).toBe(
+        'history',
+      );
+      expect(resolveDockStrip(input({ historyResult: 'failure', hasConflict: true }))).toBe(
+        'conflict',
+      );
+    });
+
+    it('a success yields to an armed tool and to a conflict', () => {
+      expect(resolveDockStrip(input({ historyResult: 'success', modeStatement: ARMED }))).toBe(
+        'mode',
+      );
+      expect(resolveDockStrip(input({ historyResult: 'success', hasConflict: true }))).toBe(
+        'conflict',
+      );
+    });
+
+    it('a success replaces the layout-resolved notice and every standing strip', () => {
+      expect(
+        resolveDockStrip(
+          input({
+            historyResult: 'success',
+            hasLayoutResolvedNotice: true,
+            hasArrangeOffer: true,
+            hasPlacementMigrationNotice: true,
+          }),
+        ),
+      ).toBe('history');
+      expect(resolveDockStrip(input({ historyResult: 'success', activityCount: 0 }))).toBe(
+        'history',
+      );
     });
   });
 });

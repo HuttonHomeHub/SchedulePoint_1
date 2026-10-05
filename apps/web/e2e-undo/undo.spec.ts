@@ -6,6 +6,7 @@ import {
   seedActivities,
   seedLink,
 } from '../e2e-copy-paste/support';
+import { ganttGrid, showGantt } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -351,4 +352,78 @@ test('deleting a phase and then its parent undoes in the order it was done', asy
   const substructure = restored.find((a) => a.name === 'Substructure');
   expect(substructure?.parentId).toBe(structure?.id);
   expect(restored.find((a) => a.name === 'Excavate')?.parentId).toBe(substructure?.id);
+});
+
+/**
+ * **A sighted planner sees what undo did** (undo-redo M1, spec US-1) — in the diagram AND the Gantt.
+ *
+ * Until now the only message an undo produced went to the live region, so a planner who could see
+ * the screen got nothing: no confirmation, no way to take it back, and — pressing `Ctrl+Z` without
+ * the right to edit — no reason it did nothing. This drives the whole loop in a real browser:
+ *
+ * 1. Undo from the toolbar → the dock strip says what was undone and offers **Redo**.
+ * 2. That Redo → the strip says what was redone and offers **Undo**.
+ * 3. In the **Gantt**, `Ctrl+Z` → the same strip, in the other host's dock.
+ * 4. With the Late-start overlay on (editing paused), `Ctrl+Z` → the strip states the refusal,
+ *    as an alert, instead of doing nothing.
+ * 5. axe over the strip, in its refusal state.
+ *
+ * The no-pen variant of step 4's sentence is M2's journey: until M2 relaxes M0-T1, releasing the pen
+ * empties the history, so there is nothing for a pen-less press to refuse.
+ */
+test('a planner sees what undo and redo did, in the diagram and the Gantt', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const strip = page.getByTestId('canvas-history-result');
+
+  await drawTask(page, 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawTask(page, 'Foundations', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  // (1) Undo → the strip names the step, in the activity's own capitalisation, with a Redo button.
+  const undoBtn = toolbar.getByRole('button', { name: /^Undo\b/ });
+  await expect(undoBtn).toHaveAccessibleName('Undo add “Foundations”');
+  await undoBtn.click();
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await expect(strip).toContainText('Undid add “Foundations”.');
+  // Success is not a live region of its own: the announcer said it once already.
+  await expect(strip).not.toHaveAttribute('role', 'alert');
+
+  // (2) The strip's Redo is the same step coming back, and the strip then offers the opposite.
+  await strip.getByRole('button', { name: 'Redo' }).click();
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+  await expect(strip).toContainText('Redid add “Foundations”.');
+  await expect(strip.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+  // (3) The Gantt's dock carries the same strip — the one-host-and-not-its-neighbour defect this
+  // repository has recorded repeatedly. Focus a row first so the workspace root's handler hears it.
+  await showGantt(page);
+  await ganttGrid(page).getByRole('row').nth(1).focus();
+  await page.keyboard.press('Control+z');
+  await expect(strip).toBeVisible({ timeout: 15_000 });
+  await expect(strip).toContainText('Undid add “Foundations”.');
+
+  // (4) Paused editing is a reason, not a silent key. The overlay is read-only analysis, so the pen
+  // is still held and the history is intact — which is exactly when a silent Ctrl+Z misleads.
+  await page.getByRole('button', { name: 'View', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Late-start overlay' }).check();
+  await page.keyboard.press('Escape');
+  await ganttGrid(page).getByRole('row').nth(1).focus();
+  await page.keyboard.press('Control+z');
+  const refusal = page.getByRole('alert').filter({ hasText: /Late-start overlay is on/ });
+  await expect(refusal).toBeVisible();
+  await expect(refusal).toContainText('to undo');
+
+  // (5) The strip, in its alert state, is accessible.
+  const results = await new AxeBuilder({ page })
+    .include('[data-testid="canvas-history-result"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
 });

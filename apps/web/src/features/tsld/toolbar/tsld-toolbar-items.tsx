@@ -104,6 +104,7 @@ import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import { PlanPenControl } from '@/features/plan-lock';
 import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
+import { historyPhrase } from '@/lib/history-phrase';
 import { cn } from '@/lib/utils';
 
 /**
@@ -2055,9 +2056,11 @@ function UndoRedoControl({
   const disabled = api.disabled;
   const stepLabel = direction === 'undo' ? ctx.undoLabel : ctx.redoLabel;
   const verb = direction === 'undo' ? 'Undo' : 'Redo';
-  // Name the pending action where a label exists ("Undo move activity"), else the bare verb; when
+  // Name the pending action where a label exists ("Undo edit “Excavate”"), else the bare verb; when
   // disabled, surface the reason ("Undo — Nothing to undo"), matching the icon-only ToolbarButton.
-  const liveLabel = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
+  // `historyPhrase` lowercases the first letter only — `toLowerCase()` here used to flatten the
+  // activity's own name too ("Undo edit “excavate”") while the announcement kept it.
+  const liveLabel = historyPhrase(verb, stepLabel);
   const label = disabled && api.disabledReason ? `${verb} — ${api.disabledReason}` : liveLabel;
   const keyShortcuts = direction === 'undo' ? 'Control+Z' : 'Control+Shift+Z';
   // The visible name comes from the Tooltip primitive, not `title` (ADR-0117 — hover-only, so a

@@ -5,14 +5,14 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bulkPlacementCommand } from './commands';
-import { usePlanEditHistory } from './use-plan-edit-history';
 import {
   REDO_CONFLICT_MESSAGE,
   REDO_FAILED_MESSAGE,
   UNDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
-  usePlanUndoRedo,
-} from './use-plan-undo-redo';
+} from './history-result';
+import { usePlanEditHistory } from './use-plan-edit-history';
+import { usePlanUndoRedo } from './use-plan-undo-redo';
 
 import { levellingApplicationSnapshots } from '@/features/schedule';
 import { ApiFetchError } from '@/lib/api/client';

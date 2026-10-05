@@ -95,8 +95,11 @@ const SEARCH_NAV_SHORTCUTS: readonly Shortcut[] = [
  * so the sheet stays byte-for-byte identical with the flag off.
  */
 const UNDO_REDO_SHORTCUTS: readonly Shortcut[] = [
-  { keys: 'Cmd / Ctrl + Z', action: 'Undo the last edit' },
-  { keys: 'Cmd / Ctrl + Shift + Z  ·  Ctrl + Y', action: 'Redo' },
+  { keys: 'Cmd / Ctrl + Z', action: 'Undo the last edit — what it did shows under the plan' },
+  {
+    keys: 'Cmd / Ctrl + Shift + Z  ·  Ctrl + Y',
+    action: 'Redo — what it did shows under the plan',
+  },
 ];
 
 /**

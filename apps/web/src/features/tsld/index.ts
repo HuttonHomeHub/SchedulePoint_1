@@ -17,6 +17,8 @@ export {
 } from './components/TsldPanel';
 /** The dock strip for an edit's automatic overlap resolution (NetPoint-layout M3), built by the host. */
 export { LayoutResolvedStrip } from './components/LayoutResolvedStrip';
+/** The dock strip for what an undo or redo just did (undo-redo M1), built by the host for both views. */
+export { HistoryResultStrip } from './components/HistoryResultStrip';
 /** Calendar-day math (day offset → date) the route needs to map a create intent to a constraint. */
 export { addCalendarDays } from './render/render-model';
 /** The canvas working-day calendar shape (weekday mask + `date → isWorking` exceptions) for the

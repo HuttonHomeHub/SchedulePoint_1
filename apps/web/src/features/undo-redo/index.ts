@@ -47,12 +47,18 @@ export {
   COALESCE_WINDOW_MS,
   type PlanEditHistory,
 } from './use-plan-edit-history';
+export { usePlanUndoRedo, type PlanUndoRedo } from './use-plan-undo-redo';
 export {
-  usePlanUndoRedo,
+  historyResultMessage,
+  isHistoryFailure,
   UNDO_CONFLICT_MESSAGE,
   REDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
   REDO_FAILED_MESSAGE,
-  type PlanUndoRedo,
-} from './use-plan-undo-redo';
+  type HistoryOutcome,
+  type HistoryResult,
+  type PostedHistoryResult,
+} from './history-result';
+export { useHistoryResult, type HistoryResultState } from './use-history-result';
 export { useUndoRedoKeybindings } from './use-undo-redo-keybindings';
+export { blockedHistoryResult, historyResultAction } from './history-result-host';

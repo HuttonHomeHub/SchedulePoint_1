@@ -58,6 +58,14 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     expect(within(bar).getByRole('button', { name: 'Redo add link' })).toBeInTheDocument();
   });
 
+  // Regression (undo-redo M1-T1): the name was built with `label.toLowerCase()`, which flattened the
+  // activity's own name too — "Undo edit “excavate”" — while the announcement kept "Excavate".
+  it('keeps the activity name’s own capitalisation in the name', () => {
+    const bar = doRow(ctx({ undoLabel: 'Edit “Excavate”', redoLabel: 'Move “NORTH Wing”' }));
+    expect(within(bar).getByRole('button', { name: 'Undo edit “Excavate”' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Redo move “NORTH Wing”' })).toBeInTheDocument();
+  });
+
   it('falls back to the bare verb when there is no pending label', () => {
     const bar = doRow(ctx({ undoLabel: null, redoLabel: null }));
     expect(within(bar).getByRole('button', { name: 'Undo' })).toBeInTheDocument();

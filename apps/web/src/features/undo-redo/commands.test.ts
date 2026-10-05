@@ -17,6 +17,7 @@ import {
   relaneCommand,
   updateCommand,
   visualResizeCommand,
+  typeChangeCommand,
   visualStartCommand,
   type BatchPositionsFn,
   type CreateDependencyFn,
@@ -546,6 +547,7 @@ describe('relaneCommand', () => {
       fromLaneIndex: 0,
       toLaneIndex: 3,
       version: 7,
+      activityName: 'Excavate',
     });
 
     await command.undo();
@@ -828,7 +830,7 @@ describe('dependency add / remove commands', () => {
 
     await command.undo();
     expect(deleteDependency).toHaveBeenLastCalledWith('edge-2'); // the re-created id
-    expect(command.label).toBe('Add link');
+    expect(command.label).toBe('Add link “Excavate” → “Pour”');
   });
 
   it('remove: undo re-creates the edge, redo removes it again', async () => {
@@ -849,7 +851,7 @@ describe('dependency add / remove commands', () => {
     );
     await command.redo(); // remove again
     expect(deleteDependency).toHaveBeenCalledExactlyOnceWith('edge-10');
-    expect(command.label).toBe('Remove link');
+    expect(command.label).toBe('Remove link “Excavate” → “Pour”');
   });
 });
 
@@ -935,6 +937,7 @@ describe('visualStartCommand', () => {
       before: { visualStart: null, laneIndex: 0 },
       after: { visualStart: '2026-03-10', laneIndex: 2 },
       version: 7,
+      activityName: 'Excavate',
     });
 
     await command.undo();
@@ -997,6 +1000,72 @@ describe('autoArrangeCommand', () => {
         { id: 'a2', laneIndex: 3, version: 16 },
       ],
     });
-    expect(command.label).toBe('Auto-arrange lanes');
+    expect(command.label).toBe('Auto-arrange 2 activities');
+  });
+});
+
+/** M1-T1: every default label names its subject, so the result strip can say what was undone. */
+describe('default step labels name their subject', () => {
+  it('a lane move, a visual placement and a milestone conversion carry the activity name', () => {
+    const noop = vi.fn();
+    expect(
+      relaneCommand({
+        repositionLane: noop,
+        activityId: 'a1',
+        fromLaneIndex: 0,
+        toLaneIndex: 1,
+        version: 1,
+        activityName: 'Excavate',
+      }).label,
+    ).toBe('Move “Excavate” to lane');
+    expect(
+      visualStartCommand({
+        setVisualStart: noop,
+        activityId: 'a1',
+        before: { visualStart: null, laneIndex: 0 },
+        after: { visualStart: '2026-03-10', laneIndex: 0 },
+        version: 1,
+        activityName: 'Excavate',
+      }).label,
+    ).toBe('Move “Excavate”');
+    expect(
+      typeChangeCommand({
+        patch: noop,
+        activityId: 'a1',
+        before: 'TASK',
+        after: 'FINISH_MILESTONE',
+        version: 1,
+        activityName: 'Excavate',
+      }).label,
+    ).toBe('Make “Excavate” a milestone');
+  });
+
+  it('a coalesced lane move keeps its name after the merge rebuilds the command', () => {
+    const noop = vi.fn();
+    const first = relaneCommand({
+      repositionLane: noop,
+      activityId: 'a1',
+      fromLaneIndex: 0,
+      toLaneIndex: 1,
+      version: 1,
+      activityName: 'Excavate',
+    });
+    const second = relaneCommand({
+      repositionLane: noop,
+      activityId: 'a1',
+      fromLaneIndex: 1,
+      toLaneIndex: 2,
+      version: 2,
+      activityName: 'Excavate',
+    });
+    expect(second.coalescing?.merge(first).label).toBe('Move “Excavate” to lane');
+  });
+
+  it('auto-arrange counts what it moved, singular and plural', () => {
+    const batchPositions = vi.fn();
+    const one = [{ id: 'a1', laneIndex: 0 }];
+    expect(
+      autoArrangeCommand({ batchPositions, before: one, after: one, versions: new Map() }).label,
+    ).toBe('Auto-arrange 1 activity');
   });
 });

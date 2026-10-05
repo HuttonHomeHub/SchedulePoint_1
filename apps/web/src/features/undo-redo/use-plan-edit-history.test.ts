@@ -311,6 +311,7 @@ describe('usePlanEditHistory coalescing', () => {
       fromLaneIndex: from,
       toLaneIndex: to,
       version,
+      activityName: 'Excavate',
     });
 
   it('collapses a rapid same-key burst into ONE step spanning the first→last position', async () => {
@@ -464,6 +465,7 @@ describe('usePlanEditHistory version ledger', () => {
         fromLaneIndex: 0,
         toLaneIndex: 1,
         version: 5,
+        activityName: 'Excavate',
       }),
     );
   }

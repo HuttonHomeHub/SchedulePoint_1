@@ -120,7 +120,12 @@ import {
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
-import { LayoutResolvedStrip, TsldPanel, barDateSourceFor } from '@/features/tsld';
+import {
+  HistoryResultStrip,
+  LayoutResolvedStrip,
+  TsldPanel,
+  barDateSourceFor,
+} from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
@@ -137,6 +142,12 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
+import {
+  blockedHistoryResult,
+  historyResultAction,
+  historyResultMessage,
+  isHistoryFailure,
+} from '@/features/undo-redo';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
@@ -898,6 +909,52 @@ export function ToolbarPlanWorkspace({
         restoreFocus={focusPlanSurface}
       />
     );
+  /**
+   * **Undo and redo are live only when the flag is on AND the planner can author right now** — pen
+   * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the
+   * strip's follow-up button and the refusal below, so they cannot disagree about it.
+   */
+  const undoRedoLive = UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive;
+  // What the last undo/redo press came to (undo-redo M1), built here for the layout notice's reason:
+  // it renders in BOTH views' docks. Focus goes to the plan surface first because every button on it
+  // removes the strip that holds them.
+  const historyResult = model.historyResult.result;
+  const historyFailed = historyResult !== null && isHistoryFailure(historyResult);
+  const historyMessage = historyResult === null ? null : historyResultMessage(historyResult);
+  const historyResultNotice =
+    historyResult === null || historyMessage === null
+      ? null
+      : {
+          id: historyResult.id,
+          kind: historyFailed ? ('failure' as const) : ('success' as const),
+          message: historyMessage,
+          node: (
+            <HistoryResultStrip
+              key={historyResult.id}
+              kind={historyFailed ? 'failure' : 'success'}
+              message={historyMessage}
+              action={historyResultAction(historyResult, undoRedoLive, model.undoRedo)}
+              onDismiss={model.historyResult.dismiss}
+              restoreFocus={focusPlanSurface}
+            />
+          ),
+        };
+  /**
+   * **Say why `Ctrl+Z` did nothing** (undo-redo M1-T4). Called by the accelerator when it is off;
+   * posts the refusal as a result and reports whether there was a step to refuse, so an empty
+   * history leaves the key to the browser (`blockedHistoryResult`).
+   */
+  const onUndoRedoBlocked = (direction: 'undo' | 'redo'): boolean => {
+    const posted = blockedHistoryResult({
+      direction,
+      label: direction === 'undo' ? model.undoRedo.undoLabel : model.undoRedo.redoLabel,
+      canEditSchedule: model.canEditSchedule,
+      scheduleRefusal: model.scheduleRefusal,
+    });
+    if (posted === null) return false;
+    model.historyResult.post(posted);
+    return true;
+  };
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -1003,9 +1060,10 @@ export function ToolbarPlanWorkspace({
   const onWorkspaceKeyDown = usePlanWorkspaceKeyScope({
     modalOpen: anotherDialogOpen,
     onShowShortcuts: showShortcuts,
-    undoRedoEnabled: UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    undoRedoEnabled: undoRedoLive,
     undo: model.undoRedo.undo,
     redo: model.undoRedo.redo,
+    onUndoRedoBlocked,
     // Copy/paste ride the SAME gate as undo/redo — flag on, and the planner can actually author.
     // A copy alone is a read, but the paste it exists to feed is not, and a `Ctrl+C` that works
     // followed by a `Ctrl+V` that refuses is a worse dead end than a shortcut that is simply off.
@@ -1154,6 +1212,7 @@ export function ToolbarPlanWorkspace({
       hasRevisionPair={hasRevisionPair}
       placementMigrationNotice={placementMigrationNotice}
       layoutResolvedNotice={layoutResolvedNotice}
+      historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -1590,8 +1649,10 @@ export function ToolbarPlanWorkspace({
           {/* **One transient strip at a time, in the canvas's order** (`resolveDockStrip`): an
               overlap resolved by the planner's last edit outranks the migration notice, which is a
               standing fact and waits. Stacking both, as the first version did, gave the same pair
-              of facts one strip on the diagram and two on the Gantt (component review). */}
-          {layoutResolvedNotice ?? placementMigrationNotice}
+              of facts one strip on the diagram and two on the Gantt (component review). The
+              undo/redo result is the newest of the three — it describes the step just taken, and
+              replaces the overlap notice it would otherwise contradict (`resolveDockStrip`). */}
+          {historyResultNotice?.node ?? layoutResolvedNotice ?? placementMigrationNotice}
         </CanvasDock>
       </>
     ) : (
