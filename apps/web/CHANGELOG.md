@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.170.3
+
+### Patch Changes
+
+- [#829](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/829) [`cd2cf44`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cd2cf44a96d027d6b9de4345de4a43243696404e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An opened plan now says "Edited since it was last calculated", with a Recalculate button, whenever the organisation overview says it. The plan used to know only about edits made in that browser tab, so a plan edited elsewhere could be flagged on the overview while the plan itself offered no way to recalculate. The plan response gains an `editedSinceCalculated` field.
+
 ## 0.170.2
 
 ### Patch Changes
