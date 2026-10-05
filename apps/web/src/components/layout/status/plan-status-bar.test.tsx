@@ -138,7 +138,13 @@ describe('PlanStatusBar', () => {
       const { unmount } = render(
         <PlanStatusBar
           {...base}
-          scheduleState={{ kind: 'stale', edits: 1, failed: false, refusal: null }}
+          scheduleState={{
+            kind: 'stale',
+            edits: 1,
+            failed: false,
+            editedSinceCalculated: false,
+            refusal: null,
+          }}
         />,
       );
       expect(screen.getByText('1 edit not calculated')).toBeInTheDocument();
@@ -147,10 +153,34 @@ describe('PlanStatusBar', () => {
       render(
         <PlanStatusBar
           {...base}
-          scheduleState={{ kind: 'stale', edits: 7, failed: false, refusal: null }}
+          scheduleState={{
+            kind: 'stale',
+            edits: 7,
+            failed: false,
+            editedSinceCalculated: false,
+            refusal: null,
+          }}
         />,
       );
       expect(screen.getByText('7 edits not calculated')).toBeInTheDocument();
+    });
+
+    it('says the plan was edited since its calculation when the server says so and nothing is owed here', () => {
+      // `docs/TECH_DEBT.md` #452 — the organisation overview's words, because it is the same fact.
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{
+            kind: 'stale',
+            edits: 0,
+            failed: false,
+            editedSinceCalculated: true,
+            refusal: null,
+          }}
+        />,
+      );
+      expect(screen.getByText('Edited since it was last calculated')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Recalculate' })).toBeInTheDocument();
     });
 
     it('says a failure happened, and still says how much is owed', () => {
@@ -159,7 +189,13 @@ describe('PlanStatusBar', () => {
       render(
         <PlanStatusBar
           {...base}
-          scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
+          scheduleState={{
+            kind: 'stale',
+            edits: 3,
+            failed: true,
+            editedSinceCalculated: false,
+            refusal: null,
+          }}
         />,
       );
       expect(screen.getByText('Could not calculate — 3 edits still pending')).toBeInTheDocument();
@@ -171,7 +207,13 @@ describe('PlanStatusBar', () => {
       render(
         <PlanStatusBar
           {...base}
-          scheduleState={{ kind: 'stale', edits: 0, failed: true, refusal: null }}
+          scheduleState={{
+            kind: 'stale',
+            edits: 0,
+            failed: true,
+            editedSinceCalculated: false,
+            refusal: null,
+          }}
         />,
       );
       expect(screen.getByText('Could not calculate the schedule')).toBeInTheDocument();
@@ -182,7 +224,13 @@ describe('PlanStatusBar', () => {
       render(
         <PlanStatusBar
           {...base}
-          scheduleState={{ kind: 'stale', edits: 2, failed: false, refusal: null }}
+          scheduleState={{
+            kind: 'stale',
+            edits: 2,
+            failed: false,
+            editedSinceCalculated: false,
+            refusal: null,
+          }}
           onRecalculate={onRecalculate}
         />,
       );
@@ -203,6 +251,7 @@ describe('PlanStatusBar', () => {
             kind: 'stale',
             edits: 2,
             failed: false,
+            editedSinceCalculated: false,
             refusal: 'Start editing to recalculate.',
           }}
           onRecalculate={onRecalculate}
@@ -251,6 +300,7 @@ describe('deriveScheduleState', () => {
     isRecalculating: false,
     pendingEdits: 0,
     failed: false,
+    editedSinceCalculated: false,
     activities: [{ earlyStart: '2026-03-02' }, { earlyStart: '2026-03-09' }],
     canRecalculate: true,
     refusalReason: null,
@@ -304,6 +354,19 @@ describe('deriveScheduleState', () => {
         pendingEdits: 0,
       }),
     ).toMatchObject({ kind: 'stale' });
+  });
+
+  it('calls a plan the SERVER says was edited since its calculation stale, with no edit here', () => {
+    // `docs/TECH_DEBT.md` #452: the overview said "Edited since it was calculated" while this bar
+    // said nothing and offered no Recalculate, because the only facts it consulted were this tab's
+    // edits and whether the rows had dates. The server's answer is the third.
+    expect(deriveScheduleState({ ...base, editedSinceCalculated: true })).toEqual({
+      kind: 'stale',
+      edits: 0,
+      failed: false,
+      editedSinceCalculated: true,
+      refusal: null,
+    });
   });
 
   it('leaves an EMPTY plan alone', () => {
@@ -406,7 +469,13 @@ describe('the facts pairs', () => {
     render(
       <PlanStatusBar
         {...base}
-        scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
+        scheduleState={{
+          kind: 'stale',
+          edits: 3,
+          failed: true,
+          editedSinceCalculated: false,
+          refusal: null,
+        }}
       />,
     );
     const [dates, population] = pairRows();

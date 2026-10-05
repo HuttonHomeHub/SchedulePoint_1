@@ -13,6 +13,7 @@ import {
   activityKeys,
   baselineKeys,
   dependencyKeys,
+  planKeys,
   scheduleKeys,
 } from '@/lib/query/hierarchy-keys';
 
@@ -130,6 +131,11 @@ export function useRecalculate(orgSlug: string, planId: string) {
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) }),
         queryClient.invalidateQueries({ queryKey: dependencyKeys.byPlan(orgSlug, planId) }),
+        // The plan row carries `editedSinceCalculated`, which a recalculation clears — without this
+        // refetch the status bar would keep saying "Edited since it was last calculated" after the
+        // press that answered it (`docs/TECH_DEBT.md` #452). A recalculation touches no `version`,
+        // so a settings form reading this row is not disturbed.
+        queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, planId) }),
         // The resource histogram (M7 rung 5, ADR-0044 §3) reads the recomputed activity spans, so a
         // recalc moves each assignment's units-over-time — refresh every bucket size (prefix, no
         // granularity) so whichever the user is viewing reflects the new dates.

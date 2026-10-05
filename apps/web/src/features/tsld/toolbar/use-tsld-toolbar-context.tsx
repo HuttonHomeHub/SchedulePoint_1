@@ -351,6 +351,7 @@ export function useTsldToolbarContext({
       isRecalculating,
       pendingEdits,
       failed: recalcFailed,
+      editedSinceCalculated: plan.editedSinceCalculated,
       activities: model.activities.data,
       canRecalculate: canRecalc,
       refusalReason: null,
@@ -364,6 +365,7 @@ export function useTsldToolbarContext({
     model.activities.data,
     canRecalc,
     plan.plannedStart,
+    plan.editedSinceCalculated,
   ]);
 
   // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1

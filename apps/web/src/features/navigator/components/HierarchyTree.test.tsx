@@ -76,6 +76,7 @@ const plans: PlanSummary[] = [
     currencyCode: null,
     plannedStart: null,
     calendarId: null,
+    editedSinceCalculated: false,
     version: 1,
     createdAt: '',
     updatedAt: '',

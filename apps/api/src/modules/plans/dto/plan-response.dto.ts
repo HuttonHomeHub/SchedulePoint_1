@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
 
+import { isEditedSinceCalculated } from '../../../common/schedule-inputs/edited-since-calculated';
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 
 /** Public representation of a plan (scoped to a project). */
@@ -118,6 +119,14 @@ export class PlanResponseDto implements PlanSummary {
   })
   calendarId!: string | null;
 
+  @ApiProperty({
+    description:
+      'True when a scheduling input changed after the last recalculation, so the computed dates may ' +
+      'be behind the plan. False for a plan that has never been calculated. The same rule the ' +
+      "organisation overview's 'Edited since it was calculated' uses.",
+  })
+  editedSinceCalculated!: boolean;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -149,6 +158,10 @@ export class PlanResponseDto implements PlanSummary {
       currencyCode: entity.currencyCode,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
+      editedSinceCalculated: isEditedSinceCalculated(
+        entity.scheduleComputedAt,
+        entity.scheduleInputsChangedAt,
+      ),
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),

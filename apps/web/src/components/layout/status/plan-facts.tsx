@@ -360,7 +360,11 @@ function ScheduleStateRegion({
  * sentence when it is zero — a manual recalculation that fails on an unedited plan is a failure
  * about the plan, not about work the reader has done.
  */
-function describe(state: { edits: number; failed: boolean }): string {
+function describe(state: {
+  edits: number;
+  failed: boolean;
+  editedSinceCalculated: boolean;
+}): string {
   if (state.failed) {
     return state.edits > 0
       ? `Could not calculate — ${state.edits === 1 ? '1 edit' : `${state.edits} edits`} still pending`
@@ -371,6 +375,14 @@ function describe(state: { edits: number; failed: boolean }): string {
   // built before anyone pressed anything. "0 edits not calculated" would be arithmetic about work
   // nobody did; the Finish fact three positions to the left already says `Not calculated`, and this
   // is the sentence that offers to fix it.
-  if (state.edits === 0) return 'Not yet calculated';
+  //
+  // **The fifth: no edit in this tab, but the server says an input changed since the last
+  // calculation** — another session, a colleague, or a change from before this tab opened. The
+  // words are the organisation overview's, because it is the same fact (`docs/TECH_DEBT.md` #452).
+  if (state.edits === 0) {
+    return state.editedSinceCalculated
+      ? 'Edited since it was last calculated'
+      : 'Not yet calculated';
+  }
   return state.edits === 1 ? '1 edit not calculated' : `${state.edits} edits not calculated`;
 }
