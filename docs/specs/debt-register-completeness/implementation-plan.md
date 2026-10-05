@@ -1,7 +1,7 @@
 # Implementation Plan: Debt-register completeness
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-10-05 (in session): CQ-1 **recover** the 17 unledgered numbers into the ledger (not exempt them).
 - **Owner:** repo
 
 ## Breakdown

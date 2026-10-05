@@ -1,6 +1,6 @@
 # Feature Spec: Debt-register completeness — every number is a live row or a ledger line
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-10-05 (in session): CQ-1 **recover** the 17 unledgered numbers into the ledger (not exempt them).
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-10-05
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #453
