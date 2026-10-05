@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityMembersPanel } from './ActivityMembersPanel';
@@ -14,7 +14,7 @@ import { ActivityMembersPanel } from './ActivityMembersPanel';
  */
 const mutateSpy = vi.fn();
 vi.mock('@/features/activities', () => ({
-  useUpdateActivityParents: () => ({ mutate: mutateSpy, isPending: false }),
+  useUpdateActivityParents: () => ({ mutateAsync: mutateSpy, isPending: false }),
 }));
 
 const announceSpy = vi.fn();
@@ -36,6 +36,7 @@ function activity(over: Partial<ActivitySummary>): ActivitySummary {
 }
 
 const SUMMARY = activity({ id: 's1', name: 'Substructure', type: 'WBS_SUMMARY' });
+const onReparented = vi.fn();
 
 function renderPanel(
   planActivities: ActivitySummary[],
@@ -50,6 +51,7 @@ function renderPanel(
         summary={SUMMARY}
         planActivities={planActivities}
         gate={gate}
+        onReparented={onReparented}
         {...extra}
       />
     </QueryClientProvider>,
@@ -60,10 +62,19 @@ function renderPanel(
 const visibleRows = (): string[] =>
   screen.queryAllByRole('checkbox').map((box) => box.closest('label')?.textContent ?? '');
 
-const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save membership' }));
+/** Press Save and let the write settle — the panel acts on the promise, not on a callback. */
+const save = () =>
+  act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save membership' }));
+    await Promise.resolve();
+  });
 
 describe('ActivityMembersPanel', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // A batch answers with the rows it moved; the default is an empty one.
+    mutateSpy.mockResolvedValue([]);
+  });
 
   it('lists the plan’s activities with current members ticked', () => {
     renderPanel([
@@ -88,7 +99,7 @@ describe('ActivityMembersPanel', () => {
     expect(visibleRows().join(' ')).not.toContain('Superstructure');
   });
 
-  it('sends only the rows that actually changed', () => {
+  it('sends only the rows that actually changed', async () => {
     renderPanel([
       SUMMARY,
       activity({ id: 'a', name: 'Excavate', parentId: 's1' }),
@@ -96,21 +107,19 @@ describe('ActivityMembersPanel', () => {
       activity({ id: 'c', name: 'Formwork' }),
     ]);
     fireEvent.click(screen.getByRole('checkbox', { name: /Blind/ }));
-    save();
-    expect(mutateSpy).toHaveBeenCalledWith(
-      { parents: [{ id: 'b', parentId: 's1', version: 1 }] },
-      expect.any(Object),
-    );
+    await save();
+    expect(mutateSpy).toHaveBeenCalledWith({
+      parents: [{ id: 'b', parentId: 's1', version: 1 }],
+    });
   });
 
-  it('un-ticking a member sends it back to the top level', () => {
+  it('un-ticking a member sends it back to the top level', async () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate', parentId: 's1' })]);
     fireEvent.click(screen.getByRole('checkbox', { name: /Excavate/ }));
-    save();
-    expect(mutateSpy).toHaveBeenCalledWith(
-      { parents: [{ id: 'a', parentId: null, version: 1 }] },
-      expect.any(Object),
-    );
+    await save();
+    expect(mutateSpy).toHaveBeenCalledWith({
+      parents: [{ id: 'a', parentId: null, version: 1 }],
+    });
   });
 
   /**
@@ -118,7 +127,7 @@ describe('ActivityMembersPanel', () => {
    * off the visible list, saving after a search would unfile every member the search excluded — an
    * atomic, valid, catastrophic batch.
    */
-  it('keeps a member ticked when a search hides it, and does not unfile it on save', () => {
+  it('keeps a member ticked when a search hides it, and does not unfile it on save', async () => {
     renderPanel([
       SUMMARY,
       activity({ id: 'a', name: 'Excavate', parentId: 's1' }),
@@ -128,12 +137,11 @@ describe('ActivityMembersPanel', () => {
     expect(visibleRows()).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /Blind/ }));
-    save();
+    await save();
     // Only Blind moves. Excavate — filtered out of view but still a member — is untouched.
-    expect(mutateSpy).toHaveBeenCalledWith(
-      { parents: [{ id: 'b', parentId: 's1', version: 1 }] },
-      expect.any(Object),
-    );
+    expect(mutateSpy).toHaveBeenCalledWith({
+      parents: [{ id: 'b', parentId: 's1', version: 1 }],
+    });
   });
 
   it('filters on code as well as name, and announces the settled count', () => {
@@ -156,9 +164,9 @@ describe('ActivityMembersPanel', () => {
     expect(screen.getByText('in Superstructure')).toBeInTheDocument();
   });
 
-  it('does nothing when nothing changed', () => {
+  it('does nothing when nothing changed', async () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate', parentId: 's1' })]);
-    save();
+    await save();
     expect(mutateSpy).not.toHaveBeenCalled();
   });
 
@@ -170,9 +178,9 @@ describe('ActivityMembersPanel', () => {
     expect(screen.getByText(SHUT.reason)).toBeInTheDocument();
   });
 
-  it('refuses to save when the gate is shut, even if a row was somehow toggled', () => {
+  it('refuses to save when the gate is shut, even if a row was somehow toggled', async () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })], SHUT);
-    save();
+    await save();
     expect(mutateSpy).not.toHaveBeenCalled();
   });
 
@@ -199,22 +207,42 @@ describe('ActivityMembersPanel', () => {
 
   // The ADR-0062 M6 steps-panel defect: a panel that never passes `saved` leaves a successful save
   // pixel-identical to a tab nobody touched.
-  it('reports a saved state after a successful write', () => {
-    mutateSpy.mockImplementation((_input, opts) => opts.onSuccess?.());
+  it('reports a saved state after a successful write', async () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })]);
     fireEvent.click(screen.getByRole('checkbox', { name: /Excavate/ }));
-    save();
+    await save();
     expect(screen.getByText(/Membership saved/)).toBeInTheDocument();
     expect(announceSpy).toHaveBeenCalledWith('Membership of “Substructure” saved.');
   });
 
-  it('surfaces a save error without losing the user’s ticks', () => {
-    mutateSpy.mockImplementation((_input, opts) => opts.onError?.(new Error('Server said no')));
+  it('surfaces a save error without losing the user’s ticks', async () => {
+    mutateSpy.mockRejectedValueOnce(new Error('Server said no'));
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })]);
     fireEvent.click(screen.getByRole('checkbox', { name: /Excavate/ }));
-    save();
+    await save();
     expect(screen.getByRole('alert')).toHaveTextContent('Server said no');
     expect(screen.getByRole('checkbox', { name: /Excavate/ })).toBeChecked();
+    expect(onReparented).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Undo-redo M3, grouping audit: one Save is ONE report however many rows it moved, with the rows as
+   * they stood before and the rows the batch returned, and a label that names the summary.
+   */
+  it('reports the whole save to the host once, named for the summary', async () => {
+    const a = activity({ id: 'a', name: 'Excavate', parentId: 's1' });
+    const b = activity({ id: 'b', name: 'Blind' });
+    const after = [
+      { ...a, parentId: null, version: 2 },
+      { ...b, parentId: 's1', version: 2 },
+    ];
+    mutateSpy.mockResolvedValueOnce(after);
+    renderPanel([SUMMARY, a, b]);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Excavate/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Blind/ }));
+    await save();
+    expect(onReparented).toHaveBeenCalledTimes(1);
+    expect(onReparented).toHaveBeenCalledWith([a, b], after, 'Change members of “Substructure”');
   });
 
   it('says how many activities will move before they do', () => {

@@ -14,7 +14,7 @@ import { WbsBulkAssignBar } from './WbsBulkAssignBar';
  */
 const mutateSpy = vi.fn();
 vi.mock('@/features/activities', () => ({
-  useUpdateActivityParents: () => ({ mutate: mutateSpy, isPending: false }),
+  useUpdateActivityParents: () => ({ mutateAsync: mutateSpy, isPending: false }),
 }));
 
 const announceSpy = vi.fn();
@@ -44,6 +44,7 @@ const PLAN = [SUMMARY, OTHER_SUMMARY, A, B];
 
 const onDone = vi.fn();
 const onClear = vi.fn();
+const onReparented = vi.fn();
 
 function renderBar(
   selected: string[],
@@ -60,6 +61,7 @@ function renderBar(
         gate={gate}
         onDone={onDone}
         onClear={onClear}
+        onReparented={onReparented}
       />
     </QueryClientProvider>,
   );
@@ -71,7 +73,12 @@ const chooseTarget = (label: string): void => {
   });
 };
 const assignButton = () => screen.getByRole('button', { name: 'Assign' });
-const assign = () => fireEvent.click(assignButton());
+/** Press Assign and let the write settle — the bar acts on the promise, not on a callback. */
+const assign = () =>
+  act(async () => {
+    fireEvent.click(assignButton());
+    await Promise.resolve();
+  });
 /** Inert the house way: `aria-disabled`, never the native attribute (see the component's docblock). */
 const expectInert = (el: HTMLElement): void => {
   expect(el).toHaveAttribute('aria-disabled', 'true');
@@ -79,7 +86,11 @@ const expectInert = (el: HTMLElement): void => {
 };
 
 describe('WbsBulkAssignBar', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // A batch answers with the rows it moved; the default is an empty one.
+    mutateSpy.mockResolvedValue([]);
+  });
 
   it('renders nothing with an empty selection', () => {
     const { container } = renderBar([]);
@@ -94,10 +105,10 @@ describe('WbsBulkAssignBar', () => {
     expect(options).toEqual(['None (top-level)', 'Substructure', 'Superstructure']);
   });
 
-  it('sends the selection with each row’s own version', () => {
+  it('sends the selection with each row’s own version', async () => {
     renderBar(['a', 'b']);
     chooseTarget('Substructure');
-    assign();
+    await assign();
     expect(mutateSpy).toHaveBeenCalledTimes(1);
     expect(mutateSpy.mock.calls[0]?.[0]).toEqual({
       parents: [
@@ -107,9 +118,9 @@ describe('WbsBulkAssignBar', () => {
     });
   });
 
-  it('files the selection at the top level when that is chosen', () => {
+  it('files the selection at the top level when that is chosen', async () => {
     renderBar(['a'], WRITABLE, [SUMMARY, activity({ id: 'a', name: 'Excavate', parentId: 's1' })]);
-    assign();
+    await assign();
     expect(mutateSpy.mock.calls[0]?.[0]).toEqual({
       parents: [{ id: 'a', parentId: null, version: 1 }],
     });
@@ -175,32 +186,45 @@ describe('WbsBulkAssignBar', () => {
     );
   });
 
-  it('sends nothing when the caller cannot write', () => {
+  it('sends nothing when the caller cannot write', async () => {
     renderBar(['a'], SHUT);
-    assign();
+    await assign();
     expect(mutateSpy).not.toHaveBeenCalled();
   });
 
-  it('announces the destination, not just the count, and hands back to the host', () => {
+  it('announces the destination, not just the count, and hands back to the host', async () => {
     renderBar(['a', 'b']);
     chooseTarget('Substructure');
-    assign();
-    mutateSpy.mock.calls[0]?.[1]?.onSuccess?.();
+    await assign();
     expect(announceSpy).toHaveBeenCalledWith('2 activities moved to “Substructure”.');
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a failed batch and keeps the selection', () => {
+  it('surfaces a failed batch and keeps the selection', async () => {
+    mutateSpy.mockRejectedValueOnce(new Error('Someone else changed “Excavate”.'));
     renderBar(['a']);
     chooseTarget('Substructure');
-    assign();
-    // The callback is invoked directly rather than through a real mutation, so it needs `act` for
-    // the state it sets to be flushed — `fireEvent` wraps its own.
-    act(() => {
-      mutateSpy.mock.calls[0]?.[1]?.onError?.(new Error('Someone else changed “Excavate”.'));
-    });
+    await assign();
     expect(screen.getByRole('alert')).toHaveTextContent('Someone else changed “Excavate”.');
     expect(onDone).not.toHaveBeenCalled();
+    expect(onReparented).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Undo-redo M3, grouping audit: one Assign is ONE report however many rows it moved, carrying the
+   * rows as they stood before and the rows the batch returned — so the host records one step.
+   */
+  it('reports the whole batch to the host once, with the rows before and after', async () => {
+    const after = [
+      { ...A, parentId: 's1', version: 2 },
+      { ...B, parentId: 's1', version: 8 },
+    ];
+    mutateSpy.mockResolvedValueOnce(after);
+    renderBar(['a', 'b']);
+    chooseTarget('Substructure');
+    await assign();
+    expect(onReparented).toHaveBeenCalledTimes(1);
+    expect(onReparented).toHaveBeenCalledWith([A, B], after);
   });
 
   it('clears the selection without assigning', () => {

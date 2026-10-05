@@ -31,6 +31,8 @@ export function CrossPlanLinksSection({
   activity,
   canManageLogic = false,
   enabled,
+  onAdded,
+  onRemoved,
 }: {
   orgSlug: string;
   /** The activity's own plan — the successor plan, excluded from the endpoint picker (N31). */
@@ -39,6 +41,10 @@ export function CrossPlanLinksSection({
   canManageLogic?: boolean;
   /** Keep the query idle while the host dialog is closed (mirrors the dependency editor). */
   enabled: boolean;
+  /** Told when a link was added, for a host that records it for undo (undo-redo M3). */
+  onAdded?: (link: CrossPlanDependencySummary) => void;
+  /** Told when a link was removed, with the link as it was. */
+  onRemoved?: (link: CrossPlanDependencySummary) => void;
 }): React.ReactElement {
   const links = useActivityCrossPlanLinks(orgSlug, activity.id, enabled);
   const deleteLink = useDeleteCrossPlanLink(orgSlug);
@@ -117,8 +123,11 @@ export function CrossPlanLinksSection({
 
   const confirmRemove = (): void => {
     if (!removing) return;
-    deleteLink.mutate(removing.id, {
-      onSuccess: () => {
+    const removed = removing;
+    // The promise, not a per-call `onSuccess`: the list refetches before that callback would run and
+    // unmounts the row, and react-query drops a per-call callback for an unmounted observer.
+    void deleteLink.mutateAsync(removed.id).then(
+      () => {
         // Close the confirm dialog synchronously before moving focus (mirrors the dependency editor):
         // while the native <dialog> is modal, focusing outside it is a no-op, and focus would fall to
         // <body> once the removed row unmounts on refetch.
@@ -127,10 +136,11 @@ export function CrossPlanLinksSection({
           setRemoveError(null);
         });
         announce('Cross-plan link removed.');
+        onRemoved?.(removed);
         regionRef.current?.focus();
       },
-      onError: (err) => setRemoveError(err.message),
-    });
+      (err: Error) => setRemoveError(err.message),
+    );
   };
 
   return (
@@ -165,6 +175,7 @@ export function CrossPlanLinksSection({
             open={adding}
             onClose={() => setAdding(false)}
             anchor={activity}
+            {...(onAdded ? { onAdded } : {})}
           />
           <ConfirmDialog
             open={removing !== undefined}

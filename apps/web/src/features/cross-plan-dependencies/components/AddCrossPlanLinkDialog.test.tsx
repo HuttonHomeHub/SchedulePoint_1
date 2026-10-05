@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, CrossPlanDependencySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useLayoutEffect } from 'react';
@@ -48,7 +48,7 @@ function mockCascade(create?: () => Promise<unknown>): void {
   vi.mocked(apiFetchAllPages).mockImplementation(route as (path: string) => Promise<unknown[]>);
 }
 
-function renderDialog() {
+function renderDialog(props: { onAdded?: (link: CrossPlanDependencySummary) => void } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -59,6 +59,7 @@ function renderDialog() {
           anchor={ANCHOR}
           open
           onClose={vi.fn()}
+          {...props}
         />
       </AnnouncerProvider>
     </QueryClientProvider>,
@@ -178,6 +179,22 @@ describe('AddCrossPlanLinkDialog', () => {
       lagDays: 0,
       lagCalendar: 'PROJECT_DEFAULT',
     });
+  });
+
+  /**
+   * Undo-redo M3: the link the server returned — carrying its new id — is what the host records, so a
+   * remove can name it. Reported from the create's promise, after the dialog has been asked to close.
+   */
+  it('reports the created link to the host', async () => {
+    const created = { id: 'x9', type: 'FS' } as CrossPlanDependencySummary;
+    mockCascade(() => Promise.resolve(created));
+    const onAdded = vi.fn();
+    renderDialog({ onAdded });
+    await pickUpstreamActivity();
+    fireEvent.click(screen.getByRole('button', { name: 'Add cross-plan link' }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalledTimes(1));
+    expect(onAdded).toHaveBeenCalledWith(created);
   });
 
   it('requires choosing an activity before it will submit', async () => {

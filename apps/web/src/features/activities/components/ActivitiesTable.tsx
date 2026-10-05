@@ -40,8 +40,8 @@ import {
   MAKE_MILESTONE_LABEL,
   deriveMakeMilestoneGate,
 } from '@/features/plan-actions/make-milestone-gate';
-import { ActivityResourcesDialog } from '@/features/resources';
-import { WbsBulkAssignBar } from '@/features/wbs';
+import { ActivityResourcesDialog, type OnAssignmentEdited } from '@/features/resources';
+import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -271,6 +271,8 @@ export function ActivitiesTable({
   onMakeMilestone,
   onDeleted,
   onDissolved,
+  onReparented,
+  onAssignmentEdited,
   onOpenResources,
   varianceByActivityId,
   noteCountByActivityId,
@@ -342,6 +344,16 @@ export function ActivitiesTable({
    * honest behaviour and is named in the changeset.
    */
   onDissolved?: () => void;
+  /**
+   * Tell the host a bulk assign filed rows under a summary (undo-redo M3), for the same reason as
+   * {@link onDeleted}: the bar's write is one batch and the host's history records it as one step.
+   */
+  onReparented?: OnReparented;
+  /**
+   * Tell the host about an assignment write made in this table's own resources dialog (undo-redo M3).
+   * Only reached when the host does not own the resources surface — see {@link onOpenResources}.
+   */
+  onAssignmentEdited?: OnAssignmentEdited;
   /**
    * Open the resource-assignment surface for a row. Like {@link onOpenLogic} the host owns it, so
    * both row actions resolve to the **same** editor the canvas opens rather than to a second one
@@ -1055,6 +1067,7 @@ export function ActivitiesTable({
             selected={effectiveSelection}
             planActivities={loadedActivities}
             gate={membersGate}
+            {...(onReparented ? { onReparented } : {})}
             onClear={clearSelection}
             onDone={() => {
               flushSync(clearSelection);
@@ -1093,6 +1106,7 @@ export function ActivitiesTable({
           open={managingResources !== undefined}
           onClose={() => setResourcesId(null)}
           canWrite={canEditSchedule}
+          {...(onAssignmentEdited ? { onAssignmentEdited } : {})}
           {...(managingResources
             ? {
                 activityId: managingResources.id,

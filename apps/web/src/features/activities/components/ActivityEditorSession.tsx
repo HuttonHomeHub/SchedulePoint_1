@@ -126,6 +126,8 @@ export function ActivityEditorSession({
   logic,
   notesSlot,
   historySlot,
+  onAssignmentEdited,
+  onReparented,
 }: ActivityEditorSessionProps): React.ReactElement {
   const announce = useAnnounce();
   const [active, setActive] = useState<TabKey>(intent?.tab ?? 'general');
@@ -580,6 +582,7 @@ export function ActivityEditorSession({
     savePanel('steps', () =>
       saves.saveSteps({
         activity,
+        before: stepsQuery.data ?? [],
         steps,
         onSuccess: (saved) => {
           const rows = stepRowsFromSaved(saved);
@@ -882,6 +885,7 @@ export function ActivityEditorSession({
                   summary={activity}
                   planActivities={planActivities}
                   gate={gating.members}
+                  {...(onReparented ? { onReparented } : {})}
                 />
               ) : null}
 
@@ -913,6 +917,7 @@ export function ActivityEditorSession({
                   // (`canReadCost === canWrite`, TECH_DEBT #62) and load-bearing the day it isn't.
                   canReadCost={gating.cost.readable}
                   enabled={current === 'resources'}
+                  {...(onAssignmentEdited ? { onAssignmentEdited } : {})}
                 />
               ) : null}
 

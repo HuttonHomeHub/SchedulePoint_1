@@ -1495,9 +1495,12 @@ export function ToolbarPlanWorkspace({
     canEditSchedule: model.canEditSchedule,
     penRefusal: model.scheduleRefusal?.('change the structure') ?? null,
     onReparent: (activity: ActivitySummary, parentId: string | null) => {
-      updateParents.mutate(
-        { parents: [{ id: activity.id, parentId, version: activity.version }] },
-        {
+      // The promise, not a per-call `onSuccess`: react-query keeps those only for the observer's
+      // latest call, so a second Indent pressed while the first is in flight would lose the first's
+      // announcement AND its undo record.
+      void updateParents
+        .mutateAsync({ parents: [{ id: activity.id, parentId, version: activity.version }] })
+        .then(
           // **Both outcomes are announced, and the failure one is why this exists.**
           // The write has no optimistic update by design, so on a 409 — two planners indenting at
           // once, which this gesture makes easy — the row simply does not move after the refetch,
@@ -1506,18 +1509,18 @@ export function ToolbarPlanWorkspace({
           // that does nothing. `WbsBulkAssignBar` and `ActivityMembersPanel` already announce this
           // exact class of write (the same ADR-0063 M4b batch) — one correct pattern applied to two
           // controls and not their third, found by the 2026-08-18 reconciliation pass.
-          onSuccess: () => {
+          (after) => {
             ganttAnnounce(
               parentId === null
                 ? `${activity.name} moved to the top level.`
                 : `${activity.name} filed under its summary.`,
             );
+            model.recordReparent([activity], after);
           },
-          onError: (error: Error) => {
+          (error: Error) => {
             ganttAnnounce(`${activity.name} could not be moved. ${error.message}`);
           },
-        },
-      );
+        );
     },
     // M5-T5. The dialog itself is mounted once by `ActivityCrudDialogs`, which already owns the
     // workspace's activity dialogs so their behaviour cannot drift; this only opens it.

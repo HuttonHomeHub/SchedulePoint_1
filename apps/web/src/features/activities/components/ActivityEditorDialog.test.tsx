@@ -415,6 +415,28 @@ describe('ActivityEditorDialog — weighted steps panel', () => {
     expect(PATCHES[0]!.body.steps).toEqual([{ name: 'Formwork', weight: 1, percentComplete: 50 }]);
   });
 
+  /**
+   * Undo-redo M3: the frame — not the session — reports the save, so it survives the editor closing,
+   * and it carries the list as it stood BEFORE the save beside the one the server answered with, which
+   * is what the history's inverse replaces the steps with.
+   */
+  it('reports the save to the host with the list before and the list saved', async () => {
+    const saved = { name: 'Formwork', weight: 1, percentComplete: 50 };
+    STEPS = [saved];
+    const onStepsSaved = vi.fn();
+    mount({ onStepsSaved });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    await screen.findByDisplayValue('Formwork');
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '60' } });
+    fireEvent.click(screen.getByRole('button', { name: /save steps/i }));
+
+    await waitFor(() => expect(onStepsSaved).toHaveBeenCalledTimes(1));
+    const [activity, before, after] = onStepsSaved.mock.calls[0]!;
+    expect(activity).toMatchObject({ id: 'act-1' });
+    expect(before).toEqual([saved]);
+    expect(after).toEqual([saved]);
+  });
+
   it('previews the rollup the server will compute', async () => {
     await openSteps();
     fireEvent.click(screen.getByRole('button', { name: 'Add step' }));

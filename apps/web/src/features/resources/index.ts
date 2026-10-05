@@ -10,6 +10,7 @@ export {
   useResourceSearch,
   useAssignments,
   useCreateAssignment,
+  useCreateAssignmentOn,
   useUpdateAssignment,
   useDeleteAssignment,
   useResourceHistogram,
@@ -20,7 +21,10 @@ export {
   resourceHistogramQueryOptions,
   resourceKeys,
   assignmentKeys,
+  type AssignmentCreateBody,
+  type AssignmentUpdateInput,
 } from './api/use-resources';
+export type { AssignmentEdit, OnAssignmentEdited } from './model/assignment-edit';
 export { ResourcesTable } from './components/ResourcesTable';
 export { CreateResourceButton } from './components/CreateResourceButton';
 export { ResourceFormDialog } from './components/ResourceFormDialog';

@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
 import { membershipDiff } from '../model/membership-diff';
+import type { OnReparented } from '../model/reparented';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
@@ -36,6 +37,7 @@ export function ActivityMembersPanel({
   loading = false,
   error = false,
   gate,
+  onReparented,
 }: {
   orgSlug: string;
   planId: string;
@@ -47,6 +49,8 @@ export function ActivityMembersPanel({
   error?: boolean;
   /** May the caller write, and — when not — why (ADR-0060 §6). */
   gate: { writable: boolean; reason: string | null };
+  /** Told when a save lands, for the host that records it for undo (undo-redo M3). */
+  onReparented?: OnReparented;
 }): React.ReactElement {
   const announce = useAnnounce();
   const updateParents = useUpdateActivityParents(orgSlug, planId);
@@ -121,16 +125,22 @@ export function ActivityMembersPanel({
   const save = (): void => {
     if (!gate.writable || !dirty) return;
     setSaveError(null);
-    updateParents.mutate(
-      { parents: changes },
-      {
-        onSuccess: () => {
-          setBaseline(checked);
-          setSaved(true);
-          announce(`Membership of “${summary.name}” saved.`);
-        },
-        onError: (err) => setSaveError(err.message),
+    // The rows as they stand now, before the write bumps their versions.
+    const before = changes.flatMap((change) => {
+      const row = byId.get(change.id);
+      return row === undefined ? [] : [row];
+    });
+    const savedChecked = checked;
+    // The promise, not a per-call `onSuccess`: react-query drops those when the observer unmounts, and
+    // closing the editor while this saves must not lose the undo record.
+    void updateParents.mutateAsync({ parents: changes }).then(
+      (after) => {
+        setBaseline(savedChecked);
+        setSaved(true);
+        announce(`Membership of “${summary.name}” saved.`);
+        onReparented?.(before, after, `Change members of “${summary.name}”`);
       },
+      (err: Error) => setSaveError(err.message),
     );
   };
 

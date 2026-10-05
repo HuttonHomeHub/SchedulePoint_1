@@ -80,6 +80,8 @@ export function PlanDialogs({
                     planId={model.planId}
                     activity={model.logicActivity}
                     canManageLogic={model.canManageLogic}
+                    onAdded={model.recordCrossPlanLinkAdd}
+                    onRemoved={model.recordCrossPlanLinkRemove}
                     enabled={model.logicActivity !== undefined}
                   />
                 ),
@@ -124,6 +126,7 @@ export function PlanDialogs({
           open={model.resourcesActivity !== undefined}
           onClose={() => model.setResourcesActivity(undefined)}
           canWrite={model.canEditSchedule}
+          onAssignmentEdited={model.recordAssignmentEdit}
           {...(model.resourcesActivity
             ? {
                 activityId: model.resourcesActivity.id,

@@ -6,7 +6,7 @@ import {
   seedActivities,
   seedLink,
 } from '../e2e-copy-paste/support';
-import { ganttGrid, showGantt } from '../e2e-gantt/support';
+import { ganttGrid, ganttRow, showGantt } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -553,4 +553,132 @@ test('undo history survives releasing and retaking the edit lock', async ({ page
   await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
   await expect(strip).toContainText('Undid add “Foundations”.');
+});
+
+/**
+ * **An activity added from a dialog is one undo step** (undo-redo M3, spec §2.1).
+ *
+ * `ActivityCreateDialog` has two hosts — the panel's **New activity** and the Gantt's **Insert
+ * activity below** — and neither passed a recorder, so an activity added from either was the one edit
+ * in the plan that Undo skipped. The canvas's draw was recorded all along, which is why nothing
+ * looked wrong until somebody added a bar from a dialog and pressed Ctrl+Z.
+ *
+ * The assertions are **through the REST API, by id**: redo is a restore of the delete's batch, not a
+ * re-create, so the same row has to come back under the same id — a DOM assertion would pass against
+ * a redo that quietly minted a new one, which strands every later step that names the old id.
+ */
+test('an activity added from either dialog is one undo step, and redo brings the same row back', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+  await seedActivities(page, orgSlug, [{ name: 'Excavate' }]);
+
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const undoBtn = toolbar.getByRole('button', { name: /^Undo\b/ });
+  const redoBtn = toolbar.getByRole('button', { name: /^Redo\b/ });
+  const idOf = async (name: string): Promise<string | undefined> =>
+    (await apiActivities(page, orgSlug)).find((a) => a.name === name)?.id;
+
+  await test.step('the panel’s New activity', async () => {
+    await showActivities(page);
+    await page.getByRole('button', { name: 'New activity' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New activity' });
+    await dialog.getByLabel('Name').fill('Backfill');
+    await dialog.getByRole('button', { name: 'Create activity' }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => idOf('Backfill'), { timeout: 20_000 }).toBeTruthy();
+    const created = await idOf('Backfill');
+
+    await expect(undoBtn).toHaveAccessibleName('Undo add “Backfill”');
+    await undoBtn.click();
+    await expect.poll(() => idOf('Backfill'), { timeout: 20_000 }).toBeUndefined();
+
+    await redoBtn.click();
+    await expect.poll(() => idOf('Backfill'), { timeout: 20_000 }).toBe(created);
+  });
+
+  await test.step('the Gantt’s Insert activity below', async () => {
+    await showGantt(page);
+    await ganttRow(page, 'Excavate')
+      .getByRole('button', { name: /^Actions for/ })
+      .click();
+    await page.getByRole('menuitem', { name: 'Insert activity below' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New activity' });
+    await dialog.getByLabel('Name').fill('Inserted');
+    await dialog.getByRole('button', { name: 'Create activity' }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => idOf('Inserted'), { timeout: 20_000 }).toBeTruthy();
+    const created = await idOf('Inserted');
+
+    await expect(undoBtn).toHaveAccessibleName('Undo add “Inserted”');
+    await undoBtn.click();
+    await expect.poll(() => idOf('Inserted'), { timeout: 20_000 }).toBeUndefined();
+
+    await redoBtn.click();
+    await expect.poll(() => idOf('Inserted'), { timeout: 20_000 }).toBe(created);
+    // Backfill, put back by the redo above, was not disturbed by either step.
+    expect(await idOf('Backfill')).toBeTruthy();
+  });
+});
+
+/**
+ * **Indent and Outdent are undoable** (undo-redo M3, spec §2.1).
+ *
+ * The Gantt row menu's structure edits wrote through `useUpdateActivityParents` and told the history
+ * nothing, so a planner who indented a row and pressed Ctrl+Z got nothing — in the one place the
+ * gesture exists. Both directions are driven, and the parent is read back through the API: the
+ * reparent batch carries each row's `version`, so an undo that sent a stale one would be refused
+ * rather than half-applied, which only a real server can show.
+ */
+test('Indent and Outdent in the Gantt are each undone and redone', async ({ page }) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Phase A', type: 'WBS_SUMMARY' },
+    { name: 'Excavate' },
+  ]);
+  const phase = seeded.find((a) => a.name === 'Phase A')?.id;
+  if (!phase) throw new Error('seeding did not return the summary');
+  const parentOf = async (): Promise<string | null | undefined> =>
+    (await apiActivities(page, orgSlug)).find((a) => a.name === 'Excavate')?.parentId;
+
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const undoBtn = toolbar.getByRole('button', { name: /^Undo\b/ });
+  const redoBtn = toolbar.getByRole('button', { name: /^Redo\b/ });
+
+  await showGantt(page);
+  const menuItem = async (name: 'Indent' | 'Outdent'): Promise<void> => {
+    await ganttRow(page, 'Excavate')
+      .getByRole('button', { name: /^Actions for/ })
+      .click();
+    await page.getByRole('menuitem', { name }).click();
+  };
+
+  await test.step('Indent files the row under the summary above it, and Undo returns it', async () => {
+    await menuItem('Indent');
+    await expect.poll(parentOf, { timeout: 20_000 }).toBe(phase);
+
+    await expect(undoBtn).toHaveAccessibleName('Undo move “Excavate” under “Phase A”');
+    await undoBtn.click();
+    await expect.poll(parentOf, { timeout: 20_000 }).toBeNull();
+
+    await redoBtn.click();
+    await expect.poll(parentOf, { timeout: 20_000 }).toBe(phase);
+  });
+
+  await test.step('Outdent takes it back to the top level, and Undo files it again', async () => {
+    await menuItem('Outdent');
+    await expect.poll(parentOf, { timeout: 20_000 }).toBeNull();
+
+    await expect(undoBtn).toHaveAccessibleName('Undo move “Excavate” to the top level');
+    await undoBtn.click();
+    await expect.poll(parentOf, { timeout: 20_000 }).toBe(phase);
+  });
 });
