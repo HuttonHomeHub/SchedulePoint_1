@@ -35,6 +35,9 @@ export const DIAGNOSTIC_IDS = [
   'visual-conflict-later-than-bound',
   'zero-duration-tasks',
   'zero-duration-tasks-resourced',
+  'history-entries-last-28-days',
+  'history-entries-links-and-resources-28-days',
+  'history-entries-over-512-bytes',
 ] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
@@ -76,11 +79,11 @@ export type DiagnosticNature = (typeof DIAGNOSTIC_NATURES)[number];
  * single renderer that speaks them.
  *
  * It carries no installation data, exactly like `label` and `nature`: it is a property of the
- * QUESTION. Three members because the registry has three grains, counted from the denominators
- * rather than assumed — nine entries ask about activities, `visual-placement-plans` about plans,
- * and `baselines-over-placed-plans` about baselines.
+ * QUESTION. Four members because the registry has four grains, counted from the denominators
+ * rather than assumed — activities, plans (`visual-placement-plans`), baselines
+ * (`baselines-over-placed-plans`) and history entries (the three `history-entries-*` entries).
  */
-export const DIAGNOSTIC_UNITS = ['activity', 'plan', 'baseline'] as const;
+export const DIAGNOSTIC_UNITS = ['activity', 'plan', 'baseline', 'history-entry'] as const;
 
 export type DiagnosticUnit = (typeof DIAGNOSTIC_UNITS)[number];
 
@@ -763,6 +766,127 @@ const ZERO_DURATION_TASKS_RESOURCED: DiagnosticEntry = {
   `,
 };
 
+/**
+ * **H-1..H-3 — how fast activity history is accruing (ADR-0174 M3-T2, `docs/TECH_DEBT.md` #443).**
+ *
+ * ADR-0174 sized history from an **estimate** (18k–190k entries a year on a busy plan), and two
+ * things rest on it: CQ-2's retention trigger (one plan above 1,000,000 entries) and the expiry
+ * cost budget. The real rate is owed once the feature has recorded for four weeks, and a press of
+ * **Run diagnostics** is the only route to it that needs neither a shell nor a checkout.
+ *
+ * **The first time-relative diagnostic.** The 28-day window is a property of the question, written
+ * as a SQL literal exactly like the 512-byte threshold — never a parameter (ADR-0140 clause 2,
+ * gate S-3). Before the feature has recorded for 28 days the window reaches back past the day
+ * recording began, so H-1's `examined === affected` means the window is not yet full and the rate
+ * is a floor; the renderer says so, keyed on this entry's id.
+ *
+ * **H-1's `examined` is the retention trigger's observable.** An estate with fewer than 1,000,000
+ * entries cannot hold a plan above CQ-2's trigger, and a re-measure of the write and expiry cost
+ * (#443) is worth its effort when it approaches 100,000, not before.
+ *
+ * **Counts only, and nothing of the row is read.** `actor_user_id` and `changes` are never
+ * projected, and there is deliberately no `count(DISTINCT h.actor_user_id)`: how many people
+ * edited is a statement about individuals this console does not make. Only `pg_column_size(h.*)`
+ * of the whole row reaches a predicate (H-3) — a byte size, not its content. Joins with
+ * `count(DISTINCT …)`, never `EXISTS` (gate S-4 refuses the semi-join's `SELECT 1`).
+ *
+ * **History on a soft-deleted activity IS counted** (declared `any-state` at each query): the row exists,
+ * occupies space and is removed by expiry, and volume is the question. The `activities` join exists
+ * only to reach `plan_id`.
+ *
+ * H-2's population is H-1's numerator, so the two read together: H-1 sizes the rate, H-2 how much
+ * of it is link and resource work (the estimate used one combined 20–40 % uplift for both). H-3's
+ * 512-byte threshold is the top of the estimate's per-entry range, so a high share means the size
+ * estimate was low.
+ *
+ * **Measured cost (2026-10-05, `docs/specs/staff-server-readings/m1-measurement.md`)**, on the
+ * 102,000-activity diluted estate with physically interleaved history, `EXPLAIN (ANALYZE)`, median of
+ * five, against ADR-0140's ≤ 500 ms per-statement bar:
+ *
+ * | Statement                  | 100,000 rows | 1,000,000 rows |
+ * | -------------------------- | -----------: | -------------: |
+ * | H-1 denominator            |      17.6 ms |       101.0 ms |
+ * | H-1 numerator              |      71.0 ms |   **524.0 ms** |
+ * | H-2 denominator            |      25.7 ms |       118.0 ms |
+ * | H-2 numerator              |      52.4 ms |       185.2 ms |
+ * | H-3 denominator            |      17.9 ms |        98.1 ms |
+ * | H-3 numerator              |      70.4 ms |   **537.7 ms** |
+ *
+ * Every statement is a sequential scan of `activity_history_entries` (hash-joined to `activities`
+ * for `plan_id`, then a sort for `count(DISTINCT …)`); no index is proposed. **Two numerators pass
+ * the bar by being measured over it at 1,000,000 rows, and they ship anyway** — the estate holds
+ * hundreds of activities today, and a count nobody can obtain at all is worth less than one that is
+ * slow at a scale nobody has. **Re-arm trigger, observable in this very entry: H-1 `examined` ≥
+ * 500,000.** Past that, re-cost both numerators and consider a cheaper `affected_plans`
+ * formulation or an index — an index is a schema change and goes to database-architect first. The
+ * whole press, 335 ms without these entries, read 576 ms at 100,000 rows and 1,693 ms at 1,000,000:
+ * ADR-0140 D7's ~800 ms reopen trigger is crossed at roughly 300,000 rows.
+ */
+const HISTORY_WINDOW_DENOMINATOR = Prisma.sql`
+  SELECT count(*) AS examined
+  FROM activity_history_entries h
+  WHERE h.first_recorded_at >= now() - interval '28 days'
+`;
+
+const HISTORY_ENTRIES_LAST_28_DAYS: DiagnosticEntry = {
+  id: 'history-entries-last-28-days',
+  label: 'History entries begun in the last four weeks',
+  nature: 'prospective',
+  unit: 'history-entry',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activity_history_entries h
+  `,
+  // soft-delete: any-state — an entry lives exactly as long as its activity row, so one on a
+  // soft-deleted activity still occupies the table, which is what volume asks about.
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT h.organization_id) AS affected_organizations
+    FROM activity_history_entries h
+    JOIN activities a ON a.id = h.activity_id
+    WHERE h.first_recorded_at >= now() - interval '28 days'
+  `,
+};
+
+const HISTORY_ENTRIES_LINKS_AND_RESOURCES: DiagnosticEntry = {
+  id: 'history-entries-links-and-resources-28-days',
+  label: 'Of those, link and resource entries',
+  nature: 'prospective',
+  unit: 'history-entry',
+  denominator: HISTORY_WINDOW_DENOMINATOR,
+  // soft-delete: any-state — as H-1: the join reaches `plan_id` only, and volume is the question.
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT h.organization_id) AS affected_organizations
+    FROM activity_history_entries h
+    JOIN activities a ON a.id = h.activity_id
+    WHERE h.first_recorded_at >= now() - interval '28 days'
+      AND h.scope IN ('LOGIC', 'RESOURCES')
+  `,
+};
+
+const HISTORY_ENTRIES_OVER_512_BYTES: DiagnosticEntry = {
+  id: 'history-entries-over-512-bytes',
+  label: 'History entries larger than half a kilobyte',
+  nature: 'prospective',
+  unit: 'history-entry',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activity_history_entries h
+  `,
+  // soft-delete: any-state — as H-1: the join reaches `plan_id` only, and volume is the question.
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT h.organization_id) AS affected_organizations
+    FROM activity_history_entries h
+    JOIN activities a ON a.id = h.activity_id
+    WHERE pg_column_size(h.*) > 512
+  `,
+};
+
 /** The registry, in the order the panel renders it. D-A first, per CQ-1. */
 export const DIAGNOSTICS = [
   DAY_FACTOR_DIVERGENCE,
@@ -778,4 +902,7 @@ export const DIAGNOSTICS = [
   VISUAL_CONFLICT_LATER,
   ZERO_DURATION_TASKS,
   ZERO_DURATION_TASKS_RESOURCED,
+  HISTORY_ENTRIES_LAST_28_DAYS,
+  HISTORY_ENTRIES_LINKS_AND_RESOURCES,
+  HISTORY_ENTRIES_OVER_512_BYTES,
 ] as const;

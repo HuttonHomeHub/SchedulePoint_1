@@ -11613,21 +11613,33 @@ reviewer's ruling, or a complaint from a pointer-only user.
 
 ### 443. Activity history's write and expiry costs were measured only on a shared 4-vCPU container
 
-**Status:** open · **Verified:** 2026-10-04 (ADR-0174 Consequences; plan M1-T7, two runs on a 2.10 GHz 4 vCPU container with the API and Postgres 16.14 on one host) ·
+**Status:** open · **Verified:** 2026-10-05 (ADR-0174 Consequences; plan M1-T7, two runs on a 2.10 GHz 4 vCPU container with the API and Postgres 16.14 on one host; scope re-derived from `docs/specs/staff-server-readings/` §0.5–0.7) ·
 **Raised:** 2026-10-04 (product-owner decision to ship on the statement count) · **Size:** S · **Owner:** api
 
 Recording history adds about 5.7–7.2 ms p50 to a single-object save and 3.0–4.9 ms p50 to a link create on
 that machine, against the restated 3 ms / 4 ms bars; the four statements it issues sum to 3.3 ms p50 measured
 alone, so roughly 2–4 ms per save is **unattributed** and was not guessed at. The binding bar is now the
 three-statement test. **Not established:** whether the gap is the container (Node and Postgres sharing four
-slow cores), Prisma's interactive-transaction overhead, or something in the request path. **Next:** run
-`apps/api/test/measure/activity-history.measure.ts` against a disposable database on the deployed host (or the
-product owner's machine) and record the result in ADR-0174. **The same host run should re-measure ADR-0096
-expiry over history, cold and interleaved** (`test/measure/hierarchy-expiry-history.measure.ts`, M3-T1,
-`m3-measurement.md`): the constant `HISTORY_ROWS_PER_ACTIVITY = 5` rests on a warm-cache, one-machine
-interleaved quotient of 8.3–10.4, cold rows cost more per row, and no pre-pass is proposed until that
-reading exists. **Trigger:** a planner reports slow saves, or the next performance pass on the write paths,
-or a scope within an order of magnitude of CQ-2's 1,000,000-entry trigger.
+slow cores), Prisma's interactive-transaction overhead, or something in the request path.
+
+**Not automatable from the staff console, by decision** (`docs/specs/staff-server-readings/feature-spec.md` §4):
+a synthetic write or expiry benchmark would write to customer tables, which ADR-0140 refuses, and the binding
+bar is a statement count, so no decision rests on milliseconds today. **The expiry half has a passive source
+that already exists:** each real ADR-0096 expiry logs `durationMs` beside `activityHistoryEntries` in the
+`hierarchy_expiry.batch` line (`hierarchy-expiry.service.ts`), cold and interleaved on production data, once
+`RETENTION_HIERARCHY_ENABLED` is on and a scope expires; read it there rather than running a harness.
+**The volume half is shipped:** the staff **Run diagnostics** press now counts history (`history-entries-*`,
+M1 of that spec), and H-1's `examined` is the observable for the trigger below. Costs are in
+`docs/specs/staff-server-readings/m1-measurement.md`; the ADR-0174 M3-T2 row-rate **reading** is taken on or
+after 2026-11-01.
+
+**Next:** none that anybody can perform without a shell; the write-cost attribution and the cold expiry
+re-measure (`apps/api/test/measure/activity-history.measure.ts`, `hierarchy-expiry-history.measure.ts`,
+`m3-measurement.md`) wait on the trigger. The constant `HISTORY_ROWS_PER_ACTIVITY = 5` still rests on a
+warm-cache, one-machine interleaved quotient of 8.3–10.4. **Trigger:** a planner reports slow saves, or the
+next performance pass on the write paths, or **H-1 `examined` ≥ 100,000** (an order of magnitude below CQ-2's
+1,000,000-entry trigger; the diagnostics' own numerators cross 500 ms near 1,000,000 and re-arm at 500,000,
+and the press reaches ADR-0140 D7's ~800 ms near 300,000).
 
 ### 444. A batch history probe reads each activity's whole latest entry when it only needs the timestamp
 

@@ -887,6 +887,127 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     expect(patched.body.data.resourceAssignmentCount).toBe(1);
   });
 
+  // -------------------------------------------------------------------------------------------
+  // Activity-history volume (ADR-0174 M3-T2, `docs/TECH_DEBT.md` #443). A fourth estate, and the
+  // only one whose rows are written below the public API: an entry's `first_recorded_at` is
+  // `clock_timestamp()` under the recorder's lock, so a row OUTSIDE a 28-day window cannot be made
+  // by the write path in a test. The activities are still built through the API; only the history
+  // rows are seeded, with the fields each predicate reads set exactly.
+  // -------------------------------------------------------------------------------------------
+
+  const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
+
+  /**
+   * **The history estate.** Two plans, one soft-deleted activity, six entries — every row a witness
+   * for one clause, removing it moves a count:
+   *
+   * | Entry | Activity (plan)    | Scope       | Begun         | Size  | H-1 | H-2 | H-3 |
+   * | ----- | ------------------ | ----------- | ------------- | ----- | --- | --- | --- |
+   * | 1     | Live (plan 1)      | DEFINITION  | 1 day ago     | small | YES | no  | no  |
+   * | 2     | Live (plan 1)      | LOGIC       | 2 days ago    | small | YES | YES | no  |
+   * | 3     | Other (plan 2)     | RESOURCES   | 27 days ago   | big   | YES | YES | YES |
+   * | 4     | Other (plan 2)     | PROGRESS    | 28 d + 1 h    | small | no  | -   | no  |
+   * | 5     | Deleted (plan 1)   | PLACEMENT   | 3 days ago    | small | YES | no  | no  |
+   * | 6     | Old (plan 2)       | DEFINITION  | 60 days ago   | big   | no  | -   | YES |
+   *
+   * Entries 1 and 2 share an activity (the `DISTINCT` on plans has duplicates to remove), entry 4
+   * sits one hour outside the window and entry 3 one day inside it (the boundary in both
+   * directions), entry 5 is on a soft-deleted activity (`any-state` — it is counted), and entry 6
+   * is big but old (H-3 does not take the window).
+   */
+  async function seedHistoryEstate(actor: Actor): Promise<void> {
+    const allDay = await calendar(actor, 'Site (24h)', 24);
+    const planOne = await planOn(actor, allDay, 'History one');
+    const planTwo = await planOn(actor, allDay, 'History two');
+    const live = await activityOn(actor, planOne, { name: 'Live' });
+    const deleted = await activityOn(actor, planOne, { name: 'Deleted' });
+    const other = await activityOn(actor, planTwo, { name: 'Other' });
+    const old = await activityOn(actor, planTwo, { name: 'Old' });
+    await actor.agent.delete(`${org}/activities/${deleted}`).expect(200);
+
+    const organizationId = (await prisma.organization.findFirstOrThrow()).id;
+    // Writing the activities above recorded entries of their own; the fixture is exactly the six.
+    await prisma.activityHistoryEntry.deleteMany();
+
+    const now = Date.now();
+    const small = { name: { from: 'a', to: 'b' } };
+    const big = { notes: { from: 'x'.repeat(300), to: 'y'.repeat(300) } };
+    const entry = (
+      activityId: string,
+      scope: 'DEFINITION' | 'PROGRESS' | 'PLACEMENT' | 'LOGIC' | 'RESOURCES',
+      ageMs: number,
+      changes: object,
+    ) => ({
+      organizationId,
+      activityId,
+      actorUserId: 'history-fixture-actor',
+      scope,
+      firstRecordedAt: new Date(now - ageMs),
+      lastRecordedAt: new Date(now - ageMs),
+      hasNonCostChange: true,
+      changes,
+    });
+    await prisma.activityHistoryEntry.createMany({
+      data: [
+        entry(live, 'DEFINITION', 1 * DAY, small),
+        entry(live, 'LOGIC', 2 * DAY, small),
+        entry(other, 'RESOURCES', 27 * DAY, big),
+        entry(other, 'PROGRESS', 28 * DAY + HOUR, small),
+        entry(deleted, 'PLACEMENT', 3 * DAY, small),
+        entry(old, 'DEFINITION', 60 * DAY, big),
+      ],
+    });
+  }
+
+  it('counts history volume at the window, scope and size edges (M1, staff server readings)', async () => {
+    const actor = await adminWithOrg();
+    await seedHistoryEstate(actor);
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    expect(byId.get('history-entries-last-28-days')).toMatchObject({
+      nature: 'prospective',
+      unit: 'history-entry',
+      examined: 6,
+      affected: 4,
+      affectedPlans: 2,
+      affectedOrganizations: 1,
+    });
+    expect(byId.get('history-entries-links-and-resources-28-days')).toMatchObject({
+      unit: 'history-entry',
+      examined: 4,
+      affected: 2,
+      affectedPlans: 2,
+      affectedOrganizations: 1,
+    });
+    expect(byId.get('history-entries-over-512-bytes')).toMatchObject({
+      unit: 'history-entry',
+      examined: 6,
+      affected: 2,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+  });
+
+  it('returns no content of an entry — only numbers and the registry literals (M1)', async () => {
+    // Clause 1 of ADR-0140's narrowing over the first diagnostic that reads a table carrying an
+    // actor and the content of a change. The fixture's actor id and change text are distinctive so
+    // that if either can appear in the payload, this is where it shows.
+    const actor = await adminWithOrg();
+    await seedHistoryEstate(actor);
+    const staff = await signedInStaff();
+
+    const response = await staff.get('/api/v1/staff/diagnostics').set('Origin', ORIGIN).expect(200);
+    const body = JSON.stringify(response.body);
+
+    for (const leak of ['history-fixture-actor', 'xxxxxxxxxx', 'yyyyyyyyyy', 'History one']) {
+      expect(body, `the response must not carry "${leak}"`).not.toContain(leak);
+    }
+    expect(body).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  });
+
   it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {
     // TypeScript stops the field being DROPPED — it is non-optional on the DTO — and stops nothing
     // if a producer writes the wrong literal. Both entries are retrospective today, so this cannot
@@ -929,6 +1050,9 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'visual-conflict-later-than-bound',
       'zero-duration-tasks',
       'zero-duration-tasks-resourced',
+      'history-entries-last-28-days',
+      'history-entries-links-and-resources-28-days',
+      'history-entries-over-512-bytes',
     ]);
     for (const row of byId.values()) {
       expect(row).toMatchObject({ examined: 0, affected: 0, affectedPlans: 0 });
