@@ -3,8 +3,8 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-05, at the end of the **reconciliation pass** that followed the undo/redo epic
-(`docs/RECONCILE.md`, ADR-0058; findings in `docs/DECISIONS.md`, 2026-10-05).
+**Written:** 2026-10-05, after the **Dependabot batch** (#807–#816) that followed the reconciliation
+pass (`docs/RECONCILE.md`, ADR-0058; findings in `docs/DECISIONS.md`, 2026-10-05).
 
 ## Where things stand
 
@@ -19,18 +19,17 @@ epic boundary; its history is in git.
 | PR   | What                                                                                                                                                                                                                                                                                                                                                                 | Release     |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | #832 | **#455**: `useSession()` refetched `/me` on every mount and focus (`staleTime: 0`), and #827 made each plan switch a remount; the base suite hit the 100/60 s bucket on CI (#821, #831). Observers now hold the session fresh for 30 s; the shared options keep `0` because sign-in `fetchQuery`s them. Census 65 → 31.                                              | web 0.170.4 |
-| this | The pass itself: **#336/#338/#340 restored** (deleted by accident in #729), ledger pointers named, #405/#418/#429/#432/#435/#437/#438 corrected (#418 closed by running its seed), ADR-0169/0048/0146 statuses, four agent files taught ADR-0171/0172/0174/0175, RECONCILE §1/§6 counts. New rows **#453** (register completeness gate), **#454** (#827 follow-ups). | none        |
+| #834 | The pass itself: **#336/#338/#340 restored** (deleted by accident in #729), ledger pointers named, #405/#418/#429/#432/#435/#437/#438 corrected (#418 closed by running its seed), ADR-0169/0048/0146 statuses, four agent files taught ADR-0171/0172/0174/0175, RECONCILE §1/§6 counts. New rows **#453** (register completeness gate), **#454** (#827 follow-ups). | none        |
 
-## Decision waiting on the product owner
+## The Dependabot batch (2026-10-05, approved)
 
-**Ten Dependabot PRs (#807–#816)** — all patch or minor, no security or breaking notes. Five pass CI
-(#808 globals, #809 dev group, #812 nestjs-pino, #813 fast-xml-parser, #814 vitest). Five fail one
-gate, `check:claims`, because the bumped packages (`@nestjs/*` 11.2.7, react-query 5.104.0,
-react-router 1.170.41, lucide-react 1.49.0, react-hook-form 7.89.0) are pinned in
-`scripts/dependency-claims.json` until someone re-reads the cited lines; those five never reached their
-unit tests. Recommendation: do what #731 did — one combined PR off `main`, claims re-verified, full
-gate, close the ten as superseded. #807 and #809 must land together (they split `@nestjs` versions).
-Not merged: the product owner has not asked.
+**#807–#816 were taken as one change** (the combined PR; `docs/DECISIONS.md`, 2026-10-05), the way
+#731 took the previous eight, and the ten were closed as superseded. The lockfile is held to **exactly
+the versions Dependabot proposed**: a plain install resolved `nestjs-pino` 5.3.1, `lucide-react`
+1.52.0, `react-query` 5.104.1 and `turbo` 2.11.7, none reviewed, so expect those as the next
+Dependabot PRs. All 57 claims on the eight pinned packages were re-read (every cited block
+byte-identical; seven `react-hook-form` line ranges moved). No changeset, so no release: the new
+versions ship with the next release's images.
 
 ## Open rows that need a decision or a trigger
 
@@ -50,10 +49,9 @@ Not merged: the product owner has not asked.
 
 Nothing below is approved. Put these to the product owner in plain English:
 
-1. The Dependabot batch (above).
-2. **#433**: measure plan refresh on the live server.
-3. **#453**: the register completeness gate (small; touches a shared gate, so a short spec first).
-4. Anything from `docs/BACKLOG.md`; a new feature starts with **feature-analyst**.
+1. **#433**: measure plan refresh on the live server.
+2. **#453**: the register completeness gate (small; touches a shared gate, so a short spec first).
+3. Anything from `docs/BACKLOG.md`; a new feature starts with **feature-analyst**.
 
 ## Environment notes a new session would otherwise rediscover
 
@@ -85,3 +83,7 @@ Nothing below is approved. Put these to the product owner in plain English:
 - **Never use the global `prettier`**; use `pnpm exec prettier`.
 - **The release run is not in the default workflow listing.** Filter on `release.yml`, then list
   that run's jobs for "Build & push api/web".
+- **Re-reading dependency claims after a bump:** `npm pack <pkg>@<old version>` into the scratchpad
+  works (the registry is reachable), so each cited block can be compared byte-for-byte with the
+  installed new version. Other projects' GitHub release notes are **not** reachable (access is scoped
+  to this repository).

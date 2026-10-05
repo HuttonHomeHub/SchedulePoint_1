@@ -10,6 +10,38 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-05 — The ten Dependabot bumps are taken together, at the versions Dependabot proposed
+
+**What was decided.** #807–#816 land as one change off `main`, the way #731 took the previous eight
+(product-owner approval, 2026-10-05): `@nestjs/{common,core,platform-express,testing}` 11.2.7 (#807 and
+#809 together, so Nest stays on one version), `globals` 17.13.0, `@swc/core` 1.16.13, `@types/node`
+22.20.5, `vite` 8.3.2, `turbo` 2.11.6, `@tanstack/react-query` 5.104.0, `@tanstack/react-router`
+1.170.41 (with `router-core` 1.171.34; `history` unchanged at 1.162.4), `nestjs-pino` 5.2.1,
+`fast-xml-parser` 5.11.2, `vitest` 5.0.3, `lucide-react` 1.49.0 and `react-hook-form` 7.89.0. The ten
+PRs are closed as superseded.
+
+**Held to the proposed versions, not the newest in range.** A plain `pnpm install` resolved four of the
+carets past what the PRs offered — `nestjs-pino` **5.3.1** (a minor nobody had reviewed),
+`lucide-react` 1.52.0, `react-query`/`query-core` 5.104.1 and `turbo` 2.11.7 — and none of those
+projects' release notes were readable from the container (GitHub access is scoped to this repository,
+and their tarballs carry no changelog). The approval covered the ten bumps, so the lockfile was taken
+to exactly those versions: install with the four pinned exactly, then restore the carets and install
+again, which keeps the locked versions because they satisfy the ranges. The specifiers in
+`package.json` are Dependabot's. The newer releases will arrive as ordinary Dependabot PRs.
+
+**Claims re-read, not re-stamped.** All 57 claims on the eight pinned packages were checked by
+comparing each cited block in the old tarball (`npm pack <pkg>@<old>`) with the installed new version:
+every block is **byte-identical**. Only `react-hook-form`'s seven moved (its bundle grew ~90 lines
+above them), and their line ranges are updated. Of the 26 cited files, 19 are byte-identical across the
+bump; `lucide-react`'s differ only in the licence header and `.d.ts` doc order; `link.js` reworked
+`selectLinkState` but its cited destructuring (lines 53–60) is unchanged and still threads
+`ignoreBlocker` into navigation (line 166), so the unsaved-work-guard spec's sentence still holds. No
+prose needed changing. `turbo` 2.11.6 still honours `agentGuidance: false` — no `AGENTS.md` was written
+by the gate runs.
+
+**No changeset**, as with #731: nothing a user sees changes, so no release is cut for it; the new
+versions ship in the next release's images.
+
 ## 2026-10-05 — Reconciliation pass: three register rows lost by accident, and a session read that cost a CI run
 
 **What was decided.** The pass `docs/HANDOFF.md` and `check:reconcile-due` both called due — twelve ADRs
