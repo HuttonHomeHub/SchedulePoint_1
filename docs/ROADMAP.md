@@ -773,13 +773,18 @@ discriminators. Each becomes a spec/plan before build:
   threads (ADR-0046) on **plans and activities** (client/project reserved for a later slice): a
   polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the web
   thread/composer/badge in the activity Logic panel and plan workspace (M3). The weekly-progress "why".
-- **Undo/redo.** **Delivered & enabled (`VITE_UNDO_REDO` on by default)** — a client-side, per-plan,
-  per-pen-session command stack (ADR-0048) that undoes plan **inputs** through the existing mutations
-  (engine + parity gate untouched): reposition/relane/update/create/delete/dependency/`visualStart`/
-  auto-arrange, with drag coalescing, pen-gated toolbar Undo/Redo + keyboard shortcuts, abort-and-refetch
-  conflict handling, and announcements. Chromium Back/Forward suppression is asserted by the flag-on
-  Playwright journey; the Firefox/Safari/Edge manual sweep is the operator gate (TECH_DEBT #25).
-  Id-stable cascade/WBS delete-undo is a deferred M4.
+- **Undo/redo.** **Delivered & enabled (`VITE_UNDO_REDO` on by default)** — a client-side, per-plan
+  command stack (ADR-0048) that undoes plan **inputs** through the existing mutations (engine +
+  parity gate untouched): reposition/relane/update/create/delete/dependency/`visualStart`/
+  auto-arrange, with drag coalescing, pen-gated toolbar Undo/Redo + keyboard shortcuts, and
+  announcements. Chromium Back/Forward suppression is asserted by the flag-on Playwright journey; the
+  Firefox/Safari/Edge manual sweep is the operator gate (TECH_DEBT #25). Id-stable cascade/WBS
+  delete-undo shipped (ADR-0048 M4). **Best-in-class follow-on in progress** (spec
+  `docs/specs/undo-redo-best-in-class/`): what each press did shows in the dock strip (M1), and
+  **undo never jams** (M2, **ADR-0176**) — a step checks the fields it wrote against the server
+  before it writes, a step that cannot apply is set aside and explained so the next press carries
+  on, and the history survives a pen hand-off. Still to come: every edit undoable (M3), reveal after
+  undo (M4), keyboard from anywhere (M5), dissolve (M6), a history list (M7).
 - **Gantt view** — **shipped** (ADR-0059, `VITE_GANTT_VIEW` default-on 2026-07-28): a
   grid-and-bar projection of the same model behind a TSLD | Gantt switch, with WBS summary rows,
   the baseline variance bar ADR-0025 deferred "until a Gantt exists", and a printed programme.

@@ -169,3 +169,14 @@ before this milestone, so the capability was never built on top of a rare, invis
 ## Amendment (2026-10-04) — a replay sends the row's latest known version
 
 Each command builder threaded its own optimistic-lock `version`, which is correct only while that command is the sole writer of its row. Two steps on one activity (a move, then a resize) each captured the version their forward write returned, so undoing the newer step bumped the row and the older step's undo sent a stale number: one 409, then a 409 on every replay after it (`docs/TECH_DEBT.md` #447, reproduced in a browser with move, resize, move, lane on one activity). The history now owns a **version ledger** (`VersionLedger`, `history.versions`): a monotonic max per entity id, seeded by `record` from each command's post-edit version(s) and fed by every successful replay response, and emptied by `clear()`. A replay sends `max(its own threaded version, ledger)`. The ledger only knows versions the stack itself recorded or replayed — it never reads the query cache and never fetches — so a write the stack did not record (another path, another user) still produces the 409 that M3.1's conflict contract exists to report. Recreate-on-undo commands observe the new row's version under its new id, and restore paths (delete-batch restore, paste redo) observe the restored rows' bumped versions.
+
+## Amendment (2026-10-05) — superseded in part by ADR-0176
+
+[ADR-0176](0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md) replaces two of this
+ADR's Decision bullets and the 2026-10-04 version-ledger amendment above. **"Conflict = abort-and-refetch"**
+no longer holds: a replay re-reads the rows it touched, compares only the fields the step wrote, and a step
+that cannot apply is **set aside** (removed, explained, redo cleared) so the next press continues with the
+step beneath it. **"A 423 clears the stack"** and **"scoped per pen session"** no longer hold: history
+survives a pen release or hand-off, because every step is checked before it writes. The version ledger is
+deleted — a replay writes at the version its fresh read returned. What does not change: inputs only, the
+unchanged API gates, the depth cap of 50, and loss on plan switch and reload.
