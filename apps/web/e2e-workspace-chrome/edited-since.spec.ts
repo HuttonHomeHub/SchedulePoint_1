@@ -43,7 +43,9 @@ test('a plan edited elsewhere since its calculation says so, and Recalculate cle
   const bar = page.locator('[data-schedule-state]');
   await expect(bar).toHaveAttribute('data-schedule-state', 'current');
 
-  // A scheduling-input edit this tab does not make: a duration change straight to the API.
+  // A scheduling-input edit this tab does not make: a duration change straight to the API. The
+  // reload inside `recalculate` released the pen (pagehide), so it is taken again first.
+  await ensurePen(page);
   const planId = openPlanId(page);
   await page.evaluate(
     async ({ org, plan, id }: { org: string; plan: string; id: string }) => {
