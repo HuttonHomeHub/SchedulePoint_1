@@ -1,7 +1,7 @@
 # Implementation Plan: Two server readings from the staff console
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — **do not implement before approval** (`docs/PROCESS.md` Definition of Ready)
+- **Status:** Approved — by the product owner, 2026-10-05 (in session), "approved as described": defaults D-1 to D-6 stand; M1 (history counts) first, before 1 November.
 - **Owner:** Claude Code (builder), for James Ewbank (product owner)
 
 ## Breakdown

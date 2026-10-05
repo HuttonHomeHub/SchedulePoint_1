@@ -1,6 +1,6 @@
 # Feature Spec: Two server readings from the staff console (plan-screen loading, activity-history volume)
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved — by the product owner, 2026-10-05 (in session), "approved as described": defaults D-1 to D-6 stand; M1 (history counts) first, before 1 November.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-05
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #433 and #443; ADR-0174 plan task M3-T2
