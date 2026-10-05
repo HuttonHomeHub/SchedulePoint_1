@@ -3,8 +3,11 @@ import AxeBuilder from '@axe-core/playwright';
 import {
   apiActivities,
   apiDependencies as apiDependenciesShared,
+  diagramList,
   seedActivities,
   seedLink,
+  selectByName,
+  selectedActivityId,
 } from '../e2e-copy-paste/support';
 import { ganttGrid, ganttRow, showGantt } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
@@ -751,5 +754,80 @@ test('a planner undoes dissolving a summary, and the earlier edit is still undoa
         timeout: 20_000,
       })
       .toBe(false);
+  });
+});
+
+/**
+ * **Undo shows you where** (undo-redo M4) — after an applied undo or redo the activity it changed is
+ * selected and brought into view, in the Gantt and in the diagram, and keyboard focus stays on the
+ * control that was pressed.
+ *
+ * The subject is made hard to find on purpose: a phase and the bar filed under it sit at the top of
+ * a sixty-row plan and the Gantt is scrolled to the bottom before Undo. A selection alone scrolls
+ * nothing there (the Gantt's reveal hangs off its own prop), so the row being in the viewport is the
+ * assertion that says the reveal reached the grid and not only the selection state. In the diagram
+ * the proof is the selection moving onto the changed bar from a different one. Both presses are the
+ * toolbar's, and both then check the button still holds focus: a reveal that pulled the planner into
+ * the diagram would pass every assertion above it and break the next keystroke.
+ */
+test('an undo or redo selects the activity it changed and brings it into view', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+  const fillers = Array.from({ length: 60 }, (_, i) => ({
+    name: `Filler ${String(i + 1).padStart(2, '0')}`,
+  }));
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Phase A', type: 'WBS_SUMMARY' },
+    { name: 'Excavate' },
+    ...fillers,
+  ]);
+  const excavate = seeded.find((a) => a.name === 'Excavate')?.id;
+  if (!excavate) throw new Error('seeding did not return Excavate');
+
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const undoBtn = toolbar.getByRole('button', { name: /^Undo\b/ });
+  const redoBtn = toolbar.getByRole('button', { name: /^Redo\b/ });
+
+  await test.step('Gantt: the row is selected and scrolled into view, and focus stays on Undo', async () => {
+    await showGantt(page);
+    await ganttRow(page, 'Excavate')
+      .getByRole('button', { name: /^Actions for/ })
+      .click();
+    await page.getByRole('menuitem', { name: 'Indent' }).click();
+    await expect(undoBtn).toHaveAccessibleName('Undo move “Excavate” under “Phase A”');
+
+    // Scroll whichever ancestor of the grid is the scroller to its end, so the row is far away.
+    const scrolled = await ganttGrid(page).evaluate((el) => {
+      let node: Element | null = el;
+      while (node && node.scrollHeight <= node.clientHeight + 1) node = node.parentElement;
+      if (!node) return 0;
+      node.scrollTop = node.scrollHeight;
+      return node.scrollTop;
+    });
+    expect(scrolled).toBeGreaterThan(0);
+
+    await undoBtn.focus();
+    await undoBtn.click();
+    const row = ganttRow(page, 'Excavate');
+    await expect(row).toBeInViewport({ timeout: 15_000 });
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+    await expect(undoBtn).toBeFocused();
+  });
+
+  await test.step('Diagram: Redo moves the selection onto the bar it changed, and focus stays on Redo', async () => {
+    await page.getByRole('button', { name: 'Diagram', exact: true }).click();
+    await selectByName(page, 'Filler 01');
+    expect(await selectedActivityId(page)).not.toBe(excavate);
+
+    await redoBtn.focus();
+    await redoBtn.click();
+    await expect.poll(() => selectedActivityId(page), { timeout: 15_000 }).toBe(excavate);
+    await expect(redoBtn).toBeFocused();
+    await expect(diagramList(page)).not.toBeFocused();
   });
 });

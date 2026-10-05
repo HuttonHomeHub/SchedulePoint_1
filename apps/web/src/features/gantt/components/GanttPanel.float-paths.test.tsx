@@ -137,6 +137,56 @@ describe('GanttPanel — float-path emphasis', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  it('tells the host once the row has been scrolled to, so an event-shaped request can be withdrawn', () => {
+    const onBroughtIntoView = vi.fn();
+    scrollToIndex.mockClear();
+    render(
+      <GanttPanel
+        activities={THREE}
+        bringIntoViewActivityId="c"
+        onBroughtIntoView={onBroughtIntoView}
+      />,
+    );
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    expect(onBroughtIntoView).toHaveBeenCalledOnce();
+  });
+
+  it('does not report a scroll that had to expand a collapsed parent first', () => {
+    const summary = anActivity({
+      id: 'w',
+      code: 'W',
+      name: 'Substructure',
+      type: 'WBS_SUMMARY',
+      earlyStart: '2026-02-02',
+      earlyFinish: '2026-02-20',
+    });
+    const child = anActivity({
+      id: 'k',
+      code: 'K',
+      name: 'Blinding',
+      parentId: 'w',
+      earlyStart: '2026-02-02',
+      earlyFinish: '2026-02-06',
+    });
+    const onBroughtIntoView = vi.fn();
+    const { rerender } = render(<GanttPanel activities={[summary, child]} />);
+    const chevron = rowFor('Substructure').querySelector('button');
+    if (chevron === null) throw new Error('no collapse control on the summary row');
+    fireEvent.click(chevron);
+    scrollToIndex.mockClear();
+    rerender(
+      <GanttPanel
+        activities={[summary, child]}
+        bringIntoViewActivityId="k"
+        onBroughtIntoView={onBroughtIntoView}
+      />,
+    );
+    // The pass that expands has not scrolled; the pass after it, with the row now present, has —
+    // and only that one reports, which is what lets the host withdraw the request exactly then.
+    expect(scrollToIndex).toHaveBeenCalledWith(1, { align: 'center' });
+    expect(onBroughtIntoView).toHaveBeenCalledOnce();
+  });
+
   it('expands a collapsed WBS parent rather than silently doing nothing', () => {
     // `rowRefs` holds RENDERED rows and `rows` excludes anything under a collapsed summary, so a
     // naive `scrollIntoView` on a hidden target is a no-op that looks like a broken control.

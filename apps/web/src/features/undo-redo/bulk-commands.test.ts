@@ -85,6 +85,11 @@ describe('bulkDeleteCommand', () => {
     return { server, command };
   }
 
+  it('names every deleted activity as a subject', async () => {
+    const { command } = await swept();
+    expect(command.subjects).toEqual(['a', 'b']);
+  });
+
   it('undo restores the BATCH — one call, not one per activity', async () => {
     const { server, command } = await swept();
     expect(await command.undo(server.ctx)).toEqual(APPLIED);

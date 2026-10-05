@@ -16,6 +16,7 @@ import { PlanFactsProvider } from './plan-facts-host';
 import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
+import { revealTakesFocus } from './reveal-focus';
 import { docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
@@ -148,6 +149,7 @@ import {
   historyResultMessage,
   isHistoryFailure,
 } from '@/features/undo-redo';
+import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
@@ -1343,6 +1345,12 @@ export function ToolbarPlanWorkspace({
   // seam; both read `ctx.matchedIds`, which `useSearchNavigation` derives once — so the two views
   // cannot disagree about what the search matched, which is the whole point of lifting it.
   const searchNavActive = CANVAS_SEARCH_NAV_ENABLED && ctx.matchedIds.size > 0;
+  // The undo reveal holds only while its activity is still the selection: choosing anything else hands
+  // the scroll back, and the Gantt withdraws it itself once it has scrolled.
+  const undoRevealId =
+    model.undoRevealId !== null && model.selectedActivityId === model.undoRevealId
+      ? model.undoRevealId
+      : null;
   const ganttEmphasisIds = useMemo<ReadonlySet<string>>(() => {
     if (!searchNavActive) return floatPaths.emphasisIds;
     if (floatPaths.emphasisIds.size === 0) return ctx.matchedIds;
@@ -1599,24 +1607,30 @@ export function ToolbarPlanWorkspace({
           // because "whichever is set" is not a rule, it is an accident that only shows up when both
           // are on at once.
           emphasisIds={ganttEmphasisIds}
-          {...(healthDockActive && healthRevealId !== null
-            ? // A health-offender press outranks both standing sources while its dock is open: it
-              // is the planner's NEWEST explicit instruction, where search nav and float paths are
-              // standing states that may have been set minutes ago. Cleared when the dock closes,
-              // so this cannot go stale over the other two — the "whichever is set is an accident"
-              // trap the comment above warns about, answered in writing for the third source.
-              { bringIntoViewActivityId: healthRevealId }
-            : revisionsDockActive && revisionRevealId !== null
-              ? // The comparison's row press, on the same footing and for the same reason. It sits
-                // BELOW health rather than above only because the two docks are mutually exclusive
-                // (`right-docks.ts`), so the order between them is unreachable — stated rather than
-                // left as an apparent precedence somebody later "fixes" without knowing it is inert.
-                { bringIntoViewActivityId: revisionRevealId }
-              : searchNavActive && ctx.currentMatchId !== null
-                ? { bringIntoViewActivityId: ctx.currentMatchId }
-                : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-                  ? { bringIntoViewActivityId: model.selectedActivityId }
-                  : {})}
+          {...(undoRevealId !== null ? { onBroughtIntoView: model.onUndoRevealHandled } : {})}
+          {...(undoRevealId !== null
+            ? // What an undo or redo just changed outranks every standing source, and the dock presses
+              // below: it is the newest instruction the planner gave. It holds only while that
+              // activity is still the selection, so choosing anything else hands the scroll back.
+              { bringIntoViewActivityId: undoRevealId }
+            : healthDockActive && healthRevealId !== null
+              ? // A health-offender press outranks both standing sources while its dock is open: it
+                // is the planner's NEWEST explicit instruction, where search nav and float paths are
+                // standing states that may have been set minutes ago. Cleared when the dock closes,
+                // so this cannot go stale over the other two — the "whichever is set is an accident"
+                // trap the comment above warns about, answered in writing for the third source.
+                { bringIntoViewActivityId: healthRevealId }
+              : revisionsDockActive && revisionRevealId !== null
+                ? // The comparison's row press, on the same footing and for the same reason. It sits
+                  // BELOW health rather than above only because the two docks are mutually exclusive
+                  // (`right-docks.ts`), so the order between them is unreachable — stated rather than
+                  // left as an apparent precedence somebody later "fixes" without knowing it is inert.
+                  { bringIntoViewActivityId: revisionRevealId }
+                : searchNavActive && ctx.currentMatchId !== null
+                  ? { bringIntoViewActivityId: ctx.currentMatchId }
+                  : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+                    ? { bringIntoViewActivityId: model.selectedActivityId }
+                    : {})}
         />
         {/*
           The object-action bar, in the Gantt (M1). `CanvasDock` portals it into the Activities
@@ -1859,9 +1873,19 @@ export function ToolbarPlanWorkspace({
     // Only once the row has arrived in the refetched list — a clone the client has not seen yet has
     // no date to centre on, and selecting an unknown id would be a no-op the effect never retries.
     if (activity === undefined) return;
-    if (activity.earlyStart !== null)
-      canvasUi.canvasControlRef.current?.centerOnDate(activity.earlyStart);
-    canvasUi.requestSelectActivity(id);
+    // Both axes: a bar in a lane below the fold must be visible, not merely centred in time. The date
+    // pan stays as the fallback for a bar the scene has not drawn yet.
+    const control = canvasUi.canvasControlRef.current;
+    if (control && !control.centerOnActivity(id)) {
+      const start = barDatesFor(activity, 'visual').start ?? activity.earlyStart;
+      if (start !== null) control.centerOnDate(start);
+    }
+    // An undo or redo keeps focus where the planner is — only a focus that has already fallen to
+    // `<body>` is handed to the diagram (ADR-0135), so the keyboard is never left nowhere. The other
+    // callers land in the diagram, as they always have.
+    canvasUi.requestSelectActivity(id, {
+      focusListbox: revealTakesFocus(model.revealKeepsFocus, document.activeElement),
+    });
     model.onSelectionChange(id);
     model.onRevealHandled();
   }, [model, canvasUi]);

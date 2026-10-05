@@ -133,6 +133,7 @@ export function reparentCommand(params: {
         );
   return {
     label: params.label,
+    subjects: moved.map((row) => row.id),
     undo: (ctx) =>
       replay(ctx, atUndo, atRedo, (next) => {
         atRedo = next;
@@ -235,6 +236,7 @@ export function stepsReplaceCommand(params: {
   };
   return {
     label: params.label ?? `Edit steps of “${activity.name}”`,
+    subjects: [activity.id],
     undo: (ctx) =>
       replay(ctx, atUndo, before, (saved) => {
         atRedo = saved;
@@ -492,6 +494,7 @@ export function assignmentAddCommand(params: {
   });
   return {
     label: params.label ?? assignmentLabel('Assign', params.resourceName, params.activityName),
+    subjects: [params.assignment.activityId],
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
   };
@@ -516,6 +519,7 @@ export function assignmentRemoveCommand(params: {
   });
   return {
     label: params.label ?? assignmentLabel('Unassign', params.resourceName, params.activityName),
+    subjects: [params.assignment.activityId],
     undo: toggle.ensurePresent,
     redo: toggle.ensureAbsent,
   };
@@ -686,6 +690,7 @@ export function assignmentEditCommand(params: {
   };
   return {
     label: params.label ?? assignmentLabel('Edit', resourceName, activityName),
+    subjects: [activityId],
     undo: (ctx) =>
       replay(ctx, atUndo, atRedo, (next) => {
         atRedo = next;
@@ -761,6 +766,16 @@ function crossPlanLinkToggle(params: {
   };
 }
 
+/**
+ * A cross-plan link's two ends, the plan's own first. The edge's home is the successor's plan
+ * (ADR-0045 CQ-2) and the predecessor is in another plan, so it names nothing in this plan's list —
+ * listed anyway, because which end is local depends on the plan the planner is looking at, and the
+ * reveal keeps only what the open plan holds.
+ */
+function crossPlanSubjects(link: CrossPlanDependencySummary): string[] {
+  return [link.successor.id, link.predecessor.id];
+}
+
 /** Reverse **adding a cross-plan link** — undo removes it (when unchanged), redo adds it again. */
 export function crossPlanLinkAddCommand(params: {
   link: CrossPlanDependencySummary;
@@ -773,6 +788,7 @@ export function crossPlanLinkAddCommand(params: {
     label:
       params.label ??
       `Add cross-plan link “${params.link.predecessor.name}” → “${params.link.successor.name}”`,
+    subjects: crossPlanSubjects(params.link),
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
   };
@@ -790,6 +806,7 @@ export function crossPlanLinkRemoveCommand(params: {
     label:
       params.label ??
       `Remove cross-plan link “${params.link.predecessor.name}” → “${params.link.successor.name}”`,
+    subjects: crossPlanSubjects(params.link),
     undo: toggle.ensurePresent,
     redo: toggle.ensureAbsent,
   };

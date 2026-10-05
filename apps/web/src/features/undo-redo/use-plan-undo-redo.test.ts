@@ -14,6 +14,7 @@ import { ReplayFailure } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 import { usePlanUndoRedo } from './use-plan-undo-redo';
 
+import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 import { aDependency, detailReader, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
@@ -45,6 +46,7 @@ const err = (status: number, details?: unknown): ApiFetchError =>
 
 const command = (label: string, over: Partial<Command> = {}): Command => ({
   label,
+  subjects: [],
   undo: vi.fn(),
   redo: vi.fn(),
   ...over,
@@ -70,12 +72,23 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
   };
 }
 
-function setup(history: PlanEditHistory, onResult?: (result: PostedHistoryResult) => void) {
+function setup(
+  history: PlanEditHistory,
+  onResult?: (result: PostedHistoryResult) => void,
+  reveal?: { onReveal: (activityId: string) => void; inPlan: readonly string[] },
+) {
   const announce = vi.fn();
   const onLockLost = vi.fn();
   const onReplayed = vi.fn();
   const queryClient = new QueryClient();
   const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+  // What the refreshed list holds once the replay's invalidation has settled (the spy above stands
+  // in for the refetch, so the cache is the answer).
+  if (reveal)
+    queryClient.setQueryData(
+      activitiesQueryOptions('acme', 'p1').queryKey,
+      reveal.inPlan.map((id) => anActivity({ id })),
+    );
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
   const { result } = renderHook(
@@ -88,6 +101,7 @@ function setup(history: PlanEditHistory, onResult?: (result: PostedHistoryResult
         onLockLost,
         onReplayed,
         ...(onResult ? { onResult } : {}),
+        ...(reveal ? { onReveal: reveal.onReveal } : {}),
       }),
     { wrapper },
   );
@@ -95,6 +109,86 @@ function setup(history: PlanEditHistory, onResult?: (result: PostedHistoryResult
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('usePlanUndoRedo — what a press shows (undo-redo M4)', () => {
+  it('reveals the first subject still in the plan, after the list has been refreshed', async () => {
+    const onReveal = vi.fn();
+    const step = command('Move “A”', { subjects: ['gone', 'a2', 'a3'] });
+    const { result, invalidateSpy } = setup(
+      fakeHistory({ undo: vi.fn().mockResolvedValue(applied(step)) }),
+      undefined,
+      { onReveal, inPlan: ['a3', 'a2'] },
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onReveal).toHaveBeenCalledExactlyOnceWith('a2'));
+    // Joins the refetch the replay's own mutation started, rather than restarting it.
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.anything(), { cancelRefetch: false });
+  });
+
+  it('reveals on redo as well', async () => {
+    const onReveal = vi.fn();
+    const step = command('Add link', { subjects: ['a1', 'a2'] });
+    const { result } = setup(
+      fakeHistory({ redo: vi.fn().mockResolvedValue(applied(step)) }),
+      undefined,
+      {
+        onReveal,
+        inPlan: ['a1', 'a2'],
+      },
+    );
+    act(() => result.current.redo());
+    await waitFor(() => expect(onReveal).toHaveBeenCalledExactlyOnceWith('a1'));
+  });
+
+  it('reveals nothing when no subject survives — an undone create has no bar to show', async () => {
+    const onReveal = vi.fn();
+    const step = command('Add “A”', { subjects: ['a1'] });
+    const { result, invalidateSpy } = setup(
+      fakeHistory({ undo: vi.fn().mockResolvedValue(applied(step)) }),
+      undefined,
+      { onReveal, inPlan: ['other'] },
+    );
+    act(() => result.current.undo());
+    // The reveal has run its refresh and found nobody to show — then, and only then, is "never
+    // called" a statement about the answer rather than about timing.
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
+    await act(() => Promise.resolve());
+    expect(onReveal).not.toHaveBeenCalled();
+  });
+
+  it('reveals nothing for a step that was set aside', async () => {
+    const onReveal = vi.fn();
+    const step = command('Move “A”', { subjects: ['a1'] });
+    const outcome: StepOutcome = {
+      kind: 'set-aside',
+      command: step,
+      reason: 'changed',
+      subjectName: 'A',
+      nextLabel: null,
+    };
+    const onResult = vi.fn();
+    const { result } = setup(fakeHistory({ undo: vi.fn().mockResolvedValue(outcome) }), onResult, {
+      onReveal,
+      inPlan: ['a1'],
+    });
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalled());
+    expect(onReveal).not.toHaveBeenCalled();
+  });
+
+  it('reveals nothing for a step that failed', async () => {
+    const onReveal = vi.fn();
+    const onResult = vi.fn();
+    const { result } = setup(
+      fakeHistory({ undo: vi.fn().mockRejectedValue(new Error('network')) }),
+      onResult,
+      { onReveal, inPlan: ['a1'] },
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalled());
+    expect(onReveal).not.toHaveBeenCalled();
+  });
+});
 
 describe('usePlanUndoRedo — success', () => {
   it('announces the executed step label on a successful undo / redo', async () => {

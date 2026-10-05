@@ -133,6 +133,13 @@ export interface TsldCanvasHandle {
    * (canvas nav, `docs/specs/canvas-nav/`). Same pure view transform; no fetch/persisted state. */
   centerOnDate: (iso: string) => void;
   /**
+   * Bring one drawn activity into view on **both** axes without changing the scale: its bar is centred
+   * horizontally and the lane axis moves the minimum distance to show it (undo-redo M4). Unlike
+   * {@link centerOnDate}, a bar in a lane below the fold ends up visible. Returns false when the
+   * activity has no drawn position or the canvas is unmeasured.
+   */
+  centerOnActivity: (id: string) => boolean;
+  /**
    * Frame a single activity at a readable scale (`docs/specs/canvas-search-navigation/` M3).
    *
    * A **command, not a mode** (ADR-0056): it sets the scale once, and a later resize preserves what
@@ -1309,6 +1316,23 @@ export function TsldCanvas({
         );
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
+      },
+      centerOnActivity: (id: string): boolean => {
+        const size = sizeRef.current;
+        if (size.width <= 1) return false;
+        const activity = sceneRef.current.activities.find((a) => a.id === id);
+        if (!activity) return false;
+        const rect = activityRect(activity, viewRef.current, sceneRef.current.dataDate);
+        if (!rect) return false;
+        // The same `revealOffset` the selection-reveal effect and `zoomToActivity` use, for the lane axis.
+        viewRef.current = pan(
+          viewRef.current,
+          size.width / 2 - (rect.x + rect.w / 2),
+          revealOffset(rect.y, rect.h, size.height, LANE_HEIGHT),
+        );
+        dirtyRef.current = true;
+        interactionDirtyRef.current = true;
+        return true;
       },
       zoomToActivity: (id: string): boolean => {
         const size = sizeRef.current;

@@ -1668,6 +1668,11 @@ export function TsldPanel({
     if (activities.some((a) => a.id === signal.id)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- external one-shot signal → selection sync
       setSelectedId(signal.id);
+      // The keyboard cursor goes with it. With multi-select on, `aria-activedescendant` names the
+      // CURSOR, not the selection, so selecting alone left it on whichever row the planner had last
+      // walked to — a reveal (undo, a duplicate, a search hit) that selected the right bar and told a
+      // screen reader about the wrong one (WCAG 4.1.2).
+      if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(signal.id);
       // Move DOM focus into the parallel listbox so `aria-activedescendant` is actually conveyed and an
       // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not
       // just hears the announcement. Guarded to this conflict-cycle path so ordinary canvas selection
@@ -1680,7 +1685,7 @@ export function TsldPanel({
         listboxRef.current?.focus();
       }
     }
-  }, [navState.selectSignal, activities, setSelectedId]);
+  }, [navState.selectSignal, activities, setSelectedId, setActiveIdRaw]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a

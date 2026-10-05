@@ -175,6 +175,7 @@ describe('useAutoResolveOverlaps', () => {
     act(() =>
       view.result.current.history.record({
         label: 'A later edit',
+        subjects: [],
         undo: () => Promise.resolve({ kind: 'applied' }),
         redo: () => Promise.resolve({ kind: 'applied' }),
       }),
