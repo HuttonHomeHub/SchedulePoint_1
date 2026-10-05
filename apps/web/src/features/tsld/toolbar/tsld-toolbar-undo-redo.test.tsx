@@ -8,15 +8,13 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
- * Flag-ON Undo/Redo toolbar items (ADR-0048 M3.2). Pins `VITE_UNDO_REDO` on (+ canvas authoring, so the
- * Row 2 · Do authoring cluster is present) — the flag-off "Coming soon" placeholders are covered by
- * `tsld-toolbar.test.tsx`. Asserts: real controls render, disable from `canUndo`/`canRedo` and pen-gating,
+ * Undo/Redo toolbar items (ADR-0048 M3.2). Pins canvas authoring on so the
+ * Row 2 · Do authoring cluster is present). Asserts: real controls render, disable from `canUndo`/`canRedo` and pen-gating,
  * invoke the store, and carry the dynamic accessible name.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  UNDO_REDO_ENABLED: true,
 }));
 
 const undo = vi.fn();

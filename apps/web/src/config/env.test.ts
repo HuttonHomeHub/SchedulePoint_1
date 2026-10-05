@@ -9,7 +9,6 @@ import {
   EXPORT_PRINT_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
-  UNDO_REDO_ENABLED,
   flagDefaultOff,
   flagDefaultOn,
 } from './env';
@@ -27,14 +26,6 @@ describe('flagDefaultOff', () => {
     expect(flagDefaultOff('0')).toBe(false);
     expect(flagDefaultOff('TRUE')).toBe(false); // case-sensitive: only the literal "true"
     expect(flagDefaultOff('yes')).toBe(false);
-  });
-});
-
-describe('UNDO_REDO_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-19; no VITE_UNDO_REDO set in the test env)', () => {
-    // Undo/redo is on by default now that its gates are green (ADR-0048). Setting VITE_UNDO_REDO=false
-    // ships it inert (no store/keys, placeholder toolbar items) — the rollback path.
-    expect(UNDO_REDO_ENABLED).toBe(true);
   });
 });
 

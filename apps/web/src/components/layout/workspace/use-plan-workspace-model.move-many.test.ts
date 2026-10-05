@@ -33,7 +33,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   record: vi.fn(),
   notify: vi.fn(),
   hold: vi.fn(),
@@ -49,9 +48,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -218,7 +214,6 @@ function apiError(status: number): ApiFetchError {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.batchPlacements.mockResolvedValue([
     { id: 'a1', version: 8 },
@@ -319,7 +314,6 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
   });
 
   it('records ONE undoable step, labelled by how many bars actually moved', async () => {
-    h.undoRedo = true;
     await moveMany()([ACTIVITY, OTHER], { dayDelta: 2, laneDelta: 0 });
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record.mock.calls[0]?.[0]).toMatchObject({ label: 'Move 2 activities' });
@@ -327,10 +321,5 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     h.record.mockClear();
     await moveMany()([ACTIVITY], { dayDelta: 2, laneDelta: 0 });
     expect(h.record.mock.calls[0]?.[0]).toMatchObject({ label: 'Move “Excavate”' });
-  });
-
-  it('records nothing when undo/redo is off', async () => {
-    await moveMany()([ACTIVITY, OTHER], { dayDelta: 2, laneDelta: 0 });
-    expect(h.record).not.toHaveBeenCalled();
   });
 });

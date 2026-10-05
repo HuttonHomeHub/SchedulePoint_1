@@ -87,7 +87,7 @@ export function useGanttGridEditing({
   announce: (message: string) => void;
   /** Restore focus to the row a cell just closed on (WCAG 2.4.3). */
   onCellClosed: () => void;
-  /** ADR-0048. A no-op when `VITE_UNDO_REDO` is off, so this needs no flag of its own. */
+  /** ADR-0048. The workspace's undo recorder. */
   recordUpdate: (before: ActivitySummary, after: ActivitySummary) => void;
 }): GanttGridEditing {
   const [state, dispatch] = useReducer(reduceCellEdit, IDLE);

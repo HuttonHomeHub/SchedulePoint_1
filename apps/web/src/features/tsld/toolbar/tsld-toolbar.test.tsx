@@ -14,9 +14,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
-  // Pin undo/redo OFF here so the "Coming soon" placeholder assertions below exercise the flag-off
-  // rollback path; the real flag-on Undo/Redo items are covered in tsld-toolbar-undo-redo.test.tsx.
-  UNDO_REDO_ENABLED: false,
   // Pin the canvas insight lenses OFF here too (this is the flag-off registry suite): the search field
   // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
   // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
@@ -288,25 +285,6 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(arrange).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(arrange);
     expect(requestAutoArrange).toHaveBeenCalledOnce();
-  });
-
-  it('shows future features as disabled "Coming soon" placeholders (undo/redo)', () => {
-    renderRows(ctx());
-    for (const name of ['Undo', 'Redo']) {
-      const btn = screen.getByRole('button', { name });
-      expect(btn).toHaveAttribute('aria-disabled', 'true');
-      // Icon-only tooltip names the button, then the reason (WCAG/discoverability).
-      // The title repeats the label ONLY when the button is icon-only, because then it is the
-      // single thing identifying which control is refusing. A labelled button already shows its
-      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
-      // than hard-coded, so this case keeps working whichever side of that line an item is on.
-      // NOT `hasAttribute('aria-label')` — that was the first shape and it is wrong, because
-      // `ToolbarButton` also sets `aria-label` on a LABELLED button once a reason is linked by
-      // `aria-describedby`. The discriminator is whether the visible label is rendered, and the
-      // label span is the button's first text node.
-      const iconOnly = !btn.textContent?.startsWith(name);
-      expect(btn).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
-    }
   });
 
   it('renders the search field and inline roadmap placeholders, disabled with a reason', () => {

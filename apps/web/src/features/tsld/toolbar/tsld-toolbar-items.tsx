@@ -97,7 +97,6 @@ import {
   RESOURCE_CURVES_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
-  UNDO_REDO_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
@@ -647,7 +646,6 @@ function GoToTodayControl({
         caretDisabled={caretDisabled}
         {...(primaryReason ? { primaryDisabledReason: primaryReason } : {})}
         caretDisabledReason="Set the plan's start date first"
-
         haspopup="dialog"
         compact={triggersAreCompact(api.layout)}
         title="Go to today"
@@ -2274,34 +2272,10 @@ function UndoHistoryControl({
 }
 
 /**
- * The Undo/Redo authoring-cluster items (ADR-0048 M3.2). Flag-**off** keeps the ADR-0031 "Coming soon"
- * placeholder stubs so the toolbar is byte-for-byte the current bar; flag-**on** swaps in the real
- * pen-gated commands (disabled from `canUndo`/`canRedo`, dynamic accessible name, driving `ctx.undo` /
+ * The Undo/Redo authoring-cluster items (ADR-0048 M3.2). Real pen-gated commands (disabled from `canUndo`/`canRedo`, dynamic accessible name, driving `ctx.undo` /
  * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), tier-2 icon buttons.
  */
 function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
-  if (!UNDO_REDO_ENABLED) {
-    return [
-      placeholderItem({
-        id: 'undo',
-        group: 'tools',
-        row: 'strip',
-        tier: 2,
-        order: 8,
-        label: 'Undo',
-        icon: <Undo2 className="size-4" />,
-      }),
-      placeholderItem({
-        id: 'redo',
-        group: 'tools',
-        row: 'strip',
-        tier: 2,
-        order: 9,
-        label: 'Redo',
-        icon: <Redo2 className="size-4" />,
-      }),
-    ];
-  }
   return [
     {
       id: 'undo',
@@ -2360,7 +2334,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
  * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
- * (undo/redo swap in under `VITE_UNDO_REDO`; go-to-today, comments and add-note under
+ * (go-to-today, comments and add-note under
  * `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
  * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
  * export and print under `VITE_EXPORT_PRINT`; the Add menu's Level-of-effort/Hammock placeholders

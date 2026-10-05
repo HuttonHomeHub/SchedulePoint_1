@@ -17,7 +17,6 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
-  UNDO_REDO_ENABLED,
 } from '@/config/env';
 import {
   useActivities,
@@ -622,17 +621,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
   // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
   const announce = useAnnounce();
-  // Undo/redo command stack (ADR-0048, dark M1). Records the inverse of each structural edit behind
-  // `VITE_UNDO_REDO`; nothing is recorded and no behaviour changes when the flag is off. The store is
-  // keyed on `planId` so switching plans resets history. No visible surface yet — M3 wires the UI.
+  // Undo/redo command stack (ADR-0048). Records the inverse of each structural edit. The store is
+  // keyed on `planId` so switching plans resets history.
   const bulkDeleteActivities = useBulkDeleteActivities(orgSlug, planId);
   const restoreDeleteBatch = useRestoreDeleteBatch(orgSlug, planId);
   const editHistory = usePlanEditHistory(planId);
-  // Undo/redo user-visible surface (ADR-0048 M3): wraps the dark M1/M2 store with the replay
+  // Undo/redo user-visible surface (ADR-0048 M3): wraps the store with the replay
   // contract (ADR-0176: a step that cannot apply is set aside + refetch; 423 → the shared pen
   // contract, history kept) and the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
-  // recording seams above push onto). Inert unless `VITE_UNDO_REDO` is on — the wrapper only acts when
-  // the user invokes undo/redo, which the flag-gated surface never does when off, so byte-identical.
+  // recording seams above push onto).
   // What a press came to, held for the dock strip (undo-redo M1) — a sibling of the wrapper rather
   // than part of its return value, so a press does not rebuild the toolbar-context memo.
   const historyResult = useHistoryResult(editHistory, planId);
@@ -677,7 +674,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * has not caught up yet would hand it the dates the recalculation replaced.
    */
   const autoResolve = useAutoResolveOverlaps({
-    enabled: CANVAS_AUTHORING_ENABLED && UNDO_REDO_ENABLED && canEditSchedule,
+    enabled: CANVAS_AUTHORING_ENABLED && canEditSchedule,
     settled: autoRecalc.settled,
     pendingEdits: autoRecalc.pendingEdits,
     readActivities: () =>
@@ -838,17 +835,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     autoResolve.addSubjects([created.id]);
     // Record the create for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
     // Undo deletes the created activity; redo restores that delete's batch, so the id is stable and
-    // later steps that name it stay valid (ADR-0176). Guarded on the flag so behaviour is
-    // byte-identical when off.
-    if (UNDO_REDO_ENABLED) {
-      editHistory.record(
-        createActivityCommand({
-          created,
-          deleteActivity: deleteActivity.mutateAsync,
-          restoreBatch: restoreDeleteBatch.mutateAsync,
-        }),
-      );
-    }
+    // later steps that name it stay valid (ADR-0176).
+    editHistory.record(
+      createActivityCommand({
+        created,
+        deleteActivity: deleteActivity.mutateAsync,
+        restoreBatch: restoreDeleteBatch.mutateAsync,
+      }),
+    );
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
     // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
     // await + recalc-conflict semantics byte-for-byte.
@@ -931,16 +925,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         const result = await bulkDelete({ activities });
         // ONE reversible step for the whole gesture, and its undo is the id-stable batch restore
         // (CQ-4) — re-creating N activities would silently lose the links BETWEEN them.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            bulkDeleteCommand({
-              bulkDelete: bulkDelete,
-              restoreBatch: restoreBatch,
-              activities: rows.map((a) => ({ id: a.id, name: a.name })),
-              deleteBatchId: result.deleteBatchId,
-            }),
-          );
-        }
+        editHistory.record(
+          bulkDeleteCommand({
+            bulkDelete: bulkDelete,
+            restoreBatch: restoreBatch,
+            activities: rows.map((a) => ({ id: a.id, name: a.name })),
+            deleteBatchId: result.deleteBatchId,
+          }),
+        );
         autoRecalc.notify();
       },
       /**
@@ -980,20 +972,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               return version === undefined ? [] : [{ ...placement, version }];
             }),
           });
-          if (UNDO_REDO_ENABLED) {
-            editHistory.record(
-              bulkPlacementCommand({
-                batchPlacements,
-                before,
-                after,
-                saved,
-                label:
-                  rows.length === 1 && rows[0] !== undefined
-                    ? `Move \u201c${rows[0].name}\u201d`
-                    : `Move ${String(rows.length)} activities`,
-              }),
-            );
-          }
+          editHistory.record(
+            bulkPlacementCommand({
+              batchPlacements,
+              before,
+              after,
+              saved,
+              label:
+                rows.length === 1 && rows[0] !== undefined
+                  ? `Move \u201c${rows[0].name}\u201d`
+                  : `Move ${String(rows.length)} activities`,
+            }),
+          );
         } catch (err) {
           // **The same refusals the single-bar drag already handles**, and for the same reasons.
           // This block replaced a comment claiming pen handling was impossible here "because both
@@ -1048,7 +1038,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           }
           throw error;
         }
-        if (UNDO_REDO_ENABLED && created.length > 0) {
+        if (created.length > 0) {
           editHistory.record(
             linkChainCommand({
               created,
@@ -1120,17 +1110,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       beginLayoutEdit(application.rows.map((row) => row.id));
       try {
         const saved = await batchPlacements({ placements: application.rows });
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            bulkPlacementCommand({
-              batchPlacements,
-              before,
-              after,
-              saved,
-              label: applyLevellingLabel(application.rows.length),
-            }),
-          );
-        }
+        editHistory.record(
+          bulkPlacementCommand({
+            batchPlacements,
+            before,
+            after,
+            saved,
+            label: applyLevellingLabel(application.rows.length),
+          }),
+        );
       } catch (err) {
         if (onWriteRejected(err).kind === 'lock') {
           return { applied: false, conflict: null, lostPen: true };
@@ -1171,10 +1159,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Record an activity DEFINITION edit (rename / duration / constraint / …) on the undo stack (ADR-0048,
   // dark M1). Called by `ActivityCrudDialogs` when the shared edit dialog saves, with the pre-edit row
   // and the server's post-edit row; the inverse re-PATCHes only the fields the edit changed (ADR-0176)
-  // through the partial-PATCH endpoint. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  // through the partial-PATCH endpoint.
   const recordActivityUpdate = useCallback(
     (before: ActivitySummary, after: ActivitySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // AFTER the dialog's write, unlike the canvas handlers, and still a true "before": the write
       // changed an input, and a bar is drawn from what the engine computes from its inputs, so no
       // drawn span moves until the recalculation this edit triggers (ADR-0153).
@@ -1201,12 +1188,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * planner who deletes a phase keeps the rest of their session's history too.
    *
    * A dissolve is recorded too — `recordActivityDissolve` below.
-   *
-   * A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
    */
   const recordActivityDelete = useCallback(
     (activity: ActivitySummary, deleteBatchId: string): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
       beginLayoutEdit([]);
       editHistory.record(
@@ -1222,10 +1206,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
   // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
-  // endpoints/type/lag; redo removes it again. A no-op unless `VITE_UNDO_REDO` is on.
+  // endpoints/type/lag; redo removes it again.
   const recordDependencyRemove = useCallback(
     (dependency: DependencySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
       beginLayoutEdit([dependency.predecessor.id, dependency.successor.id]);
       editHistory.record(
@@ -1245,7 +1228,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // undone, adding one could not.
   const recordDependencyAdd = useCallback(
     (dependency: DependencySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
       beginLayoutEdit([dependency.predecessor.id, dependency.successor.id]);
       editHistory.record(
@@ -1271,11 +1253,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * after the dissolve lands, with the summary as it was and what the server answered: the promoted
    * children and the batch the summary went in. Undo restores that batch and files the children back
    * under it; a dissolve used to clear the whole history instead, on the grounds that the client had no
-   * inverse — which lapsed once the response carried the batch id. A no-op unless `VITE_UNDO_REDO` is on.
+   * inverse — which lapsed once the response carried the batch id.
    */
   const recordActivityDissolve = useCallback(
     (summary: ActivitySummary, result: DissolveSummaryResponse): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded (see `recordReparent`).
       try {
         const known = cachedActivities();
@@ -1313,12 +1294,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * Record an activity **created from a dialog** — the panel's "New activity" and the Gantt's "Insert
    * activity below" (undo-redo M3). Called by `ActivityCreateDialog` with the row the server returned.
    * It is the same step the canvas's draw records: undo deletes the row, and redo restores that
-   * delete's batch, so the id is stable and a later step that names it stays valid (ADR-0176). A no-op
-   * unless `VITE_UNDO_REDO` is on.
+   * delete's batch, so the id is stable and a later step that names it stays valid (ADR-0176).
    */
   const recordActivityCreate = useCallback(
     (created: ActivitySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1340,7 +1319,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   /**
    * Record a **re-parenting** batch — Indent / Outdent, a summary's Members save, the bulk-assign bar.
    * One endpoint call is one step however many rows it moved (undo-redo M3). A batch that moved
-   * nothing records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   * nothing records nothing.
    */
   const recordReparent = useCallback(
     (
@@ -1348,7 +1327,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       after: readonly ActivitySummary[],
       label?: string,
     ): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1372,7 +1350,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   /**
    * Record a **weighted-steps save** (undo-redo M3): the list before and the list the server saved. A
-   * save that changed nothing records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   * save that changed nothing records nothing.
    */
   const recordStepsSaved = useCallback(
     (
@@ -1380,7 +1358,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       before: readonly ActivityStep[],
       after: readonly ActivityStep[],
     ): void => {
-      if (!UNDO_REDO_ENABLED || !stepsChanged(before, after)) return;
+      if (!stepsChanged(before, after)) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1410,11 +1388,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   /**
    * Record a **resource-assignment write** — assign, edit, unassign (undo-redo M3). Called by the
    * Resources tab and the Resources dialog with the rows on either side. An edit that changed no field
-   * a step would write records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   * a step would write records nothing.
    */
   const recordAssignmentEdit = useCallback(
     (edit: AssignmentEdit): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1469,11 +1446,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   /**
    * Record a **cross-plan link** add or remove (undo-redo M3). Called by the cross-plan section and its
-   * add dialog, wherever the host mounts them. A no-op unless `VITE_UNDO_REDO` is on.
+   * add dialog, wherever the host mounts them.
    */
   const recordCrossPlanLinkAdd = useCallback(
     (link: CrossPlanDependencySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1494,7 +1470,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   const recordCrossPlanLinkRemove = useCallback(
     (link: CrossPlanDependencySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       // A history fault must never break a write that already succeeded: the edit is on the
       // server and the planner has been told so, and losing its undo step is the smaller failure.
       try {
@@ -1550,19 +1525,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           version: activity.version,
         });
         // Record the lane move for undo (ADR-0048, dark M1) — only the user edit, never the recalc
-        // (a pure lane move has none). Guarded on the flag so behaviour is unchanged when off.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            relaneCommand({
-              repositionLane: repositionLane.mutateAsync,
-              activityId,
-              fromLaneIndex: activity.laneIndex,
-              toLaneIndex: landed,
-              saved,
-              activityName: activity.name,
-            }),
-          );
-        }
+        // (a pure lane move has none).
+        editHistory.record(
+          relaneCommand({
+            repositionLane: repositionLane.mutateAsync,
+            activityId,
+            fromLaneIndex: activity.laneIndex,
+            toLaneIndex: landed,
+            saved,
+            activityName: activity.name,
+          }),
+        );
         return landed === laneIndex
           ? { applied: true, conflict: null }
           : { applied: true, conflict: null, laneIndex: landed };
@@ -1624,19 +1597,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       });
       // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
       // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
-      // burst coalesces to one step (the command carries a coalescing key). Guarded on the flag.
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          visualStartCommand({
-            setVisualStart: setVisualStart.mutateAsync,
-            activityId,
-            before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
-            after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
-            saved,
-            activityName: activity.name,
-          }),
-        );
-      }
+      // burst coalesces to one step (the command carries a coalescing key).
+      editHistory.record(
+        visualStartCommand({
+          setVisualStart: setVisualStart.mutateAsync,
+          activityId,
+          before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
+          after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
+          saved,
+          activityName: activity.name,
+        }),
+      );
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {
@@ -1709,15 +1680,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         });
         // Record for undo (ADR-0048): the inverse restores the prior `visualStart` AND duration
         // through the same seam; a drag burst coalesces to one step (`resize:{id}`).
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            visualResizeCommand({
-              setVisualStart: setVisualStart.mutateAsync,
-              before: activity,
-              after: saved,
-            }),
-          );
-        }
+        editHistory.record(
+          visualResizeCommand({
+            setVisualStart: setVisualStart.mutateAsync,
+            before: activity,
+            after: saved,
+          }),
+        );
       } else {
         /**
          * **The FINISH-edge resize, which changes the duration and nothing else.**
@@ -1746,16 +1715,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         });
         // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.
         // The inverse restores the pre-edit definition; a drag/held-key burst coalesces to one
-        // step (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            durationResizeCommand({
-              patch: patchActivityFieldsAsync,
-              before: activity,
-              after: saved,
-            }),
-          );
-        }
+        // step (`resize:{id}`).
+        editHistory.record(
+          durationResizeCommand({
+            patch: patchActivityFieldsAsync,
+            before: activity,
+            after: saved,
+          }),
+        );
       }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -1836,20 +1803,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       });
       // Record the lag change for undo (ADR-0048) — the single user edit, NOT the follow-up
       // recalc. The inverse restores the prior lag through the same PATCH; a drag/nudge burst
-      // coalesces to one step (`lag:{dependencyId}`). Guarded on the flag.
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          lagDragCommand({
-            updateDependency: updateDependency.mutateAsync,
-            dependency,
-            // The SAME resolved write, so undo restores the exact stored minutes rather than the
-            // rounded day the gesture named — otherwise the remainder this fix preserves would be
-            // destroyed by the first Ctrl+Z, which is the same defect one layer along.
-            after: lagFields,
-            saved,
-          }),
-        );
-      }
+      // coalesces to one step (`lag:{dependencyId}`).
+      editHistory.record(
+        lagDragCommand({
+          updateDependency: updateDependency.mutateAsync,
+          dependency,
+          // The SAME resolved write, so undo restores the exact stored minutes rather than the
+          // rounded day the gesture named — otherwise the remainder this fix preserves would be
+          // destroyed by the first Ctrl+Z, which is the same defect one layer along.
+          after: lagFields,
+          saved,
+        }),
+      );
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {
@@ -1889,7 +1854,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // way a link changes, and the last one that recorded nothing. Called by the Logic panel with the
   // pre-edit row and the PATCH response; the inverse restores type + lag + lag calendar in ONE
   // PATCH, because the forward write is atomic and a partial inverse is a new edit wearing an
-  // undo's label. A no-op unless `VITE_UNDO_REDO` is on.
+  // undo's label.
   //
   // A save that changed nothing records nothing: the dialog resends the whole form, so reading a
   // link and pressing Save is a real PATCH with no field different, and a step whose inverse moves
@@ -1898,7 +1863,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // the step for exactly the edits this seam exists to make undoable.
   const recordDependencyEdit = useCallback(
     (before: DependencySummary, after: DependencySummary): void => {
-      if (!UNDO_REDO_ENABLED) return;
       if (!dependencyEditChanged(before, after)) return;
       // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
       beginLayoutEdit([after.predecessor.id, after.successor.id]);
@@ -1932,15 +1896,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       });
       // Record the link for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
       // Undo removes the created edge; redo re-creates it from the captured endpoints/type/lag.
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          dependencyAddCommand({
-            dependency: created,
-            createDependency: createDependency.mutateAsync,
-            deleteDependency: deleteDependency.mutateAsync,
-          }),
-        );
-      }
+      editHistory.record(
+        dependencyAddCommand({
+          dependency: created,
+          createDependency: createDependency.mutateAsync,
+          deleteDependency: deleteDependency.mutateAsync,
+        }),
+      );
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
@@ -1994,17 +1956,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       const saved = await batchPositions.mutateAsync({ positions });
       // Record the whole batch as ONE reversible step (ADR-0048 M2.3): undo restores every prior
       // lane, redo re-applies the pack. Versions are seeded from this forward response so the inverse
-      // carries current versions. Guarded on the flag; a lane batch has no recalc to double-record.
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          autoArrangeCommand({
-            batchPositions: batchPositions.mutateAsync,
-            before,
-            after,
-            saved,
-          }),
-        );
-      }
+      // carries current versions. A lane batch has no recalc to double-record.
+      editHistory.record(
+        autoArrangeCommand({
+          batchPositions: batchPositions.mutateAsync,
+          before,
+          after,
+          saved,
+        }),
+      );
       return { applied: true, conflict: null };
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -2058,23 +2018,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       try {
         const saved = await setVisualStartAsync({ activityId, visualStart: null, version });
         // Record the clear for undo (ADR-0048) — the single user edit, NOT the follow-up recalc. The
-        // inverse restores the prior `visualStart` (lane unchanged). Guarded on the flag, like the
-        // reposition VISUAL branch — byte-identical when off.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            visualStartCommand({
-              setVisualStart: setVisualStartAsync,
-              activityId,
-              before: {
-                visualStart: activity?.visualStart ?? null,
-                laneIndex: activity?.laneIndex ?? 0,
-              },
-              after: { visualStart: null, laneIndex: activity?.laneIndex ?? 0 },
-              saved,
-              activityName: name,
-            }),
-          );
-        }
+        // inverse restores the prior `visualStart` (lane unchanged). Like the
+        // reposition VISUAL branch.
+        editHistory.record(
+          visualStartCommand({
+            setVisualStart: setVisualStartAsync,
+            activityId,
+            before: {
+              visualStart: activity?.visualStart ?? null,
+              laneIndex: activity?.laneIndex ?? 0,
+            },
+            after: { visualStart: null, laneIndex: activity?.laneIndex ?? 0 },
+            saved,
+            activityName: name,
+          }),
+        );
       } catch (err) {
         if (onPenWriteRejected(err).kind === 'lock') return;
         // Stale version — the clear was NOT applied (nothing changed); never re-send, never record.
@@ -2194,18 +2152,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }
         throw err;
       }
-      if (UNDO_REDO_ENABLED) {
-        editHistory.record(
-          typeChangeCommand({
-            patch: patchActivityFieldsAsync,
-            activityId: activity.id,
-            before: activity.type,
-            after: type,
-            saved,
-            activityName: activity.name,
-          }),
-        );
-      }
+      editHistory.record(
+        typeChangeCommand({
+          patch: patchActivityFieldsAsync,
+          activityId: activity.id,
+          before: activity.type,
+          after: type,
+          saved,
+          activityName: activity.name,
+        }),
+      );
       makeMilestoneAnnouncementRef.current = {
         activityId: activity.id,
         name: activity.name,
@@ -2267,7 +2223,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
         onTsldRefresh();
-        if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+        editHistory.clearRedo();
         return { applied: false, conflict: err.error.message };
       }
       throw err;
@@ -2305,7 +2261,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         /* swallow: the refetch below re-syncs the client to server truth */
       }
       onTsldRefresh();
-      if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+      editHistory.clearRedo();
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
         return { applied: false, conflict: err.error.message };
@@ -2313,21 +2269,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // Record the whole compose as ONE reversible step (ADR-0048) — undo deletes the LOE (cascading its
-    // edges); redo re-composes. The single user edit, NOT the follow-up recalc. Guarded on the flag.
-    if (UNDO_REDO_ENABLED) {
-      editHistory.record(
-        createLoeSpanCommand({
-          loe,
-          placedInput,
-          planId,
-          startDriverId,
-          finishDriverId,
-          createPlaced: createPlacedActivity.mutateAsync,
-          createDependency: createDependency.mutateAsync,
-          deleteActivity: deleteActivity.mutateAsync,
-        }),
-      );
-    }
+    // edges); redo re-composes. The single user edit, NOT the follow-up recalc.
+    editHistory.record(
+      createLoeSpanCommand({
+        loe,
+        placedInput,
+        planId,
+        startDriverId,
+        finishDriverId,
+        createPlaced: createPlacedActivity.mutateAsync,
+        createDependency: createDependency.mutateAsync,
+        deleteActivity: deleteActivity.mutateAsync,
+      }),
+    );
     // Fire the coalesced auto-recalc so the LOE redraws at its engine-derived span (ADR-0032). A recalc
     // failure is non-fatal — the span persisted; the dates land on the next recalc. This is unconditional
     // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button, hence
@@ -2498,7 +2452,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }
       }
       onTsldRefresh();
-      if (UNDO_REDO_ENABLED) editHistory.clearRedo();
+      editHistory.clearRedo();
       if (pen.onWriteRejected(err).kind === 'lock') {
         return { applied: false, refusal: null, conflict: null };
       }
@@ -2511,21 +2465,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
 
     autoResolve.addSubjects(created.map((c) => c.id));
-    if (UNDO_REDO_ENABLED) {
-      editHistory.record(
-        pasteActivitiesCommand({
-          created,
-          roots,
-          deleteActivity: deleteActivity.mutateAsync,
-          bulkDelete: bulkDeleteActivities.mutateAsync,
-          restoreBatch: restoreDeleteBatch.mutateAsync,
-          label:
-            sources.length === 1 && sources[0] !== undefined
-              ? `Duplicate \u201c${sources[0].name}\u201d`
-              : `Copy ${String(sources.length)} activities`,
-        }),
-      );
-    }
+    editHistory.record(
+      pasteActivitiesCommand({
+        created,
+        roots,
+        deleteActivity: deleteActivity.mutateAsync,
+        bulkDelete: bulkDeleteActivities.mutateAsync,
+        restoreBatch: restoreDeleteBatch.mutateAsync,
+        label:
+          sources.length === 1 && sources[0] !== undefined
+            ? `Duplicate \u201c${sources[0].name}\u201d`
+            : `Copy ${String(sources.length)} activities`,
+      }),
+    );
     notifyRecalc();
     // The skipped-assignment sentence rides the SAME announcement rather than a second one: two
     // live-region writes in one frame collapse to the last (the ADR-0073 C1 / TECH_DEBT #104
@@ -2843,13 +2795,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     clearVisualPlacement,
     // Undo/redo recording seam (ADR-0048, dark M1). `ActivityCrudDialogs` calls this when the shared
     // edit dialog saves so a definition edit joins the reposition/relane commands recorded inline in
-    // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
+    // the TSLD callbacks.
     recordActivityUpdate,
     // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
     // `recordActivityDelete` after a successful delete, with the batch it returned — an id-stable
     // restore, a WBS phase and its subtree included (`docs/TECH_DEBT.md` #230); the
-    // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal. No-ops
-    // when `VITE_UNDO_REDO` is off.
+    // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal.
     recordActivityDelete,
     // A dissolve is one undo step (undo-redo M6) — see `recordActivityDissolve`.
     recordActivityDissolve,
@@ -2866,7 +2817,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     recordCrossPlanLinkRemove,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
-    // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
     undoRedo,
     /** What the last undo/redo press came to, for the dock's `'history'` strip (undo-redo M1). */
     historyResult,

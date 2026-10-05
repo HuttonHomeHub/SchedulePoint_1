@@ -3,7 +3,6 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
-  UNDO_REDO_ENABLED,
 } from '@/config/env';
 import type { PlanViewMode } from '@/features/gantt/view-mode';
 import { isApplePlatform } from '@/features/undo-redo';
@@ -92,8 +91,7 @@ const SEARCH_NAV_SHORTCUTS: readonly Shortcut[] = [
 ];
 
 /**
- * Undo/redo accelerators (ADR-0048 M3.2) — appended to the Edit list only when `VITE_UNDO_REDO` is on,
- * so the sheet stays byte-for-byte identical with the flag off. Keys are written for the platform
+ * Undo/redo accelerators (ADR-0048 M3.2) — appended to the Edit list. Keys are written for the platform
  * (undo-redo M5): ⌘Z / ⇧⌘Z on a Mac, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z elsewhere. They work wherever focus
  * is in the plan — including on the page itself — except inside a text box, where Ctrl/⌘+Z undoes
  * the typing instead; the sheet says so, because that exception is the one planners ask about.
@@ -212,10 +210,7 @@ export function PlanShortcutsHelp({
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold">Edit</h3>
               <ShortcutList
-                items={[
-                  ...GANTT_EDIT_SHORTCUTS,
-                  ...(UNDO_REDO_ENABLED ? undoRedoShortcuts(isApplePlatform()) : []),
-                ]}
+                items={[...GANTT_EDIT_SHORTCUTS, ...undoRedoShortcuts(isApplePlatform())]}
               />
             </section>
           ) : null}
@@ -227,7 +222,7 @@ export function PlanShortcutsHelp({
     ...EDIT_SHORTCUTS,
     ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
     ...(CANVAS_SEARCH_NAV_ENABLED ? SEARCH_NAV_SHORTCUTS : []),
-    ...(UNDO_REDO_ENABLED ? undoRedoShortcuts(isApplePlatform()) : []),
+    ...undoRedoShortcuts(isApplePlatform()),
   ];
   return (
     <Dialog

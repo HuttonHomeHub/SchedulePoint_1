@@ -25,7 +25,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **undo / redo** journey (`VITE_UNDO_REDO`, ADR-0048 M3) — the user-visible surface over the
+ * Flag-ON **undo / redo** journey (ADR-0048 M3) — the user-visible surface over the
  * canvas-first authoring workspace. Proves the whole reversible-edit loop runs in a real browser:
  *
  * 1. A planner takes the pen and draws two tasks; the schedule auto-recalcs (M1/M2 recording seam).

@@ -549,7 +549,7 @@ export function useTsldToolbarContext({
 
       // Undo / redo (ADR-0048 M3): the model's wrapped store (conflict contract + announcements),
       // shared with the workspace keybindings. Pen-gated as part of the authoring cluster at the
-      // toolbar; the items themselves swap in only when `VITE_UNDO_REDO` is on (else Coming-soon stubs).
+      // toolbar.
       canUndo: model.undoRedo.canUndo,
       canRedo: model.undoRedo.canRedo,
       undoLabel: model.undoRedo.undoLabel,

@@ -466,33 +466,6 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOOLBAR_QUICK_WINS);
 
 /**
- * Client-side command-stack undo/redo for plan authoring (ADR-0048, spec `docs/specs/undo-redo/`).
- * **ON by default** (2026-07-19, product sign-off) now that M1–M3 have landed and their a11y / ux /
- * component reviews + the flag-on Playwright journey are green. When on, structural plan edits
- * (reposition / relane / definition update / create / delete / dependency add-remove / `visualStart` /
- * auto-arrange) push an inverse onto a bounded (50), per-plan in-memory stack that survives a pen hand-off (ADR-0176), and the
- * toolbar Undo/Redo + `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` · `Ctrl+Y` keys replay plan **INPUTS** through
- * the existing REST mutation hooks — never engine-owned derived columns. The normal ADR-0032 auto-recalc
- * redraws the outputs, so the CPM engine and its recalc **parity gate are untouched**. Undo is pen-gated
- * exactly like a first-class edit: every inverse flows through the unchanged `assertHoldsPen` (423) +
- * RBAC + org-scope + optimistic `version` gates, so the client stack can never escalate.
- *
- * BACK/FORWARD SUPPRESSION (the pre-flip gate, the pre-flip gate ADR-0084 batch 1 retired): that `Cmd/Ctrl+Z`
- * doesn't trigger the browser's Back is asserted on **Chromium** by the flag-on Playwright journey
- * (`e2e-undo/undo.spec.ts` via `pnpm --filter @repo/web test:e2e:undo`); the **Firefox / Safari / Edge**
- * manual sweep is the same operator gate `VITE_TSLD_EDITING` used (docs/TECH_DEBT.md #25) — do it before
- * wide rollout.
- *
- * Building with `VITE_UNDO_REDO=false` ships it inert (no store, no keybindings, placeholder toolbar
- * items) — byte-for-byte the prior behaviour. That is a developer's build-time switch, not an
- * operator's rollback: Vite inlines the value and no published image sets it (ADR-0088 D1), so on a
- * deployed host the rollback is pinning the previous image tag.
- *
- * @enabled 2026-07-19
- */
-export const UNDO_REDO_ENABLED = flagDefaultOn(import.meta.env.VITE_UNDO_REDO);
-
-/**
  * TSLD canvas insight lenses (spec `docs/specs/canvas-lenses/`). **OFF by default during build** —
  * it will flip on after the specialist reviews (a11y / ux / component / perf) are green (M4). When
  * on, it turns three shaded Look-row toolbar placeholders into real client-side read lenses over

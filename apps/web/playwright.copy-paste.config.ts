@@ -24,7 +24,7 @@ import { defineConfig, devices } from '@playwright/test';
  *   (the ADR-0080 CQ-4 argument), and a mock returns whatever it was told to.
  * - **that `Ctrl+C` with a live text selection does not capture activities.** `window.getSelection`
  *   is stubbed in the unit suite; only a real browser has a real selection.
- * - **that `Ctrl+Z` does not trigger browser Back** (the TSLD_EDITING / UNDO_REDO precedent,
+ * - **that `Ctrl+Z` does not trigger browser Back** (the TSLD_EDITING precedent,
  *   TECH_DEBT #25) — a navigation, which jsdom has no concept of.
  * - **that the pen gate is real.** Every write here is pen-gated, so a suite driving the buttons
  *   without the lock would prove the buttons and not the guard.
@@ -90,9 +90,6 @@ export default defineConfig({
               VITE_CANVAS_MULTI_SELECT: 'true',
               VITE_CANVAS_DIRECT_MANIPULATION: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              // The undo half: one Ctrl+Z removing a whole paste is one of the seven things this
-              // suite must prove, and the accelerator lives behind its own flag.
-              VITE_UNDO_REDO: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
               // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The

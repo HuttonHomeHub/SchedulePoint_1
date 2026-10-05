@@ -5,14 +5,12 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * M1.3 seam coverage (ADR-0048, dark): the workspace model records ONE undo command per structural
- * edit when `VITE_UNDO_REDO` is on, and NOTHING when it is off — and the edit's own behaviour (the
- * mutation it issues) is unchanged either way. The command builders + history store have their own
+ * M1.3 seam coverage (ADR-0048): the workspace model records ONE undo command per structural
+ * edit, and the edit's own behaviour (the mutation it issues) is unchanged by the recording. The command builders + history store have their own
  * unit suites; here we assert only the seam wiring, with a spy standing in for the history store.
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   record: vi.fn(),
   clear: vi.fn(),
   updateMutateAsync: vi.fn(),
@@ -32,9 +30,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -224,7 +219,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
   h.relaneMutateAsync.mockResolvedValue({ ...ACTIVITY, laneIndex: 2, version: 4 });
@@ -232,8 +226,7 @@ beforeEach(() => {
 });
 
 describe('usePlanWorkspaceModel undo/redo recording seam', () => {
-  it('flag ON: a day reposition issues its placement AND records exactly one command', async () => {
-    h.undoRedo = true;
+  it('a day reposition issues its placement AND records exactly one command', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
@@ -252,20 +245,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(typeof command.redo).toBe('function');
   });
 
-  it('flag OFF: the same reposition issues its placement but records nothing', async () => {
-    h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-
-    await act(async () => {
-      await result.current.onTsldReposition({ activityId: 'a1', startDay: 4 });
-    });
-
-    expect(h.setVisualStartMutateAsync).toHaveBeenCalledTimes(1); // behaviour unchanged
-    expect(h.record).not.toHaveBeenCalled();
-  });
-
-  it('flag ON: a pure lane move records exactly one command and issues no recalc', async () => {
-    h.undoRedo = true;
+  it('a pure lane move records exactly one command and issues no recalc', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     await act(async () => {
@@ -277,20 +257,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(h.recalcMutateAsync).not.toHaveBeenCalled(); // a lane move never recalcs
   });
 
-  it('flag OFF: a pure lane move records nothing', async () => {
-    h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-
-    await act(async () => {
-      await result.current.onTsldReposition({ activityId: 'a1', laneIndex: 2 });
-    });
-
-    expect(h.relaneMutateAsync).toHaveBeenCalledTimes(1);
-    expect(h.record).not.toHaveBeenCalled();
-  });
-
-  it('flag ON: a create records exactly one command; flag OFF records nothing', async () => {
-    h.undoRedo = true;
+  it('a create records exactly one command', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldCreate({
@@ -302,24 +269,9 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
       });
     });
     expect(h.record).toHaveBeenCalledTimes(1);
-
-    h.undoRedo = false;
-    h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await off.result.current.onTsldCreate({
-        name: 'Dig',
-        type: 'TASK',
-        startDay: 0,
-        endDay: 2,
-        laneIndex: 1,
-      });
-    });
-    expect(h.record).not.toHaveBeenCalled();
   });
 
-  it('flag ON: a dependency link records exactly one command', async () => {
-    h.undoRedo = true;
+  it('a dependency link records exactly one command', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldLink({ predecessorId: 'a1', successorId: 'a2', type: 'FS' });
@@ -327,8 +279,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(h.record).toHaveBeenCalledTimes(1);
   });
 
-  it('flag ON: an auto-arrange records exactly one command (the whole batch = one step)', async () => {
-    h.undoRedo = true;
+  it('an auto-arrange records exactly one command (the whole batch = one step)', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldAutoArrange([{ id: 'a1', laneIndex: 3 }]);
@@ -349,8 +300,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
    * optimistic version and the parent-active guard are all invisible here. `apps/web/e2e-undo/`
    * is where those are proven.
    */
-  it('flag ON: a cascade delete records one command, exactly like a leaf', () => {
-    h.undoRedo = true;
+  it('a cascade delete records one command, exactly like a leaf', () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     // A leaf (TASK, no children) is reversible — one command, no truncation.
@@ -370,20 +320,10 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
    * branching on `type` and only stops looking at the subtree. Before #230 this case already
    * recorded, so it is the one member of this group that was green throughout.
    */
-  it('flag ON: an empty summary records one command', () => {
-    h.undoRedo = true;
+  it('an empty summary records one command', () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() => result.current.recordActivityDelete(EMPTY_SUMMARY, 'batch-3'));
     expect(h.record).toHaveBeenCalledTimes(1);
-    expect(h.clear).not.toHaveBeenCalled();
-  });
-
-  it('flag OFF: neither a leaf delete nor a cascade delete touches the history', () => {
-    h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => result.current.recordActivityDelete(ACTIVITY, 'batch-1'));
-    act(() => result.current.recordActivityDelete(SUMMARY, 'batch-2'));
-    expect(h.record).not.toHaveBeenCalled();
     expect(h.clear).not.toHaveBeenCalled();
   });
 
@@ -392,8 +332,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
    * until the response carried the batch the summary went in; a recorded command now restores that
    * batch and files the children back, and the rest of the session's history survives.
    */
-  it('flag ON: a dissolve records one step and does not clear the history', () => {
-    h.undoRedo = true;
+  it('a dissolve records one step and does not clear the history', () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() =>
       result.current.recordActivityDissolve(SUMMARY, {
@@ -404,16 +343,6 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record.mock.calls[0]?.[0]).toMatchObject({ label: 'Dissolve “Phase 1”' });
     expect(h.clear).not.toHaveBeenCalled();
-  });
-
-  it('flag OFF: a dissolve does not touch the history', () => {
-    h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() =>
-      result.current.recordActivityDissolve(SUMMARY, { promoted: [], deleteBatchId: 'batch-9' }),
-    );
-    expect(h.clear).not.toHaveBeenCalled();
-    expect(h.record).not.toHaveBeenCalled();
   });
 });
 
@@ -428,11 +357,10 @@ describe('usePlanWorkspaceModel records beside the bar', () => {
   const ASSIGNED = anAssignment({ id: 'as1', activityId: 'a1', resourceId: 'r1' });
 
   /**
-   * The model with the flag on and the plan's activity list in the query cache — where the seams read
+   * The model with the plan's activity list in the query cache — where the seams read
    * names from at the moment of a record (the hook that normally fills it is stubbed above).
    */
   function seams() {
-    h.undoRedo = true;
     const client = new QueryClient();
     client.setQueryData(activityKeys.listByPlan('acme', 'p1'), [
       ACTIVITY,
@@ -445,17 +373,11 @@ describe('usePlanWorkspaceModel records beside the bar', () => {
     return renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper: seeded }).result;
   }
 
-  it('a dialog create records exactly one command; flag OFF records nothing', () => {
+  it('a dialog create records exactly one command', () => {
     const result = seams();
     act(() => result.current.recordActivityCreate(ACTIVITY));
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.record.mock.calls[0]![0].label).toBe('Add “Excavate”');
-
-    h.undoRedo = false;
-    h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper }).result;
-    act(() => off.current.recordActivityCreate(ACTIVITY));
-    expect(h.record).not.toHaveBeenCalled();
   });
 
   it('a re-parenting batch of several rows is ONE step, named for where they went', () => {
@@ -546,22 +468,5 @@ describe('usePlanWorkspaceModel records beside the bar', () => {
       'Add cross-plan link “Other plan work” → “Excavate”',
       'Remove cross-plan link “Other plan work” → “Excavate”',
     ]);
-  });
-
-  it('flag OFF: none of the seams touches the history', () => {
-    h.undoRedo = false;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => {
-      result.current.recordReparent([ACTIVITY], [FILED]);
-      result.current.recordStepsSaved(ACTIVITY, [], [aStep()]);
-      result.current.recordAssignmentEdit({
-        kind: 'removed',
-        assignment: ASSIGNED,
-        resourceName: 'Digger',
-      });
-      result.current.recordCrossPlanLinkAdd(aCrossPlanLink());
-      result.current.recordCrossPlanLinkRemove(aCrossPlanLink());
-    });
-    expect(h.record).not.toHaveBeenCalled();
   });
 });
