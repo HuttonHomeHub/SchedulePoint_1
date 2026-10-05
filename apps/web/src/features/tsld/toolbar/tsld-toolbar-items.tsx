@@ -2108,7 +2108,10 @@ function UndoRedoControl({
   );
 }
 
-const HISTORY_LABEL = 'Undo history';
+// Deliberately NOT "Undo history": a name starting "Undo" is a second "Undo" button beside the real
+// one — ambiguous to voice control ("click Undo") and to a screen-reader user, and it collided with
+// every `/^Undo\b/` locator in the journeys.
+const HISTORY_LABEL = 'Recent edits';
 
 /**
  * One row of the history menu. The visible text is the step's own label, with — past the first row —
@@ -2167,11 +2170,11 @@ function HistoryMenuRow({
 }
 
 /**
- * The **Undo history** control (undo-redo M7, US-6): a caret beside Undo that opens the recent steps,
+ * The **Recent edits** control (undo-redo M7, US-6): a caret beside Undo that opens the recent steps,
  * newest first, undo above redo, and choosing one runs every step down to it as ONE action with ONE
  * summarising strip.
  *
- * Named "Undo history", not "History": the activity editor already has a History tab (ADR-0174), and
+ * Named "Recent edits", not "History": the activity editor already has a History tab (ADR-0174), and
  * that one is a read-out of one activity, where this is a list of what the pen-holder did in this
  * sitting. Built as an APG menu button on the shared {@link Menu}: Enter, Space or a vertical arrow
  * opens it with focus on the first row, ↑/↓/Home/End rove, Escape and a pick return focus here. It is
@@ -2193,8 +2196,8 @@ function UndoHistoryControl({
   const reasonId = useId();
   const disabled = api.disabled;
   const { triggerProps: tipTrigger, tooltip: tipNode } = useTooltip({
-    content: HISTORY_LABEL,
-    purpose: 'name-echo',
+    content: `${HISTORY_LABEL} — undo or redo several at once`,
+    purpose: 'description',
   });
   const entries = open ? ctx.historyEntries() : null;
   return (

@@ -145,8 +145,9 @@ entry stops being needed.
   that is intended. Tooltips and the shortcuts
   sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
   `aria-keyshortcuts` lists every chord that works.
-- **Undo history jumps back several steps in one action** (undo-redo M7). A menu button beside
-  Undo, named **Undo history**, lists the undo steps newest first and then the redo steps. A row
+- **Recent edits jumps back several steps in one action** (undo-redo M7). A menu button beside
+  Undo, named **Recent edits** (not "Undo history": a second control whose name starts "Undo" is
+  ambiguous to voice control and to a screen reader), lists the undo steps newest first and then the redo steps. A row
   shows the step's name; past the first it adds a second line saying what else the choice takes
   along ("and the 2 steps after it"), and a screen reader hears "Undo ⟨step⟩ and the 2 steps after
   it" — the visible text sits unbroken in the name. Choosing one runs every step down to it and

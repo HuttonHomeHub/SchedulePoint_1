@@ -131,7 +131,7 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
   });
 });
 
-describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
+describe('TSLD toolbar Recent edits menu (undo-redo M7)', () => {
   const undoTo = vi.fn();
   const redoTo = vi.fn();
   const historyCtx = (over: Partial<TsldToolbarContext> = {}) =>
@@ -142,26 +142,26 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
       historyEntries: () => ({ undo: ['Move “C”', 'Move “B”', 'Add “A”'], redo: ['Delete “D”'] }),
       ...over,
     });
-  const trigger = (bar: HTMLElement) => within(bar).getByRole('button', { name: 'Undo history' });
+  const trigger = (bar: HTMLElement) => within(bar).getByRole('button', { name: 'Recent edits' });
   const rowsOf = () => within(screen.getByRole('menu')).getAllByRole('menuitem');
   /** Keys reach the focused element, as in a browser. */
   const press = (key: string) =>
     fireEvent.keyDown(document.activeElement ?? document.body, { key });
 
-  it('is a menu button named Undo history, beside Undo', () => {
+  it('is a menu button named Recent edits, beside Undo', () => {
     const bar = doRow(historyCtx());
     expect(trigger(bar)).toHaveAttribute('aria-haspopup', 'menu');
     expect(trigger(bar)).toHaveAttribute('aria-expanded', 'false');
     const names = within(bar)
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
-    expect(names.indexOf('Undo history')).toBe(names.indexOf('Undo move “C”') + 1);
+    expect(names.indexOf('Recent edits')).toBe(names.indexOf('Undo move “C”') + 1);
   });
 
   it('lists the undo steps newest first, then the redo steps, each saying what it does', () => {
     const bar = doRow(historyCtx());
     fireEvent.click(trigger(bar));
-    expect(screen.getByRole('menu', { name: 'Undo history' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: 'Recent edits' })).toBeInTheDocument();
     expect(rowsOf().map((item) => item.textContent)).toEqual([
       'Undo Move “C”',
       'Undo Move “B” and the 1 step after it',
@@ -269,7 +269,7 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
 
   it('marks Undo, Redo and the history button busy while a run is in flight, and ignores them', () => {
     const bar = doRow(historyCtx({ historyBusy: true }));
-    for (const name of ['Undo history', 'Undo move “C”', 'Redo add link']) {
+    for (const name of ['Recent edits', 'Undo move “C”', 'Redo add link']) {
       expect(within(bar).getByRole('button', { name })).toHaveAttribute('aria-busy', 'true');
     }
     fireEvent.click(within(bar).getByRole('button', { name: 'Undo move “C”' }));
@@ -287,6 +287,15 @@ describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
     press('ArrowLeft');
     expect(first).toHaveFocus();
     expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('no other control’s name starts with Undo or Redo (voice control, locators)', () => {
+    const bar = doRow(historyCtx());
+    const starting = within(bar)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent ?? '')
+      .filter((name) => /^(Undo|Redo)\b/i.test(name));
+    expect(starting).toEqual(['Undo move “C”', 'Redo add link']);
   });
 
   it('adds no roving stop of its own beyond the toolbar’s one', () => {

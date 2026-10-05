@@ -120,7 +120,7 @@ and Escape/Tab/selection return focus to `restoreFocusRef`.
 **ArrowLeft and ArrowRight are claimed and ignored.** A vertical menu leaves them unused (APG), and
 `Menu` stops them anyway: it is portalled, but its React events bubble to an enclosing toolbar,
 whose roving model would otherwise move focus to the next toolbar stop and leave the menu open
-and orphaned (found reviewing the Undo history menu, undo-redo M7).
+and orphaned (found reviewing the Recent edits menu, undo-redo M7).
 
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
 typeahead. Pair it with `useMenuTrigger()` rather than re-deriving the

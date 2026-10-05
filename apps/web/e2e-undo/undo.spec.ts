@@ -902,7 +902,7 @@ test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan
 });
 
 /**
- * **The Undo history menu undoes back to a chosen step** (undo-redo M7, US-6).
+ * **The Recent edits menu undoes back to a chosen step** (undo-redo M7, US-6).
  *
  * Driven from the keyboard, because the control is an APG menu button inside a roving toolbar and the
  * seam between those two is what a unit suite cannot see: the arrow opens it, focus lands on the first
@@ -910,7 +910,7 @@ test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan
  * matters is the **one** summarising message — three undos ran, and the strip and the live region each
  * say it once, rather than three results replacing each other.
  */
-test('a planner undoes back several steps at once from the Undo history menu', async ({ page }) => {
+test('a planner undoes back several steps at once from the Recent edits menu', async ({ page }) => {
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
@@ -928,10 +928,10 @@ test('a planner undoes back several steps at once from the Undo history menu', a
   await drawTask(page, 'Framing', { x: 500, y: 240 });
   await expect(diagram.getByRole('option')).toHaveCount(3, { timeout: 15_000 });
 
-  const history = toolbar.getByRole('button', { name: 'Undo history' });
+  const history = toolbar.getByRole('button', { name: 'Recent edits' });
   await history.focus();
   await page.keyboard.press('ArrowDown');
-  const menu = page.getByRole('menu', { name: 'Undo history' });
+  const menu = page.getByRole('menu', { name: 'Recent edits' });
   await expect(menu).toBeVisible();
   const rows = menu.getByRole('menuitem');
   await expect(rows).toHaveCount(3);
@@ -957,7 +957,7 @@ test('a planner undoes back several steps at once from the Undo history menu', a
 
   await test.step('the redo half of the list brings them back', async () => {
     await page.keyboard.press('ArrowDown');
-    const redoRows = page.getByRole('menu', { name: 'Undo history' }).getByRole('menuitem');
+    const redoRows = page.getByRole('menu', { name: 'Recent edits' }).getByRole('menuitem');
     await expect(redoRows).toHaveCount(3);
     await expect(redoRows.last()).toHaveAccessibleName(
       'Redo Add “Framing” and the 2 steps before it',

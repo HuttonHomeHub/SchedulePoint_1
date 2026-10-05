@@ -235,7 +235,7 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
 - **Entries are read when the menu is open, not carried as state.** `PlanEditHistory.entries()` returns
   the labels of both stacks nearest first, read from the refs; it is a stable callback, so the
   object the toolbar-context memo keys on does not change when a step is recorded.
-- **The control is a menu button beside Undo, named "Undo history"** (the activity editor already has
+- **The control is a menu button beside Undo, named "Recent edits"** (the activity editor already has
   a History tab, ADR-0174): a registry item (`undo-history`, pen-gated, enabled while either stack is
   non-empty) on the shared APG `Menu`, in the toolbar both views mount. Undo above redo, nearest
   first; each row's name is "Undo ⟨step⟩ and the 2 steps after it". The row passes the label of the
