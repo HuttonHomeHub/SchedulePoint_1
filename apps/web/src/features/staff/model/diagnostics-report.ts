@@ -43,7 +43,7 @@ export function diagnosticSentence(row: StaffDiagnosticRow): string {
     `${String(row.affected)} of ${count(row.examined, one, many)}, ` +
     spread +
     `in ${count(row.affectedOrganizations, 'organisation', 'organisations')}.`;
-  return row.id === HISTORY_RATE_ID && row.examined === row.affected
+  return row.id === HISTORY_RATE_ID && row.examined > 0 && row.examined === row.affected
     ? `${sentence} ${WINDOW_NOT_FULL}`
     : sentence;
 }
@@ -51,7 +51,8 @@ export function diagnosticSentence(row: StaffDiagnosticRow): string {
 /**
  * The one entry whose `affected` is a rate over a fixed 28-day window, so the only one where
  * `examined === affected` carries a meaning: every entry that exists began inside the window, which
- * means the window reaches back past the day recording began and the rate is a floor. Keyed on the
+ * means the window reaches back past the day recording began and the rate is a floor. An empty table
+ * (0 of 0) is not that: it has no history at all, so there is no window to call full or not. Keyed on the
  * id, never inferred from the numbers alone, because the same equality on any other row is a
  * coincidence of the data (`docs/specs/staff-server-readings/` D-2).
  */

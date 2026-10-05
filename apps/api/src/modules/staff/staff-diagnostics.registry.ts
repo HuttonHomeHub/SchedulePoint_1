@@ -790,6 +790,11 @@ const ZERO_DURATION_TASKS_RESOURCED: DiagnosticEntry = {
  * of the whole row reaches a predicate (H-3) — a byte size, not its content. Joins with
  * `count(DISTINCT …)`, never `EXISTS` (gate S-4 refuses the semi-join's `SELECT 1`).
  *
+ * **H-1's denominator counts every entry without the `activities` join while its numerator joins.**
+ * That is harmless only because `activity_id` is a RESTRICT foreign key, so every entry has exactly one
+ * activity and the join neither drops nor duplicates an entry. `affected_organizations` is a
+ * cardinality and nothing else: it says how many organisations, never which.
+ *
  * **History on a soft-deleted activity IS counted** (declared `any-state` at each query): the row exists,
  * occupies space and is removed by expiry, and volume is the question. The `activities` join exists
  * only to reach `plan_id`.
@@ -813,14 +818,15 @@ const ZERO_DURATION_TASKS_RESOURCED: DiagnosticEntry = {
  * | H-3 numerator              |      70.4 ms |   **537.7 ms** |
  *
  * Every statement is a sequential scan of `activity_history_entries` (hash-joined to `activities`
- * for `plan_id`, then a sort for `count(DISTINCT …)`); no index is proposed. **Two numerators pass
- * the bar by being measured over it at 1,000,000 rows, and they ship anyway** — the estate holds
+ * for `plan_id`, then a sort for `count(DISTINCT …)`); no index is proposed. **Two numerators miss
+ * the bar at 1,000,000 rows, and they ship anyway** — the estate holds
  * hundreds of activities today, and a count nobody can obtain at all is worth less than one that is
- * slow at a scale nobody has. **Re-arm trigger, observable in this very entry: H-1 `examined` ≥
- * 500,000.** Past that, re-cost both numerators and consider a cheaper `affected_plans`
- * formulation or an index — an index is a schema change and goes to database-architect first. The
- * whole press, 335 ms without these entries, read 576 ms at 100,000 rows and 1,693 ms at 1,000,000:
- * ADR-0140 D7's ~800 ms reopen trigger is crossed at roughly 300,000 rows.
+ * slow at a scale nobody has. **Two triggers, and the first fires much earlier.** The whole press
+ * (335 ms without these entries) read 576 ms at 100,000 rows and 1,693 ms at 1,000,000, so ADR-0140 D7's
+ * ~800 ms reopen trigger is crossed at roughly 250,000–300,000 rows; the per-statement 500 ms bar is
+ * crossed at roughly 950,000. **The re-arm observable, readable in this very entry, is H-1 `examined` ≥
+ * 250,000:** re-cost the press, reopen the throttle decision, and consider a cheaper formulation or an
+ * index — an index is a schema change and goes to database-architect first.
  */
 const HISTORY_WINDOW_DENOMINATOR = Prisma.sql`
   SELECT count(*) AS examined

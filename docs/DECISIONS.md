@@ -37,8 +37,9 @@ terminal. Before the feature has recorded for 28 days the window is not yet full
 `examined === affected`, keyed on the entry id.
 
 **Consequences.** Two of the six statements read 524 and 538 ms at 1,000,000 history rows (over the 500 ms
-bar) and ship anyway with a re-arm trigger, H-1 `examined` ≥ 500,000; the whole press crosses ADR-0140 D7's
-~800 ms near 300,000 rows, which reopens the throttle decision. See `m1-measurement.md`.
+bar) and ship anyway. **Two triggers, stated together:** the whole press crosses ADR-0140 D7's ~800 ms at
+roughly 250,000–300,000 rows (which reopens the throttle decision), so the entries' re-arm observable is H-1
+`examined` ≥ 250,000; the per-statement 500 ms bar is crossed near 950,000. See `m1-measurement.md`.
 
 ---
 

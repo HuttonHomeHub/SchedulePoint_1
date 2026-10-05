@@ -11666,8 +11666,9 @@ re-measure (`apps/api/test/measure/activity-history.measure.ts`, `hierarchy-expi
 `m3-measurement.md`) wait on the trigger. The constant `HISTORY_ROWS_PER_ACTIVITY = 5` still rests on a
 warm-cache, one-machine interleaved quotient of 8.3–10.4. **Trigger:** a planner reports slow saves, or the
 next performance pass on the write paths, or **H-1 `examined` ≥ 100,000** (an order of magnitude below CQ-2's
-1,000,000-entry trigger; the diagnostics' own numerators cross 500 ms near 1,000,000 and re-arm at 500,000,
-and the press reaches ADR-0140 D7's ~800 ms near 300,000).
+1,000,000-entry trigger; the diagnostics' two triggers are stated in the registry docblock: the press reaches ADR-0140
+D7's ~800 ms at roughly 250,000–300,000 rows, so the entries' own re-arm observable is **H-1 `examined` ≥
+250,000**, and the per-statement 500 ms bar is crossed near 950,000).
 
 ### 444. A batch history probe reads each activity's whole latest entry when it only needs the timestamp
 
@@ -11849,3 +11850,19 @@ that the fix did not take up, none of them wrong in behaviour today:
 
 **Next:** the unit pin first; the other two ride the next change to either file. **Trigger:** the next change
 to `plan-detail.tsx` or `use-plan-workspace-model.ts`.
+
+### 456. The staff diagnostics press runs with no statement timeout and in no read-only transaction
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-05 (`staff-diagnostics.repository.ts` issues each entry's two statements with `$queryRaw` on the shared pool; no `SET LOCAL statement_timeout` or `READ ONLY` transaction in `modules/staff/`; raised by the M1 backend-performance review of `docs/specs/staff-server-readings/`) ·
+**Raised:** 2026-10-05 · **Size:** S · **Owner:** api
+
+Pre-existing, and not new with the history entries: the press has never had a per-statement time bound, and nothing
+asserts it is read-only beyond the registry being count-only SQL. Until M1 that was harmless, because every entry
+scanned a table whose size tracks the number of activities. **M1's three entries are the first whose scan grows
+with usage** (history accrues with every save, with no ceiling but expiry), and their numerators already read
+524 and 538 ms at 1,000,000 rows (`docs/specs/staff-server-readings/m1-measurement.md`), so a press on a large
+estate on a loaded host is the first place a runaway statement could hold a pooled connection. Not fixed in M1 to
+keep that change to the diagnostics it adds. **Next:** run each press inside one `READ ONLY` transaction with
+`SET LOCAL statement_timeout` (and decide the figure against the measured readings), with a test that a statement
+over the bound surfaces as the existing 500 rather than hanging. **Trigger:** H-1 `examined` ≥ 250,000, or any
+press over ~800 ms reported by the operator, or the next entry whose scan is unbounded by an index.
