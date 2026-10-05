@@ -8,7 +8,7 @@ pass (`docs/RECONCILE.md`, ADR-0058; findings in `docs/DECISIONS.md`, 2026-10-05
 
 ## Where things stand
 
-- `main` holds everything below. Latest releases: **web 0.170.4, api 0.87.1**.
+- `main` holds everything below (last: #835). Latest releases: **web 0.170.4, api 0.87.1**.
 - **No approved work is waiting.** The reconciliation pass is done; the next one is due at the next
   epic boundary (`pnpm check:reconcile-due` counts ADRs since 2026-10-05).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
@@ -23,7 +23,7 @@ pass (`docs/RECONCILE.md`, ADR-0058; findings in `docs/DECISIONS.md`, 2026-10-05
 
 ## The Dependabot batch (2026-10-05, approved)
 
-**#807–#816 were taken as one change** (the combined PR; `docs/DECISIONS.md`, 2026-10-05), the way
+**#807–#816 were taken as one change** in **#835** (`docs/DECISIONS.md`, 2026-10-05), the way
 #731 took the previous eight, and the ten were closed as superseded. The lockfile is held to **exactly
 the versions Dependabot proposed**: a plain install resolved `nestjs-pino` 5.3.1, `lucide-react`
 1.52.0, `react-query` 5.104.1 and `turbo` 2.11.7, none reviewed, so expect those as the next
@@ -36,8 +36,12 @@ versions ship with the next release's images.
 - **#449**: calendar and resource-limit edits do not mark plans "edited since calculated" (left out
   by decision); plus a small stamp race. Pick up only if the product owner asks.
 - **#450**: a single `DELETE` carries no version, so undo's check-then-delete has a small window.
-- **#435**: the e2e flake row. Its green-run count **reset to 0** on 2026-10-05 (the #831 429); #832
-  removes the cause it named, so count again from #832.
+- **#435**: the e2e flake row. Its green-run count **reset to 0** on 2026-10-05 (the #831 429) and
+  stands at **6 of 10** since #832: `ci.yml` runs `37320914199` (#832), `37325042796` (#809, built on
+  #832), `37326303215` (#834), `37328284102` (`main`), `37343513749` (#835), `37345810798` (`main`),
+  all four web shards green in each. Cancelled `main` runs and the Version Packages PR's runs ran no
+  jobs and count neither way. The shard logs (their closing suites) show no 429, and two retried-then-passed tests
+  that are not 429s (`plan-switch.spec.ts:109`, `activity-editor.spec.ts:449`; detail in the row).
 - **#453**, **#454**: filed by the pass (above).
 - **#440–#446** (filed with activity history) unchanged; **#446** is lighter after #832.
 - **History row-rate count is owed around 1 November** (ADR-0174 / #443): re-measure on the live host.
