@@ -831,3 +831,72 @@ test('an undo or redo selects the activity it changed and brings it into view', 
     await expect(diagramList(page)).not.toBeFocused();
   });
 });
+
+/**
+ * **Ctrl+Z works from anywhere in the plan, and still belongs to a text box inside one** (undo-redo
+ * M5, spec F-4 / US-5).
+ *
+ * Two halves of one rule, so one plan and one history: with focus on `<body>` (where a deselect or a
+ * closed dialog leaves it) the accelerator used to be dead, because the handler sat on the workspace
+ * root; and inside a text-entry field it must NOT reach the plan, or a planner who typed into a cell
+ * and pressed Ctrl+Z would lose an unrelated edit. Both are about what a real browser does with real
+ * focus, which jsdom cannot ask. The assertions read the REST API, not the cell, because "the plan
+ * did not undo" is a statement about stored data.
+ */
+test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan alone', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await drawTask(page, 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawTask(page, 'Foundations', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  await test.step('inside a Gantt cell editor, Ctrl+Z is the field’s undo and the plan is untouched', async () => {
+    await showGantt(page);
+    const row = ganttRow(page, 'Foundations');
+    await row.click();
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('F2');
+    const field = page.getByRole('textbox', { name: /Activity, Foundations/ });
+    await expect(field).toBeFocused();
+    await page.keyboard.type('XYZ');
+    await page.keyboard.press('Control+z');
+    // Still the open editor, and nothing was removed: the native undo took the typing.
+    await expect(field).toBeVisible();
+    await expect(field).not.toHaveValue(/XYZ$/);
+    expect((await apiActivities(page, orgSlug)).length).toBe(2);
+    await page.keyboard.press('Escape');
+    await expect(field).toBeHidden();
+  });
+
+  await test.step('with focus on <body>, Ctrl+Z undoes the plan', async () => {
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement === document.body))
+      .toBe(true);
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(1);
+
+    // Redo from the body too, by the Windows chord.
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+    await page.keyboard.press('Control+y');
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(2);
+  });
+});

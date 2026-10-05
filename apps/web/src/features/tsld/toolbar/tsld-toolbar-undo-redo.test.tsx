@@ -109,7 +109,16 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     );
     expect(within(bar).getByRole('button', { name: 'Redo add link' })).toHaveAttribute(
       'aria-keyshortcuts',
-      'Control+Shift+Z',
+      'Control+Y Control+Shift+Z',
+    );
+  });
+
+  it('puts the platform accelerator in the tooltip, not the accessible name', () => {
+    const bar = doRow(ctx());
+    const undoBtn = within(bar).getByRole('button', { name: 'Undo move activity' });
+    fireEvent.focus(undoBtn);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
+      'Undo move activity (Ctrl+Z)',
     );
   });
 
