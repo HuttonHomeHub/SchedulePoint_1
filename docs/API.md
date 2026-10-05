@@ -1339,6 +1339,13 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   state — current — is `scheduleComputedAt` set and `editedSinceCalculated` false, and the screen
   renders **nothing** for it.
 
+  **The plan resource carries the same flag.** Every response that returns a plan (`GET`, list,
+  create, update, restore) includes a read-only `editedSinceCalculated`, computed by the same rule
+  (`isEditedSinceCalculated`), so the plan workspace's status bar and this overview cannot disagree
+  (`docs/TECH_DEBT.md` #452). It is not accepted on writes (the whitelist refuses it). A plan never
+  calculated reads `false` there too; the workspace tells that state apart from its activities'
+  dates.
+
   The comparison is `schedule_inputs_changed_at > scheduleComputedAt`, in both sections ("Where the
   work stands" and "Recently changed"). `plans.schedule_inputs_changed_at` is stamped, in the edit's
   own transaction, only by a write the CPM engine reads: a duration, type, constraint, progress,
