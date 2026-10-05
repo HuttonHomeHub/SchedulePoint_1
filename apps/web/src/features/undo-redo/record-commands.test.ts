@@ -63,6 +63,11 @@ describe('reparentCommand', () => {
     return { server, command };
   }
 
+  it('names the rows that moved as its subjects', async () => {
+    const { command } = await filed();
+    expect(command.subjects).toEqual(['a1', 'a2']);
+  });
+
   it('clean replay: undo returns every row in ONE batch, redo files them again', async () => {
     const { server, command } = await filed();
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
@@ -159,6 +164,11 @@ describe('stepsReplaceCommand', () => {
     return { server, command, before, after };
   }
 
+  it('names the activity that owns the steps', async () => {
+    const { command } = await saved();
+    expect(command.subjects).toEqual(['a1']);
+  });
+
   it('clean replay: undo puts the earlier list back, redo the saved one, at the live version', async () => {
     const { server, command } = await saved();
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
@@ -248,6 +258,11 @@ describe('assignment commands', () => {
       });
       return { server, command };
     }
+
+    it('names the activity the resource is assigned to', async () => {
+      const { command } = await assigned();
+      expect(command.subjects).toEqual(['a1']);
+    });
 
     it('clean replay: undo unassigns it, redo assigns it again (found by resource, not id)', async () => {
       const { server, command } = await assigned();
@@ -726,6 +741,11 @@ describe('cross-plan link commands', () => {
       server.mutations.createCrossPlanLink.mockClear();
       return { server, command: crossPlanLinkAddCommand({ link, ...links(server) }), link };
     }
+
+    it('lists the plan’s own end first, then the other plan’s', async () => {
+      const { command } = await added();
+      expect(command.subjects).toEqual(['a1', 'o1']);
+    });
 
     it('clean replay: undo removes the link, redo adds it again with the same type and lag', async () => {
       const { server, command } = await added();

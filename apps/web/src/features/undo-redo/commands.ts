@@ -59,6 +59,14 @@ import { minorToMajorInput } from '@/lib/format-money';
 export interface Command {
   /** Human label for the edit — surfaces in the Undo/Redo controls, announcements and the strip. */
   readonly label: string;
+  /**
+   * The activities this step touched, in the order the planner should be shown them — what the
+   * workspace selects and brings into view after the step applies (undo-redo M4). A link names both
+   * its ends (predecessor first); a record owned by an activity (steps, an assignment, a cross-plan
+   * link) names that activity. Required so a new family cannot forget it. Which of them still exist
+   * is not decided here: an undone create has none left, and the reveal asks the refreshed list.
+   */
+  readonly subjects: readonly string[];
   /** Apply the inverse of the edit (restore the pre-edit state), or say why it cannot be applied. */
   undo: (ctx: ReplayContext) => Promise<ReplayResult>;
   /** Re-apply the original edit (restore the post-edit state), or say why it cannot be applied. */
@@ -357,7 +365,7 @@ function definitionStepCommand(params: {
     write: (target, row) =>
       patch({ activityId: row.id, version: row.version, patch: patchBody(target, fields) }),
   });
-  const command: Command = { label, ...step };
+  const command: Command = { label, subjects: [after.id], ...step };
   if (coalesceKey === undefined) return command;
   return coalescable(command, {
     key: coalesceKey,
@@ -396,6 +404,7 @@ export function relaneCommand(params: {
   });
   const command: Command = {
     label: params.label ?? `Move “${params.activityName}” to lane`,
+    subjects: [activityId],
     ...step,
     affectsSchedule: false,
   };
@@ -493,7 +502,11 @@ export function typeChangeCommand(params: {
     write: (target, row) =>
       params.patch({ activityId: row.id, version: row.version, patch: { type: target.type } }),
   });
-  return { label: params.label ?? `Make “${params.activityName}” a milestone`, ...step };
+  return {
+    label: params.label ?? `Make “${params.activityName}” a milestone`,
+    subjects: [params.activityId],
+    ...step,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -537,6 +550,7 @@ export function createActivityCommand(params: {
   return {
     // Name the created entity ("Add “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Add “${created.name}”`,
+    subjects: [created.id],
     undo: async (ctx) => {
       if (!present) return APPLIED;
       // Deleting takes the row's links with it, and a new bar has none: any link on it now is
@@ -596,6 +610,7 @@ export function deleteActivityCommand(params: {
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Delete “${activity.name}”`,
+    subjects: [activity.id],
     undo: async (ctx) => {
       if (present) {
         // A retry after the restore landed but the link read failed: finish recording, don't restore.
@@ -903,6 +918,11 @@ function linkToggle(params: {
   };
 }
 
+/** The two activities a link joins, predecessor first — what a step on the link reveals. */
+function linkSubjects(dependency: DependencySummary): string[] {
+  return [dependency.predecessor.id, dependency.successor.id];
+}
+
 /** A link step's default label, naming both endpoints like {@link dependencyEditCommand}'s. */
 function linkLabel(verb: string, dependency: DependencySummary): string {
   return `${verb} “${dependency.predecessor.name}” → “${dependency.successor.name}”`;
@@ -922,6 +942,7 @@ export function dependencyAddCommand(params: {
   const toggle = linkToggle({ ...params, startPresent: true });
   return {
     label: params.label ?? linkLabel('Add link', params.dependency),
+    subjects: linkSubjects(params.dependency),
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
   };
@@ -941,6 +962,7 @@ export function dependencyRemoveCommand(params: {
   const toggle = linkToggle({ ...params, startPresent: false });
   return {
     label: params.label ?? linkLabel('Remove link', params.dependency),
+    subjects: linkSubjects(params.dependency),
     undo: toggle.ensurePresent,
     redo: toggle.ensureAbsent,
   };
@@ -970,6 +992,7 @@ export function linkChainCommand(params: {
   const removed = new Set<string>();
   return {
     label: params.label ?? `Link ${params.created.length} activities in sequence`,
+    subjects: [...new Set(params.created.flatMap(linkSubjects))],
     undo: async (ctx) => {
       if (live === null) return APPLIED;
       // A retry after a failure part-way must not be refused as "gone" for the very links the first
@@ -1055,6 +1078,9 @@ export function createLoeSpanCommand(params: {
     // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
     // and read plainly "Add level-of-effort span" (S3).
     label: params.label ?? 'Add level-of-effort span',
+    // The LOE is re-created under a new id on redo, so its own id may name nothing by then; the two
+    // drivers it hangs between are what is still there to be shown.
+    subjects: [params.loe.id, startDriverId, finishDriverId],
     undo: async (ctx) => {
       if (live === null) return APPLIED;
       const { id, expected } = live;
@@ -1167,7 +1193,11 @@ export function visualStartCommand(params: {
         version: row.version,
       }),
   });
-  const command: Command = { label: params.label ?? `Move “${params.activityName}”`, ...step };
+  const command: Command = {
+    label: params.label ?? `Move “${params.activityName}”`,
+    subjects: [activityId],
+    ...step,
+  };
   return coalescable(command, {
     key: `visual:${activityId}`,
     before,
@@ -1220,6 +1250,7 @@ export function visualResizeCommand(params: {
   const command: Command = {
     // Name the entity ("Resize “Excavate”"), matching the EARLY-mode resize label (S1).
     label: params.label ?? `Resize “${before.name}”`,
+    subjects: [after.id],
     ...step,
   };
   return coalescable(command, {
@@ -1321,6 +1352,7 @@ export function lagDragCommand(params: {
     label:
       params.label ??
       `Change lag “${dependency.predecessor.name}” → “${dependency.successor.name}”`,
+    subjects: linkSubjects(dependency),
     undo: (ctx) =>
       replay(ctx, atUndo, before, (state) => {
         atRedo = state;
@@ -1427,6 +1459,7 @@ export function dependencyEditCommand(params: {
     // Both endpoints named, the link labels' entity-naming convention (S1) — and deliberately the
     // same wording as a lag drag, because to the planner they are the same edit by another route.
     label: params.label ?? `Edit link “${before.predecessor.name}” → “${before.successor.name}”`,
+    subjects: linkSubjects(before),
     undo: (ctx) =>
       replay(ctx, atUndo, before, (state) => {
         atRedo = state;
@@ -1496,6 +1529,7 @@ export function autoArrangeCommand(params: {
     label:
       params.label ??
       `Auto-arrange ${params.after.length === 1 ? '1 activity' : `${params.after.length} activities`}`,
+    subjects: params.after.map((p) => p.id),
     undo: (ctx) =>
       replay(ctx, atUndo, params.before, (next) => {
         atRedo = next;
@@ -1607,6 +1641,7 @@ export function bulkPlacementCommand(params: {
     );
   return {
     label: params.label ?? `Move ${params.after.length} activities`,
+    subjects: params.after.map((p) => p.id),
     undo: (ctx) =>
       replay(ctx, atUndo, params.before, (next) => {
         atRedo = next;
@@ -1652,6 +1687,7 @@ export function bulkDeleteCommand(params: {
   const name = params.activities[0]?.name ?? 'An activity in this step';
   return {
     label: params.label ?? `Delete ${params.activities.length} activities`,
+    subjects: params.activities.map((a) => a.id),
     undo: async (ctx) => {
       if (present) {
         await restored.recordLinks(ctx);
@@ -1740,6 +1776,7 @@ export function pasteActivitiesCommand(params: {
   let expected = stateOf(params.created);
   return {
     label: params.label,
+    subjects: params.created.map((c) => c.id),
     undo: async (ctx) => {
       if (!live) return APPLIED;
       // Deleting the clones takes their links with them. A copy carries only the links BETWEEN its

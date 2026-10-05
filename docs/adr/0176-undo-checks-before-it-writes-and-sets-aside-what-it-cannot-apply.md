@@ -189,6 +189,26 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   context; supplying them is deferred to the history list (M7), which is the first thing that replays
   a step recorded in an earlier render.
 
+## Addendum — what a press shows (undo-redo M4, 2026-10-05)
+
+- **A command names the activities it touched** (`Command.subjects`, activity ids in the order a
+  planner should be shown them: a link names both its ends, a record owned by an activity names that
+  activity, a cross-plan link names its own plan's end first). The field is required, so a new family
+  cannot forget it. It is a flat list for now; the spec's richer `{ activities, dependencies, other }`
+  shape waits for the history list (M7), the first reader that needs links as subjects.
+- **After an applied step the first subject still in the plan is selected and brought into view**, in
+  whichever view is showing, through the channels duplicate and the dock presses already use: the
+  one-shot `revealActivityId` (centre the diagram on the bar's drawn start, lift the selection) and the
+  Gantt's `bringIntoViewActivityId`. "Still in the plan" is read from the plan's list after the
+  replay's own invalidation has settled, so an undone create reveals nothing and the dates centred on
+  are the restored ones. A set-aside or failed step reveals nothing.
+- **Focus is not moved.** The diagram's select request is made with `focusListbox: false` unless focus
+  has already fallen to `<body>`, in which case it is handed to the diagram (ADR-0135). Both scrolls are
+  instant (`centerOnDate` is a pure pan; the Gantt calls `scrollToIndex` with no smooth behaviour), so
+  there is no animation for reduced motion to govern.
+- **A plural step reveals its first subject only**: the diagram reports its selection outward and has no
+  inbound set API (ADR-0080), so there is nothing to hand a set to.
+
 ## References
 
 - [`docs/adr/0048-undo-redo-command-stack.md`](0048-undo-redo-command-stack.md) — amended here.

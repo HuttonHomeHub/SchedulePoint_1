@@ -709,6 +709,11 @@ describe('lagDragCommand', () => {
     return { server, command };
   }
 
+  it('names both ends of the link as its subjects, predecessor first', async () => {
+    const { command } = await dragged();
+    expect(command.subjects).toEqual(['a1', 'a2']);
+  });
+
   it('clean replay: undo restores the exact stored minutes, redo re-applies the new lag', async () => {
     const { server, command } = await dragged();
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
@@ -1005,6 +1010,11 @@ describe('linkChainCommand', () => {
     return { server, command, created };
   }
 
+  it('names each activity of the chain once, in chain order', async () => {
+    const { command } = await chained();
+    expect(command.subjects).toEqual(['a1', 'a2', 'a3']);
+  });
+
   it('clean replay: undo removes the whole chain, redo re-creates it with new ids', async () => {
     const { server, command, created } = await chained();
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
@@ -1060,6 +1070,11 @@ describe('createActivityCommand', () => {
     });
     return { server, command };
   }
+
+  it('names the created activity as its subject', () => {
+    const { command } = drawn();
+    expect(command.subjects).toEqual(['a1']);
+  });
 
   it('undo deletes the activity; redo RESTORES it — the same id, never a re-create', async () => {
     const { server, command } = drawn();

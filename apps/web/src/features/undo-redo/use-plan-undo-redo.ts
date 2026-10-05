@@ -89,15 +89,25 @@ export function usePlanUndoRedo(params: {
    * toolbar on every press. Absent, a failure is announced instead, as before.
    */
   onResult?: (result: PostedHistoryResult) => void;
+  /**
+   * Called after a replay that APPLIED, with the first activity of the step's {@link
+   * Command.subjects} that is still in the plan — so the workspace can select it and bring it into
+   * view (undo-redo M4). Not called when none survives (an undone create), and never on a failed or
+   * set-aside step: those changed nothing, so there is nothing to show. Read through a ref like
+   * {@link onReplayed}, for the same identity reason.
+   */
+  onReveal?: (activityId: string) => void;
 }): PlanUndoRedo {
-  const { history, orgSlug, planId, announce, onLockLost, onReplayed, onResult } = params;
+  const { history, orgSlug, planId, announce, onLockLost, onReplayed, onResult, onReveal } = params;
   const queryClient = useQueryClient();
   // The workspace passes an inline arrow here (it closes over a hook declared later), so reading it
   // through a ref keeps `run` — and the object this hook returns, which feeds the toolbar-context
   // memo — from being rebuilt on every render.
   const onReplayedRef = useRef(onReplayed);
+  const onRevealRef = useRef(onReveal);
   useEffect(() => {
     onReplayedRef.current = onReplayed;
+    onRevealRef.current = onReveal;
   });
 
   // Refetch server truth after a set-aside, mirroring the recalculate mutation's invalidation set: the
@@ -237,6 +247,33 @@ export function usePlanUndoRedo(params: {
     [announce, onResult],
   );
 
+  // Reveal AFTER the plan's list has been refreshed: the replay's own mutation invalidated it, but
+  // the row the planner is about to be shown carries the dates the step just restored, and centring
+  // on the stale ones would land the view where the bar WAS. `cancelRefetch: false` joins the refetch
+  // already in flight rather than restarting it, so this adds no request. A failed refresh reveals
+  // nothing — the strip and the announcement already said what happened.
+  const revealSubjects = useCallback(
+    async (subjects: readonly string[]): Promise<void> => {
+      if (subjects.length === 0 || onRevealRef.current === undefined) return;
+      try {
+        await queryClient.invalidateQueries(
+          { queryKey: activityKeys.listByPlan(orgSlug, planId) },
+          { cancelRefetch: false },
+        );
+      } catch {
+        return;
+      }
+      const present = new Set(
+        queryClient
+          .getQueryData<ActivitySummary[]>(activitiesQueryOptions(orgSlug, planId).queryKey)
+          ?.map((row) => row.id),
+      );
+      const first = subjects.find((id) => present.has(id));
+      if (first !== undefined) onRevealRef.current?.(first);
+    },
+    [queryClient, orgSlug, planId],
+  );
+
   const run = useCallback(
     (direction: 'undo' | 'redo'): void => {
       void (async () => {
@@ -287,9 +324,10 @@ export function usePlanUndoRedo(params: {
           command: outcome.command,
         });
         if (outcome.command.affectsSchedule !== false) onReplayedRef.current?.();
+        void revealSubjects(outcome.command.subjects);
       })();
     },
-    [history, replayContext, onLockLost, refetchServerTruth, report],
+    [history, replayContext, onLockLost, refetchServerTruth, report, revealSubjects],
   );
 
   const undo = useCallback((): void => run('undo'), [run]);

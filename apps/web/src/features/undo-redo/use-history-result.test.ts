@@ -13,6 +13,7 @@ import type { PlanEditHistory } from './use-plan-edit-history';
 
 const step = (label: string): Command => ({
   label,
+  subjects: [],
   undo: () => Promise.resolve({ kind: 'applied' }),
   redo: () => Promise.resolve({ kind: 'applied' }),
 });

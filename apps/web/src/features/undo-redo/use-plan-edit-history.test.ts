@@ -15,6 +15,7 @@ const { ctx } = fakePlanServer();
 function cmd(tag: string, log: string[]): Command {
   return {
     label: tag,
+    subjects: [],
     undo: vi.fn(() => {
       log.push(`undo:${tag}`);
       return Promise.resolve(APPLIED);
@@ -32,6 +33,7 @@ function refusing(tag: string, directions: ('undo' | 'redo')[] = ['undo']): Comm
     Promise.resolve(notApplicable('changed', `${tag}’s subject`));
   return {
     label: tag,
+    subjects: [],
     undo: directions.includes('undo') ? refuse : () => Promise.resolve(APPLIED),
     redo: directions.includes('redo') ? refuse : () => Promise.resolve(APPLIED),
   };
@@ -273,6 +275,7 @@ describe('usePlanEditHistory', () => {
     });
     const slow: Command = {
       label: 'slow',
+      subjects: [],
       undo: vi.fn(async () => {
         await gate;
         log.push('undo:slow');
@@ -305,6 +308,7 @@ describe('usePlanEditHistory', () => {
   it('leaves the stacks intact when a replay throws, so the planner can retry', async () => {
     const flaky: Command = {
       label: 'flaky',
+      subjects: [],
       undo: vi.fn().mockRejectedValueOnce(new Error('network')).mockResolvedValue(APPLIED),
       redo: vi.fn(() => Promise.resolve(APPLIED)),
     };
@@ -545,6 +549,7 @@ describe('usePlanEditHistory coalescing', () => {
     const { server, lane } = plan();
     const plain: Command = {
       label: 'Edit',
+      subjects: [],
       undo: () => Promise.resolve(APPLIED),
       redo: () => Promise.resolve(APPLIED),
     };

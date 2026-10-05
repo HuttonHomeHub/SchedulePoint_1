@@ -296,7 +296,23 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * every arrow-key move would be pulled back. The panel clears this the moment it honours it.
    */
   const [revealActivityId, setRevealActivityId] = useState<string | null>(null);
-  const onRevealHandled = useCallback(() => setRevealActivityId(null), []);
+  // Whether honouring that request leaves keyboard focus where the planner has it. A duplicate or
+  // paste is asked for from a menu or a dialog that has just closed, so landing in the diagram is
+  // right; an undo is pressed from the toolbar (or the keyboard) and must not be moved off it.
+  const [revealKeepsFocus, setRevealKeepsFocus] = useState(false);
+  // The activity the last undo/redo brought into view, kept for the Gantt (undo-redo M4): its scroll
+  // hangs off a prop that must persist across the re-render that expands a collapsed ancestor, so it
+  // cannot be a one-shot. The host only honours it while that activity is still the selection.
+  const [undoRevealId, setUndoRevealId] = useState<string | null>(null);
+  const onRevealHandled = useCallback(() => {
+    setRevealActivityId(null);
+    setRevealKeepsFocus(false);
+  }, []);
+  const onUndoReveal = useCallback((activityId: string) => {
+    setRevealKeepsFocus(true);
+    setRevealActivityId(activityId);
+    setUndoRevealId(activityId);
+  }, []);
   /**
    * The tabbed editor's open intent (ADR-0060 §7, M5) — the ONE piece of state the three entry
    * points (**Edit**, **Report progress**, **Steps**) now share, replacing the three that could
@@ -624,6 +640,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     announce,
     onResult: historyResult.post,
+    onReveal: onUndoReveal,
     onLockLost: pen.onWriteRejected,
     // `autoRecalc` is declared just below; the callback only runs on a replay, long after render.
     onReplayed: () => autoRecalc.notify(),
@@ -2681,6 +2698,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     confirmDuplicateBand,
     /** The canvas should select and scroll to this activity, then call `onRevealHandled`. */
     revealActivityId,
+    revealKeepsFocus,
+    undoRevealId,
     onRevealHandled,
     /** The app clipboard (`docs/specs/activity-copy-paste/` M3): `Ctrl+C` / `Ctrl+V`. */
     copySelection,
