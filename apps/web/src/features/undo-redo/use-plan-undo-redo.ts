@@ -8,9 +8,10 @@ import type {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import type { Command } from './commands';
 import { historyResultMessage, type PostedHistoryResult } from './history-result';
 import { isNotFound, ReplayFailure, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
-import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
+import type { HistoryEntries, PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import { activityStepsQueryOptions } from '@/features/activities/api/use-activity-steps';
@@ -41,6 +42,60 @@ export interface PlanUndoRedo {
   undoLabel: string | null;
   /** The next redo step's label; null when nothing to redo. */
   redoLabel: string | null;
+  /**
+   * The labels of the steps on each stack, nearest first — read when the history menu renders, not
+   * held as state (see {@link PlanEditHistory.entries}).
+   */
+  entries: () => HistoryEntries;
+  /**
+   * Undo `count` steps in order (the history menu's "undo to here"), the nearest first. Stops at the
+   * first step that does not apply and says so in ONE result — see {@link historyResultMessage}.
+   */
+  undoTo: (count: number) => void;
+  /** Redo `count` steps in order, the mirror of {@link undoTo}. */
+  redoTo: (count: number) => void;
+}
+
+/**
+ * What one replay of one step came to, with the failure handling already done (the pen contract run,
+ * the plan refetched after a set-aside). A single press and a run of several are both built on it,
+ * so they cannot disagree about what a step's outcome means.
+ */
+type Step =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'pen-lost' }
+  | { readonly kind: 'failed'; readonly label: string; readonly detail?: string }
+  | { readonly kind: 'set-aside'; readonly outcome: Extract<StepOutcome, { kind: 'set-aside' }> }
+  | { readonly kind: 'applied'; readonly command: Command };
+
+type StoppedStep = Extract<Step, { kind: 'failed' | 'set-aside' }>;
+
+/** The result a step that did not apply posts; `steps` is set only by a run of several. */
+function stoppedResult(
+  direction: 'undo' | 'redo',
+  step: StoppedStep,
+  steps?: { done: number; total: number },
+): PostedHistoryResult {
+  if (step.kind === 'failed') {
+    return {
+      direction,
+      outcome: 'failed',
+      label: step.label,
+      ...(step.detail !== undefined ? { detail: step.detail } : {}),
+      ...(steps ? { steps } : {}),
+    };
+  }
+  return {
+    direction,
+    outcome: 'set-aside',
+    label: step.outcome.command.label,
+    setAside: {
+      reason: step.outcome.reason,
+      subjectName: step.outcome.subjectName,
+      nextLabel: step.outcome.nextLabel,
+    },
+    ...(steps ? { steps } : {}),
+  };
 }
 
 /**
@@ -274,64 +329,132 @@ export function usePlanUndoRedo(params: {
     [queryClient, orgSlug, planId],
   );
 
+  // Held across a whole run of steps: between two of them the store's own in-flight guard is down,
+  // so without this a keystroke could slip a single undo into the middle of "undo to here".
+  const rangeRunningRef = useRef(false);
+
+  const replayOne = useCallback(
+    async (direction: 'undo' | 'redo'): Promise<Step> => {
+      const label = (direction === 'undo' ? history.peekUndo() : history.peekRedo())?.label ?? '';
+      let outcome: StepOutcome | null;
+      try {
+        outcome = await (direction === 'undo'
+          ? history.undo(replayContext)
+          : history.redo(replayContext));
+      } catch (err) {
+        if (err instanceof ReplayFailure) {
+          // The step failed part-way and says what state it left the plan in; the planner is told
+          // that, whatever the cause — and a lost pen under it still runs the pen contract.
+          if (err.cause instanceof ApiFetchError && err.cause.status === 423) onLockLost(err.cause);
+          return { kind: 'failed', label, detail: err.detail };
+        }
+        if (err instanceof ApiFetchError && err.status === 423) {
+          // Pen lost — the shared pen contract shows the lost-control banner and refetches the
+          // lock. The history stays: a step is checked against the server before it writes.
+          onLockLost(err);
+          return { kind: 'pen-lost' };
+        }
+        // Anything else — the stacks stay intact so the user can retry.
+        return { kind: 'failed', label };
+      }
+      if (outcome === null) return { kind: 'idle' };
+      if (outcome.kind === 'set-aside') {
+        refetchServerTruth();
+        return { kind: 'set-aside', outcome };
+      }
+      return { kind: 'applied', command: outcome.command };
+    },
+    [history, replayContext, onLockLost, refetchServerTruth],
+  );
+
+  /** What a step that APPLIED sets in motion: the recalculation, and the reveal of what it changed. */
+  const afterApplied = useCallback(
+    (command: Command, recalculate: boolean): void => {
+      if (recalculate) onReplayedRef.current?.();
+      void revealSubjects(command.subjects);
+    },
+    [revealSubjects],
+  );
+
   const run = useCallback(
     (direction: 'undo' | 'redo'): void => {
+      if (rangeRunningRef.current) return;
       void (async () => {
-        const label = (direction === 'undo' ? history.peekUndo() : history.peekRedo())?.label ?? '';
-        let outcome: StepOutcome | null;
-        try {
-          outcome = await (direction === 'undo'
-            ? history.undo(replayContext)
-            : history.redo(replayContext));
-        } catch (err) {
-          if (err instanceof ReplayFailure) {
-            // The step failed part-way and says what state it left the plan in; the planner is told
-            // that, whatever the cause — and a lost pen under it still runs the pen contract.
-            if (err.cause instanceof ApiFetchError && err.cause.status === 423)
-              onLockLost(err.cause);
-            report({ direction, outcome: 'failed', label, detail: err.detail });
-            return;
-          }
-          if (err instanceof ApiFetchError && err.status === 423) {
-            // Pen lost — the shared pen contract shows the lost-control banner and refetches the
-            // lock. The history stays: a step is checked against the server before it writes.
-            onLockLost(err);
-            return;
-          }
-          // Anything else — the stacks stay intact so the user can retry.
-          report({ direction, outcome: 'failed', label });
-          return;
-        }
-        if (outcome === null) return;
-        if (outcome.kind === 'set-aside') {
-          refetchServerTruth();
-          report({
-            direction,
-            outcome: 'set-aside',
-            label: outcome.command.label,
-            setAside: {
-              reason: outcome.reason,
-              subjectName: outcome.subjectName,
-              nextLabel: outcome.nextLabel,
-            },
-          });
+        const step = await replayOne(direction);
+        if (step.kind === 'idle' || step.kind === 'pen-lost') return;
+        if (step.kind !== 'applied') {
+          report(stoppedResult(direction, step));
           return;
         }
         report({
           direction,
           outcome: 'done',
-          label: outcome.command.label,
-          command: outcome.command,
+          label: step.command.label,
+          command: step.command,
         });
-        if (outcome.command.affectsSchedule !== false) onReplayedRef.current?.();
-        void revealSubjects(outcome.command.subjects);
+        afterApplied(step.command, step.command.affectsSchedule !== false);
       })();
     },
-    [history, replayContext, onLockLost, refetchServerTruth, report, revealSubjects],
+    [replayOne, report, afterApplied],
+  );
+
+  const runTo = useCallback(
+    (direction: 'undo' | 'redo', count: number): void => {
+      if (rangeRunningRef.current || count < 1) return;
+      // One step is an ordinary press, and reads as one.
+      if (count === 1) {
+        run(direction);
+        return;
+      }
+      rangeRunningRef.current = true;
+      void (async () => {
+        try {
+          let done = 0;
+          let last: Command | undefined;
+          let recalculate = false;
+          let stop: Exclude<Step, { kind: 'applied' }> = { kind: 'idle' };
+          while (done < count) {
+            const step = await replayOne(direction);
+            if (step.kind !== 'applied') {
+              stop = step;
+              break;
+            }
+            done += 1;
+            last = step.command;
+            recalculate ||= step.command.affectsSchedule !== false;
+          }
+          // What DID run is acted on whether or not the run finished: the plan changed, so the engine
+          // is told and the planner is shown the last thing reversed.
+          if (last !== undefined) afterApplied(last, recalculate);
+          if (stop.kind === 'pen-lost') return;
+          if (stop.kind !== 'idle') {
+            // The run STOPPED, and does not skip the step (see `rangeMessage`). If it stopped on the
+            // first step nothing ran, so this is an ordinary single press and reads as one.
+            report(stoppedResult(direction, stop, done === 0 ? undefined : { done, total: count }));
+            return;
+          }
+          // Finished — or the stack ran out early, in which case `done` is all there was.
+          if (last !== undefined) {
+            report({
+              direction,
+              outcome: 'done',
+              label: last.label,
+              command: last,
+              steps: { done, total: done },
+            });
+          }
+        } finally {
+          rangeRunningRef.current = false;
+        }
+      })();
+    },
+    [run, replayOne, report, afterApplied],
   );
 
   const undo = useCallback((): void => run('undo'), [run]);
   const redo = useCallback((): void => run('redo'), [run]);
+  const undoTo = useCallback((count: number): void => runTo('undo', count), [runTo]);
+  const redoTo = useCallback((count: number): void => runTo('redo', count), [runTo]);
 
   return useMemo(
     () => ({
@@ -341,7 +464,20 @@ export function usePlanUndoRedo(params: {
       canRedo: history.canRedo,
       undoLabel: history.undoLabel,
       redoLabel: history.redoLabel,
+      entries: history.entries,
+      undoTo,
+      redoTo,
     }),
-    [undo, redo, history.canUndo, history.canRedo, history.undoLabel, history.redoLabel],
+    [
+      undo,
+      redo,
+      undoTo,
+      redoTo,
+      history.entries,
+      history.canUndo,
+      history.canRedo,
+      history.undoLabel,
+      history.redoLabel,
+    ],
   );
 }

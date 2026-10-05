@@ -332,6 +332,40 @@ describe('usePlanEditHistory', () => {
  * the next press runs the step below it — before this, a refused step stayed on top and every earlier
  * step was unreachable until a reload.
  */
+describe('usePlanEditHistory — entries (undo-redo M7)', () => {
+  const named = (label: string): Command => cmd(label, []);
+
+  it('lists both stacks nearest first, as the steps would run', async () => {
+    const { result } = renderHook(() => usePlanEditHistory('p1'));
+    act(() => {
+      result.current.record(named('A'));
+      result.current.record(named('B'));
+      result.current.record(named('C'));
+    });
+    await act(async () => {
+      await result.current.undo(ctx);
+      await result.current.undo(ctx);
+    });
+    expect(result.current.entries()).toEqual({ undo: ['A'], redo: ['B', 'C'] });
+  });
+
+  it('is empty after a clear', () => {
+    const { result } = renderHook(() => usePlanEditHistory('p1'));
+    act(() => result.current.record(named('A')));
+    act(() => result.current.clear());
+    expect(result.current.entries()).toEqual({ undo: [], redo: [] });
+  });
+
+  // The toolbar-context memo invariant: reading the list must not need a new store identity, and
+  // recording must not change the reader's.
+  it('is a stable reader across records', () => {
+    const { result } = renderHook(() => usePlanEditHistory('p1'));
+    const first = result.current.entries;
+    act(() => result.current.record(named('A')));
+    expect(result.current.entries).toBe(first);
+  });
+});
+
 describe('usePlanEditHistory — setting a step aside', () => {
   it('pops the refused step, writes nothing across, and names what the next press runs', async () => {
     const log: string[] = [];

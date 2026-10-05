@@ -34,6 +34,16 @@ export type StepOutcome =
       readonly nextLabel: string | null;
     };
 
+/**
+ * The labels of the steps on each stack, **nearest first** — the order the history menu lists them
+ * and the order they would run: `undo[0]` is what the next undo reverses, `redo[0]` what the next
+ * redo re-applies.
+ */
+export interface HistoryEntries {
+  readonly undo: readonly string[];
+  readonly redo: readonly string[];
+}
+
 export interface PlanEditHistory {
   /** Push a just-applied edit's inverse onto the undo stack; clears the redo branch (linear history). */
   record: (command: Command) => void;
@@ -65,6 +75,13 @@ export interface PlanEditHistory {
    */
   peekUndo: () => Command | undefined;
   peekRedo: () => Command | undefined;
+  /**
+   * The labels of every step on both stacks, read on demand. A function rather than state **on
+   * purpose**: the stacks live in refs, and publishing the whole list as state would move this
+   * object's identity on every record and press — the toolbar-context memo invariant this hook ends
+   * on. The history menu calls it when it renders, which is only while it is open.
+   */
+  entries: () => HistoryEntries;
   /**
    * Drop both stacks — a plan switch. **Not** a pen release or loss: the
    * history survives a hand-off (ADR-0176 D4), because every step is checked against the server
@@ -186,6 +203,14 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     [],
   );
 
+  const entries = useCallback(
+    (): HistoryEntries => ({
+      undo: undoStackRef.current.map((command) => command.label).reverse(),
+      redo: redoStackRef.current.map((command) => command.label).reverse(),
+    }),
+    [],
+  );
+
   const undo = useCallback(
     async (ctx: ReplayContext): Promise<StepOutcome | null> => {
       if (runningRef.current) return null;
@@ -276,6 +301,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       isTop,
       peekUndo,
       peekRedo,
+      entries,
       undo,
       redo,
       clear,
@@ -290,6 +316,7 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
       isTop,
       peekUndo,
       peekRedo,
+      entries,
       undo,
       redo,
       clear,

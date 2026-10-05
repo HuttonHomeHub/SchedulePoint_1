@@ -13,6 +13,7 @@ import type { ResizableColumnKey } from '@/features/gantt/layout/column-widths';
 import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
+import type { HistoryEntries } from '@/features/undo-redo';
 
 /**
  * The context the TSLD toolbar registry ({@link tsldToolbarItems}) reads and commands (ADR-0031).
@@ -195,6 +196,12 @@ export interface TsldToolbarContext {
   undo: () => void;
   /** Run the top redo step. */
   redo: () => void;
+  /** The labels of the steps on each stack, nearest first — read when the history menu renders. */
+  historyEntries: () => HistoryEntries;
+  /** Undo this many steps in order (the history menu's "undo to here"). */
+  undoTo: (count: number) => void;
+  /** Redo this many steps in order. */
+  redoTo: (count: number) => void;
 
   // --- Object / plan actions (group 5) ------------------------------------------------------
   /** Whether the plan can be recalculated now (role + pen; from the model). */

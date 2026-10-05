@@ -130,3 +130,129 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     expect(undo).not.toHaveBeenCalled();
   });
 });
+
+describe('TSLD toolbar Undo history menu (undo-redo M7)', () => {
+  const undoTo = vi.fn();
+  const redoTo = vi.fn();
+  const historyCtx = (over: Partial<TsldToolbarContext> = {}) =>
+    ctx({
+      undoTo,
+      undoLabel: 'Move “C”',
+      redoTo,
+      historyEntries: () => ({ undo: ['Move “C”', 'Move “B”', 'Add “A”'], redo: ['Delete “D”'] }),
+      ...over,
+    });
+  const trigger = (bar: HTMLElement) => within(bar).getByRole('button', { name: 'Undo history' });
+  const rowsOf = () => within(screen.getByRole('menu')).getAllByRole('menuitem');
+  /** Keys reach the focused element, as in a browser. */
+  const press = (key: string) =>
+    fireEvent.keyDown(document.activeElement ?? document.body, { key });
+
+  it('is a menu button named Undo history, beside Undo', () => {
+    const bar = doRow(historyCtx());
+    expect(trigger(bar)).toHaveAttribute('aria-haspopup', 'menu');
+    expect(trigger(bar)).toHaveAttribute('aria-expanded', 'false');
+    const names = within(bar)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(names.indexOf('Undo history')).toBe(names.indexOf('Undo move “C”') + 1);
+  });
+
+  it('lists the undo steps newest first, then the redo steps, each saying what it does', () => {
+    const bar = doRow(historyCtx());
+    fireEvent.click(trigger(bar));
+    expect(screen.getByRole('menu', { name: 'Undo history' })).toBeInTheDocument();
+    expect(rowsOf().map((item) => item.textContent)).toEqual([
+      'Undo Move “C”',
+      'Undo 2 steps, back to Move “B”2 steps',
+      'Undo 3 steps, back to Add “A”3 steps',
+      'Redo Delete “D”',
+    ]);
+  });
+
+  it('choosing a row undoes back to it in one call, and returns focus to the trigger', () => {
+    const bar = doRow(historyCtx());
+    fireEvent.click(trigger(bar));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Add “A”/ }));
+    expect(undoTo).toHaveBeenCalledExactlyOnceWith(3);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger(bar)).toHaveFocus();
+  });
+
+  it('choosing a redo row redoes up to it', () => {
+    const bar = doRow(historyCtx());
+    fireEvent.click(trigger(bar));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Delete “D”/ }));
+    expect(redoTo).toHaveBeenCalledExactlyOnceWith(1);
+    expect(undoTo).not.toHaveBeenCalled();
+  });
+
+  it('opens from the keyboard with focus on the first row; arrows rove; Escape returns focus', () => {
+    const bar = doRow(historyCtx());
+    trigger(bar).focus();
+    press('ArrowDown');
+    const rows = rowsOf();
+    expect(rows[0]).toHaveFocus();
+    press('ArrowDown');
+    expect(rows[1]).toHaveFocus();
+    press('End');
+    expect(rows[3]).toHaveFocus();
+    press('Home');
+    expect(rows[0]).toHaveFocus();
+    press('Escape');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger(bar)).toHaveFocus();
+    expect(undoTo).not.toHaveBeenCalled();
+  });
+
+  it('ArrowUp opens it too (APG menu button)', () => {
+    const bar = doRow(historyCtx());
+    trigger(bar).focus();
+    press('ArrowUp');
+    expect(rowsOf()[0]).toHaveFocus();
+  });
+
+  it('is shaded with the reason when there is nothing to undo or redo, and does not open', () => {
+    const bar = doRow(historyCtx({ canUndo: false, canRedo: false }));
+    expect(trigger(bar)).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger(bar)).toHaveAccessibleDescription('Nothing to undo or redo');
+    fireEvent.click(trigger(bar));
+    trigger(bar).focus();
+    press('ArrowDown');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('is shaded with the rest of the pen-gated cluster when authoring is off', () => {
+    const bar = doRow(historyCtx(), false);
+    expect(trigger(bar)).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(trigger(bar));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('shades its rows, still reachable and still named, if the pen is lost while it is open', () => {
+    const items = buildTsldToolbarItems();
+    const bar = (authoringEnabled: boolean) => (
+      <Toolbar
+        items={splitByRow(items).strip}
+        context={historyCtx()}
+        label="Plan commands"
+        authoringEnabled={authoringEnabled}
+      />
+    );
+    const view = render(bar(true));
+    fireEvent.click(trigger(screen.getByRole('toolbar')));
+    expect(rowsOf()[0]).not.toHaveAttribute('aria-disabled');
+    view.rerender(bar(false));
+    expect(rowsOf()[0]).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(rowsOf()[0]!);
+    expect(undoTo).not.toHaveBeenCalled();
+  });
+
+  it('adds no roving stop of its own beyond the toolbar’s one', () => {
+    const bar = doRow(historyCtx());
+    const stops = within(bar)
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('tabindex') === '0');
+    expect(stops).toHaveLength(1);
+  });
+});

@@ -900,3 +900,69 @@ test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan
       .toBe(2);
   });
 });
+
+/**
+ * **The Undo history menu undoes back to a chosen step** (undo-redo M7, US-6).
+ *
+ * Driven from the keyboard, because the control is an APG menu button inside a roving toolbar and the
+ * seam between those two is what a unit suite cannot see: the arrow opens it, focus lands on the first
+ * row, End reaches the oldest, Enter runs it and focus comes back to the trigger. The assertion that
+ * matters is the **one** summarising message — three undos ran, and the strip and the live region each
+ * say it once, rather than three results replacing each other.
+ */
+test('a planner undoes back several steps at once from the Undo history menu', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const strip = page.getByTestId('canvas-history-result');
+  const announcer = page.getByTestId('announcer');
+
+  await drawTask(page, 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawTask(page, 'Foundations', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+  await drawTask(page, 'Framing', { x: 500, y: 240 });
+  await expect(diagram.getByRole('option')).toHaveCount(3, { timeout: 15_000 });
+
+  const history = toolbar.getByRole('button', { name: 'Undo history' });
+  await history.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = page.getByRole('menu', { name: 'Undo history' });
+  await expect(menu).toBeVisible();
+  const rows = menu.getByRole('menuitem');
+  await expect(rows).toHaveCount(3);
+  // Newest first, each row saying what choosing it does.
+  await expect(rows.first()).toHaveAccessibleName('Undo Add “Framing”');
+  await expect(rows.last()).toHaveAccessibleName('Undo 3 steps, back to Add “Excavate”');
+
+  await test.step('the open menu is accessible', async () => {
+    const results = await new AxeBuilder({ page })
+      .include('[role="menu"]')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+
+  await expect(diagram.getByRole('option')).toHaveCount(0, { timeout: 15_000 });
+  await expect(strip).toContainText('Undid 3 steps.', { timeout: 15_000 });
+  await expect(announcer).toContainText('Undid 3 steps.');
+  await expect(history).toBeFocused();
+
+  await test.step('the redo half of the list brings them back', async () => {
+    await page.keyboard.press('ArrowDown');
+    const redoRows = page.getByRole('menu', { name: 'Undo history' }).getByRole('menuitem');
+    await expect(redoRows).toHaveCount(3);
+    await expect(redoRows.last()).toHaveAccessibleName('Redo 3 steps, up to Add “Framing”');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect(diagram.getByRole('option')).toHaveCount(3, { timeout: 15_000 });
+    await expect(strip).toContainText('Redid 3 steps.');
+  });
+});

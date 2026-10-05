@@ -145,6 +145,12 @@ entry stops being needed.
   that is intended. Tooltips and the shortcuts
   sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
   `aria-keyshortcuts` lists every chord that works.
+- **Undo history jumps back several steps in one action** (undo-redo M7). A menu button beside
+  Undo, named **Undo history**, lists the undo steps newest first and then the redo steps; choosing
+  one runs every step down to it and leaves **one** strip — "Undid 3 steps." — or, when a step cannot
+  apply, "Undid 2 of 4 — stopped at ⟨step⟩: ⟨why⟩." The run stops there rather than skipping the step,
+  because the steps below it were made on top of it. It is shaded with Undo and Redo (no pen, the
+  Late-start overlay, nothing to undo) and a row says what it does by name, not by position.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

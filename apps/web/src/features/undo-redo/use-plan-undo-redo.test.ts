@@ -60,6 +60,7 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
     isTop: vi.fn().mockReturnValue(false),
     peekUndo: vi.fn().mockReturnValue(undefined),
     peekRedo: vi.fn().mockReturnValue(undefined),
+    entries: vi.fn().mockReturnValue({ undo: [], redo: [] }),
     undo: vi.fn().mockResolvedValue(applied(command('Move activity'))),
     redo: vi.fn().mockResolvedValue(applied(command('Add link'))),
     clear: vi.fn(),
@@ -693,5 +694,156 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
     act(() => result.current.undo());
     await waitFor(() => expect(history.undo).toHaveBeenCalled());
     expect(onResult).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePlanUndoRedo — undo and redo to a chosen step (undo-redo M7)', () => {
+  const steps = [
+    command('Move “A”'),
+    command('Move “B”'),
+    command('Move “C”'),
+    command('Move “D”'),
+  ];
+
+  /** A history double that undoes (or redoes) `steps` in order and answers each as scripted. */
+  function scripted(answers: StepOutcome[], direction: 'undo' | 'redo' = 'undo') {
+    const fn = vi.fn();
+    for (const answer of answers) fn.mockResolvedValueOnce(answer);
+    fn.mockResolvedValue(null);
+    return fakeHistory(direction === 'undo' ? { undo: fn } : { redo: fn });
+  }
+  const setAside = (c: Command): StepOutcome => ({
+    kind: 'set-aside',
+    command: c,
+    reason: 'changed',
+    subjectName: 'Pour',
+    nextLabel: null,
+  });
+
+  it('runs the steps in order and posts ONE summarising result', async () => {
+    const onResult = vi.fn();
+    const history = scripted(steps.slice(0, 3).map(applied));
+    const { result, announce, onReplayed } = setup(history, onResult);
+    act(() => result.current.undoTo(3));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(history.undo).toHaveBeenCalledTimes(3);
+    expect(onResult).toHaveBeenCalledWith({
+      direction: 'undo',
+      outcome: 'done',
+      label: 'Move “C”',
+      command: steps[2],
+      steps: { done: 3, total: 3 },
+    });
+    expect(announce).toHaveBeenCalledExactlyOnceWith('Undid 3 steps.');
+    // The engine is told once for the whole run, not once per step.
+    expect(onReplayed).toHaveBeenCalledTimes(1);
+  });
+
+  it('redoes to a step the same way', async () => {
+    const onResult = vi.fn();
+    const history = scripted(steps.slice(0, 2).map(applied), 'redo');
+    const { result } = setup(history, onResult);
+    act(() => result.current.redoTo(2));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(history.redo).toHaveBeenCalledTimes(2);
+    expect(history.undo).not.toHaveBeenCalled();
+    expect(onResult.mock.calls[0]![0]).toMatchObject({
+      direction: 'redo',
+      outcome: 'done',
+      steps: { done: 2, total: 2 },
+    });
+  });
+
+  it('stops at the first step that cannot apply, and says how far it got', async () => {
+    const onResult = vi.fn();
+    const history = scripted([applied(steps[0]!), applied(steps[1]!), setAside(steps[2]!)]);
+    const { result, announce, onReplayed, invalidateSpy } = setup(history, onResult);
+    act(() => result.current.undoTo(4));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    // The fourth step is never attempted: it was made on top of the one that did not apply.
+    expect(history.undo).toHaveBeenCalledTimes(3);
+    expect(onResult.mock.calls[0]![0]).toMatchObject({
+      outcome: 'set-aside',
+      label: 'Move “C”',
+      steps: { done: 2, total: 4 },
+    });
+    expect(historyResultMessage({ ...onResult.mock.calls[0]![0], id: 1 })).toBe(
+      'Undid 2 of 4 — stopped at move “C”: Pour was changed after your edit.',
+    );
+    // A refusal is the strip's `role="alert"`, so it is not announced as well.
+    expect(announce).not.toHaveBeenCalled();
+    // The two steps that DID run still recalculate; the set-aside refetches server truth.
+    expect(onReplayed).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it('a first step that cannot apply reads as an ordinary single press', async () => {
+    const onResult = vi.fn();
+    const { result, onReplayed } = setup(scripted([setAside(steps[0]!)]), onResult);
+    act(() => result.current.undoTo(3));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult.mock.calls[0]![0]).not.toHaveProperty('steps');
+    expect(onReplayed).not.toHaveBeenCalled();
+  });
+
+  it('a transport failure part-way stops the run and keeps the retry path', async () => {
+    const onResult = vi.fn();
+    const history = fakeHistory({
+      undo: vi.fn().mockResolvedValueOnce(applied(steps[0]!)).mockRejectedValueOnce(err(500)),
+      peekUndo: vi.fn().mockReturnValue(steps[1]),
+    });
+    const { result } = setup(history, onResult);
+    act(() => result.current.undoTo(3));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(history.undo).toHaveBeenCalledTimes(2);
+    expect(onResult.mock.calls[0]![0]).toMatchObject({
+      outcome: 'failed',
+      label: 'Move “B”',
+      steps: { done: 1, total: 3 },
+    });
+  });
+
+  it('a lost pen part-way runs the pen contract and posts nothing', async () => {
+    const onResult = vi.fn();
+    const history = fakeHistory({
+      undo: vi.fn().mockResolvedValueOnce(applied(steps[0]!)).mockRejectedValueOnce(err(423)),
+    });
+    const { result, onLockLost, onReplayed } = setup(history, onResult);
+    act(() => result.current.undoTo(3));
+    await waitFor(() => expect(onLockLost).toHaveBeenCalledTimes(1));
+    expect(onResult).not.toHaveBeenCalled();
+    // What ran is still recalculated.
+    await waitFor(() => expect(onReplayed).toHaveBeenCalledTimes(1));
+  });
+
+  it('one step is an ordinary press, and reads as one', async () => {
+    const onResult = vi.fn();
+    const { result, announce } = setup(scripted([applied(steps[0]!)]), onResult);
+    act(() => result.current.undoTo(1));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult.mock.calls[0]![0]).not.toHaveProperty('steps');
+    expect(announce).toHaveBeenCalledExactlyOnceWith('Undid move “A”.');
+  });
+
+  it('ignores a single press while a run is in progress', async () => {
+    let release: (outcome: StepOutcome) => void = () => undefined;
+    const history = fakeHistory({
+      undo: vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<StepOutcome>((resolve) => (release = resolve)))
+        .mockResolvedValue(applied(steps[1]!)),
+    });
+    const { result } = setup(history, vi.fn());
+    act(() => result.current.undoTo(2));
+    act(() => result.current.undo());
+    expect(history.undo).toHaveBeenCalledTimes(1);
+    release(applied(steps[0]!));
+    await waitFor(() => expect(history.undo).toHaveBeenCalledTimes(2));
+  });
+
+  it('exposes the store’s entries without changing its own identity as steps are recorded', () => {
+    const entries = vi.fn().mockReturnValue({ undo: ['A'], redo: [] });
+    const { result } = setup(fakeHistory({ entries }));
+    expect(result.current.entries()).toEqual({ undo: ['A'], redo: [] });
   });
 });

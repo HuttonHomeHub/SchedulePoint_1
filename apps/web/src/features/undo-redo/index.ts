@@ -67,6 +67,7 @@ export {
   usePlanEditHistory,
   MAX_HISTORY_DEPTH,
   COALESCE_WINDOW_MS,
+  type HistoryEntries,
   type PlanEditHistory,
   type StepOutcome,
 } from './use-plan-edit-history';
