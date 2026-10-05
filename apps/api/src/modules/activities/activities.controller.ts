@@ -179,7 +179,8 @@ export class ActivitiesController {
       'optimistic-lock `version` is incremented, so a client holding a cached copy of one would ' +
       'otherwise 409 on its next save with no explanation. The response returns those rows at ' +
       'their new versions — the caller cannot derive them, since it did not know which activities ' +
-      'were children and the count alone would not carry the versions.',
+      'were children and the count alone would not carry the versions. `deleteBatchId` is the batch ' +
+      'the summary’s soft-delete was stamped with: `POST …/restore-batch/:batchId` undoes the dissolve.',
   })
   @ApiOkResponse({ type: DissolveSummaryResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })

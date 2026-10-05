@@ -1618,7 +1618,9 @@ controller's 30 / 60 s per handler.
   409-ing on its next save for a reason the user did not cause (the cross-resource-recompute rule
   above, applied to the WBS tree). `deleteBatchId` is the batch the summary's own soft-delete was
   stamped with: `POST …/activities/restore-batch/:batchId` with it restores the summary (same id),
-  which is what undoing a dissolve is keyed on. Additive — the status and `promoted` are unchanged.
+  which is what undoing a dissolve is keyed on. The restore keeps its own gates — `activity:restore`,
+  the plan edit-lock (423 once the pen is lost) — so a held id never makes an undo certain. Additive —
+  the status and `promoted` are unchanged.
 - `POST …/resources/:resourceId/dissolve` (**200**, no request body; returns `{ promoted }`) is the same act for the **resource**
   tree: a `GROUP`'s direct children take its own parent (or the top level), then the group is
   soft-deleted, under the organisation's resource-tree lock. Permission `resource:delete`; a
