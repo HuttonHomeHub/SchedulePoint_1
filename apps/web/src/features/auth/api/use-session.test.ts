@@ -4,7 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { sessionKeys, useSignIn, useSignOut, useSignUp } from './use-session';
+import { sessionKeys, useSession, useSignIn, useSignOut, useSignUp } from './use-session';
 
 import { rememberPlan, readRecentPlanIds } from '@/features/overview/model/recent-plans';
 import { apiFetch } from '@/lib/api/client';
@@ -126,5 +126,39 @@ describe('useSignOut', () => {
     await waitFor(() => {
       expect(readRecentPlanIds(window.localStorage, { userId: 'u1', orgSlug: 'acme' })).toEqual([]);
     });
+  });
+});
+
+describe('useSession', () => {
+  it('does not refetch /me when another observer mounts while the session is fresh', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(ME);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children);
+
+    const first = renderHook(() => useSession(), { wrapper });
+    await waitFor(() => expect(first.result.current.data).toEqual(ME));
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    // A plan switch remounts the workspace and its observers (docs/TECH_DEBT.md #451, #455).
+    first.unmount();
+    const second = renderHook(() => useSession(), { wrapper });
+    expect(second.result.current.data).toEqual(ME);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still lets sign-in replace a session cached a moment ago', async () => {
+    // The trap a shared non-zero staleTime would spring: `fetchQuery` would return this fresh
+    // `null` and the post-login navigation would bounce back to sign-in.
+    vi.mocked(authClient.signIn.email).mockResolvedValue({ error: null });
+    vi.mocked(apiFetch).mockResolvedValue(ME);
+    const { queryClient, wrapper } = harness();
+    renderHook(() => useSession(), { wrapper });
+
+    const { result } = renderHook(() => useSignIn(), { wrapper });
+    await result.current.mutateAsync({ email: 'a@b.com', password: 'correct-horse' });
+
+    expect(queryClient.getQueryData(sessionKeys.session)).toEqual(ME);
   });
 });
