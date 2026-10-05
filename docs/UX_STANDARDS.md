@@ -138,7 +138,11 @@ entry stops being needed.
   including with focus on the page itself after a deselect or a closed dialog. They stand aside
   only where the browser has a native undo to protect — text-type inputs (text, search, number,
   date, time, …), `textarea`, `select` and `contenteditable` — so a checkbox, radio, range or
-  button does **not** swallow the key. They are inert under a modal. Tooltips and the shortcuts
+  button does **not** swallow the key. They are inert under a modal, and an Alt chord (AltGr
+  types a character on some layouts) is never an undo. The scope is the plan workspace and the
+  page itself — **not** app-shell controls outside the workspace (the navigator tree, the
+  header), where the key is left alone. A held key repeats the undo, as it does in every editor;
+  that is intended. Tooltips and the shortcuts
   sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
   `aria-keyshortcuts` lists every chord that works.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear

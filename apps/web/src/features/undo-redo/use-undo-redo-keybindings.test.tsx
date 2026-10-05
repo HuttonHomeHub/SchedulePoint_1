@@ -99,6 +99,16 @@ describe('useUndoRedoKeybindings', () => {
     expect(undo).not.toHaveBeenCalled();
   });
 
+  it('ignores an Alt chord — AltGr is Ctrl+Alt on Windows and types a character', () => {
+    mount();
+    for (const target of targets()) {
+      expect(press({ key: 'z', ctrlKey: true, altKey: true }, target)).toBe(false);
+      expect(press({ key: 'y', ctrlKey: true, altKey: true }, target)).toBe(false);
+    }
+    expect(undo).not.toHaveBeenCalled();
+    expect(redo).not.toHaveBeenCalled();
+  });
+
   it('does nothing for a bare Z (no modifier) and never preventDefaults it', () => {
     mount();
     for (const target of targets()) expect(press({ key: 'z' }, target)).toBe(false);

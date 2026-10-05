@@ -81,6 +81,9 @@ export function useUndoRedoKeybindings(params: {
       if (modalOpenRef.current) return;
       // Undo/redo are always modified (Cmd on macOS, Ctrl elsewhere) — bail early on a bare key.
       if (!event.metaKey && !event.ctrlKey) return;
+      // AltGr is reported as Ctrl+Alt on Windows and types a character on some layouts (AltGr+Z, AltGr+Y),
+      // so an Alt-chord is never an undo.
+      if (event.altKey) return;
       const key = event.key.toLowerCase();
       // Never hijack an undo the user is typing into a text field (the native edit-undo owns it).
       if (isTextEntryTarget(event.target)) return;
@@ -141,5 +144,5 @@ export function useUndoRedoKeybindings(params: {
 /** The slice of a keyboard event the handler reads — a React synthetic event and a native one both fit. */
 type KeyLike = Pick<
   KeyboardEvent,
-  'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'target' | 'preventDefault'
+  'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'target' | 'preventDefault'
 >;
