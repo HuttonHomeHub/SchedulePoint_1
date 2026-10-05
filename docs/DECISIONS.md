@@ -10,6 +10,17 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-05 — Debt-register completeness: the 17 lost numbers are recovered, not exempted
+
+**What was decided.** `check:debt-status` gains A11 (`docs/TECH_DEBT.md` #453): every number from 1 to the
+highest in use is a live row or a ledger line. The 17 numbers found missing below 62 (6, 19, 22, 24–27, 36,
+38, 39, 41, 44, 47, 50, 52, 54, 61) were **recovered into the ledger from `git log -S` and this file**, not
+frozen behind an exemption list (product owner, 2026-10-05, answering the spec's CQ-1). Git answered all 17,
+so the exemption mechanism was not built. Numbers 19 and 61 had each been used twice and carry a footnoted
+second line, as 83 does. The ledger parse is now the one contiguous table under `## Closed numbers`, which
+moved `#343`, `#360` and `#362` out of `### 294.`'s table. **Known limit, pinned by a test:** deleting the
+single highest row is not seen, because the ceiling is read from the file.
+
 ## 2026-10-05 — The ten Dependabot bumps are taken together, at the versions Dependabot proposed
 
 **What was decided.** #807–#816 land as one change off `main`, the way #731 took the previous eight
