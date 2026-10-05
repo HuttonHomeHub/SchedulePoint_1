@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.165.0
+
+### Minor Changes
+
+- [#801](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/801) [`7213c56`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7213c56411a71450aaa1a0e01a3eeeac71a70227) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo no longer gets stuck: a step that can't be undone is set aside and explained, and earlier steps still undo. Before it writes, an undo or redo now checks the activities and links it changed and writes back only what that step changed, so it never overwrites somebody else's edit or reverts an unrelated field. Your undo history is also kept when you hand the edit lock to a colleague and take it back, and redoing an added activity brings back the same one.
+
 ## 0.164.0
 
 ### Minor Changes
