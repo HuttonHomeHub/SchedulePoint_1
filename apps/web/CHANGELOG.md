@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.166.0
+
+### Minor Changes
+
+- [#804](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/804) [`5fae8a4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5fae8a4956c709c88d919e93b24538af6019a354) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - More of your edits can now be undone: adding from the Add dialog or Insert below, indent/outdent, summary members, steps, resource assignments and cross-plan links.
+
 ## 0.165.0
 
 ### Minor Changes
