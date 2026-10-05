@@ -25,6 +25,18 @@ export function PlanDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const planId = 'planId' in params ? params.planId : '';
+  // **One workspace per plan, by key** (`docs/TECH_DEBT.md` #451). TanStack Router re-renders this
+  // route when only `$planId` changes — opening another plan from the Project Explorer — so without
+  // the key every ref and state in the model outlived the plan it was about. The auto-recalculation
+  // watcher compared plan B's activities with its snapshot of plan A, counted the difference as an
+  // edit, and the status bar said "1 edit not calculated" on a plan nobody had touched; a debounced
+  // recalculation due for A fired against B. Several hooks in the model already document a
+  // `key={planId}` remount as their contract (`usePlanAutoRecalc`'s unmount flush is one), and this
+  // is where that remount now actually happens.
+  return <PlanDetail key={`${orgSlug}/${planId}`} orgSlug={orgSlug} planId={planId} />;
+}
+
+function PlanDetail({ orgSlug, planId }: { orgSlug: string; planId: string }): React.ReactElement {
   const model = usePlanWorkspaceModel(orgSlug, planId);
   const planQuery = model.plan;
 
