@@ -38,4 +38,13 @@ export class DissolveSummaryResponseDto {
       'empty grouping is legal and simply removes it.',
   })
   promoted!: PromotedActivityDto[];
+
+  @ApiProperty({
+    format: 'uuid',
+    description:
+      'The delete batch the summary itself was soft-deleted in. `POST …/activities/restore-batch/' +
+      ':batchId` with it brings the summary back (alone — the promotion is not undone), which is ' +
+      'what an undo of the dissolve needs.',
+  })
+  deleteBatchId!: string;
 }

@@ -1350,6 +1350,15 @@ describe('ActivitiesService', () => {
       ]);
     });
 
+    it('returns the batch id the summary’s soft-delete was stamped with', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      lifecycle.cascadeSoftDelete.mockResolvedValue({ batchId: 'batch-dissolve', counts: {} });
+
+      const result = await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(result.deleteBatchId).toBe('batch-dissolve');
+    });
+
     // A promoted child's row changed, so a client holding the old copy must not be able to write
     // over the promotion — it gets a 409 on its next attempt instead.
     it('bumps the promoted children’s versions', async () => {
@@ -1371,7 +1380,7 @@ describe('ActivitiesService', () => {
       txUpdateMany.mockResolvedValue({ count: 0 });
       await expect(
         service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID),
-      ).resolves.toEqual({ promoted: [] });
+      ).resolves.toEqual({ promoted: [], deleteBatchId: 'b1' });
       expect(lifecycle.cascadeSoftDelete).toHaveBeenCalled();
     });
 

@@ -1143,6 +1143,30 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         });
       });
 
+      it('returns a deleteBatchId that restore-batch restores the summary with', async () => {
+        const { actor, planId } = await setup();
+        const s = await summary(actor, planId, 'Substructure');
+        const a = await task(actor, planId, 'Excavate', s.id);
+
+        const res = await actor.agent.post(dissolveUrl(s.id)).expect(200);
+        const deleteBatchId = res.body.data.deleteBatchId as string;
+        expect(deleteBatchId).toEqual(expect.any(String));
+
+        await actor.agent
+          .post(
+            `/api/v1/organizations/acme/plans/${planId}/activities/restore-batch/${deleteBatchId}`,
+          )
+          .expect(200);
+
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+          deletedAt: null,
+        });
+        // Restore brings the summary back alone; the child stays where it was promoted to.
+        expect(await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({
+          parentId: null,
+        });
+      });
+
       it('keeps a nested branch intact, moving it up one level', async () => {
         const { actor, planId } = await setup();
         const outer = await summary(actor, planId, 'Outer');

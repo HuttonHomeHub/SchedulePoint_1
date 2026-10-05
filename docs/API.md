@@ -1612,11 +1612,15 @@ controller's 30 / 60 s per handler.
   soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,
   because `DELETE` cascades to the whole subtree — the destructive reading must never be the
   default. Restoring a dissolved summary brings back the summary **alone**; the promotion is not
-  undone. It returns `{ promoted: [{ id, parentId, version }] }` rather than `204`, because it
+  undone. It returns `{ promoted: [{ id, parentId, version }], deleteBatchId }` rather than `204`, because it
   mutates **sibling rows the caller never named** and bumps each one's `version`: a client cannot
   derive which activities were children, so a bare 204 would leave every cached child stale and
   409-ing on its next save for a reason the user did not cause (the cross-resource-recompute rule
-  above, applied to the WBS tree).
+  above, applied to the WBS tree). `deleteBatchId` is the batch the summary's own soft-delete was
+  stamped with: `POST …/activities/restore-batch/:batchId` with it restores the summary (same id),
+  which is what undoing a dissolve is keyed on. The restore keeps its own gates — `activity:restore`,
+  the plan edit-lock (423 once the pen is lost) — so a held id never makes an undo certain. Additive —
+  the status and `promoted` are unchanged.
 - `POST …/resources/:resourceId/dissolve` (**200**, no request body; returns `{ promoted }`) is the same act for the **resource**
   tree: a `GROUP`'s direct children take its own parent (or the top level), then the group is
   soft-deleted, under the organisation's resource-tree lock. Permission `resource:delete`; a

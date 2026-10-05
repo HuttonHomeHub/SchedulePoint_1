@@ -87,6 +87,11 @@ const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MIL
  */
 export interface DissolveSummaryResult {
   promoted: { id: string; parentId: string | null; version: number }[];
+  /**
+   * The batch id the summary's own soft-delete was stamped with — what `restore-batch` needs to
+   * bring the summary back. Without it an undo of a dissolve had nothing to key the restore on.
+   */
+  deleteBatchId: string;
 }
 
 /**
@@ -1851,7 +1856,7 @@ export class ActivitiesService {
       });
     }
 
-    const promoted = await this.prisma.$transaction(async (tx) => {
+    const { promoted, deleteBatchId } = await this.prisma.$transaction(async (tx) => {
       // Same lock as every other parent-tree write.
       await acquirePlanWriteLock(tx, existing.planId);
 
@@ -1887,7 +1892,12 @@ export class ActivitiesService {
         },
       });
       // The summary is childless now, so the cascade has nothing left to take with it.
-      await this.lifecycle.cascadeSoftDelete(tx, 'activity', activityId, principal.userId);
+      const cascade = await this.lifecycle.cascadeSoftDelete(
+        tx,
+        'activity',
+        activityId,
+        principal.userId,
+      );
       // Each promoted child's WBS parent changed, from the summary to its grandparent: one entry per
       // child, saved together. (The summary carries no logic, so the cascade removed no link whose
       // other end needs a knock-on — a summary may not be a dependency endpoint, ADR-0035 §24.)
@@ -1927,11 +1937,12 @@ export class ActivitiesService {
       // and nothing tells it so.
       // soft-delete: any-state — re-reads the ids this transaction just selected as active and
       // updated (both guarded on `deletedAt: null`) under the plan lock, so none can be deleted.
-      return tx.activity.findMany({
+      const promotedRows = await tx.activity.findMany({
         where: { id: { in: rows.map((r) => r.id) } },
         select: { id: true, parentId: true, version: true },
         orderBy: { id: 'asc' },
       });
+      return { promoted: promotedRows, deleteBatchId: cascade.batchId };
     });
 
     this.logger.info(
@@ -1945,7 +1956,7 @@ export class ActivitiesService {
       'WBS summary dissolved',
     );
 
-    return { promoted };
+    return { promoted, deleteBatchId };
   }
 
   async restore(
