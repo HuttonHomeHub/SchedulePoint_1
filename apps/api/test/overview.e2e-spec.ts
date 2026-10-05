@@ -306,6 +306,15 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       const { recent, standing } = await flags(setup.actor, setup.planId);
       expect(recent?.editedSinceCalculated, 'Recently changed').toBe(expected);
       expect(standing?.editedSinceCalculated, 'Where the work stands').toBe(expected);
+      // **And the plan itself, which the workspace's status bar reads** (`docs/TECH_DEBT.md` #452).
+      // The overview said "Edited since it was calculated" while the plan said nothing, because the
+      // plan response did not carry the fact; asserting it in every case here is what keeps the
+      // three readers on one rule.
+      const plan = await setup.actor.agent.get(`${API}/plans/${setup.planId}`).expect(200);
+      expect(
+        (plan.body.data as { editedSinceCalculated: boolean }).editedSinceCalculated,
+        'GET plan',
+      ).toBe(expected);
     }
 
     /** A calculated plan: two linked activities, the pen held, nothing edited since. */

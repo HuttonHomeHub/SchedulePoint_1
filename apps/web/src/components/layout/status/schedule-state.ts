@@ -55,8 +55,19 @@ export type ScheduleState =
    * missing data date. The control is **shaded with the reason, never hidden** (ADR-0082) — a
    * planner who has just made an edit and cannot compute it is exactly the reader who needs to be
    * told which of the three it is.
+   *
+   * `editedSinceCalculated` is the SERVER's answer (`PlanSummary.editedSinceCalculated`): a
+   * scheduling input changed after the last recalculation, in this tab or not. It is what lets the
+   * workspace say what the organisation overview says, rather than only what this tab did
+   * (`docs/TECH_DEBT.md` #452).
    */
-  | { kind: 'stale'; edits: number; failed: boolean; refusal: string | null };
+  | {
+      kind: 'stale';
+      edits: number;
+      failed: boolean;
+      editedSinceCalculated: boolean;
+      refusal: string | null;
+    };
 
 /**
  * A stable hook for the journeys, in this repository's established shape (`data-toolbar-item`,
@@ -105,6 +116,7 @@ export function deriveScheduleState({
   isRecalculating,
   pendingEdits,
   failed,
+  editedSinceCalculated,
   activities,
   canRecalculate,
   refusalReason,
@@ -113,6 +125,16 @@ export function deriveScheduleState({
   isRecalculating: boolean;
   pendingEdits: number;
   failed: boolean;
+  /**
+   * **The server says a scheduling input changed after the last recalculation**
+   * (`PlanSummary.editedSinceCalculated`) — the same fact the organisation overview reads.
+   *
+   * The edit counter and the rows below can only see what THIS tab did, or a plan never
+   * calculated at all. An edit made in another session, by a colleague, or before this release
+   * left the overview saying "Edited since it was calculated" while this bar said nothing and
+   * offered no Recalculate (`docs/TECH_DEBT.md` #452, product owner report 2026-10-05).
+   */
+  editedSinceCalculated: boolean;
   /**
    * The plan's activities **as the client holds them**, or `undefined` while that query is
    * unresolved.
@@ -149,11 +171,13 @@ export function deriveScheduleState({
     activities !== undefined &&
     activities.length > 0 &&
     !activities.some((activity) => activity.earlyStart !== null);
-  if (!failed && pendingEdits === 0 && !neverCalculated) return { kind: 'current' };
+  if (!failed && pendingEdits === 0 && !neverCalculated && !editedSinceCalculated) {
+    return { kind: 'current' };
+  }
   const refusal = !canRecalculate
     ? (refusalReason ?? 'The schedule cannot be recalculated.')
     : hasDataDate
       ? null
       : 'Set a data date before the schedule can be calculated.';
-  return { kind: 'stale', edits: pendingEdits, failed, refusal };
+  return { kind: 'stale', edits: pendingEdits, failed, editedSinceCalculated, refusal };
 }

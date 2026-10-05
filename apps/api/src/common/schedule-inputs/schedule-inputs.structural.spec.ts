@@ -79,19 +79,28 @@ describe('the scheduling-input classification', () => {
 });
 
 describe('the writers of plans.schedule_inputs_changed_at', () => {
-  it('is written only by the helper; the overview merely reads it', () => {
+  it('is written only by the helper; the overview and the plan response merely read it', () => {
     const mentions = sourceFiles(SRC)
       .filter((file) =>
         /schedule_inputs_changed_at|scheduleInputsChangedAt/.test(readFileSync(file, 'utf8')),
       )
       .map((file) => relative(SRC, file))
       .sort();
+    // The readers: the shared "edited since calculated" rule, the overview, and the plan response
+    // that carries the rule's answer to the workspace (`docs/TECH_DEBT.md` #452).
     expect(mentions).toEqual([
+      'common/schedule-inputs/edited-since-calculated.ts',
       'common/schedule-inputs/mark-schedule-inputs-changed.ts',
       'modules/overview/overview.repository.ts',
+      'modules/plans/dto/plan-response.dto.ts',
     ]);
-    const overview = readFileSync(join(MODULES, 'overview/overview.repository.ts'), 'utf8');
-    expect(overview).not.toMatch(/SET\s+schedule_inputs_changed_at/i);
+    for (const reader of [
+      join(SRC, 'common/schedule-inputs/edited-since-calculated.ts'),
+      join(MODULES, 'overview/overview.repository.ts'),
+      join(MODULES, 'plans/dto/plan-response.dto.ts'),
+    ]) {
+      expect(readFileSync(reader, 'utf8')).not.toMatch(/SET\s+schedule_inputs_changed_at/i);
+    }
   });
 });
 

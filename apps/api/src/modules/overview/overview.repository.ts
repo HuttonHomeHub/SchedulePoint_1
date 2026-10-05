@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { PlanStatus } from '@prisma/client';
 
+import { isEditedSinceCalculated } from '../../common/schedule-inputs/edited-since-calculated';
 import { PrismaService } from '../../prisma/prisma.service';
 import { expiredInvitationWhere, liveInvitationWhere } from '../invitations/invitation-predicates';
 import { placedFinishSql } from '../schedule/placed-finish';
@@ -221,9 +222,10 @@ export class OverviewRepository {
       // The comparison is with the plan's scheduling-input stamp, NOT `changed_at`: `changed_at`
       // answers "was any row written" (it orders this list), and a lane move or a rename writes rows
       // the engine never reads. The stamp is written only by an edit that could move a date.
-      editedSinceCalculated:
-        row.schedule_computed_at !== null &&
-        row.schedule_inputs_changed_at.getTime() > row.schedule_computed_at.getTime(),
+      editedSinceCalculated: isEditedSinceCalculated(
+        row.schedule_computed_at,
+        row.schedule_inputs_changed_at,
+      ),
       changedByUserId: row.changed_by,
     }));
   }
@@ -369,9 +371,10 @@ export class OverviewRepository {
       clientName: row.client_name,
       status: row.status,
       scheduleComputedAt: row.schedule_computed_at,
-      editedSinceCalculated:
-        row.schedule_computed_at !== null &&
-        row.schedule_inputs_changed_at.getTime() > row.schedule_computed_at.getTime(),
+      editedSinceCalculated: isEditedSinceCalculated(
+        row.schedule_computed_at,
+        row.schedule_inputs_changed_at,
+      ),
       projectFinish: row.project_finish,
       activityCount: Number(row.activity_count),
       baselineFinish: row.baseline_finish,

@@ -1006,12 +1006,20 @@ export function ToolbarPlanWorkspace({
         isRecalculating: model.autoRecalc.isPending,
         pendingEdits: model.autoRecalc.pendingEdits,
         failed: model.autoRecalc.failed,
+        editedSinceCalculated: plan.editedSinceCalculated,
         activities: model.activities.data,
         canRecalculate: model.canRecalc,
         refusalReason: scheduleRefusal('recalculate'),
         hasDataDate: plan.plannedStart != null,
       }),
-    [model.autoRecalc, model.canRecalc, scheduleRefusal, plan.plannedStart, model.activities.data],
+    [
+      model.autoRecalc,
+      model.canRecalc,
+      scheduleRefusal,
+      plan.plannedStart,
+      plan.editedSinceCalculated,
+      model.activities.data,
+    ],
   );
 
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the

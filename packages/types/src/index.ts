@@ -354,6 +354,12 @@ export interface PlanSummary {
    * seeded {@link STANDARD_CALENDAR_NAME} calendar.
    */
   calendarId: string | null;
+  /**
+   * A scheduling input changed after the last recalculation, so the computed dates may be behind
+   * the plan. False for a plan never calculated. The server's answer, by the rule the organisation
+   * overview uses, so the plan workspace and the overview cannot disagree (TECH_DEBT #452).
+   */
+  editedSinceCalculated: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;
