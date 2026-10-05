@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.170.1
+
+### Patch Changes
+
+- [#825](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/825) [`8c9a606`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8c9a6062ae41def745062ae22e7e2fef1ceaa533) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo and redo no longer have a build-time off switch. They have been on in every release for months, so this removes the dead switch and changes nothing you see.
+
 ## 0.170.0
 
 ### Minor Changes
