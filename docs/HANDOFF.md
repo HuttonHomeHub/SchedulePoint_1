@@ -86,7 +86,7 @@ Nothing below is approved. Put these to the product owner in plain English:
   re-add it or the stop hook reports untracked files. A restart also kills running agents —
   checkpoint their work as WIP commits and relaunch.
 - **The `@repo/interchange` "decodes CP1252 high bytes" test fails in the container only.**
-  `check:reconcile-due` warns on a shallow clone; that is expected. Because it stops turbo, run
+  `check:reconcile-due` warns on a shallow clone; that is expected. Because the interchange failure stops turbo, run
   `pnpm --filter @repo/web test` and `pnpm --filter @repo/api test` on their own afterwards.
 - **Playwright in the container:** set `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium` (the
   bundled headless shell version is not installed). A spec filter is a regex on the full path, so
