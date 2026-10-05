@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 import { useId, useState } from 'react';
 
 import { bulkParentChanges } from '../model/membership-diff';
+import type { OnReparented } from '../model/reparented';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ export function WbsBulkAssignBar({
   gate,
   onDone,
   onClear,
+  onReparented,
 }: {
   orgSlug: string;
   planId: string;
@@ -56,6 +58,8 @@ export function WbsBulkAssignBar({
   onDone: () => void;
   /** The user dismissed the selection without assigning. */
   onClear: () => void;
+  /** Told when a batch lands, for the host that records it for undo (undo-redo M3). */
+  onReparented?: OnReparented;
 }): React.ReactElement | null {
   const announce = useAnnounce();
   const updateParents = useUpdateActivityParents(orgSlug, planId);
@@ -81,17 +85,23 @@ export function WbsBulkAssignBar({
     if (blocked) return;
     setError(null);
     const moved = changes.length;
-    updateParents.mutate(
-      { parents: changes },
-      {
-        onSuccess: () => {
-          // Names the destination, not just the count: "5 activities moved" leaves out the one
-          // thing the user was choosing.
-          announce(`${plural(moved, 'activity', 'activities')} moved to ${destination}.`);
-          onDone();
-        },
-        onError: (err) => setError(err.message),
+    // The rows as they stand now, before the write bumps their versions.
+    const before = changes.flatMap((change) => {
+      const row = byId.get(change.id);
+      return row === undefined ? [] : [row];
+    });
+    // The promise, not a per-call `onSuccess`: `onDone` clears the selection, which unmounts this bar
+    // and with it the observer, and react-query drops a per-call callback for an unmounted observer.
+    void updateParents.mutateAsync({ parents: changes }).then(
+      (after) => {
+        // Names the destination, not just the count: "5 activities moved" leaves out the one
+        // thing the user was choosing.
+        announce(`${plural(moved, 'activity', 'activities')} moved to ${destination}.`);
+        onDone();
+        // Last, so a fault in the host's history cannot leave a successful assign looking unfinished.
+        onReparented?.(before, after);
       },
+      (err: Error) => setError(err.message),
     );
   };
 

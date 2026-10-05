@@ -1,4 +1,11 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type {
+  ActivityStep,
+  ActivitySummary,
+  CrossPlanDependencySummary,
+  DependencySummary,
+  EditedField,
+  ResourceAssignmentSummary,
+} from '@repo/types';
 import { vi } from 'vitest';
 
 import type { ReplayContext } from '@/features/undo-redo/replay';
@@ -16,6 +23,66 @@ export function aDependency(overrides: Partial<DependencySummary> = {}): Depende
     predecessor: { id: 'a1', code: null, name: 'Excavate' },
     successor: { id: 'a2', code: null, name: 'Pour' },
     isDriving: false,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+/** A complete resource-assignment row for tests, overridable field by field. */
+export function anAssignment(
+  overrides: Partial<ResourceAssignmentSummary> = {},
+): ResourceAssignmentSummary {
+  return {
+    id: 'as1',
+    activityId: 'a1',
+    resourceId: 'r1',
+    budgetedUnits: 8,
+    unitsPerHour: null,
+    isDriving: false,
+    curveType: 'UNIFORM',
+    lagMinutes: 0,
+    actualUnits: 0,
+    budgetedCost: null,
+    actualCost: 0,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+/** A complete activity step for tests, overridable field by field. */
+export function aStep(overrides: Partial<ActivityStep> = {}): ActivityStep {
+  return {
+    id: 's1',
+    activityId: 'a1',
+    seq: 1,
+    name: 'Pour',
+    weight: 1,
+    percentComplete: 0,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+/** A complete cross-plan link for tests, overridable field by field. */
+export function aCrossPlanLink(
+  overrides: Partial<CrossPlanDependencySummary> = {},
+): CrossPlanDependencySummary {
+  return {
+    id: 'x1',
+    predecessorPlanId: 'p2',
+    successorPlanId: 'p1',
+    type: 'FS',
+    lagDays: 0,
+    lagMinutes: 0,
+    lagCalendar: 'PROJECT_DEFAULT',
+    predecessor: { id: 'o1', code: null, name: 'Other plan work' },
+    successor: { id: 'a1', code: null, name: 'Excavate' },
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -41,11 +108,26 @@ const conflict = (reason?: string): ApiFetchError =>
  * what lets a test prove a step still applies when the stored value is not the sent one.
  */
 export function fakePlanServer(
-  seed: { activities?: ActivitySummary[]; dependencies?: DependencySummary[] } = {},
+  seed: {
+    activities?: ActivitySummary[];
+    dependencies?: DependencySummary[];
+    assignments?: ResourceAssignmentSummary[];
+    /** Steps by the activity they hang off. */
+    steps?: Record<string, ActivityStep[]>;
+    crossPlanLinks?: CrossPlanDependencySummary[];
+  } = {},
   options: { normalise?: (row: ActivitySummary) => void } = {},
 ) {
   const activities = new Map((seed.activities ?? []).map((a) => [a.id, { ...a }]));
   const dependencies = new Map((seed.dependencies ?? []).map((d) => [d.id, { ...d }]));
+  const assignments = new Map((seed.assignments ?? []).map((a) => [a.id, { ...a }]));
+  const steps = new Map(
+    Object.entries(seed.steps ?? {}).map(([id, list]) => [id, list.map((step) => ({ ...step }))]),
+  );
+  const crossPlanLinks = new Map((seed.crossPlanLinks ?? []).map((l) => [l.id, { ...l }]));
+  let nextAssignment = 100;
+  let nextStep = 100;
+  let nextCrossLink = 100;
   // What each delete swept: the activities (a summary's subtree included) and the links touching
   // them, which the server cascades with the row and `restore-batch` puts back.
   const deleted = new Map<string, { rows: ActivitySummary[]; links: DependencySummary[] }>();
@@ -116,6 +198,24 @@ export function fakePlanServer(
       Promise.resolve(
         new Map(ids.flatMap((id) => (activities.has(id) ? [[id, { ...rowOf(id) }] as const] : []))),
       ),
+    readSteps: (activityId) =>
+      Promise.resolve(
+        activities.has(activityId)
+          ? (steps.get(activityId) ?? []).map((step) => ({ ...step }))
+          : undefined,
+      ),
+    readAssignments: (activityId) =>
+      Promise.resolve(
+        activities.has(activityId)
+          ? [...assignments.values()]
+              .filter((a) => a.activityId === activityId)
+              .map((a) => ({ ...a }))
+          : undefined,
+      ),
+    readCrossPlanLink: (id) => {
+      const link = crossPlanLinks.get(id);
+      return Promise.resolve(link === undefined ? undefined : { ...link });
+    },
     readDependencies: (ids) =>
       Promise.resolve(
         new Map(
@@ -127,7 +227,162 @@ export function fakePlanServer(
       ),
   };
 
+  const assignmentOf = (id: string): ResourceAssignmentSummary => {
+    const row = assignments.get(id);
+    if (row === undefined) throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+    return row;
+  };
+  /** Setting a driver is a move: the server clears the activity's previous driver in the same write. */
+  const clearDrivers = (activityId: string, exceptId?: string): void => {
+    for (const other of assignments.values()) {
+      if (other.activityId === activityId && other.isDriving && other.id !== exceptId) {
+        other.isDriving = false;
+        other.version += 1;
+      }
+    }
+  };
+
   const mutations = {
+    updateParents: vi.fn(
+      (input: { parents: { id: string; parentId: string | null; version: number }[] }) => {
+        // All-or-nothing, like the endpoint: one stale row refuses the lot and writes none.
+        for (const p of input.parents) lock(rowOf(p.id), p.version);
+        return Promise.resolve(
+          input.parents.map((p) => write(p.id, p.version, { parentId: p.parentId })),
+        );
+      },
+    ),
+    replaceSteps: vi.fn(
+      (input: {
+        activityId: string;
+        version: number;
+        steps: { name: string; weight: number; percentComplete: number }[];
+      }) => {
+        // The replace bumps the parent activity, whose version it is locked on.
+        write(input.activityId, input.version, {});
+        const saved = input.steps.map((step, i) =>
+          aStep({ ...step, id: `s${nextStep++}`, activityId: input.activityId, seq: i + 1 }),
+        );
+        steps.set(input.activityId, saved);
+        return Promise.resolve(saved.map((step) => ({ ...step })));
+      },
+    ),
+    createAssignment: vi.fn(
+      (input: {
+        activityId: string;
+        body: {
+          resourceId: string;
+          budgetedUnits: number;
+          unitsPerHour?: number;
+          isDriving: boolean;
+          curveType?: ResourceAssignmentSummary['curveType'];
+          budgetedCost?: number;
+          actualCost?: number;
+          actualUnits?: number;
+          lagMinutes?: number;
+        };
+      }) => {
+        rowOf(input.activityId);
+        const taken = [...assignments.values()].some(
+          (a) => a.activityId === input.activityId && a.resourceId === input.body.resourceId,
+        );
+        if (taken) throw conflict('DUPLICATE_ASSIGNMENT');
+        if (input.body.isDriving) clearDrivers(input.activityId);
+        const { budgetedUnits, isDriving, resourceId } = input.body;
+        const row = anAssignment({
+          id: `as${nextAssignment++}`,
+          activityId: input.activityId,
+          resourceId,
+          budgetedUnits,
+          isDriving,
+          unitsPerHour: input.body.unitsPerHour ?? null,
+          ...(input.body.curveType === undefined ? {} : { curveType: input.body.curveType }),
+          budgetedCost: input.body.budgetedCost ?? null,
+          actualCost: input.body.actualCost ?? 0,
+          actualUnits: input.body.actualUnits ?? 0,
+          lagMinutes: input.body.lagMinutes ?? 0,
+        });
+        assignments.set(row.id, row);
+        return Promise.resolve({ ...row });
+      },
+    ),
+    updateAssignment: vi.fn(
+      (input: {
+        assignmentId: string;
+        activityId: string;
+        version: number;
+        budgetedUnits?: number;
+        unitsPerHour?: number;
+        isDriving?: boolean;
+        curveType?: ResourceAssignmentSummary['curveType'];
+        editedField?: EditedField;
+        budgetedCost?: number | null;
+        actualCost?: number;
+        actualUnits?: number;
+        lagMinutes?: number;
+      }) => {
+        const row = assignmentOf(input.assignmentId);
+        lock(row, input.version);
+        const { budgetedUnits, unitsPerHour, isDriving, curveType } = input;
+        const { budgetedCost, actualCost, actualUnits, lagMinutes } = input;
+        if (isDriving === true) clearDrivers(row.activityId, row.id);
+        Object.assign(row, {
+          ...(budgetedUnits === undefined ? {} : { budgetedUnits }),
+          ...(unitsPerHour === undefined ? {} : { unitsPerHour }),
+          ...(isDriving === undefined ? {} : { isDriving }),
+          ...(curveType === undefined ? {} : { curveType }),
+          ...(budgetedCost === undefined ? {} : { budgetedCost }),
+          ...(actualCost === undefined ? {} : { actualCost }),
+          ...(actualUnits === undefined ? {} : { actualUnits }),
+          ...(lagMinutes === undefined ? {} : { lagMinutes }),
+        });
+        row.version += 1;
+        return Promise.resolve({ ...row });
+      },
+    ),
+    deleteAssignment: vi.fn((input: { assignmentId: string; activityId: string }) => {
+      assignmentOf(input.assignmentId);
+      assignments.delete(input.assignmentId);
+      return Promise.resolve();
+    }),
+    createCrossPlanLink: vi.fn(
+      (input: {
+        predecessorActivityId: string;
+        successorActivityId: string;
+        type: CrossPlanDependencySummary['type'];
+        lagDays: number;
+        lagCalendar: CrossPlanDependencySummary['lagCalendar'];
+      }) => {
+        const exists = [...crossPlanLinks.values()].some(
+          (l) =>
+            l.predecessor.id === input.predecessorActivityId &&
+            l.successor.id === input.successorActivityId &&
+            l.type === input.type,
+        );
+        if (exists) throw conflict('DUPLICATE_DEPENDENCY');
+        const row = aCrossPlanLink({
+          id: `x${nextCrossLink++}`,
+          type: input.type,
+          lagDays: input.lagDays,
+          lagMinutes: input.lagDays * 480,
+          lagCalendar: input.lagCalendar,
+          predecessor: { id: input.predecessorActivityId, code: null, name: 'Other plan work' },
+          successor: {
+            id: input.successorActivityId,
+            code: null,
+            name: activities.get(input.successorActivityId)?.name ?? 'Activity',
+          },
+        });
+        crossPlanLinks.set(row.id, row);
+        return Promise.resolve({ ...row });
+      },
+    ),
+    deleteCrossPlanLink: vi.fn((id: string) => {
+      if (!crossPlanLinks.delete(id)) {
+        throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+      }
+      return Promise.resolve();
+    }),
     patchFields: vi.fn(
       (input: { activityId: string; version: number; patch: Record<string, unknown> }) =>
         Promise.resolve(
@@ -284,6 +539,34 @@ export function fakePlanServer(
     mutations,
     activities,
     dependencies,
+    assignments,
+    steps,
+    crossPlanLinks,
+    /** Somebody else's write to an assignment: changes it and bumps its version. */
+    editAssignment: (id: string, fields: Partial<ResourceAssignmentSummary>): void => {
+      const row = assignmentOf(id);
+      Object.assign(row, fields);
+      row.version += 1;
+    },
+    removeAssignment: (id: string): void => {
+      assignments.delete(id);
+    },
+    /** Somebody else's steps save: the list becomes `list`, in order. */
+    setSteps: (activityId: string, list: ActivityStep[]): void => {
+      steps.set(
+        activityId,
+        list.map((step) => ({ ...step })),
+      );
+    },
+    editCrossPlanLink: (id: string, fields: Partial<CrossPlanDependencySummary>): void => {
+      const row = crossPlanLinks.get(id);
+      if (row === undefined) throw new Error(`no cross-plan link ${id}`);
+      Object.assign(row, fields);
+      row.version += 1;
+    },
+    removeCrossPlanLink: (id: string): void => {
+      crossPlanLinks.delete(id);
+    },
     /** Somebody else's write: changes the row and bumps its version, and nothing records it. */
     edit: (id: string, fields: Partial<ActivitySummary>): void => {
       const row = rowOf(id);

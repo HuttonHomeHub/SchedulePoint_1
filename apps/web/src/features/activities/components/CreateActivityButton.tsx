@@ -22,6 +22,7 @@ export function CreateActivityButton({
   planActivities = [],
   planActivitiesLoading = false,
   planActivitiesError = false,
+  onCreated,
 }: {
   orgSlug: string;
   planId: string;
@@ -39,6 +40,8 @@ export function CreateActivityButton({
   planActivities?: ActivitySummary[];
   planActivitiesLoading?: boolean;
   planActivitiesError?: boolean;
+  /** Told when the activity has been created, for a host that records it for undo (undo-redo M3). */
+  onCreated?: (activity: ActivitySummary) => void;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
@@ -56,6 +59,7 @@ export function CreateActivityButton({
         planActivities={planActivities}
         planActivitiesLoading={planActivitiesLoading}
         planActivitiesError={planActivitiesError}
+        {...(onCreated ? { onCreated } : {})}
       />
     </>
   );

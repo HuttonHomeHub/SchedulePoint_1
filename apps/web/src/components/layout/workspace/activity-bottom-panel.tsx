@@ -38,8 +38,11 @@ export interface ActivityPanelModel extends Pick<
   | 'onOpenLogic'
   | 'onResourcesActivity'
   | 'onMakeMilestone'
+  | 'recordActivityCreate'
   | 'recordActivityDelete'
   | 'recordDissolveBoundary'
+  | 'recordReparent'
+  | 'recordAssignmentEdit'
   | 'varianceByActivityId'
   | 'noteCountByActivityId'
 > {
@@ -91,8 +94,11 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
     onOpenLogic,
     onResourcesActivity,
     onMakeMilestone,
+    recordActivityCreate,
     recordActivityDelete,
     recordDissolveBoundary,
+    recordReparent,
+    recordAssignmentEdit,
     varianceByActivityId,
     noteCountByActivityId,
   } = model;
@@ -117,8 +123,11 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
       onOpenLogic,
       onResourcesActivity,
       onMakeMilestone,
+      recordActivityCreate,
       recordActivityDelete,
       recordDissolveBoundary,
+      recordReparent,
+      recordAssignmentEdit,
       varianceByActivityId,
       noteCountByActivityId,
       onDuplicateActivity,
@@ -142,8 +151,11 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
       onOpenLogic,
       onResourcesActivity,
       onMakeMilestone,
+      recordActivityCreate,
       recordActivityDelete,
       recordDissolveBoundary,
+      recordReparent,
+      recordAssignmentEdit,
       varianceByActivityId,
       noteCountByActivityId,
       onDuplicateActivity,
@@ -268,6 +280,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
               planActivities={model.planActivities}
               planActivitiesLoading={model.planActivitiesLoading}
               planActivitiesError={model.planActivitiesError}
+              onCreated={model.recordActivityCreate}
             />
           ) : null}
         </div>
@@ -319,6 +332,8 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
            */
           onDeleted={model.recordActivityDelete}
           onDissolved={model.recordDissolveBoundary}
+          onReparented={model.recordReparent}
+          onAssignmentEdited={model.recordAssignmentEdit}
           calendars={model.calendars}
           calendarsLoading={model.calendarsLoading}
           {...(model.planCalendarId === undefined ? {} : { planCalendarId: model.planCalendarId })}

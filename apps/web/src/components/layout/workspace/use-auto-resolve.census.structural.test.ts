@@ -23,7 +23,9 @@ import { describe, expect, it } from 'vitest';
  * pin the order, for the handlers they cover.
  */
 const MODEL = resolve(__dirname, 'use-plan-workspace-model.ts');
-const COMMANDS = resolve(__dirname, '../../../features/undo-redo/commands.ts');
+const COMMAND_FILES = ['commands.ts', 'record-commands.ts'].map((name) =>
+  resolve(__dirname, '../../../features/undo-redo', name),
+);
 
 /** A function head in the model: a handler, a memo method, or a `useCallback`. */
 const HEAD = /^\s{2,8}(const \w+ = async \(|const \w+ = useCallback\(|\w+: async \()/;
@@ -62,10 +64,14 @@ describe('auto-resolve census', () => {
     expect(missing).toEqual([]);
   });
 
-  it('exempts only what it has reasons for — lane-only writes that are resolved at the write', () => {
+  it('exempts only what it has reasons for', () => {
     const exempt = classifyRecordSites(model).filter((s) => s.verdict === 'exempt');
-    // The lane drop (resolved before it writes) and Arrange (packs with no overlap by construction).
-    expect(exempt).toHaveLength(2);
+    // Two lane-only writes that are resolved at the write: the lane drop (resolved before it writes)
+    // and Arrange (packs with no overlap by construction). Then the five records beside the bar
+    // (undo-redo M3), each of which moves no drawn span and says so where it records: a dialog create
+    // (no placement is sent), a re-parenting (a parent is not a lane), a steps save (feeds a % and no
+    // date), and a cross-plan link add and remove (move nothing until a programme recalculation).
+    expect(exempt).toHaveLength(7);
   });
 
   it('pinned positive case: a record with neither is reported', () => {
@@ -79,11 +85,11 @@ describe('auto-resolve census', () => {
   });
 
   it('every exported command constructor is recorded from the model', () => {
-    const commands = readFileSync(COMMANDS, 'utf8');
+    const commands = COMMAND_FILES.map((file) => readFileSync(file, 'utf8')).join('\n');
     const constructors = [...commands.matchAll(/^export function (\w+Command)\(/gm)].map(
       (m) => m[1] as string,
     );
-    expect(constructors.length).toBeGreaterThanOrEqual(16);
+    expect(constructors.length).toBeGreaterThanOrEqual(23);
     const unreached = constructors.filter((name) => !model.includes(`${name}(`));
     expect(unreached).toEqual([]);
   });

@@ -1,6 +1,8 @@
 import type {
+  ActivityStep,
   ActivitySummary,
   BaselineVarianceRow,
+  CrossPlanDependencySummary,
   DependencySummary,
   LevellingApplication,
 } from '@repo/types';
@@ -35,6 +37,11 @@ import {
 // free helpers, and the activities barrel pulls the whole data layer with it — which is exactly why
 // a dozen workspace tests replace that barrel wholesale. Routing pure logic through a mocked module
 // would have those tests exercising a stub of the gate this epic exists to get right.
+// Deep imports for the next three groups, for the reason the activities note above gives: these are
+// plain mutation hooks, and the barrels they belong to are replaced wholesale by a dozen workspace
+// tests that never mean to stub a write.
+import { useUpdateActivityParents } from '@/features/activities/api/use-activities';
+import { useReplaceActivityStepsOn } from '@/features/activities/api/use-activity-steps';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import {
   openActivityEditor,
@@ -62,6 +69,10 @@ import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import {
+  useCreateCrossPlanLink,
+  useDeleteCrossPlanLink,
+} from '@/features/cross-plan-dependencies/api/use-cross-plan-dependencies';
+import {
   type LagEndpoint,
   lagEndpoint,
   lagHoursPerDay,
@@ -77,6 +88,12 @@ import type { MilestoneChoice } from '@/features/plan-actions/make-milestone-gat
 import { derivePlanGating, scheduleRefusal, usePlanPen } from '@/features/plan-lock';
 import { usePlan } from '@/features/plans';
 import { useProject } from '@/features/projects';
+import {
+  useCreateAssignmentOn,
+  useDeleteAssignment,
+  useUpdateAssignment,
+} from '@/features/resources/api/use-resources';
+import type { AssignmentEdit } from '@/features/resources/model/assignment-edit';
 import {
   APPLY_LEVELLING_CONFLICT,
   applyLevellingAnnouncement,
@@ -108,11 +125,17 @@ import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bul
 import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
   activityDefinitionInput,
+  assignmentAddCommand,
+  assignmentChanged,
+  assignmentEditCommand,
+  assignmentRemoveCommand,
   autoArrangeCommand,
   bulkDeleteCommand,
   bulkPlacementCommand,
   createActivityCommand,
   createLoeSpanCommand,
+  crossPlanLinkAddCommand,
+  crossPlanLinkRemoveCommand,
   linkChainCommand,
   pasteActivitiesCommand,
   deleteActivityCommand,
@@ -123,6 +146,11 @@ import {
   durationResizeCommand,
   lagDragCommand,
   relaneCommand,
+  reparentCommand,
+  reparentedRows,
+  reparentLabel,
+  stepsChanged,
+  stepsReplaceCommand,
   typeChangeCommand,
   updateCommand,
   visualResizeCommand,
@@ -738,6 +766,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const createClone = useCreateClonedActivity(orgSlug, planId);
   const cloneCarriage = useCloneCarriage(orgSlug);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
+  // The writes the undo history replays for the records beside the bar (undo-redo M3). Each is a
+  // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
+  // writes have their own observers and report what landed through the `record*` seams below.
+  const updateParents = useUpdateActivityParents(orgSlug, planId);
+  const replaceSteps = useReplaceActivityStepsOn(orgSlug, planId);
+  const createAssignmentOn = useCreateAssignmentOn(orgSlug, planId);
+  const updateAssignment = useUpdateAssignment(orgSlug, planId);
+  const deleteAssignment = useDeleteAssignment(orgSlug, planId);
+  const createCrossPlanLink = useCreateCrossPlanLink(orgSlug);
+  const deleteCrossPlanLink = useDeleteCrossPlanLink(orgSlug);
   const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
     // Post-M1 every saved plan has a mandatory start (ADR-0033 M1), so the ADR-0032 "first draw pins
@@ -1207,6 +1245,217 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       );
     },
     [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync, beginLayoutEdit],
+  );
+  // The activity list as the cache holds it right now — read at the moment of a record rather than
+  // closed over, so the seams below stay referentially stable across refetches (the activity panel's
+  // narrowed model is memoised on them, `activity-bottom-panel.render-count.test.tsx`).
+  const cachedActivities = useCallback(
+    (): readonly ActivitySummary[] =>
+      queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ?? [],
+    [queryClient, orgSlug, planId],
+  );
+  /**
+   * Record an activity **created from a dialog** — the panel's "New activity" and the Gantt's "Insert
+   * activity below" (undo-redo M3). Called by `ActivityCreateDialog` with the row the server returned.
+   * It is the same step the canvas's draw records: undo deletes the row, and redo restores that
+   * delete's batch, so the id is stable and a later step that names it stays valid (ADR-0176). A no-op
+   * unless `VITE_UNDO_REDO` is on.
+   */
+  const recordActivityCreate = useCallback(
+    (created: ActivitySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: a dialog create sends no lane or placement, so there is no drawn span for the
+        // overlap rule to protect; it never took a snapshot before this seam existed either.
+        editHistory.record(
+          createActivityCommand({
+            created,
+            deleteActivity: deleteActivity.mutateAsync,
+            restoreBatch: restoreDeleteBatch.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record adding an activity for undo', error);
+      }
+    },
+    [editHistory, deleteActivity.mutateAsync, restoreDeleteBatch.mutateAsync],
+  );
+  /**
+   * Record a **re-parenting** batch — Indent / Outdent, a summary's Members save, the bulk-assign bar.
+   * One endpoint call is one step however many rows it moved (undo-redo M3). A batch that moved
+   * nothing records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordReparent = useCallback(
+    (
+      before: readonly ActivitySummary[],
+      after: readonly ActivitySummary[],
+      label?: string,
+    ): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        const moved = reparentedRows(before, after);
+        if (moved.length === 0) return;
+        // layout-exempt: a parent is not a lane or a drawn span — the WBS band rolls up from it, and no
+        // bar moves until the recalculation, which cannot make an overlap between two lanes.
+        editHistory.record(
+          reparentCommand({
+            before,
+            after,
+            updateParents: updateParents.mutateAsync,
+            label: label ?? reparentLabel(moved, cachedActivities()),
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record moving activities in the outline for undo', error);
+      }
+    },
+    [editHistory, updateParents.mutateAsync, cachedActivities],
+  );
+  /**
+   * Record a **weighted-steps save** (undo-redo M3): the list before and the list the server saved. A
+   * save that changed nothing records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordStepsSaved = useCallback(
+    (
+      activity: ActivitySummary,
+      before: readonly ActivityStep[],
+      after: readonly ActivityStep[],
+    ): void => {
+      if (!UNDO_REDO_ENABLED || !stepsChanged(before, after)) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: steps feed the physical % rollup and never a date, so no bar can move.
+        editHistory.record(
+          stepsReplaceCommand({
+            activity,
+            before,
+            after,
+            replaceSteps: replaceSteps.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record saving steps for undo', error);
+      }
+    },
+    [editHistory, replaceSteps.mutateAsync],
+  );
+  const assignmentWrites = useMemo(
+    () => ({
+      createAssignment: createAssignmentOn.mutateAsync,
+      updateAssignment: updateAssignment.mutateAsync,
+      deleteAssignment: deleteAssignment.mutateAsync,
+    }),
+    [createAssignmentOn.mutateAsync, updateAssignment.mutateAsync, deleteAssignment.mutateAsync],
+  );
+  /**
+   * Record a **resource-assignment write** — assign, edit, unassign (undo-redo M3). Called by the
+   * Resources tab and the Resources dialog with the rows on either side. An edit that changed no field
+   * a step would write records nothing. A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordAssignmentEdit = useCallback(
+    (edit: AssignmentEdit): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        if (edit.kind === 'edited' && !assignmentChanged(edit.before, edit.after)) return;
+        const subject = edit.kind === 'edited' ? edit.after : edit.assignment;
+        const activityName =
+          cachedActivities().find((a) => a.id === subject.activityId)?.name ?? 'this activity';
+        // After the write, and still a true "before": units, the join lag and a driver are scheduling
+        // inputs, so no drawn span moves until the recalculation this edit triggers (ADR-0153).
+        beginLayoutEdit([subject.activityId]);
+        const displacedOf = (row: typeof subject | undefined) =>
+          row === undefined
+            ? {}
+            : { displaced: { assignment: row, resourceName: 'The driving resource' } };
+        if (edit.kind === 'added') {
+          editHistory.record(
+            assignmentAddCommand({
+              assignment: edit.assignment,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+              ...displacedOf(edit.displaced),
+            }),
+          );
+        } else if (edit.kind === 'removed') {
+          editHistory.record(
+            assignmentRemoveCommand({
+              assignment: edit.assignment,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+            }),
+          );
+        } else {
+          editHistory.record(
+            assignmentEditCommand({
+              before: edit.before,
+              after: edit.after,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+              ...(edit.editedField ? { editedField: edit.editedField } : {}),
+              ...displacedOf(edit.displaced),
+            }),
+          );
+        }
+      } catch (error) {
+        console.error('Could not record a resource assignment for undo', error);
+      }
+    },
+    [editHistory, assignmentWrites, cachedActivities, beginLayoutEdit],
+  );
+  /**
+   * Record a **cross-plan link** add or remove (undo-redo M3). Called by the cross-plan section and its
+   * add dialog, wherever the host mounts them. A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordCrossPlanLinkAdd = useCallback(
+    (link: CrossPlanDependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: a cross-plan link moves nothing in this plan until a programme recalculation,
+        // which is its own explicit action and not this plan's coalesced settle.
+        editHistory.record(
+          crossPlanLinkAddCommand({
+            link,
+            createLink: createCrossPlanLink.mutateAsync,
+            deleteLink: deleteCrossPlanLink.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record adding a cross-plan link for undo', error);
+      }
+    },
+    [editHistory, createCrossPlanLink.mutateAsync, deleteCrossPlanLink.mutateAsync],
+  );
+  const recordCrossPlanLinkRemove = useCallback(
+    (link: CrossPlanDependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: see `recordCrossPlanLinkAdd`.
+        editHistory.record(
+          crossPlanLinkRemoveCommand({
+            link,
+            createLink: createCrossPlanLink.mutateAsync,
+            deleteLink: deleteCrossPlanLink.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record removing a cross-plan link for undo', error);
+      }
+    },
+    [editHistory, createCrossPlanLink.mutateAsync, deleteCrossPlanLink.mutateAsync],
   );
   // A day-drag hand-places `visualStart` (no constraint of any kind), then the effective-Visual
   // recalc pins the bar and pushes its unplaced successors.
@@ -2549,6 +2798,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     recordDependencyRemove,
     recordDependencyAdd,
     recordDependencyEdit,
+    // The records beside the bar (undo-redo M3). Each is called by the surface that makes the write —
+    // a dialog, a tab, a bar — with the rows on either side of it, so the history records what landed.
+    recordActivityCreate,
+    recordReparent,
+    recordStepsSaved,
+    recordAssignmentEdit,
+    recordCrossPlanLinkAdd,
+    recordCrossPlanLinkRemove,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.

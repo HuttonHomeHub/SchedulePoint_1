@@ -1,5 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES, type ActivitySummary } from '@repo/types';
+import {
+  CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES,
+  type ActivitySummary,
+  type CrossPlanDependencySummary,
+} from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -22,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
+import { useIsMounted } from '@/hooks/use-is-mounted';
 import { ApiFetchError } from '@/lib/api/client';
 import {
   clientsQueryOptions,
@@ -88,6 +93,7 @@ export function AddCrossPlanLinkDialog({
   anchor,
   open,
   onClose,
+  onAdded,
 }: {
   orgSlug: string;
   /** The successor plan — excluded from the picker so a same-plan link (N31) can't be chosen. */
@@ -95,6 +101,8 @@ export function AddCrossPlanLinkDialog({
   anchor?: ActivitySummary;
   open: boolean;
   onClose: () => void;
+  /** Told when the link has been created, for a host that records it for undo (undo-redo M3). */
+  onAdded?: (link: CrossPlanDependencySummary) => void;
 }): React.ReactElement {
   return (
     <Dialog
@@ -115,6 +123,7 @@ export function AddCrossPlanLinkDialog({
         currentPlanId={currentPlanId}
         anchor={anchor}
         onClose={onClose}
+        {...(onAdded ? { onAdded } : {})}
       />
     </Dialog>
   );
@@ -131,15 +140,18 @@ function AddCrossPlanLinkForm({
   currentPlanId,
   anchor,
   onClose,
+  onAdded,
 }: {
   orgSlug: string;
   currentPlanId: string;
   // Required-but-`undefined` rather than optional: `exactOptionalPropertyTypes`.
   anchor: ActivitySummary | undefined;
   onClose: () => void;
+  onAdded?: (link: CrossPlanDependencySummary) => void;
 }): React.ReactElement {
   const create = useCreateCrossPlanLink(orgSlug);
   const announce = useAnnounce();
+  const isMounted = useIsMounted();
 
   const {
     register,
@@ -187,21 +199,28 @@ function AddCrossPlanLinkForm({
       });
       return;
     }
-    create.mutate(
-      {
+    // The promise, not a per-call `onSuccess`: Escape while this saves unmounts the form and its
+    // observer, and react-query drops a per-call callback then — losing the undo record.
+    void create
+      .mutateAsync({
         predecessorActivityId: values.predecessorActivityId,
         successorActivityId: anchor.id,
         type: values.type,
         lagDays: values.lagDays,
         lagCalendar: values.lagCalendar,
-      },
-      {
-        onSuccess: () => {
+      })
+      .then(
+        (link) => {
           announce(`Cross-plan link added to “${anchor.name}”.`);
-          onClose();
+          // Close only if this opening is still the one on screen: Escape and reopen while the create
+          // is in flight must not close the new opening. The seam is reported either way — the link
+          // exists — and last, so a fault in the host's history cannot keep a saved dialog open.
+          if (isMounted()) onClose();
+          onAdded?.(link);
         },
-      },
-    );
+        // Shown above the form from `create.isError`; there is nothing else to do with it.
+        () => undefined,
+      );
   });
 
   return (

@@ -43,7 +43,18 @@ export default defineConfig({
             url: 'http://localhost:3000/api/v1/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: { LOG_LEVEL: 'silent', PLAN_EDIT_LOCK_ENFORCED: 'true' },
+            env: {
+              LOG_LEVEL: 'silent',
+              PLAN_EDIT_LOCK_ENFORCED: 'true',
+              // Measured 2026-10-05 (E2E_THROTTLE_CENSUS=1, all nine journeys green, zero 429s): the
+              // busiest handler, GET …/plans/:id/activities, peaks at 102 requests per 60 s — over the
+              // product's 100. Undo now re-reads what it is about to undo (ADR-0176) and every journey
+              // polls the REST API for what was stored, so the suite crossed the limit and a journey
+              // failed by name on a 429 (the throttle-visibility guard, ADR-0175). Ceiling 450 is about
+              // 4x that peak, rounded up to the next 50, matching the other suites' margin for CI
+              // runners. Raised for this harness only; the product default stays 100/60 s.
+              RATE_LIMIT_LIMIT: '450',
+            },
           },
           {
             command: 'pnpm dev',

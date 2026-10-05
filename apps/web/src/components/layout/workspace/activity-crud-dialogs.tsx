@@ -146,6 +146,9 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         open={intended !== undefined}
         onClose={() => model.setEditorIntent(null)}
         onSaved={model.recordActivityUpdate}
+        onStepsSaved={model.recordStepsSaved}
+        onAssignmentEdited={model.recordAssignmentEdit}
+        onReparented={model.recordReparent}
         gating={model.activityEditorGating}
         calendars={model.calendars.data ?? []}
         calendarsLoading={model.calendars.isPending}
@@ -202,6 +205,8 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                           orgSlug={orgSlug}
                           planId={planId}
                           activity={intended}
+                          onAdded={model.recordCrossPlanLinkAdd}
+                          onRemoved={model.recordCrossPlanLinkRemove}
                           canManageLogic={model.canManageLogic}
                           // `intended` is already narrowed truthy by this branch's own
                           // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
@@ -262,6 +267,7 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planActivitiesLoading={model.activities.isPending}
         planActivitiesError={model.activities.isError}
         {...(model.insertParentId === undefined ? {} : { initialParentId: model.insertParentId })}
+        onCreated={model.recordActivityCreate}
       />
 
       <ConfirmDialog

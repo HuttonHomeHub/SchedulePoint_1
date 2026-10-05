@@ -12,6 +12,8 @@ const PATCHES: { url: string; body: Record<string, unknown> }[] = [];
 
 /** What the steps GET returns. Mutable so a test can open the Progress tab on an activity that has them. */
 let STEPS: { name: string; weight: number; percentComplete: number }[] = [];
+/** When set, the steps GET never answers — the list has not loaded. */
+let HOLD_STEPS = false;
 
 /** A row whose `version` the test can advance, to prove the editor re-reads it per save. */
 function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -74,12 +76,14 @@ function mount(props: Partial<Parameters<typeof ActivityEditorDialog>[0]> = {}) 
 beforeEach(() => {
   PATCHES.length = 0;
   STEPS = [];
+  HOLD_STEPS = false;
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       const method = (init?.method ?? 'GET').toUpperCase();
       // Record WRITES only. The Progress tab issues a steps GET on mount (the rollup needs them),
       // and counting it would make every "the first request was the save" assertion a lie.
+      if (HOLD_STEPS && method === 'GET' && url.includes('/steps')) return new Promise(() => {});
       if (method !== 'GET') {
         const body: string = typeof init?.body === 'string' ? init.body : '{}';
         PATCHES.push({ url, body: JSON.parse(body) as Record<string, unknown> });
@@ -413,6 +417,44 @@ describe('ActivityEditorDialog — weighted steps panel', () => {
     expect(PATCHES[0]!.url).toContain('/steps');
     expect(PATCHES[0]!.body.version).toBe(1);
     expect(PATCHES[0]!.body.steps).toEqual([{ name: 'Formwork', weight: 1, percentComplete: 50 }]);
+  });
+
+  /**
+   * Undo-redo M3: the frame — not the session — reports the save, so it survives the editor closing,
+   * and it carries the list as it stood BEFORE the save beside the one the server answered with, which
+   * is what the history's inverse replaces the steps with.
+   */
+  it('reports the save to the host with the list before and the list saved', async () => {
+    const saved = { name: 'Formwork', weight: 1, percentComplete: 50 };
+    STEPS = [saved];
+    const onStepsSaved = vi.fn();
+    mount({ onStepsSaved });
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    await screen.findByDisplayValue('Formwork');
+    fireEvent.change(screen.getByLabelText('Step 1 % complete'), { target: { value: '60' } });
+    fireEvent.click(screen.getByRole('button', { name: /save steps/i }));
+
+    await waitFor(() => expect(onStepsSaved).toHaveBeenCalledTimes(1));
+    const [activity, before, after] = onStepsSaved.mock.calls[0]!;
+    expect(activity).toMatchObject({ id: 'act-1' });
+    expect(before).toEqual([saved]);
+    expect(after).toEqual([saved]);
+  });
+
+  /**
+   * Review C5: a steps save must not be able to happen before the list has loaded — the history's
+   * "before" would be a guessed empty list, and its undo would replace the real steps with none. The
+   * panel offers no Save while loading, which is what makes the session's `before: undefined` guard
+   * (the frame records nothing for it) unreachable from the UI and only a backstop.
+   */
+  it('offers no steps save before the list has loaded', async () => {
+    HOLD_STEPS = true;
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    await screen.findByRole('button', { name: /save progress/i });
+    expect(screen.queryByRole('button', { name: /save steps/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add step' })).not.toBeInTheDocument();
+    expect(PATCHES).toHaveLength(0);
   });
 
   it('previews the rollup the server will compute', async () => {

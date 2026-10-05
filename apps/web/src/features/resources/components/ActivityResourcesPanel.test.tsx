@@ -1,6 +1,6 @@
 import type { ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assignmentKeys, resourceKeys } from '../api/use-resources';
@@ -198,5 +198,100 @@ describe('ActivityResourcesPanel', () => {
     await waitFor(() => expect(apiFetchAllPages).not.toHaveBeenCalled());
     expect(apiFetch).not.toHaveBeenCalled();
     expect(screen.getByRole('group', { name: 'Assigned' })).toBeInTheDocument();
+  });
+
+  /**
+   * Undo-redo M3. The panel and its rows say what landed, with the rows on either side of it, and the
+   * host decides what to record. Reported from the write's promise — the row unmounts on the refetch
+   * that follows an unassign, and an unmounted observer's per-call callback never runs.
+   */
+  describe('reports what landed to the host (onAssignmentEdited)', () => {
+    it('an unassign, with the assignment as it was and the resource’s name', async () => {
+      const onAssignmentEdited = vi.fn();
+      renderPanel({ onAssignmentEdited });
+      fireEvent.click(screen.getByRole('button', { name: 'Unassign Crew A' }));
+
+      await waitFor(() => expect(onAssignmentEdited).toHaveBeenCalledTimes(1));
+      expect(onAssignmentEdited).toHaveBeenCalledWith({
+        kind: 'removed',
+        assignment: ASSIGNMENT,
+        resourceName: 'Crew A',
+      });
+    });
+
+    it('a units edit, with the row before and the row the server answered with', async () => {
+      const after = { ...ASSIGNMENT, budgetedUnits: 9, version: 2 };
+      // The PATCH answers with the row; the list refetch that follows it answers with a list.
+      vi.mocked(apiFetch).mockImplementation((_path, init) =>
+        Promise.resolve(init?.method === 'PATCH' ? after : [after]),
+      );
+      const onAssignmentEdited = vi.fn();
+      renderPanel({ onAssignmentEdited });
+      // The assigned row's field comes first; the assign form below has one of the same name.
+      fireEvent.change(screen.getAllByLabelText('Budgeted units')[0]!, { target: { value: '9' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save budgeted units for Crew A' }));
+
+      await waitFor(() => expect(onAssignmentEdited).toHaveBeenCalledTimes(1));
+      expect(onAssignmentEdited).toHaveBeenCalledWith({
+        kind: 'edited',
+        before: ASSIGNMENT,
+        after,
+        resourceName: 'Crew A',
+      });
+    });
+
+    /** Review C7: making a row the driver moves the current driver off, and the row hands it to the host. */
+    it('a driving toggle reports the driver it displaced', async () => {
+      const incumbent = { ...ASSIGNMENT, id: 'asg-2', resourceId: 'res-2', isDriving: true };
+      const after = { ...ASSIGNMENT, isDriving: true, version: 2 };
+      vi.mocked(apiFetch).mockImplementation((_path, init) =>
+        Promise.resolve(
+          init?.method === 'PATCH' ? after : [after, { ...incumbent, isDriving: false }],
+        ),
+      );
+      const onAssignmentEdited = vi.fn();
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
+        CREW,
+        { ...CREW, id: 'res-2', name: 'Crew B' },
+      ]);
+      queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [
+        ASSIGNMENT,
+        incumbent,
+      ]);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ActivityResourcesPanel
+            orgSlug="acme"
+            activityId="a1"
+            canWrite
+            onAssignmentEdited={onAssignmentEdited}
+          />
+        </QueryClientProvider>,
+      );
+      // The first row is Crew A, which is not driving; Crew B is.
+      fireEvent.click(screen.getAllByRole('checkbox', { name: /Driving resource/ })[0]!);
+
+      await waitFor(() => expect(onAssignmentEdited).toHaveBeenCalledTimes(1));
+      expect(onAssignmentEdited).toHaveBeenCalledWith({
+        kind: 'edited',
+        before: ASSIGNMENT,
+        after,
+        resourceName: 'Crew A',
+        displaced: incumbent,
+      });
+    });
+
+    it('reports nothing for a write the server refused', async () => {
+      vi.mocked(apiFetch).mockRejectedValue(new Error('Stale'));
+      const onAssignmentEdited = vi.fn();
+      renderPanel({ onAssignmentEdited });
+      fireEvent.click(screen.getByRole('button', { name: 'Unassign Crew A' }));
+
+      await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+      expect(onAssignmentEdited).not.toHaveBeenCalled();
+    });
   });
 });

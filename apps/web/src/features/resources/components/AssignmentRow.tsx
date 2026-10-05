@@ -7,7 +7,12 @@ import {
 } from '@repo/types';
 import { useId, useState } from 'react';
 
-import { useDeleteAssignment, useUpdateAssignment } from '../api/use-resources';
+import {
+  useDeleteAssignment,
+  useUpdateAssignment,
+  type AssignmentUpdateInput,
+} from '../api/use-resources';
+import type { OnAssignmentEdited } from '../model/assignment-edit';
 import {
   assignmentLagHelp,
   assignmentLagLabel,
@@ -111,6 +116,7 @@ function AssignmentCostFields({
   activityId,
   assignment,
   name,
+  onEdited,
 }: {
   orgSlug: string;
   /** The owning plan, so a cost save refreshes the resource histogram (ADR-0044 §3). */
@@ -118,6 +124,8 @@ function AssignmentCostFields({
   activityId: string;
   assignment: ResourceAssignmentSummary;
   name: string;
+  /** Told when a cost save lands (undo-redo M3). */
+  onEdited?: OnAssignmentEdited;
 }): React.ReactElement {
   const update = useUpdateAssignment(orgSlug, planId);
   const announce = useAnnounce();
@@ -150,8 +158,10 @@ function AssignmentCostFields({
 
   const save = (): void => {
     if (hasError || !changed) return;
-    update.mutate(
-      {
+    const before = assignment;
+    // The promise, not a per-call `onSuccess`: react-query keeps those only for an observer's latest call.
+    void update
+      .mutateAsync({
         assignmentId: assignment.id,
         activityId,
         version: assignment.version,
@@ -162,9 +172,15 @@ function AssignmentCostFields({
         budgetedCost: (budgetedValidation as { value: number | null }).value,
         actualCost: (actualCostValidation as { value: number | null }).value ?? 0,
         actualUnits: (actualUnitsValidation as { value: number }).value,
-      },
-      { onSuccess: () => announce(`Cost for “${name}” saved.`) },
-    );
+      })
+      .then(
+        (after) => {
+          announce(`Cost for “${name}” saved.`);
+          onEdited?.({ kind: 'edited', before, after, resourceName: name });
+        },
+        // Shown by the row's own alert from `update.isError`; there is nothing else to do with it.
+        () => undefined,
+      );
   };
 
   return (
@@ -265,6 +281,8 @@ export function AssignmentRow({
   canWrite,
   canReadCost = true,
   onRemoved,
+  onEdited,
+  otherDriver,
 }: {
   orgSlug: string;
   /** The owning plan, so units/driving/curve/unassign edits refresh the resource histogram (ADR-0044 §3). */
@@ -285,6 +303,14 @@ export function AssignmentRow({
   canReadCost?: boolean;
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
   onRemoved: () => void;
+  /** Told of every write that landed (undo-redo M3). Absent, nothing is reported. */
+  onEdited?: OnAssignmentEdited;
+  /**
+   * Whichever OTHER assignment on this activity is the driver right now. Making this row the driver
+   * moves that one off in the same request, so it is read here — before the write — for the host to
+   * be able to put it back.
+   */
+  otherDriver?: ResourceAssignmentSummary;
 }): React.ReactElement {
   const update = useUpdateAssignment(orgSlug, planId);
   const remove = useDeleteAssignment(orgSlug, planId);
@@ -361,12 +387,37 @@ export function AssignmentRow({
     [rateError ? rateErrorId : null, showRateNote ? rateNoteId : null].filter(Boolean).join(' ') ||
     undefined;
 
+  /**
+   * Send one edit and report it. Settled through the promise rather than a per-call `onSuccess`, which
+   * react-query drops for any call but the observer's latest — so a second quick save would lose the
+   * first one's undo record and announcement.
+   */
+  const commit = (input: AssignmentUpdateInput, saved: () => void): void => {
+    const before = assignment;
+    const displaced = input.isDriving === true && !before.isDriving ? otherDriver : undefined;
+    void update.mutateAsync(input).then(
+      (after) => {
+        saved();
+        onEdited?.({
+          kind: 'edited',
+          before,
+          after,
+          resourceName: name,
+          ...(input.editedField ? { editedField: input.editedField } : {}),
+          ...(displaced ? { displaced } : {}),
+        });
+      },
+      // Shown by the row's own alert from `update.isError`; there is nothing else to do with it.
+      () => undefined,
+    );
+  };
+
   const saveUnits = (): void => {
     if ('error' in unitsValidation) {
       announce(`Budgeted units for “${name}” not saved: ${unitsValidation.error}`);
       return;
     }
-    update.mutate(
+    commit(
       {
         assignmentId: assignment.id,
         activityId,
@@ -377,7 +428,7 @@ export function AssignmentRow({
         // already carries a rate. Otherwise this is a plain store (byte-identical to before ADR-0040).
         ...(triadOn && hasRate ? { editedField: 'UNITS' as const } : {}),
       },
-      { onSuccess: () => announce(`Budgeted units for “${name}” saved.`) },
+      () => announce(`Budgeted units for “${name}” saved.`),
     );
   };
 
@@ -386,7 +437,7 @@ export function AssignmentRow({
       announce(`Rate for “${name}” not saved: ${rateValidation.error}`);
       return;
     }
-    update.mutate(
+    commit(
       {
         assignmentId: assignment.id,
         activityId,
@@ -396,12 +447,12 @@ export function AssignmentRow({
         isDriving: assignment.isDriving,
         editedField: 'UNITS_PER_HOUR',
       },
-      { onSuccess: () => announce(`Rate for “${name}” saved.`) },
+      () => announce(`Rate for “${name}” saved.`),
     );
   };
 
   const toggleDriving = (next: boolean): void => {
-    update.mutate(
+    commit(
       {
         assignmentId: assignment.id,
         activityId,
@@ -409,23 +460,21 @@ export function AssignmentRow({
         budgetedUnits: assignment.budgetedUnits,
         isDriving: next,
       },
-      {
-        onSuccess: () =>
-          // Setting a driver un-drives whichever assignment previously held it (server-side
-          // move); call that out so the other row's silent flip has an explanation.
-          announce(
-            next
-              ? `“${name}” is now the driving resource; any previous driver no longer drives.`
-              : `“${name}” no longer drives.`,
-          ),
-      },
+      () =>
+        // Setting a driver un-drives whichever assignment previously held it (server-side
+        // move); call that out so the other row's silent flip has an explanation.
+        announce(
+          next
+            ? `“${name}” is now the driving resource; any previous driver no longer drives.`
+            : `“${name}” no longer drives.`,
+        ),
     );
   };
 
   // Resource loading curve (M7 rung 5, ADR-0044 §3): a plain enum save (like the driving toggle),
   // preserving the other fields; it never triggers a triad recompute (no editedField).
   const changeCurve = (next: ResourceCurveType): void => {
-    update.mutate(
+    commit(
       {
         assignmentId: assignment.id,
         activityId,
@@ -434,10 +483,7 @@ export function AssignmentRow({
         isDriving: assignment.isDriving,
         curveType: next,
       },
-      {
-        onSuccess: () =>
-          announce(`Loading curve for “${name}” set to ${RESOURCE_CURVE_LABELS[next]}.`),
-      },
+      () => announce(`Loading curve for “${name}” set to ${RESOURCE_CURVE_LABELS[next]}.`),
     );
   };
 
@@ -459,7 +505,7 @@ export function AssignmentRow({
       announce(`Join delay for “${name}” not saved: ${lagParsed.message}`);
       return;
     }
-    update.mutate(
+    commit(
       {
         assignmentId: assignment.id,
         activityId,
@@ -468,27 +514,29 @@ export function AssignmentRow({
         isDriving: assignment.isDriving,
         lagMinutes: lagParsed.minutes,
       },
-      {
-        onSuccess: () =>
-          announce(
-            lagParsed.minutes === 0
-              ? `“${name}” now joins with the activity.`
-              : `“${name}” now joins after ${seedAssignmentLag(lagParsed.minutes, hoursPerDay)}.`,
-          ),
-      },
+      () =>
+        announce(
+          lagParsed.minutes === 0
+            ? `“${name}” now joins with the activity.`
+            : `“${name}” now joins after ${seedAssignmentLag(lagParsed.minutes, hoursPerDay)}.`,
+        ),
     );
   };
 
   const unassign = (): void => {
-    remove.mutate(
-      { assignmentId: assignment.id, activityId },
-      {
-        onSuccess: () => {
-          announce(`“${name}” unassigned.`);
-          // The row is about to unmount; hand focus back to a stable target.
-          onRemoved();
-        },
+    const removed = assignment;
+    // The promise, not a per-call `onSuccess`: the list refetches before that callback would run, which
+    // unmounts this row and the observer with it, and the undo record would be dropped.
+    void remove.mutateAsync({ assignmentId: assignment.id, activityId }).then(
+      () => {
+        announce(`“${name}” unassigned.`);
+        // The row is about to unmount; hand focus back to a stable target.
+        onRemoved();
+        // Last, so a fault in the host's history cannot skip the focus hand-back.
+        onEdited?.({ kind: 'removed', assignment: removed, resourceName: name });
       },
+      // Shown by the row's own alert from `remove.isError`; there is nothing else to do with it.
+      () => undefined,
     );
   };
 
@@ -704,6 +752,7 @@ export function AssignmentRow({
               activityId={activityId}
               assignment={assignment}
               name={name}
+              {...(onEdited ? { onEdited } : {})}
             />
           ) : null}
         </div>

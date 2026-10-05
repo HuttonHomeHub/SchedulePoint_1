@@ -1,5 +1,6 @@
 export { ActivityMembersPanel } from './components/ActivityMembersPanel';
 export { WbsBulkAssignBar } from './components/WbsBulkAssignBar';
+export type { OnReparented } from './model/reparented';
 export { bulkParentChanges, membershipDiff, type MembershipChange } from './model/membership-diff';
 export { deriveWbsBandSource, type WbsBandSource } from './model/wbs-band-source';
 export { wbsBandDescribedRows } from './model/wbs-band-described-rows';

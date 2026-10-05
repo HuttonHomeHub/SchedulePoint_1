@@ -29,6 +29,26 @@ export function useActivitySteps(
   return useQuery(activityStepsQueryOptions(orgSlug, activityId));
 }
 
+function putSteps(orgSlug: string, activityId: string, input: ReplaceActivityStepsRequest) {
+  return apiFetch<ActivityStep[]>(`/organizations/${orgSlug}/activities/${activityId}/steps`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+function invalidateAfterReplace(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgSlug: string,
+  planId: string,
+  activityId: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: stepKeys.listByActivity(orgSlug, activityId) }),
+    queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+    queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, activityId) }),
+  ]);
+}
+
 /**
  * Bulk-replace an activity's weighted steps (ADR-0044 §2): one all-or-nothing
  * `PUT …/activities/:activityId/steps` carrying the full desired ordered list plus the parent
@@ -40,18 +60,21 @@ export function useActivitySteps(
 export function useReplaceActivitySteps(orgSlug: string, planId: string, activityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ReplaceActivityStepsRequest) =>
-      apiFetch<ActivityStep[]>(`/organizations/${orgSlug}/activities/${activityId}/steps`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: stepKeys.listByActivity(orgSlug, activityId),
-        }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, activityId) }),
-      ]),
+    mutationFn: (input: ReplaceActivityStepsRequest) => putSteps(orgSlug, activityId, input),
+    onSettled: () => invalidateAfterReplace(queryClient, orgSlug, planId, activityId),
+  });
+}
+
+/**
+ * The same replace, addressed at an activity at call time — the undo history replays a step recorded
+ * on any activity, and a hook cannot be called per activity (`useCreateAssignmentOn`'s reason).
+ */
+export function useReplaceActivityStepsOn(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ activityId, ...input }: ReplaceActivityStepsRequest & { activityId: string }) =>
+      putSteps(orgSlug, activityId, input),
+    onSettled: (_data, _error, input) =>
+      invalidateAfterReplace(queryClient, orgSlug, planId, input.activityId),
   });
 }

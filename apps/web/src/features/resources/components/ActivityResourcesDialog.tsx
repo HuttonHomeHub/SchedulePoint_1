@@ -1,6 +1,8 @@
 import type { DurationType } from '@repo/types';
 import { useRef } from 'react';
 
+import type { OnAssignmentEdited } from '../model/assignment-edit';
+
 import { ActivityResourcesPanel } from './ActivityResourcesPanel';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,7 @@ export function ActivityResourcesDialog({
   open,
   onClose,
   canWrite,
+  onAssignmentEdited,
 }: {
   orgSlug: string;
   /** See {@link ActivityResourcesPanel} — forwarded unchanged. */
@@ -43,6 +46,8 @@ export function ActivityResourcesDialog({
   open: boolean;
   onClose: () => void;
   canWrite: boolean;
+  /** See {@link ActivityResourcesPanel} — forwarded unchanged. */
+  onAssignmentEdited?: OnAssignmentEdited;
 }): React.ReactElement {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   return (
@@ -63,6 +68,7 @@ export function ActivityResourcesDialog({
           // Keep the dialog's focus-restore target: after an unassign the removed row unmounts, and
           // Close is the stable control the dialog has always handed focus back to.
           onRowRemoved={() => closeButtonRef.current?.focus()}
+          {...(onAssignmentEdited ? { onAssignmentEdited } : {})}
           {...(planId ? { planId } : {})}
           {...(activityId ? { activityId } : {})}
           {...(activityDurationType ? { activityDurationType } : {})}

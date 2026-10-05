@@ -10,6 +10,9 @@ import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
 import type { ProgressFormValues } from '../schemas/activity-schemas';
 import type { StepsFormValues } from '../schemas/step-schemas';
 
+import type { OnAssignmentEdited } from '@/features/resources';
+import type { OnReparented } from '@/features/wbs';
+
 /** The props the host sees — and the session is handed the same ones, minus `open`. */
 export interface ActivityEditorDialogProps {
   orgSlug: string;
@@ -23,6 +26,19 @@ export interface ActivityEditorDialogProps {
   intent?: ActivityEditorIntent;
   /** Called after a scope saves, with the pre-save row and the server's post-save row (ADR-0048). */
   onSaved?: (before: ActivitySummary, after: ActivitySummary) => void;
+  /**
+   * Called after the weighted steps save, with the list as it stood before and the server's saved one
+   * (undo-redo M3). Like {@link onSaved} it is made by the frame, so it survives the editor closing.
+   */
+  onStepsSaved?: (
+    activity: ActivitySummary,
+    before: readonly ActivityStep[],
+    after: readonly ActivityStep[],
+  ) => void;
+  /** Told of every resource-assignment write made on the Resources tab (undo-redo M3). */
+  onAssignmentEdited?: OnAssignmentEdited;
+  /** Told when the Members tab files rows under (or out of) the summary being edited (undo-redo M3). */
+  onReparented?: OnReparented;
   /**
    * The row being edited. This editor is edit-only; creation is {@link ActivityCreateDialog}. A modal
    * guarantees it cannot change while the editor is open (ADR-0108 D7, ADR-0169 D5).
@@ -110,6 +126,11 @@ export interface ProgressSave {
 /** One weighted-steps save (`PUT …/steps`). */
 export interface StepsSave {
   activity: ActivitySummary;
+  /**
+   * The saved list this save replaces, for the host that records it; `undefined` when the list had
+   * not loaded, in which case nothing is recorded.
+   */
+  before: readonly ActivityStep[] | undefined;
   steps: StepsFormValues['steps'];
   onSuccess: (saved: ActivityStep[]) => void;
   onError: (error: Error) => void;
@@ -142,7 +163,7 @@ export interface ActivityEditorSaves {
  */
 export interface ActivityEditorSessionProps extends Omit<
   ActivityEditorDialogProps,
-  'open' | 'onSaved' | 'activity'
+  'open' | 'onSaved' | 'onStepsSaved' | 'activity'
 > {
   handleRef: React.Ref<ActivityEditorSessionHandle>;
   activity: ActivitySummary;

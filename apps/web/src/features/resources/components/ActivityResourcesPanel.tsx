@@ -9,6 +9,7 @@ import {
   useResourceSearch,
   useResources,
 } from '../api/use-resources';
+import type { OnAssignmentEdited } from '../model/assignment-edit';
 import {
   assignmentLagEnabled,
   assignmentLagHelp,
@@ -70,6 +71,7 @@ export function ActivityResourcesPanel({
   canReadCost = true,
   enabled = true,
   onRowRemoved,
+  onAssignmentEdited,
 }: {
   orgSlug: string;
   /** The owning plan (ADR-0044 §3) — threaded to the assignment mutations so an assign / edit /
@@ -122,6 +124,11 @@ export function ActivityResourcesPanel({
    * omits it and the panel focuses its own list region.
    */
   onRowRemoved?: () => void;
+  /**
+   * Told of every assignment write that landed — assign, edit, unassign — so a host can record it for
+   * undo (undo-redo M3). Absent, nothing is reported, which is every host that has no history.
+   */
+  onAssignmentEdited?: OnAssignmentEdited;
 }): React.ReactElement {
   // The whole library, for LABELLING the assigned rows (and, flag off, for the picker's options).
   // Behind the flag it asks for archived rows too: an assignment to a since-archived resource keeps
@@ -147,6 +154,8 @@ export function ActivityResourcesPanel({
   const showLag = assignmentLagEnabled() && !isMilestone;
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
+  // At most one assignment drives an activity; whoever does is what a new driver would displace.
+  const currentDriver = (assignments.data ?? []).find((a) => a.isDriving);
   const assignedIds = new Set((assignments.data ?? []).map((a) => a.resourceId));
   // A GROUP is a grouping node, not a resource (ADR-0053 §3): the API answers 422
   // GROUP_NOT_ASSIGNABLE, so offering one would only ever produce an error. A picker must never
@@ -247,8 +256,12 @@ export function ActivityResourcesPanel({
       setError('lagText', { message: lag.message }, { shouldFocus: true });
       return;
     }
-    create.mutate(
-      {
+    // The driver this assignment will move off, read before the write: the request takes the flag
+    // from it in the same transaction, and reversing the assign has to give it back.
+    const displaced = isDriving ? currentDriver : undefined;
+    // The promise, not a per-call `onSuccess`: react-query keeps those only for an observer's latest call.
+    void create
+      .mutateAsync({
         ...values,
         isDriving,
         // The rate is meaningful only for the driver — drop a stray value entered before un-driving.
@@ -256,9 +269,9 @@ export function ActivityResourcesPanel({
         // Flag off, no lag is sent at all — the create body is byte-identical to the one that ships
         // today, which is what makes the rollback a switch rather than a revert.
         ...(showLag && lag.ok && lag.minutes > 0 ? { lagMinutes: lag.minutes } : {}),
-      },
-      {
-        onSuccess: () => {
+      })
+      .then(
+        (assignment) => {
           const name = resourceById.get(values.resourceId)?.name ?? 'Resource';
           announce(`“${name}” assigned.`);
           reset({
@@ -268,9 +281,16 @@ export function ActivityResourcesPanel({
             curveType: 'UNIFORM',
             lagText: '',
           });
+          onAssignmentEdited?.({
+            kind: 'added',
+            assignment,
+            resourceName: name,
+            ...(displaced ? { displaced } : {}),
+          });
         },
-      },
-    );
+        // Shown below the form from `create.isError`; there is nothing else to do with it.
+        () => undefined,
+      );
   });
 
   return (
@@ -309,6 +329,10 @@ export function ActivityResourcesPanel({
                   canWrite={canWrite}
                   canReadCost={canReadCost}
                   onRemoved={() => (onRowRemoved ? onRowRemoved() : listRef.current?.focus())}
+                  {...(onAssignmentEdited ? { onEdited: onAssignmentEdited } : {})}
+                  {...(currentDriver !== undefined && currentDriver.id !== assignment.id
+                    ? { otherDriver: currentDriver }
+                    : {})}
                 />
               ))}
             </ul>

@@ -118,6 +118,40 @@ describe('ActivityCreateDialog', () => {
     });
   });
 
+  /**
+   * Undo-redo M3: the row the server returned is what the host records — not the form's values — so a
+   * redo can restore the same id. It is delivered AFTER the dialog has asked to close, and a throw from
+   * the host cannot leave a saved form open.
+   */
+  it('reports the created row to the host once it has saved', async () => {
+    const onCreated = vi.fn();
+    const onClose = vi.fn();
+    renderDialog({ onCreated, onClose });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(onCreated).toHaveBeenCalledWith(ACTIVITY);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  /**
+   * Undo-redo M3, grouping audit: "Insert activity below" seeds the parent, and the create that comes
+   * of it is ONE report — the row is filed at creation, there is no second reparent write to record, so
+   * one Undo removes it from where the planner put it.
+   */
+  it('a create seeded with a parent is one report, and one write that already carries the parent', async () => {
+    const onCreated = vi.fn();
+    renderDialog({ onCreated, initialParentId: 'sum-1' });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Inserted' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    const writes = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(writes[0]![1]?.body as string)).toMatchObject({ parentId: 'sum-1' });
+  });
+
   it('hides duration for a milestone and sends 0', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });

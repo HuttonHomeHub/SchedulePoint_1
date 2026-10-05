@@ -213,6 +213,9 @@ const DEPENDENCY = {
 // Imported AFTER the mocks are declared.
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { activityKeys } from '@/lib/query/hierarchy-keys';
+import { aCrossPlanLink, anAssignment, aStep } from '@/test/fake-plan-server';
+
 // The model now composes the M3 undo/redo wrapper (`usePlanUndoRedo`), which reads the query client to
 // refetch server truth on a conflict — so the hook must render inside a QueryClientProvider (the real
 // wrapper is unmocked; only the history store is swapped for the record spy above).
@@ -404,6 +407,155 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() => result.current.recordDissolveBoundary());
     expect(h.clear).not.toHaveBeenCalled();
+    expect(h.record).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The records beside the bar (undo-redo M3): each surface reports what landed through a `record*`
+ * seam, and the model turns it into ONE step — or none, when nothing changed. Only the seam wiring is
+ * asserted here; the commands have their own matrix (`record-commands.test.ts`) and the server-side
+ * behaviour is the journey's (`apps/web/e2e-undo/undo.spec.ts`).
+ */
+describe('usePlanWorkspaceModel records beside the bar', () => {
+  const FILED: ActivitySummary = { ...ACTIVITY, parentId: 'sum-1', version: 4 };
+  const ASSIGNED = anAssignment({ id: 'as1', activityId: 'a1', resourceId: 'r1' });
+
+  /**
+   * The model with the flag on and the plan's activity list in the query cache — where the seams read
+   * names from at the moment of a record (the hook that normally fills it is stubbed above).
+   */
+  function seams() {
+    h.undoRedo = true;
+    const client = new QueryClient();
+    client.setQueryData(activityKeys.listByPlan('acme', 'p1'), [
+      ACTIVITY,
+      SUMMARY,
+      CHILD,
+      EMPTY_SUMMARY,
+    ]);
+    const seeded = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    return renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper: seeded }).result;
+  }
+
+  it('a dialog create records exactly one command; flag OFF records nothing', () => {
+    const result = seams();
+    act(() => result.current.recordActivityCreate(ACTIVITY));
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Add “Excavate”');
+
+    h.undoRedo = false;
+    h.record.mockClear();
+    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper }).result;
+    act(() => off.current.recordActivityCreate(ACTIVITY));
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('a re-parenting batch of several rows is ONE step, named for where they went', () => {
+    const result = seams();
+    const other = { ...ACTIVITY, id: 'a9', name: 'Pour' };
+    act(() =>
+      result.current.recordReparent([ACTIVITY, other], [FILED, { ...other, parentId: 'sum-1' }]),
+    );
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Move 2 activities under “Phase 1”');
+  });
+
+  it('a surface that names the step keeps its name', () => {
+    const result = seams();
+    act(() => result.current.recordReparent([ACTIVITY], [FILED], 'Change members of “Phase 1”'));
+    expect(h.record.mock.calls[0]![0].label).toBe('Change members of “Phase 1”');
+  });
+
+  it('a batch that moved nothing records nothing', () => {
+    const result = seams();
+    act(() => result.current.recordReparent([ACTIVITY], [{ ...ACTIVITY, version: 4 }]));
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('a steps save records one command, and a save that changed nothing records none', () => {
+    const result = seams();
+    const before = [aStep({ name: 'Form' })];
+    act(() => result.current.recordStepsSaved(ACTIVITY, before, [aStep({ name: 'Form' })]));
+    expect(h.record).not.toHaveBeenCalled();
+    act(() =>
+      result.current.recordStepsSaved(ACTIVITY, before, [
+        aStep({ name: 'Form', percentComplete: 50 }),
+      ]),
+    );
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Edit steps of “Excavate”');
+  });
+
+  it('an assignment add, edit and removal each record one command, naming the activity', () => {
+    const result = seams();
+    act(() =>
+      result.current.recordAssignmentEdit({
+        kind: 'added',
+        assignment: ASSIGNED,
+        resourceName: 'Digger',
+      }),
+    );
+    act(() =>
+      result.current.recordAssignmentEdit({
+        kind: 'edited',
+        before: ASSIGNED,
+        after: { ...ASSIGNED, budgetedUnits: 20, version: 2 },
+        resourceName: 'Digger',
+      }),
+    );
+    act(() =>
+      result.current.recordAssignmentEdit({
+        kind: 'removed',
+        assignment: ASSIGNED,
+        resourceName: 'Digger',
+      }),
+    );
+    expect(h.record.mock.calls.map(([command]) => command.label)).toEqual([
+      'Assign “Digger” to “Excavate”',
+      'Edit “Digger” on “Excavate”',
+      'Unassign “Digger” on “Excavate”',
+    ]);
+  });
+
+  it('an assignment edit that changed no field a step would write records nothing', () => {
+    const result = seams();
+    act(() =>
+      result.current.recordAssignmentEdit({
+        kind: 'edited',
+        before: ASSIGNED,
+        after: { ...ASSIGNED, version: 2 },
+        resourceName: 'Digger',
+      }),
+    );
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('a cross-plan link add and remove each record one command', () => {
+    const result = seams();
+    act(() => result.current.recordCrossPlanLinkAdd(aCrossPlanLink()));
+    act(() => result.current.recordCrossPlanLinkRemove(aCrossPlanLink()));
+    expect(h.record.mock.calls.map(([command]) => command.label)).toEqual([
+      'Add cross-plan link “Other plan work” → “Excavate”',
+      'Remove cross-plan link “Other plan work” → “Excavate”',
+    ]);
+  });
+
+  it('flag OFF: none of the seams touches the history', () => {
+    h.undoRedo = false;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => {
+      result.current.recordReparent([ACTIVITY], [FILED]);
+      result.current.recordStepsSaved(ACTIVITY, [], [aStep()]);
+      result.current.recordAssignmentEdit({
+        kind: 'removed',
+        assignment: ASSIGNED,
+        resourceName: 'Digger',
+      });
+      result.current.recordCrossPlanLinkAdd(aCrossPlanLink());
+      result.current.recordCrossPlanLinkRemove(aCrossPlanLink());
+    });
     expect(h.record).not.toHaveBeenCalled();
   });
 });

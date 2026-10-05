@@ -209,6 +209,13 @@ interface ActivityCreateOptions {
    * Undefined leaves the seed exactly as it was, so every existing caller is unchanged.
    */
   initialParentId?: string | null;
+  /**
+   * Told when the activity has been created, with the row the server returned (undo-redo M3). Both
+   * hosts of this dialog pass it — the workspace's "Insert activity below" and the panel's
+   * "New activity" — and `create-seam.structural.test.ts` holds them to it. Called for a create that
+   * outlives its opening, exactly as the announcement is.
+   */
+  onCreated?: (activity: ActivitySummary) => void;
 }
 
 interface ActivityCreateFormProps extends ActivityCreateOptions {
@@ -307,6 +314,7 @@ function ActivityCreateForm({
   planActivitiesLoading = false,
   planActivitiesError = false,
   initialParentId,
+  onCreated,
   mutation,
   onClose,
   handleRef,
@@ -585,15 +593,20 @@ function ActivityCreateForm({
       return;
     }
     setSubmittedThisOpening(true);
-    mutation.mutate(
-      { ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) },
-      {
-        onSuccess: () => {
+    // The promise, not a per-call `onSuccess`: react-query keeps those only for the mutation
+    // observer's latest call, so a second create begun while the first is in flight would lose the
+    // first one's announcement and its undo record.
+    void mutation
+      .mutateAsync({ ...values, ...(hoursPerDay === undefined ? {} : { hoursPerDay }) })
+      .then(
+        (created) => {
           announce(`Activity “${values.name}” created.`);
           if (mountedRef.current) onClose();
+          onCreated?.(created);
         },
-      },
-    );
+        // Shown in the dialog from `mutation.isError`; there is nothing else to do with it.
+        () => undefined,
+      );
   };
 
   return (

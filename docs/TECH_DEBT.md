@@ -11617,8 +11617,20 @@ single-row `DELETE` routes are **unversioned**, so between that read and the del
 land and be deleted with the row. The window is one round trip, and the bulk delete is already versioned.
 Accepted for now; the API is not changed by the undo work.
 
-**Next:** an optional `version` (or `If-Match`) on single-row `DELETE`, enforced when sent, which `commands.ts` would
-then pass from the row its pre-check just read. Additive and opt-in, so existing callers are unaffected.
+**Resource assignments have the same shape** (undo-redo M3): `DELETE /assignments/:id` takes no version
+(`resource-assignments.controller.ts`, `remove`), so an assignment step's check-then-delete has the same window, and
+so does the one place an undo deletes and re-creates an assignment (a PATCH cannot clear a rate, ADR-0040). That
+case is compensated, not closed: a create that fails after the delete is retried from the row that was read and
+reported as a distinct failure (ADR-0176).
+
+**The LOE span's redo rolls back the same way** (undo-redo M2 security re-check): if one of its two edges fails
+after the LOE was created, the LOE is deleted best-effort and the error rethrown so a retry composes again. If that
+rollback delete itself fails (a 423 mid-sequence), an LOE with no logic is left behind and a retry creates a second
+one. Rare, visible and restorable; recording the orphan id so the retry deletes it first would close it.
+
+**Next:** an optional `version` (or `If-Match`) on single-row `DELETE`, enforced when sent, which `commands.ts` and
+`record-commands.ts` would then pass from the row their pre-check just read. Additive and opt-in, so existing
+callers are unaffected.
 **Trigger:** a report of a colleague's edit lost to an undo, or the next change to either `DELETE` route.
 
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged

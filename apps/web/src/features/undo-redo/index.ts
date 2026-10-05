@@ -41,6 +41,28 @@ export {
   type RestoreDeleteBatchFn,
 } from './commands';
 export {
+  assignmentAddCommand,
+  assignmentChanged,
+  assignmentEditCommand,
+  assignmentRemoveCommand,
+  crossPlanLinkAddCommand,
+  crossPlanLinkRemoveCommand,
+  reparentCommand,
+  reparentedRows,
+  reparentLabel,
+  stepsChanged,
+  stepsReplaceCommand,
+  type AssignmentWrites,
+  type CreateAssignmentFn,
+  type CreateCrossPlanLinkFn,
+  type DeleteAssignmentFn,
+  type DeleteCrossPlanLinkFn,
+  type DisplacedDriver,
+  type ReplaceStepsFn,
+  type UpdateAssignmentFn,
+  type UpdateParentsFn,
+} from './record-commands';
+export {
   usePlanEditHistory,
   MAX_HISTORY_DEPTH,
   COALESCE_WINDOW_MS,

@@ -52,7 +52,13 @@ function mockApi(links: CrossPlanDependencySummary[]): void {
   vi.mocked(apiFetchAllPages).mockImplementation(route as (path: string) => Promise<unknown[]>);
 }
 
-function renderSection(props: { canManageLogic?: boolean } = {}) {
+function renderSection(
+  props: {
+    canManageLogic?: boolean;
+    onAdded?: (link: CrossPlanDependencySummary) => void;
+    onRemoved?: (link: CrossPlanDependencySummary) => void;
+  } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -63,6 +69,8 @@ function renderSection(props: { canManageLogic?: boolean } = {}) {
           activity={ANCHOR}
           canManageLogic={props.canManageLogic ?? true}
           enabled
+          {...(props.onAdded ? { onAdded: props.onAdded } : {})}
+          {...(props.onRemoved ? { onRemoved: props.onRemoved } : {})}
         />
       </AnnouncerProvider>
     </QueryClientProvider>,
@@ -126,6 +134,26 @@ describe('CrossPlanLinksSection', () => {
     await waitFor(() =>
       expect(screen.getByTestId('announcer')).toHaveTextContent('Cross-plan link removed.'),
     );
+  });
+
+  /**
+   * Undo-redo M3: the removed link, as it was, is what the host records — the inverse re-creates it
+   * from its endpoints, type and lag. Reported from the delete's promise, because the row unmounts on
+   * the refetch that follows and an unmounted observer's per-call callback never runs.
+   */
+  it('reports the removed link to the host', async () => {
+    mockApi([link()]);
+    const onRemoved = vi.fn();
+    renderSection({ onRemoved });
+    await waitFor(() => expect(screen.getByText('Deliver steel')).toBeInTheDocument());
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Remove cross-plan link to Deliver steel/ }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(onRemoved).toHaveBeenCalledTimes(1));
+    expect(onRemoved).toHaveBeenCalledWith(link());
   });
 
   it('hides the add and remove controls for a read-only member', async () => {

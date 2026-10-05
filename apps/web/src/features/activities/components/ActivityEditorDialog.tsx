@@ -75,6 +75,7 @@ export function ActivityEditorDialog({
   open,
   onClose,
   onSaved,
+  onStepsSaved,
   activity,
   ...sessionProps
 }: ActivityEditorDialogProps): React.ReactElement {
@@ -145,11 +146,12 @@ export function ActivityEditorDialog({
       );
   };
 
-  const saveSteps = ({ activity: row, steps, onSuccess, onError }: StepsSave): void => {
+  const saveSteps = ({ activity: row, before, steps, onSuccess, onError }: StepsSave): void => {
     void replaceSteps.mutateAsync({ version: row.version, steps }).then(
       (saved) => {
         onSuccess(saved);
         announce('Steps saved.');
+        if (before !== undefined) onStepsSaved?.(row, before, saved);
       },
       failed('Steps', onError),
     );
