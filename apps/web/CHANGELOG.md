@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.169.0
+
+### Minor Changes
+
+- [#821](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/821) [`adce901`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/adce901368bc53914bede83674db1c2b7b7224ab) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ctrl+Z and Ctrl+Y now work anywhere in the plan, and still undo your typing inside a text box.
+
 ## 0.168.0
 
 ### Minor Changes
