@@ -1,6 +1,6 @@
 # Feature Spec: "Edited since it was calculated" means a scheduling input changed
 
-- **Status:** Approved — product owner, 2026-10-04 ("leave calendar edits out of it for now", in reply to the plain-English summary). CQ-1 answered (a): calendar, shift and exception edits and resource max-units/calendar edits stay out of scope and go to a TECH_DEBT row.
+- **Status:** Approved — shipped in PR #799 (no ADR was proposed, so the header stays Approved: the decision is in `docs/DECISIONS.md` 2026-10-04 and `docs/DATABASE.md`). Product owner, 2026-10-04 ("leave calendar edits out of it for now", in reply to the plain-English summary). CQ-1 answered (a): calendar, shift and exception edits and resource max-units/calendar edits stay out of scope and go to a TECH_DEBT row.
 - **Author(s):** feature-analyst (for the product owner), folding in the database-architect's design
 - **Date:** 2026-10-04
 - **Tracking issue / epic:** no register row of its own; this spec is the record. Required by

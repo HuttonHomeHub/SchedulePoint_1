@@ -1,8 +1,9 @@
 # Implementation Plan: Undo/redo that works like it does everywhere else
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — product owner, 2026-10-04 ("Approved", in reply to the plain-English summary
-  of this spec). CQ-1: plan settings stay **outside** undo (the recommended default). CQ-3: the
+- **Status:** Accepted — shipped ([ADR-0176](../../adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)). Approved by the product owner 2026-10-04 ("Approved", in reply to the plain-English summary
+  of this spec). M0–M8 built: web 0.163.1–0.169.0 plus the M7 history list in the next web release;
+  the `VITE_UNDO_REDO` flag was retired in M8. CQ-1: plan settings stay **outside** undo (the recommended default). CQ-3: the
   result message lives in the **dock strip under the diagram** (the recommended default).
   **Orchestrator amendment at approval (CQ-2 / F-1):** fix (a) (#447) was built as a per-history
   version ledger that only knows versions produced by edits the stack itself recorded or replayed,
@@ -448,10 +449,10 @@ versions from the response)`; redo = dissolve again (rethread batch id). Replace
 
 ---
 
-### Milestone M7: Undo history list (shippable slice)
+### Milestone M7: Recent edits list (shippable slice)
 
 **Outcome:** a menu beside Undo lists recent steps; choosing one undoes back to it.
-**Entry point:** toolbar **Undo history** menu button (next to Undo; name chosen to avoid confusion
+**Entry point:** toolbar **Recent edits** menu button (next to Undo; name chosen to avoid confusion
 with the activity editor's **History** tab, ADR-0174).
 **Journey:** `e2e-undo/history-menu.spec.ts` — three edits; open the menu (keyboard: Enter, arrows);
 choose the third → strip "Undid 3 steps."; set one up to fail → "Undid 1 of 3 — stopped at …".

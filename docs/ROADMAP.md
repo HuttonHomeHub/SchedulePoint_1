@@ -773,19 +773,20 @@ discriminators. Each becomes a spec/plan before build:
   threads (ADR-0046) on **plans and activities** (client/project reserved for a later slice): a
   polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the web
   thread/composer/badge in the activity Logic panel and plan workspace (M3). The weekly-progress "why".
-- **Undo/redo.** **Delivered & enabled (`VITE_UNDO_REDO` on by default)** — a client-side, per-plan
+- **Undo/redo.** **Delivered & enabled** (the `VITE_UNDO_REDO` flag was retired in M8 of the follow-on below) — a client-side, per-plan
   command stack (ADR-0048) that undoes plan **inputs** through the existing mutations (engine +
   parity gate untouched): reposition/relane/update/create/delete/dependency/`visualStart`/
   auto-arrange, with drag coalescing, pen-gated toolbar Undo/Redo + keyboard shortcuts, and
   announcements. Chromium Back/Forward suppression is asserted by the flag-on Playwright journey; the
   Firefox/Safari/Edge manual sweep is the operator gate (TECH_DEBT #25). Id-stable cascade/WBS
-  delete-undo shipped (ADR-0048 M4). **Best-in-class follow-on in progress** (spec
-  `docs/specs/undo-redo-best-in-class/`): what each press did shows in the dock strip (M1), and
+  delete-undo shipped (ADR-0048 M4). **Best-in-class follow-on shipped, M0–M8** (spec `docs/specs/undo-redo-best-in-class/`, web 0.163.1–0.169.0
+  plus the M7 list in the next web release): what each press did shows in the dock strip (M1), and
   **undo never jams** (M2, **ADR-0176**) — a step checks the fields it wrote against the server
   before it writes, a step that cannot apply is set aside and explained so the next press carries
   on, and the history survives a pen hand-off. Every edit is undoable (M3) and so is **Dissolve**
-  (M6 — it no longer wipes the history). Still to come: reveal after undo (M4), keyboard from
-  anywhere (M5), a history list (M7).
+  (M6 — it no longer wipes the history); the changed activity is revealed after a press (M4),
+  Ctrl/Cmd+Z works from anywhere in the plan (M5), and a **Recent edits** list beside Undo jumps back
+  several steps (M7).
 - **Gantt view** — **shipped** (ADR-0059, `VITE_GANTT_VIEW` default-on 2026-07-28): a
   grid-and-bar projection of the same model behind a TSLD | Gantt switch, with WBS summary rows,
   the baseline variance bar ADR-0025 deferred "until a Gantt exists", and a printed programme.
