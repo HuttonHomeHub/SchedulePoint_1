@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.167.0
+
+### Minor Changes
+
+- [#817](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/817) [`e162953`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1629532b1db8c227710105ef0e51a5fc466415e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Removing a WBS group can now be undone, and it no longer wipes your undo history.
+
 ## 0.166.0
 
 ### Minor Changes
