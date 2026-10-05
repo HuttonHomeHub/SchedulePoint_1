@@ -11623,6 +11623,11 @@ so does the one place an undo deletes and re-creates an assignment (a PATCH cann
 case is compensated, not closed: a create that fails after the delete is retried from the row that was read and
 reported as a distinct failure (ADR-0176).
 
+**The LOE span's redo rolls back the same way** (undo-redo M2 security re-check): if one of its two edges fails
+after the LOE was created, the LOE is deleted best-effort and the error rethrown so a retry composes again. If that
+rollback delete itself fails (a 423 mid-sequence), an LOE with no logic is left behind and a retry creates a second
+one. Rare, visible and restorable; recording the orphan id so the retry deletes it first would close it.
+
 **Next:** an optional `version` (or `If-Match`) on single-row `DELETE`, enforced when sent, which `commands.ts` and
 `record-commands.ts` would then pass from the row their pre-check just read. Additive and opt-in, so existing
 callers are unaffected.
