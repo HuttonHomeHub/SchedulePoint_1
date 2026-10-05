@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.86.2
+
+### Patch Changes
+
+- [#799](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/799) [`a5f70b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a5f70b5d4657e996330bf0659719edaca248f769) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(api): the overview says a plan was "edited since it was calculated" only when a scheduling input changed. Moving a bar to another row, Arrange, the overlap fix, a rename and cost or steps edits no longer raise the warning after a recalculation. A plan where an activity or link was deleted after its last calculation will now correctly show the warning, which it did not before. Calendar and resource-limit edits still do not raise it.
+
 ## 0.86.1
 
 ### Patch Changes
