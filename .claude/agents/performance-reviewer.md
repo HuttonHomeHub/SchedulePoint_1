@@ -75,13 +75,21 @@ You review; you do not edit code.
   ceiling on any one lazy chunk, and render-blocking CSS), each a measured floor
   times a 1.05 headroom ratio that is a **product-owner judgement and not a
   measurement**. Read the file for today's figures; do not restate them here, and do
-  not quote "~200KB initial" — this brief did, the real entry graph is roughly
-  **twice** that, and the delivery-gates spec (C3) rejected that figure as one nobody
-  had ever measured before deriving the floor from a build. A raise needs a one-line
-  `raisedBecause`: a budget quietly moved up is a budget that never says no.
-- **Code splitting:** routes lazy-loaded; heavy/non-critical UI (charts, rich
-  editors, rarely-used dialogs) behind `React.lazy`/dynamic import with a
-  Suspense fallback. Critical path stays lean.
+  not quote any figure from memory — this brief once quoted "~200KB initial", which
+  nobody had measured, and then "roughly twice that", which ADR-0171's route
+  splitting made false (the floor was re-derived downward on 2026-10-02). The file is
+  the only figure. A raise needs a one-line `raisedBecause`: a budget quietly moved up
+  is a budget that never says no.
+- **Code splitting is the rule, not a suggestion (ADR-0171).** Routes load when opened
+  (`lazyRouteComponent`); only routes named in `EAGER_ROUTES`
+  (`router-splitting.structural.test.ts`) ship in the entry graph. Two chunk groups in
+  `vite.config.ts` keep the split fast — `boot` (the `$initial` graph) and `ui-shared`
+  (code several lazy routes share) — and `check-bundle-size.mjs` B9 fails on a cycle
+  between chunks. A change that imports a
+  lazy route's module from eager code, or adds a module to `boot` that a first paint
+  does not need, undoes the split silently: check where new imports land. Heavy
+  non-route UI (charts, rich editors, rarely-used dialogs) still goes behind
+  `React.lazy`/dynamic import with a Suspense fallback.
 - **Rendering:** avoid needless re-renders (stable keys, memo where measured,
   no new object/array/function literals in hot props without reason); lists
   virtualised when large.

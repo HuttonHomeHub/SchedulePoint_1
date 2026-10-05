@@ -83,6 +83,18 @@ review; you do not edit code. Assume an adversarial user.
   log yet (#14)", which is not merely stale prose: it would stop you checking that
   a new privileged route is audited at all. `#14`'s remaining halves are (b) the
   in-process rate-limit store and (c) unencrypted OAuth token columns.
+- **Activity history is NOT the audit log, and its read rules are its own (ADR-0174).**
+  `activity_history_entries` is mutable working memory (entries merge, and die with
+  their activity), stores the actor as an opaque id resolved at read time, and is read
+  by every member with `activity:read`. Cost items are stripped server-side for anyone
+  without `cost:read` (D7), and there is no guest route. A change that adds a field to
+  an entry, or a reader of it, must keep those three: cost stripped on the server, no
+  guest surface, no actor name stored.
+- **A read states its soft-delete filter (ADR-0172).** Every Prisma read of a model
+  with `deletedAt` says `deletedAt: null`, or carries `// soft-delete: any-state|deleted-only
+— <reason>`; `common/query/soft-delete-filter.structural.spec.ts` fails otherwise. A
+  reason that reaches deleted rows on a member-facing route is an exposure to review,
+  not a formality.
 - **Known and accepted, so don't re-report as new:** the throttler store is
   in-process memory, per-replica (TECH_DEBT #49); the keyset cursor is resolved
   before the scope filter, which is a cosmetic anchor issue and leaks no rows

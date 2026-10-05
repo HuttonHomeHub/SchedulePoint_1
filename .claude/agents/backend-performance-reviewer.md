@@ -30,7 +30,9 @@ not edit code.
   lock _hold time_, not just query count. The ~2,000-activity plan (brief §17) is
   the sizing target.
 - **Advisory locks are the serialisation primitive** (`src/common/db/*-advisory-lock.ts`)
-  — plan, calendar, resource, resource-tree. A loop that takes a per-row lock is a
+  — plan, calendar, resource, resource-tree — plus the activity-history lock
+  (`activity-history-lock.ts`, ADR-0174 D4), taken inside activity write
+  transactions, so its hold time adds to theirs. A loop that takes a per-row lock is a
   smell: the GROUP-delete loop cost ~830 ms for a 2,000-row subtree until it was
   batched into one `unnest` (~13 ms), all of it spent holding an org-wide lock.
 - **Read models are read models.** Earned value, the resource histogram and the

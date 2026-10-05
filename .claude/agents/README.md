@@ -5,7 +5,8 @@ frontmatter (`name`, `description`, `tools`, `model`) and a system prompt. Claud
 Code can delegate to them automatically based on their `description`, or you can
 invoke one explicitly (e.g. "use the security-reviewer").
 
-Each agent carries a **SchedulePoint invariants** section: the things that break in
+Each planner and reviewer carries a section headed **SchedulePoint invariants**,
+**context** or **architecture** (`builder` and `explorer` work from their brief): the things that break in
 _this_ codebase, not generic best practice. That is deliberate — a reviewer that
 only knows "check for IDOR" will not notice that cross-org access must be a 404
 rather than a 403, that the guest principal's isolation is a compile-time property,

@@ -31,10 +31,19 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
   live in the migration as raw SQL with a documenting comment in the model and
   **no** `@@index` declaration. A declared full index the database does not have
   breaks the CI schema-drift check (`prisma:check-drift`) — that was TECH_DEBT #54.
-- **Soft delete everywhere**, with cascades stamped by a shared `delete_batch_id`
+- **Soft delete on every user-deletable entity** (not every model: join, log and
+  read-model tables carry no `deleted_at`), with cascades stamped by a shared `delete_batch_id`
   so a restore reactivates exactly the set that was removed
   (`src/common/hierarchy/`). Restore is guarded both ways: a child cannot come back
   under a deleted ancestor.
+- **Every read states its soft-delete filter (ADR-0172)**, enforced by
+  `common/query/soft-delete-filter.structural.spec.ts`: `deletedAt: null`, or a
+  `// soft-delete: any-state|deleted-only — <reason>` comment. A new soft-deletable
+  model joins that gate's subject; say so in the design.
+- **`activity_history_entries` (ADR-0174) is deleted explicitly, not by cascade**: its
+  foreign key into `activities` is `ON DELETE RESTRICT`, so every permanent-deletion
+  path must delete history first. A new hard-delete path that forgets it fails at the
+  database, which is the point.
 - **Optimistic locking** via a `version` column on client-writable rows;
   engine-owned batched writes deliberately bypass it (ADR-0022).
 - **Fail-closed CHECKs.** Where a discriminator implies which columns must be set,

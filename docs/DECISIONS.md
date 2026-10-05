@@ -10,6 +10,78 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-05 — Reconciliation pass: three register rows lost by accident, and a session read that cost a CI run
+
+**What was decided.** The pass `docs/HANDOFF.md` and `check:reconcile-due` both called due — twelve ADRs
+since 2026-09-29 (ADR-0165 … ADR-0176). Every computed gate was green before it started (`check:counts`,
+`check:claims` at 133 claims, `check:adr-coverage` 176 of 176, `check:debt-status` 166 detailed rows,
+`check:spec-status`, `check:flags`, `check:doc-links`, `check:playbook` at 44 plans), so every finding
+below is something those gates cannot read. Steps 1–7 were run by read-only agents and **each finding was
+re-read at the cited line before it was written down**; the hand-off itself was verified against `git log`,
+the tags and both manifests first (web 0.170.3, api 0.87.1; #827–#831 on `main`).
+
+**What it found wrong.**
+
+1. **Three open register rows were deleted by accident.** `98532284` (#729) removed **#336** (the
+   documented `pg_trgm` escalation names an index the query cannot use), **#338** (two `<summary>`
+   treatments) and **#340** (`ParseUuidPipe` hand-rolled for a stale reason) with no ledger line and no
+   fix — its message closes #334, #412, #414, #415 and #418 only. All three still hold in the code
+   (`uuid.ts:26` still throws its own message; `calendar.repository.ts` still emits `name ILIKE`). Restored
+   verbatim with a note. Nothing gates this: `check:debt-status` reads the rows that exist and cannot see
+   one that vanished. A ledger-completeness check ("every number below the highest is a row or a ledger
+   line") would have caught it; filed as `#453` rather than built, because it is a shared gate.
+2. **Six ledger lines said "this change"**, which stops pointing anywhere once merged — two of them
+   quoting commit subjects that never landed (#423, #425). Each now names its PR and commit. **#447**
+   led with `VersionLedger`, which ADR-0176 removed.
+3. **#435 contradicted itself** ("429 … confirmed above" under a paragraph measuring zero 429s), and
+   **#418** still read open with its remedy shipped; its own exit test (a clean `scale-2000` seed) had
+   never been run. It was run here — clean, with 2,128 of 2,160 activities parented — and the row closed.
+4. **Line citations had moved** in #429, #432, #437 and #438; #437 had also become the open half of a
+   recorded decision (ADR-0173 D5) without saying so. **#405** still carried its two closed parts struck
+   through, against the register's own rule. And `activity.repository.ts`'s `updatePlacements` docblock
+   claimed the plan advisory lock, which its caller does not take — the comment was wrong, not #440.
+5. **ADR status drift:** `docs/adr/README.md` listed ADR-0169 as Proposed (the ADR says Accepted), and
+   ADR-0048 and ADR-0146 did not record that ADR-0176 and ADR-0165 amend them, in their own Status line
+   or in `CLAUDE.md` §16 — the shape every other amended ADR follows.
+6. **The agents, for the fourth pass running, were where the stale beliefs lived.**
+   `performance-reviewer.md` told every review the entry graph was "roughly twice" 200 KB — false since
+   ADR-0171 re-floored it to 180,121 bytes on 2026-10-02 — and knew nothing of the split it now polices.
+   `backend-performance-reviewer.md` listed four advisory locks against five (ADR-0174's history lock).
+   `database-architect.md` said "soft delete everywhere" (20 of 35 models carry `deletedAt`) and, like
+   `security-reviewer.md`, did not know ADR-0172's gate or ADR-0174's history table; `test-engineer.md`
+   did not know ADR-0175's fixture. `RECONCILE.md` §6 and `.claude/agents/README.md` miscounted the
+   agents' own section headings, and §1 quoted 42/43 against today's 47/48.
+
+**The carried-forward finding: `/me` and the base suite.** HANDOFF recorded the base suite's census at
+67 → 69 `GET /me` per 60 s after #827, and a 429 on #831's CI. The CI annotations name it: ADR-0175's guard
+reported `429 RATE_LIMITED on GET /api/v1/me` on `[chromium] tsld` and `[firefox] activities`. CI runs
+the base suite on **three** browsers against one API, but the failing chromium test ran before any other
+browser, and a local run of chromium twice back to back passed — so the bucket filled on chromium alone,
+on hardware faster than this container. ADR-0175 D3 says to remove redundant reads before raising a
+limit, and this one was redundant: `sessionQueryOptions` has `staleTime: 0`, so each of thirteen
+`useSession()` call sites refetched `/me` on mount and on every window focus, and #827 made every plan
+switch a remount. The shared options **must** keep `0` — sign-in, sign-up and a password change call
+`fetchQuery(sessionQueryOptions)` to replace a cached `null`, and a non-zero value would bounce a fresh
+sign-in back to the sign-in screen (verified red). So the fix is observer-level: `useSession()` treats
+`/me` as fresh for 30 s, the app's default. The census fell **65 → 31** with all 23 tests green. Shipped as
+its own `fix(web)` PR; recorded as `#455`. It also halves the per-office load behind one NAT address that
+`#446` describes, without changing that row's subject.
+
+**Step 7** reviewed #827 and #829's web halves (no specialist review had seen them): nothing blocking;
+the follow-ups are `#454`.
+
+**Negative results.** All eleven manifest descriptions hold; no absent library is named; the four
+accepted-but-unbuilt ADRs (0009–0011, 0013) are still unbuilt; the three `REFERENCE_FEATURE` exemplars
+exist; `docs/API.md` and `docs/DATABASE.md` document #829's field and #799's column; `VITE_UNDO_REDO`
+survives only in history; and the four global-policy files added since the last pass have accurate
+docblocks.
+
+**The Dependabot batch (#807–#816) is put to the product owner**, not merged: five of the ten fail
+`check:claims` because the bumped packages are pinned in `scripts/dependency-claims.json`, so they cannot
+go green one at a time. The #731 approach (one combined PR, claims re-verified) is the recommendation.
+
+---
+
 ## 2026-10-04 — "Edited since it was calculated" is a scheduling input changing, stamped by the writers
 
 **What.** The overview's `editedSinceCalculated` compares `schedule_computed_at` with a new plan column,

@@ -1,6 +1,6 @@
 # ADR-0146: A page has one measure, a column has a reason, and a fact belongs under its row
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0165 for the windowed table
 - **Date:** 2026-09-17
 - **Deciders:** Product owner; agent implementation
 - **Spec:** [`docs/specs/page-composition/`](../specs/page-composition/)

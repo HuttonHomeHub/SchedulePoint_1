@@ -68,6 +68,13 @@ exist** — ADR-0057 deleted them. Read real suites instead:
   and fails if CLAUDE.md's banner disagrees (ADR-0076); `ls apps/web/e2e-*` is the
   directory list, which is one larger than the gate's figure because `e2e-support`
   holds shared page objects and no spec.
+- **Journeys import `test` from `e2e-support/test.ts`, never from `@playwright/test`**
+  (ADR-0175, enforced by a lint rule). That fixture fails a test that met an API 429,
+  by name. A deliberate 429 opts out with `test.use({ allowRateLimited: true })` inside
+  the one `describe` that provokes it, never file-wide. A suite that 429s gets its
+  `RATE_LIMIT_LIMIT` re-measured with `E2E_THROTTLE_CENSUS=1` (about 2× the census
+  peak, cited with a date), not removed; and CI runs the base suite on three browsers
+  against one API, so a chromium-only census understates that bucket.
 - **API e2e runs against real Postgres** (`describe.skipIf(!hasDatabase)`), so
   cascade, cursor and lock behaviour is exercised for real.
 
