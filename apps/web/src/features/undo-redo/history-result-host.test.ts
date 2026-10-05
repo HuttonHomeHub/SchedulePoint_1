@@ -29,8 +29,8 @@ describe('historyResultAction', () => {
     expect(undoRedo.undo).toHaveBeenCalledOnce();
   });
 
-  it('offers nothing for a conflict or a refusal, or while undo/redo is not live', () => {
-    expect(historyResultAction(result({ outcome: 'conflict' }), true, undoRedo)).toBeUndefined();
+  it('offers nothing for a set-aside step or a refusal, or while undo/redo is not live', () => {
+    expect(historyResultAction(result({ outcome: 'set-aside' }), true, undoRedo)).toBeUndefined();
     expect(historyResultAction(result({ outcome: 'blocked' }), true, undoRedo)).toBeUndefined();
     expect(historyResultAction(result({}), false, undoRedo)).toBeUndefined();
   });

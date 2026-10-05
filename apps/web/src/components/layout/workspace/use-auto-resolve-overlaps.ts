@@ -195,7 +195,7 @@ export function useAutoResolveOverlaps(params: {
       batchPositions,
       before: moves.map((m) => ({ id: m.id, laneIndex: m.from })),
       after: moves.map((m) => ({ id: m.id, laneIndex: m.to })),
-      versions: new Map(saved.map((row) => [row.id, row.version])),
+      saved,
       label:
         moves.length === 1
           ? 'Move activity clear of an overlap'

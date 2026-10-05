@@ -7,37 +7,56 @@ import type {
   LagCalendarSource,
 } from '@repo/types';
 
-import type { PlacedActivityInput } from '@/features/activities/api/use-activities';
-import type { ActivityDefinitionInput } from '@/features/activities/api/use-activities';
+import {
+  APPLIED,
+  checkActivities,
+  checkDependencies,
+  linkName,
+  notApplicable,
+  pick,
+  replayActivities,
+  replayActivity,
+  replayDependency,
+  writeOrSetAside,
+  type ReplayContext,
+  type ReplayResult,
+} from './replay';
+
+import type {
+  ActivityDefinitionInput,
+  PlacedActivityInput,
+} from '@/features/activities/api/use-activities';
+import { typeChangeReexpressesDates } from '@/features/activities/model/type-change-dates';
+import { isDurationDerivedType } from '@/features/activities/schemas/activity-schemas';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /**
- * A single reversible plan-authoring edit (ADR-0048). `redo` re-applies the original edit; `undo`
- * applies its inverse. Both replay plan **inputs** through the existing REST mutation hooks — never
- * engine-owned derived columns — so the CPM engine and its recalc parity gate stay untouched; the
- * normal ADR-0032 auto-recalc redraws the outputs after either direction.
+ * A single reversible plan-authoring edit (ADR-0048, amended by ADR-0176). `redo` re-applies the
+ * original edit; `undo` applies its inverse. Both replay plan **inputs** through the existing REST
+ * mutation hooks — never engine-owned derived columns — so the CPM engine and its recalc parity gate
+ * stay untouched; the normal ADR-0032 auto-recalc redraws the outputs after either direction.
  *
- * The type is intentionally minimal and cheap to construct: a label plus two thunks. The builders
- * below are pure — they capture the pre-edit and post-edit values plus the mutation function(s) they
- * need, closing over nothing React. The optimistic `version` the mutation hooks require is threaded
- * forward from each call's response (a fresh version after every undo/redo), mirroring how the seam's
- * own handlers read the live version before a write.
+ * **A replay checks before it writes.** Each builder below declares the rows it touched and the
+ * fields it wrote; a replay re-reads those rows, compares ONLY the written fields against the state
+ * the step left, and — when they match — writes only those fields with the row's CURRENT version. A
+ * mismatch writes nothing and answers `not-applicable`, which the history sets aside (ADR-0176 D2,
+ * D3). A multi-row step succeeds or fails as a whole.
+ *
+ * The state a replay expects is the **server's saved row**, never the value the client sent: the
+ * server normalises (a milestone's dates, ADR-0162), so comparing what was sent would refuse a
+ * perfectly good undo. After a replay applies, the opposite direction's expectation is refreshed from
+ * that write's response, for the same reason.
+ *
+ * Builders stay pure and cheap to construct — a label, the captured rows and the mutation function(s)
+ * they need, closing over nothing React.
  */
 export interface Command {
-  /** Human label for the edit — M3 surfaces it in the Undo/Redo controls + announcements. */
+  /** Human label for the edit — surfaces in the Undo/Redo controls, announcements and the strip. */
   readonly label: string;
-  /**
-   * Apply the inverse of the edit (restore the pre-edit state). The history passes its
-   * {@link VersionLedger}; a command run without one (a bare unit test) threads only its own version.
-   */
-  undo: (versions?: VersionLedger) => Promise<void>;
-  /** Re-apply the original edit (restore the post-edit state). Same ledger contract as {@link undo}. */
-  redo: (versions?: VersionLedger) => Promise<void>;
-  /**
-   * Tell the history's ledger the post-edit version(s) of the row(s) this edit just wrote. Called by
-   * `record`, so a LATER replay of an OLDER step on the same row already knows the newer version.
-   */
-  readonly seedVersions?: (versions: VersionLedger) => void;
+  /** Apply the inverse of the edit (restore the pre-edit state), or say why it cannot be applied. */
+  undo: (ctx: ReplayContext) => Promise<ReplayResult>;
+  /** Re-apply the original edit (restore the post-edit state), or say why it cannot be applied. */
+  redo: (ctx: ReplayContext) => Promise<ReplayResult>;
   /**
    * Optional coalescing descriptor (ADR-0048 M2.3). A pointer drag or a held-key nudge fires many
    * intermediate writes for one user gesture; the seam records a command per successful write, but
@@ -57,50 +76,15 @@ export interface Command {
   readonly affectsSchedule?: boolean;
 }
 
-/**
- * The newest version this history has seen for each row, whichever step produced it.
- *
- * Every builder below used to thread its OWN `version`, which is only right while the command is the
- * sole writer of its row: two steps on one activity (a move, then a resize) each captured the version
- * their forward write returned, so after the newer step's undo bumped the row the older step's undo
- * still sent the stale number and 409'd — and so did every replay after it (`docs/TECH_DEBT.md`
- * #447). The ledger is monotonic (max per id) and fed ONLY by writes the stack itself recorded or
- * replayed. It deliberately never reads the query cache and never fetches: an UNRECORDED write on the
- * same row (another path, another user) is invisible to it, so the next replay still 409s, which is
- * the whole point of the optimistic lock (ADR-0048 M3.1).
- */
-export interface VersionLedger {
-  get: (id: string) => number | undefined;
-  observe: (id: string, version: number) => void;
-}
-
-/** A fresh ledger; `clear` is for the history that owns it (plan switch, pen loss). */
-export function createVersionLedger(): VersionLedger & { clear: () => void } {
-  const seen = new Map<string, number>();
-  return {
-    get: (id) => seen.get(id),
-    observe: (id, version) => {
-      const known = seen.get(id);
-      if (known === undefined || version > known) seen.set(id, version);
-    },
-    clear: () => seen.clear(),
-  };
-}
-
-/** The version a replay sends: the command's own thread, unless the ledger has seen a newer one. */
-function liveVersion(versions: VersionLedger | undefined, id: string, threaded: number): number {
-  return Math.max(threaded, versions?.get(id) ?? threaded);
-}
-
 /** How a coalescable command folds into the previous same-key step. */
 export interface CommandCoalescing {
   /** Same-key consecutive commands recorded within one interaction collapse to a single undo step. */
   readonly key: string;
   /**
    * Build the combined command from `previous` (the older, top-of-stack command) and this newer one:
-   * undo restores `previous`'s pre-edit state, redo re-applies THIS command's post-edit state, and
-   * version threading re-seeds from THIS command's post-edit version (the live row's current version
-   * after the whole gesture). Called as `newCommand.coalescing.merge(topOfStack)`.
+   * undo restores `previous`'s pre-edit state, redo re-applies THIS command's post-edit state, and the
+   * expectation a replay checks is THIS command's saved row (the live row after the whole gesture).
+   * Called as `newCommand.coalescing.merge(topOfStack)`.
    */
   merge: (previous: Command) => Command;
 }
@@ -112,10 +96,10 @@ interface CoalesceState<P> {
 
 /**
  * Attach coalescing to a command built from a `{ before, after }` pair. `rebuild` re-runs the owning
- * builder (so the merged command is itself coalescable and threads the newer version); `merge` reads
- * the *older* command's stashed `before` and rebuilds original-before → this-after — so a chain of N
- * intermediate writes always collapses to one step spanning the first pre-edit and last post-edit
- * state, regardless of how many merges happened along the way.
+ * builder (so the merged command is itself coalescable and checks against the newest saved row);
+ * `merge` reads the *older* command's stashed `before` and rebuilds original-before → this-after — so
+ * a chain of N intermediate writes always collapses to one step spanning the first pre-edit and last
+ * post-edit state, regardless of how many merges happened along the way.
  */
 function coalescable<P>(
   command: Command,
@@ -134,15 +118,12 @@ function coalescable<P>(
   return { ...command, coalescing };
 }
 
-/** The single-activity definition PATCH input `useUpdateActivity` already takes. */
-export type UpdateActivityInput = {
+/** `useUpdateActivityFields().mutateAsync` — a partial PATCH of exactly the fields in `patch`. */
+export type PatchActivityFieldsFn = (input: {
   activityId: string;
   version: number;
-  laneIndex?: number;
-} & ActivityDefinitionInput;
-
-/** `useUpdateActivity().mutateAsync` — resolves to the saved activity, carrying the new `version`. */
-export type UpdateActivityFn = (input: UpdateActivityInput) => Promise<ActivitySummary>;
+  patch: Record<string, unknown>;
+}) => Promise<ActivitySummary>;
 
 /** `useRepositionLane().mutateAsync` — the minimal, layout-only lane PATCH. */
 export type RepositionLaneFn = (input: {
@@ -153,13 +134,9 @@ export type RepositionLaneFn = (input: {
 
 /**
  * Project an activity row into the full definition PATCH body `useUpdateActivity` expects — the same
- * `ActivitySummary → form-values` seed the edit dialog performs on open, so re-issuing it restores the
- * activity's **whole** definition (name, duration, constraints, calendar, WBS parent, cost/EV inputs,
- * …). `laneIndex` is carried separately by the caller — it isn't part of the definition schema.
- *
- * Restoring the full definition (not a hand-picked field diff) is what makes the inverse correct: a
- * canvas reposition rewrites the primary constraint AND resends every other definition field, so only
- * a full-snapshot restore reliably reverses whatever the edit changed.
+ * `ActivitySummary → form-values` seed the edit dialog performs on open. `laneIndex` is carried
+ * separately by the caller — it isn't part of the definition schema. (Still the canvas's start-edge
+ * resize seed; the undo steps no longer resend it whole — see {@link definitionStepCommand}.)
  */
 export function activityDefinitionInput(activity: ActivitySummary): ActivityDefinitionInput {
   return {
@@ -194,78 +171,207 @@ export function activityDefinitionInput(activity: ActivitySummary): ActivityDefi
 }
 
 /**
- * The core of the reposition + update inverses: capture the before/after activity snapshots and
- * re-issue the full-definition PATCH to restore either. The version is threaded from each response so
- * the optimistic lock always carries the **current** version, starting from the post-edit
- * `after.version` (the next thing the stack does from here is an undo, from that state).
+ * One activity's field step: the fields it wrote, the state each direction expects to find, and the
+ * write that restores a target. Every single-row activity builder below is this with a different
+ * field list and write.
+ *
+ * `after` is what a REDO writes and `saved` is what the server held after the forward write — the
+ * undo's expectation. They differ exactly where the server normalised, which is why the expectation
+ * is read from `saved`. After a replay applies, the other direction's expectation becomes that
+ * write's response (the same reason, one hop along).
  */
-function definitionSnapshotCommand(params: {
+function fieldStep<K extends keyof ActivitySummary>(params: {
+  id: string;
+  name: string;
+  fields: readonly K[];
+  before: Pick<ActivitySummary, K>;
+  after: Pick<ActivitySummary, K>;
+  saved: Pick<ActivitySummary, K>;
+  write: (target: Pick<ActivitySummary, K>, row: ActivitySummary) => Promise<ActivitySummary>;
+}): Pick<Command, 'undo' | 'redo'> {
+  const { id, name, fields, before, after, write } = params;
+  let atUndo: Pick<ActivitySummary, K> = pick(params.saved, fields);
+  let atRedo: Pick<ActivitySummary, K> = pick(before, fields);
+  const replay = (
+    ctx: ReplayContext,
+    expect: Pick<ActivitySummary, K>,
+    target: Pick<ActivitySummary, K>,
+    settle: (saved: Pick<ActivitySummary, K>) => void,
+  ): Promise<ReplayResult> =>
+    fields.length === 0
+      ? Promise.resolve(APPLIED)
+      : replayActivity(ctx, { id, name, expect }, async (row) => {
+          settle(pick(await write(target, row), fields));
+        });
+  return {
+    undo: (ctx) =>
+      replay(ctx, atUndo, before, (saved) => {
+        atRedo = saved;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, after, (saved) => {
+        atUndo = saved;
+      }),
+  };
+}
+
+/**
+ * The definition fields an edit can write — every one a partial PATCH accepts and a row carries
+ * under the same name. Duration is the exact stored minutes (ADR-0070), never the rounded day.
+ */
+const DEFINITION_KEYS = [
+  'name',
+  'code',
+  'description',
+  'type',
+  'durationMinutes',
+  'durationType',
+  'constraintType',
+  'constraintDate',
+  'secondaryConstraintType',
+  'secondaryConstraintDate',
+  'scheduleAsLateAsPossible',
+  'expectedFinish',
+  'externalEarlyStart',
+  'externalLateFinish',
+  'calendarId',
+  'parentId',
+  'levelingPriority',
+  'percentCompleteType',
+  'accrualType',
+  'physicalPercentComplete',
+  'budgetedExpense',
+  'actualExpense',
+  'laneIndex',
+] as const satisfies readonly (keyof ActivitySummary)[];
+
+type DefinitionKey = (typeof DEFINITION_KEYS)[number];
+
+/** A constraint is written with its date or not at all — the API pairs them (both-or-neither). */
+const CONSTRAINT_PAIRS: readonly (readonly [DefinitionKey, DefinitionKey])[] = [
+  ['constraintType', 'constraintDate'],
+  ['secondaryConstraintType', 'secondaryConstraintDate'],
+];
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return (a ?? null) === (b ?? null);
+}
+
+/**
+ * The fields a definition edit changed, diffed from the **server's** before and after rows — not from
+ * the form, which could miss a field the write changed (a normalised date, a recomputed duration).
+ */
+function changedDefinitionFields(before: ActivitySummary, after: ActivitySummary): DefinitionKey[] {
+  const changed = new Set<DefinitionKey>(
+    DEFINITION_KEYS.filter((key) => !sameValue(before[key], after[key])),
+  );
+  // A duration-derived target (summary, hammock, level of effort) takes its duration from elsewhere;
+  // the client never writes one for it (`durationFields` sends `0`), so it is not this step's field.
+  if (isDurationDerivedType(before.type) || isDurationDerivedType(after.type)) {
+    changed.delete('durationMinutes');
+  }
+  for (const [typeKey, dateKey] of CONSTRAINT_PAIRS) {
+    if (changed.has(typeKey) || changed.has(dateKey)) {
+      changed.add(typeKey);
+      changed.add(dateKey);
+    }
+  }
+  // The dates the server re-expresses when a zero-duration activity's type crosses the
+  // finish-milestone convention (ADR-0162 decision 3) are CONSEQUENCES of the type change, not things
+  // the planner wrote, so a step neither compares nor writes them: sent back with the type they would
+  // be read in the new type's convention (`typeChangeCommand`'s docblock), and the server
+  // re-expresses them again in the other direction by itself — which returns the row byte-identical.
+  // A constraint whose TYPE changed too was a real edit and keeps its date.
+  if (typeChangeReexpressesDates(before.type, before.durationMinutes, after.type)) {
+    changed.delete('externalEarlyStart');
+    changed.delete('externalLateFinish');
+    for (const [typeKey, dateKey] of CONSTRAINT_PAIRS) {
+      if (sameValue(before[typeKey], after[typeKey])) {
+        changed.delete(typeKey);
+        changed.delete(dateKey);
+      }
+    }
+  }
+  return DEFINITION_KEYS.filter((key) => changed.has(key));
+}
+
+/** The partial PATCH body for a target's values of `fields`. */
+function patchBody<K extends DefinitionKey>(
+  target: Pick<ActivitySummary, K>,
+  fields: readonly K[],
+): Record<string, unknown> {
+  return Object.fromEntries(fields.map((key) => [key, target[key] ?? null]));
+}
+
+/**
+ * The core of the definition edits: a diffed, field-scoped step over the partial PATCH.
+ *
+ * It used to resend the activity's WHOLE definition on every undo, which is wrong twice over. It
+ * reverted fields the step never touched (so a colleague's later edit to a different field was
+ * silently undone along with ours), and it resent dates alongside a type, which the server reads in
+ * the new type's convention — the editor's milestone conversion (F-3). Writing only what the step
+ * changed fixes both, and is what makes "only the written fields are compared" possible at all.
+ */
+function definitionStepCommand(params: {
   label: string;
-  update: UpdateActivityFn;
+  patch: PatchActivityFieldsFn;
   before: ActivitySummary;
   after: ActivitySummary;
   /** When set, the command coalesces with same-key neighbours (a canvas drag/nudge — ADR-0048 M2.3). */
   coalesceKey?: string;
 }): Command {
-  const { label, update, before, after, coalesceKey } = params;
-  let version = after.version;
-  const restore = async (target: ActivitySummary, versions?: VersionLedger): Promise<void> => {
-    const saved = await update({
-      activityId: target.id,
-      version: liveVersion(versions, target.id, version),
-      ...activityDefinitionInput(target),
-      laneIndex: target.laneIndex,
-    });
-    version = saved.version;
-    versions?.observe(target.id, saved.version);
-  };
-  const command: Command = {
-    label,
-    undo: (versions) => restore(before, versions),
-    redo: (versions) => restore(after, versions),
-    seedVersions: (versions) => versions.observe(after.id, after.version),
-  };
+  const { label, patch, before, after, coalesceKey } = params;
+  const fields = changedDefinitionFields(before, after);
+  const step = fieldStep({
+    id: after.id,
+    name: before.name,
+    fields,
+    before,
+    after,
+    saved: after,
+    write: (target, row) =>
+      patch({ activityId: row.id, version: row.version, patch: patchBody(target, fields) }),
+  });
+  const command: Command = { label, ...step };
   if (coalesceKey === undefined) return command;
   return coalescable(command, {
     key: coalesceKey,
     before,
     after,
-    rebuild: (b, a) =>
-      definitionSnapshotCommand({ label, update, before: b, after: a, coalesceKey }),
+    rebuild: (b, a) => definitionStepCommand({ label, patch, before: b, after: a, coalesceKey }),
   });
 }
 
 /**
  * Reverse a canvas **lane move** — the layout-only `{ laneIndex, version }` PATCH (no constraint, no
- * recalc). The inverse moves the bar back to its previous lane; redo moves it to the new one. Version
- * threaded from each response, starting from the post-edit `version`.
+ * recalc). The inverse moves the bar back to its previous lane; redo moves it to the new one. The
+ * version each write carries is the row's current one, read at replay.
  */
 export function relaneCommand(params: {
   repositionLane: RepositionLaneFn;
   activityId: string;
   fromLaneIndex: number;
   toLaneIndex: number;
-  version: number;
+  /** The row the forward write returned — the state an undo expects to find. */
+  saved: ActivitySummary;
   /** The moved activity's name, so the default label says whose lane it was (M1-T1). */
   activityName: string;
   label?: string;
 }): Command {
-  const { repositionLane, activityId, fromLaneIndex, toLaneIndex } = params;
-  let version = params.version;
-  const move = async (laneIndex: number, versions?: VersionLedger): Promise<void> => {
-    const saved = await repositionLane({
-      activityId,
-      laneIndex,
-      version: liveVersion(versions, activityId, version),
-    });
-    version = saved.version;
-    versions?.observe(activityId, saved.version);
-  };
+  const { repositionLane, activityId, fromLaneIndex, toLaneIndex, saved } = params;
+  const step = fieldStep({
+    id: activityId,
+    name: params.activityName,
+    fields: ['laneIndex'],
+    before: { laneIndex: fromLaneIndex },
+    after: { laneIndex: toLaneIndex },
+    saved,
+    write: (target, row) =>
+      repositionLane({ activityId, laneIndex: target.laneIndex, version: row.version }),
+  });
   const command: Command = {
     label: params.label ?? `Move “${params.activityName}” to lane`,
-    undo: (versions) => move(fromLaneIndex, versions),
-    redo: (versions) => move(toLaneIndex, versions),
-    seedVersions: (versions) => versions.observe(activityId, params.version),
+    ...step,
     affectsSchedule: false,
   };
   return coalescable(command, {
@@ -273,14 +379,14 @@ export function relaneCommand(params: {
     before: fromLaneIndex,
     after: toLaneIndex,
     // A vertical drag / `Alt+↑/↓` lane nudge is one gesture — collapse its intermediate lanes to a
-    // single step (the newest post-edit `version` seeds the rebuilt command; ADR-0048 M2.3).
+    // single step (the newest saved row seeds the rebuilt command; ADR-0048 M2.3).
     rebuild: (from, to) =>
       relaneCommand({
         repositionLane,
         activityId,
         fromLaneIndex: from,
         toLaneIndex: to,
-        version,
+        saved,
         activityName: params.activityName,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
@@ -288,22 +394,20 @@ export function relaneCommand(params: {
 }
 
 /**
- * Reverse a canvas **finish-edge duration resize** (ADR-0052 M2) — the full-definition PATCH whose
- * only intended change is `durationDays`. The inverse restores the whole pre-edit definition (so
- * whatever the write touched is reliably reversed); redo re-applies the resized one. Coalesces per
- * activity (`resize:{id}`) so a drag / held-`Shift+←/→` burst collapses to ONE undo step, exactly
- * like {@link visualStartCommand}'s day-move coalescing.
+ * Reverse a canvas **finish-edge duration resize** (ADR-0052 M2) — a field-scoped step whose only
+ * intended change is the duration. Coalesces per activity (`resize:{id}`) so a drag / held-`Shift+←/→`
+ * burst collapses to ONE undo step, exactly like {@link visualStartCommand}'s day-move coalescing.
  */
 export function durationResizeCommand(params: {
-  update: UpdateActivityFn;
+  patch: PatchActivityFieldsFn;
   before: ActivitySummary;
   after: ActivitySummary;
   label?: string;
 }): Command {
-  return definitionSnapshotCommand({
+  return definitionStepCommand({
     // Name the entity ("Resize “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Resize “${params.before.name}”`,
-    update: params.update,
+    patch: params.patch,
     before: params.before,
     after: params.after,
     coalesceKey: `resize:${params.before.id}`,
@@ -311,31 +415,24 @@ export function durationResizeCommand(params: {
 }
 
 /**
- * Reverse a **definition edit** from the activity form (rename / duration / constraint / …). Restores
- * the full pre-edit definition on undo and the post-edit definition on redo — the same mechanism as
+ * Reverse a **definition edit** from the activity form (rename / duration / constraint / …). Undo
+ * restores the fields the edit changed and nothing else; redo re-applies them — the same mechanism as
  * {@link durationResizeCommand}, differing only in the default label and in coalescing nothing.
  */
 export function updateCommand(params: {
-  update: UpdateActivityFn;
+  patch: PatchActivityFieldsFn;
   before: ActivitySummary;
   after: ActivitySummary;
   label?: string;
 }): Command {
-  return definitionSnapshotCommand({
+  return definitionStepCommand({
     // Name the entity ("Edit “Excavate”"), like {@link durationResizeCommand} (S1).
     label: params.label ?? `Edit “${params.before.name}”`,
-    update: params.update,
+    patch: params.patch,
     before: params.before,
     after: params.after,
   });
 }
-
-/** `useUpdateActivityFields().mutateAsync` — a partial PATCH of exactly the fields in `patch`. */
-export type PatchActivityFieldsFn = (input: {
-  activityId: string;
-  version: number;
-  patch: Record<string, unknown>;
-}) => Promise<ActivitySummary>;
 
 /**
  * Reverse **Make milestone…** (ADR-0162 decision 4): a plain `PATCH {version, type}` each way.
@@ -344,8 +441,9 @@ export type PatchActivityFieldsFn = (input: {
  * crosses the milestone convention, in BOTH directions (decision 3): converting a Monday placement
  * to a finish milestone stores the Sunday, and converting back stores the Monday again. So the
  * inverse sends the type and nothing else, and the row returns byte-identical — the journey pins it.
- * A full-definition inverse (`updateCommand`) would be wrong here: it would resend the pre-edit
- * dates alongside the type, and a date sent WITH the type is read in the new type's convention.
+ * A full-definition inverse would be wrong here: it would resend the pre-edit dates alongside the
+ * type, and a date sent WITH the type is read in the new type's convention. The check compares the
+ * type alone for the same reason: the dates are the server's to move.
  *
  * Discrete (no coalescing): one dialog confirm is one step.
  */
@@ -354,27 +452,23 @@ export function typeChangeCommand(params: {
   activityId: string;
   before: ActivityType;
   after: ActivityType;
-  version: number;
+  /** The row the forward write returned — the state an undo expects to find. */
+  saved: ActivitySummary;
   /** The converted activity's name, so the default label names its subject (M1-T1). */
   activityName: string;
   label?: string;
 }): Command {
-  let version = params.version;
-  const set = async (type: ActivityType, versions?: VersionLedger): Promise<void> => {
-    const saved = await params.patch({
-      activityId: params.activityId,
-      version: liveVersion(versions, params.activityId, version),
-      patch: { type },
-    });
-    version = saved.version;
-    versions?.observe(params.activityId, saved.version);
-  };
-  return {
-    label: params.label ?? `Make “${params.activityName}” a milestone`,
-    undo: (versions) => set(params.before, versions),
-    redo: (versions) => set(params.after, versions),
-    seedVersions: (versions) => versions.observe(params.activityId, params.version),
-  };
+  const step = fieldStep({
+    id: params.activityId,
+    name: params.activityName,
+    fields: ['type'],
+    before: { type: params.before },
+    after: { type: params.after },
+    saved: params.saved,
+    write: (target, row) =>
+      params.patch({ activityId: row.id, version: row.version, patch: { type: target.type } }),
+  });
+  return { label: params.label ?? `Make “${params.activityName}” a milestone`, ...step };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -385,77 +479,56 @@ export function typeChangeCommand(params: {
 export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<ActivitySummary>;
 /**
  * `useDeleteActivity().mutateAsync` — soft-deletes an activity by id and resolves the batch it was
- * deleted in, so an undo can restore exactly what it removed.
- *
- * **The `| void` branch is gone** (`docs/TECH_DEBT.md` #116 item 5). It dated from before `#113`
- * typed the mutation to its body, and the route has answered `200 { deleteBatchId }` since — which
- * `use-activities.ts:486-488` records at the hook. Carrying the union meant every consumer had to
- * narrow a case the product could not produce, and `pasteActivitiesCommand` carried a runtime
- * `typeof result === 'object'` guard for it: dead weight that read as a real branch.
+ * deleted in, so an undo can restore exactly what it removed (`docs/TECH_DEBT.md` #116 item 5).
  */
 export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string }>;
 
-/**
- * A small state machine over an entity that either exists (a known live id) or doesn't. Both the
- * create and the (leaf) delete inverses are this toggle, differing only in their start state and which
- * direction `undo` runs. `create` resolves the entity's **new** id each time — the conservative M2
- * rule (ADR-0048): a re-created activity/dependency gets a fresh id, so redo-of-delete then deletes
- * that new id. Idempotent in each direction (a double-undo can't double-create or double-delete).
- */
-function existenceToggle(params: {
-  startId: string | null;
-  create: (versions?: VersionLedger) => Promise<string>;
-  remove: (id: string) => Promise<void>;
-}): {
-  ensurePresent: (versions?: VersionLedger) => Promise<void>;
-  ensureAbsent: () => Promise<void>;
-} {
-  let liveId = params.startId;
-  return {
-    ensurePresent: async (versions?: VersionLedger): Promise<void> => {
-      if (liveId === null) liveId = await params.create(versions);
-    },
-    ensureAbsent: async (): Promise<void> => {
-      if (liveId !== null) {
-        await params.remove(liveId);
-        liveId = null;
-      }
-    },
-  };
-}
+/** `useRestoreDeleteBatch().mutateAsync` — puts a whole batch back, ids and links intact. */
+export type RestoreDeleteBatchFn = (input: { deleteBatchId: string }) => Promise<ActivitySummary[]>;
 
 /**
- * Reverse a canvas **create** — undo deletes the just-created activity; redo re-creates it from the
- * same placement input (a new id). Only the create itself is reversed here; the follow-up recalc is
- * never recorded (recompute-don't-restore, ADR-0048).
+ * Reverse a canvas **create** — undo deletes the just-created activity and keeps the batch the
+ * delete returned; redo is the id-stable `restore-batch` of that delete, **not a re-create**.
+ *
+ * A re-create mints a new id, and every later step that names the old one (a move, a link, a resize)
+ * would then address a row that no longer exists — the redo would silently strand the rest of the
+ * history. The restore brings the same id back, with its links, exactly as {@link
+ * pasteActivitiesCommand} already does for the same reason. Only the create itself is reversed here;
+ * the follow-up recalc is never recorded (recompute-don't-restore, ADR-0048).
+ *
+ * Undo needs the row to still be there — the one thing a delete cannot do without.
  */
 export function createActivityCommand(params: {
   created: ActivitySummary;
-  input: PlacedActivityInput;
-  createPlaced: CreatePlacedActivityFn;
   deleteActivity: DeleteActivityFn;
+  restoreBatch: RestoreDeleteBatchFn;
   label?: string;
 }): Command {
-  const toggle = existenceToggle({
-    startId: params.created.id,
-    create: async (versions) => {
-      const row = await params.createPlaced(params.input);
-      // A re-created row is a NEW id; a later step on it must start from this version.
-      versions?.observe(row.id, row.version);
-      return row.id;
-    },
-    // The delete now resolves with `{ deleteBatchId }` (`docs/TECH_DEBT.md` #113); this toggle
-    // re-creates rather than restores, so it wants the void shape and discards the body.
-    remove: async (id: string) => {
-      await params.deleteActivity(id);
-    },
-  });
+  const { created, deleteActivity, restoreBatch } = params;
+  let present = true;
+  let batchId: string | null = null;
   return {
     // Name the created entity ("Add “Excavate”"), mirroring the toast convention (S1).
-    label: params.label ?? `Add “${params.created.name}”`,
-    undo: toggle.ensureAbsent,
-    redo: toggle.ensurePresent,
-    seedVersions: (versions) => versions.observe(params.created.id, params.created.version),
+    label: params.label ?? `Add “${created.name}”`,
+    undo: async (ctx) => {
+      if (!present) return APPLIED;
+      const checked = await checkActivities(ctx, [
+        { id: created.id, name: created.name, expect: {} },
+      ]);
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(created.name, async () => {
+        batchId = (await deleteActivity(created.id)).deleteBatchId;
+        present = false;
+      });
+    },
+    redo: async () => {
+      if (present || batchId === null) return APPLIED;
+      return writeOrSetAside(created.name, async () => {
+        await restoreBatch({ deleteBatchId: batchId as string });
+        present = true;
+        batchId = null;
+      });
+    },
   };
 }
 
@@ -463,31 +536,16 @@ export function createActivityCommand(params: {
  * Reverse an activity delete — **one id-stable restore, not a re-create**
  * (`docs/TECH_DEBT.md` #92).
  *
- * This used to re-create the whole definition through `createActivity` and then relane it, which was
- * ADR-0048's conservative M1–M3 rule for one reason only: the id-stable restore endpoint did not
- * exist yet. It does now — `DELETE …/activities/:id` answers `{ deleteBatchId }` and
- * `POST …/activities/restore-batch/:batchId` puts that batch back with its ids and its links intact
- * (`docs/TECH_DEBT.md` #113, ADR-0048 M4). So the re-create is no longer the best available inverse,
- * it is a strictly worse one, and it was wrong in two ways a planner could see:
+ * `DELETE …/activities/:id` answers `{ deleteBatchId }` and `POST …/activities/restore-batch/:batchId`
+ * puts that batch back with its ids and its links intact (`docs/TECH_DEBT.md` #113, ADR-0048 M4). A
+ * re-create would lose every dependency the activity had and would leave `activity.deleted` without
+ * its `activity.restored` pair in the audit log. A cascade stamps ONE `deleteBatchId` across the
+ * whole subtree, so a phase delete is this same command (`docs/TECH_DEBT.md` #230).
  *
- * - **Every dependency the activity had was silently lost.** A new id is not the endpoint any edge
- *   referenced, so undoing a delete gave the bar back with its logic gone — the CQ-4 argument that
- *   made {@link bulkDeleteCommand} a restore rather than N re-creates, one gesture along.
- * - **The audit log recorded a deletion with no matching restore.** `activity.deleted` and
- *   `activity.restored` are a pair a reader uses to answer "what happened to this activity?", and a
- *   re-create fires neither half of it (`activity.created` is deliberately outside the catalogue,
- *   ADR-0073 §2.4). The restore path fires the existing producer with the original id, so the pair
- *   closes with no new audit action and no rows on the common path.
- *
- * The batch id is **rethreaded on every redo**, exactly as `bulkDeleteCommand` does and for the same
- * reason: a redo is a new delete and therefore a new batch, so an undo reusing the first id would
- * restore nothing and report success.
- *
- * **Every delete records one of these, a WBS phase included.** The recording seam used to branch: a
- * summary with a subtree truncated the history instead, because ADR-0048 M2 assumed the inverse
- * could only re-create the summary. It cannot re-create anything — it restores a batch, and a
- * cascade stamps ONE `deleteBatchId` across the whole subtree — so the branch is gone and this
- * command is what a phase delete records too (ADR-0048's amendment; `docs/TECH_DEBT.md` #230).
+ * The batch id is **rethreaded on every redo**: a redo is a new delete and therefore a new batch, so
+ * an undo reusing the first id would restore nothing and report success. A refused restore (the phase
+ * it was filed under has since been deleted, `PARENT_DELETED`) is the server's decision and reads as
+ * such; the redo needs the row to be there.
  */
 export function deleteActivityCommand(params: {
   activity: ActivitySummary;
@@ -504,19 +562,24 @@ export function deleteActivityCommand(params: {
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Delete “${activity.name}”`,
-    undo: async (versions) => {
-      if (present) return;
-      // A restore bumps the row's version, which an older step on this activity must then send.
-      const restored = await restoreBatch({ deleteBatchId: batchId });
-      for (const row of restored) versions?.observe(row.id, row.version);
-      present = true;
+    undo: async () => {
+      if (present) return APPLIED;
+      return writeOrSetAside(activity.name, async () => {
+        await restoreBatch({ deleteBatchId: batchId });
+        present = true;
+      });
     },
-    redo: async () => {
-      if (!present) return;
-      // The id is stable across the restore, so the redo deletes exactly what was restored.
-      const result = await deleteActivity(activity.id);
-      if (result) batchId = result.deleteBatchId;
-      present = false;
+    redo: async (ctx) => {
+      if (!present) return APPLIED;
+      const checked = await checkActivities(ctx, [
+        { id: activity.id, name: activity.name, expect: {} },
+      ]);
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(activity.name, async () => {
+        // The id is stable across the restore, so the redo deletes exactly what was restored.
+        batchId = (await deleteActivity(activity.id)).deleteBatchId;
+        present = false;
+      });
     },
   };
 }
@@ -545,9 +608,8 @@ export type DeleteDependencyFn = (dependencyId: string) => Promise<void>;
  *
  * The lag is carried in **minutes**, which is what the row stores and the engine applies (ADR-0036).
  * It used to be `lagDays` — a rounded read of the same value — so undoing the removal of a two-hour
- * cure lag restored the link with **no lag at all**, silently and with no error anywhere: the read
- * rounded to zero and the re-create faithfully wrote the zero back. Undo must restore what was
- * there, not what the day-granular view of it happened to look like (ADR-0070 §5).
+ * cure lag restored the link with **no lag at all**, silently and with no error anywhere. Undo must
+ * restore what was there, not what the day-granular view of it happened to look like (ADR-0070 §5).
  */
 export function dependencyLinkOf(dependency: DependencySummary): DependencyLinkInput {
   return {
@@ -560,22 +622,54 @@ export function dependencyLinkOf(dependency: DependencySummary): DependencyLinkI
   };
 }
 
-function dependencyToggle(params: {
+/** The fields of a link a step writes, and so the ones a replay compares. */
+const LINK_FIELDS = ['type', 'lagMinutes', 'lagCalendar'] as const;
+type LinkState = Pick<DependencySummary, (typeof LINK_FIELDS)[number]>;
+
+/**
+ * A small state machine over a link that either exists (a known live id) or doesn't. Add and remove
+ * are this toggle, differing only in start state and which direction `undo` runs. A re-created link
+ * gets a NEW id each time (there is no restore endpoint for a single edge), so the toggle tracks the
+ * live id and the state that link was last left in. Idempotent in each direction: a retried replay
+ * cannot double-create or double-delete.
+ */
+function linkToggle(params: {
   dependency: DependencySummary;
-  startId: string | null;
+  startPresent: boolean;
   createDependency: CreateDependencyFn;
   deleteDependency: DeleteDependencyFn;
-}): { ensurePresent: () => Promise<void>; ensureAbsent: () => Promise<void> } {
-  const link = dependencyLinkOf(params.dependency);
-  return existenceToggle({
-    startId: params.startId,
-    create: async (versions) => {
-      const row = await params.createDependency(link);
-      versions?.observe(row.id, row.version);
-      return row.id;
+}): { ensurePresent: Command['redo']; ensureAbsent: Command['redo'] } {
+  const { dependency, createDependency, deleteDependency } = params;
+  const link = dependencyLinkOf(dependency);
+  const name = linkName(dependency);
+  let liveId: string | null = params.startPresent ? dependency.id : null;
+  let state: LinkState = pick(dependency, LINK_FIELDS);
+  return {
+    ensurePresent: async (ctx) => {
+      if (liveId !== null) return APPLIED;
+      // Both ends must still be there; a link to a deleted bar is the server's 404 anyway, but
+      // naming the missing bar is the planner's whole answer.
+      const endpoints = [dependency.predecessor, dependency.successor];
+      const rows = await ctx.readActivities(endpoints.map((e) => e.id));
+      const missing = endpoints.find((e) => !rows.has(e.id));
+      if (missing !== undefined) return notApplicable('gone', missing.name);
+      return writeOrSetAside(name, async () => {
+        const created = await createDependency(link);
+        liveId = created.id;
+        state = pick(created, LINK_FIELDS);
+      });
     },
-    remove: params.deleteDependency,
-  });
+    ensureAbsent: async (ctx) => {
+      if (liveId === null) return APPLIED;
+      const id = liveId;
+      const checked = await checkDependencies(ctx, [{ id, name, expect: state }]);
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(name, async () => {
+        await deleteDependency(id);
+        liveId = null;
+      });
+    },
+  };
 }
 
 /** A link step's default label, naming both endpoints like {@link dependencyEditCommand}'s. */
@@ -584,8 +678,9 @@ function linkLabel(verb: string, dependency: DependencySummary): string {
 }
 
 /**
- * Reverse a dependency **add** — undo removes the just-created edge; redo re-creates it (a new id)
- * from the captured endpoints/type/lag. The follow-up recalc is never recorded (ADR-0048).
+ * Reverse a dependency **add** — undo removes the just-created edge (when it is still as it was
+ * created); redo re-creates it (a new id) from the captured endpoints/type/lag. The follow-up recalc
+ * is never recorded (ADR-0048).
  */
 export function dependencyAddCommand(params: {
   dependency: DependencySummary;
@@ -593,17 +688,11 @@ export function dependencyAddCommand(params: {
   deleteDependency: DeleteDependencyFn;
   label?: string;
 }): Command {
-  const toggle = dependencyToggle({
-    dependency: params.dependency,
-    startId: params.dependency.id,
-    createDependency: params.createDependency,
-    deleteDependency: params.deleteDependency,
-  });
+  const toggle = linkToggle({ ...params, startPresent: true });
   return {
     label: params.label ?? linkLabel('Add link', params.dependency),
     undo: toggle.ensureAbsent,
     redo: toggle.ensurePresent,
-    seedVersions: (versions) => versions.observe(params.dependency.id, params.dependency.version),
   };
 }
 
@@ -617,13 +706,8 @@ export function dependencyRemoveCommand(params: {
   deleteDependency: DeleteDependencyFn;
   label?: string;
 }): Command {
-  const toggle = dependencyToggle({
-    dependency: params.dependency,
-    // The remove already happened at the call site, so the command starts in the ABSENT state.
-    startId: null,
-    createDependency: params.createDependency,
-    deleteDependency: params.deleteDependency,
-  });
+  // The remove already happened at the call site, so the command starts in the ABSENT state.
+  const toggle = linkToggle({ ...params, startPresent: false });
   return {
     label: params.label ?? linkLabel('Remove link', params.dependency),
     undo: toggle.ensurePresent,
@@ -632,16 +716,81 @@ export function dependencyRemoveCommand(params: {
 }
 
 /**
+ * Reverse **Link in sequence** — the chain of FS links one gesture created, as ONE step. Undo removes
+ * every link of the chain (all-or-nothing: any link already gone or changed sets the whole step
+ * aside); redo re-creates them in order (new ids), rolling the partial chain back if one is refused —
+ * half a sequence is worse than none, because the plan then looks finished.
+ */
+export function linkChainCommand(params: {
+  /** The links the forward gesture created, in creation order. */
+  created: readonly DependencySummary[];
+  createDependency: CreateDependencyFn;
+  deleteDependency: DeleteDependencyFn;
+  label?: string;
+}): Command {
+  const { createDependency, deleteDependency } = params;
+  const links = params.created.map(dependencyLinkOf);
+  let live: { id: string; name: string; state: LinkState }[] | null = params.created.map((d) => ({
+    id: d.id,
+    name: linkName(d),
+    state: pick(d, LINK_FIELDS),
+  }));
+  return {
+    label: params.label ?? `Link ${params.created.length} activities in sequence`,
+    undo: async (ctx) => {
+      if (live === null) return APPLIED;
+      const current = live;
+      const checked = await checkDependencies(
+        ctx,
+        current.map((l) => ({ id: l.id, name: l.name, expect: l.state })),
+      );
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(current[0]?.name ?? '', async () => {
+        for (const link of [...current].reverse()) await deleteDependency(link.id);
+        live = null;
+      });
+    },
+    redo: async () => {
+      if (live !== null) return APPLIED;
+      const made: { id: string; name: string; state: LinkState }[] = [];
+      const result = await writeOrSetAside(links.length > 0 ? 'The chain' : '', async () => {
+        try {
+          for (const link of links) {
+            const dependency = await createDependency(link);
+            made.push({
+              id: dependency.id,
+              name: linkName(dependency),
+              state: pick(dependency, LINK_FIELDS),
+            });
+          }
+        } catch (error) {
+          for (const link of [...made].reverse()) {
+            // Best-effort, as the forward path: a failed rollback leaves links the planner can
+            // delete, whereas throwing here would replace the real error with a second one.
+            await deleteDependency(link.id).catch(() => undefined);
+          }
+          throw error;
+        }
+      });
+      if (result.kind === 'applied') live = made;
+      return result;
+    },
+  };
+}
+
+/**
  * Reverse a canvas **Level of Effort span** create (Stage D, `docs/specs/canvas-activity-types/`) — the
  * composite `createActivity(LEVEL_OF_EFFORT) → SS(start → LOE) → FF(LOE → finish)` as ONE reversible
  * step (ADR-0048): **undo** deletes the LOE, which cascades its SS + FF edges (a leaf LOE carries no
  * subtree), so no orphan edge survives; **redo** re-composes the whole span from the captured inputs (a
- * NEW LOE id — the conservative M2 rule, {@link existenceToggle}). Only the compose is reversed here;
- * the follow-up recalc is never recorded (recompute-don't-restore). No `HAMMOCK` is ever created — the
- * LOE is the span-derived hammock (Stage D Q1).
+ * NEW LOE id). Only the compose is reversed here; the follow-up recalc is never recorded
+ * (recompute-don't-restore). No `HAMMOCK` is ever created — the LOE is the span-derived hammock
+ * (Stage D Q1).
+ *
+ * Undo needs the LOE to still be there; redo needs both drivers, and names the one that is gone.
  */
 export function createLoeSpanCommand(params: {
-  /** The just-created LOE row (its id starts the toggle in the PRESENT state). */
+  /** The just-created LOE row (its id starts the step in the PRESENT state). */
   loe: ActivitySummary;
   /** The placement input that re-creates the LOE on redo (name / type / duration / lane). */
   placedInput: PlacedActivityInput;
@@ -654,42 +803,51 @@ export function createLoeSpanCommand(params: {
   label?: string;
 }): Command {
   const { planId, startDriverId, finishDriverId, createPlaced, createDependency } = params;
-  const toggle = existenceToggle({
-    startId: params.loe.id,
-    // Redo re-composes the whole span: re-create the LOE, then its SS + FF edges (a fresh LOE id).
-    create: async (versions): Promise<string> => {
-      const loe = await createPlaced(params.placedInput);
-      versions?.observe(loe.id, loe.version);
-      await createDependency({
-        planId,
-        predecessorId: startDriverId,
-        successorId: loe.id,
-        type: 'SS',
-        lagMinutes: 0,
-        lagCalendar: 'PROJECT_DEFAULT',
-      });
-      await createDependency({
-        planId,
-        predecessorId: loe.id,
-        successorId: finishDriverId,
-        type: 'FF',
-        lagMinutes: 0,
-        lagCalendar: 'PROJECT_DEFAULT',
-      });
-      return loe.id;
-    },
-    // Undo deletes the LOE — the cascade removes its SS + FF edges with it.
-    remove: async (id: string) => {
-      await params.deleteActivity(id);
-    },
-  });
+  let liveId: string | null = params.loe.id;
+  const name = params.loe.name;
   return {
     // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
     // and read plainly "Add level-of-effort span" (S3).
     label: params.label ?? 'Add level-of-effort span',
-    undo: toggle.ensureAbsent,
-    redo: toggle.ensurePresent,
-    seedVersions: (versions) => versions.observe(params.loe.id, params.loe.version),
+    undo: async (ctx) => {
+      if (liveId === null) return APPLIED;
+      const id = liveId;
+      const checked = await checkActivities(ctx, [{ id, name, expect: {} }]);
+      if (!checked.ok) return checked.result;
+      // Deleting the LOE cascades its SS + FF edges with it.
+      return writeOrSetAside(name, async () => {
+        await params.deleteActivity(id);
+        liveId = null;
+      });
+    },
+    redo: async (ctx) => {
+      if (liveId !== null) return APPLIED;
+      const drivers = await ctx.readActivities([startDriverId, finishDriverId]);
+      // Unnamed: the span's two ends are the planner's own words for them, and the builder holds only
+      // their ids.
+      if (!drivers.has(startDriverId)) return notApplicable('gone', 'The start activity');
+      if (!drivers.has(finishDriverId)) return notApplicable('gone', 'The finish activity');
+      return writeOrSetAside(name, async () => {
+        const loe = await createPlaced(params.placedInput);
+        liveId = loe.id;
+        await createDependency({
+          planId,
+          predecessorId: startDriverId,
+          successorId: loe.id,
+          type: 'SS',
+          lagMinutes: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        });
+        await createDependency({
+          planId,
+          predecessorId: loe.id,
+          successorId: finishDriverId,
+          type: 'FF',
+          lagMinutes: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+        });
+      });
+    },
   };
 }
 
@@ -712,42 +870,38 @@ export interface VisualPlacement {
 /**
  * Reverse a Visual-Planning **`visualStart` set** (ADR-0033 M3): undo restores the prior placement,
  * redo re-applies the dropped one. Coalescable — a drag / nudge burst on one bar collapses to a
- * single undo step. Version threaded from each response.
+ * single undo step. The check compares the placement the SERVER saved, not the date the drop sent.
  *
  * **This is the ONLY inverse a canvas move has since the collapse** (one-planning-surface M-F-T3).
- * Its predecessor, `repositionCommand`, reversed the full-definition PATCH an EARLY-mode drop sent —
- * the one that imposed an `SNET` at the drop and overwrote whatever constraint the row carried. It
- * outlived that write by an epic, unreachable and still exported, and is deleted at the M-J gate
- * pass.
  */
 export function visualStartCommand(params: {
   setVisualStart: SetVisualStartFn;
   activityId: string;
   before: VisualPlacement;
   after: VisualPlacement;
-  version: number;
+  /** The row the forward write returned — the state an undo expects to find. */
+  saved: ActivitySummary;
   /** The placed activity's name, so the default label names its subject (M1-T1). */
   activityName: string;
   label?: string;
 }): Command {
-  const { setVisualStart, activityId, before, after } = params;
-  let version = params.version;
-  const place = async (target: VisualPlacement, versions?: VersionLedger): Promise<void> => {
-    const saved = await setVisualStart({
-      activityId,
-      visualStart: target.visualStart,
-      laneIndex: target.laneIndex,
-      version: liveVersion(versions, activityId, version),
-    });
-    version = saved.version;
-    versions?.observe(activityId, saved.version);
-  };
-  const command: Command = {
-    label: params.label ?? `Move “${params.activityName}”`,
-    undo: (versions) => place(before, versions),
-    redo: (versions) => place(after, versions),
-    seedVersions: (versions) => versions.observe(activityId, params.version),
-  };
+  const { setVisualStart, activityId, before, after, saved } = params;
+  const step = fieldStep({
+    id: activityId,
+    name: params.activityName,
+    fields: ['visualStart', 'laneIndex'],
+    before,
+    after,
+    saved,
+    write: (target, row) =>
+      setVisualStart({
+        activityId,
+        visualStart: target.visualStart,
+        laneIndex: target.laneIndex,
+        version: row.version,
+      }),
+  });
+  const command: Command = { label: params.label ?? `Move “${params.activityName}”`, ...step };
   return coalescable(command, {
     key: `visual:${activityId}`,
     before,
@@ -758,7 +912,7 @@ export function visualStartCommand(params: {
         activityId,
         before: b,
         after: a,
-        version,
+        saved,
         activityName: params.activityName,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
@@ -782,23 +936,25 @@ export function visualResizeCommand(params: {
   label?: string;
 }): Command {
   const { setVisualStart, before, after } = params;
-  let version = after.version;
-  const restore = async (target: ActivitySummary, versions?: VersionLedger): Promise<void> => {
-    const saved = await setVisualStart({
-      activityId: target.id,
-      visualStart: target.visualStart,
-      durationDays: target.durationDays,
-      version: liveVersion(versions, target.id, version),
-    });
-    version = saved.version;
-    versions?.observe(target.id, saved.version);
-  };
+  const step = fieldStep({
+    id: after.id,
+    name: before.name,
+    fields: ['visualStart', 'durationMinutes', 'durationDays'],
+    before,
+    after,
+    saved: after,
+    write: (target, row) =>
+      setVisualStart({
+        activityId: row.id,
+        visualStart: target.visualStart,
+        durationDays: target.durationDays,
+        version: row.version,
+      }),
+  });
   const command: Command = {
     // Name the entity ("Resize “Excavate”"), matching the EARLY-mode resize label (S1).
     label: params.label ?? `Resize “${before.name}”`,
-    undo: (versions) => restore(before, versions),
-    redo: (versions) => restore(after, versions),
-    seedVersions: (versions) => versions.observe(after.id, after.version),
+    ...step,
   };
   return coalescable(command, {
     key: `resize:${before.id}`,
@@ -825,16 +981,10 @@ export type CommandLagInput = { lagDays: number } | { lagMinutes: number };
  * `useUpdateDependency().mutateAsync` — the dependency PATCH (type + lag + lag calendar).
  *
  * **The lag is a union, and that is the fix rather than a generalisation** (`docs/TECH_DEBT.md`
- * #65). This type declared `lagDays: number` — a narrowed copy of an API input that has taken
- * `{ lagDays } | { lagMinutes }` since ADR-0070 — so every inverse built against it could only
- * speak in whole working days. `DependencySummary.lagDays` is documented as _"rounded from the
- * stored minutes. A sub-day lag reads back as 0 here"_, so an inverse restoring a 90-minute cure
- * lag would have restored **zero**: an undo that loses data, which is worse than no undo at all.
- *
- * That is verbatim the defect {@link dependencyLinkOf} records having already shipped and been
- * fixed one command along — the narrow type that caused it was still sitting next door. Widening
- * is strictly more permissive, so {@link lagDragCommand}'s existing day-denominated calls are
- * unchanged; #233 is the separate question of whether that gesture should be sending days at all.
+ * #65). `DependencySummary.lagDays` is documented as _"rounded from the stored minutes. A sub-day lag
+ * reads back as 0 here"_, so an inverse restoring a 90-minute cure lag in days would have restored
+ * **zero**: an undo that loses data, which is worse than no undo at all. #233 is the separate
+ * question of whether the lag-drag gesture should be sending days at all.
  */
 export type UpdateDependencyFn = (
   input: {
@@ -845,66 +995,82 @@ export type UpdateDependencyFn = (
   } & CommandLagInput,
 ) => Promise<DependencySummary>;
 
+/** The one lag field a {@link CommandLagInput} writes, read off a row. */
+function lagFieldOf(lag: CommandLagInput): 'lagDays' | 'lagMinutes' {
+  return 'lagMinutes' in lag ? 'lagMinutes' : 'lagDays';
+}
+
 /**
  * Reverse a **lag-anchor drag / lag nudge** (ADR-0052 M3) — the dependency PATCH whose only
- * intended change is `lagDays` (type + lag calendar echoed verbatim from the captured row). The
- * inverse restores the prior lag; redo re-applies the new one. Coalesces per dependency
- * (`lag:{dependencyId}`) so a drag / held-key burst collapses to ONE undo step, exactly like
- * {@link relaneCommand}'s lane coalescing. Version threaded from each response.
+ * intended change is the lag. The inverse restores the prior lag; redo re-applies the new one. The
+ * type and lag calendar are echoed from the link AS IT IS NOW, so a colleague's change to either is
+ * never reverted by ours. Coalesces per dependency (`lag:{dependencyId}`) so a drag / held-key burst
+ * collapses to ONE undo step, exactly like {@link relaneCommand}'s lane coalescing.
  */
 export function lagDragCommand(params: {
   updateDependency: UpdateDependencyFn;
-  /** The pre-edit row: the undo target is read from it; endpoints/type/calendar are echoed. */
+  /** The pre-edit row: the undo target is read from it. */
   dependency: DependencySummary;
   /**
    * What the forward write sent — `{ lagMinutes }` normally, `{ lagDays }` on the degraded path
    * where the lag calendar's hours-per-day is not resolvable (`docs/TECH_DEBT.md` #233).
    *
    * **It is the resolved write and not the gesture's day**, because undo has to restore the exact
-   * stored value. Taking `afterLagDays` here — which is what this took until 2026-09-01 — meant the
-   * first Ctrl+Z after a drag re-sent a ROUNDED day and destroyed the sub-day remainder the forward
-   * write had just been fixed to preserve: the same defect one layer along, and invisible unless
-   * somebody undid a drag on an edge carrying a ninety-minute lift.
+   * stored value: re-sending a ROUNDED day would destroy the sub-day remainder the forward write
+   * preserved.
    */
   after: CommandLagInput;
-  /** The post-edit optimistic-lock version (from the forward write's response). */
-  version: number;
+  /** The link the forward write returned — the state an undo expects to find. */
+  saved: DependencySummary;
   label?: string;
 }): Command {
-  const { updateDependency, dependency, after } = params;
+  const { updateDependency, dependency, after, saved } = params;
   // The undo target mirrors the forward write's unit: minutes are what is stored, so restoring
   // them is exact; days are used only where the factor was unknown going in, and re-sending days
   // is then the same lossy-but-honest degradation the forward path took.
   const before: CommandLagInput =
     'lagMinutes' in after ? { lagMinutes: dependency.lagMinutes } : { lagDays: dependency.lagDays };
-  let version = params.version;
-  const setLag = async (lag: CommandLagInput, versions?: VersionLedger): Promise<void> => {
-    const saved = await updateDependency({
-      dependencyId: dependency.id,
-      type: dependency.type,
-      ...lag,
-      lagCalendar: dependency.lagCalendar,
-      version: liveVersion(versions, dependency.id, version),
+  const field = lagFieldOf(after);
+  const name = linkName(dependency);
+  let atUndo: Partial<DependencySummary> = { [field]: saved[field] };
+  let atRedo: Partial<DependencySummary> = { [field]: dependency[field] };
+  const replay = (
+    ctx: ReplayContext,
+    expect: Partial<DependencySummary>,
+    target: CommandLagInput,
+    settle: (state: Partial<DependencySummary>) => void,
+  ): Promise<ReplayResult> =>
+    replayDependency(ctx, { id: dependency.id, name, expect }, async (row) => {
+      const result = await updateDependency({
+        dependencyId: row.id,
+        type: row.type,
+        ...target,
+        lagCalendar: row.lagCalendar,
+        version: row.version,
+      });
+      settle({ [field]: result[field] });
     });
-    version = saved.version;
-    versions?.observe(dependency.id, saved.version);
-  };
   const command: Command = {
     // Name both endpoints, mirroring the link labels' entity-naming convention (S1).
     label:
       params.label ??
       `Change lag “${dependency.predecessor.name}” → “${dependency.successor.name}”`,
-    undo: (versions) => setLag(before, versions),
-    redo: (versions) => setLag(after, versions),
-    seedVersions: (versions) => versions.observe(dependency.id, params.version),
+    undo: (ctx) =>
+      replay(ctx, atUndo, before, (state) => {
+        atRedo = state;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, after, (state) => {
+        atUndo = state;
+      }),
   };
   return coalescable(command, {
     key: `lag:${dependency.id}`,
     before,
     after,
-    // A burst rebuilds oldest-before → newest-after, threading the newest version (M2.3). The
-    // rebuilt row carries the oldest `before` in whichever unit that step used, so a burst that
-    // began before the calendar list resolved still undoes to where it started.
+    // A burst rebuilds oldest-before → newest-after. The rebuilt row carries the oldest `before` in
+    // whichever unit that step used, so a burst that began before the calendar list resolved still
+    // undoes to where it started.
     rebuild: (b, a) =>
       lagDragCommand({
         updateDependency,
@@ -913,7 +1079,7 @@ export function lagDragCommand(params: {
             ? { ...dependency, lagMinutes: b.lagMinutes }
             : { ...dependency, lagDays: b.lagDays },
         after: a,
-        version,
+        saved,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
   });
@@ -946,61 +1112,63 @@ export function dependencyEditChanged(
 }
 
 /**
- * Reverse an **Edit link** dialog save — the third way a link changes, and until now the only one
- * that recorded nothing (`docs/TECH_DEBT.md` #65). Adding and removing a link were already
- * symmetric, and the lag-anchor drag records {@link lagDragCommand}; so `Shift+←/→` on a link was
- * undoable and typing into the same link's lag field was not, from one panel, one row apart —
- * `ActivityLogicPanel` renders the tip advertising the chord and the dialog that ignored it in the
- * same component.
+ * Reverse an **Edit link** dialog save — the third way a link changes, and until #65 the only one
+ * that recorded nothing. Adding and removing a link were already symmetric, and the lag-anchor drag
+ * records {@link lagDragCommand}; so `Shift+←/→` on a link was undoable and typing into the same
+ * link's lag field was not.
  *
  * **All three fields move together, in one PATCH** (CQ-1). The forward write is atomic — a save
  * that changes the type and the lag is one request — so an inverse that restored only the lag would
- * leave the row in a state the planner never authored and the history unable to describe. That is
- * not a partial undo; it is a new edit wearing an undo's label.
+ * leave the row in a state the planner never authored and the history unable to describe. They are
+ * also compared together: the step wrote all three, so all three must still read as it left them.
  *
  * **The lag rides as `lagMinutes`.** `DependencySummary.lagDays` is rounded from the stored minutes
- * and a sub-day lag reads back as `0`, so a days-denominated inverse would restore a 90-minute cure
- * lag as no lag at all — see {@link UpdateDependencyFn} for why that type was narrow, and
- * {@link dependencyLinkOf} for the same defect having already shipped once.
+ * and a sub-day lag reads back as `0` — see {@link UpdateDependencyFn} and {@link dependencyLinkOf}.
  *
- * **No coalescing, and that is a decision rather than an omission.** #65 asked for a coalescing key
- * "so a lag nudged five times is one undo step" — a requirement that belongs to the *nudge*, which
- * already has it ({@link lagDragCommand}'s `lag:{id}` plus the caller's debounce). A dialog closes
- * on save, so five saves inside the 500 ms window is unreachable; and sharing the nudge's key would
- * be actively wrong, merging a drag with a following dialog save into one step the planner never
- * performed. {@link Command.coalescing}'s own docblock already says discrete edits leave it unset.
+ * **No coalescing, and that is a decision rather than an omission.** A dialog closes on save, so five
+ * saves inside the 500 ms window is unreachable; and sharing the lag drag's key would be actively
+ * wrong, merging a drag with a following dialog save into one step the planner never performed.
  */
 export function dependencyEditCommand(params: {
   updateDependency: UpdateDependencyFn;
   /** The row as it stood when the dialog opened — the undo target. */
   before: DependencySummary;
-  /** The row the PATCH returned: the redo target, and the version the inverse starts from. */
+  /** The row the PATCH returned: the redo target, and the state an undo expects to find. */
   after: DependencySummary;
   label?: string;
 }): Command {
   const { updateDependency, before, after } = params;
-  let version = after.version;
-  const applyState = async (
-    state: Pick<DependencySummary, 'type' | 'lagMinutes' | 'lagCalendar'>,
-    versions?: VersionLedger,
-  ): Promise<void> => {
-    const saved = await updateDependency({
-      dependencyId: before.id,
-      type: state.type,
-      lagMinutes: state.lagMinutes,
-      lagCalendar: state.lagCalendar,
-      version: liveVersion(versions, before.id, version),
+  const name = linkName(before);
+  let atUndo: LinkState = pick(after, LINK_FIELDS);
+  let atRedo: LinkState = pick(before, LINK_FIELDS);
+  const replay = (
+    ctx: ReplayContext,
+    expect: LinkState,
+    target: LinkState,
+    settle: (state: LinkState) => void,
+  ): Promise<ReplayResult> =>
+    replayDependency(ctx, { id: before.id, name, expect }, async (row) => {
+      const result = await updateDependency({
+        dependencyId: row.id,
+        type: target.type,
+        lagMinutes: target.lagMinutes,
+        lagCalendar: target.lagCalendar,
+        version: row.version,
+      });
+      settle(pick(result, LINK_FIELDS));
     });
-    version = saved.version;
-    versions?.observe(before.id, saved.version);
-  };
   return {
     // Both endpoints named, the link labels' entity-naming convention (S1) — and deliberately the
     // same wording as a lag drag, because to the planner they are the same edit by another route.
     label: params.label ?? `Edit link “${before.predecessor.name}” → “${before.successor.name}”`,
-    undo: (versions) => applyState(before, versions),
-    redo: (versions) => applyState(after, versions),
-    seedVersions: (versions) => versions.observe(after.id, after.version),
+    undo: (ctx) =>
+      replay(ctx, atUndo, before, (state) => {
+        atRedo = state;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, after, (state) => {
+        atUndo = state;
+      }),
   };
 }
 
@@ -1018,44 +1186,58 @@ export interface LanePlacement {
 /**
  * Reverse a canvas **auto-arrange** — one batch relane of many bars collapses to a SINGLE reversible
  * step (ADR-0048 M2.3): undo restores every affected row's prior lane, redo re-applies the packed
- * lanes, each through the same all-or-nothing batch endpoint. Versions are threaded from each batch
- * response (seeded from the forward pass) so the optimistic lock always carries the current version.
+ * lanes, each through the same all-or-nothing batch endpoint. Every row must still hold the lane the
+ * step left, or the whole step is set aside — a half-restored arrangement is not one anybody drew.
  */
 export function autoArrangeCommand(params: {
   batchPositions: BatchPositionsFn;
   before: readonly LanePlacement[];
   after: readonly LanePlacement[];
-  versions: ReadonlyMap<string, number>;
+  /** The rows the forward batch returned — the lanes an undo expects to find. */
+  saved: readonly ActivitySummary[];
   label?: string;
 }): Command {
   const { batchPositions } = params;
-  const versions = new Map(params.versions);
-  const apply = async (
-    placements: readonly LanePlacement[],
-    ledger?: VersionLedger,
-  ): Promise<void> => {
-    const positions = placements.flatMap((p) => {
-      const threaded = versions.get(p.id);
-      return threaded === undefined
-        ? []
-        : [{ id: p.id, laneIndex: p.laneIndex, version: liveVersion(ledger, p.id, threaded) }];
-    });
-    if (positions.length === 0) return;
-    const saved = await batchPositions({ positions });
-    for (const row of saved) {
-      versions.set(row.id, row.version);
-      ledger?.observe(row.id, row.version);
-    }
-  };
+  const lanes = (placements: readonly LanePlacement[]): Map<string, number> =>
+    new Map(placements.map((p) => [p.id, p.laneIndex]));
+  const savedLanes = new Map(params.saved.map((row) => [row.id, row.laneIndex]));
+  let atUndo = lanes(
+    params.after.map((p) => ({ ...p, laneIndex: savedLanes.get(p.id) ?? p.laneIndex })),
+  );
+  let atRedo = lanes(params.before);
+  const replay = (
+    ctx: ReplayContext,
+    expect: ReadonlyMap<string, number>,
+    target: readonly LanePlacement[],
+    settle: (next: Map<string, number>) => void,
+  ): Promise<ReplayResult> =>
+    replayActivities(
+      ctx,
+      [...expect].map(([id, laneIndex]) => ({ id, expect: { laneIndex } })),
+      async (rows) => {
+        const positions = target.flatMap((p) => {
+          const row = rows.get(p.id);
+          return row === undefined
+            ? []
+            : [{ id: p.id, laneIndex: p.laneIndex, version: row.version }];
+        });
+        if (positions.length === 0) return;
+        const result = await batchPositions({ positions });
+        settle(new Map(result.map((row) => [row.id, row.laneIndex])));
+      },
+    );
   return {
     label:
       params.label ??
       `Auto-arrange ${params.after.length === 1 ? '1 activity' : `${params.after.length} activities`}`,
-    undo: (ledger) => apply(params.before, ledger),
-    redo: (ledger) => apply(params.after, ledger),
-    seedVersions: (ledger) => {
-      for (const [id, version] of versions) ledger.observe(id, version);
-    },
+    undo: (ctx) =>
+      replay(ctx, atUndo, params.before, (next) => {
+        atRedo = next;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, params.after, (next) => {
+        atUndo = next;
+      }),
     affectsSchedule: false,
   };
 }
@@ -1081,9 +1263,28 @@ export interface ActivityPlacement {
   laneIndex: number | null;
 }
 
+/** The placement fields a batch writes, as a row carries them. */
+const PLACEMENT_FIELDS = ['constraintType', 'constraintDate', 'visualStart', 'laneIndex'] as const;
+type PlacementState = Pick<ActivitySummary, (typeof PLACEMENT_FIELDS)[number]>;
+
+/**
+ * The state a placement expects to find — read from the server's row where there is one (that is
+ * where a snapped date shows), else the placement itself. A placement whose lane is `null` is read by
+ * the batch as "leave the lane", so the step never wrote the lane and has no expectation about it: an
+ * overlap resolve that moved the bar sideways since must not make this undo refuse.
+ */
+function placementExpectation(
+  placement: ActivityPlacement,
+  row: ActivitySummary | undefined,
+): Partial<PlacementState> {
+  const { laneIndex, ...rest } = row ? pick(row, PLACEMENT_FIELDS) : placement;
+  return placement.laneIndex === null || laneIndex === null ? rest : { ...rest, laneIndex };
+}
+
 /**
  * Reverse a **bulk move** — a plural drag of many bars in time and/or lane collapses to a SINGLE
- * reversible step, the `autoArrangeCommand` shape one field set wider.
+ * reversible step, the `autoArrangeCommand` shape one field set wider. Also the shape of apply
+ * levelling and of an overlap resolve that moves time.
  *
  * **Deliberately not coalescable**, and the reason is worth stating rather than leaving to the
  * absence of a descriptor: there are no intermediate writes to merge (the ghosts are client-side
@@ -1091,40 +1292,55 @@ export interface ActivityPlacement {
  * restores a set **nobody ever selected** — the union of two different selections, in a state
  * neither of them was in.
  *
- * Versions are threaded from each batch response, seeded from the forward pass, so the optimistic
- * lock always carries the current version and an undo after a redo is not a guaranteed 409.
+ * All-or-nothing: every row must still hold the placement the step left (compared against the
+ * server's saved rows, which is where a snapped date shows), or the whole step is set aside.
  */
 export function bulkPlacementCommand(params: {
   batchPlacements: BatchPlacementsFn;
   before: readonly ActivityPlacement[];
   after: readonly ActivityPlacement[];
-  versions: ReadonlyMap<string, number>;
+  /** The rows the forward batch returned — the placements an undo expects to find. */
+  saved: readonly ActivitySummary[];
   label?: string;
 }): Command {
   const { batchPlacements } = params;
-  const versions = new Map(params.versions);
-  const apply = async (
+  const savedById = new Map(params.saved.map((row) => [row.id, row]));
+  const expectations = (
     placements: readonly ActivityPlacement[],
-    ledger?: VersionLedger,
-  ): Promise<void> => {
-    const rows = placements.flatMap((p) => {
-      const threaded = versions.get(p.id);
-      return threaded === undefined ? [] : [{ ...p, version: liveVersion(ledger, p.id, threaded) }];
-    });
-    if (rows.length === 0) return;
-    const saved = await batchPlacements({ placements: rows });
-    for (const row of saved) {
-      versions.set(row.id, row.version);
-      ledger?.observe(row.id, row.version);
-    }
-  };
+    from?: ReadonlyMap<string, ActivitySummary>,
+  ): Map<string, Partial<PlacementState>> =>
+    new Map(placements.map((p) => [p.id, placementExpectation(p, from?.get(p.id))]));
+  let atUndo = expectations(params.after, savedById);
+  let atRedo = expectations(params.before);
+  const replay = (
+    ctx: ReplayContext,
+    expect: ReadonlyMap<string, Partial<PlacementState>>,
+    target: readonly ActivityPlacement[],
+    settle: (next: Map<string, Partial<PlacementState>>) => void,
+  ): Promise<ReplayResult> =>
+    replayActivities(
+      ctx,
+      [...expect].map(([id, fields]) => ({ id, expect: fields })),
+      async (rows) => {
+        const placements = target.flatMap((p) => {
+          const row = rows.get(p.id);
+          return row === undefined ? [] : [{ ...p, version: row.version }];
+        });
+        if (placements.length === 0) return;
+        const result = await batchPlacements({ placements });
+        settle(expectations(target, new Map(result.map((row) => [row.id, row]))));
+      },
+    );
   return {
     label: params.label ?? `Move ${params.after.length} activities`,
-    undo: (ledger) => apply(params.before, ledger),
-    redo: (ledger) => apply(params.after, ledger),
-    seedVersions: (ledger) => {
-      for (const [id, version] of versions) ledger.observe(id, version);
-    },
+    undo: (ctx) =>
+      replay(ctx, atUndo, params.before, (next) => {
+        atRedo = next;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, params.after, (next) => {
+        atUndo = next;
+      }),
   };
 }
 
@@ -1132,9 +1348,6 @@ export function bulkPlacementCommand(params: {
 export type BulkDeleteActivitiesFn = (input: {
   activities: { id: string; version: number }[];
 }) => Promise<{ deleteBatchId: string; activityCount: number; dependencyCount: number }>;
-
-/** `useRestoreDeleteBatch().mutateAsync` — puts a whole batch back, ids and links intact. */
-export type RestoreDeleteBatchFn = (input: { deleteBatchId: string }) => Promise<ActivitySummary[]>;
 
 /**
  * Reverse a **bulk delete** — one restore, not N re-creates.
@@ -1146,41 +1359,44 @@ export type RestoreDeleteBatchFn = (input: { deleteBatchId: string }) => Promise
  * with nothing on screen saying so. `restore-batch` puts the ids back, so the links come with them.
  *
  * The batch id is captured from the forward write and **rethreaded on every redo**: a redo is a new
- * delete and therefore a new batch, so an undo that reused the first id would restore nothing.
+ * delete and therefore a new batch, so an undo that reused the first id would restore nothing. The
+ * redo is all-or-nothing: every row must be there, and is deleted at the version it holds now.
  */
 export function bulkDeleteCommand(params: {
   bulkDelete: BulkDeleteActivitiesFn;
   restoreBatch: RestoreDeleteBatchFn;
-  /** The rows that were deleted, with the versions the forward write used. */
-  activities: readonly { id: string; version: number }[];
+  /** The rows that were deleted, with the names a refusal can say. */
+  activities: readonly { id: string; name?: string }[];
   /** The batch the forward write returned. */
   deleteBatchId: string;
   label?: string;
 }): Command {
   const { bulkDelete, restoreBatch } = params;
   let batchId = params.deleteBatchId;
-  // Restoring bumps every row's version, so a redo cannot reuse the versions the first delete used.
-  const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
   return {
     label: params.label ?? `Delete ${params.activities.length} activities`,
-    undo: async (ledger) => {
-      const restored = await restoreBatch({ deleteBatchId: batchId });
-      for (const row of restored) {
-        versions.set(row.id, row.version);
-        ledger?.observe(row.id, row.version);
-      }
-    },
-    redo: async (ledger) => {
-      const rows = [...versions].map(([id, version]) => ({
-        id,
-        version: liveVersion(ledger, id, version),
-      }));
-      const result = await bulkDelete({ activities: rows });
-      batchId = result.deleteBatchId;
-    },
-    seedVersions: (ledger) => {
-      for (const [id, version] of versions) ledger.observe(id, version);
-    },
+    undo: () =>
+      writeOrSetAside(params.activities[0]?.name ?? 'An activity in this step', async () => {
+        await restoreBatch({ deleteBatchId: batchId });
+      }),
+    redo: (ctx) =>
+      replayActivities(
+        ctx,
+        params.activities.map((a) => ({
+          id: a.id,
+          ...(a.name !== undefined ? { name: a.name } : {}),
+          expect: {},
+        })),
+        async (rows) => {
+          const result = await bulkDelete({
+            activities: params.activities.flatMap((a) => {
+              const row = rows.get(a.id);
+              return row === undefined ? [] : [{ id: a.id, version: row.version }];
+            }),
+          });
+          batchId = result.deleteBatchId;
+        },
+      ),
   };
 }
 
@@ -1188,30 +1404,21 @@ export function bulkDeleteCommand(params: {
  * Reverse a **paste / duplicate** — the whole copy as ONE reversible step
  * (`docs/specs/activity-copy-paste/` M1-T1, ADR-0048).
  *
- * **Undo is a bulk delete; redo is the id-stable batch restore.** The plan for this milestone said
- * redo should "re-compose with new ids", and it is written the other way round on purpose: the
- * clones are linked to *each other* (the internal edges `planClone` carries), and re-creating N
- * activities restores the bars while silently losing the logic between them — the CQ-4 argument
- * that made {@link bulkDeleteCommand} a restore rather than N re-creates, one gesture along. The
- * batch id the undo produces is exactly what makes the redo id-stable.
+ * **Undo is a bulk delete; redo is the id-stable batch restore.** The clones are linked to *each
+ * other* (the internal edges `planClone` carries), and re-creating N activities restores the bars
+ * while silently losing the logic between them — the CQ-4 argument that made {@link
+ * bulkDeleteCommand} a restore rather than N re-creates, one gesture along. The batch id the undo
+ * produces is exactly what makes the redo id-stable.
  *
- * There is deliberately **no compose-from-inputs fallback**. One was written and removed: `redo`
- * only ever runs after `undo` (that is what puts a command on the redo stack), and `undo` always
- * yields a batch id, so the fallback branch was unreachable — a plausible-looking path that no test
- * could exercise and no planner could reach.
+ * There is deliberately **no compose-from-inputs fallback**: `redo` only ever runs after `undo`,
+ * and `undo` always yields a batch id, so the branch would be unreachable.
  *
- * **Versions are captured once, at creation, and that is safe** — the recalculation a paste triggers
- * writes only the engine-owned columns and never `version`
- * (`apps/api/src/modules/schedule/schedule.repository.ts:242`, read rather than assumed, because if
- * it *did* bump them every paste-undo would 409 on the happy path). A restore **does** bump them,
- * so the restored rows' versions are threaded back for the next undo.
- *
- * Idempotent in both directions: a double-undo cannot double-delete and a double-redo cannot
- * double-create, which is the {@link existenceToggle} contract expressed over a set.
+ * Undo is all-or-nothing: every clone must still be there. Idempotent in both directions: a retried
+ * undo cannot double-delete and a retried redo cannot double-create.
  */
 export function pasteActivitiesCommand(params: {
   /** The clones just created, in creation order (parent before child). */
-  created: readonly { id: string; version: number }[];
+  created: readonly { id: string; name?: string }[];
   /**
    * The clones with no cloned parent — the tops of what was copied.
    *
@@ -1219,18 +1426,12 @@ export function pasteActivitiesCommand(params: {
    * than an oversight to work around.** `bulkDelete` refuses any batch containing a `WBS_SUMMARY`
    * (422 `SUMMARY_NOT_BULK_ELIGIBLE`, `activities.service.ts:1277-1281`): deleting a summary takes
    * its whole subtree, and letting that ride inside a forty-bar selection would make the most
-   * destructive operation in the product the easiest to trigger by accident. A bulk delete is
-   * therefore always leaf-only, "which is what makes its undo honest".
+   * destructive operation in the product the easiest to trigger by accident.
    *
    * So undoing a band copy deletes its **root**, once, and lets the documented cascade take the
-   * subtree — which is exactly what the planner asked to reverse. When the roots ARE the whole set
-   * (a flat copy, every clone top-level) this is the same call as before, so the common path is
-   * unchanged.
-   *
-   * The flag-on journey found this: the undo fired, the batch 422'd, and the planner was told
-   * "Couldn't undo just now." A mocked delete accepts any batch, so no unit test could have.
+   * subtree. When the roots ARE the whole set (a flat copy) this is the same call as before.
    */
-  roots: readonly { id: string; version: number }[];
+  roots: readonly { id: string; name?: string }[];
   bulkDelete: BulkDeleteActivitiesFn;
   /** Single delete; cascades a summary's subtree (ADR-0038). Used when the set is not flat. */
   deleteActivity: DeleteActivityFn;
@@ -1239,56 +1440,50 @@ export function pasteActivitiesCommand(params: {
   label: string;
 }): Command {
   const { bulkDelete, deleteActivity, restoreBatch } = params;
-  const roots = [...params.roots];
-  const isFlat = roots.length === params.created.length;
-  // `null` means "the clones are not in the plan right now" — the absent state of the toggle.
-  let live: { id: string; version: number }[] | null = [...params.created];
+  const isFlat = params.roots.length === params.created.length;
+  // `false` means "the clones are not in the plan right now" — the absent state of the toggle.
+  let live = true;
   let batchId: string | null = null;
-
   return {
     label: params.label,
-    undo: async (ledger) => {
-      if (live === null) return;
-      if (isFlat) {
-        const result = await bulkDelete({
-          activities: live.map((row) => ({
-            id: row.id,
-            version: liveVersion(ledger, row.id, row.version),
-          })),
-        });
-        batchId = result.deleteBatchId;
-      } else {
-        // Roots only, one at a time — each cascade sweeps its own subtree. Sequential because each
-        // delete takes the plan lock server-side anyway; the batch id of the LAST one is kept,
-        // which is right while a paste has a single root (a band). Redo of a multi-root non-flat
-        // paste would restore only the last cascade, so that shape is not offered: `planClone`'s
-        // band path produces exactly one root.
-        // **Redo works now.** This used to leave `batchId` null and make redo a no-op, because
-        // `DELETE …/activities/:id` answered 204 with no body — the cascade's `delete_batch_id`
-        // existed server-side and the client was never told it (`docs/TECH_DEBT.md` #113, closed).
-        // The route returns it, so a band copy's undo is reversible like every other command's.
-        //
-        // The LAST root's id is kept, which is exact while a paste has a single root — `planClone`'s
-        // band path produces exactly one — and is why a multi-root non-flat paste is not offered.
-        batchId = null;
-        for (const root of roots) {
-          // No narrowing: `DeleteActivityFn` resolves the batch (#116 item 5). The guard that used
-          // to stand here was for a `void` the route has not returned since `#113`.
-          batchId = (await deleteActivity(root.id)).deleteBatchId;
-        }
-      }
-      live = null;
+    undo: async (ctx) => {
+      if (!live) return APPLIED;
+      return replayActivities(
+        ctx,
+        params.created.map((c) => ({
+          id: c.id,
+          ...(c.name !== undefined ? { name: c.name } : {}),
+          expect: {},
+        })),
+        async (rows) => {
+          if (isFlat) {
+            const result = await bulkDelete({
+              activities: params.created.flatMap((c) => {
+                const row = rows.get(c.id);
+                return row === undefined ? [] : [{ id: c.id, version: row.version }];
+              }),
+            });
+            batchId = result.deleteBatchId;
+          } else {
+            // Roots only, one at a time — each cascade sweeps its own subtree. The batch id of the
+            // LAST one is kept, which is exact while a paste has a single root — `planClone`'s band
+            // path produces exactly one — and is why a multi-root non-flat paste is not offered.
+            batchId = null;
+            for (const root of params.roots) {
+              batchId = (await deleteActivity(root.id)).deleteBatchId;
+            }
+          }
+          live = false;
+        },
+      );
     },
-    redo: async (ledger) => {
-      if (live === null && batchId !== null) {
-        const restored = await restoreBatch({ deleteBatchId: batchId });
-        live = restored.map((row) => ({ id: row.id, version: row.version }));
-        for (const row of restored) ledger?.observe(row.id, row.version);
+    redo: async () => {
+      if (live || batchId === null) return APPLIED;
+      return writeOrSetAside(params.created[0]?.name ?? 'An activity in this step', async () => {
+        await restoreBatch({ deleteBatchId: batchId as string });
+        live = true;
         batchId = null;
-      }
-    },
-    seedVersions: (ledger) => {
-      for (const row of params.created) ledger.observe(row.id, row.version);
+      });
     },
   };
 }

@@ -18,13 +18,12 @@ export {
   autoArrangeCommand,
   bulkPlacementCommand,
   bulkDeleteCommand,
+  linkChainCommand,
   pasteActivitiesCommand,
   typeChangeCommand,
   type Command,
   type CommandCoalescing,
   type RepositionLaneFn,
-  type UpdateActivityFn,
-  type UpdateActivityInput,
   type PatchActivityFieldsFn,
   type CreatePlacedActivityFn,
   type DeleteActivityFn,
@@ -46,19 +45,20 @@ export {
   MAX_HISTORY_DEPTH,
   COALESCE_WINDOW_MS,
   type PlanEditHistory,
+  type StepOutcome,
 } from './use-plan-edit-history';
 export { usePlanUndoRedo, type PlanUndoRedo } from './use-plan-undo-redo';
 export {
   historyResultMessage,
   isHistoryFailure,
-  UNDO_CONFLICT_MESSAGE,
-  REDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
   REDO_FAILED_MESSAGE,
   type HistoryOutcome,
   type HistoryResult,
   type PostedHistoryResult,
+  type SetAside,
 } from './history-result';
+export type { NotApplicableReason, ReplayContext, ReplayResult } from './replay';
 export { useHistoryResult, type HistoryResultState } from './use-history-result';
 export { useUndoRedoKeybindings } from './use-undo-redo-keybindings';
 export { blockedHistoryResult, historyResultAction } from './history-result-host';

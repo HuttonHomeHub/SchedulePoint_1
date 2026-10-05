@@ -104,6 +104,9 @@ const DEPENDENCY: DependencySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
+/** What the server answers the drag with, and so what an undo's pre-check expects to find. */
+const SAVED: DependencySummary = { ...DEPENDENCY, lagDays: 5, lagMinutes: 7200, version: 7 };
+
 // **The hooks are stubbed; the pure helpers are the real ones** (`docs/TECH_DEBT.md` #233).
 // `resolveLagDragWrite` and `lagHoursPerDay` decide what this handler writes, so stubbing them
 // would leave the suite asserting against a fixture of its own answer — the shape this repository
@@ -154,6 +157,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);
@@ -162,7 +166,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.authoring = false;
-  h.updateDependencyMutateAsync.mockResolvedValue({ ...DEPENDENCY, lagDays: 5, version: 7 });
+  h.updateDependencyMutateAsync.mockResolvedValue(SAVED);
   h.recalcMutateAsync.mockResolvedValue(undefined);
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
 });
@@ -217,7 +221,7 @@ describe('onTsldLag (ADR-0052 M3)', () => {
     // defect the forward write was just fixed for, one layer along, and it would be visible only to
     // somebody pressing Ctrl+Z on an edge carrying a sub-day lag (`docs/TECH_DEBT.md` #233).
     h.updateDependencyMutateAsync.mockClear();
-    await command.undo();
+    await command.undo(fakePlanServer({ dependencies: [SAVED] }).ctx);
     expect(h.updateDependencyMutateAsync).toHaveBeenCalledExactlyOnceWith({
       dependencyId: 'd1',
       type: 'SS',

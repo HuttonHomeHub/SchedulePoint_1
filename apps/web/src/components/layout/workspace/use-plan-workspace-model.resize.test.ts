@@ -186,21 +186,26 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);
+
+/** What the server answers a start-edge drag with — the state an undo's pre-check expects to find. */
+const SAVED_START_RESIZE: ActivitySummary = {
+  ...ACTIVITY,
+  visualStart: '2026-01-07',
+  durationDays: 8,
+  durationMinutes: 3840,
+  version: 4,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.authoring = false;
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
-  h.setVisualStartMutateAsync.mockResolvedValue({
-    ...ACTIVITY,
-    visualStart: '2026-01-07',
-    durationDays: 8,
-    version: 4,
-  });
+  h.setVisualStartMutateAsync.mockResolvedValue(SAVED_START_RESIZE);
   h.recalcMutateAsync.mockResolvedValue(undefined);
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
 });
@@ -408,7 +413,7 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
     });
     const command = h.record.mock.calls[0]![0];
     h.setVisualStartMutateAsync.mockClear();
-    await command.undo();
+    await command.undo(fakePlanServer({ activities: [SAVED_START_RESIZE] }).ctx);
     // The pre-edit row had no placement (null) and duration 5 — both restored in one PATCH at
     // the post-edit version.
     expect(h.setVisualStartMutateAsync).toHaveBeenCalledExactlyOnceWith({

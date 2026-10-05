@@ -175,8 +175,8 @@ describe('useAutoResolveOverlaps', () => {
     act(() =>
       view.result.current.history.record({
         label: 'A later edit',
-        undo: () => Promise.resolve(),
-        redo: () => Promise.resolve(),
+        undo: () => Promise.resolve({ kind: 'applied' }),
+        redo: () => Promise.resolve({ kind: 'applied' }),
       }),
     );
     // Its Undo would now reverse the later edit, which its sentence does not describe.

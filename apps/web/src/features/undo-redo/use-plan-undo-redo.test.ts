@@ -3,30 +3,33 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { autoArrangeCommand, dependencyEditCommand, relaneCommand, type Command } from './commands';
 import {
-  autoArrangeCommand,
-  createVersionLedger,
-  dependencyEditCommand,
-  relaneCommand,
-} from './commands';
-import {
-  REDO_CONFLICT_MESSAGE,
   REDO_FAILED_MESSAGE,
-  REDO_PARENT_DELETED_MESSAGE,
-  UNDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
-  UNDO_PARENT_DELETED_MESSAGE,
   type PostedHistoryResult,
 } from './history-result';
-import type { PlanEditHistory } from './use-plan-edit-history';
+import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 import { usePlanUndoRedo } from './use-plan-undo-redo';
 
 import { ApiFetchError } from '@/lib/api/client';
+import { anActivity } from '@/test/activity-fixture';
+import { aDependency, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
+
+// The replay reads the plan through `fetchQuery`; the one test that exercises it answers from a fake.
+const reader = vi.hoisted(() => ({
+  current: (_path: string): Promise<unknown[]> => Promise.resolve([]),
+}));
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetchAllPages: (path: string) => reader.current(path),
+}));
 
 /**
- * M3.1 conflict + pen-loss contract (ADR-0048). The store's own suite covers replay/coalescing; here
- * the inverse is mocked to REJECT so we can assert each failure branch: 409/404 → refetch + clear redo
- * (non-destructive), 423 → clear whole history + run the shared pen contract, other → generic status.
+ * The ADR-0176 replay contract around the store. The store's own suite covers stacks and coalescing;
+ * here the store is a double whose undo/redo resolve to an outcome or reject, so each branch can be
+ * asserted: applied → announce + recalculate; set aside → refetch + a result in words; 423 → the pen
+ * contract with the history KEPT; anything else → a retryable failure.
  */
 
 const err = (status: number, details?: unknown): ApiFetchError =>
@@ -36,6 +39,14 @@ const err = (status: number, details?: unknown): ApiFetchError =>
     ...(details === undefined ? {} : { details }),
   });
 
+const command = (label: string, over: Partial<Command> = {}): Command => ({
+  label,
+  undo: vi.fn(),
+  redo: vi.fn(),
+  ...over,
+});
+const applied = (c: Command): StepOutcome => ({ kind: 'applied', command: c });
+
 /** A minimal history double whose undo/redo resolve or reject as the test sets up. */
 function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
   return {
@@ -43,11 +54,10 @@ function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
     isTop: vi.fn().mockReturnValue(false),
     peekUndo: vi.fn().mockReturnValue(undefined),
     peekRedo: vi.fn().mockReturnValue(undefined),
-    undo: vi.fn().mockResolvedValue('Move activity'),
-    redo: vi.fn().mockResolvedValue('Add link'),
+    undo: vi.fn().mockResolvedValue(applied(command('Move activity'))),
+    redo: vi.fn().mockResolvedValue(applied(command('Add link'))),
     clear: vi.fn(),
     clearRedo: vi.fn(),
-    versions: createVersionLedger(),
     canUndo: true,
     canRedo: true,
     undoLabel: 'Move activity',
@@ -98,6 +108,26 @@ describe('usePlanUndoRedo — success', () => {
     expect(result.current.undoLabel).toBe('Move activity');
     expect(result.current.redoLabel).toBeNull();
   });
+
+  it('hands the store a replay context that reads the plan fresh from the server', async () => {
+    const server = fakePlanServer({
+      activities: [anActivity({ id: 'a1', name: 'Excavate' })],
+      dependencies: [aDependency()],
+    });
+    reader.current = pagedReader(server);
+    const read = vi.fn<(ids: string[]) => void>();
+    const undo = vi.fn(async (ctx: Parameters<PlanEditHistory['undo']>[0]) => {
+      const activities = await ctx.readActivities(['a1', 'ghost']);
+      const dependencies = await ctx.readDependencies(['d1']);
+      read([...activities.keys(), ...dependencies.keys()]);
+      return applied(command('Edit “Excavate”'));
+    });
+    const { result, announce } = setup(fakeHistory({ undo }));
+    act(() => result.current.undo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('Undid edit “Excavate”.'));
+    // Only the rows asked for come back; a row the server does not have is simply absent.
+    expect(read).toHaveBeenCalledExactlyOnceWith(['a1', 'd1']);
+  });
 });
 
 /**
@@ -107,26 +137,22 @@ describe('usePlanUndoRedo — success', () => {
  */
 describe('usePlanUndoRedo — recalculation after a replay', () => {
   const noop = vi.fn();
+  const row = aDependency();
   const lag = dependencyEditCommand({
     updateDependency: noop,
-    before: { id: 'd1', type: 'FS', lagMinutes: 0, version: 1 },
-    after: { id: 'd1', type: 'FS', lagMinutes: 90, version: 2 },
+    before: row,
+    after: { ...row, lagMinutes: 90, version: 2 },
     label: 'Edit link',
-  } as unknown as Parameters<typeof dependencyEditCommand>[0]);
+  });
   const relane = relaneCommand({
     repositionLane: noop,
     activityId: 'a1',
     fromLaneIndex: 0,
     toLaneIndex: 1,
-    version: 1,
+    saved: anActivity({ id: 'a1', laneIndex: 1 }),
     activityName: 'Excavate',
   });
-  const arrange = autoArrangeCommand({
-    batchPositions: noop,
-    before: [],
-    after: [],
-    versions: new Map(),
-  });
+  const arrange = autoArrangeCommand({ batchPositions: noop, before: [], after: [], saved: [] });
 
   it('a schedule-affecting command defaults to affecting the schedule', () => {
     expect(lag.affectsSchedule).not.toBe(false);
@@ -140,8 +166,8 @@ describe('usePlanUndoRedo — recalculation after a replay', () => {
   it('notifies after a successful undo and redo of a schedule-affecting step', async () => {
     const { result, onReplayed } = setup(
       fakeHistory({
-        peekUndo: vi.fn().mockReturnValue(lag),
-        peekRedo: vi.fn().mockReturnValue(lag),
+        undo: vi.fn().mockResolvedValue(applied(lag)),
+        redo: vi.fn().mockResolvedValue(applied(lag)),
       }),
     );
     act(() => result.current.undo());
@@ -153,27 +179,37 @@ describe('usePlanUndoRedo — recalculation after a replay', () => {
   it('does not notify after a lane-only replay', async () => {
     const { result, announce, onReplayed } = setup(
       fakeHistory({
-        peekUndo: vi.fn().mockReturnValue(relane),
-        peekRedo: vi.fn().mockReturnValue(arrange),
+        undo: vi.fn().mockResolvedValue(applied(relane)),
+        redo: vi.fn().mockResolvedValue(applied(arrange)),
       }),
     );
     act(() => result.current.undo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith('Undid move activity.'));
+    await waitFor(() => expect(announce).toHaveBeenCalled());
     act(() => result.current.redo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith('Redid add link.'));
+    await waitFor(() => expect(announce).toHaveBeenCalledTimes(2));
     expect(onReplayed).not.toHaveBeenCalled();
   });
 
-  it('does not notify when the replay failed or there was nothing to replay', async () => {
-    const failing = setup(
-      fakeHistory({
-        peekUndo: vi.fn().mockReturnValue(lag),
-        undo: vi.fn().mockRejectedValue(err(500)),
-      }),
-    );
+  it('does not notify when the replay failed, was set aside, or there was nothing to replay', async () => {
+    const failing = setup(fakeHistory({ undo: vi.fn().mockRejectedValue(err(500)) }));
     act(() => failing.result.current.undo());
     await waitFor(() => expect(failing.announce).toHaveBeenCalledWith(UNDO_FAILED_MESSAGE));
     expect(failing.onReplayed).not.toHaveBeenCalled();
+
+    const aside = setup(
+      fakeHistory({
+        undo: vi.fn().mockResolvedValue({
+          kind: 'set-aside',
+          command: lag,
+          reason: 'changed',
+          subjectName: 'Excavate',
+          nextLabel: null,
+        }),
+      }),
+    );
+    act(() => aside.result.current.undo());
+    await waitFor(() => expect(aside.announce).toHaveBeenCalled());
+    expect(aside.onReplayed).not.toHaveBeenCalled();
 
     const empty = setup(fakeHistory({ undo: vi.fn().mockResolvedValue(null) }));
     act(() => empty.result.current.undo());
@@ -182,89 +218,81 @@ describe('usePlanUndoRedo — recalculation after a replay', () => {
   });
 });
 
-describe('usePlanUndoRedo — 409 / 404 conflict (abort non-destructively)', () => {
-  for (const status of [409, 404]) {
-    it(`undo ${status}: refetches server truth, clears ONLY redo, announces, no re-pop`, async () => {
-      const history = fakeHistory({ undo: vi.fn().mockRejectedValue(err(status)) });
-      const { result, announce, onLockLost, invalidateSpy } = setup(history);
-
-      act(() => result.current.undo());
-
-      await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE));
-      expect(history.clearRedo).toHaveBeenCalledTimes(1);
-      expect(history.clear).not.toHaveBeenCalled(); // non-destructive: undo stack intact
-      expect(onLockLost).not.toHaveBeenCalled();
-      // The refetch invalidates the plan's activity list + the org/plan schedule namespace.
-      const keys = invalidateSpy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
-      expect(keys).toContainEqual(JSON.stringify(['activities', 'acme', 'plan', 'p1']));
-      expect(keys).toContainEqual(JSON.stringify(['schedule', 'acme']));
-    });
-  }
-
-  it('redo 409: clears redo + announces the redo-flavoured conflict copy', async () => {
-    const history = fakeHistory({ redo: vi.fn().mockRejectedValue(err(409)) });
-    const { result, announce } = setup(history);
-    act(() => result.current.redo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_CONFLICT_MESSAGE));
-    expect(history.clearRedo).toHaveBeenCalledTimes(1);
+describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
+  const setAside = (
+    reason: 'changed' | 'gone' | 'parent-deleted' | 'duplicate',
+    nextLabel: string | null = 'Edit “Pour”',
+  ): StepOutcome => ({
+    kind: 'set-aside',
+    command: command('Move “Foundations”'),
+    reason,
+    subjectName: 'Foundations',
+    nextLabel,
   });
 
-  /**
-   * **The one 409 whose recovery is a different action** (`docs/TECH_DEBT.md` #230 M2). The general
-   * copy tells the reader to refresh, and refreshing does not help — restoring the phase does. So
-   * the words branch and nothing else does.
-   *
-   * The reason is read from `error.details.reason`, which was verified rather than assumed: it is
-   * the same path `lib/api/calendar-scope-errors.ts` already reads, and the server's
-   * `ConflictError('…', { reason })` is copied straight into the envelope by the exceptions filter.
-   *
-   * **This branch is the only cover this case has, and that is deliberate.** Its journey does not
-   * exist because the state is not reachable from one pen session — `apps/web/e2e-undo` drives the
-   * spec's own alternate flow and both undos succeed, because the stack is LIFO and a cascade never
-   * sweeps an already-deleted subtree. It stays reachable across sessions (a stale tab, a pen
-   * hand-off), which is why the words are worth having at all.
-   */
-  it('undo 409 PARENT_DELETED: says which action recovers it, not "refresh"', async () => {
-    const history = fakeHistory({
-      undo: vi.fn().mockRejectedValue(err(409, { reason: 'PARENT_DELETED' })),
-    });
-    const { result, announce } = setup(history);
+  it('says what changed, that the step was set aside, and what the next press runs', async () => {
+    const { result, announce } = setup(
+      fakeHistory({ undo: vi.fn().mockResolvedValue(setAside('changed')) }),
+    );
     act(() => result.current.undo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_PARENT_DELETED_MESSAGE));
-    expect(announce).not.toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE);
-    // Everything else about the branch is unchanged — only the words move.
-    expect(history.clearRedo).toHaveBeenCalledTimes(1);
-    expect(history.clear).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(
+        'Couldn’t undo move “Foundations” — Foundations was changed since. ' +
+          'That step was set aside; Undo again continues with edit “Pour”.',
+      ),
+    );
   });
 
-  it('redo 409 PARENT_DELETED: the redo-flavoured wording', async () => {
-    const history = fakeHistory({
-      redo: vi.fn().mockRejectedValue(err(409, { reason: 'PARENT_DELETED' })),
-    });
-    const { result, announce } = setup(history);
+  it('says a deleted row was deleted', async () => {
+    const { result, announce } = setup(
+      fakeHistory({ undo: vi.fn().mockResolvedValue(setAside('gone', null)) }),
+    );
+    act(() => result.current.undo());
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(
+        'Couldn’t undo move “Foundations” — Foundations has been deleted since. ' +
+          'That step was set aside.',
+      ),
+    );
+  });
+
+  it('keeps the phase words for a restore the server refused', async () => {
+    const { result, announce } = setup(
+      fakeHistory({ undo: vi.fn().mockResolvedValue(setAside('parent-deleted', null)) }),
+    );
+    act(() => result.current.undo());
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('a phase it was filed under')),
+    );
+  });
+
+  it('says a duplicate link already exists', async () => {
+    const { result, announce } = setup(
+      fakeHistory({ redo: vi.fn().mockResolvedValue(setAside('duplicate')) }),
+    );
     act(() => result.current.redo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_PARENT_DELETED_MESSAGE));
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(
+        expect.stringContaining('that link already exists. That step was set aside.'),
+      ),
+    );
   });
 
-  /**
-   * The pinned positive that stops the branch swallowing every 409: a conflict with SOME OTHER
-   * reason, and a conflict with no `details` at all, both still get the general copy. Without
-   * these, "the new message appears" would be indistinguishable from "the new message always
-   * appears".
-   */
-  it('keeps the general copy for a 409 with another reason, or none', async () => {
-    for (const details of [{ reason: 'VERSION_CONFLICT' }, undefined]) {
-      const history = fakeHistory({ undo: vi.fn().mockRejectedValue(err(409, details)) });
-      const { result, announce } = setup(history);
-      act(() => result.current.undo());
-      await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE));
-      expect(announce).not.toHaveBeenCalledWith(UNDO_PARENT_DELETED_MESSAGE);
-    }
+  it('refetches server truth, and neither clears the history nor runs the pen contract', async () => {
+    const history = fakeHistory({ undo: vi.fn().mockResolvedValue(setAside('changed')) });
+    const { result, onLockLost, invalidateSpy } = setup(history);
+    act(() => result.current.undo());
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
+    expect(history.clear).not.toHaveBeenCalled();
+    expect(onLockLost).not.toHaveBeenCalled();
+    const keys = invalidateSpy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys).toContainEqual(JSON.stringify(['activities', 'acme', 'plan', 'p1']));
+    expect(keys).toContainEqual(JSON.stringify(['schedule', 'acme']));
   });
 });
 
-describe('usePlanUndoRedo — 423 pen lost (clear whole history)', () => {
-  it('clears the whole history and runs the shared pen contract, WITHOUT a second announcement', async () => {
+describe('usePlanUndoRedo — 423 pen lost (the history is kept)', () => {
+  it('runs the shared pen contract WITHOUT a second announcement and WITHOUT clearing the history', async () => {
     const history = fakeHistory({ undo: vi.fn().mockRejectedValue(err(423)) });
     const { result, announce, onLockLost } = setup(history);
 
@@ -273,7 +301,9 @@ describe('usePlanUndoRedo — 423 pen lost (clear whole history)', () => {
     // The shared pen contract (the `EditLockBanner`'s own live region) is the single source of the
     // pen-loss announcement — this feature must NOT `announce(...)` a second, near-identical utterance.
     await waitFor(() => expect(onLockLost).toHaveBeenCalledTimes(1));
-    expect(history.clear).toHaveBeenCalledTimes(1);
+    // ADR-0176 D4: the history belongs to the page session, not the pen — every step is checked
+    // against the server before it writes, so a hand-off no longer has to destroy it.
+    expect(history.clear).not.toHaveBeenCalled();
     expect(history.clearRedo).not.toHaveBeenCalled();
     expect(announce).not.toHaveBeenCalled();
   });
@@ -306,15 +336,12 @@ describe('usePlanUndoRedo — other errors (leave stacks intact)', () => {
  * success through the polite region, a failure by the strip's `role="alert"` (ADR-0132).
  */
 describe('usePlanUndoRedo — results for the dock strip', () => {
-  const step = { label: 'Edit “Excavate”', undo: vi.fn(), redo: vi.fn() };
+  const step = command('Edit “Excavate”');
 
   it('a success posts a `done` result bound to its step and announces once', async () => {
     const onResult = vi.fn();
     const { result, announce } = setup(
-      fakeHistory({
-        peekUndo: vi.fn().mockReturnValue(step),
-        undo: vi.fn().mockResolvedValue(step.label),
-      }),
+      fakeHistory({ undo: vi.fn().mockResolvedValue(applied(step)) }),
       onResult,
     );
     act(() => result.current.undo());
@@ -331,10 +358,7 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
   it('a redo success posts the redo direction', async () => {
     const onResult = vi.fn();
     const { result } = setup(
-      fakeHistory({
-        peekRedo: vi.fn().mockReturnValue(step),
-        redo: vi.fn().mockResolvedValue(step.label),
-      }),
+      fakeHistory({ redo: vi.fn().mockResolvedValue(applied(step)) }),
       onResult,
     );
     act(() => result.current.redo());
@@ -344,15 +368,37 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
     );
   });
 
-  const failures: [string, unknown, string][] = [
-    ['a 409', err(409), 'conflict'],
-    ['a 404', err(404), 'conflict'],
-    ['a 409 PARENT_DELETED', err(409, { reason: 'PARENT_DELETED' }), 'parent-deleted'],
-    ['a 500', err(500), 'failed'],
-    ['a thrown Error', new Error('boom'), 'failed'],
+  it('a set-aside posts a `set-aside` result carrying why and what is next, and is NOT also announced', async () => {
+    const onResult = vi.fn();
+    const { result, announce } = setup(
+      fakeHistory({
+        undo: vi.fn().mockResolvedValue({
+          kind: 'set-aside',
+          command: step,
+          reason: 'gone',
+          subjectName: 'Excavate',
+          nextLabel: 'Add “Pour”',
+        }),
+      }),
+      onResult,
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult).toHaveBeenCalledWith({
+      direction: 'undo',
+      outcome: 'set-aside',
+      label: step.label,
+      setAside: { reason: 'gone', subjectName: 'Excavate', nextLabel: 'Add “Pour”' },
+    });
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  const failures: [string, unknown][] = [
+    ['a 500', err(500)],
+    ['a thrown Error', new Error('boom')],
   ];
-  for (const [name, error, outcome] of failures) {
-    it(`${name} posts a \`${outcome}\` result and is NOT also announced`, async () => {
+  for (const [name, error] of failures) {
+    it(`${name} posts a \`failed\` result and is NOT also announced`, async () => {
       const onResult = vi.fn();
       const { result, announce } = setup(
         fakeHistory({
@@ -365,7 +411,7 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
       await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
       expect(onResult).toHaveBeenCalledWith({
         direction: 'undo',
-        outcome,
+        outcome: 'failed',
         label: step.label,
       });
       expect(announce).not.toHaveBeenCalled();
