@@ -44,7 +44,7 @@ versions ship with the next release's images.
   that are not 429s (`plan-switch.spec.ts:109`, `activity-editor.spec.ts:449`; detail in the row).
 - **#453**, **#454**: filed by the pass (above).
 - **#440–#446** (filed with activity history) unchanged; **#446** is lighter after #832.
-- **History row-rate count is owed around 1 November** (ADR-0174 / #443): re-measure on the live host.
+- **History row-rate reading is owed on or after 2026-11-01** (ADR-0174 plan M3-T2, `docs/specs/staff-server-readings/` M3-T2): press **Run diagnostics** on the live host once the staff-server-readings M1 release is pulled, and paste the block. #443's cost halves are re-scoped (see the row).
 - **Gantt hands-on readings** are still owed by the product owner.
 - **#433**, **#432**, **#429**, **#419**, **#405** unchanged. (**#431** is closed — the previous
   hand-off listed its "remainder" as open; it was not.)

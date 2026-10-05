@@ -21,6 +21,27 @@ second line, as 83 does. The ledger parse is now the one contiguous table under 
 moved `#343`, `#360` and `#362` out of `### 294.`'s table. **Known limit, pinned by a test:** deleting the
 single highest row is not seen, because the ceiling is read from the file.
 
+---
+
+## 2026-10-05 — The first time-relative staff diagnostic: a fixed window is a property of the question
+
+**What was decided.** The three `history-entries-*` diagnostics (`docs/specs/staff-server-readings/`, M1)
+count against `now() - interval '28 days'`, the first registry entries to read the clock. The window is a
+SQL literal exactly like the 512-byte threshold, never a parameter, so ADR-0140's "no caller input" clause
+and gate S-3 hold unedited. Two further choices ride on it: history on a soft-deleted activity **is**
+counted (`soft-delete: any-state`, because volume is the question), and nothing distinct about _people_ is
+counted (no `count(DISTINCT actor_user_id)`).
+
+**Why.** ADR-0174's volume estimate is owed a reading around 2026-11-01 and the product owner cannot run a
+terminal. Before the feature has recorded for 28 days the window is not yet full, so H-1 states that when
+`examined === affected`, keyed on the entry id.
+
+**Consequences.** Two of the six statements read 524 and 538 ms at 1,000,000 history rows (over the 500 ms
+bar) and ship anyway with a re-arm trigger, H-1 `examined` ≥ 500,000; the whole press crosses ADR-0140 D7's
+~800 ms near 300,000 rows, which reopens the throttle decision. See `m1-measurement.md`.
+
+---
+
 ## 2026-10-05 — The ten Dependabot bumps are taken together, at the versions Dependabot proposed
 
 **What was decided.** #807–#816 land as one change off `main`, the way #731 took the previous eight

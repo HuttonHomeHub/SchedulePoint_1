@@ -22,10 +22,10 @@ export type DiagnosticNature = 'retrospective' | 'prospective';
  *
  * The sentence names this noun out loud — "17 of 1,284 **activities**" — and it was a hard-coded
  * literal until `docs/TECH_DEBT.md` #362, so the two diagnostics that do not count activities
- * printed their counts as counts of activities. Nine entries ask about activities, one about plans
- * and one about baselines.
+ * printed their counts as counts of activities. Most entries ask about activities, one about plans,
+ * one about baselines and three about history entries.
  */
-export type DiagnosticUnit = 'activity' | 'plan' | 'baseline';
+export type DiagnosticUnit = 'activity' | 'plan' | 'baseline' | 'history-entry';
 
 /** One named question's answer. Every field a number except the registry literals (ADR-0140). */
 export interface StaffDiagnosticRow {
