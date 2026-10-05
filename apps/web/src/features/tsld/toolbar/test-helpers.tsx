@@ -61,6 +61,10 @@ export function makeTsldToolbarContext(
     redoLabel: null,
     undo: vi.fn(),
     redo: vi.fn(),
+    historyEntries: () => ({ undo: [], redo: [] }),
+    undoTo: vi.fn(),
+    redoTo: vi.fn(),
+    historyBusy: false,
     // Object / plan actions
     canRecalc: true,
     recalcPending: false,

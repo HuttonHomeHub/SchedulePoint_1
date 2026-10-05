@@ -47,6 +47,13 @@ export interface HistoryResult {
   readonly setAside?: SetAside;
   /** `done` only: the step that ran, which is what the strip's lifetime is bound to. */
   readonly command?: Command;
+  /**
+   * Present only on the result of a run of SEVERAL steps (the history menu's "undo to here",
+   * undo-redo M7): how many ran and how many were asked for. One summarising result, not one per
+   * step — the strip shows one thing at a time. `label` is then the LAST step the result is about:
+   * the final one that ran (`done`), or the one the run stopped at (`set-aside` / `failed`).
+   */
+  readonly steps?: { readonly done: number; readonly total: number };
 }
 
 /** A result before it has been given its id. */
@@ -96,6 +103,7 @@ export function isHistoryFailure(result: HistoryResult): boolean {
  */
 export function historyResultMessage(result: HistoryResult | PostedHistoryResult): string {
   const undo = result.direction === 'undo';
+  if (result.steps !== undefined) return rangeMessage(result, result.steps);
   switch (result.outcome) {
     case 'done':
       return `${historyPhrase(undo ? 'Undid' : 'Redid', result.label)}.`;
@@ -117,4 +125,30 @@ export function historyResultMessage(result: HistoryResult | PostedHistoryResult
     case 'blocked':
       return result.reason ?? `Can’t ${result.direction} right now.`;
   }
+}
+
+/**
+ * The sentence for a run of several steps. A run **stops at the first step that does not apply**
+ * rather than skipping over it: the steps below it were made on top of the one that could not be
+ * reversed, so undoing them anyway would reverse edits whose base is not there any more. The
+ * planner is told how far it got and why it stopped, and can press Undo again to carry on past it
+ * (the skipped step is gone from the history by then — ADR-0176 D3).
+ */
+function rangeMessage(
+  result: HistoryResult | PostedHistoryResult,
+  { done, total }: { done: number; total: number },
+): string {
+  const verb = result.direction === 'undo' ? 'Undid' : 'Redid';
+  if (result.outcome === 'done') return `${verb} ${done} ${done === 1 ? 'step' : 'steps'}.`;
+  // Same lower-casing rule as `historyPhrase` (first character only), without a verb in front.
+  const step = `${result.label.charAt(0).toLowerCase()}${result.label.slice(1)}`;
+  const head = `${verb} ${done} of ${total} — stopped at ${step}`;
+  if (result.outcome === 'set-aside' && result.setAside !== undefined) {
+    return `${head}: ${setAsideClause(result.setAside)}.`;
+  }
+  if (result.outcome === 'failed') {
+    const fallback = result.direction === 'undo' ? UNDO_FAILED_MESSAGE : REDO_FAILED_MESSAGE;
+    return `${head}. ${result.detail ?? fallback}`;
+  }
+  return `${head}.`;
 }

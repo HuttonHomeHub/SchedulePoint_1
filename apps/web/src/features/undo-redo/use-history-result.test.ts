@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Command } from './commands';
 import {
+  UNDO_FAILED_MESSAGE,
   historyResultMessage,
   isHistoryFailure,
   type HistoryResult,
@@ -29,6 +30,7 @@ function historyWith(state: {
     isTop: (command) => state.undoTop === command,
     peekUndo: () => state.undoTop,
     peekRedo: () => state.redoTop,
+    entries: () => ({ undo: [], redo: [] }),
     undo: () => Promise.resolve(null),
     redo: () => Promise.resolve(null),
     clear: () => undefined,
@@ -166,6 +168,39 @@ describe('historyResultMessage', () => {
     expect(
       message({ outcome: 'blocked', reason: 'Start editing to undo delete “Excavate”.' }),
     ).toBe('Start editing to undo delete “Excavate”.');
+  });
+
+  describe('a run of several steps', () => {
+    const run = (over: Partial<HistoryResult>): string =>
+      message({ steps: { done: 2, total: 4 }, ...over });
+
+    it('says how many steps it ran', () => {
+      expect(run({ steps: { done: 4, total: 4 } })).toBe('Undid 4 steps.');
+      expect(run({ direction: 'redo', steps: { done: 3, total: 3 } })).toBe('Redid 3 steps.');
+    });
+
+    it('says "1 step", not "1 steps"', () => {
+      expect(run({ steps: { done: 1, total: 1 } })).toBe('Undid 1 step.');
+    });
+
+    it('says how far it got, where it stopped and why, when a step is set aside', () => {
+      expect(
+        run({
+          outcome: 'set-aside',
+          label: 'Move “Pour”',
+          setAside: { reason: 'changed', subjectName: 'Pour', nextLabel: null },
+        }),
+      ).toBe('Undid 2 of 4 — stopped at move “Pour”: Pour was changed after your edit.');
+    });
+
+    it('says where it stopped when a step fails, with the step’s own detail if it has one', () => {
+      expect(run({ outcome: 'failed', label: 'Move “Pour”' })).toBe(
+        `Undid 2 of 4 — stopped at move “Pour”. ${UNDO_FAILED_MESSAGE}`,
+      );
+      expect(
+        run({ outcome: 'failed', label: 'Move “Pour”', detail: 'Crane was not put back.' }),
+      ).toBe('Undid 2 of 4 — stopped at move “Pour”. Crane was not put back.');
+    });
   });
 
   it('only a success is not a failure', () => {

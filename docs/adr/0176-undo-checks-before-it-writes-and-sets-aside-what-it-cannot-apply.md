@@ -186,8 +186,9 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
 - Inverses are field-scoped, so a command written against the old whole-definition contract does not
   type-check — the census in D6 is what keeps a new write path from being forgotten.
 - The mutation functions are still closed over by each builder rather than supplied by the replay
-  context; supplying them is deferred to the history list (M7), which is the first thing that replays
-  a step recorded in an earlier render.
+  context; supplying them was said to be deferred to the history list (M7), "the first thing that
+  replays a step recorded in an earlier render". **That was wrong** — every ordinary undo replays a
+  step recorded in an earlier render — and the M7 addendum below records what it actually did.
 
 ## Addendum — what a press shows (undo-redo M4, 2026-10-05)
 
@@ -195,7 +196,8 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   planner should be shown them: a link names both its ends, a record owned by an activity names that
   activity, a cross-plan link names its own plan's end first). The field is required, so a new family
   cannot forget it. It is a flat list for now; the spec's richer `{ activities, dependencies, other }`
-  shape waits for the history list (M7), the first reader that needs links as subjects.
+  shape was said to wait for the history list (M7) as "the first reader that needs links as
+  subjects" — it did not need them (see the M7 addendum), so the shape stays flat.
 - **After an applied step the first subject still in the plan is selected and brought into view**, in
   whichever view is showing, through the channels duplicate and the dock presses already use: the
   one-shot `revealActivityId` (bring the bar into view on both axes with `centerOnActivity`, lift the selection) and the
@@ -212,6 +214,39 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   there is no animation for reduced motion to govern.
 - **A plural step reveals its first subject only**: the diagram reports its selection outward and has no
   inbound set API (ADR-0080), so there is nothing to hand a set to.
+
+## Addendum — the history menu (undo-redo M7, 2026-10-05)
+
+- **"Undo to here" is the single-step workflow run `k` times, and it STOPS at the first step that
+  does not apply** (the spec's §2.3 wording, "stopping at the first non-success"). It does not skip
+  the step and carry on: the steps below it were made on top of it, so reversing them anyway would
+  undo edits whose base is no longer there. The stopped step is set aside as usual (D3), so the
+  planner can press Undo again to go on past it. A step that fails in transport stops the run the
+  same way and stays on the stack; a lost pen runs the pen contract and posts nothing (the banner is
+  its one announcer), but the steps that did run are still recalculated.
+- **One result for the whole run**, not one per step: `HistoryResult.steps` carries `{ done, total }`
+  and the message is "Undid 4 steps." or "Undid 2 of 4 — stopped at ⟨label⟩: ⟨reason⟩." A run that
+  stops on its first step has done nothing, so it posts the ordinary single-step result. The
+  recalculation and the reveal happen once, for the steps that ran (the reveal is the last step's
+  first subject still in the plan).
+- **A run holds its own in-flight guard.** The store's guard drops between two awaited steps, so a
+  keystroke could have slipped a single undo into the middle of a run; `usePlanUndoRedo` holds a
+  second ref across the whole run and a single press is ignored while it is set.
+- **Entries are read when the menu is open, not carried as state.** `PlanEditHistory.entries()` returns
+  the labels of both stacks nearest first, read from the refs; it is a stable callback, so the
+  object the toolbar-context memo keys on does not change when a step is recorded.
+- **The control is a menu button beside Undo, named "Recent edits"** (the activity editor already has
+  a History tab, ADR-0174): a registry item (`undo-history`, pen-gated, enabled while either stack is
+  non-empty) on the shared APG `Menu`, in the toolbar both views mount. Undo above redo, nearest
+  first; each row's name is "Undo ⟨step⟩ and the 2 steps after it". The row passes the label of the
+  step it was drawn for, and a run refuses ("The history changed — open the list again.") if that
+  position no longer holds that step. Undo, Redo and the button are `aria-busy` for the length of a
+  run. Redo is in the
+  same list because the cost was one section and the symmetry is what a planner who has just undone
+  too far reaches for.
+- **The two deferrals above did not hold.** Replaying a step recorded in an earlier render is what
+  every undo does, so the history list did not need the mutations moved into the replay context; and
+  it needed labels only, so `subjects` stays a flat id list.
 
 ## References
 

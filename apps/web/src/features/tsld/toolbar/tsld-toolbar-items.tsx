@@ -2088,8 +2088,9 @@ function UndoRedoControl({
       aria-label={label}
       aria-keyshortcuts={hint.aria}
       aria-disabled={disabled || undefined}
+      aria-busy={ctx.historyBusy || undefined}
       onClick={() => {
-        if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();
+        if (!disabled && !ctx.historyBusy) (direction === 'undo' ? ctx.undo : ctx.redo)();
       }}
       onFocus={(event) => {
         tipTrigger.onFocus(event);
@@ -2104,6 +2105,171 @@ function UndoRedoControl({
       )}
       {tipNode}
     </button>
+  );
+}
+
+// Deliberately NOT "Undo history": a name starting "Undo" is a second "Undo" button beside the real
+// one — ambiguous to voice control ("click Undo") and to a screen-reader user, and it collided with
+// every `/^Undo\b/` locator in the journeys.
+const HISTORY_LABEL = 'Recent edits';
+
+/**
+ * One row of the history menu. The visible text is the step's own label, with — past the first row —
+ * a second line saying what else the choice takes along ("and the 2 steps after it"). A screen reader
+ * hears the **action** in front ("Undo …"), because the label alone does not say whether it undoes or
+ * redoes. The accessible name is built so the visible text sits in it **unbroken** (WCAG 2.5.3: the
+ * name must contain what is shown): the verb goes before it, nothing is interleaved.
+ *
+ * Undo rows say "after it" (the steps made later, listed above the row) and redo rows "before it" (the
+ * steps that come back first, listed above the row) — the words a planner would use for the sequence
+ * of their own work, not a position in a list.
+ */
+function HistoryMenuRow({
+  verb,
+  label,
+  steps,
+  api,
+  onSelect,
+}: {
+  verb: 'Undo' | 'Redo';
+  label: string;
+  /** How many steps choosing this row runs: 1 for the nearest. */
+  steps: number;
+  api: ToolbarItemRenderApi;
+  onSelect: () => void;
+}): React.ReactElement {
+  const others = steps - 1;
+  const alongside =
+    others === 0
+      ? null
+      : `and the ${others === 1 ? '1 step' : `${others} steps`} ${verb === 'Undo' ? 'after' : 'before'} it`;
+  return (
+    <MenuItem
+      onSelect={onSelect}
+      // A menu left open while the pen is lost shades its rows rather than offering a write the
+      // press would refuse (ADR-0082): still reachable, with the reason.
+      disabled={api.disabled}
+      {...(api.disabledReason ? { disabledReason: api.disabledReason } : {})}
+    >
+      <span className="sr-only">{verb} </span>
+      {/* `min-w-0` + `max-w` + `truncate`: an activity's name can be arbitrarily long, and the menu
+          must not widen to the viewport for it. The full text stays in `title` and in the name. */}
+      <span className="flex max-w-72 min-w-0 flex-col">
+        <span className="truncate" title={label}>
+          {label}
+        </span>
+        {alongside ? (
+          <>
+            {' '}
+            <span className="text-muted-foreground text-micro truncate">{alongside}</span>
+          </>
+        ) : null}
+      </span>
+    </MenuItem>
+  );
+}
+
+/**
+ * The **Recent edits** control (undo-redo M7, US-6): a caret beside Undo that opens the recent steps,
+ * newest first, undo above redo, and choosing one runs every step down to it as ONE action with ONE
+ * summarising strip.
+ *
+ * Named "Recent edits", not "History": the activity editor already has a History tab (ADR-0174), and
+ * that one is a read-out of one activity, where this is a list of what the pen-holder did in this
+ * sitting. Built as an APG menu button on the shared {@link Menu}: Enter, Space or a vertical arrow
+ * opens it with focus on the first row, ↑/↓/Home/End rove, Escape and a pick return focus here. It is
+ * its own roving stop in the toolbar — Undo and Redo are not split buttons, because their primary is
+ * the one-step action, which this does not replace. Pen-gated and shaded with Undo and Redo, so every
+ * route to a write is shut together.
+ *
+ * The entries are read **while the menu is open**, from the store's refs, rather than carried in the
+ * toolbar context: that memo must not rebuild on every recorded edit (`use-plan-edit-history.ts`).
+ */
+function UndoHistoryControl({
+  ctx,
+  api,
+}: {
+  ctx: TsldToolbarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle, openMenu } = useMenuTrigger();
+  const reasonId = useId();
+  const disabled = api.disabled;
+  const { triggerProps: tipTrigger, tooltip: tipNode } = useTooltip({
+    content: `${HISTORY_LABEL} — undo or redo several at once`,
+    purpose: 'description',
+  });
+  const entries = open ? ctx.historyEntries() : null;
+  return (
+    <>
+      <button
+        {...tipTrigger}
+        {...api.itemProps}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={HISTORY_LABEL}
+        aria-disabled={disabled || undefined}
+        aria-busy={ctx.historyBusy || undefined}
+        {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
+        onClick={() => {
+          if (!disabled && !ctx.historyBusy) toggle();
+        }}
+        onKeyDown={(event) => {
+          // APG menu button: the vertical arrows open the menu. Left/right stay the toolbar's.
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          event.preventDefault();
+          if (!disabled && !ctx.historyBusy && !open) openMenu();
+        }}
+        onFocus={(event) => {
+          tipTrigger.onFocus(event);
+          api.itemProps.onFocus?.();
+        }}
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
+      >
+        <ChevronDown aria-hidden="true" className="size-4" />
+        {disabled && api.disabledReason ? (
+          <span id={reasonId} className="sr-only">
+            {api.disabledReason}
+          </span>
+        ) : null}
+        {tipNode}
+      </button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={HISTORY_LABEL}
+        restoreFocusRef={triggerRef}
+      >
+        {entries && entries.undo.length > 0 ? <MenuSection label="Undo" /> : null}
+        {entries?.undo.map((label, index) => (
+          <HistoryMenuRow
+            // Labels repeat (two moves of one bar), so the position is the identity.
+            key={`undo-${index}`}
+            verb="Undo"
+            label={label}
+            steps={index + 1}
+            api={api}
+            onSelect={() => ctx.undoTo(index + 1, label)}
+          />
+        ))}
+        {entries && entries.redo.length > 0 ? (
+          <MenuSection label="Redo" divider={entries.undo.length > 0} />
+        ) : null}
+        {entries?.redo.map((label, index) => (
+          <HistoryMenuRow
+            key={`redo-${index}`}
+            verb="Redo"
+            label={label}
+            steps={index + 1}
+            api={api}
+            onSelect={() => ctx.redoTo(index + 1, label)}
+          />
+        ))}
+      </Menu>
+    </>
   );
 }
 
@@ -2150,11 +2316,23 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       render: (ctx, api) => <UndoRedoControl direction="undo" ctx={ctx} api={api} />,
     },
     {
-      id: 'redo',
+      id: 'undo-history',
       group: 'tools',
       row: 'strip',
       tier: 2,
       order: 9,
+      label: HISTORY_LABEL,
+      penGated: true,
+      isEnabled: (ctx) => ctx.canUndo || ctx.canRedo,
+      disabledReason: (ctx) => (ctx.canUndo || ctx.canRedo ? undefined : 'Nothing to undo or redo'),
+      render: (ctx, api) => <UndoHistoryControl ctx={ctx} api={api} />,
+    },
+    {
+      id: 'redo',
+      group: 'tools',
+      row: 'strip',
+      tier: 2,
+      order: 10,
       label: 'Redo',
       penGated: true,
       isEnabled: (ctx) => ctx.canRedo,

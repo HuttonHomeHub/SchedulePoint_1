@@ -556,6 +556,10 @@ export function useTsldToolbarContext({
       redoLabel: model.undoRedo.redoLabel,
       undo: model.undoRedo.undo,
       redo: model.undoRedo.redo,
+      historyEntries: model.undoRedo.entries,
+      undoTo: model.undoRedo.undoTo,
+      redoTo: model.undoRedo.redoTo,
+      historyBusy: model.undoRedo.busy,
 
       // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
       // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
