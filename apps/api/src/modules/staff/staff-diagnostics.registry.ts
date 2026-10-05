@@ -846,12 +846,16 @@ const HISTORY_ENTRIES_LAST_28_DAYS: DiagnosticEntry = {
   // soft-delete: any-state — an entry lives exactly as long as its activity row, so one on a
   // soft-deleted activity still occupies the table, which is what volume asks about.
   numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT h.organization_id) AS affected_organizations
-    FROM activity_history_entries h
-    JOIN activities a ON a.id = h.activity_id
-    WHERE h.first_recorded_at >= now() - interval '28 days'
+    SELECT sum(g.n)::bigint AS affected,
+           count(DISTINCT g.plan_id) AS affected_plans,
+           count(DISTINCT g.organization_id) AS affected_organizations
+    FROM (
+      SELECT a.plan_id, h.organization_id, count(*) AS n
+      FROM activity_history_entries h
+      JOIN activities a ON a.id = h.activity_id
+      WHERE h.first_recorded_at >= now() - interval '28 days'
+      GROUP BY a.plan_id, h.organization_id
+    ) g
   `,
 };
 
@@ -863,13 +867,17 @@ const HISTORY_ENTRIES_LINKS_AND_RESOURCES: DiagnosticEntry = {
   denominator: HISTORY_WINDOW_DENOMINATOR,
   // soft-delete: any-state — as H-1: the join reaches `plan_id` only, and volume is the question.
   numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT h.organization_id) AS affected_organizations
-    FROM activity_history_entries h
-    JOIN activities a ON a.id = h.activity_id
-    WHERE h.first_recorded_at >= now() - interval '28 days'
-      AND h.scope IN ('LOGIC', 'RESOURCES')
+    SELECT sum(g.n)::bigint AS affected,
+           count(DISTINCT g.plan_id) AS affected_plans,
+           count(DISTINCT g.organization_id) AS affected_organizations
+    FROM (
+      SELECT a.plan_id, h.organization_id, count(*) AS n
+      FROM activity_history_entries h
+      JOIN activities a ON a.id = h.activity_id
+      WHERE h.first_recorded_at >= now() - interval '28 days'
+        AND h.scope IN ('LOGIC', 'RESOURCES')
+      GROUP BY a.plan_id, h.organization_id
+    ) g
   `,
 };
 
@@ -884,12 +892,16 @@ const HISTORY_ENTRIES_OVER_512_BYTES: DiagnosticEntry = {
   `,
   // soft-delete: any-state — as H-1: the join reaches `plan_id` only, and volume is the question.
   numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT h.organization_id) AS affected_organizations
-    FROM activity_history_entries h
-    JOIN activities a ON a.id = h.activity_id
-    WHERE pg_column_size(h.*) > 512
+    SELECT sum(g.n)::bigint AS affected,
+           count(DISTINCT g.plan_id) AS affected_plans,
+           count(DISTINCT g.organization_id) AS affected_organizations
+    FROM (
+      SELECT a.plan_id, h.organization_id, count(*) AS n
+      FROM activity_history_entries h
+      JOIN activities a ON a.id = h.activity_id
+      WHERE pg_column_size(h.*) > 512
+      GROUP BY a.plan_id, h.organization_id
+    ) g
   `,
 };
 
