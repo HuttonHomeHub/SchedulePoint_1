@@ -11,6 +11,11 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  ASSIGNMENT_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   combineChanges,
@@ -234,6 +239,8 @@ export class ResourceAssignmentService {
           pairs: [{ before: null, after: created }, ...displacedPairs(displaced)],
           duration: activityDurationUpdate,
         });
+        // A new assignment feeds levelling and the driving duration: always an input change.
+        await markScheduleInputsChanged(tx, organization.id, [activity.planId]);
         return created;
       });
       this.logger.info(
@@ -373,6 +380,15 @@ export class ResourceAssignmentService {
           pairs: [{ before, after }, ...displacedPairs(displaced)],
           duration: activityDurationUpdate,
         });
+        // The rate, units, driver flag and join delay are engine inputs; the curve and the costs are
+        // not. A derived duration or a displaced driver is a change the patch does not show.
+        if (
+          activityDurationUpdate !== null ||
+          displaced.length > 0 ||
+          changedInputs(ASSIGNMENT_FIELD_CLASS, before, patch)
+        ) {
+          await markScheduleInputsChanged(tx, organization.id, [activity.planId]);
+        }
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) throw this.duplicateAssignmentError();
@@ -410,6 +426,7 @@ export class ResourceAssignmentService {
           duration: null,
         });
       }
+      await markScheduleInputsChanged(tx, organization.id, [activity.planId]);
     });
     this.logger.info(
       { organizationId: organization.id, assignmentId, userId: principal.userId },

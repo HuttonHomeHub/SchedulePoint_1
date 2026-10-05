@@ -1,4 +1,10 @@
-import { Prisma, type Activity, type ActivityType, type Plan } from '@prisma/client';
+import {
+  Prisma,
+  type Activity,
+  type ActivityType,
+  type ConstraintType,
+  type Plan,
+} from '@prisma/client';
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,6 +62,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     scheduleCriticalFloatThresholdMinutes: null,
     scheduleTotalFloatMode: null,
     scheduleMakeOpenEndsCritical: null,
+    scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -215,7 +222,20 @@ describe('ActivitiesService', () => {
 
   /** The namespaces passed to `pg_advisory_xact_lock`, in acquisition order. */
   const locksTaken = (): string[] =>
-    txExecuteRaw.mock.calls.map((call) => String(call[1])).filter((ns) => ns !== 'undefined');
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('pg_advisory_xact_lock'))
+      .map((call) => String(call[1]))
+      .filter((ns) => ns !== 'undefined');
+
+  /**
+   * The plan-id lists the scheduling-input stamp was called with (`markScheduleInputsChanged`: its
+   * parameters are the organisation, then the ids). Empty means the write left the plan reading as
+   * calculated.
+   */
+  const stampedPlanIds = (): string[][] =>
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
+      .map((call) => call[2] as string[]);
 
   beforeEach(() => {
     organizations = {
@@ -445,6 +465,12 @@ describe('ActivitiesService', () => {
       expect(locksTaken()).toEqual(['dependency-plan', 'calendar-assign']);
     });
 
+    it('flags the plan as edited: a new activity is always a scheduling-input change', async () => {
+      activities.create.mockResolvedValue(activity());
+      await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'A' });
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
+    });
+
     it('defaults type to TASK and duration to 1 when omitted', async () => {
       activities.create.mockResolvedValue(activity());
       await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'A' });
@@ -664,6 +690,28 @@ describe('ActivitiesService', () => {
   });
 
   describe('update', () => {
+    // The overview's "edited since it was calculated" is a scheduling-input claim: a lane move is
+    // the original false positive, a duration the case it must keep.
+    it('does not flag the plan for a lane-only edit, a rename or a cost field', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        laneIndex: 3,
+        name: 'Renamed',
+        budgetedExpense: 100,
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
+    it('flags the plan for a duration edit, once, naming the activity’s plan', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+        durationMinutes: 2880,
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
+    });
+
     it('clears code/description on an empty string and constraint on null', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
       activities.updateIfVersionMatches.mockResolvedValue({});
@@ -1538,6 +1586,12 @@ describe('ActivitiesService', () => {
   });
 
   describe('remove', () => {
+    it('flags the plan: a deleted activity is a change the old read could not see', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.remove(principalWith(ALL), 'acme', ACTIVITY_ID);
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
+    });
+
     it('soft-deletes an existing activity', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
       await service.remove(principalWith(ALL), 'acme', ACTIVITY_ID);
@@ -1581,13 +1635,17 @@ describe('ActivitiesService', () => {
    * all-or-nothing, the shared batch id, the single audit row — is `activity-batch-ops.e2e-spec.ts`.
    */
   describe('updatePlacements (batch placement write)', () => {
-    const row = (id: string, version = 1) => ({
+    const row = (
+      id: string,
+      version = 1,
+      placed: { constraintType?: ConstraintType; constraintDate?: string; laneIndex?: number } = {},
+    ) => ({
       id,
       version,
-      constraintType: null,
-      constraintDate: null,
+      constraintType: placed.constraintType ?? null,
+      constraintDate: placed.constraintDate ?? (null as string | null),
       visualStart: null,
-      laneIndex: null,
+      laneIndex: placed.laneIndex ?? (null as number | null),
     });
     const call = (placements: ReturnType<typeof row>[]) =>
       service.updatePlacements(principalWith(ALL), 'acme', PLAN_ID, { placements });
@@ -1603,6 +1661,38 @@ describe('ActivitiesService', () => {
         USER_ID,
         expect.anything(),
       );
+    });
+
+    it('does not flag the plan for a lane-only batch (Arrange, the overlap resolve)', async () => {
+      txActivityFindMany.mockResolvedValue([
+        {
+          id: 'a',
+          type: 'TASK',
+          constraintType: null,
+          constraintDate: null,
+          visualStart: null,
+          laneIndex: 0,
+        },
+      ]);
+      activities.updatePlacements.mockResolvedValue(1);
+      await call([row('a', 1, { laneIndex: 4 })]);
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
+    it('flags the plan when a placement moves a constraint', async () => {
+      txActivityFindMany.mockResolvedValue([
+        {
+          id: 'a',
+          type: 'TASK',
+          constraintType: null,
+          constraintDate: null,
+          visualStart: null,
+          laneIndex: 0,
+        },
+      ]);
+      activities.updatePlacements.mockResolvedValue(1);
+      await call([row('a', 1, { constraintType: 'SNET', constraintDate: '2026-02-01' })]);
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
     });
 
     it('422s a duplicate id without writing (DUPLICATE_PLACEMENT_ID)', async () => {

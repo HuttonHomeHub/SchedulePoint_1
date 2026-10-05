@@ -258,6 +258,302 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     });
   });
 
+  /**
+   * "Edited since it was calculated" means a SCHEDULING INPUT changed — the overview's two sections
+   * against a real database, because the signal rests on which write paths stamp
+   * `plans.schedule_inputs_changed_at` and that is a property of SQL, not of a mocked repository.
+   *
+   * Every case recalculates first and asserts BOTH sections, since the two reads were separate
+   * queries that once disagreed by construction. A lane move is the case the defect was reported
+   * on; the duration, deletion and link cases keep the flag from being hard-wired to `false`.
+   */
+  describe('freshness is about scheduling inputs', () => {
+    const API = '/api/v1/organizations/acme';
+    type Json = Record<string, unknown>;
+    type Versioned = { id: string; version: number };
+
+    interface Setup {
+      actor: Actor;
+      planId: string;
+      a: Versioned;
+      b: Versioned;
+    }
+
+    const recalculate = (actor: Actor, planId: string) =>
+      actor.agent.post(`${API}/plans/${planId}/schedule/recalculate`).send({}).expect(200);
+
+    const takePen = (actor: Actor, planId: string) =>
+      actor.agent.post(`${API}/plans/${planId}/edit-lock`).send({}).expect(200);
+
+    async function addActivity(actor: Actor, planId: string, name: string, over: Json = {}) {
+      const res = await actor.agent
+        .post(`${API}/plans/${planId}/activities`)
+        .send({ name, durationDays: 5, ...over })
+        .expect(201);
+      return res.body.data as Versioned;
+    }
+
+    /** What both sections say about one plan. */
+    async function flags(actor: Actor, planId: string) {
+      const body = await fetchOverview(actor);
+      return {
+        recent: body.recentlyChanged.find((r) => r.planId === planId),
+        standing: body.planStanding?.find((r) => r.planId === planId),
+      };
+    }
+
+    async function expectFlag(setup: Pick<Setup, 'actor' | 'planId'>, expected: boolean) {
+      const { recent, standing } = await flags(setup.actor, setup.planId);
+      expect(recent?.editedSinceCalculated, 'Recently changed').toBe(expected);
+      expect(standing?.editedSinceCalculated, 'Where the work stands').toBe(expected);
+    }
+
+    /** A calculated plan: two linked activities, the pen held, nothing edited since. */
+    async function calculated(): Promise<Setup> {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Calculated');
+      await takePen(actor, planId);
+      const a = await addActivity(actor, planId, 'Excavate');
+      const b = await addActivity(actor, planId, 'Pour slab');
+      await actor.agent
+        .post(`${API}/plans/${planId}/dependencies`)
+        .send({ predecessorId: a.id, successorId: b.id })
+        .expect(201);
+      await recalculate(actor, planId);
+      const setup = { actor, planId, a, b };
+      await expectFlag(setup, false);
+      return setup;
+    }
+
+    /** An edit, then the flag it must raise; and a recalculation clears whatever it raised. */
+    async function expectRaisesThenClears(setup: Setup, edit: () => Promise<unknown>) {
+      await edit();
+      await expectFlag(setup, true);
+      await recalculate(setup.actor, setup.planId);
+      await expectFlag(setup, false);
+    }
+
+    const planVersion = async (setup: Setup) =>
+      (await setup.actor.agent.get(`${API}/plans/${setup.planId}`).expect(200)).body.data
+        .version as number;
+
+    it('does not flag a lane move, and the move still orders and credits Recently changed', async () => {
+      const setup = await calculated();
+      const before = (await flags(setup.actor, setup.planId)).recent;
+
+      await setup.actor.agent
+        .patch(`${API}/activities/${setup.a.id}`)
+        .send({ laneIndex: 4, version: setup.a.version })
+        .expect(200);
+
+      await expectFlag(setup, false);
+      const after = (await flags(setup.actor, setup.planId)).recent;
+      // The write is still a write: `changedAt` is "was any row written" and moves with it, which is
+      // what keeps the plan at the top of the list and credits the mover.
+      expect(new Date(after?.changedAt ?? 0).getTime()).toBeGreaterThan(
+        new Date(before?.changedAt ?? 0).getTime(),
+      );
+      expect(after?.changedBy).toEqual({ kind: 'MEMBER', name: 'admin' });
+    });
+
+    it('does not flag the batch lane move, or a placements batch that only changes lanes', async () => {
+      const setup = await calculated();
+
+      const moved = await setup.actor.agent
+        .patch(`${API}/plans/${setup.planId}/activities/positions`)
+        .send({
+          positions: [
+            { id: setup.a.id, laneIndex: 2, version: setup.a.version },
+            { id: setup.b.id, laneIndex: 3, version: setup.b.version },
+          ],
+        })
+        .expect(200);
+      await expectFlag(setup, false);
+
+      await setup.actor.agent
+        .patch(`${API}/plans/${setup.planId}/activities/placements`)
+        .send({
+          placements: (moved.body.data as Versioned[]).map((row, i) => ({
+            id: row.id,
+            version: row.version,
+            constraintType: null,
+            constraintDate: null,
+            visualStart: null,
+            laneIndex: 6 + i,
+          })),
+        })
+        .expect(200);
+      await expectFlag(setup, false);
+    });
+
+    it('flags a placements batch that moves a constraint', async () => {
+      const setup = await calculated();
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent
+          .patch(`${API}/plans/${setup.planId}/activities/placements`)
+          .send({
+            placements: [
+              {
+                id: setup.a.id,
+                version: setup.a.version,
+                constraintType: 'SNET',
+                constraintDate: '2026-02-02',
+                visualStart: null,
+                laneIndex: null,
+              },
+            ],
+          })
+          .expect(200),
+      );
+    });
+
+    it('flags a duration edit and clears on a recalculation', async () => {
+      const setup = await calculated();
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent
+          .patch(`${API}/activities/${setup.a.id}`)
+          .send({ durationDays: 9, version: setup.a.version })
+          .expect(200),
+      );
+    });
+
+    it('does not flag a rename, a cost edit, a steps replace, or a plan rename and currency', async () => {
+      const setup = await calculated();
+
+      const renamed = await setup.actor.agent
+        .patch(`${API}/activities/${setup.a.id}`)
+        .send({ name: 'Excavate and trim', budgetedExpense: 50000, version: setup.a.version })
+        .expect(200);
+      await expectFlag(setup, false);
+
+      await setup.actor.agent
+        .put(`${API}/activities/${setup.a.id}/steps`)
+        .send({
+          version: renamed.body.data.version,
+          steps: [{ name: 'Rebar', weight: 1, percentComplete: 0 }],
+        })
+        .expect(200);
+      await expectFlag(setup, false);
+
+      // The version is read first: a request built around an awaited read would share the
+      // supertest server with it and find it closed.
+      const version = await planVersion(setup);
+      await setup.actor.agent
+        .patch(`${API}/plans/${setup.planId}`)
+        .send({ name: 'Calculated, renamed', currencyCode: 'EUR', version })
+        .expect(200);
+      await expectFlag(setup, false);
+    });
+
+    it('does not flag an assignment curve edit, and flags a rate edit', async () => {
+      const setup = await calculated();
+      const crane = await setup.actor.agent
+        .post(`${API}/resources`)
+        .send({ name: 'Tower crane', kind: 'LABOUR' })
+        .expect(201);
+      // The assignment itself is an input change; the rest starts from a fresh calculation.
+      const assignment = await setup.actor.agent
+        .post(`${API}/activities/${setup.a.id}/assignments`)
+        .send({ resourceId: crane.body.data.id, budgetedUnits: 40 })
+        .expect(201);
+      await expectFlag(setup, true);
+      await recalculate(setup.actor, setup.planId);
+      await expectFlag(setup, false);
+
+      const row = assignment.body.data as Versioned;
+      const curved = await setup.actor.agent
+        .patch(`${API}/assignments/${row.id}`)
+        .send({ curveType: 'FRONT_LOADED', version: row.version })
+        .expect(200);
+      await expectFlag(setup, false);
+
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent
+          .patch(`${API}/assignments/${row.id}`)
+          .send({ unitsPerHour: 2, version: curved.body.data.version })
+          .expect(200),
+      );
+    });
+
+    it('flags an activity deleted after the calculation, which the old read could not see', async () => {
+      const setup = await calculated();
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent.delete(`${API}/activities/${setup.b.id}`).expect(200),
+      );
+    });
+
+    it('flags a dependency created, updated and deleted, each from a fresh calculation', async () => {
+      const setup = await calculated();
+      const c = await addActivity(setup.actor, setup.planId, 'Backfill');
+      await recalculate(setup.actor, setup.planId);
+
+      let created: Versioned | undefined;
+      await expectRaisesThenClears(setup, async () => {
+        const res = await setup.actor.agent
+          .post(`${API}/plans/${setup.planId}/dependencies`)
+          .send({ predecessorId: setup.b.id, successorId: c.id })
+          .expect(201);
+        created = res.body.data as Versioned;
+      });
+
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent
+          .patch(`${API}/dependencies/${created!.id}`)
+          .send({ lagDays: 2, version: created!.version })
+          .expect(200),
+      );
+
+      await expectRaisesThenClears(setup, () =>
+        setup.actor.agent.delete(`${API}/dependencies/${created!.id}`).expect(204),
+      );
+    });
+
+    it('flags the data date and the critical-path definition, which are plan inputs', async () => {
+      const setup = await calculated();
+
+      const patchPlan = async (body: Json) => {
+        const version = await planVersion(setup);
+        return setup.actor.agent
+          .patch(`${API}/plans/${setup.planId}`)
+          .send({ ...body, version })
+          .expect(200);
+      };
+      await expectRaisesThenClears(setup, () => patchPlan({ plannedStart: '2026-01-05' }));
+      await expectRaisesThenClears(setup, () =>
+        patchPlan({ criticalPathDefinition: 'LONGEST_PATH' }),
+      );
+    });
+
+    it('flags both plans when a cross-plan link joins them', async () => {
+      const setup = await calculated();
+      const client = await setup.actor.agent
+        .post(`${API}/clients`)
+        .send({ name: 'Second client' })
+        .expect(201);
+      const project = await setup.actor.agent
+        .post(`${API}/clients/${client.body.data.id}/projects`)
+        .send({ name: 'Second project' })
+        .expect(201);
+      const other = await setup.actor.agent
+        .post(`${API}/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Downstream', plannedStart: '2026-01-01' })
+        .expect(201);
+      const otherId = other.body.data.id as string;
+      await takePen(setup.actor, otherId);
+      const downstream = await addActivity(setup.actor, otherId, 'Fit out');
+      await recalculate(setup.actor, otherId);
+      await expectFlag({ actor: setup.actor, planId: otherId }, false);
+
+      await setup.actor.agent
+        .post(`${API}/cross-plan-dependencies`)
+        .send({ predecessorActivityId: setup.a.id, successorActivityId: downstream.id })
+        .expect(201);
+
+      await expectFlag(setup, true);
+      await expectFlag({ actor: setup.actor, planId: otherId }, true);
+    });
+  });
+
   describe('the ordering key', () => {
     it('ranks a plan by its newest activity, not by plans.updated_at', async () => {
       const { actor } = await adminWithOrg();

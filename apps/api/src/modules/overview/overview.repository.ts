@@ -27,17 +27,17 @@ export interface RecentlyChangedRow {
    */
   scheduleComputedAt: Date | null;
   /**
-   * Whether the plan has been touched since that computation — so the dates on it are the engine's
-   * answer to an older question.
+   * Whether a SCHEDULING INPUT of the plan has changed since that computation — so the dates on it
+   * are the engine's answer to an older question.
    *
-   * **Derived here in TypeScript rather than as a fourth SQL column, and that is deliberate.** The
-   * comparison is `changedAt > scheduleComputedAt`, and `changedAt` is the `GREATEST(...)` the
-   * query already computes. PostgreSQL cannot reference a select-list alias from the same select
-   * list, so an SQL form would have to REPEAT that three-term expression — two copies of the rule
-   * for what "changed" means, drifting invisibly the first time one is edited (the ADR-0065
-   * `routeOrthogonal` argument). One expression, compared once.
+   * It compares `plans.schedule_inputs_changed_at`, which only a write the engine reads stamps
+   * (`markScheduleInputsChanged`), and NOT `changedAt`: `changedAt` answers "was any row written" and
+   * orders this list, and a lane move or a rename writes rows without being able to move a date.
+   * Deleting an activity or a link stamps it too, which the old `changedAt` comparison could not see
+   * because its laterals filtered deleted rows. Calendar and resource-limit edits do not stamp it
+   * (`docs/TECH_DEBT.md`).
    *
-   * It is a SERVER fact all the same: the client is told the answer, never the inputs plus the
+   * It is a SERVER fact: the client is told the answer, never the inputs plus the
    * rule, because "has this been edited since it was calculated" is a scheduling question and
    * `apps/web` has no business holding a second opinion about it.
    */
@@ -154,6 +154,7 @@ export class OverviewRepository {
         status: PlanStatus;
         changed_at: Date;
         schedule_computed_at: Date | null;
+        schedule_inputs_changed_at: Date;
         changed_by: string | null;
       }>
     >`
@@ -169,6 +170,7 @@ export class OverviewRepository {
                COALESCE(d.at, 'epoch'::timestamptz)
              )               AS changed_at,
              p.schedule_computed_at AS schedule_computed_at,
+             p.schedule_inputs_changed_at AS schedule_inputs_changed_at,
              -- Attribution follows whichever source won. Ties resolve plan → activity →
              -- dependency, which is arbitrary but total: a tie means the same instant,
              -- so no ordering of the three is more correct than another, and picking one
@@ -215,9 +217,13 @@ export class OverviewRepository {
       scheduleComputedAt: row.schedule_computed_at,
       // A plan that has never been calculated is NOT "edited since" — there is no since. It is its
       // own state, and the row says so in its own words rather than through this flag.
+      //
+      // The comparison is with the plan's scheduling-input stamp, NOT `changed_at`: `changed_at`
+      // answers "was any row written" (it orders this list), and a lane move or a rename writes rows
+      // the engine never reads. The stamp is written only by an edit that could move a date.
       editedSinceCalculated:
         row.schedule_computed_at !== null &&
-        row.changed_at.getTime() > row.schedule_computed_at.getTime(),
+        row.schedule_inputs_changed_at.getTime() > row.schedule_computed_at.getTime(),
       changedByUserId: row.changed_by,
     }));
   }
@@ -278,7 +284,7 @@ export class OverviewRepository {
         client_name: string;
         status: PlanStatus;
         schedule_computed_at: Date | null;
-        last_touched_at: Date;
+        schedule_inputs_changed_at: Date;
         project_finish: string | null;
         activity_count: bigint;
         baseline_finish: string | null;
@@ -299,13 +305,9 @@ export class OverviewRepository {
              p.status               AS status,
              p.schedule_computed_at AS schedule_computed_at,
              p.calendar_id          AS plan_calendar_id,
-             -- The same three-source "changed" rule the recently-changed read uses, so the two
-             -- sections cannot disagree about whether a plan has been touched.
-             GREATEST(
-               p.updated_at,
-               COALESCE(a.last_activity_at, 'epoch'::timestamptz),
-               COALESCE(d.at, 'epoch'::timestamptz)
-             )                      AS last_touched_at,
+             -- The same column the recently-changed read compares, so the two sections cannot
+             -- disagree about whether a plan has been edited since it was calculated.
+             p.schedule_inputs_changed_at AS schedule_inputs_changed_at,
              to_char(a.project_finish, 'YYYY-MM-DD') AS project_finish,
              -- The live side of the baseline comparison, on the BASELINE's basis: placed against a
              -- placement-recording baseline, network against one that froze only the network.
@@ -329,7 +331,6 @@ export class OverviewRepository {
           SELECT COUNT(*)                                        AS activity_count,
                  MAX(${placedFinishSql('act')})                  AS project_finish,
                  MAX(act.early_finish)                           AS network_finish,
-                 MAX(act.updated_at)                             AS last_activity_at,
                  COUNT(*) FILTER (WHERE act.constraint_violated)  AS constraint_violated_count,
                  COUNT(*) FILTER (WHERE act.loe_no_span)          AS loe_no_span_count,
                  COUNT(*) FILTER (WHERE act.resource_driver_missing)
@@ -338,13 +339,6 @@ export class OverviewRepository {
             FROM activities act
            WHERE act.plan_id = p.id AND act.deleted_at IS NULL
         ) a ON true
-        LEFT JOIN LATERAL (
-          SELECT dep.updated_at AS at
-            FROM dependencies dep
-           WHERE dep.plan_id = p.id AND dep.deleted_at IS NULL
-           ORDER BY dep.updated_at DESC
-           LIMIT 1
-        ) d ON true
         -- At most one active baseline per plan is guaranteed by uq_baselines_plan_active; the
         -- LIMIT is belt-and-braces so a future relaxation degrades to "one of them" rather than to
         -- duplicate plan rows silently doubling the section.
@@ -377,7 +371,7 @@ export class OverviewRepository {
       scheduleComputedAt: row.schedule_computed_at,
       editedSinceCalculated:
         row.schedule_computed_at !== null &&
-        row.last_touched_at.getTime() > row.schedule_computed_at.getTime(),
+        row.schedule_inputs_changed_at.getTime() > row.schedule_computed_at.getTime(),
       projectFinish: row.project_finish,
       activityCount: Number(row.activity_count),
       baselineFinish: row.baseline_finish,

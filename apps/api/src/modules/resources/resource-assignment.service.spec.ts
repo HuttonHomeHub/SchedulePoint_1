@@ -22,6 +22,7 @@ import type { ResourceRepository } from './resource.repository';
 
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
+const PLAN_ID = 'plan-1';
 const ACTIVITY_ID = '00000000-0000-0000-0000-0000000000ac';
 const RESOURCE_ID = '00000000-0000-0000-0000-0000000000re';
 
@@ -29,6 +30,7 @@ function activity(overrides: Partial<Activity> = {}): Partial<Activity> {
   return {
     id: ACTIVITY_ID,
     organizationId: ORG_ID,
+    planId: PLAN_ID,
     deletedAt: null,
     // Duration-type triad inputs (ADR-0040): default type, 10 working days (14 400 min), version 1.
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
@@ -122,6 +124,12 @@ describe('ResourceAssignmentService', () => {
   let txActivityUpdateMany: ReturnType<typeof vi.fn>;
   let editLock: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: ResourceAssignmentService;
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // The plan ids the scheduling-input stamp named (its parameters: the organisation, then the ids).
+  const stampedPlanIds = (): string[][] =>
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
+      .map((call) => call[2] as string[]);
 
   beforeEach(() => {
     organizations = {
@@ -137,12 +145,13 @@ describe('ResourceAssignmentService', () => {
       softDelete: vi.fn().mockResolvedValue(1),
     };
     txActivityUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    txExecuteRaw = vi.fn();
     prisma = {
       // The tx handle exposes $executeRaw (the resource advisory lock create takes) and the
       // `activity` model (the ADR-0040 units-driven derived-duration write).
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
-          $executeRaw: vi.fn(),
+          $executeRaw: txExecuteRaw,
           activity: { updateMany: txActivityUpdateMany },
           // The history reads the assignment inside the transaction (ADR-0174 D4); the stub
           // recorder below ignores what they return.
@@ -364,6 +373,22 @@ describe('ResourceAssignmentService', () => {
   });
 
   describe('update', () => {
+    it('flags the plan when an engine input (the rate) changes', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      await service.update(principalWith(ALL), 'acme', 'asg-1', { unitsPerHour: 2, version: 1 });
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
+    });
+
+    it('does not flag the plan for a curve or cost edit', async () => {
+      assignments.findActiveByIdInOrg.mockResolvedValue(assignment());
+      await service.update(principalWith(ALL), 'acme', 'asg-1', {
+        curveType: 'FRONT_LOADED',
+        actualCost: 500,
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
     it('404s when the assignment is missing', async () => {
       assignments.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(

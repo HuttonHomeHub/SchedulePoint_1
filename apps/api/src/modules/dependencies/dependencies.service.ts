@@ -12,6 +12,11 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  DEPENDENCY_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
@@ -318,7 +323,6 @@ export class DependenciesService {
             after: created,
           }),
         });
-
         /*
          * A create that earns a row — the one exception to "a create is already durably
          * attributed" (spec Test 1), because a link passes Test 2 instead: it re-dates everything
@@ -349,6 +353,9 @@ export class DependenciesService {
           },
           tx,
         );
+        // A new link is new logic: always a scheduling-input change. After every child write, so
+        // the plan row is locked last (the recalculation's order).
+        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
         return created;
       });
       this.logger.info(
@@ -445,6 +452,10 @@ export class DependenciesService {
             after,
           }),
         });
+        // Every mutable field of a link is an input, but a resave of the values it holds is not.
+        if (changedInputs(DEPENDENCY_FIELD_CLASS, before, patch)) {
+          await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+        }
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -519,6 +530,11 @@ export class DependenciesService {
         },
         tx,
       );
+      // A deleted link is changed logic, which the old read could not see (it filtered deleted rows).
+      // Only the transaction that made the transition stamps, like its history entry.
+      if (cascade.counts.dependencies === 1) {
+        await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+      }
     });
     this.logger.info(
       { organizationId: organization.id, dependencyId, userId: principal.userId },

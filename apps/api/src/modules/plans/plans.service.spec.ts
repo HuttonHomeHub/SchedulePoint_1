@@ -62,6 +62,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     scheduleCriticalFloatThresholdMinutes: null,
     scheduleTotalFloatMode: null,
     scheduleMakeOpenEndsCritical: null,
+    scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -110,6 +111,12 @@ describe('PlansService', () => {
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // The plan ids the scheduling-input stamp named (its parameters: the organisation, then the ids).
+  const stampedPlanIds = (): string[][] =>
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
+      .map((call) => call[2] as string[]);
   let audit: { record: ReturnType<typeof vi.fn> };
   let service: PlansService;
 
@@ -136,8 +143,9 @@ describe('PlansService', () => {
     };
     // The tx handle exposes $executeRaw (the calendar advisory lock) for the
     // calendar-assignment path; repo methods are mocked, so they ignore the tx arg.
+    txExecuteRaw = vi.fn();
     prisma = {
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: txExecuteRaw })),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     audit = { record: vi.fn().mockResolvedValue(undefined) };
@@ -238,6 +246,30 @@ describe('PlansService', () => {
   });
 
   describe('update', () => {
+    it('flags the plan as edited when a scheduling option changes', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        progressRecalcMode: 'PROGRESS_OVERRIDE',
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([['pl1']]);
+    });
+
+    it('does not flag the plan for a rename, a currency change, or resending the values it holds', async () => {
+      const held = plan();
+      plans.findActiveByIdInOrg.mockResolvedValue(held);
+      plans.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', 'pl1', {
+        name: 'Renamed',
+        currencyCode: 'EUR',
+        plannedStart: held.plannedStart.toISOString().slice(0, 10),
+        progressRecalcMode: held.progressRecalcMode,
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
     it('moves plannedStart to a new calendar day (mandatory: never cleared, ADR-0033 M1)', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(plan());
       plans.updateIfVersionMatches.mockResolvedValue(1);

@@ -55,6 +55,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     scheduleCriticalFloatThresholdMinutes: null,
     scheduleTotalFloatMode: null,
     scheduleMakeOpenEndsCritical: null,
+    scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -204,6 +205,13 @@ describe('DependenciesService', () => {
   let calendars: { findHoursPerDayMinutes: ReturnType<typeof vi.fn> };
   let lifecycle: { cascadeSoftDelete: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  // The scheduling-input stamp is the only `$executeRaw` here; the plan ids it names are its second
+  // parameter (the first is the organisation).
+  let txExecuteRaw: ReturnType<typeof vi.fn>;
+  const stampedPlanIds = (): string[][] =>
+    txExecuteRaw.mock.calls
+      .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
+      .map((call) => call[2] as string[]);
   let service: DependenciesService;
 
   beforeEach(() => {
@@ -233,9 +241,11 @@ describe('DependenciesService', () => {
     lifecycle = { cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }) };
     // The history reads the link inside the update's transaction (ADR-0174 D4); the stub recorder
     // below ignores what they return, so a plain dependency row will do.
+    txExecuteRaw = vi.fn().mockResolvedValue(1);
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
+          $executeRaw: txExecuteRaw,
           activityDependency: {
             findFirst: vi.fn().mockResolvedValue(dependency()),
             findFirstOrThrow: vi.fn().mockResolvedValue(dependency()),
@@ -276,6 +286,7 @@ describe('DependenciesService', () => {
         successorId: SUCC_ID,
       });
       expect(result.id).toBe(DEP_ID);
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
       expect(deps.create).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationId: ORG_ID,
@@ -469,12 +480,32 @@ describe('DependenciesService', () => {
         expect.anything(),
         expect.anything(), // the transaction client the history is recorded in (ADR-0174)
       );
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
+    });
+
+    it('does not stamp the plan when the resent values are the ones the link already holds', async () => {
+      const held = dependency();
+      deps.findActiveByIdInOrg.mockResolvedValue(held);
+      deps.updateIfVersionMatches.mockResolvedValue(1);
+      await service.update(principalWith(ALL), 'acme', DEP_ID, {
+        lagCalendar: held.lagCalendar,
+        version: 1,
+      });
+      expect(stampedPlanIds()).toEqual([]);
     });
   });
 
   describe('remove', () => {
+    it('stamps nothing when a concurrent delete already took the dependency', async () => {
+      deps.findActiveByIdInOrg.mockResolvedValue(dependency());
+      lifecycle.cascadeSoftDelete.mockResolvedValue({ batchId: 'b1', counts: { dependencies: 0 } });
+      await service.remove(principalWith(ALL), 'acme', DEP_ID);
+      expect(stampedPlanIds()).toEqual([]);
+    });
+
     it('soft-deletes an existing dependency via the lifecycle', async () => {
       deps.findActiveByIdInOrg.mockResolvedValue(dependency());
+      lifecycle.cascadeSoftDelete.mockResolvedValue({ batchId: 'b1', counts: { dependencies: 1 } });
       await service.remove(principalWith(ALL), 'acme', DEP_ID);
       expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledWith(
         expect.anything(),
@@ -482,6 +513,7 @@ describe('DependenciesService', () => {
         DEP_ID,
         USER_ID,
       );
+      expect(stampedPlanIds()).toEqual([[PLAN_ID]]);
     });
 
     it('404s (and does not delete) when the dependency is missing', async () => {

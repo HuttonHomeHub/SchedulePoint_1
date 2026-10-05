@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 35
-> models across 73 committed migrations — is the single source of truth for the data model.
+> models across 74 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -363,6 +363,39 @@ can compare the plan on its own logic vs. gated by its neighbours (scenario S09)
 `make_open_ends_critical` / `level_resources` it is read with the plan, never filtered
 across plans (so unindexed), and additive with a constant `DEFAULT` (no data migration)
 — default `false` is behaviour-preserving.
+
+### Plan: "edited since it was calculated" (`schedule_inputs_changed_at`)
+
+`plans.schedule_inputs_changed_at` (`20261004120000_plan_schedule_inputs_changed_at`) is the
+instant of the latest write that **may** have changed one of the plan's scheduling inputs, and
+`schedule_inputs_changed_at > schedule_computed_at` is the whole of the overview's
+`editedSinceCalculated`. It replaced `GREATEST(plans.updated_at, latest activity updated_at,
+latest dependency updated_at)`, which a lane move, Arrange, a rename or a cost edit all advanced
+although the engine reads none of them.
+
+- **An upper bound, never a claim of change.** Writers stamp `GREATEST(column, clock_timestamp())`
+  with the database clock, in the last statement of the edit's transaction (`markScheduleInputsChanged`).
+  `schedule_computed_at` takes `now()`, the transaction's start; an edit stamped with `now()` that began
+  before a recalculation and committed after it would read as already calculated, so the edit uses the
+  wall clock. The race that remains runs both ways: an edit that stamps before a recalculation starts
+  and commits after the recalculation's read is missed (an edit that does not take the plan advisory
+  lock), and a recalculation queued behind a lock-taking edit leaves a spurious flag until the next
+  recalculation (`docs/TECH_DEBT.md` #449). Over-reporting is the safe direction; under-reporting is
+  the defect.
+- **Not `updated_at`, and not engine-owned.** Stamped by a raw `UPDATE plans` that leaves
+  `version`/`updated_at`/`updated_by` alone (the `stampScheduleComputedAt` shape), so an activity
+  edit cannot 409 a plan-settings save; never accepted from a DTO; never written by the
+  recalculation; never written by a layout-only write. `updated_at` keeps its meaning and still
+  orders "Recently changed". Layout writes must not touch `schedule_computed_at` either: cross-plan
+  staleness compares it between plans.
+- **Which writes are scheduling inputs** is decided once, in code, against what the engine loads
+  (`ScheduleRepository.loadActivities` and its sibling loaders) — not here, so this paragraph
+  cannot drift from it.
+- **Backfilled, which is legal because it is a bound.** Existing rows took the old rule's instant,
+  widened to soft-deleted activities and dependencies (a deletion is an input change the old rule
+  could not see). No plan went from "edited since" to not; a plan with a deletion after its last
+  calculation went the other way, correctly.
+- Unindexed (read with its own row) and unchecked; measured in the migration.
 
 ### Activity: the schedule leaf
 

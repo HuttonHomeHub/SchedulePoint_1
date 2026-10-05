@@ -27,6 +27,12 @@ import {
   HierarchyLifecycleService,
   type KnockOn,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
+import {
+  ACTIVITY_FIELD_CLASS,
+  ASSIGNMENT_FIELD_CLASS,
+  changedInputs,
+} from '../../common/schedule-inputs/schedule-input-fields';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
 import { combineChanges, noChanges } from '../activity-history/activity-history.pending';
@@ -383,7 +389,7 @@ export class ActivitiesService {
                 tx,
               ),
             ));
-        return this.activities.create(
+        const created = await this.activities.create(
           {
             // Copy the organisation id from the parent plan, never from input.
             organizationId: plan.organizationId,
@@ -451,6 +457,9 @@ export class ActivitiesService {
           },
           tx,
         );
+        // A new activity is a new node in the network: always a scheduling-input change.
+        await markScheduleInputsChanged(tx, organization.id, [plan.id]);
+        return created;
       });
       this.logger.info(
         {
@@ -775,6 +784,19 @@ export class ActivitiesService {
             },
           ],
         });
+        // Last, after every child write: only a value the engine reads counts, so a lane move or a
+        // rename leaves the plan reading as calculated. The triad's rewrite of the driving
+        // assignment is an input change when it moved the units or the rate.
+        if (
+          changedInputs(ACTIVITY_FIELD_CLASS, before, patch) ||
+          (recomputed !== null &&
+            changedInputs(ASSIGNMENT_FIELD_CLASS, recomputed.before, {
+              budgetedUnits: recomputed.after.budgetedUnits.toNumber(),
+              unitsPerHour: recomputed.after.unitsPerHour?.toNumber() ?? null,
+            }))
+        ) {
+          await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+        }
       });
     } catch (error) {
       throw this.mapWriteError(error);
@@ -1034,6 +1056,20 @@ export class ActivitiesService {
           }),
         ),
       });
+      // A lane-only batch (Arrange, the overlap resolve) changes no value the engine reads, so it
+      // must not make the plan read as edited; a time shift in the batch does.
+      if (
+        dto.placements.some((p) =>
+          // Safe: every placement id was proven present in `byId` by the throw above, in this transaction.
+          changedInputs(ACTIVITY_FIELD_CLASS, byId.get(p.id)!, {
+            constraintType: p.constraintType,
+            constraintDate: p.constraintDate === null ? null : parseCalendarDate(p.constraintDate),
+            visualStart: p.visualStart === null ? null : parseCalendarDate(p.visualStart),
+          }),
+        )
+      ) {
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
+      }
     });
 
     this.logger.info(
@@ -1200,6 +1236,11 @@ export class ActivitiesService {
         },
         tx,
       );
+
+      // A re-file that leaves every activity under the parent it had is not an edit.
+      if (rows.some((r) => r.parentId !== (byId.get(r.id)?.parentId ?? null))) {
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
+      }
     });
 
     this.logger.info(
@@ -1405,6 +1446,11 @@ export class ActivitiesService {
           },
         ],
       });
+      // Progress is an engine input (actuals, percent, remaining, resume); `status` and the suspend
+      // date are not, and the report resends all of them, so compare by value.
+      if (changedInputs(ACTIVITY_FIELD_CLASS, before, patch)) {
+        await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
+      }
     });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },
@@ -1480,6 +1526,9 @@ export class ActivitiesService {
         }),
         tx,
       );
+      // A deleted activity (and the links and assignments the cascade took) leaves the network a
+      // different shape from the one last calculated.
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
       return cascade.batchId;
     });
     this.logger.info(
@@ -1606,6 +1655,8 @@ export class ActivitiesService {
           tx,
         );
 
+        await markScheduleInputsChanged(tx, organization.id, [planId]);
+
         return { activityCount, dependencyCount };
       },
       {
@@ -1714,6 +1765,7 @@ export class ActivitiesService {
         },
         tx,
       );
+      await markScheduleInputsChanged(tx, organization.id, [planId]);
     });
 
     this.logger.info(
@@ -1866,6 +1918,8 @@ export class ActivitiesService {
         },
         tx,
       );
+      // The children's WBS parent changed, which the engine's summary rollup reads.
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
 
       // Re-read the promoted rows so the response carries their NEW versions. A client cannot
       // derive them: it did not know which activities were children, and `updateMany` reports only
@@ -1939,6 +1993,7 @@ export class ActivitiesService {
         }),
         tx,
       );
+      await markScheduleInputsChanged(tx, organization.id, [existing.planId]);
     });
     this.logger.info(
       { organizationId: organization.id, activityId, userId: principal.userId },

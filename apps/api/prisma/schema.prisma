@@ -953,6 +953,46 @@ model Plan {
   scheduleCriticalFloatThresholdMinutes Int?                    @map("schedule_critical_float_threshold_minutes")
   scheduleTotalFloatMode                TotalFloatMode?         @map("schedule_total_float_mode")
   scheduleMakeOpenEndsCritical          Boolean?                @map("schedule_make_open_ends_critical")
+  /// The instant of the latest write that MAY have changed one of this plan's SCHEDULING INPUTS —
+  /// the other half of `scheduleComputedAt`. The organisation overview's "edited since it was
+  /// calculated" is `scheduleInputsChangedAt > scheduleComputedAt`, and nothing else is.
+  ///
+  /// WHY A COLUMN AND NOT `updated_at`. The overview used `GREATEST(plans.updated_at, latest
+  /// activity updated_at, latest dependency updated_at)`, and `updated_at` answers "was this row
+  /// written", not "could the schedule have moved". A lane move (`laneIndex`, never read by the
+  /// engine — `ScheduleRepository.loadActivities` does not select it), Arrange, the ADR-0153 overlap
+  /// resolve, a rename, a steps replace and an EV/cost edit all stamp `updated_at`, so every one of
+  /// them claimed "these figures may have moved" about figures that cannot have. `updated_at` keeps
+  /// its house meaning (DATABASE.md "Auditing") and keeps ordering "Recently changed"; it is simply
+  /// no longer asked a question it cannot answer.
+  ///
+  /// SEMANTICS ARE AN UPPER BOUND, which is what makes the backfill honest rather than invented:
+  /// every scheduling-input write to this plan happened at or before this instant. Over-reporting
+  /// (a write that turned out not to move anything) is the safe direction; under-reporting is the
+  /// defect. The writers stamp `GREATEST(schedule_inputs_changed_at, clock_timestamp())` in the
+  /// edit's last statement (`markScheduleInputsChanged`), NOT `now()`: `now()` is the edit
+  /// transaction's START, so an edit that began before a recalculation and committed after its read
+  /// would be stamped earlier than `schedule_computed_at` (the recalc's `now()`) and missed. The
+  /// GREATEST keeps the column monotone when two transactions commit out of order. The helper must
+  /// NEVER run inside a recalculation transaction: its `clock_timestamp()` is always later than that
+  /// transaction's `now()`, so the plan would read "edited since" permanently. The race still runs
+  /// both ways (`docs/TECH_DEBT.md` #449): an edit that stamps before a recalc starts and commits
+  /// after its read is missed, and a recalc queued on the plan lock behind an edit it then reads
+  /// leaves a spurious flag.
+  ///
+  /// CLIENT-NEVER, USER-INVISIBLE TO LOCKING. Stamped by a raw `UPDATE plans` that touches no
+  /// `version`/`updated_at`/`updated_by` (the `stampScheduleComputedAt` shape), so an activity edit
+  /// cannot 409 a concurrent plan-settings save. Never accepted from a DTO. The recalculation does
+  /// NOT write it, and a layout-only write must not either — nor may a layout write touch
+  /// `schedule_computed_at`, which cross-plan staleness (staleness.ts) compares between plans.
+  ///
+  /// NOT NULL with DEFAULT now(): a plan's creation is itself an input write (it sets
+  /// `planned_start`/`calendar_id`). Existing rows are backfilled in the migration to the latest
+  /// write the OLD rule could see, widened to include soft-deleted activities/dependencies (a
+  /// deletion is an input change the old rule missed). No index: read with its own plan row, never
+  /// filtered or sorted across plans — the `scheduleComputedAt` precedent. No CHECK: the one
+  /// candidate (`>= created_at`) compares two clocks and guards nothing a reader relies on.
+  scheduleInputsChangedAt               DateTime                @default(now()) @map("schedule_inputs_changed_at") @db.Timestamptz(3)
   version                               Int                     @default(1)
   createdAt                             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)

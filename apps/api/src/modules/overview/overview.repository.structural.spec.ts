@@ -67,6 +67,21 @@ describe('OverviewRepository (structural)', () => {
     expect(SOURCE).toContain('FROM dependencies dep');
   });
 
+  it('derives the stale flag from the scheduling-input stamp, not from changed_at', () => {
+    // `changed_at` is every write, lane moves included; the flag is "could a date have moved".
+    expect(SOURCE).toContain('p.schedule_inputs_changed_at');
+    const flag = FILE.slice(FILE.indexOf('editedSinceCalculated:', FILE.indexOf('rows.map')));
+    expect(flag.slice(0, 200)).toContain('schedule_inputs_changed_at');
+    expect(flag.slice(0, 200)).not.toMatch(/row\.changed_at\.getTime/);
+  });
+
+  it('reads the same stamp in the plan-standing query, which no longer scans for last touches', () => {
+    const standing = methodText('findPlanStanding');
+    expect(standing).toContain('p.schedule_inputs_changed_at');
+    expect(standing).not.toContain('last_touched_at');
+    expect(standing).not.toContain('FROM dependencies dep');
+  });
+
   it('never orders the outer query by plans.updated_at alone', () => {
     // The specific wrong answer, named so a refactor towards it fails here rather than on
     // the screen.

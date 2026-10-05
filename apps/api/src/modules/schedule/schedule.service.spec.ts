@@ -54,6 +54,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     scheduleCriticalFloatThresholdMinutes: null,
     scheduleTotalFloatMode: null,
     scheduleMakeOpenEndsCritical: null,
+    scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
