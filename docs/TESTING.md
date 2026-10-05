@@ -764,7 +764,8 @@ Three kinds of job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   minor bump moves every one while the prose keeps reading as authoritative.
   `pnpm check:debt-status` asserts that every `docs/TECH_DEBT.md` row carries a
   status a parser can find, that no row is annotated CLOSED in its heading while
-  still present in the file, and that the compact table cannot silently regrow —
+  still present in the file, and that the compact table cannot silently regrow,
+  and that every number from 1 to the highest in use is a live row or a ledger line —
   because that file decides what gets picked up next, and **14 of its 138 rows**
   carried a machine-readable status, so a candidate recommended from it had been
   fixed three weeks earlier (ADR-0120). `pnpm check:spec-status` reads every spec document's
