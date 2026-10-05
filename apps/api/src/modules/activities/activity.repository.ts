@@ -251,8 +251,9 @@ export class ActivityRepository {
    * `laneIndex: null` means **leave the lane alone** — `COALESCE` in the SQL, not a write of null,
    * because `lane_index` is `NOT NULL`. Every other null is a genuine clear.
    *
-   * One statement, never a per-row loop: the ADR-0053 M6 lesson (830 ms → 13 ms for 2,000 rows),
-   * and here it is also held under the plan advisory lock, where a loop's cost is everyone's.
+   * One statement, never a per-row loop: the ADR-0053 M6 lesson (830 ms → 13 ms for 2,000 rows).
+   * The caller takes **no** plan advisory lock — this said it did until 2026-10-05; the row locks
+   * this statement takes in join order are what `docs/TECH_DEBT.md` #440 is about.
    */
   async updatePlacements(
     organizationId: string,

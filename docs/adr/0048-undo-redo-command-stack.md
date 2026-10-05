@@ -1,6 +1,6 @@
 # ADR-0048: Client-side command-stack undo/redo for plan authoring
 
-- **Status:** Accepted
+- **Status:** Accepted; the conflict and session-scope bullets amended by ADR-0176
 - **Date:** 2026-07-19
 - **Deciders:** Product owner + engineering
 
