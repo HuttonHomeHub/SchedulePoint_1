@@ -23,7 +23,6 @@ vi.mock('@/config/env', async (importOriginal) => {
       return h.authoring;
     },
     NOTES_ENABLED: false,
-    UNDO_REDO_ENABLED: false,
   };
 });
 

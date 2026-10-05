@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   authoring: false,
   record: vi.fn(),
   updateDependencyMutateAsync: vi.fn(),
@@ -31,9 +30,6 @@ vi.mock('@/config/env', async (importOriginal) => {
       return h.authoring;
     },
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -164,7 +160,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.authoring = false;
   h.updateDependencyMutateAsync.mockResolvedValue(SAVED);
   h.recalcMutateAsync.mockResolvedValue(undefined);
@@ -206,8 +201,7 @@ describe('onTsldLag (ADR-0052 M3)', () => {
     expect(h.recalcMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('records ONE coalescable lagDragCommand when undo/redo is on, none when off', async () => {
-    h.undoRedo = true;
+  it('records ONE coalescable lagDragCommand', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldLag({ dependencyId: 'd1', lagDays: 5 });
@@ -229,18 +223,9 @@ describe('onTsldLag (ADR-0052 M3)', () => {
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 7,
     });
-
-    h.undoRedo = false;
-    h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await off.result.current.onTsldLag({ dependencyId: 'd1', lagDays: 5 });
-    });
-    expect(h.record).not.toHaveBeenCalled();
   });
 
   it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
-    h.undoRedo = true;
     h.updateDependencyMutateAsync.mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
     );

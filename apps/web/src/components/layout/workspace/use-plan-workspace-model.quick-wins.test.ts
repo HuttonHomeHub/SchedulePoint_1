@@ -12,7 +12,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   record: vi.fn(),
   setVisualMutateAsync: vi.fn(),
   notify: vi.fn(),
@@ -26,9 +25,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -187,7 +183,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.setVisualMutateAsync.mockResolvedValue({ ...ACTIVITY, visualStart: null, version: 8 });
   h2.activities = [ACTIVITY, OTHER];
@@ -245,28 +240,16 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     expect(h.notify).toHaveBeenCalledTimes(1);
   });
 
-  it('F5: records the undo inverse only when VITE_UNDO_REDO is on', async () => {
-    // Flag ON → one command recorded (never the recalc).
-    h.undoRedo = true;
-    const on = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+  it('F5: records the undo inverse — one command, never the recalc', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
-      await on.result.current.clearVisualPlacement('a1', 7);
-    });
-    expect(h.record).toHaveBeenCalledTimes(1);
-
-    // Flag OFF → the same clear issues its PATCH but records nothing.
-    h.undoRedo = false;
-    h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await off.result.current.clearVisualPlacement('a1', 7);
+      await result.current.clearVisualPlacement('a1', 7);
     });
     expect(h.setVisualMutateAsync).toHaveBeenCalled();
-    expect(h.record).not.toHaveBeenCalled();
+    expect(h.record).toHaveBeenCalledTimes(1);
   });
 
   it('F5: a stale-version 409 is non-destructive — nothing applied, nothing recorded, no recalc', async () => {
-    h.undoRedo = true;
     h.setVisualMutateAsync.mockRejectedValueOnce(
       new ApiFetchError(409, { message: 'stale', code: 'CONFLICT' }),
     );
@@ -303,7 +286,6 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
   });
 
   it('T4: a 423 pen-loss is non-destructive — nothing recorded, no recalc, no announce contradiction', async () => {
-    h.undoRedo = true;
     h.onWriteRejected.mockReturnValueOnce({ kind: 'lock' as const });
     h.setVisualMutateAsync.mockRejectedValueOnce(
       new ApiFetchError(423, { message: 'locked', code: 'LOCKED' }),

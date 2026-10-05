@@ -67,7 +67,6 @@ import {
   FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
-  UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
@@ -912,11 +911,11 @@ export function ToolbarPlanWorkspace({
       />
     );
   /**
-   * **Undo and redo are live only when the flag is on AND the planner can author right now** — pen
+   * **Undo and redo are live only when the planner can author right now** — pen
    * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the
    * strip's follow-up button and the refusal below, so they cannot disagree about it.
    */
-  const undoRedoLive = UNDO_REDO_ENABLED && model.canEditSchedule && !lateOverlayActive;
+  const undoRedoLive = model.canEditSchedule && !lateOverlayActive;
   // What the last undo/redo press came to (undo-redo M1), built here for the layout notice's reason:
   // it renders in BOTH views' docks. Focus goes to the plan surface first because every button on it
   // removes the strip that holds them.
@@ -1108,7 +1107,7 @@ export function ToolbarPlanWorkspace({
   /**
    * In-grid editing for the Gantt (M2). Built here because it needs the workspace's OWN mutation
    * and undo recorder — the grid must not open a second write path to an activity (spec F5), and
-   * `recordActivityUpdate` is already a no-op when `VITE_UNDO_REDO` is off, so this needs no flag.
+   * `recordActivityUpdate` is the same recorder the canvas uses.
    *
    * Deliberately NOT a `host-parity` PLAN_FACT. The canvas edits an activity through its own
    * gestures and the editor dialog, not through grid cells, so there is nothing on the other host

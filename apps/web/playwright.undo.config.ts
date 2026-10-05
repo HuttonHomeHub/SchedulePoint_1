@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **undo / redo** (`VITE_UNDO_REDO`, ADR-0048) — the
+ * **Flag-ON** end-to-end configuration for **undo / redo** (ADR-0048) — the
  * user-visible surface (toolbar Undo/Redo + keybindings + announcements) layered on the canvas-first
- * authoring workspace. Serves the web bundle with `VITE_UNDO_REDO=true` plus the toolbar / workspace /
+ * authoring workspace. Serves the web bundle with the toolbar / workspace /
  * editing / pen flags it builds on, and the API enforcing the pen (`PLAN_EDIT_LOCK_ENFORCED=true`), so
  * a Planner can author a plan on the canvas and reverse the edits with the real controls. Like the
  * other flag-on configs the flags bake at `webServer` start, so this is a separate config on the same
@@ -61,7 +61,7 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Undo/redo ON, plus every layer it builds on (canvas authoring → toolbar → workspace →
+            // Every layer undo/redo builds on (canvas authoring → toolbar → workspace →
             // editing surface + pen).
             //
             // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). It
@@ -71,7 +71,6 @@ export default defineConfig({
             // surface the collapse makes universal, so almost nothing drove it end to end. The flag
             // now takes its default, which is what a shipped bundle carries (ADR-0088 D1).
             env: {
-              VITE_UNDO_REDO: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',

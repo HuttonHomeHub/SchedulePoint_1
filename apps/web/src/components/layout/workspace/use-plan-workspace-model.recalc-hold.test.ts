@@ -19,7 +19,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   record: vi.fn(),
   setVisualMutateAsync: vi.fn(),
   notify: vi.fn(),
@@ -34,9 +33,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -199,7 +195,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.setVisualMutateAsync.mockResolvedValue({ ...ACTIVITY, visualStart: null, version: 8 });
   h2.activities = [ACTIVITY, OTHER];

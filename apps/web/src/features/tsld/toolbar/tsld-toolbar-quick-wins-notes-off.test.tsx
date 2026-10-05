@@ -18,7 +18,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   NOTES_ENABLED: false,
-  UNDO_REDO_ENABLED: false,
   TOOLBAR_QUICK_WINS_ENABLED: true,
 }));
 

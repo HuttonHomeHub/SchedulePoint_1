@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const h = vi.hoisted(() => ({
-  undoRedo: false,
   authoring: false,
   record: vi.fn(),
   updateMutateAsync: vi.fn(),
@@ -32,9 +31,6 @@ vi.mock('@/config/env', async (importOriginal) => {
       return h.authoring;
     },
     NOTES_ENABLED: false,
-    get UNDO_REDO_ENABLED() {
-      return h.undoRedo;
-    },
   };
 });
 
@@ -202,7 +198,6 @@ const SAVED_START_RESIZE: ActivitySummary = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.undoRedo = false;
   h.authoring = false;
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue(SAVED_START_RESIZE);
@@ -255,8 +250,7 @@ describe('onTsldResize (ADR-0052 M2)', () => {
     expect(h.recalcMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('records ONE coalescable durationResizeCommand when undo/redo is on, none when off', async () => {
-    h.undoRedo = true;
+  it('records ONE coalescable durationResizeCommand', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8 });
@@ -265,18 +259,9 @@ describe('onTsldResize (ADR-0052 M2)', () => {
     const command = h.record.mock.calls[0]![0];
     expect(command.label).toBe('Resize “Excavate”');
     expect(command.coalescing?.key).toBe('resize:a1');
-
-    h.undoRedo = false;
-    h.record.mockClear();
-    const off = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await off.result.current.onTsldResize({ activityId: 'a1', durationDays: 8 });
-    });
-    expect(h.record).not.toHaveBeenCalled();
   });
 
   it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
-    h.undoRedo = true;
     h.updateMutateAsync.mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
     );
@@ -394,7 +379,6 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
    * which is what lets a drag's many frames coalesce into one undo entry.
    */
   it('records a coalescable command on the shared resize:{id} key', async () => {
-    h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
@@ -406,7 +390,6 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
   });
 
   it('undo restores the prior visualStart AND duration through the same seam', async () => {
-    h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
@@ -425,7 +408,6 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
   });
 
   it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
-    h.undoRedo = true;
     // **The placement seam, because that is the one a start-edge drag uses** (M-F-T3). It rejected
     // `updateMutateAsync` until the collapse; left there the mock would resolve happily, the drag
     // would succeed, and this case would assert a conflict path it never entered.

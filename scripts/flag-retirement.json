@@ -522,14 +522,6 @@
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
     },
-    "VITE_UNDO_REDO": {
-      "constant": "UNDO_REDO_ENABLED",
-      "enabled": "2026-07-19",
-      "enabledSource": "docblock",
-      "batch": "batch-6",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
     "VITE_WBS_IMPROVEMENTS": {
       "constant": "WBS_IMPROVEMENTS_ENABLED",
       "enabled": "2026-07-30",

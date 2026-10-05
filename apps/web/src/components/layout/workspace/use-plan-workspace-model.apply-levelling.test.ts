@@ -42,7 +42,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
   NOTES_ENABLED: false,
-  UNDO_REDO_ENABLED: true,
 }));
 
 vi.mock('@/features/undo-redo', async (importOriginal) => ({

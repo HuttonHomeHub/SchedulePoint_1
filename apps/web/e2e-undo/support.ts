@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **undo / redo** suite (`VITE_UNDO_REDO`, ADR-0048). Mirrors the
+ * Journey helpers for the flag-ON **undo / redo** suite (ADR-0048). Mirrors the
  * canvas-first authoring helpers (this surface layers on that one): sign up → org → client → project →
  * plan, take the pen, and draw activities on the canvas — then the spec reverses those edits with the
  * toolbar controls + keybindings.

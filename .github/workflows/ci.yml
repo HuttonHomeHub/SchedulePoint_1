@@ -583,7 +583,7 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:notes
 
-      # Flag-ON undo/redo journey (playwright.undo.config.ts) serving the app with VITE_UNDO_REDO on
+      # Flag-ON undo/redo journey (playwright.undo.config.ts) serving the app
       # (layered on the canvas authoring + editing/pen flags, with the pen enforced), so
       # the user-visible undo surface — the toolbar Undo/Redo controls, the Ctrl/Cmd+Z keybinding, the
       # announcements — is exercised end to end (ADR-0048 M3). Runs last, after the prior runs tear down
