@@ -4,16 +4,29 @@ The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten**
 epic boundary; its history is in git.
 
 **Written:** 2026-10-05, at the end of the **best-in-class undo/redo** epic (M0–M8) and the
-"edited since it was calculated" fix.
+"edited since it was calculated" fix. **Updated later on 2026-10-05** with two bug fixes from the
+product owner (below); the next job is unchanged.
 
 ## Where things stand
 
-- `main` holds everything below. This file ships in the same PR as undo M8 (the flag retirement).
+- `main` holds everything below. Latest releases: **web 0.170.3, api 0.87.1**.
 - **No approved work is waiting.** Everything the product owner approved on 2026-10-04 has shipped.
 - **First job of the next session: the reconciliation pass** (`docs/RECONCILE.md`, ADR-0058). It is
   due at this epic boundary and was deliberately deferred so it gets a fresh session of its own.
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
   (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
+
+## Bug fixes on 2026-10-05 (after the epic)
+
+Both were product-owner reports, fixed and released the same day; ledgered as closed rows.
+
+| PR   | What                                                                                                                                                                                                                                                                                                      | Release                 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| #827 | **#451**: opening another plan counted as an edit ("N edits not calculated"). The plan route re-rendered instead of remounting on a `$planId` change, so the workspace model outlived its plan. `PlanDetailScreen` now keys the model on org + plan. Journey: `e2e-workspace-chrome/plan-switch.spec.ts`. | web 0.170.2             |
+| #829 | **#452**: the overview said "Edited since it was calculated" while the opened plan said nothing. `PlanSummary.editedSinceCalculated` (shared rule `isEditedSinceCalculated`) now drives the status bar too. Journey: `e2e-workspace-chrome/edited-since.spec.ts`.                                         | web 0.170.3, api 0.87.1 |
+
+Worth knowing for the reconciliation pass: `PlanSummary` gained a field, so `docs/API.md` and the
+structural reader roster in `schedule-inputs.structural.spec.ts` were updated in #829.
 
 ## What shipped on 2026-10-03 → 2026-10-05
 
@@ -73,7 +86,11 @@ Nothing below is approved. Put these to the product owner in plain English:
   re-add it or the stop hook reports untracked files. A restart also kills running agents —
   checkpoint their work as WIP commits and relaunch.
 - **The `@repo/interchange` "decodes CP1252 high bytes" test fails in the container only.**
-  `check:reconcile-due` warns on a shallow clone; that is expected.
+  `check:reconcile-due` warns on a shallow clone; that is expected. Because the interchange failure stops turbo, run
+  `pnpm --filter @repo/web test` and `pnpm --filter @repo/api test` on their own afterwards.
+- **Playwright in the container:** set `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium` (the
+  bundled headless shell version is not installed). A spec filter is a regex on the full path, so
+  a worktree whose name matches it runs the whole suite — use `-g "<test title>"` instead.
 - **Local e2e shares one database.** Never run two `scripts/e2e-local.sh` jobs (or vitest) at once;
   wait with `until ! pgrep -a node | grep -qE "vitest|playwright"`. Clear `apps/web/node_modules/.vite`
   first. Agents must not run Playwright.
