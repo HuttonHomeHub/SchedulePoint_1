@@ -1,13 +1,18 @@
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { historyResultMessage, type PostedHistoryResult } from './history-result';
-import type { ReplayContext } from './replay';
+import { isNotFound, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
-import { planDependenciesQueryOptions } from '@/features/dependencies/api/use-dependencies';
-import { ApiFetchError } from '@/lib/api/client';
+import {
+  planDependenciesQueryOptions,
+  predecessorsQueryOptions,
+  successorsQueryOptions,
+} from '@/features/dependencies/api/use-dependencies';
+import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import {
   activityKeys,
   baselineKeys,
@@ -78,6 +83,13 @@ export function usePlanUndoRedo(params: {
 }): PlanUndoRedo {
   const { history, orgSlug, planId, announce, onLockLost, onReplayed, onResult } = params;
   const queryClient = useQueryClient();
+  // The workspace passes an inline arrow here (it closes over a hook declared later), so reading it
+  // through a ref keeps `run` — and the object this hook returns, which feeds the toolbar-context
+  // memo — from being rebuilt on every render.
+  const onReplayedRef = useRef(onReplayed);
+  useEffect(() => {
+    onReplayedRef.current = onReplayed;
+  });
 
   // Refetch server truth after a set-aside, mirroring the recalculate mutation's invalidation set: the
   // plan's activity list + dependencies + baseline variance, plus the whole org schedule namespace
@@ -89,30 +101,100 @@ export function usePlanUndoRedo(params: {
     void queryClient.invalidateQueries({ queryKey: scheduleKeys.all(orgSlug) });
   }, [queryClient, orgSlug, planId]);
 
-  // What a replay reads with. `staleTime: 0` because the whole point is to see the server NOW, and
-  // going through the query cache means the same read refreshes what the views draw from. The plan's
-  // whole list is one paged read (`apiFetchAllPages`), filtered to the ids asked for.
-  const replayContext = useMemo<ReplayContext>(
-    () => ({
-      readActivities: async (ids) => {
-        const rows = await queryClient.fetchQuery({
-          ...activitiesQueryOptions(orgSlug, planId),
-          staleTime: 0,
+  // What a replay reads with. `staleTime: 0` because the whole point is to see the server NOW.
+  //
+  // **A step that names a few rows reads those rows; only a bigger one walks the plan.** The list is
+  // paged and walked sequentially, so on a 2,000-activity plan it is about twenty round trips before
+  // the write can even start — for a step that touched one bar. Up to `SINGLE_READ_LIMIT` rows go
+  // through the per-row endpoints in parallel (a 404 is "gone"); above it, one walk is cheaper.
+  const replayContext = useMemo<ReplayContext>(() => {
+    const fresh = { staleTime: 0 } as const;
+    const walkActivities = () =>
+      queryClient.fetchQuery({ ...activitiesQueryOptions(orgSlug, planId), ...fresh });
+    const walkDependencies = () =>
+      queryClient.fetchQuery({ ...planDependenciesQueryOptions(orgSlug, planId), ...fresh });
+    /** One row by id through the detail endpoint; absent when the server says 404. */
+    async function readOne<T extends { id: string }>(
+      queryKey: readonly unknown[],
+      path: string,
+    ): Promise<T | undefined> {
+      try {
+        return await queryClient.fetchQuery({
+          queryKey,
+          queryFn: () => apiFetch<T>(path),
+          ...fresh,
         });
-        const wanted = new Set(ids);
-        return new Map(rows.filter((row) => wanted.has(row.id)).map((row) => [row.id, row]));
+      } catch (err) {
+        if (isNotFound(err)) return undefined;
+        throw err;
+      }
+    }
+    const byId = <T extends { id: string }>(rows: readonly (T | undefined)[]) =>
+      new Map(rows.flatMap((row) => (row === undefined ? [] : [[row.id, row] as const])));
+    const unique = (ids: readonly string[]) => [...new Set(ids)];
+    return {
+      readActivities: async (ids) => {
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId((await walkActivities()).filter((row) => set.has(row.id)));
+        }
+        return byId(
+          await Promise.all(
+            wanted.map((id) =>
+              readOne<ActivitySummary>(
+                activityKeys.detail(orgSlug, id),
+                `/organizations/${orgSlug}/activities/${id}`,
+              ),
+            ),
+          ),
+        );
       },
       readDependencies: async (ids) => {
-        const rows = await queryClient.fetchQuery({
-          ...planDependenciesQueryOptions(orgSlug, planId),
-          staleTime: 0,
-        });
-        const wanted = new Set(ids);
-        return new Map(rows.filter((row) => wanted.has(row.id)).map((row) => [row.id, row]));
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId((await walkDependencies()).filter((row) => set.has(row.id)));
+        }
+        return byId(
+          await Promise.all(
+            wanted.map((id) =>
+              readOne<DependencySummary>(
+                dependencyKeys.detail(orgSlug, id),
+                `/organizations/${orgSlug}/dependencies/${id}`,
+              ),
+            ),
+          ),
+        );
       },
-    }),
-    [queryClient, orgSlug, planId],
-  );
+      readLinksOf: async (ids) => {
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId(
+            (await walkDependencies()).filter(
+              (row) => set.has(row.predecessor.id) || set.has(row.successor.id),
+            ),
+          );
+        }
+        const lists = await Promise.all(
+          wanted.flatMap((id) => [
+            queryClient.fetchQuery({ ...predecessorsQueryOptions(orgSlug, id), ...fresh }),
+            queryClient.fetchQuery({ ...successorsQueryOptions(orgSlug, id), ...fresh }),
+          ]),
+        );
+        return byId(lists.flat());
+      },
+      readChildrenOf: async (parentIds) => {
+        const parents = new Set(parentIds);
+        return byId(
+          (await walkActivities()).filter(
+            (row) => row.parentId !== null && parents.has(row.parentId),
+          ),
+        );
+      },
+    };
+  }, [queryClient, orgSlug, planId]);
 
   const report = useCallback(
     (result: PostedHistoryResult): void => {
@@ -164,10 +246,10 @@ export function usePlanUndoRedo(params: {
           label: outcome.command.label,
           command: outcome.command,
         });
-        if (outcome.command.affectsSchedule !== false) onReplayed?.();
+        if (outcome.command.affectsSchedule !== false) onReplayedRef.current?.();
       })();
     },
-    [history, replayContext, onLockLost, refetchServerTruth, report, onReplayed],
+    [history, replayContext, onLockLost, refetchServerTruth, report],
   );
 
   const undo = useCallback((): void => run('undo'), [run]);

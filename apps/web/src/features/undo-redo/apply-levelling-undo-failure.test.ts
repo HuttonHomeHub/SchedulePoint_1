@@ -12,15 +12,17 @@ import { usePlanUndoRedo } from './use-plan-undo-redo';
 import { levellingApplicationSnapshots } from '@/features/schedule';
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
-import { fakePlanServer, pagedReader } from '@/test/fake-plan-server';
+import { detailReader, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
 
 // The replay reads the plan through `fetchQuery`; answer those lists from the fake server.
 const reader = vi.hoisted(() => ({
   current: (_path: string): Promise<unknown[]> => Promise.resolve([]),
+  one: (_path: string): Promise<unknown> => Promise.resolve(undefined),
 }));
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   apiFetchAllPages: (path: string) => reader.current(path),
+  apiFetch: (path: string) => reader.one(path),
 }));
 
 /**
@@ -84,6 +86,7 @@ function setup() {
     activities: [anActivity({ id: 'a', name: 'Lift A', visualStart: '2026-03-09' })],
   });
   reader.current = pagedReader(server);
+  reader.one = detailReader(server);
   const queryClient = new QueryClient();
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
@@ -124,7 +127,7 @@ describe('Apply levelled dates — a failed undo', () => {
     server.mutations.batchPlacements.mockRejectedValueOnce(conflict());
     act(() => result.current.undoRedo.undo());
     await waitFor(() =>
-      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed since')),
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed after your edit')),
     );
     expect(result.current.history.canUndo).toBe(false);
     expect(result.current.history.canRedo).toBe(false);
@@ -136,7 +139,7 @@ describe('Apply levelled dates — a failed undo', () => {
     server.mutations.batchPlacements.mockClear();
     act(() => result.current.undoRedo.undo());
     await waitFor(() =>
-      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed since')),
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed after your edit')),
     );
     expect(server.mutations.batchPlacements).not.toHaveBeenCalled();
     expect(server.row('a').visualStart).toBe('2026-05-04');

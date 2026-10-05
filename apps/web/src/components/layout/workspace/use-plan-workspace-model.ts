@@ -2087,7 +2087,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     autoRecalc.hold(holdToken);
     // A copy is not in S0, so a copy dropped onto an occupied lane is the bar that moves (rule 1).
     beginLayoutEdit([]);
-    const created: { id: string; version: number }[] = [];
+    const created: ActivitySummary[] = [];
     // The clones with no cloned parent. A band's undo deletes these and lets the ADR-0038 cascade
     // take the subtree, because `bulkDelete` refuses a batch containing a summary by design.
     const roots: { id: string; version: number }[] = [];
@@ -2132,7 +2132,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           ...(parentId === undefined ? {} : { parentId }),
         });
         idMap.set(step.sourceId, row.id);
-        created.push({ id: row.id, version: row.version });
+        created.push(row);
         if (step.parentSourceId === null) roots.push({ id: row.id, version: row.version });
 
         // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
@@ -2183,7 +2183,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           // refused for the same reason its undo is (422 SUMMARY_NOT_BULK_ELIGIBLE), which would
           // leave the half-copy in place under a message about the original failure.
           if (roots.length === created.length) {
-            await bulkDeleteActivities.mutateAsync({ activities: created });
+            await bulkDeleteActivities.mutateAsync({
+              activities: created.map((row) => ({ id: row.id, version: row.version })),
+            });
           } else {
             for (const root of roots) await deleteActivity.mutateAsync(root.id);
           }

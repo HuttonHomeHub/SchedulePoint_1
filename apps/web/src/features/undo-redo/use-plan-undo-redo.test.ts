@@ -14,15 +14,17 @@ import { usePlanUndoRedo } from './use-plan-undo-redo';
 
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
-import { aDependency, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
+import { aDependency, detailReader, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
 
 // The replay reads the plan through `fetchQuery`; the one test that exercises it answers from a fake.
 const reader = vi.hoisted(() => ({
   current: (_path: string): Promise<unknown[]> => Promise.resolve([]),
+  one: (_path: string): Promise<unknown> => Promise.resolve(undefined),
 }));
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   apiFetchAllPages: (path: string) => reader.current(path),
+  apiFetch: (path: string) => reader.one(path),
 }));
 
 /**
@@ -109,24 +111,127 @@ describe('usePlanUndoRedo — success', () => {
     expect(result.current.redoLabel).toBeNull();
   });
 
-  it('hands the store a replay context that reads the plan fresh from the server', async () => {
+  it('returns the same object across renders even when the host passes a fresh onReplayed each time', () => {
+    const history = fakeHistory();
+    // Stable, as the workspace's own `announce` and `pen.onWriteRejected` are.
+    const announce = vi.fn();
+    const onLockLost = vi.fn();
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children);
+    const { result, rerender } = renderHook(
+      () =>
+        usePlanUndoRedo({
+          history,
+          orgSlug: 'acme',
+          planId: 'p1',
+          announce,
+          onLockLost,
+          onReplayed: () => undefined,
+        }),
+      { wrapper },
+    );
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+  });
+});
+
+/**
+ * What a replay reads, and how much it costs (ADR-0176). A step that names a few rows reads those
+ * rows; the plan's list is paged and walked sequentially, so only a step above `SINGLE_READ_LIMIT`
+ * walks it.
+ */
+describe('usePlanUndoRedo — the replay context’s reads', () => {
+  /** Run one undo whose command body uses the context, and report what the network saw. */
+  async function reading(body: (ctx: Parameters<PlanEditHistory['undo']>[0]) => Promise<unknown>) {
     const server = fakePlanServer({
-      activities: [anActivity({ id: 'a1', name: 'Excavate' })],
+      activities: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((id) =>
+        anActivity({ id, name: id, parentId: id === 'a2' ? 'a1' : null }),
+      ),
       dependencies: [aDependency()],
     });
-    reader.current = pagedReader(server);
-    const read = vi.fn<(ids: string[]) => void>();
+    const paged = vi.fn(pagedReader(server));
+    const one = vi.fn(detailReader(server));
+    reader.current = paged;
+    reader.one = one;
     const undo = vi.fn(async (ctx: Parameters<PlanEditHistory['undo']>[0]) => {
-      const activities = await ctx.readActivities(['a1', 'ghost']);
-      const dependencies = await ctx.readDependencies(['d1']);
-      read([...activities.keys(), ...dependencies.keys()]);
+      await body(ctx);
       return applied(command('Edit “Excavate”'));
     });
     const { result, announce } = setup(fakeHistory({ undo }));
     act(() => result.current.undo());
     await waitFor(() => expect(announce).toHaveBeenCalledWith('Undid edit “Excavate”.'));
-    // Only the rows asked for come back; a row the server does not have is simply absent.
-    expect(read).toHaveBeenCalledExactlyOnceWith(['a1', 'd1']);
+    return { paged, one };
+  }
+
+  it('a single-row step is exactly one detail read and no list walk', async () => {
+    let found: string[] = [];
+    const { paged, one } = await reading(async (ctx) => {
+      found = [...(await ctx.readActivities(['a1'])).keys()];
+    });
+    expect(found).toEqual(['a1']);
+    expect(one).toHaveBeenCalledOnce();
+    expect(one.mock.calls[0]?.[0]).toBe('/organizations/acme/activities/a1');
+    expect(paged).not.toHaveBeenCalled();
+  });
+
+  it('a row the server answers 404 for is simply absent', async () => {
+    let found: string[] = ['x'];
+    await reading(async (ctx) => {
+      found = [...(await ctx.readActivities(['ghost'])).keys()];
+    });
+    expect(found).toEqual([]);
+  });
+
+  it('a link is one detail read too', async () => {
+    let found: string[] = [];
+    const { paged, one } = await reading(async (ctx) => {
+      found = [...(await ctx.readDependencies(['d1'])).keys()];
+    });
+    expect(found).toEqual(['d1']);
+    expect(one).toHaveBeenCalledExactlyOnceWith('/organizations/acme/dependencies/d1');
+    expect(paged).not.toHaveBeenCalled();
+  });
+
+  it('a bulk step walks the plan list once, and makes no per-row read', async () => {
+    let found: string[] = [];
+    const { paged, one } = await reading(async (ctx) => {
+      found = [...(await ctx.readActivities(['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])).keys()];
+    });
+    expect(found).toHaveLength(6);
+    expect(paged).toHaveBeenCalledOnce();
+    expect(paged.mock.calls[0]?.[0]).toMatch(/\/plans\/p1\/activities$/);
+    expect(one).not.toHaveBeenCalled();
+  });
+
+  it('the links on a few rows are read per row (predecessors and successors), not from the plan list', async () => {
+    let found: string[] = [];
+    const { paged } = await reading(async (ctx) => {
+      found = [...(await ctx.readLinksOf(['a1'])).keys()];
+    });
+    expect(found).toEqual(['d1']);
+    expect(paged.mock.calls.map((c) => c[0])).toEqual([
+      '/organizations/acme/activities/a1/predecessors',
+      '/organizations/acme/activities/a1/successors',
+    ]);
+  });
+
+  it('the links on a bulk step come from one walk of the plan’s links', async () => {
+    const { paged } = await reading(async (ctx) => {
+      await ctx.readLinksOf(['a1', 'a2', 'a3', 'a4', 'a5', 'a6']);
+    });
+    expect(paged).toHaveBeenCalledOnce();
+    expect(paged.mock.calls[0]?.[0]).toMatch(/\/plans\/p1\/dependencies$/);
+  });
+
+  it('children are found by one walk of the plan list', async () => {
+    let found: string[] = [];
+    const { paged } = await reading(async (ctx) => {
+      found = [...(await ctx.readChildrenOf(['a1'])).keys()];
+    });
+    expect(found).toEqual(['a2']);
+    expect(paged).toHaveBeenCalledOnce();
   });
 });
 
@@ -230,15 +335,15 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     nextLabel,
   });
 
-  it('says what changed, that the step was set aside, and what the next press runs', async () => {
+  it('says what changed, that the step was skipped, and what the next press runs', async () => {
     const { result, announce } = setup(
       fakeHistory({ undo: vi.fn().mockResolvedValue(setAside('changed')) }),
     );
     act(() => result.current.undo());
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
-        'Couldn’t undo move “Foundations” — Foundations was changed since. ' +
-          'That step was set aside; Undo again continues with edit “Pour”.',
+        'Couldn’t undo move “Foundations” — Foundations was changed after your edit, ' +
+          'so that step was skipped. Undo again to continue with edit “Pour”.',
       ),
     );
   });
@@ -250,8 +355,8 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     act(() => result.current.undo());
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
-        'Couldn’t undo move “Foundations” — Foundations has been deleted since. ' +
-          'That step was set aside.',
+        'Couldn’t undo move “Foundations” — Foundations was deleted after your edit, ' +
+          'so that step was skipped.',
       ),
     );
   });
@@ -262,7 +367,9 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     );
     act(() => result.current.undo());
     await waitFor(() =>
-      expect(announce).toHaveBeenCalledWith(expect.stringContaining('a phase it was filed under')),
+      expect(announce).toHaveBeenCalledWith(
+        expect.stringContaining('the phase it was filed under was deleted after your edit'),
+      ),
     );
   });
 
@@ -273,7 +380,7 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     act(() => result.current.redo());
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
-        expect.stringContaining('that link already exists. That step was set aside.'),
+        expect.stringContaining('that link already exists, so that step was skipped.'),
       ),
     );
   });

@@ -143,6 +143,34 @@ describe('HistoryResultStrip', () => {
     expect(props.restoreFocus).toHaveBeenCalledOnce();
   });
 
+  // The host re-keys the strip per result, so a press made with focus on `Redo` REPLACES the strip.
+  // When the replacement is a skipped step it has no button at all — nothing to land on — so the old
+  // strip's unmount is the only moment focus can be handed to the plan surface instead of `<body>`.
+  it('hands focus to the plan surface when a no-action set-aside strip replaces the focused one', () => {
+    const restoreFocus = vi.fn();
+    const base = { onDismiss: vi.fn(), restoreFocus };
+    const { rerender } = render(
+      <HistoryResultStrip
+        key={1}
+        {...base}
+        kind="success"
+        message="Undid add “Foundations”."
+        action={{ label: 'Redo', onClick: vi.fn() }}
+      />,
+    );
+    screen.getByRole('button', { name: 'Redo' }).focus();
+    rerender(
+      <HistoryResultStrip
+        key={2}
+        {...base}
+        kind="failure"
+        message="Couldn’t undo move “Excavate” — Excavate was changed after your edit, so that step was skipped."
+      />,
+    );
+    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Redo' })).toBeNull();
+  });
+
   it('shows the full sentence as a tooltip for a success, whose message truncates', () => {
     renderStrip();
     expect(screen.getByTestId('canvas-history-result')).toHaveAttribute(

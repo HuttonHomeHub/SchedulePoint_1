@@ -40,13 +40,26 @@ export function notApplicable(reason: NotApplicableReason, subjectName: string):
 const UNNAMED_SUBJECT = 'An activity in this step';
 
 /**
+ * How many rows a replay reads one by one. A step naming this many rows or fewer is checked through
+ * the per-row endpoints (one small request each, in parallel); a larger step walks the plan's list
+ * once. The list is paged and walked **sequentially** (`apiFetchAllPages`), so it costs a request per
+ * hundred activities before the write can start — on a 2,000-activity plan about twenty round trips.
+ * A handful of single reads is never dearer than that, and five covers every single-row step, a link
+ * chain and a paste of a few bars.
+ */
+export const SINGLE_READ_LIMIT = 5;
+
+/**
  * What a replay reads with. A **fresh** read — not whatever the views last drew — because the whole
- * point of the check is to see what is on the server now; the implementation also refreshes the
- * cache the views draw from (`usePlanUndoRedo`). Rows missing from the map are gone.
+ * point of the check is to see what is on the server now. Rows missing from a map are gone.
  */
 export interface ReplayContext {
   readActivities: (ids: readonly string[]) => Promise<ReadonlyMap<string, ActivitySummary>>;
   readDependencies: (ids: readonly string[]) => Promise<ReadonlyMap<string, DependencySummary>>;
+  /** Every link with an end on one of these activities, by link id. */
+  readLinksOf: (activityIds: readonly string[]) => Promise<ReadonlyMap<string, DependencySummary>>;
+  /** Every activity filed directly under one of these summaries, by id. */
+  readChildrenOf: (parentIds: readonly string[]) => Promise<ReadonlyMap<string, ActivitySummary>>;
 }
 
 /** A field's value for comparison: the API speaks `null`, so an absent field and a null are one value. */
@@ -211,4 +224,47 @@ export async function replayActivities(
   const only = expectations.length === 1 ? expectations[0] : undefined;
   const subject = only?.name ?? UNNAMED_SUBJECT;
   return writeOrSetAside(subject, () => write(checked.rows));
+}
+
+/**
+ * The guard for a step that **deletes** what it touches. Deleting cascades — a bar's links, a
+ * summary's subtree — so "the row still exists" is not enough: a colleague may have edited it, linked
+ * it, or filed work under it since, and the delete would take all of that with it. The step passes the
+ * fields it expects each row to hold, says which links it knows about, and (for summaries) which
+ * activities it knows are under it; anything else blocks the whole step.
+ *
+ * Resolves the checked rows (so the write can use their current versions) when it is safe to delete.
+ */
+export async function checkDeletable(
+  ctx: ReplayContext,
+  params: {
+    rows: readonly ActivityExpectation[];
+    isExpectedLink: (link: DependencySummary) => boolean;
+    /** Activities the step knows are in the set, so a child outside it is somebody else's. */
+    knownIds: ReadonlySet<string>;
+  },
+): Promise<Checked<ActivitySummary>> {
+  const checked = await checkActivities(ctx, params.rows);
+  if (!checked.ok) return checked;
+  const blocked = (subjectName: string): Checked<ActivitySummary> => ({
+    ok: false,
+    result: notApplicable('changed', subjectName),
+  });
+  const summaries = [...checked.rows.values()].filter((row) => row.type === 'WBS_SUMMARY');
+  if (summaries.length > 0) {
+    const children = await ctx.readChildrenOf(summaries.map((row) => row.id));
+    for (const child of children.values()) {
+      if (!params.knownIds.has(child.id)) return blocked(child.name);
+    }
+  }
+  const links = await ctx.readLinksOf(params.rows.map((r) => r.id));
+  for (const link of links.values()) {
+    if (!params.isExpectedLink(link)) return blocked(linkName(link));
+  }
+  return checked;
+}
+
+/** Whether an error is the server saying the thing is already gone. */
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ApiFetchError && err.status === 404;
 }

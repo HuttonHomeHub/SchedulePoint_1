@@ -98,13 +98,29 @@ Specified in the feature spec §4.6 and delivered by M3; named here so the contr
 
 ## Consequences
 
-- One extra read per replay (the plan's activity or dependency list, filtered), human-paced; a
-  bulk step reads once, not per row. It is the same `apiFetchAllPages` read the views already make,
-  so a 2,000-row plan costs a few pages per press. **Not benchmarked** — the spec's budget claim
-  (spec §3, "one extra read") stands unmeasured, and a slow press on a very large plan is the signal
-  to add a single-row GET for single-row steps.
-- A set-aside step is gone from the history. The strip says so and says why; nothing was removed from
-  the plan, and the planner can make the edit again by hand.
+- **What a press costs.** A step that names five rows or fewer (`SINGLE_READ_LIMIT`) is checked
+  through the per-row endpoints, in parallel: one `GET …/activities/:id` or `GET …/dependencies/:id`
+  per row, a 404 meaning "gone". A step above that walks the plan's list once. The list is **paged and
+  walked sequentially** (`apiFetchAllPages`), a request per hundred rows — about twenty round trips on
+  a 2,000-activity plan before the write can start — which is why a single-row step must not pay it.
+  A press that **applies** also pays the walk afterwards: every mutation invalidates the plan's lists
+  and the views refetch them, which this decision did not add and cannot remove. **Not benchmarked**;
+  the figures above are the shape of the cost, not a measurement.
+- **A step that deletes checks more than its own fields.** Deleting cascades a row's links and a
+  summary's subtree, and a delete sends the version it has just read, so the optimistic lock cannot
+  object. Add-undo, delete-redo, the copy's undo, the level-of-effort span's undo and bulk-delete redo
+  therefore compare the definition the step left and refuse any link, or any child under a summary,
+  that the step did not itself put there — reading the links on the row (per row for a few, one list
+  walk for many). A bar whose link was changed by a colleague, and whose own step was therefore
+  skipped, can in turn not be removed by the step that created it: the link is still there.
+- **A type change across the zero-duration milestone convention re-expresses dates the step does not
+  compare** (ADR-0162): the server moves them, so neither the check nor the write carries them. A
+  colleague's edit to such a date alone is therefore not noticed. Accepted.
+- **Single-row `DELETE` is unversioned**, so the check-then-delete has a window of one round trip in
+  which a colleague's write is deleted with the row. The API is not changed here; `docs/TECH_DEBT.md`
+  #450 proposes an optional version on `DELETE`.
+- A set-aside step is gone from the history. The strip says so, says why, and calls it "skipped" —
+  nothing was removed from the plan, and the planner can make the edit again by hand.
 - Inverses are field-scoped, so a command written against the old whole-definition contract does not
   type-check — the census in D6 is what keeps a new write path from being forgotten.
 - The mutation functions are still closed over by each builder rather than supplied by the replay

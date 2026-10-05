@@ -17,15 +17,10 @@ import { fakePlanServer } from '@/test/fake-plan-server';
  * The idempotence pair matters because a retried replay (a transport failure leaves the step on top)
  * can call an inverse twice, and a double-delete would 409 on rows that are already gone.
  */
-const CLONES = [
-  { id: 'c1', name: 'Excavate' },
-  { id: 'c2', name: 'Pour' },
-];
+const CLONES = [anActivity({ id: 'c1', name: 'Excavate' }), anActivity({ id: 'c2', name: 'Pour' })];
 
 function harness(created = CLONES) {
-  const server = fakePlanServer({
-    activities: created.map((c) => anActivity({ id: c.id, name: c.name })),
-  });
+  const server = fakePlanServer({ activities: created });
   const command = pasteActivitiesCommand({
     created,
     roots: created,
@@ -40,7 +35,8 @@ function harness(created = CLONES) {
 describe('pasteActivitiesCommand', () => {
   it('undo deletes every clone as ONE batch, at the rows’ current versions', async () => {
     const { server, command } = harness();
-    server.edit('c1', { description: 'edited elsewhere' });
+    // A field no step writes: it bumps the row's version without touching its definition.
+    server.edit('c1', { percentComplete: 10 });
     expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
     expect(server.mutations.bulkDelete).toHaveBeenCalledExactlyOnceWith({
       activities: [
@@ -123,17 +119,19 @@ describe('pasteActivitiesCommand', () => {
 
 describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
   function band() {
-    const created = [{ id: 'summary', name: 'Level 2' }, { id: 'child-1' }, { id: 'child-2' }];
-    const server = fakePlanServer({
-      activities: created.map((c) => anActivity({ id: c.id, name: c.name ?? c.id })),
-    });
+    const created = [
+      anActivity({ id: 'summary', name: 'Level 2', type: 'WBS_SUMMARY', durationMinutes: 0 }),
+      anActivity({ id: 'child-1', name: 'child-1', parentId: 'summary' }),
+      anActivity({ id: 'child-2', name: 'child-2', parentId: 'summary' }),
+    ];
+    const server = fakePlanServer({ activities: created });
     // `bulkDelete` refuses any batch containing a WBS_SUMMARY (422 SUMMARY_NOT_BULK_ELIGIBLE,
     // `activities.service.ts:1277-1281`) — deliberately, because deleting one cascades. A mocked
     // delete accepts any batch, which is why the failing case is made explicit here.
     const bulkDelete = vi.fn(() => Promise.reject(new Error('SUMMARY_NOT_BULK_ELIGIBLE')));
     const command = pasteActivitiesCommand({
       created,
-      roots: [{ id: 'summary', name: 'Level 2' }],
+      roots: [{ id: 'summary' }],
       deleteActivity: server.mutations.deleteActivity,
       bulkDelete,
       restoreBatch: server.mutations.restoreBatch,

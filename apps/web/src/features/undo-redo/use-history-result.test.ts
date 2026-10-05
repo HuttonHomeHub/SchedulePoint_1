@@ -136,15 +136,15 @@ describe('historyResultMessage', () => {
     expect(message({ outcome: 'set-aside', setAside })).not.toMatch(/refresh/i);
   });
 
-  it('a set-aside names the subject, says it was set aside, and says what the next press runs', () => {
+  it('a set-aside names the subject, says the step was skipped, and says what the next press runs', () => {
     expect(
       message({
         outcome: 'set-aside',
         setAside: { reason: 'changed', subjectName: 'Excavate', nextLabel: 'Add “Pour”' },
       }),
     ).toBe(
-      'Couldn’t undo delete “Excavate” — Excavate was changed since. ' +
-        'That step was set aside; Undo again continues with add “Pour”.',
+      'Couldn’t undo delete “Excavate” — Excavate was changed after your edit, ' +
+        'so that step was skipped. Undo again to continue with add “Pour”.',
     );
   });
 
@@ -156,8 +156,8 @@ describe('historyResultMessage', () => {
         setAside: { reason: 'gone', subjectName: 'Excavate', nextLabel: null },
       }),
     ).toBe(
-      'Couldn’t redo delete “Excavate” — Excavate has been deleted since. ' +
-        'That step was set aside.',
+      'Couldn’t redo delete “Excavate” — Excavate was deleted after your edit, ' +
+        'so that step was skipped.',
     );
   });
 

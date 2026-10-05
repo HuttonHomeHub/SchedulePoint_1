@@ -487,11 +487,11 @@ test('an undo that cannot apply is set aside and explained, and the next undo ca
     await page.keyboard.press('Control+z');
     await expect(strip).toBeVisible({ timeout: 15_000 });
     // A refusal is an event the planner must see: an alert, in words that name the link, say that
-    // the step was set aside, and say what the next press will run.
+    // the step was skipped, and say what the next press will run.
     await expect(strip).toHaveAttribute('role', 'alert');
-    await expect(strip).toContainText('was changed since');
-    await expect(strip).toContainText('That step was set aside');
-    await expect(strip).toContainText('Undo again continues with add link');
+    await expect(strip).toContainText('was changed after your edit');
+    await expect(strip).toContainText('so that step was skipped');
+    await expect(strip).toContainText('Undo again to continue with add link');
     expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
   });
 
@@ -500,14 +500,19 @@ test('an undo that cannot apply is set aside and explained, and the next undo ca
     // undoing its creation is set aside too, with the same explanation.
     await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
     await expect(strip).toContainText('Couldn’t undo add link', { timeout: 15_000 });
-    await expect(strip).toContainText('Undo again continues with add “Foundations”');
+    await expect(strip).toContainText('Undo again to continue with add “Foundations”');
     expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
   });
 
-  await test.step('the next undo runs the step beneath them', async () => {
+  await test.step('removing an activity would take their link with it, so that is skipped too', async () => {
+    // Deleting "Foundations" cascades the link a colleague has since changed, so the step that
+    // added it is skipped rather than deleting somebody else's logic. Nothing is lost: both bars
+    // and the link are exactly as they were, and the history still moves on one step per press.
     await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
-    await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
-    await expect(strip).toContainText('Undid add “Foundations”');
+    await expect(strip).toContainText('Couldn’t undo add “Foundations”', { timeout: 15_000 });
+    await expect(strip).toContainText('Undo again to continue with add “Excavate”');
+    await expect(diagram.getByRole('option')).toHaveCount(2);
+    expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
   });
 });
 

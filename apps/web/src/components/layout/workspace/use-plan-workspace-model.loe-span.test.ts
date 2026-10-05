@@ -5,8 +5,7 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiFetchError } from '@/lib/api/client';
-import { anActivity } from '@/test/activity-fixture';
-import { fakePlanServer } from '@/test/fake-plan-server';
+import { aDependency, fakePlanServer } from '@/test/fake-plan-server';
 
 /**
  * `createLoeSpan` seam coverage (Stage D, `docs/specs/canvas-activity-types/`): the workspace model
@@ -265,7 +264,25 @@ describe('usePlanWorkspaceModel.createLoeSpan', () => {
     });
 
     const command = h.record.mock.calls[0]![0];
-    await command.undo(fakePlanServer({ activities: [anActivity({ id: 'loe-1' })] }).ctx);
+    // The plan as the compose left it: the LOE, with exactly the span's own two edges on it.
+    const server = fakePlanServer({
+      activities: [LOE],
+      dependencies: [
+        aDependency({
+          id: 'ss',
+          type: 'SS',
+          predecessor: { id: 'start', code: null, name: 'Excavate' },
+          successor: { id: 'loe-1', code: null, name: 'Level of effort' },
+        }),
+        aDependency({
+          id: 'ff',
+          type: 'FF',
+          predecessor: { id: 'loe-1', code: null, name: 'Level of effort' },
+          successor: { id: 'finish', code: null, name: 'Pour' },
+        }),
+      ],
+    });
+    await command.undo(server.ctx);
     // Undo deletes the LOE; the SS + FF edges cascade with it — no separate edge deletes.
     expect(h.deleteActivity).toHaveBeenCalledExactlyOnceWith('loe-1');
   });

@@ -11606,6 +11606,21 @@ many plans) with the database-architect, then call the same helper from the cale
 **Trigger:** a planner reporting a stale-but-silent overview after a calendar or resource-limit edit, or the
 helper gaining a second caller that already knows its plan set.
 
+### 450. A single `DELETE` carries no version, so undo's check-then-delete has a small window
+
+**Status:** open · **Verified:** 2026-10-05 (`activities.controller.ts`, `dependencies.controller.ts`: both `DELETE` routes take an id and no version; `docs/adr/0176-*.md`) ·
+**Raised:** 2026-10-05 (undo-redo M2 review) · **Size:** S · **Owner:** api
+
+Undo and redo of a step that **deletes** (add-then-undo, delete-then-redo, a copy's undo, a link's removal) now
+re-read what they are about to delete and refuse if it was edited, linked or filed under since (ADR-0176). But the
+single-row `DELETE` routes are **unversioned**, so between that read and the delete a colleague's write can still
+land and be deleted with the row. The window is one round trip, and the bulk delete is already versioned.
+Accepted for now; the API is not changed by the undo work.
+
+**Next:** an optional `version` (or `If-Match`) on single-row `DELETE`, enforced when sent, which `commands.ts` would
+then pass from the row its pre-check just read. Additive and opt-in, so existing callers are unaffected.
+**Trigger:** a report of a colleague's edit lost to an undo, or the next change to either `DELETE` route.
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·

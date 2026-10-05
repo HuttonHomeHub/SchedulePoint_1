@@ -51,8 +51,9 @@ export const UNDO_FAILED_MESSAGE = 'Couldn’t undo just now. Please try again.'
 export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.';
 
 /**
- * The clause that says what went wrong with a set-aside step. Each names the thing, because "was
- * changed since" with no subject is what a planner cannot act on.
+ * The clause that says what went wrong with a set-aside step, in the planner's words ("skipped", not
+ * the code's "set aside"). Each names the thing and says WHEN it changed — after the planner's own
+ * edit — because "was changed" with no subject or time is what a planner cannot act on.
  *
  * `parent-deleted` is the 409 that means "a phase this was filed under has since been deleted"
  * (`docs/TECH_DEBT.md` #230 M2): the server refuses the restore rather than re-parenting the subtree
@@ -63,11 +64,11 @@ export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.'
 function setAsideClause(setAside: SetAside): string {
   switch (setAside.reason) {
     case 'changed':
-      return `${setAside.subjectName} was changed since`;
+      return `${setAside.subjectName} was changed after your edit`;
     case 'gone':
-      return `${setAside.subjectName} has been deleted since`;
+      return `${setAside.subjectName} was deleted after your edit`;
     case 'parent-deleted':
-      return 'a phase it was filed under has been deleted since';
+      return 'the phase it was filed under was deleted after your edit';
     case 'duplicate':
       return 'that link already exists';
   }
@@ -90,12 +91,12 @@ export function historyResultMessage(result: HistoryResult | PostedHistoryResult
     case 'set-aside': {
       const { setAside } = result;
       const head = historyPhrase(undo ? 'Couldn’t undo' : 'Couldn’t redo', result.label);
-      if (setAside === undefined) return `${head}. That step was set aside.`;
+      if (setAside === undefined) return `${head}. That step was skipped.`;
       const next =
         undo && setAside.nextLabel !== null
-          ? `; ${historyPhrase('Undo again continues with', setAside.nextLabel)}`
+          ? ` ${historyPhrase('Undo again to continue with', setAside.nextLabel)}.`
           : '';
-      return `${head} — ${setAsideClause(setAside)}. That step was set aside${next}.`;
+      return `${head} — ${setAsideClause(setAside)}, so that step was skipped.${next}`;
     }
     case 'failed':
       return undo ? UNDO_FAILED_MESSAGE : REDO_FAILED_MESSAGE;

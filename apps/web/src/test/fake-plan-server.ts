@@ -46,7 +46,9 @@ export function fakePlanServer(
 ) {
   const activities = new Map((seed.activities ?? []).map((a) => [a.id, { ...a }]));
   const dependencies = new Map((seed.dependencies ?? []).map((d) => [d.id, { ...d }]));
-  const deleted = new Map<string, ActivitySummary[]>();
+  // What each delete swept: the activities (a summary's subtree included) and the links touching
+  // them, which the server cascades with the row and `restore-batch` puts back.
+  const deleted = new Map<string, { rows: ActivitySummary[]; links: DependencySummary[] }>();
   let nextBatch = 1;
   let nextDependency = 100;
 
@@ -71,7 +73,45 @@ export function fakePlanServer(
     return { ...row };
   };
 
+  const sweep = (ids: readonly string[]): string => {
+    const all = new Set<string>();
+    const visit = (id: string): void => {
+      if (all.has(id)) return;
+      all.add(id);
+      for (const row of activities.values()) if (row.parentId === id) visit(row.id);
+    };
+    ids.forEach(visit);
+    const deleteBatchId = `batch-${nextBatch++}`;
+    const links = [...dependencies.values()].filter(
+      (d) => all.has(d.predecessor.id) || all.has(d.successor.id),
+    );
+    deleted.set(deleteBatchId, { rows: [...all].map((id) => ({ ...rowOf(id) })), links });
+    for (const id of all) activities.delete(id);
+    for (const link of links) dependencies.delete(link.id);
+    return deleteBatchId;
+  };
+
   const ctx: ReplayContext = {
+    readLinksOf: (ids) => {
+      const wanted = new Set(ids);
+      return Promise.resolve(
+        new Map(
+          [...dependencies.values()]
+            .filter((d) => wanted.has(d.predecessor.id) || wanted.has(d.successor.id))
+            .map((d) => [d.id, { ...d }] as const),
+        ),
+      );
+    },
+    readChildrenOf: (parentIds) => {
+      const wanted = new Set(parentIds);
+      return Promise.resolve(
+        new Map(
+          [...activities.values()]
+            .filter((a) => a.parentId !== null && wanted.has(a.parentId))
+            .map((a) => [a.id, { ...a }] as const),
+        ),
+      );
+    },
     readActivities: (ids) =>
       Promise.resolve(
         new Map(ids.flatMap((id) => (activities.has(id) ? [[id, { ...rowOf(id) }] as const] : []))),
@@ -144,32 +184,26 @@ export function fakePlanServer(
       },
     ),
     deleteActivity: vi.fn((id: string) => {
-      const row = rowOf(id);
-      const deleteBatchId = `batch-${nextBatch++}`;
-      deleted.set(deleteBatchId, [{ ...row }]);
-      activities.delete(id);
-      return Promise.resolve({ deleteBatchId });
+      rowOf(id);
+      return Promise.resolve({ deleteBatchId: sweep([id]) });
     }),
     bulkDelete: vi.fn((input: { activities: { id: string; version: number }[] }) => {
       for (const a of input.activities) lock(rowOf(a.id), a.version);
-      const deleteBatchId = `batch-${nextBatch++}`;
-      deleted.set(
-        deleteBatchId,
-        input.activities.map((a) => ({ ...rowOf(a.id) })),
-      );
-      for (const a of input.activities) activities.delete(a.id);
       return Promise.resolve({
-        deleteBatchId,
+        deleteBatchId: sweep(input.activities.map((a) => a.id)),
         activityCount: input.activities.length,
         dependencyCount: 0,
       });
     }),
     restoreBatch: vi.fn((input: { deleteBatchId: string }) => {
-      const rows = deleted.get(input.deleteBatchId);
-      if (rows === undefined) throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+      const batch = deleted.get(input.deleteBatchId);
+      if (batch === undefined) {
+        throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+      }
       deleted.delete(input.deleteBatchId);
+      for (const link of batch.links) dependencies.set(link.id, { ...link });
       return Promise.resolve(
-        rows.map((row) => {
+        batch.rows.map((row) => {
           const restored = { ...row, version: row.version + 1 };
           activities.set(restored.id, restored);
           return { ...restored };
@@ -280,14 +314,36 @@ export function fakePlanServer(
 }
 
 /**
- * A stand-in for `apiFetchAllPages` that answers the plan's activity and dependency lists from a
- * {@link fakePlanServer}, so the real replay context (`usePlanUndoRedo`'s `fetchQuery` reads) can run
- * under a test without a network.
+ * A stand-in for `apiFetchAllPages` that answers the plan's lists (and one activity's predecessors
+ * and successors) from a {@link fakePlanServer}, so the real replay context (`usePlanUndoRedo`'s
+ * `fetchQuery` reads) can run under a test without a network.
  */
 export function pagedReader(server: ReturnType<typeof fakePlanServer>) {
   return (path: string): Promise<unknown[]> => {
+    const links = /\/activities\/([^/]+)\/(predecessors|successors)$/.exec(path);
+    if (links) {
+      const [, id, which] = links;
+      return Promise.resolve(
+        [...server.dependencies.values()].filter((d) =>
+          which === 'predecessors' ? d.successor.id === id : d.predecessor.id === id,
+        ),
+      );
+    }
     if (path.endsWith('/dependencies')) return Promise.resolve([...server.dependencies.values()]);
     if (path.endsWith('/activities')) return Promise.resolve([...server.activities.values()]);
     return Promise.reject(new Error(`pagedReader: no list for ${path}`));
+  };
+}
+
+/** A stand-in for `apiFetch`: `GET …/activities/:id` and `GET …/dependencies/:id`, 404 when gone. */
+export function detailReader(server: ReturnType<typeof fakePlanServer>) {
+  return (path: string): Promise<unknown> => {
+    const match = /\/(activities|dependencies)\/([^/]+)$/.exec(path);
+    const row = match
+      ? (match[1] === 'activities' ? server.activities : server.dependencies).get(match[2] ?? '')
+      : undefined;
+    return row === undefined
+      ? Promise.reject(new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' }))
+      : Promise.resolve({ ...row });
   };
 }

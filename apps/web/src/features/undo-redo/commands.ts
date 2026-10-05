@@ -9,7 +9,8 @@ import type {
 
 import {
   APPLIED,
-  checkActivities,
+  checkDeletable,
+  isNotFound,
   checkDependencies,
   linkName,
   notApplicable,
@@ -295,6 +296,25 @@ function changedDefinitionFields(before: ActivitySummary, after: ActivitySummary
   return DEFINITION_KEYS.filter((key) => changed.has(key));
 }
 
+/**
+ * The definition a row held when a step left it — what a step that DELETES the row expects to find.
+ * Deleting is the one write a field comparison cannot be skipped for: it destroys whatever a
+ * colleague changed since, along with everything cascaded from it. A duration-derived type's
+ * duration is not its own (the engine rolls it up), so it is not part of the definition.
+ */
+function definitionState(
+  row: ActivitySummary,
+  omit: readonly DefinitionKey[] = [],
+): Partial<ActivitySummary> {
+  return pick(
+    row,
+    DEFINITION_KEYS.filter(
+      (key) =>
+        !omit.includes(key) && !(key === 'durationMinutes' && isDurationDerivedType(row.type)),
+    ),
+  );
+}
+
 /** The partial PATCH body for a target's values of `fields`. */
 function patchBody<K extends DefinitionKey>(
   target: Pick<ActivitySummary, K>,
@@ -507,14 +527,20 @@ export function createActivityCommand(params: {
   const { created, deleteActivity, restoreBatch } = params;
   let present = true;
   let batchId: string | null = null;
+  // The definition the row was left with — by the create, then by each restore.
+  let expected = definitionState(created);
   return {
     // Name the created entity ("Add “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Add “${created.name}”`,
     undo: async (ctx) => {
       if (!present) return APPLIED;
-      const checked = await checkActivities(ctx, [
-        { id: created.id, name: created.name, expect: {} },
-      ]);
+      // Deleting takes the row's links with it, and a new bar has none: any link on it now is
+      // somebody else's, as is any edit to it. Either sets the step aside rather than delete it.
+      const checked = await checkDeletable(ctx, {
+        rows: [{ id: created.id, name: created.name, expect: expected }],
+        isExpectedLink: () => false,
+        knownIds: new Set([created.id]),
+      });
       if (!checked.ok) return checked.result;
       return writeOrSetAside(created.name, async () => {
         batchId = (await deleteActivity(created.id)).deleteBatchId;
@@ -524,9 +550,11 @@ export function createActivityCommand(params: {
     redo: async () => {
       if (present || batchId === null) return APPLIED;
       return writeOrSetAside(created.name, async () => {
-        await restoreBatch({ deleteBatchId: batchId as string });
+        const restored = await restoreBatch({ deleteBatchId: batchId as string });
         present = true;
         batchId = null;
+        const row = restored.find((r) => r.id === created.id);
+        if (row !== undefined) expected = definitionState(row);
       });
     },
   };
@@ -559,26 +587,65 @@ export function deleteActivityCommand(params: {
   let batchId = params.deleteBatchId;
   // The delete already happened at the call site, so the command starts in the ABSENT state.
   let present = false;
+  const restored = restoredSet();
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Delete “${activity.name}”`,
-    undo: async () => {
-      if (present) return APPLIED;
-      return writeOrSetAside(activity.name, async () => {
-        await restoreBatch({ deleteBatchId: batchId });
+    undo: async (ctx) => {
+      if (present) {
+        // A retry after the restore landed but the link read failed: finish recording, don't restore.
+        await restored.recordLinks(ctx);
+        return APPLIED;
+      }
+      const result = await writeOrSetAside(activity.name, async () => {
+        restored.remember(await restoreBatch({ deleteBatchId: batchId }));
         present = true;
       });
+      if (result.kind === 'applied') await restored.recordLinks(ctx);
+      return result;
     },
     redo: async (ctx) => {
       if (!present) return APPLIED;
-      const checked = await checkActivities(ctx, [
-        { id: activity.id, name: activity.name, expect: {} },
-      ]);
+      const checked = await restored.checkDeletable(ctx, activity.name);
       if (!checked.ok) return checked.result;
       return writeOrSetAside(activity.name, async () => {
         // The id is stable across the restore, so the redo deletes exactly what was restored.
         batchId = (await deleteActivity(activity.id)).deleteBatchId;
         present = false;
+      });
+    },
+  };
+}
+
+/**
+ * What a restore brought back, remembered so the redo that deletes it again can tell the planner's
+ * own state from somebody else's: the definition each restored row was left with and the links that
+ * were on them. A delete cascades, so a colleague's later edit, link or child under any of these would
+ * be destroyed along with them — {@link checkDeletable} refuses instead.
+ */
+function restoredSet() {
+  let rows: readonly ActivitySummary[] = [];
+  let links: ReadonlySet<string> | null = null;
+  return {
+    /** Remember what a restore returned; the links are read separately, right after. */
+    remember(restored: readonly ActivitySummary[]): void {
+      rows = restored;
+      links = null;
+    },
+    /** Read the links on the restored rows, once. */
+    async recordLinks(ctx: ReplayContext): Promise<void> {
+      if (links !== null) return;
+      links = new Set((await ctx.readLinksOf(rows.map((r) => r.id))).keys());
+    },
+    /** Whether the restored rows may be deleted again, resolving them at their current versions. */
+    async checkDeletable(ctx: ReplayContext, name: string) {
+      if (rows.length === 0) return { ok: false as const, result: notApplicable('gone', name) };
+      const known = links;
+      return checkDeletable(ctx, {
+        rows: rows.map((row) => ({ id: row.id, name: row.name, expect: definitionState(row) })),
+        // Not read yet means unknown, and unknown links are refused rather than assumed.
+        isExpectedLink: (link) => known?.has(link.id) ?? false,
+        knownIds: new Set(rows.map((row) => row.id)),
       });
     },
   };
@@ -735,19 +802,30 @@ export function linkChainCommand(params: {
     name: linkName(d),
     state: pick(d, LINK_FIELDS),
   }));
+  // Links an undo has already deleted, kept until it finishes so a retry can skip them.
+  const removed = new Set<string>();
   return {
     label: params.label ?? `Link ${params.created.length} activities in sequence`,
     undo: async (ctx) => {
       if (live === null) return APPLIED;
-      const current = live;
+      // A retry after a failure part-way must not be refused as "gone" for the very links the first
+      // attempt removed, so those are neither checked nor deleted again.
+      const current = live.filter((l) => !removed.has(l.id));
       const checked = await checkDependencies(
         ctx,
         current.map((l) => ({ id: l.id, name: l.name, expect: l.state })),
       );
       if (!checked.ok) return checked.result;
       return writeOrSetAside(current[0]?.name ?? '', async () => {
-        for (const link of [...current].reverse()) await deleteDependency(link.id);
+        for (const link of [...current].reverse()) {
+          // Already gone is what undo wants (somebody removed it between the check and here).
+          await deleteDependency(link.id).catch((error: unknown) => {
+            if (!isNotFound(error)) throw error;
+          });
+          removed.add(link.id);
+        }
         live = null;
+        removed.clear();
       });
     },
     redo: async () => {
@@ -803,25 +881,40 @@ export function createLoeSpanCommand(params: {
   label?: string;
 }): Command {
   const { planId, startDriverId, finishDriverId, createPlaced, createDependency } = params;
-  let liveId: string | null = params.loe.id;
+  // The LOE that exists right now, and the definition it was left with; `null` while it is undone.
+  let live: { id: string; expected: Partial<ActivitySummary> } | null = {
+    id: params.loe.id,
+    expected: definitionState(params.loe),
+  };
   const name = params.loe.name;
   return {
     // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
     // and read plainly "Add level-of-effort span" (S3).
     label: params.label ?? 'Add level-of-effort span',
     undo: async (ctx) => {
-      if (liveId === null) return APPLIED;
-      const id = liveId;
-      const checked = await checkActivities(ctx, [{ id, name, expect: {} }]);
+      if (live === null) return APPLIED;
+      const { id, expected } = live;
+      // Deleting the LOE cascades its edges, so only the span's own two (start → LOE, LOE → finish)
+      // may be on it; a link a colleague added, or an edit to the LOE, sets the step aside.
+      const checked = await checkDeletable(ctx, {
+        rows: [{ id, name, expect: expected }],
+        isExpectedLink: (link) =>
+          (link.type === 'SS' &&
+            link.predecessor.id === startDriverId &&
+            link.successor.id === id) ||
+          (link.type === 'FF' &&
+            link.predecessor.id === id &&
+            link.successor.id === finishDriverId),
+        knownIds: new Set([id]),
+      });
       if (!checked.ok) return checked.result;
-      // Deleting the LOE cascades its SS + FF edges with it.
       return writeOrSetAside(name, async () => {
         await params.deleteActivity(id);
-        liveId = null;
+        live = null;
       });
     },
     redo: async (ctx) => {
-      if (liveId !== null) return APPLIED;
+      if (live !== null) return APPLIED;
       const drivers = await ctx.readActivities([startDriverId, finishDriverId]);
       // Unnamed: the span's two ends are the planner's own words for them, and the builder holds only
       // their ids.
@@ -829,23 +922,32 @@ export function createLoeSpanCommand(params: {
       if (!drivers.has(finishDriverId)) return notApplicable('gone', 'The finish activity');
       return writeOrSetAside(name, async () => {
         const loe = await createPlaced(params.placedInput);
-        liveId = loe.id;
-        await createDependency({
-          planId,
-          predecessorId: startDriverId,
-          successorId: loe.id,
-          type: 'SS',
-          lagMinutes: 0,
-          lagCalendar: 'PROJECT_DEFAULT',
-        });
-        await createDependency({
-          planId,
-          predecessorId: loe.id,
-          successorId: finishDriverId,
-          type: 'FF',
-          lagMinutes: 0,
-          lagCalendar: 'PROJECT_DEFAULT',
-        });
+        try {
+          await createDependency({
+            planId,
+            predecessorId: startDriverId,
+            successorId: loe.id,
+            type: 'SS',
+            lagMinutes: 0,
+            lagCalendar: 'PROJECT_DEFAULT',
+          });
+          await createDependency({
+            planId,
+            predecessorId: loe.id,
+            successorId: finishDriverId,
+            type: 'FF',
+            lagMinutes: 0,
+            lagCalendar: 'PROJECT_DEFAULT',
+          });
+        } catch (error) {
+          // A half-composed span must not survive: the step is still undone (`live` is null), so a
+          // retry composes again, and a LOE left behind would be an orphan with no logic. Best-effort,
+          // as the forward path's rollback: the delete cascades whichever edge did land.
+          await params.deleteActivity(loe.id).catch(() => undefined);
+          throw error;
+        }
+        // Only now is the span whole, and only now does the step count as redone.
+        live = { id: loe.id, expected: definitionState(loe) };
       });
     },
   };
@@ -1277,8 +1379,16 @@ function placementExpectation(
   placement: ActivityPlacement,
   row: ActivitySummary | undefined,
 ): Partial<PlacementState> {
-  const { laneIndex, ...rest } = row ? pick(row, PLACEMENT_FIELDS) : placement;
-  return placement.laneIndex === null || laneIndex === null ? rest : { ...rest, laneIndex };
+  const source = row ? pick(row, PLACEMENT_FIELDS) : placement;
+  const expected: Partial<PlacementState> = {
+    constraintType: source.constraintType,
+    constraintDate: source.constraintDate,
+    visualStart: source.visualStart,
+  };
+  // Whether the lane is compared follows what the step WROTE, never what the row happens to hold:
+  // a step that writes a lane compares it even if the saved row says nothing about it.
+  if (placement.laneIndex !== null) expected.laneIndex = source.laneIndex ?? placement.laneIndex;
+  return expected;
 }
 
 /**
@@ -1373,30 +1483,41 @@ export function bulkDeleteCommand(params: {
 }): Command {
   const { bulkDelete, restoreBatch } = params;
   let batchId = params.deleteBatchId;
+  let present = false;
+  const restored = restoredSet();
+  const name = params.activities[0]?.name ?? 'An activity in this step';
   return {
     label: params.label ?? `Delete ${params.activities.length} activities`,
-    undo: () =>
-      writeOrSetAside(params.activities[0]?.name ?? 'An activity in this step', async () => {
-        await restoreBatch({ deleteBatchId: batchId });
-      }),
-    redo: (ctx) =>
-      replayActivities(
-        ctx,
-        params.activities.map((a) => ({
-          id: a.id,
-          ...(a.name !== undefined ? { name: a.name } : {}),
-          expect: {},
-        })),
-        async (rows) => {
-          const result = await bulkDelete({
-            activities: params.activities.flatMap((a) => {
-              const row = rows.get(a.id);
-              return row === undefined ? [] : [{ id: a.id, version: row.version }];
-            }),
-          });
-          batchId = result.deleteBatchId;
-        },
-      ),
+    undo: async (ctx) => {
+      if (present) {
+        await restored.recordLinks(ctx);
+        return APPLIED;
+      }
+      const result = await writeOrSetAside(name, async () => {
+        restored.remember(await restoreBatch({ deleteBatchId: batchId }));
+        present = true;
+      });
+      if (result.kind === 'applied') await restored.recordLinks(ctx);
+      return result;
+    },
+    redo: async (ctx) => {
+      if (!present) return APPLIED;
+      // Every restored row must still read as the restore left it, with no link or child that is not
+      // the restore's own: a bulk delete at the row's current version would otherwise go straight
+      // through a colleague's edit.
+      const checked = await restored.checkDeletable(ctx, name);
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(name, async () => {
+        const result = await bulkDelete({
+          activities: [...checked.rows.values()].map((row) => ({
+            id: row.id,
+            version: row.version,
+          })),
+        });
+        batchId = result.deleteBatchId;
+        present = false;
+      });
+    },
   };
 }
 
@@ -1417,8 +1538,8 @@ export function bulkDeleteCommand(params: {
  * undo cannot double-delete and a retried redo cannot double-create.
  */
 export function pasteActivitiesCommand(params: {
-  /** The clones just created, in creation order (parent before child). */
-  created: readonly { id: string; name?: string }[];
+  /** The clones just created, in creation order (parent before child), as the server saved them. */
+  created: readonly ActivitySummary[];
   /**
    * The clones with no cloned parent — the tops of what was copied.
    *
@@ -1431,7 +1552,7 @@ export function pasteActivitiesCommand(params: {
    * So undoing a band copy deletes its **root**, once, and lets the documented cascade take the
    * subtree. When the roots ARE the whole set (a flat copy) this is the same call as before.
    */
-  roots: readonly { id: string; name?: string }[];
+  roots: readonly { id: string }[];
   bulkDelete: BulkDeleteActivitiesFn;
   /** Single delete; cascades a summary's subtree (ADR-0038). Used when the set is not flat. */
   deleteActivity: DeleteActivityFn;
@@ -1444,43 +1565,56 @@ export function pasteActivitiesCommand(params: {
   // `false` means "the clones are not in the plan right now" — the absent state of the toggle.
   let live = true;
   let batchId: string | null = null;
+  // What the clones were left with. Duration is left out: carrying a clone's resources recomputes it
+  // after the row is saved (ADR-0040), so the saved row is not the final word on it.
+  const stateOf = (rows: readonly ActivitySummary[]) =>
+    rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      expect: definitionState(row, ['durationMinutes']),
+    }));
+  let expected = stateOf(params.created);
   return {
     label: params.label,
     undo: async (ctx) => {
       if (!live) return APPLIED;
-      return replayActivities(
-        ctx,
-        params.created.map((c) => ({
-          id: c.id,
-          ...(c.name !== undefined ? { name: c.name } : {}),
-          expect: {},
-        })),
-        async (rows) => {
-          if (isFlat) {
-            const result = await bulkDelete({
-              activities: params.created.flatMap((c) => {
-                const row = rows.get(c.id);
-                return row === undefined ? [] : [{ id: c.id, version: row.version }];
-              }),
-            });
-            batchId = result.deleteBatchId;
-          } else {
-            // Roots only, one at a time — each cascade sweeps its own subtree. The batch id of the
-            // LAST one is kept, which is exact while a paste has a single root — `planClone`'s band
-            // path produces exactly one — and is why a multi-root non-flat paste is not offered.
-            batchId = null;
-            for (const root of params.roots) {
-              batchId = (await deleteActivity(root.id)).deleteBatchId;
-            }
+      // Deleting the clones takes their links with them. A copy carries only the links BETWEEN its
+      // clones, so a link with an end outside the copy — or any edit, or a child filed under a cloned
+      // summary — is somebody else's, and sets the whole step aside.
+      const cloneIds = new Set(expected.map((row) => row.id));
+      const checked = await checkDeletable(ctx, {
+        rows: expected,
+        isExpectedLink: (link) =>
+          cloneIds.has(link.predecessor.id) && cloneIds.has(link.successor.id),
+        knownIds: cloneIds,
+      });
+      if (!checked.ok) return checked.result;
+      const rows = checked.rows;
+      return writeOrSetAside(expected[0]?.name ?? 'An activity in this step', async () => {
+        if (isFlat) {
+          const result = await bulkDelete({
+            activities: expected.flatMap((c) => {
+              const row = rows.get(c.id);
+              return row === undefined ? [] : [{ id: c.id, version: row.version }];
+            }),
+          });
+          batchId = result.deleteBatchId;
+        } else {
+          // Roots only, one at a time — each cascade sweeps its own subtree. The batch id of the
+          // LAST one is kept, which is exact while a paste has a single root — `planClone`'s band
+          // path produces exactly one — and is why a multi-root non-flat paste is not offered.
+          batchId = null;
+          for (const root of params.roots) {
+            batchId = (await deleteActivity(root.id)).deleteBatchId;
           }
-          live = false;
-        },
-      );
+        }
+        live = false;
+      });
     },
     redo: async () => {
       if (live || batchId === null) return APPLIED;
-      return writeOrSetAside(params.created[0]?.name ?? 'An activity in this step', async () => {
-        await restoreBatch({ deleteBatchId: batchId as string });
+      return writeOrSetAside(expected[0]?.name ?? 'An activity in this step', async () => {
+        expected = stateOf(await restoreBatch({ deleteBatchId: batchId as string }));
         live = true;
         batchId = null;
       });
