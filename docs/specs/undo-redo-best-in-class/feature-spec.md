@@ -230,7 +230,7 @@ Critical ones are in §1.1 below. Defaults for the rest:
 | **Steps** save (editor Steps tab)                                                                | `features/activities/components/ActivityEditorDialog.tsx:149`                                                                                                          | M3        |
 | **Resource assignment** add / edit / remove                                                      | `features/resources/components/ActivityResourcesPanel.tsx:132`, `AssignmentRow.tsx:122`, `:289-290`                                                                    | M3        |
 | **Cross-plan link** add / remove                                                                 | `features/cross-plan-dependencies/components/AddCrossPlanLinkDialog.tsx:141`, `CrossPlanLinksSection.tsx:44`                                                           | M3        |
-| **Dissolve summary** (today **clears the whole history**)                                        | `activity-crud-dialogs.tsx:124-128`, `ActivitiesTable.tsx:1027` → `use-plan-workspace-model.ts:1169-1172`                                                              | M6        |
+| **Dissolve summary** (cleared the whole history until M6, delivered 2026-10-05)                  | `activity-crud-dialogs.tsx:124-128`, `ActivitiesTable.tsx:1027` → `use-plan-workspace-model.ts:1169-1172`                                                              | M6        |
 
 **Deliberately outside undo** (each with its reason; the census test holds this list):
 

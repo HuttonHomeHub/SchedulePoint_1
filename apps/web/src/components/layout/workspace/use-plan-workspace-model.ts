@@ -40,7 +40,11 @@ import {
 // Deep imports for the next three groups, for the reason the activities note above gives: these are
 // plain mutation hooks, and the barrels they belong to are replaced wholesale by a dozen workspace
 // tests that never mean to stub a write.
-import { useUpdateActivityParents } from '@/features/activities/api/use-activities';
+import {
+  useDissolveSummary,
+  useUpdateActivityParents,
+  type DissolveSummaryResponse,
+} from '@/features/activities/api/use-activities';
 import { useReplaceActivityStepsOn } from '@/features/activities/api/use-activity-steps';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import {
@@ -139,6 +143,7 @@ import {
   linkChainCommand,
   pasteActivitiesCommand,
   deleteActivityCommand,
+  dissolveCommand,
   dependencyAddCommand,
   dependencyEditChanged,
   dependencyEditCommand,
@@ -770,6 +775,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
   // writes have their own observers and report what landed through the `record*` seams below.
   const updateParents = useUpdateActivityParents(orgSlug, planId);
+  const dissolveSummary = useDissolveSummary(orgSlug, planId);
   const replaceSteps = useReplaceActivityStepsOn(orgSlug, planId);
   const createAssignmentOn = useCreateAssignmentOn(orgSlug, planId);
   const updateAssignment = useUpdateAssignment(orgSlug, planId);
@@ -1175,8 +1181,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * links back together. Nothing here special-cases a summary any more, which is the point — a
    * planner who deletes a phase keeps the rest of their session's history too.
    *
-   * `recordDissolveBoundary` below still truncates, and that asymmetry is deliberate: a dissolve
-   * has no inverse the client can compose at all.
+   * A dissolve is recorded too — `recordActivityDissolve` below.
    *
    * A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
    */
@@ -1196,18 +1201,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, restoreBatch, deleteActivity.mutateAsync, beginLayoutEdit],
   );
-  /**
-   * Record a summary **dissolve** as a non-undoable boundary (WBS improvements M2). Dissolve is one
-   * server-side compound — reparent every child, then soft-delete the summary — and the client has no
-   * inverse it can compose from the existing mutations: re-creating the summary yields a NEW id, so
-   * "undo" would rebuild a different grouping and leave the original in Recently deleted. That is a
-   * worse outcome than no undo, so this **truncates** the history exactly as a cascade delete does.
-   * A no-op unless `VITE_UNDO_REDO` is on.
-   */
-  const recordDissolveBoundary = useCallback((): void => {
-    if (!UNDO_REDO_ENABLED) return;
-    editHistory.clear();
-  }, [editHistory]);
   // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
   // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
   // endpoints/type/lag; redo removes it again. A no-op unless `VITE_UNDO_REDO` is on.
@@ -1254,6 +1247,49 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ?? [],
     [queryClient, orgSlug, planId],
   );
+  /**
+   * Record a summary **dissolve** as one undo step (undo-redo M6, ADR-0176). Called by both hosts
+   * after the dissolve lands, with the summary as it was and what the server answered: the promoted
+   * children and the batch the summary went in. Undo restores that batch and files the children back
+   * under it; a dissolve used to clear the whole history instead, on the grounds that the client had no
+   * inverse — which lapsed once the response carried the batch id. A no-op unless `VITE_UNDO_REDO` is on.
+   */
+  const recordActivityDissolve = useCallback(
+    (summary: ActivitySummary, result: DissolveSummaryResponse): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      // A history fault must never break a write that already succeeded (see `recordReparent`).
+      try {
+        const known = cachedActivities();
+        // layout-exempt: promoting a child changes its parent, not a lane or a drawn span, and the
+        // restore brings the summary back where it was — no bar moves until the recalculation.
+        editHistory.record(
+          dissolveCommand({
+            summary,
+            result,
+            childNames: new Map(
+              result.promoted.flatMap((child) => {
+                const name = known.find((a) => a.id === child.id)?.name;
+                return name === undefined ? [] : [[child.id, name] as const];
+              }),
+            ),
+            restoreBatch,
+            dissolve: dissolveSummary.mutateAsync,
+            updateParents: updateParents.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record dissolving a summary for undo', error);
+      }
+    },
+    [
+      editHistory,
+      restoreBatch,
+      dissolveSummary.mutateAsync,
+      updateParents.mutateAsync,
+      cachedActivities,
+    ],
+  );
+
   /**
    * Record an activity **created from a dialog** — the panel's "New activity" and the Gantt's "Insert
    * activity below" (undo-redo M3). Called by `ActivityCreateDialog` with the row the server returned.
@@ -2793,8 +2829,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal. No-ops
     // when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
-    // Dissolve's undo boundary (WBS improvements M2) — see `recordDissolveBoundary`.
-    recordDissolveBoundary,
+    // A dissolve is one undo step (undo-redo M6) — see `recordActivityDissolve`.
+    recordActivityDissolve,
     recordDependencyRemove,
     recordDependencyAdd,
     recordDependencyEdit,

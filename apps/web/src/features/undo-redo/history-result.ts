@@ -78,6 +78,8 @@ function setAsideClause(setAside: SetAside): string {
       return 'it is already there';
     case 'cycle':
       return 'it would make a loop in the logic';
+    case 'unfiled':
+      return `“${setAside.subjectName}” is back, but its activities could not be moved back under it`;
   }
 }
 

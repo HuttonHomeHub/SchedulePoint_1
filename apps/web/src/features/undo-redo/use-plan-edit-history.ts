@@ -66,7 +66,7 @@ export interface PlanEditHistory {
   peekUndo: () => Command | undefined;
   peekRedo: () => Command | undefined;
   /**
-   * Drop both stacks — a plan switch, or the dissolve boundary. **Not** a pen release or loss: the
+   * Drop both stacks — a plan switch. **Not** a pen release or loss: the
    * history survives a hand-off (ADR-0176 D4), because every step is checked against the server
    * before it writes.
    */

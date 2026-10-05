@@ -50,9 +50,6 @@ const REASON = {
     '(ADR-0048); applying levelled dates, which writes inputs, is recorded separately.',
   notThisPlan:
     'Not an edit to this plan’s content: pen, sharing and import (an import creates a new plan).',
-  dissolve:
-    'Dissolve clears the history today and becomes undoable in M6, which adds the server ' +
-    'inverse it needs (spec §4.4). Listed until then so the gap is stated rather than found.',
 } as const;
 
 /**
@@ -79,7 +76,7 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useReplaceActivitySteps: recorded('stepsReplaceCommand'),
   useReplaceActivityStepsOn: recorded('stepsReplaceCommand'),
   useUpdateActivityProgress: excluded(REASON.progress),
-  useDissolveSummary: excluded(REASON.dissolve),
+  useDissolveSummary: recorded('dissolveCommand'),
 
   // Logic
   useCreateDependency: recorded('dependencyAddCommand'),

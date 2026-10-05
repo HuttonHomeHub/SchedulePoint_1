@@ -71,7 +71,8 @@ describe('auto-resolve census', () => {
     // (undo-redo M3), each of which moves no drawn span and says so where it records: a dialog create
     // (no placement is sent), a re-parenting (a parent is not a lane), a steps save (feeds a % and no
     // date), and a cross-plan link add and remove (move nothing until a programme recalculation).
-    expect(exempt).toHaveLength(7);
+    // Then a dissolve (undo-redo M6): it re-parents, and a restored summary lands where it was.
+    expect(exempt).toHaveLength(8);
   });
 
   it('pinned positive case: a record with neither is reported', () => {

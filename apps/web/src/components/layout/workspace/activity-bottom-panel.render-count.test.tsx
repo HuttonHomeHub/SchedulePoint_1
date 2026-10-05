@@ -60,7 +60,7 @@ function freshModel(overrides: Partial<PlanWorkspaceModel> = {}): PlanWorkspaceM
     onResourcesActivity: NOOP,
     onMakeMilestone: NOOP,
     recordActivityDelete: NOOP,
-    recordDissolveBoundary: NOOP,
+    recordActivityDissolve: NOOP,
     varianceByActivityId: undefined,
     noteCountByActivityId: undefined,
     onDuplicateActivity: () => Promise.resolve(),

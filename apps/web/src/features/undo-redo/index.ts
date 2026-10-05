@@ -10,6 +10,7 @@ export {
   createActivityCommand,
   createLoeSpanCommand,
   deleteActivityCommand,
+  dissolveCommand,
   dependencyAddCommand,
   dependencyEditChanged,
   dependencyEditCommand,

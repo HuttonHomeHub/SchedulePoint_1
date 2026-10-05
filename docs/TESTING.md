@@ -130,8 +130,8 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
   by structure (an exported hook whose body calls `useMutation(`), not by a verb in its name — and
   fails any that is in neither column of `apps/web/src/features/undo-redo/coverage.ts`: `recorded`
   with the command builder that records it, or `excluded` with a written reason (plan settings, a
-  progress report, notes, baselines, the shared calendar and resource libraries, engine outputs,
-  dissolve until it gets its server inverse). It also fails an entry no hook answers to any more. It
+  progress report, notes, baselines, the shared calendar and resource libraries, engine outputs).
+  It also fails an entry no hook answers to any more. It
   runs in `pnpm test` like any other structural test, so `pnpm prepush` carries it. It is a tripwire,
   not a classifier: a write made without a mutation hook is invisible to it, and it proves a decision
   was written down, not that a `recorded` seam is wired at every host — `create-seam.structural.test.ts`

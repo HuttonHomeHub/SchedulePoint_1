@@ -438,6 +438,19 @@ export function fakePlanServer(
         );
       },
     ),
+    /** Promote every child to the summary's own parent, then delete the summary alone — as the endpoint does. */
+    dissolve: vi.fn((id: string) => {
+      const summary = rowOf(id);
+      const promoted = [...activities.values()]
+        .filter((a) => a.parentId === id)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((child) => {
+          child.parentId = summary.parentId;
+          child.version += 1;
+          return { id: child.id, parentId: child.parentId, version: child.version };
+        });
+      return Promise.resolve({ promoted, deleteBatchId: sweep([id]) });
+    }),
     deleteActivity: vi.fn((id: string) => {
       rowOf(id);
       return Promise.resolve({ deleteBatchId: sweep([id]) });

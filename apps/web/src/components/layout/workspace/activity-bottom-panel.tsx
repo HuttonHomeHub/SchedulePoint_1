@@ -40,7 +40,7 @@ export interface ActivityPanelModel extends Pick<
   | 'onMakeMilestone'
   | 'recordActivityCreate'
   | 'recordActivityDelete'
-  | 'recordDissolveBoundary'
+  | 'recordActivityDissolve'
   | 'recordReparent'
   | 'recordAssignmentEdit'
   | 'varianceByActivityId'
@@ -96,7 +96,7 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
     onMakeMilestone,
     recordActivityCreate,
     recordActivityDelete,
-    recordDissolveBoundary,
+    recordActivityDissolve,
     recordReparent,
     recordAssignmentEdit,
     varianceByActivityId,
@@ -125,7 +125,7 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
       onMakeMilestone,
       recordActivityCreate,
       recordActivityDelete,
-      recordDissolveBoundary,
+      recordActivityDissolve,
       recordReparent,
       recordAssignmentEdit,
       varianceByActivityId,
@@ -153,7 +153,7 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
       onMakeMilestone,
       recordActivityCreate,
       recordActivityDelete,
-      recordDissolveBoundary,
+      recordActivityDissolve,
       recordReparent,
       recordAssignmentEdit,
       varianceByActivityId,
@@ -331,7 +331,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
            * seams come from the ONE history the workspace owns — the table never learns it exists.
            */
           onDeleted={model.recordActivityDelete}
-          onDissolved={model.recordDissolveBoundary}
+          onDissolved={model.recordActivityDissolve}
           onReparented={model.recordReparent}
           onAssignmentEdited={model.recordAssignmentEdit}
           calendars={model.calendars}

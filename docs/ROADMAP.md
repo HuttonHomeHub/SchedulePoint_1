@@ -783,8 +783,9 @@ discriminators. Each becomes a spec/plan before build:
   `docs/specs/undo-redo-best-in-class/`): what each press did shows in the dock strip (M1), and
   **undo never jams** (M2, **ADR-0176**) — a step checks the fields it wrote against the server
   before it writes, a step that cannot apply is set aside and explained so the next press carries
-  on, and the history survives a pen hand-off. Still to come: every edit undoable (M3), reveal after
-  undo (M4), keyboard from anywhere (M5), dissolve (M6), a history list (M7).
+  on, and the history survives a pen hand-off. Every edit is undoable (M3) and so is **Dissolve**
+  (M6 — it no longer wipes the history). Still to come: reveal after undo (M4), keyboard from
+  anywhere (M5), a history list (M7).
 - **Gantt view** — **shipped** (ADR-0059, `VITE_GANTT_VIEW` default-on 2026-07-28): a
   grid-and-bar projection of the same model behind a TSLD | Gantt switch, with WBS summary rows,
   the baseline variance bar ADR-0025 deferred "until a Gantt exists", and a printed programme.
