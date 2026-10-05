@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.168.0
+
+### Minor Changes
+
+- [#819](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/819) [`4734b58`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4734b5867016f3b22ca1bdcb2e24974fe91db30f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - After an undo or redo, the activity it changed is selected and brought into view.
+
 ## 0.167.0
 
 ### Minor Changes
