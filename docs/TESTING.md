@@ -125,6 +125,19 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
     no test can make it do — so this reads the call sites instead, which is the
     part that is actually decidable.
 
+  Undo has one (ADR-0176 D6): `apps/web/src/features/undo-redo/coverage.census.structural.test.ts`
+  finds every **mutation hook** the plan workspace and the feature components it renders can call —
+  by structure (an exported hook whose body calls `useMutation(`), not by a verb in its name — and
+  fails any that is in neither column of `apps/web/src/features/undo-redo/coverage.ts`: `recorded`
+  with the command builder that records it, or `excluded` with a written reason (plan settings, a
+  progress report, notes, baselines, the shared calendar and resource libraries, engine outputs,
+  dissolve until it gets its server inverse). It also fails an entry no hook answers to any more. It
+  runs in `pnpm test` like any other structural test, so `pnpm prepush` carries it. It is a tripwire,
+  not a classifier: a write made without a mutation hook is invisible to it, and it proves a decision
+  was written down, not that a `recorded` seam is wired at every host — `create-seam.structural.test.ts`
+  and the model's own tests hold that. Its red run (two entries removed, the build refuses) is in the
+  pull request that added it (ADR-0110).
+
   The soft-delete filter has one (ADR-0172):
   `apps/api/src/common/query/soft-delete-filter.structural.spec.ts` parses
   `apps/api/src` with the TypeScript compiler API and fails any read, write,

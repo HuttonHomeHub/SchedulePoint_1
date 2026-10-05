@@ -83,7 +83,13 @@ Delivered in M0 (#795), recorded here because it is the same contract: a layout-
 
 ### D6 — Coverage is a computed census with a written exclusion list
 
-Specified in the feature spec §4.6 and delivered by M3; named here so the contract is one decision.
+Specified in the feature spec §4.6 and delivered by M3 (2026-10-05):
+`apps/web/src/features/undo-redo/coverage.ts` lists every mutation hook the plan workspace reaches as
+`recorded` (naming its command builder) or `excluded` (with a written reason), and
+`coverage.census.structural.test.ts` fails the unit suite — and so `pnpm prepush` — when a hook is in
+neither, or an entry names a hook nothing reaches. Hooks are found by structure (a body that calls
+`useMutation(`), not by a verb in the name. It is a tripwire, not a classifier: it proves a decision
+was written down, not that a `recorded` seam is wired at every host.
 
 ## Alternatives considered
 
@@ -121,6 +127,18 @@ Specified in the feature spec §4.6 and delivered by M3; named here so the contr
   #450 proposes an optional version on `DELETE`.
 - A set-aside step is gone from the history. The strip says so, says why, and calls it "skipped" —
   nothing was removed from the plan, and the planner can make the edit again by hand.
+- **A record with no restore endpoint is identified by what it joins, not by its id.** An assignment
+  is deleted softly and has no restore, so undoing a removal re-creates it under a new id; every later
+  step that named the old id would otherwise address nothing. A resource is assigned to an activity at
+  most once, so the pair (activity, resource) is the identity assignment steps read and write by. A
+  cross-plan link tracks its live id inside its own step. Making a resource the driver moves the
+  previous driver off in the same request, so reversing it writes two rows — both are checked first,
+  and the previous driver is put back **before** the delete, so a failure between the two leaves one
+  driver rather than none. Not atomic, and not pretended to be.
+- A PATCH cannot clear an assignment's rate (ADR-0040), so undoing an edit that **set** one re-creates
+  the assignment without it; that case does not replay `editedField`, so a duration the edit derived
+  is not recomputed. Cross-plan links are created from whole days (`lagDays`), which is all the form
+  offers.
 - Inverses are field-scoped, so a command written against the old whole-definition contract does not
   type-check — the census in D6 is what keeps a new write path from being forgotten.
 - The mutation functions are still closed over by each builder rather than supplied by the replay
