@@ -86,3 +86,13 @@ and 512-byte figures stay in the SQL, the docblock and the sentences. The test w
   history is clustered by plan and time, which changes the distinct-sort's input and the hash join's shape.
 - **The cache was warm.** The 468 MB heap fits the OS cache, so the readings are the optimistic end and the
   row counts at which the triggers fire are, if anything, high.
+
+## The pre-aggregate rewrite, prepared and not adopted
+
+Review proposed grouping each numerator by `(plan_id, organization_id)` before counting distinct
+values, which removes the large distinct sort. It is prepared as commit `64ff45d4` on
+`wip/history-numerator-preaggregate` and **not adopted** (2026-10-05): the inner `SELECT` projects
+columns rather than aliased `count()` expressions, so gate S-4 refuses it, and widening a shared gate
+(ADR-0105) for a saving that matters only above ~250,000 history rows is not worth doing while the
+live host holds hundreds. It is the first remedy to measure when the H-1 `examined` ≥ 250,000 trigger
+fires, together with whatever S-4 change it needs.
