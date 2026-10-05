@@ -3,7 +3,12 @@ import { MoreHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 
-import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use-activities';
+import {
+  useActivities,
+  useDeleteActivity,
+  useDissolveSummary,
+  type DissolveSummaryResponse,
+} from '../api/use-activities';
 import {
   createActivitiesTableStore,
   type ActivitiesTableStore,
@@ -337,13 +342,12 @@ export function ActivitiesTable({
    */
   onDeleted?: (activity: ActivitySummary, deleteBatchId: string) => void;
   /**
-   * Tell the host a summary was dissolved. Same reason as {@link onDeleted}, opposite consequence:
-   * a dissolve has **no inverse the client can compose**, so the host records a non-undoable
-   * boundary and the history is truncated (ADR-0048 M2, unchanged by #230). Wiring it therefore
-   * makes this table's Dissolve destroy a history it used to leave intact-but-stale, which is the
-   * honest behaviour and is named in the changeset.
+   * Tell the host a summary was dissolved, with the summary as it was and what the server answered
+   * (the promoted children and the batch it went in). Same reason as {@link onDeleted}: both surfaces
+   * report to the ONE history the workspace owns, which records the dissolve as one undo step
+   * (undo-redo M6) rather than truncating it as it did before.
    */
-  onDissolved?: () => void;
+  onDissolved?: (summary: ActivitySummary, result: DissolveSummaryResponse) => void;
   /**
    * Tell the host a bulk assign filed rows under a summary (undo-redo M3), for the same reason as
    * {@link onDeleted}: the bar's write is one batch and the host's history records it as one step.
@@ -1031,12 +1035,12 @@ export function ActivitiesTable({
     if (!dissolving) return;
     const name = dissolving.name;
     dissolveSummary.mutate(dissolving.id, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         flushSync(() => {
           setDissolving(null);
           setDissolveError(null);
         });
-        onDissolved?.();
+        onDissolved?.(dissolving, result);
         // Names what actually happened, not just that something did: the summary is gone AND the
         // work is not, which is the whole distinction from Delete.
         announce(`Summary “${name}” dissolved. Its activities were kept.`);

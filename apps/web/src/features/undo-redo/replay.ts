@@ -25,8 +25,12 @@ import { ApiFetchError } from '@/lib/api/client';
  * - `parent-deleted` — a restore the server refused because the phase it was filed under was deleted.
  * - `duplicate` — re-creating a link the plan already has.
  * - `cycle` — re-creating a cross-plan link that would now close a loop in the programme's logic.
+ * - `already-restored` — undoing a dissolve whose restore batch is already consumed (restored elsewhere).
+ * - `unfiled` — undoing a dissolve: the summary was put back but its activities could not be moved back
+ *   under it. The one reason that says something was written, so the planner is not told "nothing changed".
  */
-export type NotApplicableReason = 'changed' | 'gone' | 'parent-deleted' | 'duplicate' | 'cycle';
+export type NotApplicableReason =
+  'changed' | 'gone' | 'parent-deleted' | 'duplicate' | 'cycle' | 'unfiled' | 'already-restored';
 
 export type ReplayResult =
   | { readonly kind: 'applied' }

@@ -7,14 +7,17 @@ import type {
   LagCalendarSource,
 } from '@repo/types';
 
+import type { UpdateParentsFn } from './record-commands';
 import {
   APPLIED,
+  checkActivities,
   checkDeletable,
   isNotFound,
   checkDependencies,
   linkName,
   notApplicable,
   pick,
+  ReplayFailure,
   replayActivities,
   replayActivity,
   replayDependency,
@@ -25,10 +28,12 @@ import {
 
 import type {
   ActivityDefinitionInput,
+  DissolveSummaryResponse,
   PlacedActivityInput,
 } from '@/features/activities/api/use-activities';
 import { typeChangeReexpressesDates } from '@/features/activities/model/type-change-dates';
 import { isDurationDerivedType } from '@/features/activities/schemas/activity-schemas';
+import { ApiFetchError } from '@/lib/api/client';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /**
@@ -617,6 +622,160 @@ export function deleteActivityCommand(params: {
   };
 }
 
+/** `useDissolveSummary().mutateAsync` — promotes the summary's children and soft-deletes it. */
+export type DissolveSummaryFn = (activityId: string) => Promise<DissolveSummaryResponse>;
+
+/**
+ * Reverse a summary **dissolve** — put the summary back and file its children under it again.
+ *
+ * A dissolve is one server-side compound (promote every child, delete the summary), and
+ * `restore-batch` undoes only the second half: the summary returns **alone**, the promotion is not
+ * undone (`docs/API.md`). So undo is two writes — the id-stable restore, then one all-or-nothing
+ * `updateParents` that sets ONLY `parentId` on the children, at the versions a fresh read finds. The
+ * children's other fields are never compared or written: a colleague renaming one is no reason to
+ * refuse, and the undo must not put the old name back.
+ *
+ * **Checked before either write.** Each child must still sit where the dissolve put it; if one was
+ * moved, edited-and-moved or deleted since, nothing is written at all and the whole step is skipped.
+ * Restoring the summary and then refusing to re-file would leave a half-undone grouping for no gain.
+ *
+ * **The half that can still fail** is the second write, after the summary is already back. That state
+ * is left as it is — a visible, empty summary is harmless and the planner can file work under it — and
+ * the planner is told the children were NOT moved back (`unfiled`, or a {@link ReplayFailure} when the
+ * cause was a transport fault). A retry after such a failure does not restore twice; it re-files.
+ *
+ * Redo dissolves again and **rethreads the new batch id**, as {@link deleteActivityCommand} does: it is
+ * a new delete, so reusing the first batch would restore nothing and report success. It is refused
+ * when the summary was edited, linked, or given a child the step did not put there — a dissolve would
+ * promote somebody else's work out of the phase along with the planner's.
+ */
+export function dissolveCommand(params: {
+  /** The summary as it was before the dissolve. */
+  summary: ActivitySummary;
+  /** What the dissolve answered: the promoted children and the batch the summary went in. */
+  result: DissolveSummaryResponse;
+  /** The children's names for messages; a child with no entry is named generically. */
+  childNames?: ReadonlyMap<string, string>;
+  restoreBatch: RestoreDeleteBatchFn;
+  dissolve: DissolveSummaryFn;
+  updateParents: UpdateParentsFn;
+  label?: string;
+}): Command {
+  const { summary, restoreBatch, dissolve, updateParents } = params;
+  const names = params.childNames ?? new Map<string, string>();
+  let batchId = params.result.deleteBatchId;
+  // Where each child sits while the summary is dissolved — the parent the dissolve promoted it to.
+  let promotedTo = new Map(params.result.promoted.map((child) => [child.id, child.parentId]));
+  // The dissolve already happened at the call site: the summary is deleted and its children are out.
+  let present = false;
+  let refiled = false;
+  const restored = restoredSet();
+
+  const expectations = (parentFor: (id: string) => string | null) =>
+    [...promotedTo.keys()].map((id) => {
+      const name = names.get(id);
+      return { id, ...(name === undefined ? {} : { name }), expect: { parentId: parentFor(id) } };
+    });
+
+  /** Every child must be where the dissolve put it — the check both undo's writes depend on. */
+  const checkPromoted = (ctx: ReplayContext) =>
+    checkActivities(
+      ctx,
+      expectations((id) => promotedTo.get(id) ?? null),
+    );
+
+  const notRefiledDetail =
+    `“${summary.name}” is back, but its activities were not moved back under it. ` +
+    'Undo again to try once more.';
+
+  const refile = async (
+    ctx: ReplayContext,
+    known?: ReadonlyMap<string, ActivitySummary>,
+  ): Promise<ReplayResult> => {
+    const unfiled = notApplicable('unfiled', summary.name);
+    if (promotedTo.size > 0) {
+      let rows = known;
+      if (rows === undefined) {
+        // A retry reads again; a read that fails says nothing about the children, but the planner must
+        // still be told the summary is already back rather than shown the generic failure.
+        let checked: Awaited<ReturnType<typeof checkPromoted>>;
+        try {
+          checked = await checkPromoted(ctx);
+        } catch (err) {
+          throw new ReplayFailure(notRefiledDetail, err);
+        }
+        if (!checked.ok) return unfiled;
+        rows = checked.rows;
+      }
+      const current = rows;
+      try {
+        await updateParents({
+          parents: [...promotedTo.keys()].flatMap((id) => {
+            const row = current.get(id);
+            return row === undefined ? [] : [{ id, parentId: summary.id, version: row.version }];
+          }),
+        });
+      } catch (err) {
+        if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {
+          return unfiled;
+        }
+        throw new ReplayFailure(notRefiledDetail, err);
+      }
+    }
+    refiled = true;
+    try {
+      await restored.recordLinks(ctx);
+    } catch (err) {
+      // The undo has applied. Unread links only make a later redo refuse (unknown links are never
+      // assumed), so reporting the whole step as failed would be the wrong answer.
+      console.error('Could not read the links on a restored summary after undoing a dissolve', err);
+    }
+    return APPLIED;
+  };
+
+  return {
+    label: params.label ?? `Dissolve “${summary.name}”`,
+    undo: async (ctx) => {
+      if (present && refiled) return APPLIED;
+      if (present) return refile(ctx);
+      const checked = await checkPromoted(ctx);
+      if (!checked.ok) return checked.result;
+      let consumed = false;
+      const result = await writeOrSetAside(summary.name, async () => {
+        try {
+          restored.remember(await restoreBatch({ deleteBatchId: batchId }));
+          present = true;
+        } catch (err) {
+          // Not "deleted after your edit": the batch is gone because somebody restored it from Recently
+          // deleted, or an earlier restore committed and its answer never arrived.
+          if (!(err instanceof ApiFetchError && err.status === 404)) throw err;
+          consumed = true;
+        }
+      });
+      if (consumed) return notApplicable('already-restored', summary.name);
+      if (result.kind !== 'applied') return result;
+      return refile(ctx, checked.rows);
+    },
+    redo: async (ctx) => {
+      if (!present) return APPLIED;
+      const children = await checkActivities(
+        ctx,
+        expectations(() => summary.id),
+      );
+      if (!children.ok) return children.result;
+      const checked = await restored.checkDeletable(ctx, summary.name, [...promotedTo.keys()]);
+      if (!checked.ok) return checked.result;
+      return writeOrSetAside(summary.name, async () => {
+        const dissolved = await dissolve(summary.id);
+        batchId = dissolved.deleteBatchId;
+        promotedTo = new Map(dissolved.promoted.map((child) => [child.id, child.parentId]));
+        present = false;
+        refiled = false;
+      });
+    },
+  };
+}
+
 /**
  * What a restore brought back, remembered so the redo that deletes it again can tell the planner's
  * own state from somebody else's: the definition each restored row was left with and the links that
@@ -638,14 +797,19 @@ function restoredSet() {
       links = new Set((await ctx.readLinksOf(rows.map((r) => r.id))).keys());
     },
     /** Whether the restored rows may be deleted again, resolving them at their current versions. */
-    async checkDeletable(ctx: ReplayContext, name: string) {
+    async checkDeletable(
+      ctx: ReplayContext,
+      name: string,
+      /** Activities that are legitimately filed under a restored summary (a dissolve's children). */
+      alsoKnown: readonly string[] = [],
+    ) {
       if (rows.length === 0) return { ok: false as const, result: notApplicable('gone', name) };
       const known = links;
       return checkDeletable(ctx, {
         rows: rows.map((row) => ({ id: row.id, name: row.name, expect: definitionState(row) })),
         // Not read yet means unknown, and unknown links are refused rather than assumed.
         isExpectedLink: (link) => known?.has(link.id) ?? false,
-        knownIds: new Set(rows.map((row) => row.id)),
+        knownIds: new Set([...rows.map((row) => row.id), ...alsoKnown]),
       });
     },
   };

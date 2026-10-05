@@ -116,9 +116,11 @@ org-scope and optimistic (409) gates, so the API remains the sole trust boundary
 already existed and already had all of them; **no permission moves.** The CPM engine is not
 imported and the ADR-0034 recalculation parity gate is untouched.
 
-**Dissolve still truncates**, and the asymmetry is deliberate: a dissolve has no inverse the client
-can compose from the existing mutations, because re-creating the summary mints a new id and would
-rebuild a different grouping while stranding the original in Recently deleted.
+**Dissolve truncated, until ADR-0176's M6 (2026-10-05).** The asymmetry was deliberate while it
+lasted: a dissolve had no inverse the client could compose, because re-creating the summary mints a
+new id. It has one now — the dissolve response carries the batch the summary was deleted in, so undo
+is the id-stable `restore-batch` plus a `parentId`-only re-file of the promoted children. Dissolve is
+one undo step like any other, and a dissolve no longer ends the history.
 
 ### 2. Recording a delete is a property of the plan, not of the surface it was done from
 
@@ -131,9 +133,9 @@ Both surfaces now report to the **one** history the workspace owns, through opti
 callbacks — the pattern the table already used for five other host-owned actions, so the direction
 of the dependency is unchanged and the table still knows nothing about a history.
 
-Its honest cost: the panel's **Dissolve** now ends a history it used to leave intact-but-stale.
-That is the correct behaviour and it matches the diagram, and it is named in the changeset because
-it is a behaviour change rather than a fix.
+Its honest cost: the panel's **Dissolve** now ended a history it used to leave intact-but-stale.
+That was correct at the time and matched the diagram; M6 of ADR-0176 removed the truncation from
+both surfaces, so Dissolve is now undoable from either and ends nothing.
 
 ### 3. The ancestor-gone refusal keeps its words but loses its route, which was measured
 

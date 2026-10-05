@@ -122,10 +122,9 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
     if (!dissolving) return;
     const name = dissolving.name;
     dissolveSummary.mutate(dissolving.id, {
-      onSuccess: () => {
-        // Dissolve is a server-side compound with no client-composable inverse, so it truncates the
-        // undo history rather than offering a broken one (ADR-0048 M2's cascade-delete rule).
-        model.recordDissolveBoundary();
+      onSuccess: (result) => {
+        // One undo step: the response carries the batch the summary went in, which is what restores it.
+        model.recordActivityDissolve(dissolving, result);
         flushSync(() => {
           model.setDissolveActivityId(null);
           setDissolveError(null);

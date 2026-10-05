@@ -682,3 +682,74 @@ test('Indent and Outdent in the Gantt are each undone and redone', async ({ page
     await expect.poll(parentOf, { timeout: 20_000 }).toBe(phase);
   });
 });
+
+/**
+ * **Dissolving a summary is one undo step, and it no longer wipes the history** (undo-redo M6).
+ *
+ * Dissolve used to **truncate** the whole history because the client had no inverse: a restore brings
+ * back the summary alone, and the promotion of its children is not undone with it. The server now
+ * answers with the batch the summary went in, so Undo is the id-stable restore plus a `parentId`-only
+ * re-file of the children.
+ *
+ * Asserted through the **REST API**, not the DOM: the subject is what was stored — the same summary id,
+ * and each child's `parentId` — and a table that merely re-rendered would pass against an undo that
+ * brought back a NEW summary or left the children at the top level. The second Undo is the other half
+ * of the subject: an earlier edit that the old truncation destroyed is still there to reverse.
+ */
+test('a planner undoes dissolving a summary, and the earlier edit is still undoable', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Substructure', type: 'WBS_SUMMARY' },
+    { name: 'Excavate', parentOf: 0 },
+    { name: 'Pour slab', parentOf: 0 },
+  ]);
+  const summaryId = seeded.find((a) => a.name === 'Substructure')?.id;
+  if (!summaryId) throw new Error('seeding did not return the summary');
+  const summaryExists = async (): Promise<boolean> =>
+    (await apiActivities(page, orgSlug)).some((a) => a.id === summaryId);
+  const parentOf = async (name: string): Promise<string | null | undefined> =>
+    (await apiActivities(page, orgSlug)).find((a) => a.name === name)?.parentId;
+  const undo = page
+    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('button', { name: /^Undo\b/ });
+
+  // The edit the truncation used to destroy — a count assertion on the dissolve alone cannot see it.
+  await drawTask(page, 'Snagging', { x: 420, y: 240 });
+  await expect(page.getByRole('option', { name: /Snagging/ })).toHaveCount(1, { timeout: 15_000 });
+
+  await test.step('Dissolve removes the summary and promotes its work', async () => {
+    await showActivities(page);
+    await page.getByRole('button', { name: 'Actions for Substructure' }).click();
+    await page.getByRole('menuitem', { name: 'Dissolve' }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Dissolve summary' });
+    await confirm.getByRole('button', { name: 'Dissolve' }).click();
+    await expect(confirm).toBeHidden();
+    await expect.poll(summaryExists, { timeout: 20_000 }).toBe(false);
+    expect(await parentOf('Excavate')).toBeNull();
+  });
+
+  await test.step('Undo brings the same summary back with its children filed under it', async () => {
+    await expect(undo).toHaveAccessibleName('Undo dissolve “Substructure”');
+    await undo.click();
+    await expect.poll(summaryExists, { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => parentOf('Excavate'), { timeout: 20_000 }).toBe(summaryId);
+    expect(await parentOf('Pour slab')).toBe(summaryId);
+  });
+
+  await test.step('the history survived — the next Undo reverses the earlier edit', async () => {
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).some((a) => a.name === 'Snagging'), {
+        timeout: 20_000,
+      })
+      .toBe(false);
+  });
+});

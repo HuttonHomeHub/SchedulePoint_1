@@ -24,6 +24,7 @@ const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 const mutateSpy = vi.fn();
+const dissolveSpy = vi.fn();
 const onSavedSpy = vi.fn();
 // **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock
 // blanks every export this component imports rather than only the ones stubbed here, so the day it
@@ -39,7 +40,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),
-  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
+  useDissolveSummary: () => ({ mutate: dissolveSpy, isPending: false }),
   // The REAL copy helper, not a stub: this host must actually produce the WBS cascade warning, and
   // a stub would let it silently stop while the test kept passing (the defect being fixed was
   // precisely one surface saying something the other did not).
@@ -145,6 +146,33 @@ describe('ActivityCrudDialogs', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Server said no');
     // The dialog stays open (not closed) so the user can retry.
     expect(setDeleteActivityId).not.toHaveBeenCalled();
+  });
+  // Both hosts report a dissolve to the one history (undo-redo M6): with the summary as it was and the
+  // body the route answered, which carries the batch the undo restores. Before M6 this call took no
+  // arguments and cleared the history.
+  it('records a dissolve with the summary and the batch it went in', () => {
+    const recordActivityDissolve = vi.fn();
+    const response = { promoted: [], deleteBatchId: 'batch-5' };
+    dissolveSpy.mockImplementation((_id, opts) => opts.onSuccess?.(response));
+    const activities = {
+      data: [{ id: 's1', name: 'Substructure', type: 'WBS_SUMMARY', parentId: null }],
+    };
+    render(
+      <ActivityCrudDialogs
+        model={makeModel({
+          dissolveActivityId: 's1',
+          setDissolveActivityId: vi.fn(),
+          recordActivityDissolve,
+          activities,
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Dissolve' }));
+    expect(dissolveSpy).toHaveBeenCalledWith('s1', expect.any(Object));
+    expect(recordActivityDissolve).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 's1', name: 'Substructure' }),
+      response,
+    );
   });
   // The same WBS cascade warning the table host shows (ADR-0038). Asserted here because the two
   // hosts raise the SAME dialog from different code, and a warning on only one of them is the

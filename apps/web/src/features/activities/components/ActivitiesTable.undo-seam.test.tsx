@@ -107,10 +107,11 @@ describe('ActivitiesTable — the undo seam', () => {
     expect(onDeleted.mock.calls[0]?.[1]).toBe('batch-77');
   });
 
-  it('reports a dissolve, which the host records as a non-undoable boundary', async () => {
+  it('reports a dissolve with the summary and the batch it went in, which the host records as one step', async () => {
     const onDissolved = vi.fn();
-    dissolveMutate.mockImplementation((_id: string, opts: { onSuccess: () => void }) => {
-      opts.onSuccess();
+    const response = { promoted: [], deleteBatchId: 'batch-88' };
+    dissolveMutate.mockImplementation((_id: string, opts: { onSuccess: (r: unknown) => void }) => {
+      opts.onSuccess(response);
     });
     renderTable({ onDissolved });
 
@@ -122,6 +123,8 @@ describe('ActivitiesTable — the undo seam', () => {
     );
 
     await waitFor(() => expect(onDissolved).toHaveBeenCalledTimes(1));
+    expect(onDissolved.mock.calls[0]?.[0]).toMatchObject({ id: 'sum', name: 'Substructure' });
+    expect(onDissolved.mock.calls[0]?.[1]).toBe(response);
   });
 
   /**

@@ -388,24 +388,30 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
   });
 
   /**
-   * Dissolve (WBS improvements M2) takes the cascade-delete branch's rule for the same reason: the
-   * client cannot compose its inverse from the existing mutations, so a recorded command would
-   * rebuild a *different* summary under a new id and strand the original in Recently deleted. It
-   * truncates, and it never records — an "undo" that quietly does something else is worse than
-   * none.
+   * Dissolve is one undo step (undo-redo M6). It used to truncate — "the client has no inverse" —
+   * until the response carried the batch the summary went in; a recorded command now restores that
+   * batch and files the children back, and the rest of the session's history survives.
    */
-  it('flag ON: a dissolve truncates the history and records nothing', () => {
+  it('flag ON: a dissolve records one step and does not clear the history', () => {
     h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => result.current.recordDissolveBoundary());
-    expect(h.clear).toHaveBeenCalledTimes(1);
-    expect(h.record).not.toHaveBeenCalled();
+    act(() =>
+      result.current.recordActivityDissolve(SUMMARY, {
+        promoted: [{ id: 'child-1', parentId: null, version: 2 }],
+        deleteBatchId: 'batch-9',
+      }),
+    );
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]?.[0]).toMatchObject({ label: 'Dissolve “Phase 1”' });
+    expect(h.clear).not.toHaveBeenCalled();
   });
 
   it('flag OFF: a dissolve does not touch the history', () => {
     h.undoRedo = false;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => result.current.recordDissolveBoundary());
+    act(() =>
+      result.current.recordActivityDissolve(SUMMARY, { promoted: [], deleteBatchId: 'batch-9' }),
+    );
     expect(h.clear).not.toHaveBeenCalled();
     expect(h.record).not.toHaveBeenCalled();
   });

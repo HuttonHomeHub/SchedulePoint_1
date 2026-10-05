@@ -11633,6 +11633,13 @@ one. Rare, visible and restorable; recording the orphan id so the retry deletes 
 callers are unaffected.
 **Trigger:** a report of a colleague's edit lost to an undo, or the next change to either `DELETE` route.
 
+**Dissolve has the same window, and one gap of its own** (undo-redo M6 security review): `POST …/dissolve` takes no
+expected version, so redo's check-then-dissolve can promote a child a colleague filed under the summary in the one
+round trip between the read and the write. And the `activity.dissolved` audit row does not record `deleteBatchId`, so
+the `activity.restored` row an undo writes cannot be joined to the dissolve it reversed. **Next:** an optional
+`version` on the dissolve body, enforced when sent, which redo would pass from its pre-check; and `deleteBatchId` in
+the `activity.dissolved` audit payload (additive).
+
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 
 **Status:** open · **Verified:** 2026-10-03 (`m1-measurement.md` (b), `apps/web/measure-gantt/column-truncation.spec.ts`, container Chromium) ·

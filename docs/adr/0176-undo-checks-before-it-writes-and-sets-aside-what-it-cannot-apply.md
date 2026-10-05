@@ -91,6 +91,29 @@ neither, or an entry names a hook nothing reaches. Hooks are found by structure 
 `useMutation(`), not by a verb in the name. It is a tripwire, not a classifier: it proves a decision
 was written down, not that a `recorded` seam is wired at every host.
 
+### D7 — A dissolve is one step: restore the summary, then file its children back (M6, 2026-10-05)
+
+`dissolveCommand` (`apps/web/src/features/undo-redo/commands.ts`) replaces the history truncation both
+dissolve surfaces used to perform. `restore-batch` brings back the summary **alone** — the promotion is
+not undone with it — so undo is two writes: the id-stable restore of the batch the dissolve response
+named, then one all-or-nothing `updateParents` that writes **only** `parentId`, at the versions a fresh
+read finds. Redo dissolves again and **rethreads the new batch id**, as a delete's redo does.
+
+- **Checked before either write.** Every promoted child must still hold the parent the dissolve gave
+  it. A child a colleague moved or deleted sets the whole step aside (`changed` / `gone`) with
+  **nothing written** — the summary is not restored, because restoring it and then refusing to file its
+  work would leave a half-undone grouping for no gain.
+- **The half that can still fail is the re-file.** If the restore lands and the re-file is refused
+  (409/404), the restored summary is **left** — visible, empty and harmless — and the step is set aside
+  with the new reason `unfiled`, whose words say the children were not moved back ("“X” is back, but
+  its activities could not be moved back under it, so that step was skipped"). A transport failure
+  there is a `ReplayFailure` saying the same, and a retry re-files without restoring twice.
+- **Redo is a delete's guard** (`checkDeletable`): refused if the summary was edited, linked, or given
+  a child the step did not put there, since a dissolve would promote a colleague's work out of the
+  phase with the planner's.
+- Audit reads `activity.restored` after `activity.dissolved` for an undo, as Recently deleted already
+  does for any restore. The coverage census (D6) now lists `useDissolveSummary` as `recorded`.
+
 ## Alternatives considered
 
 - **Keep abort-and-refetch.** The dead end this removes.

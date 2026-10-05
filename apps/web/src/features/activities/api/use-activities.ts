@@ -503,6 +503,13 @@ export function useDeleteActivity(orgSlug: string, planId: string) {
   });
 }
 
+/** What `POST …/activities/:id/dissolve` answers (`DissolveSummaryResponseDto`). */
+export interface DissolveSummaryResponse {
+  promoted: { id: string; parentId: string | null; version: number }[];
+  /** The batch the summary was soft-deleted in; `restore-batch` with it brings the summary back. */
+  deleteBatchId: string;
+}
+
 /**
  * Dissolve a WBS summary: remove the grouping and **keep the work** — the children are promoted to
  * the summary's own parent and the now-childless summary is soft-deleted, in one server-side
@@ -519,12 +526,11 @@ export function useDissolveSummary(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     // The response names the promoted children at their NEW versions — rows the client could not
-    // have predicted, since it did not know which activities the summary held. The blanket
-    // invalidation below already refetches them, so the body is not read here; it is typed rather
-    // than discarded so a caller that needs the ids (an undo, a targeted cache patch) can have
-    // them without changing the endpoint.
+    // have predicted, since it did not know which activities the summary held — and the delete batch
+    // the summary went in, which is what undoing the dissolve restores it by (ADR-0176). The blanket
+    // invalidation below already refetches the children, so only the undo reads the body.
     mutationFn: (activityId: string) =>
-      apiFetch<{ promoted: { id: string; parentId: string | null; version: number }[] }>(
+      apiFetch<DissolveSummaryResponse>(
         `/organizations/${orgSlug}/activities/${activityId}/dissolve`,
         { method: 'POST' },
       ),
