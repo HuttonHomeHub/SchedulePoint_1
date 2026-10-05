@@ -684,6 +684,10 @@ export function dissolveCommand(params: {
       expectations((id) => promotedTo.get(id) ?? null),
     );
 
+  const notRefiledDetail =
+    `“${summary.name}” is back, but its activities were not moved back under it. ` +
+    'Undo again to try once more.';
+
   const refile = async (
     ctx: ReplayContext,
     known?: ReadonlyMap<string, ActivitySummary>,
@@ -692,7 +696,14 @@ export function dissolveCommand(params: {
     if (promotedTo.size > 0) {
       let rows = known;
       if (rows === undefined) {
-        const checked = await checkPromoted(ctx);
+        // A retry reads again; a read that fails says nothing about the children, but the planner must
+        // still be told the summary is already back rather than shown the generic failure.
+        let checked: Awaited<ReturnType<typeof checkPromoted>>;
+        try {
+          checked = await checkPromoted(ctx);
+        } catch (err) {
+          throw new ReplayFailure(notRefiledDetail, err);
+        }
         if (!checked.ok) return unfiled;
         rows = checked.rows;
       }
@@ -708,15 +719,17 @@ export function dissolveCommand(params: {
         if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {
           return unfiled;
         }
-        throw new ReplayFailure(
-          `“${summary.name}” is back, but its activities were not moved back under it. ` +
-            'Undo again to try once more.',
-          err,
-        );
+        throw new ReplayFailure(notRefiledDetail, err);
       }
     }
     refiled = true;
-    await restored.recordLinks(ctx);
+    try {
+      await restored.recordLinks(ctx);
+    } catch (err) {
+      // The undo has applied. Unread links only make a later redo refuse (unknown links are never
+      // assumed), so reporting the whole step as failed would be the wrong answer.
+      console.error('Could not read the links on a restored summary after undoing a dissolve', err);
+    }
     return APPLIED;
   };
 
@@ -727,10 +740,19 @@ export function dissolveCommand(params: {
       if (present) return refile(ctx);
       const checked = await checkPromoted(ctx);
       if (!checked.ok) return checked.result;
+      let consumed = false;
       const result = await writeOrSetAside(summary.name, async () => {
-        restored.remember(await restoreBatch({ deleteBatchId: batchId }));
-        present = true;
+        try {
+          restored.remember(await restoreBatch({ deleteBatchId: batchId }));
+          present = true;
+        } catch (err) {
+          // Not "deleted after your edit": the batch is gone because somebody restored it from Recently
+          // deleted, or an earlier restore committed and its answer never arrived.
+          if (!(err instanceof ApiFetchError && err.status === 404)) throw err;
+          consumed = true;
+        }
       });
+      if (consumed) return notApplicable('already-restored', summary.name);
       if (result.kind !== 'applied') return result;
       return refile(ctx, checked.rows);
     },

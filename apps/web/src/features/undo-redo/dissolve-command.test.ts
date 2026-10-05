@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { dissolveCommand } from './commands';
 import { historyResultMessage } from './history-result';
@@ -135,6 +135,47 @@ describe('dissolveCommand', () => {
     );
     expect(await command.undo(server.ctx)).toEqual(notApplicable('parent-deleted', 'Substructure'));
     expect(server.mutations.updateParents).not.toHaveBeenCalled();
+  });
+
+  it('a restore batch that is already consumed reads as already brought back, not deleted', async () => {
+    const { server, command } = await dissolved();
+    server.mutations.restoreBatch.mockRejectedValueOnce(
+      new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' }),
+    );
+    const result = await command.undo(server.ctx);
+    expect(result).toEqual(notApplicable('already-restored', 'Substructure'));
+    expect(server.mutations.updateParents).not.toHaveBeenCalled();
+    expect(
+      historyResultMessage({
+        direction: 'undo',
+        outcome: 'set-aside',
+        label: command.label,
+        setAside: { reason: 'already-restored', subjectName: 'Substructure', nextLabel: null },
+      }),
+    ).toContain('“Substructure” was already brought back, so that step was skipped');
+  });
+
+  it('a retry whose read fails still says the summary is back and the children were not moved', async () => {
+    const { server, command } = await dissolved();
+    server.mutations.updateParents.mockRejectedValueOnce(new Error('network'));
+    await command.undo(server.ctx).catch(() => undefined);
+    const failing = { ...server.ctx, readActivities: () => Promise.reject(new Error('offline')) };
+    const failure = await command.undo(failing).catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(ReplayFailure);
+    expect((failure as ReplayFailure).detail).toContain('is back');
+    // Nothing was restored a second time, and a later retry still completes.
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.restoreBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('an applied undo is not reported as failed because the links could not be read afterwards', async () => {
+    const { server, command } = await dissolved();
+    const failing = { ...server.ctx, readLinksOf: () => Promise.reject(new Error('offline')) };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await command.undo(failing)).toEqual({ kind: 'applied' });
+    expect(server.row('c1').parentId).toBe('s1');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it('a summary that held nothing is restored and nothing is re-filed', async () => {
