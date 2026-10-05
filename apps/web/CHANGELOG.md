@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.170.2
+
+### Patch Changes
+
+- [#827](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/827) [`ae63998`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ae63998213f5da4d18fb0b5d2554bd597cc7fa42) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Opening another plan no longer makes the status bar say "N edits not calculated" on a plan nobody has edited. Switching plans from the Project Explorer used to carry the previous plan's state across, so the new plan's activities were counted as edits (and, while holding the pen, recalculated for no reason).
+
 ## 0.170.1
 
 ### Patch Changes
