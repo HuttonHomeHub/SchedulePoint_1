@@ -193,13 +193,13 @@ export class ActivitiesController {
     @Param('activityId', ParseUuidPipe) activityId: string,
     @RequestContext() context: RequestContext,
   ): Promise<DissolveSummaryResponseDto> {
-    const { promoted } = await this.service.dissolveSummary(
+    const { promoted, deleteBatchId } = await this.service.dissolveSummary(
       principal,
       orgSlug,
       activityId,
       context,
     );
-    return { promoted };
+    return { promoted, deleteBatchId };
   }
 
   @Post(':activityId/restore')
