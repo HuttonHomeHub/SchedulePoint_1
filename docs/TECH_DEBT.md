@@ -11555,6 +11555,18 @@ twice back to back passed 46/46 — so the CI bucket filled faster than this con
 reading, not measured, is that CI ran faster (5.5 min for three browsers, 2.4 min for chromium alone here). The
 cause of the volume was a redundant read, which ADR-0175 D3 says to remove before raising anything: `#455`.
 
+**Count since #832, 2026-10-05: 6 of 10.** #832 (`#455`) shipped the remedy; every `ci.yml` run since that
+carries it has all four web shards green — `37320914199` (#832), `37325042796` (#809, branch contains
+#832), `37326303215` (#834), `37328284102` (`main`), `37343513749` (#835), `37345810798` (`main`). Cancelled
+`main` runs (superseded by a newer push) and the Version Packages PR's runs (held for approval, no job body)
+ran no tests and count neither way. **The 24 shard logs were then read** (the last 400 lines of each, which
+hold the closing seven to eleven suites per shard, not the first few): **no `429` or `RATE_LIMITED` line
+anywhere**, no failure, and **two retried-then-passed tests, neither a 429** — `plan-switch.spec.ts:109`
+(job `111799447911`, the first attempt timed out waiting for the **New plan** button, `support.ts:65`) and
+`activity-editor.spec.ts:449` (job `111817820829`, the editor had closed when line 481 expected it open after
+a third Escape). Neither is the cause this row names, so the count stands; both are recorded here so a
+second sighting of either is recognised as a repeat rather than a first.
+
 ### 440. `updatePlacements` and the recalculation write may deadlock each other
 
 **Status:** open · **Verified:** 2026-10-03 (read, **not reproduced**: `activities.service.ts` `updatePlacements`
