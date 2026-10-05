@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { createVersionLedger, type Command } from './commands';
+import type { Command } from './commands';
 import {
   historyResultMessage,
   isHistoryFailure,
@@ -13,8 +13,8 @@ import type { PlanEditHistory } from './use-plan-edit-history';
 
 const step = (label: string): Command => ({
   label,
-  undo: () => Promise.resolve(),
-  redo: () => Promise.resolve(),
+  undo: () => Promise.resolve({ kind: 'applied' }),
+  redo: () => Promise.resolve({ kind: 'applied' }),
 });
 
 /** A history double whose stack tops the test moves by hand — the hook reads them, never writes. */
@@ -25,7 +25,6 @@ function historyWith(state: {
 }): PlanEditHistory {
   return {
     record: () => undefined,
-    versions: createVersionLedger(),
     isTop: (command) => state.undoTop === command,
     peekUndo: () => state.undoTop,
     peekRedo: () => state.redoTop,
@@ -132,8 +131,34 @@ describe('historyResultMessage', () => {
     expect(message({ direction: 'redo' })).toBe('Redid delete “Excavate”.');
   });
 
-  it('a conflict no longer tells the reader to refresh — the refetch already happened', () => {
-    expect(message({ outcome: 'conflict' })).not.toMatch(/refresh/i);
+  it('a set-aside never tells the reader to refresh — the read that found it already refreshed', () => {
+    const setAside = { reason: 'changed', subjectName: 'Excavate', nextLabel: null } as const;
+    expect(message({ outcome: 'set-aside', setAside })).not.toMatch(/refresh/i);
+  });
+
+  it('a set-aside names the subject, says the step was skipped, and says what the next press runs', () => {
+    expect(
+      message({
+        outcome: 'set-aside',
+        setAside: { reason: 'changed', subjectName: 'Excavate', nextLabel: 'Add “Pour”' },
+      }),
+    ).toBe(
+      'Couldn’t undo delete “Excavate” — Excavate was changed after your edit, ' +
+        'so that step was skipped. Undo again to continue with add “Pour”.',
+    );
+  });
+
+  it('a set-aside redo does not promise a next step', () => {
+    expect(
+      message({
+        direction: 'redo',
+        outcome: 'set-aside',
+        setAside: { reason: 'gone', subjectName: 'Excavate', nextLabel: null },
+      }),
+    ).toBe(
+      'Couldn’t redo delete “Excavate” — Excavate was deleted after your edit, ' +
+        'so that step was skipped.',
+    );
   });
 
   it('a refusal carries the host’s own sentence', () => {
@@ -143,11 +168,11 @@ describe('historyResultMessage', () => {
   });
 
   it('only a success is not a failure', () => {
-    const outcomes = ['done', 'conflict', 'parent-deleted', 'failed', 'blocked'] as const;
+    const outcomes = ['done', 'set-aside', 'failed', 'blocked'] as const;
     expect(
       outcomes.map((outcome) =>
         isHistoryFailure({ id: 1, direction: 'undo', outcome, label: 'x' }),
       ),
-    ).toEqual([false, true, true, true, true]);
+    ).toEqual([false, true, true, true]);
   });
 });

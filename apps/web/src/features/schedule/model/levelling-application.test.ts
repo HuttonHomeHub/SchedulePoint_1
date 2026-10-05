@@ -62,7 +62,7 @@ function application(over: Partial<LevellingApplication> = {}): LevellingApplica
 
 describe('levellingApplicationSnapshots', () => {
   it('builds before from the preview items, keeping a null prior placement null', () => {
-    const { before, after, versions } = levellingApplicationSnapshots(
+    const { before, after } = levellingApplicationSnapshots(
       application({
         rows: [row('a'), row('b', { version: 9, visualStart: '2026-03-16' })],
         items: [
@@ -78,10 +78,6 @@ describe('levellingApplicationSnapshots', () => {
     expect(after.map((p) => [p.id, p.visualStart])).toEqual([
       ['a', '2026-03-09'],
       ['b', '2026-03-16'],
-    ]);
-    expect([...versions]).toEqual([
-      ['a', 3],
-      ['b', 9],
     ]);
   });
 

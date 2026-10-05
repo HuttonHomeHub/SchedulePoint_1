@@ -5,30 +5,39 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bulkPlacementCommand } from './commands';
-import {
-  REDO_CONFLICT_MESSAGE,
-  REDO_FAILED_MESSAGE,
-  UNDO_CONFLICT_MESSAGE,
-  UNDO_FAILED_MESSAGE,
-} from './history-result';
+import { REDO_FAILED_MESSAGE, UNDO_FAILED_MESSAGE } from './history-result';
 import { usePlanEditHistory } from './use-plan-edit-history';
 import { usePlanUndoRedo } from './use-plan-undo-redo';
 
 import { levellingApplicationSnapshots } from '@/features/schedule';
 import { ApiFetchError } from '@/lib/api/client';
+import { anActivity } from '@/test/activity-fixture';
+import { detailReader, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
+
+// The replay reads the plan through `fetchQuery`; answer those lists from the fake server.
+const reader = vi.hoisted(() => ({
+  current: (_path: string): Promise<unknown[]> => Promise.resolve([]),
+  one: (_path: string): Promise<unknown> => Promise.resolve(undefined),
+}));
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetchAllPages: (path: string) => reader.current(path),
+  apiFetch: (path: string) => reader.one(path),
+}));
 
 /**
- * **A failed undo or redo of "Apply levelled dates", through the real history and the real
- * conflict contract** (`docs/specs/apply-levelled-dates/` T2.3; ADR-0048 M3.1).
+ * **A failed undo or redo of "Apply levelled dates", through the real history and the real replay
+ * contract** (`docs/specs/apply-levelled-dates/` T2.3; ADR-0048 M3.1, ADR-0176).
  *
  * The command is the one the workspace model records, built from the same snapshots; only the batch
  * write is stubbed. What this pins, each against the defect it names:
  *
- * - the rejection reaches the planner as a sentence — a failed inverse that said nothing would leave
+ * - a refusal reaches the planner as a sentence — a failed inverse that said nothing would leave
  *   the bars where they are and the Undo button apparently working;
- * - a failed undo leaves the step on the undo stack, so the planner can retry — popping it before the
- *   write resolved would lose the only way back;
- * - a 409 drops the redo branch, which described a plan that is no longer the one on screen.
+ * - a transport failure leaves the step on the undo stack, so the planner can retry — popping it
+ *   before the write resolved would lose the only way back;
+ * - a step that cannot apply is SET ASIDE, not left on top to block everything beneath it, and takes
+ *   the redo branch with it, which described a plan that is no longer the one on screen.
  *
  * The command takes no recalculation hold of its own (only the forward write does), so there is
  * none to release here; `use-plan-workspace-model.apply-levelling.test.ts` asserts that.
@@ -69,11 +78,15 @@ const application: LevellingApplication = {
 };
 
 const conflict = () => new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' });
-
-const batch = vi.fn();
 const announce = vi.fn();
 
 function setup() {
+  // The row as the forward write left it: the levelled date applied.
+  const server = fakePlanServer({
+    activities: [anActivity({ id: 'a', name: 'Lift A', visualStart: '2026-03-09' })],
+  });
+  reader.current = pagedReader(server);
+  reader.one = detailReader(server);
   const queryClient = new QueryClient();
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
@@ -91,69 +104,82 @@ function setup() {
     },
     { wrapper },
   );
-  const { before, after, versions } = levellingApplicationSnapshots(application);
+  const { before, after } = levellingApplicationSnapshots(application);
   act(() =>
     result.current.history.record(
       bulkPlacementCommand({
-        batchPlacements: batch,
+        batchPlacements: server.mutations.batchPlacements,
         before,
         after,
-        versions,
+        saved: [server.row('a')],
         label: 'Apply levelled dates (1 activity)',
       }),
     ),
   );
-  return result;
+  return { result, server };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  batch.mockResolvedValue([{ id: 'a', version: 5 }]);
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe('Apply levelled dates — a failed undo', () => {
-  it('says the plan changed on a 409, and keeps the step so Undo can be retried', async () => {
-    const result = setup();
-    batch.mockRejectedValueOnce(conflict());
+  it('a 409 on the write sets the step aside in words, and the history is no longer blocked by it', async () => {
+    const { result, server } = setup();
+    server.mutations.batchPlacements.mockRejectedValueOnce(conflict());
     act(() => result.current.undoRedo.undo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE));
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed after your edit')),
+    );
+    expect(result.current.history.canUndo).toBe(false);
+    expect(result.current.history.canRedo).toBe(false);
+  });
+
+  it('a placement changed behind the planner’s back is refused BEFORE any write', async () => {
+    const { result, server } = setup();
+    server.edit('a', { visualStart: '2026-05-04' });
+    server.mutations.batchPlacements.mockClear();
+    act(() => result.current.undoRedo.undo());
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('was changed after your edit')),
+    );
+    expect(server.mutations.batchPlacements).not.toHaveBeenCalled();
+    expect(server.row('a').visualStart).toBe('2026-05-04');
+  });
+
+  it('says it failed on a network error, and leaves the step on the undo stack', async () => {
+    const { result, server } = setup();
+    server.mutations.batchPlacements.mockRejectedValueOnce(new Error('network down'));
+    act(() => result.current.undoRedo.undo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_FAILED_MESSAGE));
     expect(result.current.history.canUndo).toBe(true);
     expect(result.current.history.canRedo).toBe(false);
     act(() => result.current.undoRedo.undo());
     await waitFor(() => expect(result.current.history.canUndo).toBe(false));
     expect(result.current.history.canRedo).toBe(true);
   });
-
-  it('says it failed on a network error, and leaves the step on the undo stack', async () => {
-    const result = setup();
-    batch.mockRejectedValueOnce(new Error('network down'));
-    act(() => result.current.undoRedo.undo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_FAILED_MESSAGE));
-    expect(result.current.history.canUndo).toBe(true);
-    expect(result.current.history.canRedo).toBe(false);
-  });
 });
 
 describe('Apply levelled dates — a failed redo', () => {
   async function undone() {
-    const result = setup();
-    act(() => result.current.undoRedo.undo());
-    await waitFor(() => expect(result.current.history.canRedo).toBe(true));
-    return result;
+    const harness = setup();
+    act(() => harness.result.current.undoRedo.undo());
+    await waitFor(() => expect(harness.result.current.history.canRedo).toBe(true));
+    return harness;
   }
 
-  it('says the plan changed on a 409, and drops the stale redo', async () => {
-    const result = await undone();
-    batch.mockRejectedValueOnce(conflict());
+  it('a 409 sets the redo aside and drops the stale branch', async () => {
+    const { result, server } = await undone();
+    server.mutations.batchPlacements.mockRejectedValueOnce(conflict());
     act(() => result.current.undoRedo.redo());
-    await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_CONFLICT_MESSAGE));
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(expect.stringContaining('Couldn’t redo')),
+    );
     expect(result.current.history.canRedo).toBe(false);
     expect(result.current.history.canUndo).toBe(false);
   });
 
   it('says it failed on a network error, and keeps the step on the redo stack', async () => {
-    const result = await undone();
-    batch.mockRejectedValueOnce(new Error('network down'));
+    const { result, server } = await undone();
+    server.mutations.batchPlacements.mockRejectedValueOnce(new Error('network down'));
     act(() => result.current.undoRedo.redo());
     await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_FAILED_MESSAGE));
     expect(result.current.history.canRedo).toBe(true);

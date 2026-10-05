@@ -164,3 +164,44 @@ export async function apiDependencies(
     return body.data;
   });
 }
+
+/**
+ * Change a dependency's lag **through the REST API, behind the planner's back** — the write the
+ * history did not record (another user, another tab), which is what a set-aside step exists to
+ * survive.
+ *
+ * The current version is read first and sent back, because the endpoint's optimistic lock refuses a
+ * stale one; the status of both calls is asserted so a refused write cannot pass for a successful
+ * one. The org slug comes from the page's own URL, like {@link apiDependencies}.
+ */
+export async function apiChangeLag(
+  page: Page,
+  dependencyId: string,
+  lagMinutes: number,
+): Promise<void> {
+  await page.evaluate(
+    async ({ id, minutes }: { id: string; minutes: number }) => {
+      const match = /\/orgs\/([^/]+)\/plans\/([^/?#]+)/.exec(window.location.pathname);
+      if (!match) throw new Error(`not on a plan route: ${window.location.pathname}`);
+      const url = `/api/v1/organizations/${match[1]}/dependencies/${id}`;
+      const read = await fetch(url, { credentials: 'include' });
+      if (!read.ok) throw new Error(`dependency read failed: ${read.status}`);
+      const row = (
+        (await read.json()) as { data: { version: number; type: string; lagCalendar: string } }
+      ).data;
+      const write = await fetch(url, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: row.type,
+          lagMinutes: minutes,
+          lagCalendar: row.lagCalendar,
+          version: row.version,
+        }),
+      });
+      if (!write.ok) throw new Error(`dependency write failed: ${write.status}`);
+    },
+    { id: dependencyId, minutes: lagMinutes },
+  );
+}

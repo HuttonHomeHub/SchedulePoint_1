@@ -199,3 +199,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0173](0173-a-columns-width-is-the-planners.md)                                                 | A column's width is the planner's, kept on their device, and its drag has a typed twin     | Accepted           |
 | [0174](0174-an-activitys-history-is-working-memory-not-an-audit-trail.md)                       | An activity's history is working memory, not an audit trail                                | Accepted           |
 | [0175](0175-a-spent-budget-is-reported-as-a-spent-budget.md)                                    | A spent budget is reported as a spent budget                                               | Accepted           |
+| [0176](0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)                | Undo checks before it writes, and sets aside what it cannot apply                          | Accepted           |

@@ -1,97 +1,81 @@
-import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { pasteActivitiesCommand } from './commands';
+import { notApplicable } from './replay';
+
+import { anActivity } from '@/test/activity-fixture';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 /**
- * **The paste inverse** (`docs/specs/activity-copy-paste/` M1-T1).
+ * **The paste inverse** (`docs/specs/activity-copy-paste/` M1-T1), under ADR-0176.
  *
  * The assertion that carries the design is `redo restores the batch rather than re-creating` — the
  * plan specified the opposite, and re-creating would bring the clone bars back without the links
  * *between* them, which is the ADR-0063/W4 CQ-4 failure one gesture along. It looks correct on
  * screen: the right number of bars, in the right lanes, with the logic quietly gone.
  *
- * The idempotence pair matters because `usePlanEditHistory` can call an inverse twice when a
- * conflict is being resolved, and a double-delete would 409 on rows that are already gone.
+ * The idempotence pair matters because a retried replay (a transport failure leaves the step on top)
+ * can call an inverse twice, and a double-delete would 409 on rows that are already gone.
  */
+const CLONES = [anActivity({ id: 'c1', name: 'Excavate' }), anActivity({ id: 'c2', name: 'Pour' })];
 
-function restored(id: string, version: number): ActivitySummary {
-  // Only the two fields the command reads; the rest of ActivitySummary is irrelevant here and
-  // spelling it out would make this file about the type rather than about the inverse.
-  return { id, version } as unknown as ActivitySummary;
-}
-
-function harness(
-  created = [
-    { id: 'c1', version: 1 },
-    { id: 'c2', version: 1 },
-  ],
-) {
-  const bulkDelete = vi.fn(() =>
-    Promise.resolve({
-      deleteBatchId: 'batch-1',
-      activityCount: created.length,
-      dependencyCount: 1,
-    }),
-  );
-  const restoreBatch = vi.fn(() =>
-    Promise.resolve(created.map((c) => restored(c.id, c.version + 1))),
-  );
-  // A FLAT paste: every clone is top-level, so `roots === created` and undo takes the batch path.
-  const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
+function harness(created = CLONES) {
+  const server = fakePlanServer({ activities: created });
   const command = pasteActivitiesCommand({
     created,
     roots: created,
-    deleteActivity,
-    bulkDelete,
-    restoreBatch,
+    deleteActivity: server.mutations.deleteActivity,
+    bulkDelete: server.mutations.bulkDelete,
+    restoreBatch: server.mutations.restoreBatch,
     label: 'Duplicate “Excavate”',
   });
-  return { command, bulkDelete, restoreBatch, deleteActivity };
+  return { server, command };
 }
 
 describe('pasteActivitiesCommand', () => {
-  it('undo deletes every clone as ONE batch', async () => {
-    const { command, bulkDelete } = harness();
-    await command.undo();
-    expect(bulkDelete).toHaveBeenCalledTimes(1);
-    expect(bulkDelete).toHaveBeenCalledWith({
+  it('undo deletes every clone as ONE batch, at the rows’ current versions', async () => {
+    const { server, command } = harness();
+    // A field no step writes: it bumps the row's version without touching its definition.
+    server.edit('c1', { percentComplete: 10 });
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.bulkDelete).toHaveBeenCalledExactlyOnceWith({
       activities: [
-        { id: 'c1', version: 1 },
+        { id: 'c1', version: 2 },
         { id: 'c2', version: 1 },
       ],
     });
   });
 
   it('undo twice is a no-op — it cannot double-delete', async () => {
-    const { command, bulkDelete } = harness();
-    await command.undo();
-    await command.undo();
-    expect(bulkDelete).toHaveBeenCalledTimes(1);
+    const { server, command } = harness();
+    await command.undo(server.ctx);
+    await command.undo(server.ctx);
+    expect(server.mutations.bulkDelete).toHaveBeenCalledTimes(1);
   });
 
   it('redo restores the batch rather than re-creating — so the links between clones survive', async () => {
-    const { command, restoreBatch } = harness();
-    await command.undo();
-    await command.redo();
+    const { server, command } = harness();
+    await command.undo(server.ctx);
+    expect(await command.redo(server.ctx)).toEqual({ kind: 'applied' });
     // The whole point: re-creating would restore the activities and NOT the internal edges.
-    expect(restoreBatch).toHaveBeenCalledWith({ deleteBatchId: 'batch-1' });
+    expect(server.mutations.restoreBatch).toHaveBeenCalledWith({ deleteBatchId: 'batch-1' });
+    expect(server.activities.size).toBe(2);
   });
 
-  it('redo twice is a no-op — it cannot double-create', async () => {
-    const { command, restoreBatch } = harness();
-    await command.undo();
-    await command.redo();
-    await command.redo();
-    expect(restoreBatch).toHaveBeenCalledTimes(1);
+  it('redo twice is a no-op — it cannot double-restore', async () => {
+    const { server, command } = harness();
+    await command.undo(server.ctx);
+    await command.redo(server.ctx);
+    await command.redo(server.ctx);
+    expect(server.mutations.restoreBatch).toHaveBeenCalledTimes(1);
   });
 
-  it('threads the restored versions forward, so a second undo does not 409', async () => {
-    const { command, bulkDelete } = harness();
-    await command.undo();
-    await command.redo(); // the restore bumps every row's version to 2
-    await command.undo();
-    expect(bulkDelete).toHaveBeenLastCalledWith({
+  it('a second undo deletes at the versions the restore left, so it does not 409', async () => {
+    const { server, command } = harness();
+    await command.undo(server.ctx);
+    await command.redo(server.ctx); // the restore bumps every row's version to 2
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.bulkDelete).toHaveBeenLastCalledWith({
       activities: [
         { id: 'c1', version: 2 },
         { id: 'c2', version: 2 },
@@ -99,94 +83,84 @@ describe('pasteActivitiesCommand', () => {
     });
   });
 
+  it('one clone deleted by somebody else sets the whole step aside — nothing is half-undone', async () => {
+    const { server, command } = harness();
+    server.remove('c2');
+    expect(await command.undo(server.ctx)).toEqual(notApplicable('gone', 'Pour'));
+    expect(server.mutations.bulkDelete).not.toHaveBeenCalled();
+    expect(server.activities.has('c1')).toBe(true);
+  });
+
   it('a redo before any undo does nothing, and needs no compose-from-inputs path', async () => {
-    // `usePlanEditHistory` only ever feeds the redo stack from an undo, so this state is not
-    // reachable through the product. A compose-from-inputs fallback was written for it and removed:
-    // it could not be exercised by any test, which is the definition of the branch that rots.
-    // Pinned rather than deleted, so re-adding one is a visible decision.
-    const { command, restoreBatch, bulkDelete } = harness();
-    await command.redo();
-    expect(restoreBatch).not.toHaveBeenCalled();
-    expect(bulkDelete).not.toHaveBeenCalled();
+    // The history only ever feeds the redo stack from an undo, so this state is not reachable
+    // through the product. A compose-from-inputs fallback was written for it and removed: it could
+    // not be exercised by any test, which is the definition of the branch that rots.
+    const { server, command } = harness();
+    expect(await command.redo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.restoreBatch).not.toHaveBeenCalled();
     // …and the command is still usable afterwards: the no-op did not corrupt the state.
-    await command.undo();
-    expect(bulkDelete).toHaveBeenCalledTimes(1);
+    await command.undo(server.ctx);
+    expect(server.mutations.bulkDelete).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the state untouched when the delete rejects, so the stacks stay honest', async () => {
-    const bulkDelete = vi.fn(() => Promise.reject(new Error('423')));
-    const command = pasteActivitiesCommand({
-      created: [{ id: 'c1', version: 1 }],
-      roots: [{ id: 'c1', version: 1 }],
-      deleteActivity: vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' })),
-      bulkDelete,
-      restoreBatch: vi.fn(() => Promise.resolve([])),
-      label: 'Duplicate “Excavate”',
-    });
-    await expect(command.undo()).rejects.toThrow('423');
-    // Still present: a second undo must retry the delete, not skip it as though it had happened.
-    await expect(command.undo()).rejects.toThrow('423');
-    expect(bulkDelete).toHaveBeenCalledTimes(2);
+    const { server, command } = harness();
+    server.mutations.bulkDelete.mockRejectedValueOnce(new Error('network'));
+    await expect(command.undo(server.ctx)).rejects.toThrow('network');
+    // Still present: a retry must run the delete, not skip it as though it had happened.
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.bulkDelete).toHaveBeenCalledTimes(2);
   });
 
   it('carries a concrete label rather than a generic one', () => {
-    const { command } = harness();
-    expect(command.label).toBe('Duplicate “Excavate”');
+    expect(harness().command.label).toBe('Duplicate “Excavate”');
   });
 });
 
 describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
-  it('deletes the ROOT and lets the cascade take the subtree, never a batch', async () => {
-    // `bulkDelete` refuses any batch containing a WBS_SUMMARY (422 SUMMARY_NOT_BULK_ELIGIBLE,
-    // `activities.service.ts:1277-1281`) — deliberately, because deleting one cascades. So a band
-    // copy's undo can never go through it. The flag-on journey found this: the undo fired, the
-    // batch 422'd, and the planner was told "Couldn't undo just now." A mocked delete accepts any
-    // batch, which is why no unit test caught it first and why this one is written from the failure.
+  function band() {
     const created = [
-      { id: 'summary', version: 1 },
-      { id: 'child-1', version: 1 },
-      { id: 'child-2', version: 1 },
+      anActivity({ id: 'summary', name: 'Level 2', type: 'WBS_SUMMARY', durationMinutes: 0 }),
+      anActivity({ id: 'child-1', name: 'child-1', parentId: 'summary' }),
+      anActivity({ id: 'child-2', name: 'child-2', parentId: 'summary' }),
     ];
-    const bulkDelete = vi.fn(() =>
-      Promise.reject(new Error('SUMMARY_NOT_BULK_ELIGIBLE')),
-    ) as unknown as Parameters<typeof pasteActivitiesCommand>[0]['bulkDelete'];
-    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
+    const server = fakePlanServer({ activities: created });
+    // `bulkDelete` refuses any batch containing a WBS_SUMMARY (422 SUMMARY_NOT_BULK_ELIGIBLE,
+    // `activities.service.ts:1277-1281`) — deliberately, because deleting one cascades. A mocked
+    // delete accepts any batch, which is why the failing case is made explicit here.
+    const bulkDelete = vi.fn(() => Promise.reject(new Error('SUMMARY_NOT_BULK_ELIGIBLE')));
     const command = pasteActivitiesCommand({
       created,
-      roots: [{ id: 'summary', version: 1 }],
-      deleteActivity,
+      roots: [{ id: 'summary' }],
+      deleteActivity: server.mutations.deleteActivity,
       bulkDelete,
-      restoreBatch: vi.fn(() => Promise.resolve([])),
+      restoreBatch: server.mutations.restoreBatch,
       label: 'Duplicate band “Level 2”',
     });
+    return { server, command, bulkDelete };
+  }
 
-    await command.undo();
-    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('summary');
+  it('deletes the ROOT and lets the cascade take the subtree, never a batch', async () => {
+    const { server, command, bulkDelete } = band();
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.deleteActivity).toHaveBeenCalledExactlyOnceWith('summary');
     expect(bulkDelete).not.toHaveBeenCalled();
   });
 
-  it('redoes through the batch id the cascade delete now returns (TECH_DEBT #113)', async () => {
-    // This asserted the OPPOSITE until the route stopped answering 204: the cascade's batch id
-    // existed server-side and the client was never told it, so redo was a documented no-op. The
-    // API returns it now, so a band copy's undo is reversible like every other command's.
-    const restoreBatch = vi.fn(() => Promise.resolve([]));
-    const command = pasteActivitiesCommand({
-      created: [
-        { id: 'summary', version: 1 },
-        { id: 'child-1', version: 1 },
-      ],
-      roots: [{ id: 'summary', version: 1 }],
-      deleteActivity: vi.fn(() => Promise.resolve({ deleteBatchId: 'cascade-batch' })),
-      bulkDelete: vi.fn(() =>
-        Promise.resolve({ deleteBatchId: 'b', activityCount: 0, dependencyCount: 0 }),
-      ),
-      restoreBatch,
-      label: 'Duplicate band “Level 2”',
+  it('redoes through the batch id the cascade delete returns (TECH_DEBT #113)', async () => {
+    const { server, command } = band();
+    await command.undo(server.ctx);
+    await command.redo(server.ctx);
+    // The id the DELETE returned, not a bulk one — the band path never touches `bulkDelete`.
+    expect(server.mutations.restoreBatch).toHaveBeenCalledExactlyOnceWith({
+      deleteBatchId: 'batch-1',
     });
+  });
 
-    await command.undo();
-    await command.redo();
-    // The id the DELETE returned, not the bulk one — the band path never touches `bulkDelete`.
-    expect(restoreBatch).toHaveBeenCalledExactlyOnceWith({ deleteBatchId: 'cascade-batch' });
+  it('a child deleted since sets the step aside, deleting nothing', async () => {
+    const { server, command } = band();
+    server.remove('child-2');
+    expect((await command.undo(server.ctx)).kind).toBe('not-applicable');
+    expect(server.mutations.deleteActivity).not.toHaveBeenCalled();
   });
 });

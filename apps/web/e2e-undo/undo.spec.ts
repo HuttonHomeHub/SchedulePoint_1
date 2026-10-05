@@ -11,6 +11,7 @@ import { expect, test } from '../e2e-support/test';
 
 import {
   addLink,
+  apiChangeLag,
   apiDependencies,
   drawTask,
   onboard,
@@ -426,4 +427,130 @@ test('a planner sees what undo and redo did, in the diagram and the Gantt', asyn
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();
   expect(results.violations).toEqual([]);
+});
+
+/**
+ * **Undo never jams** (undo-redo M2, ADR-0176) — a step that cannot apply is explained and set
+ * aside, and the next press carries on with the one beneath it.
+ *
+ * The defect was a dead end: one refused step stayed on top of the stack, so every earlier step was
+ * unreachable until a reload (which also destroyed the history). The sequence below makes the top
+ * step impossible the way it happens in real use — somebody else changes the link **through the API**
+ * after the planner's own edit, so nothing on the client recorded it — and then checks two things a
+ * unit suite cannot: that nothing was written over their change, and that the earlier step still
+ * undoes in the same session.
+ *
+ * It asserts through the REST API, not the DOM: the subject is what was *stored*, and "the strip said
+ * so" would pass against an undo that had also overwritten the colleague's value.
+ */
+test('an undo that cannot apply is set aside and explained, and the next undo carries on', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const strip = page.getByTestId('canvas-history-result');
+
+  await drawTask(page, 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawTask(page, 'Foundations', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  // Two recorded steps on one link: it is added, then its lag is edited through the dialog.
+  await openLogic(page, 'Excavate');
+  await addLink(page, 'Foundations', '2d');
+  await expect.poll(async () => (await apiDependencies(page)).length, { timeout: 15_000 }).toBe(1);
+  const link = (await apiDependencies(page))[0]!;
+  await page.getByRole('button', { name: /^Edit link to Foundations$/ }).click();
+  const editDialog = page.getByRole('dialog', { name: 'Edit dependency' });
+  await editDialog.getByLabel(/^Lag \(/).fill('5d');
+  await editDialog.getByRole('button', { name: /^Save/ }).click();
+  await expect(editDialog).toBeHidden();
+  await expect
+    .poll(async () => (await apiDependencies(page))[0]?.lagMinutes, { timeout: 15_000 })
+    .not.toBe(link.lagMinutes);
+  // The editor is a modal `<dialog>`: close it, or the accelerator never reaches the workspace.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tablist', { name: 'Activity sections' })).toBeHidden();
+
+  // Somebody else changes the lag behind the planner's back — nothing on the client recorded it.
+  const theirs = 12_345;
+  await apiChangeLag(page, link.id, theirs);
+
+  await test.step('the refused step is explained, and nothing is written over their change', async () => {
+    const undoBtn = toolbar.getByRole('button', { name: /^Undo\b/ });
+    await undoBtn.focus();
+    await page.keyboard.press('Control+z');
+    await expect(strip).toBeVisible({ timeout: 15_000 });
+    // A refusal is an event the planner must see: an alert, in words that name the link, say that
+    // the step was skipped, and say what the next press will run.
+    await expect(strip).toHaveAttribute('role', 'alert');
+    await expect(strip).toContainText('was changed after your edit');
+    await expect(strip).toContainText('so that step was skipped');
+    await expect(strip).toContainText('Undo again to continue with add link');
+    expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
+  });
+
+  await test.step('the link they changed is not removed either — and the stack still does not jam', async () => {
+    // Removing the link would discard their lag just as surely as restoring the old one would, so
+    // undoing its creation is set aside too, with the same explanation.
+    await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
+    await expect(strip).toContainText('Couldn’t undo add link', { timeout: 15_000 });
+    await expect(strip).toContainText('Undo again to continue with add “Foundations”');
+    expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
+  });
+
+  await test.step('removing an activity would take their link with it, so that is skipped too', async () => {
+    // Deleting "Foundations" cascades the link a colleague has since changed, so the step that
+    // added it is skipped rather than deleting somebody else's logic. Nothing is lost: both bars
+    // and the link are exactly as they were, and the history still moves on one step per press.
+    await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
+    await expect(strip).toContainText('Couldn’t undo add “Foundations”', { timeout: 15_000 });
+    await expect(strip).toContainText('Undo again to continue with add “Excavate”');
+    await expect(diagram.getByRole('option')).toHaveCount(2);
+    expect((await apiDependencies(page))[0]?.lagMinutes).toBe(theirs);
+  });
+});
+
+/**
+ * **History survives a pen hand-off** (undo-redo M2, ADR-0176 D4).
+ *
+ * Releasing the pen used to leave the stack in place but unguarded, and the plan briefly called for
+ * clearing it. Neither is right: the history belongs to the page session, and what makes it safe to
+ * keep is that every step is checked against the server before it writes. So after a release the
+ * controls are shaded and Ctrl+Z says why instead of doing nothing, and once the pen is taken again
+ * the same step undoes.
+ */
+test('undo history survives releasing and retaking the edit lock', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const strip = page.getByTestId('canvas-history-result');
+
+  await drawTask(page, 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawTask(page, 'Foundations', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  await page.getByRole('button', { name: 'Stop editing' }).click();
+  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+
+  // Without the pen the step is still there, and the key says why it is not running.
+  await toolbar.getByRole('button', { name: /^Undo\b/ }).focus();
+  await page.keyboard.press('Control+z');
+  await expect(strip).toContainText(/to undo/i);
+  await expect(diagram.getByRole('option')).toHaveCount(2);
+
+  await startEditing(page);
+  await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await expect(strip).toContainText('Undid add “Foundations”.');
 });

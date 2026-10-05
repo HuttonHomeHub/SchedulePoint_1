@@ -107,6 +107,8 @@ export const dependencyKeys = {
   all: (orgSlug: string) => ['dependencies', orgSlug] as const,
   byPlan: (orgSlug: string, planId: string) =>
     [...dependencyKeys.all(orgSlug), 'plan', planId] as const,
+  detail: (orgSlug: string, dependencyId: string) =>
+    [...dependencyKeys.all(orgSlug), 'detail', dependencyId] as const,
   predecessors: (orgSlug: string, activityId: string) =>
     [...dependencyKeys.all(orgSlug), 'activity', activityId, 'predecessors'] as const,
   successors: (orgSlug: string, activityId: string) =>

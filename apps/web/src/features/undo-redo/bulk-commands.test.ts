@@ -1,81 +1,45 @@
-import type { ActivitySummary } from '@repo/types';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  bulkDeleteCommand,
-  bulkPlacementCommand,
-  type ActivityPlacement,
-  type BatchPlacementsFn,
-} from './commands';
+import { bulkDeleteCommand, bulkPlacementCommand } from './commands';
+import { notApplicable } from './replay';
+
+import { anActivity } from '@/test/activity-fixture';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 /**
- * The two bulk commands (`docs/specs/canvas-multi-select/` M4-T3 / M4-T4).
+ * The two bulk commands (`docs/specs/canvas-multi-select/` M4-T3 / M4-T4), under ADR-0176.
  *
- * What both are really about is **version threading**. A command's inverse runs minutes after the
- * write it inverts, against rows whose `version` the write itself bumped — so a command that
- * remembers the versions it was built with produces an undo that is a guaranteed 409 the second
- * time it is used. That is not a rare edge: it is what happens to anyone who presses undo, redo,
- * undo.
+ * What both are really about is **the row's current version**. A command's inverse runs minutes after
+ * the write it inverts, against rows whose `version` that write — or somebody else's — bumped, so a
+ * command that remembers the versions it was built with is a guaranteed 409 the second time it is
+ * used. A replay now reads each row first and writes at the version it holds, and the fake server
+ * refuses any other.
  */
-const row = (id: string, version: number): ActivitySummary =>
-  ({ id, version }) as unknown as ActivitySummary;
+const A = (id: string, name: string) => anActivity({ id, name });
+const APPLIED = { kind: 'applied' } as const;
 
-const placement = (id: string, lane: number): ActivityPlacement => ({
-  id,
-  constraintType: 'SNET',
-  constraintDate: '2026-01-05',
-  visualStart: null,
-  laneIndex: lane,
-});
-
-describe('bulkPlacementCommand', () => {
-  it('undo writes the BEFORE snapshot and redo the AFTER, in one batch each', async () => {
-    const batchPlacements = vi.fn<BatchPlacementsFn>(() =>
-      Promise.resolve([row('a', 3), row('b', 3)]),
-    );
-    const command = bulkPlacementCommand({
-      batchPlacements,
-      before: [placement('a', 0), placement('b', 1)],
-      after: [placement('a', 4), placement('b', 5)],
-      versions: new Map([
-        ['a', 2],
-        ['b', 2],
-      ]),
-    });
-
-    await command.undo();
-    expect(batchPlacements).toHaveBeenCalledOnce();
-    expect(batchPlacements.mock.calls[0]?.[0]).toEqual({
-      placements: [
-        { ...placement('a', 0), version: 2 },
-        { ...placement('b', 1), version: 2 },
-      ],
-    });
-
-    await command.redo();
-    // …and the SECOND call carries the versions the first response returned, not the ones the
-    // command was built with. Without this the redo is a 409 for anybody who undoes twice.
-    expect(batchPlacements.mock.calls[1]?.[0]).toEqual({
-      placements: [
-        { ...placement('a', 4), version: 3 },
-        { ...placement('b', 5), version: 3 },
-      ],
-    });
+describe('bulkPlacementCommand — what the batch carries', () => {
+  const placement = (id: string, laneIndex: number | null) => ({
+    id,
+    constraintType: null,
+    constraintDate: null,
+    visualStart: '2026-03-02',
+    laneIndex,
   });
 
   it('sends every field of every row — a complete-row batch, never a partial', async () => {
-    const batchPlacements = vi.fn<BatchPlacementsFn>(() => Promise.resolve([]));
+    const server = fakePlanServer({
+      activities: [anActivity({ id: 'a', name: 'One', visualStart: '2026-03-02' })],
+    });
     await bulkPlacementCommand({
-      batchPlacements,
-      before: [
-        { id: 'a', constraintType: null, constraintDate: null, visualStart: null, laneIndex: null },
-      ],
-      after: [placement('a', 1)],
-      versions: new Map([['a', 1]]),
-    }).undo();
+      batchPlacements: server.mutations.batchPlacements,
+      before: [{ ...placement('a', null), visualStart: null }],
+      after: [placement('a', null)],
+      saved: [server.row('a')],
+    }).undo(server.ctx);
     // Nulls are sent, not omitted: the DTO refuses an absent field rather than defaulting it, so a
     // command that dropped its nulls would fail validation rather than silently unpin a constraint.
-    expect(batchPlacements.mock.calls[0]?.[0].placements[0]).toEqual({
+    expect(server.mutations.batchPlacements.mock.calls[0]?.[0].placements[0]).toEqual({
       id: 'a',
       version: 1,
       constraintType: null,
@@ -85,23 +49,12 @@ describe('bulkPlacementCommand', () => {
     });
   });
 
-  it('writes nothing when no row still has a known version', async () => {
-    const batchPlacements = vi.fn<BatchPlacementsFn>(() => Promise.resolve([]));
-    await bulkPlacementCommand({
-      batchPlacements,
-      before: [placement('gone', 0)],
-      after: [placement('gone', 1)],
-      versions: new Map(),
-    }).undo();
-    expect(batchPlacements).not.toHaveBeenCalled();
-  });
-
   it('carries no coalescing descriptor', () => {
     const command = bulkPlacementCommand({
       batchPlacements: () => Promise.resolve([]),
       before: [],
       after: [],
-      versions: new Map(),
+      saved: [],
     });
     // Stated as a test rather than left to the absence of a field: merging two bulk moves would
     // produce an undo that restores the union of two different selections — a state nobody was
@@ -111,58 +64,72 @@ describe('bulkPlacementCommand', () => {
 });
 
 describe('bulkDeleteCommand', () => {
-  it('undo restores the BATCH — one call, not one per activity', async () => {
-    const restoreBatch = vi.fn(() => Promise.resolve([row('a', 4), row('b', 4)]));
-    const bulkDelete = vi.fn(() =>
-      Promise.resolve({ deleteBatchId: 'batch-2', activityCount: 2, dependencyCount: 1 }),
-    );
-    const command = bulkDeleteCommand({
-      bulkDelete,
-      restoreBatch,
-      activities: [
-        { id: 'a', version: 3 },
-        { id: 'b', version: 3 },
-      ],
-      deleteBatchId: 'batch-1',
-    });
-
-    await command.undo();
-    expect(restoreBatch).toHaveBeenCalledExactlyOnceWith({ deleteBatchId: 'batch-1' });
-  });
-
-  it('re-threads the batch id on redo, so a second undo restores the SECOND delete', async () => {
-    const restoreBatch = vi.fn(() => Promise.resolve([row('a', 4)]));
-    const bulkDelete = vi.fn(() =>
-      Promise.resolve({ deleteBatchId: 'batch-2', activityCount: 1, dependencyCount: 0 }),
-    );
-    const command = bulkDeleteCommand({
-      bulkDelete,
-      restoreBatch,
-      activities: [{ id: 'a', version: 3 }],
-      deleteBatchId: 'batch-1',
-    });
-
-    await command.undo();
-    await command.redo();
-    // The redo deleted again, which produced a NEW batch. Reusing `batch-1` here would restore
-    // nothing at all and report success, which is the worst available failure.
-    expect(bulkDelete).toHaveBeenCalledExactlyOnceWith({ activities: [{ id: 'a', version: 4 }] });
-    await command.undo();
-    expect(restoreBatch).toHaveBeenLastCalledWith({ deleteBatchId: 'batch-2' });
-  });
-
-  it('names the count, so the undo entry says what it will bring back', () => {
-    const command = bulkDeleteCommand({
-      bulkDelete: () =>
-        Promise.resolve({ deleteBatchId: 'b', activityCount: 0, dependencyCount: 0 }),
-      restoreBatch: () => Promise.resolve([]),
+  async function swept() {
+    const server = fakePlanServer({ activities: [A('a', 'One'), A('b', 'Two')] });
+    const result = await server.mutations.bulkDelete({
       activities: [
         { id: 'a', version: 1 },
         { id: 'b', version: 1 },
-        { id: 'c', version: 1 },
       ],
-      deleteBatchId: 'b',
     });
-    expect(command.label).toBe('Delete 3 activities');
+    server.mutations.bulkDelete.mockClear();
+    const command = bulkDeleteCommand({
+      bulkDelete: server.mutations.bulkDelete,
+      restoreBatch: server.mutations.restoreBatch,
+      activities: [
+        { id: 'a', name: 'One' },
+        { id: 'b', name: 'Two' },
+      ],
+      deleteBatchId: result.deleteBatchId,
+    });
+    return { server, command };
+  }
+
+  it('undo restores the BATCH — one call, not one per activity', async () => {
+    const { server, command } = await swept();
+    expect(await command.undo(server.ctx)).toEqual(APPLIED);
+    expect(server.mutations.restoreBatch).toHaveBeenCalledExactlyOnceWith({
+      deleteBatchId: 'batch-1',
+    });
+    expect(server.activities.size).toBe(2);
+  });
+
+  it('redo deletes at the versions the restore left, and re-threads the batch id', async () => {
+    const { server, command } = await swept();
+    await command.undo(server.ctx);
+    expect(await command.redo(server.ctx)).toEqual(APPLIED);
+    // The restore bumped both rows to version 2; sending the first delete's version 1 would 409.
+    expect(server.mutations.bulkDelete).toHaveBeenCalledExactlyOnceWith({
+      activities: [
+        { id: 'a', version: 2 },
+        { id: 'b', version: 2 },
+      ],
+    });
+    // The redo deleted again, which produced a NEW batch. Reusing `batch-1` here would restore
+    // nothing at all and report success, which is the worst available failure.
+    await command.undo(server.ctx);
+    expect(server.mutations.restoreBatch).toHaveBeenLastCalledWith({ deleteBatchId: 'batch-2' });
+  });
+
+  it('a redo with one row deleted by somebody else is set aside whole, deleting nothing', async () => {
+    const { server, command } = await swept();
+    await command.undo(server.ctx);
+    server.remove('b');
+    expect(await command.redo(server.ctx)).toEqual(notApplicable('gone', 'Two'));
+    expect(server.mutations.bulkDelete).not.toHaveBeenCalled();
+    expect(server.activities.has('a')).toBe(true);
+  });
+
+  it('a non-API failure is thrown, so the step stays on top for a retry', async () => {
+    const { server, command } = await swept();
+    server.mutations.restoreBatch.mockImplementationOnce(() => {
+      throw new (class extends Error {})('not an API error');
+    });
+    await expect(command.undo(server.ctx)).rejects.toThrow('not an API error');
+  });
+
+  it('names the count, so the undo entry says what it will bring back', async () => {
+    const { command } = await swept();
+    expect(command.label).toBe('Delete 2 activities');
   });
 });

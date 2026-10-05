@@ -113,6 +113,7 @@ import {
   bulkPlacementCommand,
   createActivityCommand,
   createLoeSpanCommand,
+  linkChainCommand,
   pasteActivitiesCommand,
   deleteActivityCommand,
   dependencyAddCommand,
@@ -576,9 +577,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const bulkDeleteActivities = useBulkDeleteActivities(orgSlug, planId);
   const restoreDeleteBatch = useRestoreDeleteBatch(orgSlug, planId);
   const editHistory = usePlanEditHistory(planId);
-  // Undo/redo user-visible surface (ADR-0048 M3): wraps the dark M1/M2 store with the conflict +
-  // pen-loss contract (409/404 → refetch + clear redo; 423 → clear history + shared pen contract) and
-  // the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
+  // Undo/redo user-visible surface (ADR-0048 M3): wraps the dark M1/M2 store with the replay
+  // contract (ADR-0176: a step that cannot apply is set aside + refetch; 423 → the shared pen
+  // contract, history kept) and the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
   // recording seams above push onto). Inert unless `VITE_UNDO_REDO` is on — the wrapper only acts when
   // the user invokes undo/redo, which the flag-gated surface never does when off, so byte-identical.
   // What a press came to, held for the dock strip (undo-redo M1) — a sibling of the wrapper rather
@@ -773,15 +774,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const created = await createPlacedActivity.mutateAsync(placedInput);
     autoResolve.addSubjects([created.id]);
     // Record the create for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
-    // Undo deletes the created activity; redo re-creates it from the same placement input. Guarded on
-    // the flag so behaviour is byte-identical when off.
+    // Undo deletes the created activity; redo restores that delete's batch, so the id is stable and
+    // later steps that name it stay valid (ADR-0176). Guarded on the flag so behaviour is
+    // byte-identical when off.
     if (UNDO_REDO_ENABLED) {
       editHistory.record(
         createActivityCommand({
           created,
-          input: placedInput,
-          createPlaced: createPlacedActivity.mutateAsync,
           deleteActivity: deleteActivity.mutateAsync,
+          restoreBatch: restoreDeleteBatch.mutateAsync,
         }),
       );
     }
@@ -809,6 +810,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // a layout-only `laneIndex` write with NO recalc. Both go through the single-activity PATCH with
   // the live version (optimistic lock) — a stale version is a non-destructive conflict, never re-sent.
   const updateActivity = useUpdateActivity(orgSlug, planId);
+  // The partial PATCH: the Make-milestone write, and every definition step's undo/redo — a step
+  // writes only the fields it changed (ADR-0176), which the whole-form `updateActivity` cannot do.
+  const patchActivityFields = useUpdateActivityFields(orgSlug, planId);
+  const patchActivityFieldsAsync = patchActivityFields.mutateAsync;
   const repositionLane = useRepositionLane(orgSlug, planId);
   const setVisualStart = useSetActivityVisualStart(orgSlug, planId);
   // Dependency create/delete. `createDependency` backs the canvas link (onTsldLink); both also back the
@@ -868,7 +873,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             bulkDeleteCommand({
               bulkDelete: bulkDelete,
               restoreBatch: restoreBatch,
-              activities,
+              activities: rows.map((a) => ({ id: a.id, name: a.name })),
               deleteBatchId: result.deleteBatchId,
             }),
           );
@@ -912,14 +917,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               return version === undefined ? [] : [{ ...placement, version }];
             }),
           });
-          for (const row of saved) versions.set(row.id, row.version);
           if (UNDO_REDO_ENABLED) {
             editHistory.record(
               bulkPlacementCommand({
                 batchPlacements,
                 before,
                 after,
-                versions,
+                saved,
                 label:
                   rows.length === 1 && rows[0] !== undefined
                     ? `Move \u201c${rows[0].name}\u201d`
@@ -959,7 +963,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // Sequential, and rolled back as a set. There is no batch dependency endpoint, so a
         // mid-loop failure would otherwise leave a partial chain — half a sequence is worse than
         // none, because the plan then looks finished (the `createLoeSpanCommand` precedent).
-        const created: string[] = [];
+        const created: DependencySummary[] = [];
         beginLayoutEdit(edges.flatMap((e) => [e.predecessorId, e.successorId]));
         try {
           for (const edge of edges) {
@@ -971,39 +975,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               lagDays: 0,
               lagCalendar: 'PROJECT_DEFAULT',
             });
-            created.push(dependency.id);
+            created.push(dependency);
           }
         } catch (error) {
-          for (const id of created.reverse()) {
+          for (const dependency of created.reverse()) {
             // Best-effort: a failed rollback leaves edges the planner can delete, whereas throwing
             // here would replace the real error with a second one and tell them nothing useful.
-            await removeLink(id).catch(() => undefined);
+            await removeLink(dependency.id).catch(() => undefined);
           }
           throw error;
         }
         if (UNDO_REDO_ENABLED && created.length > 0) {
-          editHistory.record({
-            label: `Link ${created.length} activities in sequence`,
-            undo: async () => {
-              for (const id of [...created].reverse()) await removeLink(id);
-            },
-            redo: async () => {
-              // A redo creates NEW edges, so the ids the undo will need are re-threaded here — the
-              // same rule as `bulkDeleteCommand`'s batch id, for the same reason.
-              created.length = 0;
-              for (const edge of edges) {
-                const dependency = await createLink({
-                  planId,
-                  predecessorId: edge.predecessorId,
-                  successorId: edge.successorId,
-                  type: 'FS',
-                  lagDays: 0,
-                  lagCalendar: 'PROJECT_DEFAULT',
-                });
-                created.push(dependency.id);
-              }
-            },
-          });
+          editHistory.record(
+            linkChainCommand({
+              created,
+              createDependency: createLink,
+              deleteDependency: removeLink,
+            }),
+          );
         }
         autoRecalc.notify();
       },
@@ -1062,20 +1051,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       application: LevellingApplication,
     ): Promise<{ applied: boolean; conflict: string | null; lostPen: boolean }> => {
       if (application.rows.length === 0) return { applied: false, conflict: null, lostPen: false };
-      const { before, after, versions } = levellingApplicationSnapshots(application);
+      const { before, after } = levellingApplicationSnapshots(application);
       const holdToken = Symbol('apply-levelling');
       autoRecalc.hold(holdToken);
       beginLayoutEdit(application.rows.map((row) => row.id));
       try {
         const saved = await batchPlacements({ placements: application.rows });
-        for (const row of saved) versions.set(row.id, row.version);
         if (UNDO_REDO_ENABLED) {
           editHistory.record(
             bulkPlacementCommand({
               batchPlacements,
               before,
               after,
-              versions,
+              saved,
               label: applyLevellingLabel(application.rows.length),
             }),
           );
@@ -1119,8 +1107,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
 
   // Record an activity DEFINITION edit (rename / duration / constraint / …) on the undo stack (ADR-0048,
   // dark M1). Called by `ActivityCrudDialogs` when the shared edit dialog saves, with the pre-edit row
-  // and the server's post-edit row; the inverse re-PATCHes the full definition through the same
-  // `useUpdateActivity` endpoint. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  // and the server's post-edit row; the inverse re-PATCHes only the fields the edit changed (ADR-0176)
+  // through the partial-PATCH endpoint. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
   const recordActivityUpdate = useCallback(
     (before: ActivitySummary, after: ActivitySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
@@ -1128,9 +1116,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // changed an input, and a bar is drawn from what the engine computes from its inputs, so no
       // drawn span moves until the recalculation this edit triggers (ADR-0153).
       beginLayoutEdit([after.id]);
-      editHistory.record(updateCommand({ update: updateActivity.mutateAsync, before, after }));
+      editHistory.record(updateCommand({ patch: patchActivityFieldsAsync, before, after }));
     },
-    [editHistory, updateActivity.mutateAsync, beginLayoutEdit],
+    [editHistory, patchActivityFieldsAsync, beginLayoutEdit],
   );
   /**
    * Record an activity DELETE on the undo stack (ADR-0048 M2, amended). Called by
@@ -1266,7 +1254,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               activityId,
               fromLaneIndex: activity.laneIndex,
               toLaneIndex: landed,
-              version: saved.version,
+              saved,
               activityName: activity.name,
             }),
           );
@@ -1340,7 +1328,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             activityId,
             before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
             after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
-            version: saved.version,
+            saved,
             activityName: activity.name,
           }),
         );
@@ -1458,7 +1446,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         if (UNDO_REDO_ENABLED) {
           editHistory.record(
             durationResizeCommand({
-              update: updateActivity.mutateAsync,
+              patch: patchActivityFieldsAsync,
               before: activity,
               after: saved,
             }),
@@ -1554,7 +1542,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             // rounded day the gesture named — otherwise the remainder this fix preserves would be
             // destroyed by the first Ctrl+Z, which is the same defect one layer along.
             after: lagFields,
-            version: saved.version,
+            saved,
           }),
         );
       }
@@ -1709,7 +1697,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             batchPositions: batchPositions.mutateAsync,
             before,
             after,
-            versions: new Map(saved.map((row) => [row.id, row.version])),
+            saved,
           }),
         );
       }
@@ -1778,7 +1766,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                 laneIndex: activity?.laneIndex ?? 0,
               },
               after: { visualStart: null, laneIndex: activity?.laneIndex ?? 0 },
-              version: saved.version,
+              saved,
               activityName: name,
             }),
           );
@@ -1846,8 +1834,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     () => setMakeMilestone((prev) => (prev === null ? null : { ...prev, open: false })),
     [],
   );
-  const patchActivityFields = useUpdateActivityFields(orgSlug, planId);
-  const patchActivityFieldsAsync = patchActivityFields.mutateAsync;
   /**
    * The announcement owed once the recalculation this conversion triggers has settled (spec D4 step
    * 4, `use-focus-handoff.ts`'s order: focus, then announce). A ref, read by the effect below on
@@ -1911,7 +1897,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             activityId: activity.id,
             before: activity.type,
             after: type,
-            version: saved.version,
+            saved,
             activityName: activity.name,
           }),
         );
@@ -2101,7 +2087,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     autoRecalc.hold(holdToken);
     // A copy is not in S0, so a copy dropped onto an occupied lane is the bar that moves (rule 1).
     beginLayoutEdit([]);
-    const created: { id: string; version: number }[] = [];
+    const created: ActivitySummary[] = [];
     // The clones with no cloned parent. A band's undo deletes these and lets the ADR-0038 cascade
     // take the subtree, because `bulkDelete` refuses a batch containing a summary by design.
     const roots: { id: string; version: number }[] = [];
@@ -2146,7 +2132,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           ...(parentId === undefined ? {} : { parentId }),
         });
         idMap.set(step.sourceId, row.id);
-        created.push({ id: row.id, version: row.version });
+        created.push(row);
         if (step.parentSourceId === null) roots.push({ id: row.id, version: row.version });
 
         // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
@@ -2197,7 +2183,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           // refused for the same reason its undo is (422 SUMMARY_NOT_BULK_ELIGIBLE), which would
           // leave the half-copy in place under a message about the original failure.
           if (roots.length === created.length) {
-            await bulkDeleteActivities.mutateAsync({ activities: created });
+            await bulkDeleteActivities.mutateAsync({
+              activities: created.map((row) => ({ id: row.id, version: row.version })),
+            });
           } else {
             for (const root of roots) await deleteActivity.mutateAsync(root.id);
           }

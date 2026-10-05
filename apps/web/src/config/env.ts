@@ -470,7 +470,7 @@ export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOO
  * **ON by default** (2026-07-19, product sign-off) now that M1–M3 have landed and their a11y / ux /
  * component reviews + the flag-on Playwright journey are green. When on, structural plan edits
  * (reposition / relane / definition update / create / delete / dependency add-remove / `visualStart` /
- * auto-arrange) push an inverse onto a bounded (50), per-plan, per-pen-session in-memory stack, and the
+ * auto-arrange) push an inverse onto a bounded (50), per-plan in-memory stack that survives a pen hand-off (ADR-0176), and the
  * toolbar Undo/Redo + `Cmd/Ctrl+Z` · `Cmd/Ctrl+Shift+Z` · `Ctrl+Y` keys replay plan **INPUTS** through
  * the existing REST mutation hooks — never engine-owned derived columns. The normal ADR-0032 auto-recalc
  * redraws the outputs, so the CPM engine and its recalc **parity gate are untouched**. Undo is pen-gated

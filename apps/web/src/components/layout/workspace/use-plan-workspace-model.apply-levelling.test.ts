@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { scheduleKeys } from '@/features/schedule';
+import type { Command } from '@/features/undo-redo';
 import { ApiFetchError } from '@/lib/api/client';
+import { anActivity } from '@/test/activity-fixture';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 /**
  * **`applyLevelling` — the write, the one undo step and the hold** (`docs/specs/apply-levelled-dates/`
@@ -108,6 +111,8 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 }));
 
 let queryClient: QueryClient;
+/** The plan as the forward write leaves it — what an undo's pre-check reads. */
+let server: ReturnType<typeof fakePlanServer>;
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: queryClient }, children);
 
@@ -176,17 +181,33 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.order = [];
   queryClient = new QueryClient();
+  server = fakePlanServer({
+    activities: [
+      anActivity({ id: 'a', name: 'Lift A', version: 5, visualStart: '2026-03-09' }),
+      anActivity({
+        id: 'b',
+        name: 'Lift B',
+        version: 7,
+        constraintType: 'SNET',
+        constraintDate: '2026-03-01',
+        visualStart: '2026-03-16',
+      }),
+    ],
+  });
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.hold.mockImplementation(() => h.order.push('hold'));
   h.release.mockImplementation(() => h.order.push('release'));
   h.batch.mockImplementation(() => {
     h.order.push('write');
-    return Promise.resolve([
-      { id: 'a', version: 5 },
-      { id: 'b', version: 7 },
-    ]);
+    return Promise.resolve([server.row('a'), server.row('b')]);
   });
 });
+
+/** After the forward write: further batches go through the fake server, which enforces the lock. */
+function afterApply(): void {
+  h.batch.mockClear();
+  h.batch.mockImplementation(server.mutations.batchPlacements);
+}
 
 describe('applyLevelling — the write', () => {
   it('sends the preview’s rows unchanged, in ONE request, as { placements }', async () => {
@@ -252,10 +273,9 @@ describe('applyLevelling — one undo step', () => {
 
   it('undoes by sending the prior placements — null included — at the versions the write returned', async () => {
     await apply(preview());
-    const command = h.record.mock.calls[0]?.[0] as { undo: () => Promise<void> };
-    h.batch.mockClear();
-    h.batch.mockResolvedValue([]);
-    await command.undo();
+    const command = h.record.mock.calls[0]?.[0] as Command;
+    afterApply();
+    await command.undo(server.ctx);
     expect(h.batch).toHaveBeenCalledOnce();
     expect(h.batch).toHaveBeenCalledWith({
       placements: [
@@ -283,10 +303,11 @@ describe('applyLevelling — one undo step', () => {
   it('redoes the same target dates, without re-running levelling', async () => {
     const application = preview();
     await apply(application);
-    const command = h.record.mock.calls[0]?.[0] as { redo: () => Promise<void> };
+    const command = h.record.mock.calls[0]?.[0] as Command;
+    afterApply();
+    await command.undo(server.ctx);
     h.batch.mockClear();
-    h.batch.mockResolvedValue([]);
-    await command.redo();
+    await command.redo(server.ctx);
     const sent = (
       h.batch.mock.calls[0]?.[0] as { placements: { id: string; visualStart: string }[] }
     ).placements;
@@ -300,19 +321,11 @@ describe('applyLevelling — one undo step', () => {
 describe('applyLevelling — undo and redo versions, and their failures', () => {
   it('redoes at the versions the undo returned, not the ones the forward write did', async () => {
     await apply(preview());
-    const command = h.record.mock.calls[0]?.[0] as {
-      undo: () => Promise<void>;
-      redo: () => Promise<void>;
-    };
+    const command = h.record.mock.calls[0]?.[0] as Command;
+    afterApply();
+    await command.undo(server.ctx); // the restore bumps both rows: 5 → 6 and 7 → 8
     h.batch.mockClear();
-    h.batch.mockResolvedValue([
-      { id: 'a', version: 6 },
-      { id: 'b', version: 8 },
-    ]);
-    await command.undo();
-    h.batch.mockClear();
-    h.batch.mockResolvedValue([]);
-    await command.redo();
+    await command.redo(server.ctx);
     const sent = (h.batch.mock.calls[0]?.[0] as { placements: { id: string; version: number }[] })
       .placements;
     expect(sent.map((p) => [p.id, p.version])).toEqual([
@@ -322,14 +335,19 @@ describe('applyLevelling — undo and redo versions, and their failures', () => 
   });
 
   it.each(['undo', 'redo'] as const)(
-    'a rejected %s surfaces, takes no recalculation hold of its own, and records nothing',
+    'a refused %s is set aside, takes no recalculation hold of its own, and records nothing',
     async (direction) => {
       await apply(preview());
-      const command = h.record.mock.calls[0]?.[0] as Record<typeof direction, () => Promise<void>>;
+      const command = h.record.mock.calls[0]?.[0] as Command;
       expect(h.hold).toHaveBeenCalledOnce();
       expect(h.release).toHaveBeenCalledOnce();
+      afterApply();
+      if (direction === 'redo') await command.undo(server.ctx);
       h.batch.mockRejectedValue(new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }));
-      await expect(command[direction]()).rejects.toMatchObject({ status: 409 });
+      await expect(command[direction](server.ctx)).resolves.toMatchObject({
+        kind: 'not-applicable',
+        reason: 'changed',
+      });
       // The forward write's hold is the only one there ever is, and it was released.
       expect(h.hold).toHaveBeenCalledOnce();
       expect(h.release).toHaveBeenCalledOnce();

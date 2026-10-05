@@ -1,4 +1,5 @@
 import type { Command } from './commands';
+import type { NotApplicableReason } from './replay';
 
 import { historyPhrase } from '@/lib/history-phrase';
 
@@ -8,13 +9,25 @@ import { historyPhrase } from '@/lib/history-phrase';
  * a bare string could carry none of that.
  *
  * - `done` — the step ran.
- * - `conflict` / `parent-deleted` — the server refused it (409/404); nothing was written.
- * - `failed` — anything else; the stacks are intact so a retry is meaningful.
+ * - `set-aside` — the step could not apply (a row it wrote was changed or deleted since, or the
+ *   server refused it); nothing was written and the step is gone from the history, so the next press
+ *   continues with the one below it (ADR-0176 D3).
+ * - `failed` — anything else (a network failure, a 5xx); the stacks are intact so a retry is
+ *   meaningful.
  * - `blocked` — the accelerator fired but the planner cannot edit right now; nothing was attempted.
  *
- * A lost pen (423) has no result: the shared pen banner is its one announcer.
+ * A lost pen (423) has no result: the shared pen banner is its one announcer, and the history is kept.
  */
-export type HistoryOutcome = 'done' | 'conflict' | 'parent-deleted' | 'failed' | 'blocked';
+export type HistoryOutcome = 'done' | 'set-aside' | 'failed' | 'blocked';
+
+/** Why a step was set aside, and what the next press would run — the strip's explanation. */
+export interface SetAside {
+  readonly reason: NotApplicableReason;
+  /** The row (or link) the sentence names. */
+  readonly subjectName: string;
+  /** `undo` only: the step the next press runs, or null when the history is now empty. */
+  readonly nextLabel: string | null;
+}
 
 export interface HistoryResult {
   /** Stable per result, so a strip can be keyed on it and a repeat of the same outcome re-mounts. */
@@ -25,6 +38,8 @@ export interface HistoryResult {
   readonly label: string;
   /** `blocked` only: the refusal sentence the host composed from the live pen/role state. */
   readonly reason?: string;
+  /** `set-aside` only: why, and what comes next. */
+  readonly setAside?: SetAside;
   /** `done` only: the step that ran, which is what the strip's lifetime is bound to. */
   readonly command?: Command;
 }
@@ -32,38 +47,32 @@ export interface HistoryResult {
 /** A result before it has been given its id. */
 export type PostedHistoryResult = Omit<HistoryResult, 'id'>;
 
-/**
- * The conflict/pen-loss contract copy (ADR-0048 M3.1). Exported for the unit tests.
- *
- * The conflict wording no longer says "Refresh to see the latest": the 409 path has already
- * refetched server truth by the time anybody reads this, so the instruction asked for something
- * already done.
- */
-export const UNDO_CONFLICT_MESSAGE =
-  'This plan changed since you opened it — your undo wasn’t applied. The latest has been loaded.';
-export const REDO_CONFLICT_MESSAGE =
-  'This plan changed since you opened it — your redo wasn’t applied. The latest has been loaded.';
 export const UNDO_FAILED_MESSAGE = 'Couldn’t undo just now. Please try again.';
 export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.';
+
 /**
- * The 409 that means "a phase this was filed under has since been deleted" (`docs/TECH_DEBT.md`
- * #230 M2). The server refuses the restore rather than re-parenting the subtree to the top level,
- * which would silently discard the planner's structure — and refusing is correct, so the only thing
- * missing was words.
+ * The clause that says what went wrong with a set-aside step, in the planner's words ("skipped", not
+ * the code's "set aside"). Each names the thing and says WHEN it changed — after the planner's own
+ * edit — because "was changed" with no subject or time is what a planner cannot act on.
  *
- * It gets its own message because the general one is **actively wrong here**: refreshing does not
- * help, restoring the phase does. This says which action recovers it.
- *
- * **It does not name the phase, and that is a decision rather than an omission.** The client cannot:
- * the 409 carries only a reason, and the ancestor is itself soft-deleted, so it is not in the
- * activity list the client holds. Naming it needs the server to say which row blocked — real work,
- * for a state the UI cannot reach in one pen session (`apps/web/e2e-undo/undo.spec.ts` drives the
- * spec's own alternate flow and both undos succeed). Deferred with that reason rather than built.
+ * `parent-deleted` is the 409 that means "a phase this was filed under has since been deleted"
+ * (`docs/TECH_DEBT.md` #230 M2): the server refuses the restore rather than re-parenting the subtree
+ * to the top level, which would silently discard the planner's structure. It does not name the
+ * phase — the client cannot: the 409 carries only a reason, and the ancestor is itself soft-deleted,
+ * so it is not in the list the client holds.
  */
-export const UNDO_PARENT_DELETED_MESSAGE =
-  'Couldn’t undo — a phase this was filed under has since been deleted. Restore that phase first, then undo again.';
-export const REDO_PARENT_DELETED_MESSAGE =
-  'Couldn’t redo — a phase this was filed under has since been deleted. Restore that phase first, then try again.';
+function setAsideClause(setAside: SetAside): string {
+  switch (setAside.reason) {
+    case 'changed':
+      return `${setAside.subjectName} was changed after your edit`;
+    case 'gone':
+      return `${setAside.subjectName} was deleted after your edit`;
+    case 'parent-deleted':
+      return 'the phase it was filed under was deleted after your edit';
+    case 'duplicate':
+      return 'that link already exists';
+  }
+}
 
 /** Whether the result is a refusal or a failure — the strip's `role="alert"` half. */
 export function isHistoryFailure(result: HistoryResult): boolean {
@@ -79,10 +88,16 @@ export function historyResultMessage(result: HistoryResult | PostedHistoryResult
   switch (result.outcome) {
     case 'done':
       return `${historyPhrase(undo ? 'Undid' : 'Redid', result.label)}.`;
-    case 'conflict':
-      return undo ? UNDO_CONFLICT_MESSAGE : REDO_CONFLICT_MESSAGE;
-    case 'parent-deleted':
-      return undo ? UNDO_PARENT_DELETED_MESSAGE : REDO_PARENT_DELETED_MESSAGE;
+    case 'set-aside': {
+      const { setAside } = result;
+      const head = historyPhrase(undo ? 'Couldn’t undo' : 'Couldn’t redo', result.label);
+      if (setAside === undefined) return `${head}. That step was skipped.`;
+      const next =
+        undo && setAside.nextLabel !== null
+          ? ` ${historyPhrase('Undo again to continue with', setAside.nextLabel)}.`
+          : '';
+      return `${head} — ${setAsideClause(setAside)}, so that step was skipped.${next}`;
+    }
     case 'failed':
       return undo ? UNDO_FAILED_MESSAGE : REDO_FAILED_MESSAGE;
     case 'blocked':

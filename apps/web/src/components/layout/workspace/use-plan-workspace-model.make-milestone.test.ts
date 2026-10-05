@@ -202,7 +202,9 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 // Imported AFTER the mocks.
 import { makeMilestoneSentence, usePlanWorkspaceModel } from './use-plan-workspace-model';
 
+import type { Command } from '@/features/undo-redo';
 import { ApiFetchError } from '@/lib/api/client';
+import { fakePlanServer } from '@/test/fake-plan-server';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);
@@ -265,9 +267,12 @@ describe('usePlanWorkspaceModel — Make milestone…', () => {
       await result.current.confirmMakeMilestone('FINISH_MILESTONE');
     });
     expect(h.record).toHaveBeenCalledOnce();
-    const command = h.record.mock.calls[0]?.[0] as { undo: () => Promise<void> };
+    const command = h.record.mock.calls[0]?.[0] as Command;
     h.patchFields.mockResolvedValueOnce({ ...ZERO, version: 9 });
-    await command.undo();
+    // The row as the conversion left it: the finish milestone the undo expects to find.
+    await command.undo(
+      fakePlanServer({ activities: [{ ...ZERO, type: 'FINISH_MILESTONE', version: 8 }] }).ctx,
+    );
     expect(h.patchFields).toHaveBeenLastCalledWith({
       activityId: 'z1',
       version: 8,

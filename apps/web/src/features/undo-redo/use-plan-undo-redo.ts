@@ -1,14 +1,18 @@
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import { historyResultMessage, type PostedHistoryResult } from './history-result';
+import { isNotFound, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
+import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
+
+import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import {
-  historyResultMessage,
-  type HistoryOutcome,
-  type PostedHistoryResult,
-} from './history-result';
-import type { PlanEditHistory } from './use-plan-edit-history';
-
-import { ApiFetchError } from '@/lib/api/client';
+  planDependenciesQueryOptions,
+  predecessorsQueryOptions,
+  successorsQueryOptions,
+} from '@/features/dependencies/api/use-dependencies';
+import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import {
   activityKeys,
   baselineKeys,
@@ -16,23 +20,11 @@ import {
   scheduleKeys,
 } from '@/lib/query/hierarchy-keys';
 
-/**
- * The machine-readable reason on a `{ error: { details } }` envelope, when it carries one.
- *
- * Read rather than assumed (ADR-0076): `ApiFetchError` carries the whole envelope error as
- * `.error` (`lib/api/client.ts`), `DomainError.details` is copied straight through by
- * `all-exceptions.filter.ts`, and `lib/api/calendar-scope-errors.ts` already reads
- * `details.reason` exactly this way — so this is an established path, not a new one.
- */
-function reasonOf(err: ApiFetchError): string | undefined {
-  return (err.error.details as { reason?: string } | undefined)?.reason;
-}
-
-/** The user-visible undo/redo surface (ADR-0048 M3): the store wrapped in the conflict contract. */
+/** The user-visible undo/redo surface (ADR-0048 M3): the store wrapped in the replay contract. */
 export interface PlanUndoRedo {
-  /** Run the top undo step, announcing success or applying the M3.1 failure contract. */
+  /** Run the top undo step, announcing success or applying the ADR-0176 failure contract. */
   undo: () => void;
-  /** Run the top redo step, announcing success or applying the M3.1 failure contract. */
+  /** Run the top redo step, announcing success or applying the ADR-0176 failure contract. */
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -43,24 +35,24 @@ export interface PlanUndoRedo {
 }
 
 /**
- * Wrap a {@link PlanEditHistory} store with the ADR-0048 M3.1 conflict + pen-loss contract, composed
- * from the existing refetch/announce seams (never the engine, never derived columns — those are
- * recomputed by the ADR-0032 auto-recalc). An inverse mutation is an ordinary write through the
- * unchanged pen (423) + optimistic-version (409) + RBAC gates, so a rejection means server truth moved
- * under the client stack:
+ * Wrap a {@link PlanEditHistory} store with the ADR-0176 replay contract, composed from the existing
+ * refetch/announce seams (never the engine, never derived columns — those are recomputed by the
+ * ADR-0032 auto-recalc). Each step checks the server before it writes and answers one of:
  *
- * - **423 (pen lost).** The whole history is cleared (it belongs to the pen session, ADR-0048) and the
- *   caller's `onLockLost` runs the shared pen contract (the lost-control banner + lock refetch, exactly
- *   as a first-class edit does via `PlanPen.onWriteRejected`); a status message is announced.
- * - **409 / 404 (row moved / deleted).** The operation aborts **non-destructively** — the stacks are
- *   NOT re-popped — server truth is refetched (the plan's activity list + dependencies + variance +
- *   the org/plan schedule namespace, mirroring the recalc mutation's invalidation), the now-stale redo
- *   branch is cleared, and a status is announced. No auto-retry, no client-side merge.
- * - **Anything else.** A generic status is announced; the stacks are left intact (retryable).
+ * - **Applied.** The step's label is announced ("Undid move activity.") and a `done` result is handed
+ *   to {@link onResult}.
+ * - **Not applicable.** A row the step wrote was changed or deleted since, or the server refused the
+ *   write (409/404, which a replay turns into the same answer). Nothing was written, the step has
+ *   been **set aside** by the store — so the next press runs the step below — and server truth is
+ *   refetched. No auto-retry, no client-side merge, no chaining: one press does one visible thing.
+ * - **423 (pen lost).** The shared pen contract runs (the lost-control banner + lock refetch, exactly
+ *   as a first-class edit does via `PlanPen.onWriteRejected`). The history is **kept**: it belongs to
+ *   the page session, not the pen, and the controls shade until the pen is back (ADR-0176 D4). That
+ *   banner is the SINGLE source of the announcement, so nothing is announced here.
+ * - **Anything else.** A generic result is posted; the stacks are left intact (retryable).
  *
- * On success the executed step's label is announced ("Undid move activity.") and a `done` result is
- * handed to {@link onResult}. A failure is a result too, and is **not** announced when a host takes
- * results (the strip is `role="alert"`, so announcing as well would say it twice — ADR-0132).
+ * A failure is a result too, and is **not** announced when a host takes results (the strip is
+ * `role="alert"`, so announcing as well would say it twice — ADR-0132).
  */
 export function usePlanUndoRedo(params: {
   history: PlanEditHistory;
@@ -74,11 +66,11 @@ export function usePlanUndoRedo(params: {
    */
   onLockLost: (err: unknown) => void;
   /**
-   * Called after a replay that SUCCEEDED and whose command can change the schedule (everything but
+   * Called after a replay that APPLIED and whose command can change the schedule (everything but
    * {@link Command.affectsSchedule} `=== false`). The workspace wires it to the auto-recalc `notify()`:
    * an inverse restoring a field the structure signature does not watch (a sub-day duration, a lag
    * in minutes, a calendar) would otherwise leave the engine-computed dates describing the edit
-   * just reversed. Not called on a failed or no-op replay.
+   * just reversed. Not called on a failed, set-aside or no-op replay.
    */
   onReplayed?: () => void;
   /**
@@ -91,8 +83,15 @@ export function usePlanUndoRedo(params: {
 }): PlanUndoRedo {
   const { history, orgSlug, planId, announce, onLockLost, onReplayed, onResult } = params;
   const queryClient = useQueryClient();
+  // The workspace passes an inline arrow here (it closes over a hook declared later), so reading it
+  // through a ref keeps `run` — and the object this hook returns, which feeds the toolbar-context
+  // memo — from being rebuilt on every render.
+  const onReplayedRef = useRef(onReplayed);
+  useEffect(() => {
+    onReplayedRef.current = onReplayed;
+  });
 
-  // Refetch server truth after a 409/404, mirroring the recalculate mutation's invalidation set: the
+  // Refetch server truth after a set-aside, mirroring the recalculate mutation's invalidation set: the
   // plan's activity list + dependencies + baseline variance, plus the whole org schedule namespace
   // (summary / earned-value / histogram) via the `scheduleKeys.all` prefix.
   const refetchServerTruth = useCallback(() => {
@@ -100,6 +99,101 @@ export function usePlanUndoRedo(params: {
     void queryClient.invalidateQueries({ queryKey: dependencyKeys.byPlan(orgSlug, planId) });
     void queryClient.invalidateQueries({ queryKey: baselineKeys.variance(orgSlug, planId) });
     void queryClient.invalidateQueries({ queryKey: scheduleKeys.all(orgSlug) });
+  }, [queryClient, orgSlug, planId]);
+
+  // What a replay reads with. `staleTime: 0` because the whole point is to see the server NOW.
+  //
+  // **A step that names a few rows reads those rows; only a bigger one walks the plan.** The list is
+  // paged and walked sequentially, so on a 2,000-activity plan it is about twenty round trips before
+  // the write can even start — for a step that touched one bar. Up to `SINGLE_READ_LIMIT` rows go
+  // through the per-row endpoints in parallel (a 404 is "gone"); above it, one walk is cheaper.
+  const replayContext = useMemo<ReplayContext>(() => {
+    const fresh = { staleTime: 0 } as const;
+    const walkActivities = () =>
+      queryClient.fetchQuery({ ...activitiesQueryOptions(orgSlug, planId), ...fresh });
+    const walkDependencies = () =>
+      queryClient.fetchQuery({ ...planDependenciesQueryOptions(orgSlug, planId), ...fresh });
+    /** One row by id through the detail endpoint; absent when the server says 404. */
+    async function readOne<T extends { id: string }>(
+      queryKey: readonly unknown[],
+      path: string,
+    ): Promise<T | undefined> {
+      try {
+        return await queryClient.fetchQuery({
+          queryKey,
+          queryFn: () => apiFetch<T>(path),
+          ...fresh,
+        });
+      } catch (err) {
+        if (isNotFound(err)) return undefined;
+        throw err;
+      }
+    }
+    const byId = <T extends { id: string }>(rows: readonly (T | undefined)[]) =>
+      new Map(rows.flatMap((row) => (row === undefined ? [] : [[row.id, row] as const])));
+    const unique = (ids: readonly string[]) => [...new Set(ids)];
+    return {
+      readActivities: async (ids) => {
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId((await walkActivities()).filter((row) => set.has(row.id)));
+        }
+        return byId(
+          await Promise.all(
+            wanted.map((id) =>
+              readOne<ActivitySummary>(
+                activityKeys.detail(orgSlug, id),
+                `/organizations/${orgSlug}/activities/${id}`,
+              ),
+            ),
+          ),
+        );
+      },
+      readDependencies: async (ids) => {
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId((await walkDependencies()).filter((row) => set.has(row.id)));
+        }
+        return byId(
+          await Promise.all(
+            wanted.map((id) =>
+              readOne<DependencySummary>(
+                dependencyKeys.detail(orgSlug, id),
+                `/organizations/${orgSlug}/dependencies/${id}`,
+              ),
+            ),
+          ),
+        );
+      },
+      readLinksOf: async (ids) => {
+        const wanted = unique(ids);
+        if (wanted.length > SINGLE_READ_LIMIT) {
+          const set = new Set(wanted);
+          return byId(
+            (await walkDependencies()).filter(
+              (row) => set.has(row.predecessor.id) || set.has(row.successor.id),
+            ),
+          );
+        }
+        const lists = await Promise.all(
+          wanted.flatMap((id) => [
+            queryClient.fetchQuery({ ...predecessorsQueryOptions(orgSlug, id), ...fresh }),
+            queryClient.fetchQuery({ ...successorsQueryOptions(orgSlug, id), ...fresh }),
+          ]),
+        );
+        return byId(lists.flat());
+      },
+      readChildrenOf: async (parentIds) => {
+        const parents = new Set(parentIds);
+        return byId(
+          (await walkActivities()).filter(
+            (row) => row.parentId !== null && parents.has(row.parentId),
+          ),
+        );
+      },
+    };
   }, [queryClient, orgSlug, planId]);
 
   const report = useCallback(
@@ -111,49 +205,51 @@ export function usePlanUndoRedo(params: {
     [announce, onResult],
   );
 
-  const handleFailure = useCallback(
-    (direction: 'undo' | 'redo', label: string, err: unknown): void => {
-      if (err instanceof ApiFetchError && err.status === 423) {
-        // Pen lost — the history belongs to the pen session, so drop it whole; the shared pen contract
-        // shows the lost-control banner + refetches the lock. That banner is its own `role="status"`
-        // live region and is the SINGLE source of the announcement (see `usePlanPen`) — so we do NOT
-        // also `announce(...)` here, which would be a double utterance for one event (a11y review).
-        onLockLost(err);
-        history.clear();
-        return;
-      }
-      let outcome: HistoryOutcome = 'failed';
-      if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {
-        // Row moved / deleted — abort non-destructively, refetch, and drop the stale redo branch.
-        // Everything below is unchanged for every reason; only the WORDS branch, and only for the
-        // one reason whose recovery is a different action (#230 M2).
-        refetchServerTruth();
-        history.clearRedo();
-        outcome = reasonOf(err) === 'PARENT_DELETED' ? 'parent-deleted' : 'conflict';
-      }
-      // Anything else — the stacks stay intact so the user can retry.
-      report({ direction, outcome, label });
-    },
-    [history, onLockLost, refetchServerTruth, report],
-  );
-
   const run = useCallback(
     (direction: 'undo' | 'redo'): void => {
       void (async () => {
-        const command = direction === 'undo' ? history.peekUndo() : history.peekRedo();
-        let label: string | null;
+        const label = (direction === 'undo' ? history.peekUndo() : history.peekRedo())?.label ?? '';
+        let outcome: StepOutcome | null;
         try {
-          label = await (direction === 'undo' ? history.undo() : history.redo());
+          outcome = await (direction === 'undo'
+            ? history.undo(replayContext)
+            : history.redo(replayContext));
         } catch (err) {
-          handleFailure(direction, command?.label ?? '', err);
+          if (err instanceof ApiFetchError && err.status === 423) {
+            // Pen lost — the shared pen contract shows the lost-control banner and refetches the
+            // lock. The history stays: a step is checked against the server before it writes.
+            onLockLost(err);
+            return;
+          }
+          // Anything else — the stacks stay intact so the user can retry.
+          report({ direction, outcome: 'failed', label });
           return;
         }
-        if (label === null) return;
-        report({ direction, outcome: 'done', label, ...(command ? { command } : {}) });
-        if (command?.affectsSchedule !== false) onReplayed?.();
+        if (outcome === null) return;
+        if (outcome.kind === 'set-aside') {
+          refetchServerTruth();
+          report({
+            direction,
+            outcome: 'set-aside',
+            label: outcome.command.label,
+            setAside: {
+              reason: outcome.reason,
+              subjectName: outcome.subjectName,
+              nextLabel: outcome.nextLabel,
+            },
+          });
+          return;
+        }
+        report({
+          direction,
+          outcome: 'done',
+          label: outcome.command.label,
+          command: outcome.command,
+        });
+        if (outcome.command.affectsSchedule !== false) onReplayedRef.current?.();
       })();
     },
-    [history, handleFailure, report, onReplayed],
+    [history, replayContext, onLockLost, refetchServerTruth, report],
   );
 
   const undo = useCallback((): void => run('undo'), [run]);

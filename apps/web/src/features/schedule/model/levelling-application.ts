@@ -75,8 +75,8 @@ export function levellingReasonText(reason: LevellingApplicationItem['reason']):
 }
 
 /**
- * The before, after and version map one apply needs for its undo step — the shape
- * `bulkPlacementCommand` takes.
+ * The before and after one apply needs for its undo step — the shape `bulkPlacementCommand` takes.
+ * (It once returned the rows' versions too; a replay now reads each row's current version, ADR-0176.)
  *
  * `before` is built from the preview's `items`, **not from the activities cache**: the cache can move
  * between the preview and the write, and the prior placement the planner must get back is the one the
@@ -89,12 +89,10 @@ export function levellingReasonText(reason: LevellingApplicationItem['reason']):
 export function levellingApplicationSnapshots(application: LevellingApplication): {
   before: ActivityPlacement[];
   after: ActivityPlacement[];
-  versions: Map<string, number>;
 } {
   const itemsById = new Map(application.items.map((item) => [item.id, item] as const));
   const before: ActivityPlacement[] = [];
   const after: ActivityPlacement[] = [];
-  const versions = new Map<string, number>();
   for (const row of application.rows) {
     const item = itemsById.get(row.id);
     if (item === undefined) {
@@ -114,9 +112,8 @@ export function levellingApplicationSnapshots(application: LevellingApplication)
       visualStart: row.visualStart,
       laneIndex: null,
     });
-    versions.set(row.id, row.version);
   }
-  return { before, after, versions };
+  return { before, after };
 }
 
 export type ApplyLevellingLineKey =
