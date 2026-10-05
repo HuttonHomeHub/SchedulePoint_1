@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.170.0
+
+### Minor Changes
+
+- [#823](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/823) [`d652e69`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d652e69ae162247038bf4f68d2560bdd2514478e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A history list beside Undo lets you jump back several steps at once.
+
 ## 0.169.0
 
 ### Minor Changes
