@@ -70,7 +70,7 @@ function setAsideClause(setAside: SetAside): string {
     case 'parent-deleted':
       return 'the phase it was filed under was deleted after your edit';
     case 'duplicate':
-      return 'that link already exists';
+      return 'it is already there';
   }
 }
 

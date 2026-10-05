@@ -380,7 +380,7 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     act(() => result.current.redo());
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
-        expect.stringContaining('that link already exists, so that step was skipped.'),
+        expect.stringContaining('it is already there, so that step was skipped.'),
       ),
     );
   });
