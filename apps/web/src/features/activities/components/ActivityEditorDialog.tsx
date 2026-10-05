@@ -151,7 +151,7 @@ export function ActivityEditorDialog({
       (saved) => {
         onSuccess(saved);
         announce('Steps saved.');
-        onStepsSaved?.(row, before, saved);
+        if (before !== undefined) onStepsSaved?.(row, before, saved);
       },
       failed('Steps', onError),
     );

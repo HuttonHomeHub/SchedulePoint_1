@@ -136,8 +136,9 @@ export function CrossPlanLinksSection({
           setRemoveError(null);
         });
         announce('Cross-plan link removed.');
-        onRemoved?.(removed);
         regionRef.current?.focus();
+        // Last, so a fault in the host's history cannot skip the focus hand-back.
+        onRemoved?.(removed);
       },
       (err: Error) => setRemoveError(err.message),
     );

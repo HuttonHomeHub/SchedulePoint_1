@@ -41,7 +41,7 @@ import {
 // plain mutation hooks, and the barrels they belong to are replaced wholesale by a dozen workspace
 // tests that never mean to stub a write.
 import { useUpdateActivityParents } from '@/features/activities/api/use-activities';
-import { useReplaceActivitySteps } from '@/features/activities/api/use-activity-steps';
+import { useReplaceActivityStepsOn } from '@/features/activities/api/use-activity-steps';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import {
   openActivityEditor,
@@ -770,8 +770,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
   // writes have their own observers and report what landed through the `record*` seams below.
   const updateParents = useUpdateActivityParents(orgSlug, planId);
-  // Built for no activity: the step names the one it replays on.
-  const replaceSteps = useReplaceActivitySteps(orgSlug, planId, '');
+  const replaceSteps = useReplaceActivityStepsOn(orgSlug, planId);
   const createAssignmentOn = useCreateAssignmentOn(orgSlug, planId);
   const updateAssignment = useUpdateAssignment(orgSlug, planId);
   const deleteAssignment = useDeleteAssignment(orgSlug, planId);
@@ -1265,15 +1264,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordActivityCreate = useCallback(
     (created: ActivitySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
-      // layout-exempt: a dialog create sends no lane or placement, so there is no drawn span for the
-      // overlap rule to protect; it never took a snapshot before this seam existed either.
-      editHistory.record(
-        createActivityCommand({
-          created,
-          deleteActivity: deleteActivity.mutateAsync,
-          restoreBatch: restoreDeleteBatch.mutateAsync,
-        }),
-      );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: a dialog create sends no lane or placement, so there is no drawn span for the
+        // overlap rule to protect; it never took a snapshot before this seam existed either.
+        editHistory.record(
+          createActivityCommand({
+            created,
+            deleteActivity: deleteActivity.mutateAsync,
+            restoreBatch: restoreDeleteBatch.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record adding an activity for undo', error);
+      }
     },
     [editHistory, deleteActivity.mutateAsync, restoreDeleteBatch.mutateAsync],
   );
@@ -1289,18 +1294,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       label?: string,
     ): void => {
       if (!UNDO_REDO_ENABLED) return;
-      const moved = reparentedRows(before, after);
-      if (moved.length === 0) return;
-      // layout-exempt: a parent is not a lane or a drawn span — the WBS band rolls up from it, and no
-      // bar moves until the recalculation, which cannot make an overlap between two lanes.
-      editHistory.record(
-        reparentCommand({
-          before,
-          after,
-          updateParents: updateParents.mutateAsync,
-          label: label ?? reparentLabel(moved, cachedActivities()),
-        }),
-      );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        const moved = reparentedRows(before, after);
+        if (moved.length === 0) return;
+        // layout-exempt: a parent is not a lane or a drawn span — the WBS band rolls up from it, and no
+        // bar moves until the recalculation, which cannot make an overlap between two lanes.
+        editHistory.record(
+          reparentCommand({
+            before,
+            after,
+            updateParents: updateParents.mutateAsync,
+            label: label ?? reparentLabel(moved, cachedActivities()),
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record moving activities in the outline for undo', error);
+      }
     },
     [editHistory, updateParents.mutateAsync, cachedActivities],
   );
@@ -1315,15 +1326,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       after: readonly ActivityStep[],
     ): void => {
       if (!UNDO_REDO_ENABLED || !stepsChanged(before, after)) return;
-      // layout-exempt: steps feed the physical % rollup and never a date, so no bar can move.
-      editHistory.record(
-        stepsReplaceCommand({
-          activity,
-          before,
-          after,
-          replaceSteps: replaceSteps.mutateAsync,
-        }),
-      );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: steps feed the physical % rollup and never a date, so no bar can move.
+        editHistory.record(
+          stepsReplaceCommand({
+            activity,
+            before,
+            after,
+            replaceSteps: replaceSteps.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record saving steps for undo', error);
+      }
     },
     [editHistory, replaceSteps.mutateAsync],
   );
@@ -1343,48 +1360,54 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordAssignmentEdit = useCallback(
     (edit: AssignmentEdit): void => {
       if (!UNDO_REDO_ENABLED) return;
-      if (edit.kind === 'edited' && !assignmentChanged(edit.before, edit.after)) return;
-      const subject = edit.kind === 'edited' ? edit.after : edit.assignment;
-      const activityName =
-        cachedActivities().find((a) => a.id === subject.activityId)?.name ?? 'this activity';
-      // After the write, and still a true "before": units, the join lag and a driver are scheduling
-      // inputs, so no drawn span moves until the recalculation this edit triggers (ADR-0153).
-      beginLayoutEdit([subject.activityId]);
-      const displacedOf = (row: typeof subject | undefined) =>
-        row === undefined
-          ? {}
-          : { displaced: { assignment: row, resourceName: 'The driving resource' } };
-      if (edit.kind === 'added') {
-        editHistory.record(
-          assignmentAddCommand({
-            assignment: edit.assignment,
-            resourceName: edit.resourceName,
-            activityName,
-            writes: assignmentWrites,
-            ...displacedOf(edit.displaced),
-          }),
-        );
-      } else if (edit.kind === 'removed') {
-        editHistory.record(
-          assignmentRemoveCommand({
-            assignment: edit.assignment,
-            resourceName: edit.resourceName,
-            activityName,
-            writes: assignmentWrites,
-          }),
-        );
-      } else {
-        editHistory.record(
-          assignmentEditCommand({
-            before: edit.before,
-            after: edit.after,
-            resourceName: edit.resourceName,
-            activityName,
-            writes: assignmentWrites,
-            ...(edit.editedField ? { editedField: edit.editedField } : {}),
-            ...displacedOf(edit.displaced),
-          }),
-        );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        if (edit.kind === 'edited' && !assignmentChanged(edit.before, edit.after)) return;
+        const subject = edit.kind === 'edited' ? edit.after : edit.assignment;
+        const activityName =
+          cachedActivities().find((a) => a.id === subject.activityId)?.name ?? 'this activity';
+        // After the write, and still a true "before": units, the join lag and a driver are scheduling
+        // inputs, so no drawn span moves until the recalculation this edit triggers (ADR-0153).
+        beginLayoutEdit([subject.activityId]);
+        const displacedOf = (row: typeof subject | undefined) =>
+          row === undefined
+            ? {}
+            : { displaced: { assignment: row, resourceName: 'The driving resource' } };
+        if (edit.kind === 'added') {
+          editHistory.record(
+            assignmentAddCommand({
+              assignment: edit.assignment,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+              ...displacedOf(edit.displaced),
+            }),
+          );
+        } else if (edit.kind === 'removed') {
+          editHistory.record(
+            assignmentRemoveCommand({
+              assignment: edit.assignment,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+            }),
+          );
+        } else {
+          editHistory.record(
+            assignmentEditCommand({
+              before: edit.before,
+              after: edit.after,
+              resourceName: edit.resourceName,
+              activityName,
+              writes: assignmentWrites,
+              ...(edit.editedField ? { editedField: edit.editedField } : {}),
+              ...displacedOf(edit.displaced),
+            }),
+          );
+        }
+      } catch (error) {
+        console.error('Could not record a resource assignment for undo', error);
       }
     },
     [editHistory, assignmentWrites, cachedActivities, beginLayoutEdit],
@@ -1396,29 +1419,41 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordCrossPlanLinkAdd = useCallback(
     (link: CrossPlanDependencySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
-      // layout-exempt: a cross-plan link moves nothing in this plan until a programme recalculation,
-      // which is its own explicit action and not this plan's coalesced settle.
-      editHistory.record(
-        crossPlanLinkAddCommand({
-          link,
-          createLink: createCrossPlanLink.mutateAsync,
-          deleteLink: deleteCrossPlanLink.mutateAsync,
-        }),
-      );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: a cross-plan link moves nothing in this plan until a programme recalculation,
+        // which is its own explicit action and not this plan's coalesced settle.
+        editHistory.record(
+          crossPlanLinkAddCommand({
+            link,
+            createLink: createCrossPlanLink.mutateAsync,
+            deleteLink: deleteCrossPlanLink.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record adding a cross-plan link for undo', error);
+      }
     },
     [editHistory, createCrossPlanLink.mutateAsync, deleteCrossPlanLink.mutateAsync],
   );
   const recordCrossPlanLinkRemove = useCallback(
     (link: CrossPlanDependencySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
-      // layout-exempt: see `recordCrossPlanLinkAdd`.
-      editHistory.record(
-        crossPlanLinkRemoveCommand({
-          link,
-          createLink: createCrossPlanLink.mutateAsync,
-          deleteLink: deleteCrossPlanLink.mutateAsync,
-        }),
-      );
+      // A history fault must never break a write that already succeeded: the edit is on the
+      // server and the planner has been told so, and losing its undo step is the smaller failure.
+      try {
+        // layout-exempt: see `recordCrossPlanLinkAdd`.
+        editHistory.record(
+          crossPlanLinkRemoveCommand({
+            link,
+            createLink: createCrossPlanLink.mutateAsync,
+            deleteLink: deleteCrossPlanLink.mutateAsync,
+          }),
+        );
+      } catch (error) {
+        console.error('Could not record removing a cross-plan link for undo', error);
+      }
     },
     [editHistory, createCrossPlanLink.mutateAsync, deleteCrossPlanLink.mutateAsync],
   );

@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
+import { useIsMounted } from '@/hooks/use-is-mounted';
 import { ApiFetchError } from '@/lib/api/client';
 import {
   clientsQueryOptions,
@@ -150,6 +151,7 @@ function AddCrossPlanLinkForm({
 }): React.ReactElement {
   const create = useCreateCrossPlanLink(orgSlug);
   const announce = useAnnounce();
+  const isMounted = useIsMounted();
 
   const {
     register,
@@ -210,8 +212,11 @@ function AddCrossPlanLinkForm({
       .then(
         (link) => {
           announce(`Cross-plan link added to “${anchor.name}”.`);
+          // Close only if this opening is still the one on screen: Escape and reopen while the create
+          // is in flight must not close the new opening. The seam is reported either way — the link
+          // exists — and last, so a fault in the host's history cannot keep a saved dialog open.
+          if (isMounted()) onClose();
           onAdded?.(link);
-          onClose();
         },
         // Shown above the form from `create.isError`; there is nothing else to do with it.
         () => undefined,

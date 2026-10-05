@@ -97,8 +97,9 @@ export function WbsBulkAssignBar({
         // Names the destination, not just the count: "5 activities moved" leaves out the one
         // thing the user was choosing.
         announce(`${plural(moved, 'activity', 'activities')} moved to ${destination}.`);
-        onReparented?.(before, after);
         onDone();
+        // Last, so a fault in the host's history cannot leave a successful assign looking unfinished.
+        onReparented?.(before, after);
       },
       (err: Error) => setError(err.message),
     );

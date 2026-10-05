@@ -475,7 +475,7 @@ export function useCreateAssignment(orgSlug: string, activityId: string, planId?
 /**
  * An assignment create addressed at call time — the undo history re-creates an assignment on whichever
  * activity the step was recorded on, and a hook cannot be called per activity (the same reason
- * `useReplaceActivitySteps` takes an optional target).
+ * `useReplaceActivityStepsOn` exists).
  */
 export function useCreateAssignmentOn(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -529,11 +529,11 @@ export function useUpdateAssignment(orgSlug: string, planId?: string) {
         {
           method: 'PATCH',
           body: JSON.stringify({
-            budgetedUnits: input.budgetedUnits,
+            ...(input.budgetedUnits !== undefined ? { budgetedUnits: input.budgetedUnits } : {}),
             ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
             ...(input.editedField ? { editedField: input.editedField } : {}),
             ...(input.curveType ? { curveType: input.curveType } : {}),
-            isDriving: input.isDriving,
+            ...(input.isDriving !== undefined ? { isDriving: input.isDriving } : {}),
             ...(input.budgetedCost !== undefined ? { budgetedCost: input.budgetedCost } : {}),
             ...(input.actualCost !== undefined ? { actualCost: input.actualCost } : {}),
             ...(input.actualUnits !== undefined ? { actualUnits: input.actualUnits } : {}),

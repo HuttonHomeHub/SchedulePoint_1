@@ -582,7 +582,9 @@ export function ActivityEditorSession({
     savePanel('steps', () =>
       saves.saveSteps({
         activity,
-        before: stepsQuery.data ?? [],
+        // `undefined` until the list has loaded: the frame records nothing then, because an undo built
+        // from a guessed empty list would replace the real steps with none.
+        before: stepsQuery.data,
         steps,
         onSuccess: (saved) => {
           const rows = stepRowsFromSaved(saved);

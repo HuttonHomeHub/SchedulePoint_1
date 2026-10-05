@@ -126,8 +126,11 @@ export interface ProgressSave {
 /** One weighted-steps save (`PUT …/steps`). */
 export interface StepsSave {
   activity: ActivitySummary;
-  /** The saved list this save replaces, for the host that records it. */
-  before: readonly ActivityStep[];
+  /**
+   * The saved list this save replaces, for the host that records it; `undefined` when the list had
+   * not loaded, in which case nothing is recorded.
+   */
+  before: readonly ActivityStep[] | undefined;
   steps: StepsFormValues['steps'];
   onSuccess: (saved: ActivityStep[]) => void;
   onError: (error: Error) => void;

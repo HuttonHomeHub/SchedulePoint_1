@@ -240,6 +240,50 @@ describe('ActivityResourcesPanel', () => {
       });
     });
 
+    /** Review C7: making a row the driver moves the current driver off, and the row hands it to the host. */
+    it('a driving toggle reports the driver it displaced', async () => {
+      const incumbent = { ...ASSIGNMENT, id: 'asg-2', resourceId: 'res-2', isDriving: true };
+      const after = { ...ASSIGNMENT, isDriving: true, version: 2 };
+      vi.mocked(apiFetch).mockImplementation((_path, init) =>
+        Promise.resolve(
+          init?.method === 'PATCH' ? after : [after, { ...incumbent, isDriving: false }],
+        ),
+      );
+      const onAssignmentEdited = vi.fn();
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      queryClient.setQueryData(resourceKeys.filtered('acme', { archived: 'include' }), [
+        CREW,
+        { ...CREW, id: 'res-2', name: 'Crew B' },
+      ]);
+      queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [
+        ASSIGNMENT,
+        incumbent,
+      ]);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ActivityResourcesPanel
+            orgSlug="acme"
+            activityId="a1"
+            canWrite
+            onAssignmentEdited={onAssignmentEdited}
+          />
+        </QueryClientProvider>,
+      );
+      // The first row is Crew A, which is not driving; Crew B is.
+      fireEvent.click(screen.getAllByRole('checkbox', { name: /Driving resource/ })[0]!);
+
+      await waitFor(() => expect(onAssignmentEdited).toHaveBeenCalledTimes(1));
+      expect(onAssignmentEdited).toHaveBeenCalledWith({
+        kind: 'edited',
+        before: ASSIGNMENT,
+        after,
+        resourceName: 'Crew A',
+        displaced: incumbent,
+      });
+    });
+
     it('reports nothing for a write the server refused', async () => {
       vi.mocked(apiFetch).mockRejectedValue(new Error('Stale'));
       const onAssignmentEdited = vi.fn();

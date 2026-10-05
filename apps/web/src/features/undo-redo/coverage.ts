@@ -77,6 +77,7 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useBatchPositions: recorded('autoArrangeCommand'),
   useBatchPlacements: recorded('bulkPlacementCommand'),
   useReplaceActivitySteps: recorded('stepsReplaceCommand'),
+  useReplaceActivityStepsOn: recorded('stepsReplaceCommand'),
   useUpdateActivityProgress: excluded(REASON.progress),
   useDissolveSummary: excluded(REASON.dissolve),
 

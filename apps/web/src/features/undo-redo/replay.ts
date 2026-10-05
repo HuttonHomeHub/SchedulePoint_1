@@ -194,7 +194,15 @@ export async function writeOrSetAside(
       if (err.status === 404) return notApplicable('gone', subjectName);
       const reason = reasonOf(err);
       if (reason === 'PARENT_DELETED') return notApplicable('parent-deleted', subjectName);
-      if (reason === 'DUPLICATE_DEPENDENCY') return notApplicable('duplicate', subjectName);
+      // A cross-plan link the plan already has, or one that would close a programme cycle because
+      // somebody else has since linked the other way: both read as "that link cannot be made now".
+      if (
+        reason === 'DUPLICATE_DEPENDENCY' ||
+        reason === 'DUPLICATE_CROSS_PLAN_DEPENDENCY' ||
+        reason === 'CROSS_PLAN_CYCLE_DETECTED'
+      ) {
+        return notApplicable('duplicate', subjectName);
+      }
       return notApplicable('changed', subjectName);
     }
     throw err;

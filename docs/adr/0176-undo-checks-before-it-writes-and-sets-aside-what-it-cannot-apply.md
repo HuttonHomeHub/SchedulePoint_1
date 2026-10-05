@@ -135,9 +135,30 @@ was written down, not that a `recorded` seam is wired at every host.
   previous driver off in the same request, so reversing it writes two rows — both are checked first,
   and the previous driver is put back **before** the delete, so a failure between the two leaves one
   driver rather than none. Not atomic, and not pretended to be.
-- A PATCH cannot clear an assignment's rate (ADR-0040), so undoing an edit that **set** one re-creates
-  the assignment without it; that case does not replay `editedField`, so a duration the edit derived
-  is not recomputed. Cross-plan links are created from whole days (`lagDays`), which is all the form
+- **A write that makes a resource the driver is checked for whom it displaces** (M3 review). The server
+  clears whoever drives the activity in the same request, so a redo of "became the driver", the undo of
+  "stopped driving" and a re-created driver may displace only the driver the step already expects; any
+  other is a colleague's change the step never compared, and the step is set aside. Whom a replay
+  displaced is remembered per direction, so the next reversal puts back the driver it actually moved.
+- **Putting a driver back and the delete/PATCH after it are two requests**, and so is the edit's own
+  write followed by the driver's. Both rows are checked first; a failure between the two writes leaves a
+  coherent activity but a half-applied step, and is not compensated — the second write's refusal reads
+  as a set-aside although the first landed. Accepted: the window is one round trip and the state is
+  never driverless.
+- A PATCH cannot clear an assignment's rate (ADR-0040), so undoing an edit that **set** one deletes and
+  re-creates the assignment without it. The delete is unversioned (`docs/TECH_DEBT.md` #450 now covers
+  assignments), so a create that fails afterwards is **compensated** by re-creating the row as it was
+  read, and reported as a distinct failure — "put back as it was", or "could not be put back, assign it
+  again" — never as a set-aside. A lost pen (423) is rethrown as it is. That case does not replay
+  `editedField`, so a duration the edit derived is not recomputed. A target the PATCH cannot express
+  (a null actual cost) sets the step aside instead of reporting a partial undo as applied.
+- **Identity is the resource, which has one consequence worth stating:** a colleague who deletes an
+  assignment and re-adds the same resource with identical values has the new row found — and removed by
+  the step's undo — because it is indistinguishable from the one the step made.
+- A cross-plan create the server refuses as a duplicate or as a programme cycle
+  (`DUPLICATE_CROSS_PLAN_DEPENDENCY`, `CROSS_PLAN_CYCLE_DETECTED`) is set aside with the duplicate
+  wording, not as a generic change. The wording says "link", which also reads for an assignment
+  duplicate; it is not yet specific. Cross-plan links are created from whole days (`lagDays`), which is all the form
   offers.
 - Inverses are field-scoped, so a command written against the old whole-definition contract does not
   type-check — the census in D6 is what keeps a new write path from being forgotten.

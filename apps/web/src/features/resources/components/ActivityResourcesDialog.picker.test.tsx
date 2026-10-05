@@ -1,4 +1,4 @@
-import type { PageMeta, ResourceSummary } from '@repo/types';
+import type { PageMeta, ResourceAssignmentSummary, ResourceSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,7 +69,13 @@ function mockTwoPages(): void {
   );
 }
 
-function renderDialog(library: ResourceSummary[] = BIG_LIBRARY) {
+function renderDialog(
+  library: ResourceSummary[] = BIG_LIBRARY,
+  extra: {
+    assignments?: ResourceAssignmentSummary[];
+    onAssignmentEdited?: React.ComponentProps<typeof ActivityResourcesDialog>['onAssignmentEdited'];
+  } = {},
+) {
   vi.mocked(apiFetchAllPages).mockResolvedValue(library);
   const queryClient = new QueryClient({
     // `staleTime: Infinity` so the SEEDED (empty) assignment list is not refetched through the
@@ -79,7 +85,7 @@ function renderDialog(library: ResourceSummary[] = BIG_LIBRARY) {
       mutations: { retry: false },
     },
   });
-  queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'act-1'), []);
+  queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'act-1'), extra.assignments ?? []);
   return render(
     <QueryClientProvider client={queryClient}>
       <ActivityResourcesDialog
@@ -89,6 +95,7 @@ function renderDialog(library: ResourceSummary[] = BIG_LIBRARY) {
         open
         onClose={() => {}}
         canWrite
+        {...(extra.onAssignmentEdited ? { onAssignmentEdited: extra.onAssignmentEdited } : {})}
       />
     </QueryClientProvider>,
   );
@@ -198,6 +205,58 @@ describe('ActivityResourcesDialog — resource picker (flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
     expect(await screen.findByText(/This resource is archived/)).toBeInTheDocument();
+  });
+
+  /**
+   * Undo-redo M3 (review C7): assigning a resource AS THE DRIVER moves the activity's current driver
+   * off in the same request, so the panel reads that driver before the write and reports it, for the
+   * host to put back when the assign is undone.
+   */
+  it('reports a new driver together with the driver it displaced', async () => {
+    const incumbent = {
+      id: 'asg-old',
+      activityId: 'act-1',
+      resourceId: 'old',
+      budgetedUnits: 4,
+      unitsPerHour: null,
+      isDriving: true,
+      curveType: 'UNIFORM',
+      lagMinutes: 0,
+      actualUnits: 0,
+      budgetedCost: null,
+      actualCost: null,
+      version: 3,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    } as ResourceAssignmentSummary;
+    const created = { ...incumbent, id: 'asg-new', resourceId: 'crew', version: 1 };
+    vi.mocked(apiFetchEnvelope).mockResolvedValue({
+      data: [resource({ id: 'crew', name: 'Crew A' })],
+      meta: meta(false, null),
+    });
+    vi.mocked(apiFetch).mockImplementation((_path, init) =>
+      Promise.resolve(init?.method === 'POST' ? created : [{ ...incumbent, isDriving: false }]),
+    );
+    const onAssignmentEdited = vi.fn();
+    renderDialog([resource({ id: 'crew', name: 'Crew A' })], {
+      assignments: [incumbent],
+      onAssignmentEdited,
+    });
+    const picker = await field();
+    fireEvent.keyDown(picker, { key: 'ArrowDown' });
+    await waitFor(() => expect(optionNames()).toContain('Crew A (Labour)'));
+    fireEvent.pointerDown(screen.getByRole('option', { name: 'Crew A (Labour)' }));
+    const form = screen.getByRole('group', { name: 'Assign a resource' });
+    fireEvent.click(within(form).getByRole('checkbox', { name: /Driving resource/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
+
+    await waitFor(() => expect(onAssignmentEdited).toHaveBeenCalledTimes(1));
+    expect(onAssignmentEdited).toHaveBeenCalledWith({
+      kind: 'added',
+      assignment: created,
+      resourceName: 'Crew A',
+      displaced: incumbent,
+    });
   });
 
   it('has no axe violations with the picker open', async () => {

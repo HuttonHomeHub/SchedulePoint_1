@@ -530,9 +530,10 @@ export function AssignmentRow({
     void remove.mutateAsync({ assignmentId: assignment.id, activityId }).then(
       () => {
         announce(`“${name}” unassigned.`);
-        onEdited?.({ kind: 'removed', assignment: removed, resourceName: name });
         // The row is about to unmount; hand focus back to a stable target.
         onRemoved();
+        // Last, so a fault in the host's history cannot skip the focus hand-back.
+        onEdited?.({ kind: 'removed', assignment: removed, resourceName: name });
       },
       // Shown by the row's own alert from `remove.isError`; there is nothing else to do with it.
       () => undefined,

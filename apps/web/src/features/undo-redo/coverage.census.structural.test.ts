@@ -56,6 +56,33 @@ const SCOPE = [
   'features/wbs',
 ];
 
+/**
+ * The feature directories that are NOT plan authoring, each named so that a NEW directory is a decision
+ * rather than a silent omission: hierarchy and administration (clients, projects, members,
+ * organisations, recently deleted, staff, system, auth), read-only analysis and reporting, and the
+ * undo feature itself. A directory in neither this list nor {@link SCOPE} fails the census.
+ */
+const NOT_PLAN_AUTHORING = [
+  'activity-history',
+  'audit',
+  'auth',
+  'clients',
+  'float-paths',
+  'members',
+  'navigator',
+  'organizations',
+  'overview',
+  'perf-probe',
+  'placement-migration',
+  'plan-actions',
+  'projects',
+  'recently-deleted',
+  'revision-compare',
+  'staff',
+  'system',
+  'undo-redo',
+];
+
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
@@ -77,7 +104,8 @@ function mutationHooks(files: readonly string[]): Map<string, string> {
   const hooks = new Map<string, string>();
   for (const file of files) {
     const source = withoutComments(readFileSync(file, 'utf8'));
-    const heads = [...source.matchAll(/^export function (use\w+)\(/gm)];
+    // `export const useX = …` is a hook too; missing it would make a whole style of write invisible.
+    const heads = [...source.matchAll(/^export (?:function|const) (use\w+)\b/gm)];
     heads.forEach((head, i) => {
       const end = heads[i + 1]?.index ?? source.length;
       if (/\buseMutation\(/.test(source.slice(head.index, end))) hooks.set(head[1] as string, file);
@@ -124,6 +152,19 @@ describe('undo coverage census', () => {
     // of writing. Floors rather than equalities, so adding a hook fails the next case and not this.
     expect(hooks.size).toBeGreaterThanOrEqual(60);
     expect(used.size).toBeGreaterThanOrEqual(45);
+  });
+
+  it('every feature directory is either in scope or named as not plan authoring', () => {
+    const scoped = SCOPE.filter((dir) => dir.startsWith('features/')).map((dir) =>
+      dir.replace('features/', ''),
+    );
+    const decided = new Set([...scoped, ...NOT_PLAN_AUTHORING]);
+    const features = readdirSync(join(SRC, 'features'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    expect(features.filter((name) => !decided.has(name))).toEqual([]);
+    // …and nothing is named that is not there, or the list is a record of what used to be true.
+    expect([...decided].filter((name) => !features.includes(name))).toEqual([]);
   });
 
   it('every mutation hook the plan workspace reaches is recorded or excluded with a reason', () => {

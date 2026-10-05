@@ -16,6 +16,7 @@ import {
 } from './record-commands';
 import { notApplicable } from './replay';
 
+import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 import { aCrossPlanLink, anAssignment, aStep, fakePlanServer } from '@/test/fake-plan-server';
 
@@ -495,6 +496,134 @@ describe('assignment commands', () => {
       expect(server.mutations.updateAssignment).not.toHaveBeenCalled();
     });
 
+    /**
+     * Review B1: a write that makes this row the driver clears WHOEVER drives now, and the step used to
+     * neither compare nor remember that. A colleague who made somebody else the driver since must stop
+     * the redo, with nothing written, rather than be displaced without a word.
+     */
+    it('a redo that would displace a driver the step never met is set aside, writing nothing', async () => {
+      const { server, command } = await edited({
+        seed: [
+          { id: 'as1', resourceId: 'r1', isDriving: false },
+          { id: 'as2', resourceId: 'r2', isDriving: true },
+          { id: 'as3', resourceId: 'r3', isDriving: false },
+        ],
+        patch: { isDriving: true },
+        displacedId: 'as2',
+      });
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      // A colleague hands the pen's driver role to somebody else.
+      server.editAssignment('as2', { isDriving: false });
+      server.editAssignment('as3', { isDriving: true });
+      server.mutations.updateAssignment.mockClear();
+      expect(await command.redo(server.ctx)).toEqual(notApplicable('changed', 'Crane'));
+      expect(server.mutations.updateAssignment).not.toHaveBeenCalled();
+      expect(server.assignments.get('as3')?.isDriving).toBe(true);
+    });
+
+    it('a redo that finds nobody driving displaces nobody, and the next undo writes only this row', async () => {
+      const { server, command } = await edited({
+        seed: [
+          { id: 'as1', resourceId: 'r1', isDriving: false },
+          { id: 'as2', resourceId: 'r2', isDriving: true },
+        ],
+        patch: { isDriving: true },
+        displacedId: 'as2',
+      });
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      server.editAssignment('as2', { isDriving: false });
+      expect(await command.redo(server.ctx)).toEqual(APPLIED);
+      server.mutations.updateAssignment.mockClear();
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      // The driver the ORIGINAL edit met is not put back: it was not displaced this time.
+      expect(server.assignments.get('as2')?.isDriving).toBe(false);
+      expect(server.mutations.updateAssignment).toHaveBeenCalledTimes(1);
+    });
+
+    it('remembers whoever the redo displaced, so the next undo gives THAT driver back', async () => {
+      const { server, command } = await edited({
+        seed: [
+          { id: 'as1', resourceId: 'r1', isDriving: false },
+          { id: 'as2', resourceId: 'r2', isDriving: true },
+        ],
+        patch: { isDriving: true },
+        displacedId: 'as2',
+      });
+      await command.undo(server.ctx);
+      await command.redo(server.ctx);
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      expect(server.assignments.get('as2')?.isDriving).toBe(true);
+      expect(server.assignments.get('as1')?.isDriving).toBe(false);
+    });
+
+    it('undoing "stopped driving" is set aside when somebody else drives now', async () => {
+      const { server, command } = await edited({
+        seed: [
+          { id: 'as1', resourceId: 'r1', isDriving: true },
+          { id: 'as2', resourceId: 'r2', isDriving: false },
+        ],
+        patch: { isDriving: false },
+      });
+      server.editAssignment('as2', { isDriving: true });
+      server.mutations.updateAssignment.mockClear();
+      expect((await command.undo(server.ctx)).kind).toBe('not-applicable');
+      expect(server.mutations.updateAssignment).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Review B2: a PATCH cannot clear a rate, so the step deletes and re-creates, and the delete is
+     * unversioned. A create that fails afterwards must not leave the resource unassigned.
+     */
+    describe('re-creating an assignment to clear its rate', () => {
+      const rateSet = () =>
+        edited({
+          seed: [{ id: 'as1', resourceId: 'r1', isDriving: true, unitsPerHour: null }],
+          patch: { unitsPerHour: 3 },
+        });
+      const refused = () => new ApiFetchError(422, { code: 'VALIDATION', message: 'Refused.' });
+
+      it('a failed create is compensated from the row that was read, and reported as such', async () => {
+        const { server, command } = await rateSet();
+        server.mutations.createAssignment.mockRejectedValueOnce(refused());
+        await expect(command.undo(server.ctx)).rejects.toThrow(/put back as it was/);
+        expect(idOf(server, 'r1')).toMatchObject({ unitsPerHour: 3, isDriving: true });
+      });
+
+      it('says so when it could not be put back either', async () => {
+        const { server, command } = await rateSet();
+        server.mutations.createAssignment
+          .mockRejectedValueOnce(refused())
+          .mockRejectedValueOnce(refused());
+        await expect(command.undo(server.ctx)).rejects.toThrow(/could not be put back/);
+        expect(idOf(server, 'r1')).toBeUndefined();
+      });
+
+      it('a lost pen is rethrown as it is, for the pen contract', async () => {
+        const { server, command } = await rateSet();
+        const locked = new ApiFetchError(423, { code: 'LOCKED', message: 'No pen.' });
+        server.mutations.createAssignment.mockRejectedValueOnce(locked);
+        await expect(command.undo(server.ctx)).rejects.toBe(locked);
+        expect(idOf(server, 'r1')).toMatchObject({ unitsPerHour: 3 });
+      });
+    });
+
+    /** Review S3: a PATCH cannot write a null actual cost, so the step is refused, not half-undone. */
+    it('a target the PATCH cannot express is set aside, not reported as applied', async () => {
+      const before = anAssignment({ id: 'as1', actualCost: 5 });
+      const after = anAssignment({ id: 'as1', actualCost: null, version: 2 });
+      const server = fakePlanServer({ activities: [A('a1', 'Excavate')], assignments: [after] });
+      const command = assignmentEditCommand({
+        before,
+        after,
+        resourceName: 'Digger',
+        activityName: 'Excavate',
+        writes: writes(server),
+      });
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      // Redo would have to write a null the endpoint cannot take.
+      expect(await command.redo(server.ctx)).toEqual(notApplicable('changed', 'Digger'));
+    });
+
     it('an edit that changed nothing is not a step', () => {
       const row = anAssignment();
       expect(assignmentChanged(row, { ...row, version: 2 })).toBe(false);
@@ -559,6 +688,21 @@ describe('cross-plan link commands', () => {
       server.remove('o1');
       expect(await command.redo(server.ctx)).toEqual(notApplicable('gone', 'Other plan work'));
       expect(server.mutations.createCrossPlanLink).not.toHaveBeenCalled();
+    });
+
+    it('a redo the server refuses for a programme cycle reads as "cannot be made now"', async () => {
+      const { server, command } = await added();
+      await command.undo(server.ctx);
+      server.mutations.createCrossPlanLink.mockRejectedValueOnce(
+        new ApiFetchError(409, {
+          code: 'CONFLICT',
+          message: 'Cycle.',
+          details: { reason: 'CROSS_PLAN_CYCLE_DETECTED' },
+        }),
+      );
+      expect(await command.redo(server.ctx)).toEqual(
+        notApplicable('duplicate', 'Other plan work → Excavate'),
+      );
     });
 
     it('a redo the server refuses as a duplicate is set aside, not thrown', async () => {

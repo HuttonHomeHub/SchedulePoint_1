@@ -48,7 +48,9 @@ function mockCascade(create?: () => Promise<unknown>): void {
   vi.mocked(apiFetchAllPages).mockImplementation(route as (path: string) => Promise<unknown[]>);
 }
 
-function renderDialog(props: { onAdded?: (link: CrossPlanDependencySummary) => void } = {}) {
+function renderDialog(
+  props: { onAdded?: (link: CrossPlanDependencySummary) => void; onClose?: () => void } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -195,6 +197,31 @@ describe('AddCrossPlanLinkDialog', () => {
 
     await waitFor(() => expect(onAdded).toHaveBeenCalledTimes(1));
     expect(onAdded).toHaveBeenCalledWith(created);
+  });
+
+  /**
+   * Review C2: Escape (or a reopen) while the create is in flight unmounts the form that began it. The
+   * link exists, so the host is still told; but the stale callback must not close whatever opening is
+   * on screen now.
+   */
+  it('still reports a create that outlives its opening, without closing a later one', async () => {
+    let resolve: (value: unknown) => void = () => undefined;
+    const created = { id: 'x9', type: 'FS' } as CrossPlanDependencySummary;
+    mockCascade(() => new Promise((r) => (resolve = r)));
+    const onAdded = vi.fn();
+    const onClose = vi.fn();
+    const { unmount } = renderDialog({ onAdded, onClose });
+    await pickUpstreamActivity();
+    fireEvent.click(screen.getByRole('button', { name: 'Add cross-plan link' }));
+    await waitFor(() =>
+      expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+    );
+
+    unmount();
+    resolve(created);
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith(created));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('requires choosing an activity before it will submit', async () => {

@@ -25,6 +25,7 @@ import type {
   AssignmentCreateBody,
   AssignmentUpdateInput,
 } from '@/features/resources/api/use-resources';
+import { ApiFetchError } from '@/lib/api/client';
 
 /**
  * The commands for the records a planner edits beside the bar (undo-redo M3): outline position, weighted
@@ -146,7 +147,7 @@ export function reparentCommand(params: {
 // Weighted steps
 // ---------------------------------------------------------------------------------------------------
 
-/** `useReplaceActivitySteps().mutateAsync`, addressed at an activity — a bulk replace of its steps. */
+/** `useReplaceActivityStepsOn().mutateAsync` — addressed at an activity — a bulk replace of its steps. */
 export type ReplaceStepsFn = (input: {
   activityId: string;
   version: number;
@@ -353,6 +354,30 @@ async function liveAssignments(
 }
 
 /**
+ * What a write that makes `resourceId` the driver will move off, checked BEFORE the write.
+ *
+ * The server clears whoever drives the activity in the same request, and this step never compared it:
+ * a colleague who made somebody else the driver since would be displaced without a word, and the step
+ * would remember the wrong driver for its next reversal. So the only driver a step may displace is the
+ * one it already expects (`expected`, from the recorded step); any other is a change the step did not
+ * make and does not own, and the step is set aside. Returns what the step should remember displacing.
+ */
+function takesOverFrom(
+  list: readonly ResourceAssignmentSummary[],
+  resourceId: string,
+  becomesDriver: boolean,
+  expected: DisplacedDriver | undefined,
+): { ok: true; displaced: DisplacedDriver | undefined } | { ok: false; name: string } {
+  if (!becomesDriver) return { ok: true, displaced: undefined };
+  const current = list.find((a) => a.isDriving && a.resourceId !== resourceId);
+  if (current === undefined) return { ok: true, displaced: undefined };
+  if (expected === undefined || current.resourceId !== expected.assignment.resourceId) {
+    return { ok: false, name: expected?.resourceName ?? 'The driving resource' };
+  }
+  return { ok: true, displaced: { assignment: current, resourceName: expected.resourceName } };
+}
+
+/**
  * Assign / unassign as a toggle on whether the resource is on the activity, differing only in start
  * state and direction — the `linkToggle` shape. A re-created assignment is found by resource, not by id
  * (see {@link liveAssignments}).
@@ -383,19 +408,15 @@ function assignmentToggle(params: {
       const live = await liveAssignments(ctx, activityId, resourceId);
       if (!live.ok) return notApplicable('gone', activityName);
       if (live.row !== undefined) return notApplicable('duplicate', resourceName);
-      const driver = state.isDriving
-        ? live.list.find((a) => a.isDriving && a.resourceId !== resourceId)
-        : undefined;
+      const taken = takesOverFrom(live.list, resourceId, state.isDriving, displaced);
+      if (!taken.ok) return notApplicable('changed', taken.name);
       return writeOrSetAside(resourceName, async () => {
         const created = await writes.createAssignment({
           activityId,
           body: assignmentBodyOf(resourceId, state),
         });
         state = pick(created, ASSIGNMENT_FIELDS);
-        displaced =
-          driver === undefined
-            ? undefined
-            : { assignment: driver, resourceName: 'The driving resource' };
+        displaced = taken.displaced;
         present = true;
       });
     },
@@ -499,6 +520,42 @@ export function assignmentRemoveCommand(params: {
 }
 
 /**
+ * Re-create an assignment without the rate it holds — a PATCH cannot clear one (ADR-0040). That is a
+ * delete followed by a create, and the delete is unversioned, so a failure of the create would leave
+ * the resource unassigned: it is compensated by re-creating the row as it was read, and reported as a
+ * distinct failure (never as a set-aside — the step did not apply, and the planner is told which of
+ * the two states the plan is in). A lost pen (423) is rethrown as it is so the pen contract runs.
+ */
+async function recreateWithout(
+  writes: AssignmentWrites,
+  row: ResourceAssignmentSummary,
+  body: AssignmentCreateBody,
+  resourceName: string,
+): Promise<ResourceAssignmentSummary> {
+  await writes.deleteAssignment({ assignmentId: row.id, activityId: row.activityId });
+  try {
+    return await writes.createAssignment({ activityId: row.activityId, body });
+  } catch (err) {
+    let compensated = true;
+    try {
+      await writes.createAssignment({
+        activityId: row.activityId,
+        body: assignmentBodyOf(row.resourceId, pick(row, ASSIGNMENT_FIELDS)),
+      });
+    } catch {
+      compensated = false;
+    }
+    if (err instanceof ApiFetchError && err.status === 423) throw err;
+    throw new Error(
+      compensated
+        ? `“${resourceName}” could not be changed, and was put back as it was.`
+        : `“${resourceName}” could not be changed, and could not be put back — assign it again.`,
+      { cause: err },
+    );
+  }
+}
+
+/**
  * Reverse an **assignment edit** (units, rate, driving, curve, join lag, cost). Only the fields the edit
  * changed — diffed from the server's before and after rows — are compared and written.
  *
@@ -529,11 +586,14 @@ export function assignmentEditCommand(params: {
   const fieldSet: ReadonlySet<AssignmentField> = new Set(fields);
   let atUndo: AssignmentState = pick(after, ASSIGNMENT_FIELDS);
   let atRedo: AssignmentState = pick(before, ASSIGNMENT_FIELDS);
+  // The driver this resource's becoming the driver moved off, as the step last saw it. Mutable and per
+  // replay: a redo that makes the resource the driver again displaces whoever drives THEN, which the
+  // next undo must put back — not the driver the original edit happened to meet.
+  let displaced = params.displaced;
   const replay = async (
     ctx: ReplayContext,
     expect: AssignmentState,
     target: AssignmentState,
-    direction: 'undo' | 'redo',
     settle: (next: AssignmentState) => void,
   ): Promise<ReplayResult> => {
     if (fields.length === 0) return APPLIED;
@@ -542,32 +602,42 @@ export function assignmentEditCommand(params: {
     if (live.row === undefined) return notApplicable('gone', resourceName);
     if (!matches(live.row, pick(expect, fields))) return notApplicable('changed', resourceName);
     const row = live.row;
-    const previous = params.displaced;
+    // A write that makes this row the driver moves the current driver off: it must be the one the step
+    // expects, or the step is set aside rather than displace somebody it never compared.
+    const sets = fieldSet.has('isDriving') && target.isDriving && !row.isDriving;
+    const taken = takesOverFrom(live.list, resourceId, sets, displaced);
+    if (!taken.ok) return notApplicable('changed', taken.name);
     // Reversing "became the driver" is putting the displaced driver back — that write moves this one off.
-    const restoreDriver =
-      direction === 'undo' && previous !== undefined && fieldSet.has('isDriving');
+    const previous = displaced;
+    const putBack =
+      fieldSet.has('isDriving') && !target.isDriving && row.isDriving && previous !== undefined;
     const driver =
-      restoreDriver && previous !== undefined
+      putBack && previous !== undefined
         ? live.list.find((a) => a.resourceId === previous.assignment.resourceId)
         : undefined;
-    if (restoreDriver && previous !== undefined) {
+    if (putBack && previous !== undefined) {
       if (driver === undefined) return notApplicable('gone', previous.resourceName);
       if (driver.isDriving) return notApplicable('changed', previous.resourceName);
     }
-    const own = new Set(fields.filter((key) => !(restoreDriver && key === 'isDriving')));
+    const own = new Set(fields.filter((key) => !(putBack && key === 'isDriving')));
+    // A PATCH cannot write `null` here; refuse rather than report a partial undo as applied.
+    if (own.has('actualCost') && target.actualCost === null) {
+      return notApplicable('changed', resourceName);
+    }
     const recreate = own.has('unitsPerHour') && target.unitsPerHour === null;
     return writeOrSetAside(resourceName, async () => {
       let saved: ResourceAssignmentSummary = row;
       if (recreate) {
-        await writes.deleteAssignment({ assignmentId: row.id, activityId });
-        saved = await writes.createAssignment({
-          activityId,
-          body: assignmentBodyOf(resourceId, {
+        saved = await recreateWithout(
+          writes,
+          row,
+          assignmentBodyOf(resourceId, {
             ...pick(row, ASSIGNMENT_FIELDS),
             ...pick(target, fields),
-            ...(restoreDriver ? { isDriving: false } : {}),
+            ...(putBack ? { isDriving: false } : {}),
           }),
-        });
+          resourceName,
+        );
       } else if (own.size > 0) {
         const edited = params.editedField;
         // The one field the forward write named must be among those this write carries, or the server
@@ -592,19 +662,20 @@ export function assignmentEditCommand(params: {
           isDriving: true,
         });
       }
+      if (sets) displaced = taken.displaced;
       // The row as the server holds it after this write, except the driving flag this step moved by
       // writing somebody else's row (the response predates that).
-      settle({ ...pick(saved, ASSIGNMENT_FIELDS), ...(restoreDriver ? { isDriving: false } : {}) });
+      settle({ ...pick(saved, ASSIGNMENT_FIELDS), ...(putBack ? { isDriving: false } : {}) });
     });
   };
   return {
     label: params.label ?? assignmentLabel('Edit', resourceName, activityName),
     undo: (ctx) =>
-      replay(ctx, atUndo, atRedo, 'undo', (next) => {
+      replay(ctx, atUndo, atRedo, (next) => {
         atRedo = next;
       }),
     redo: (ctx) =>
-      replay(ctx, atRedo, atUndo, 'redo', (next) => {
+      replay(ctx, atRedo, atUndo, (next) => {
         atUndo = next;
       }),
   };
