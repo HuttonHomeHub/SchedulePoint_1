@@ -1672,7 +1672,6 @@ export function TsldPanel({
       // CURSOR, not the selection, so selecting alone left it on whichever row the planner had last
       // walked to — a reveal (undo, a duplicate, a search hit) that selected the right bar and told a
       // screen reader about the wrong one (WCAG 4.1.2).
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- same external signal
       if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(signal.id);
       // Move DOM focus into the parallel listbox so `aria-activedescendant` is actually conveyed and an
       // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not

@@ -750,6 +750,8 @@ export function dissolveCommand(params: {
 
   return {
     label: params.label ?? `Dissolve “${summary.name}”`,
+    // The summary first (an undo brings it back); after a redo it is gone, so the reveal falls to a child.
+    subjects: [summary.id, ...params.result.promoted.map((child) => child.id)],
     undo: async (ctx) => {
       if (present && refiled) return APPLIED;
       if (present) return refile(ctx);
