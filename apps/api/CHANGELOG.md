@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.87.0
+
+### Minor Changes
+
+- [#803](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/803) [`6e2bbbf`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6e2bbbf728240f545f492f6db12d27ad162ba74b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dissolving a WBS summary now also returns `deleteBatchId`, the batch its own soft-delete was stamped with, so the dissolve can be undone through `restore-batch`.
+
 ## 0.86.2
 
 ### Patch Changes
