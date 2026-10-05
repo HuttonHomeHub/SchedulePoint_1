@@ -388,99 +388,142 @@ export function useAssignments(
   });
 }
 
+/**
+ * The POST body of an assignment create, money already in **minor** units. The assign form builds it
+ * from its major-unit strings; the undo history replays it from a row it read back, which is already
+ * minor — so the one body is what both send.
+ */
+export interface AssignmentCreateBody {
+  resourceId: string;
+  budgetedUnits: number;
+  unitsPerHour?: number;
+  isDriving: boolean;
+  curveType?: ResourceCurveType;
+  budgetedCost?: number;
+  actualCost?: number;
+  actualUnits?: number;
+  lagMinutes?: number;
+}
+
+function postAssignment(orgSlug: string, activityId: string, body: AssignmentCreateBody) {
+  return apiFetch<ResourceAssignmentSummary>(
+    `/organizations/${orgSlug}/activities/${activityId}/assignments`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+function invalidateAfterCreate(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgSlug: string,
+  activityId: string,
+  planId: string | undefined,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
+    }),
+    // A new assignment adds demand to the resource histogram (M7 rung 5, ADR-0044 §3) — refresh
+    // every bucket size for the plan (prefix) — and changes the activity's
+    // `resourceAssignmentCount` (ADR-0162), which gates Make milestone. The plan's activity list
+    // only, never `activityKeys.all`, which is organisation-wide. Only when the plan is known
+    // (every caller passes it).
+    ...(planId
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: activityKeys.listByPlan(orgSlug, planId),
+          }),
+        ]
+      : []),
+  ]);
+}
+
 export function useCreateAssignment(orgSlug: string, activityId: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: AssignmentFormValues & { lagMinutes?: number }) =>
-      apiFetch<ResourceAssignmentSummary>(
-        `/organizations/${orgSlug}/activities/${activityId}/assignments`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            resourceId: input.resourceId,
-            budgetedUnits: input.budgetedUnits,
-            // Set an initial rate when given (ADR-0040); no `editedField` on create, so the triad stays
-            // inert — a plain store. The duration derivation happens later, on an explicit units/rate
-            // edit in the row editor, where the "edited field" is unambiguous.
-            ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
-            isDriving: input.isDriving,
-            // Resource loading curve (M7 rung 5, ADR-0044 §3): omit when blank so an absent curve stays
-            // UNIFORM (a flat load, the API default).
-            ...(input.curveType ? { curveType: input.curveType } : {}),
-            // Assignment cost & actuals (EV4b, ADR-0042): the money fields carry major → minor units.
-            // Omit when blank so an absent value stays absent (the API derives budgeted cost from
-            // units × rate, and defaults actuals to 0).
-            ...(majorInputToMinor(input.budgetedCost) === undefined
-              ? {}
-              : { budgetedCost: majorInputToMinor(input.budgetedCost) }),
-            ...(majorInputToMinor(input.actualCost) === undefined
-              ? {}
-              : { actualCost: majorInputToMinor(input.actualCost) }),
-            ...(input.actualUnits === undefined ? {} : { actualUnits: input.actualUnits }),
-            // The join lag (ADR-0071 §1), in working minutes on the activity's calendar. Omitted when
-            // absent or zero, so an unlagged assign sends the body it always did.
-            ...(input.lagMinutes === undefined ? {} : { lagMinutes: input.lagMinutes }),
-          }),
-        },
-      ),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: assignmentKeys.listByActivity(orgSlug, activityId),
-        }),
-        // A new assignment adds demand to the resource histogram (M7 rung 5, ADR-0044 §3) — refresh
-        // every bucket size for the plan (prefix) — and changes the activity's
-        // `resourceAssignmentCount` (ADR-0162), which gates Make milestone. The plan's activity list
-        // only, never `activityKeys.all`, which is organisation-wide. Only when the plan is known
-        // (every caller passes it).
-        ...(planId
-          ? [
-              queryClient.invalidateQueries({
-                queryKey: scheduleKeys.resourceHistogram(orgSlug, planId),
-              }),
-              queryClient.invalidateQueries({
-                queryKey: activityKeys.listByPlan(orgSlug, planId),
-              }),
-            ]
-          : []),
-      ]),
+    mutationFn: (input: AssignmentFormValues & { lagMinutes?: number }) => {
+      // Assignment cost & actuals (EV4b, ADR-0042): the money fields carry major → minor units.
+      // Omit when blank so an absent value stays absent (the API derives budgeted cost from
+      // units × rate, and defaults actuals to 0).
+      const budgetedCost = majorInputToMinor(input.budgetedCost);
+      const actualCost = majorInputToMinor(input.actualCost);
+      return postAssignment(orgSlug, activityId, {
+        resourceId: input.resourceId,
+        budgetedUnits: input.budgetedUnits,
+        // Set an initial rate when given (ADR-0040); no `editedField` on create, so the triad stays
+        // inert — a plain store. The duration derivation happens later, on an explicit units/rate
+        // edit in the row editor, where the "edited field" is unambiguous.
+        ...(input.unitsPerHour !== undefined ? { unitsPerHour: input.unitsPerHour } : {}),
+        isDriving: input.isDriving,
+        // Resource loading curve (M7 rung 5, ADR-0044 §3): omit when blank so an absent curve stays
+        // UNIFORM (a flat load, the API default).
+        ...(input.curveType ? { curveType: input.curveType } : {}),
+        ...(budgetedCost === undefined ? {} : { budgetedCost }),
+        ...(actualCost === undefined ? {} : { actualCost }),
+        ...(input.actualUnits === undefined ? {} : { actualUnits: input.actualUnits }),
+        // The join lag (ADR-0071 §1), in working minutes on the activity's calendar. Omitted when
+        // absent or zero, so an unlagged assign sends the body it always did.
+        ...(input.lagMinutes === undefined ? {} : { lagMinutes: input.lagMinutes }),
+      });
+    },
+    onSettled: () => invalidateAfterCreate(queryClient, orgSlug, activityId, planId),
   });
+}
+
+/**
+ * An assignment create addressed at call time — the undo history re-creates an assignment on whichever
+ * activity the step was recorded on, and a hook cannot be called per activity (the same reason
+ * `useReplaceActivitySteps` takes an optional target).
+ */
+export function useCreateAssignmentOn(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { activityId: string; body: AssignmentCreateBody }) =>
+      postAssignment(orgSlug, input.activityId, input.body),
+    onSettled: (_data, _error, input) =>
+      invalidateAfterCreate(queryClient, orgSlug, input.activityId, planId),
+  });
+}
+
+/** The input of an assignment PATCH. Every field but the ids and the version is optional. */
+export interface AssignmentUpdateInput {
+  assignmentId: string;
+  activityId: string;
+  version: number;
+  budgetedUnits?: number;
+  isDriving?: boolean;
+  /** Set/change the driving assignment's rate (ADR-0040); omit to leave it unchanged. */
+  unitsPerHour?: number;
+  /** Set the loading curve (M7 rung 5, ADR-0044 §3); omit to leave it unchanged. */
+  curveType?: ResourceCurveType;
+  /**
+   * Which triad quantity the planner edited (ADR-0040) — sent only for a units/rate edit on the
+   * driving assignment, so the server holds it and recomputes the dependent (a same-row Units/Rate,
+   * or the owning activity's duration for a units-driven type). Omitted = a plain store.
+   */
+  editedField?: EditedField;
+  /**
+   * Assignment cost & actuals (EV4b, ADR-0042), already in **minor units** for the money fields.
+   * Sent only when the caller edits the cost group, so a units/rate/driving save never touches them
+   * (the PATCH treats absent fields as unchanged). `budgetedCost: null` clears the override.
+   */
+  budgetedCost?: number | null;
+  actualCost?: number;
+  actualUnits?: number;
+  /**
+   * The join lag in working minutes (ADR-0071 §1) — how far into the activity this resource
+   * arrives. Sent only when the caller edits it, so a units/rate/driving/cost save never touches
+   * it (the PATCH treats absent fields as unchanged). `0` is a real value: it clears the lag.
+   */
+  lagMinutes?: number;
 }
 
 export function useUpdateAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      assignmentId: string;
-      activityId: string;
-      version: number;
-      budgetedUnits: number;
-      isDriving: boolean;
-      /** Set/change the driving assignment's rate (ADR-0040); omit to leave it unchanged. */
-      unitsPerHour?: number;
-      /** Set the loading curve (M7 rung 5, ADR-0044 §3); omit to leave it unchanged. */
-      curveType?: ResourceCurveType;
-      /**
-       * Which triad quantity the planner edited (ADR-0040) — sent only for a units/rate edit on the
-       * driving assignment, so the server holds it and recomputes the dependent (a same-row Units/Rate,
-       * or the owning activity's duration for a units-driven type). Omitted = a plain store.
-       */
-      editedField?: EditedField;
-      /**
-       * Assignment cost & actuals (EV4b, ADR-0042), already in **minor units** for the money fields.
-       * Sent only when the caller edits the cost group, so a units/rate/driving save never touches them
-       * (the PATCH treats absent fields as unchanged). `budgetedCost: null` clears the override.
-       */
-      budgetedCost?: number | null;
-      actualCost?: number;
-      actualUnits?: number;
-      /**
-       * The join lag in working minutes (ADR-0071 §1) — how far into the activity this resource
-       * arrives. Sent only when the caller edits it, so a units/rate/driving/cost save never touches
-       * it (the PATCH treats absent fields as unchanged). `0` is a real value: it clears the lag.
-       */
-      lagMinutes?: number;
-    }) =>
+    mutationFn: (input: AssignmentUpdateInput) =>
       apiFetch<ResourceAssignmentSummary>(
         `/organizations/${orgSlug}/assignments/${input.assignmentId}`,
         {

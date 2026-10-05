@@ -122,6 +122,9 @@ export const crossPlanDependencyKeys = {
   // activities in two plans, so a coarse-but-correct sweep, mirroring `dependencyKeys` invalidation).
   byActivity: (orgSlug: string, activityId: string) =>
     [...crossPlanDependencyKeys.all(orgSlug), 'activity', activityId] as const,
+  // One link by id — what an undo step reads to learn whether the link it made is still as it left it.
+  detail: (orgSlug: string, linkId: string) =>
+    [...crossPlanDependencyKeys.all(orgSlug), 'detail', linkId] as const,
 };
 
 export const noteKeys = {

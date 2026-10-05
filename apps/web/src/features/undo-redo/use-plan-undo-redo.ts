@@ -1,4 +1,10 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type {
+  ActivityStep,
+  ActivitySummary,
+  CrossPlanDependencySummary,
+  DependencySummary,
+  ResourceAssignmentSummary,
+} from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -7,15 +13,18 @@ import { isNotFound, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
+import { activityStepsQueryOptions } from '@/features/activities/api/use-activity-steps';
 import {
   planDependenciesQueryOptions,
   predecessorsQueryOptions,
   successorsQueryOptions,
 } from '@/features/dependencies/api/use-dependencies';
+import { assignmentsQueryOptions } from '@/features/resources/api/use-resources';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import {
   activityKeys,
   baselineKeys,
+  crossPlanDependencyKeys,
   dependencyKeys,
   scheduleKeys,
 } from '@/lib/query/hierarchy-keys';
@@ -129,6 +138,15 @@ export function usePlanUndoRedo(params: {
         throw err;
       }
     }
+    /** A list read; absent when the server says 404 (its owner is gone). */
+    async function readList<T>(read: () => Promise<T[]>): Promise<readonly T[] | undefined> {
+      try {
+        return await read();
+      } catch (err) {
+        if (isNotFound(err)) return undefined;
+        throw err;
+      }
+    }
     const byId = <T extends { id: string }>(rows: readonly (T | undefined)[]) =>
       new Map(rows.flatMap((row) => (row === undefined ? [] : [[row.id, row] as const])));
     const unique = (ids: readonly string[]) => [...new Set(ids)];
@@ -193,6 +211,20 @@ export function usePlanUndoRedo(params: {
           ),
         );
       },
+      // The three lists below hang off an activity, so a 404 on one means THAT ACTIVITY is gone.
+      readSteps: (activityId) =>
+        readList<ActivityStep>(() =>
+          queryClient.fetchQuery({ ...activityStepsQueryOptions(orgSlug, activityId), ...fresh }),
+        ),
+      readAssignments: (activityId) =>
+        readList<ResourceAssignmentSummary>(() =>
+          queryClient.fetchQuery({ ...assignmentsQueryOptions(orgSlug, activityId), ...fresh }),
+        ),
+      readCrossPlanLink: (linkId) =>
+        readOne<CrossPlanDependencySummary>(
+          crossPlanDependencyKeys.detail(orgSlug, linkId),
+          `/organizations/${orgSlug}/cross-plan-dependencies/${linkId}`,
+        ),
     };
   }, [queryClient, orgSlug, planId]);
 

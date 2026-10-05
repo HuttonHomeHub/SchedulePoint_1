@@ -40,18 +40,24 @@ export function useActivitySteps(
 export function useReplaceActivitySteps(orgSlug: string, planId: string, activityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ReplaceActivityStepsRequest) =>
-      apiFetch<ActivityStep[]>(`/organizations/${orgSlug}/activities/${activityId}/steps`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: stepKeys.listByActivity(orgSlug, activityId),
-        }),
+    // `activityId` in the input addresses an activity other than the one the hook was built for: the
+    // workspace's undo history replays a step recorded on any activity, and a hook cannot be called
+    // per row. The editor never sets it.
+    mutationFn: ({
+      activityId: target,
+      ...input
+    }: ReplaceActivityStepsRequest & { activityId?: string }) =>
+      apiFetch<ActivityStep[]>(
+        `/organizations/${orgSlug}/activities/${target ?? activityId}/steps`,
+        { method: 'PUT', body: JSON.stringify(input) },
+      ),
+    onSettled: (_data, _error, input) => {
+      const target = input.activityId ?? activityId;
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: stepKeys.listByActivity(orgSlug, target) }),
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, activityId) }),
-      ]),
+        queryClient.invalidateQueries({ queryKey: activityKeys.detail(orgSlug, target) }),
+      ]);
+    },
   });
 }

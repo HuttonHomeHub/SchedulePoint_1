@@ -1,4 +1,10 @@
-import type { ActivitySummary, DependencySummary } from '@repo/types';
+import type {
+  ActivityStep,
+  ActivitySummary,
+  CrossPlanDependencySummary,
+  DependencySummary,
+  ResourceAssignmentSummary,
+} from '@repo/types';
 
 import { ApiFetchError } from '@/lib/api/client';
 
@@ -60,6 +66,14 @@ export interface ReplayContext {
   readLinksOf: (activityIds: readonly string[]) => Promise<ReadonlyMap<string, DependencySummary>>;
   /** Every activity filed directly under one of these summaries, by id. */
   readChildrenOf: (parentIds: readonly string[]) => Promise<ReadonlyMap<string, ActivitySummary>>;
+  /** An activity's weighted steps in order; `undefined` when the activity itself is gone. */
+  readSteps: (activityId: string) => Promise<readonly ActivityStep[] | undefined>;
+  /** An activity's resource assignments; `undefined` when the activity itself is gone. */
+  readAssignments: (
+    activityId: string,
+  ) => Promise<readonly ResourceAssignmentSummary[] | undefined>;
+  /** One cross-plan link by id; `undefined` when it is gone. */
+  readCrossPlanLink: (linkId: string) => Promise<CrossPlanDependencySummary | undefined>;
 }
 
 /** A field's value for comparison: the API speaks `null`, so an absent field and a null are one value. */
