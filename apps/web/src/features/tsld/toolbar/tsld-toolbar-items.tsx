@@ -104,6 +104,7 @@ import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import { PlanPenControl } from '@/features/plan-lock';
 import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
+import { undoRedoHints } from '@/features/undo-redo';
 import { historyPhrase } from '@/lib/history-phrase';
 import { cn } from '@/lib/utils';
 
@@ -2062,14 +2063,16 @@ function UndoRedoControl({
   // activity's own name too ("Undo edit “excavate”") while the announcement kept it.
   const liveLabel = historyPhrase(verb, stepLabel);
   const label = disabled && api.disabledReason ? `${verb} — ${api.disabledReason}` : liveLabel;
-  const keyShortcuts = direction === 'undo' ? 'Control+Z' : 'Control+Shift+Z';
+  // Platform-correct (undo-redo M5): ⌘Z on a Mac, Ctrl+Z / Ctrl+Y elsewhere. The accelerator is in the
+  // tooltip only, never the accessible name, which `aria-keyshortcuts` already carries for AT.
+  const hint = undoRedoHints()[direction];
   // The visible name comes from the Tooltip primitive, not `title` (ADR-0117 — hover-only, so a
   // keyboard or touch user could never read it). Found by the fix-slice M-B journey, which is the
   // ADR-0064 §7 shape one more time: `ToolbarButton`'s icon-only branch got the treatment and this
   // bespoke `render` control — the spec's own table said it went through ToolbarButton — did not.
   // The dynamic aria-label (the control's reason for being bespoke) is unchanged.
   const { triggerProps: tipTrigger, tooltip: tipNode } = useTooltip({
-    content: label,
+    content: `${label} (${hint.display})`,
     purpose: 'name-echo',
   });
   return (
@@ -2083,7 +2086,7 @@ function UndoRedoControl({
       {...api.itemProps}
       type="button"
       aria-label={label}
-      aria-keyshortcuts={keyShortcuts}
+      aria-keyshortcuts={hint.aria}
       aria-disabled={disabled || undefined}
       onClick={() => {
         if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();

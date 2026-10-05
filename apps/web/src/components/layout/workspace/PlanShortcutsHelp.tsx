@@ -6,6 +6,7 @@ import {
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import type { PlanViewMode } from '@/features/gantt/view-mode';
+import { isApplePlatform } from '@/features/undo-redo';
 
 interface Shortcut {
   keys: string;
@@ -92,15 +93,27 @@ const SEARCH_NAV_SHORTCUTS: readonly Shortcut[] = [
 
 /**
  * Undo/redo accelerators (ADR-0048 M3.2) — appended to the Edit list only when `VITE_UNDO_REDO` is on,
- * so the sheet stays byte-for-byte identical with the flag off.
+ * so the sheet stays byte-for-byte identical with the flag off. Keys are written for the platform
+ * (undo-redo M5): ⌘Z / ⇧⌘Z on a Mac, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z elsewhere. They work wherever focus
+ * is in the plan — including on the page itself — except inside a text box, where Ctrl/⌘+Z undoes
+ * the typing instead; the sheet says so, because that exception is the one planners ask about.
  */
-const UNDO_REDO_SHORTCUTS: readonly Shortcut[] = [
-  { keys: 'Cmd / Ctrl + Z', action: 'Undo the last edit — what it did shows under the plan' },
-  {
-    keys: 'Cmd / Ctrl + Shift + Z  ·  Ctrl + Y',
-    action: 'Redo — what it did shows under the plan',
-  },
-];
+function undoRedoShortcuts(apple: boolean): readonly Shortcut[] {
+  return [
+    {
+      keys: apple ? '⌘Z' : 'Ctrl + Z',
+      action: 'Undo the last edit — what it did shows under the plan',
+    },
+    {
+      keys: apple ? '⇧⌘Z' : 'Ctrl + Y  ·  Ctrl + Shift + Z',
+      action: 'Redo — what it did shows under the plan',
+    },
+    {
+      keys: apple ? '⌘Z (in a text box)' : 'Ctrl + Z (in a text box)',
+      action: 'Undo your typing, not the plan',
+    },
+  ];
+}
 
 /**
  * **The Gantt's own bindings** (`docs/TECH_DEBT.md` #137).
@@ -198,7 +211,12 @@ export function PlanShortcutsHelp({
           {editingEnabled ? (
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold">Edit</h3>
-              <ShortcutList items={GANTT_EDIT_SHORTCUTS} />
+              <ShortcutList
+                items={[
+                  ...GANTT_EDIT_SHORTCUTS,
+                  ...(UNDO_REDO_ENABLED ? undoRedoShortcuts(isApplePlatform()) : []),
+                ]}
+              />
             </section>
           ) : null}
         </div>
@@ -209,7 +227,7 @@ export function PlanShortcutsHelp({
     ...EDIT_SHORTCUTS,
     ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
     ...(CANVAS_SEARCH_NAV_ENABLED ? SEARCH_NAV_SHORTCUTS : []),
-    ...(UNDO_REDO_ENABLED ? UNDO_REDO_SHORTCUTS : []),
+    ...(UNDO_REDO_ENABLED ? undoRedoShortcuts(isApplePlatform()) : []),
   ];
   return (
     <Dialog

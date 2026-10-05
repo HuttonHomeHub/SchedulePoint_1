@@ -133,6 +133,14 @@ entry stops being needed.
   nothing; with nothing to undo the key is left to the browser. The tooltip, accessible name, strip
   and announcement all come from `historyPhrase`, which lower-cases the first letter only, so an
   activity keeps its own capitalisation.
+- **Undo and redo work wherever the planner is in the plan, and the browser keeps the text box**
+  (undo-redo M5). `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` and `Ctrl+Y` run in the diagram and the Gantt,
+  including with focus on the page itself after a deselect or a closed dialog. They stand aside
+  only where the browser has a native undo to protect — text-type inputs (text, search, number,
+  date, time, …), `textarea`, `select` and `contenteditable` — so a checkbox, radio, range or
+  button does **not** swallow the key. They are inert under a modal. Tooltips and the shortcuts
+  sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
+  `aria-keyshortcuts` lists every chord that works.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

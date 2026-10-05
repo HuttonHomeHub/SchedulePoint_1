@@ -84,4 +84,11 @@ export {
 export type { NotApplicableReason, ReplayContext, ReplayResult } from './replay';
 export { useHistoryResult, type HistoryResultState } from './use-history-result';
 export { useUndoRedoKeybindings } from './use-undo-redo-keybindings';
+export { isTextEntryTarget } from './text-entry';
+export {
+  isApplePlatform,
+  undoRedoHints,
+  type ShortcutHint,
+  type UndoRedoHints,
+} from './shortcut-hints';
 export { blockedHistoryResult, historyResultAction } from './history-result-host';

@@ -204,3 +204,149 @@ describe('useUndoRedoKeybindings — blocked (undo-redo M1-T4)', () => {
     expect(onBlocked).not.toHaveBeenCalled();
   });
 });
+
+/** Undo-redo M5 — which elements keep the browser's own undo (spec US-5). */
+describe('useUndoRedoKeybindings — text-entry narrowing (M5)', () => {
+  function elementOf(html: string): HTMLElement {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    const el = host.firstElementChild as HTMLElement;
+    screen.getByTestId('root').appendChild(el);
+    return el;
+  }
+
+  const TEXT_ENTRY = [
+    '<input />',
+    '<input type="text" />',
+    '<input type="search" />',
+    '<input type="number" />',
+    '<input type="date" />',
+    '<input type="time" />',
+    '<input type="email" />',
+    '<input type="password" />',
+    '<input type="bogus" />',
+    '<textarea></textarea>',
+    '<select><option>a</option></select>',
+    '<div contenteditable="true">x</div>',
+    '<div contenteditable="">x</div>',
+    '<div contenteditable="true"><span>nested</span></div>',
+  ];
+  const PLAN_UNDO = [
+    '<input type="checkbox" />',
+    '<input type="radio" />',
+    '<input type="range" />',
+    '<input type="button" value="b" />',
+    '<input type="submit" />',
+    '<input type="color" />',
+    '<button type="button">b</button>',
+    '<div contenteditable="false">x</div>',
+    '<div tabindex="0">row</div>',
+  ];
+
+  it.each(TEXT_ENTRY)('leaves Ctrl+Z to the browser on %s', (html) => {
+    mount();
+    const el = elementOf(html);
+    const target = el.querySelector('span') ?? el;
+    expect(press({ key: 'z', ctrlKey: true }, target)).toBe(false);
+    expect(press({ key: 'z', metaKey: true, shiftKey: true }, target)).toBe(false);
+    expect(press({ key: 'y', ctrlKey: true }, target)).toBe(false);
+    expect(undo).not.toHaveBeenCalled();
+    expect(redo).not.toHaveBeenCalled();
+  });
+
+  it.each(PLAN_UNDO)('runs the plan undo on %s (nothing native to protect)', (html) => {
+    mount();
+    const el = elementOf(html);
+    expect(press({ key: 'z', ctrlKey: true }, el)).toBe(true);
+    expect(press({ key: 'y', ctrlKey: true }, el)).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
+    expect(redo).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** Undo-redo M5, spec F-4 — the accelerators work with focus on `<body>`. */
+describe('useUndoRedoKeybindings — body fallback (M5)', () => {
+  /** A keydown aimed at the page itself — what the browser sends when nothing has focus. */
+  function pressOnBody(init: KeyboardEventInit): boolean {
+    return !fireEvent.keyDown(document.body, { bubbles: true, cancelable: true, ...init });
+  }
+
+  it('undoes and redoes with focus on <body>', () => {
+    mount();
+    expect(document.activeElement).toBe(document.body);
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
+    expect(pressOnBody({ key: 'z', metaKey: true, shiftKey: true })).toBe(true);
+    expect(pressOnBody({ key: 'y', ctrlKey: true })).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
+    expect(redo).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not double-fire when focus is inside the workspace (the React handler owns it)', () => {
+    mount();
+    const button = screen.getByRole('button', { name: 'in-tree' });
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    press({ key: 'z', ctrlKey: true }, button);
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not act when focus is in a text field outside the workspace', () => {
+    mount();
+    const stray = document.createElement('input');
+    document.body.appendChild(stray);
+    stray.focus();
+    expect(press({ key: 'z', ctrlKey: true }, stray)).toBe(false);
+    expect(undo).not.toHaveBeenCalled();
+    stray.remove();
+  });
+
+  it('is inert under a modal, and resumes when it closes', () => {
+    const view = render(<Host modalOpen container={portalHost} />);
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
+    view.rerender(<Host container={portalHost} />);
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('is inert while any open <dialog> exists, even if the host did not report a modal', () => {
+    mount();
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    document.body.appendChild(dialog);
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
+    dialog.remove();
+    expect(undo).not.toHaveBeenCalled();
+  });
+
+  it('leaves a bare Z and an already-handled key alone', () => {
+    mount();
+    expect(pressOnBody({ key: 'z' })).toBe(false);
+    const handled = (event: KeyboardEvent): void => event.preventDefault();
+    document.addEventListener('keydown', handled, { capture: true, once: true });
+    pressOnBody({ key: 'z', ctrlKey: true });
+    expect(undo).not.toHaveBeenCalled();
+  });
+
+  it('removes the listener on unmount (leaving the plan)', () => {
+    const view = render(<Host container={portalHost} />);
+    view.unmount();
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
+    expect(undo).not.toHaveBeenCalled();
+  });
+
+  it('installs one listener however many times the host re-renders', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const view = render(<Host container={portalHost} />);
+    view.rerender(<Host container={portalHost} />);
+    view.rerender(<Host modalOpen container={portalHost} />);
+    expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+    add.mockRestore();
+  });
+
+  it('tells the host why when the pen is not held, from the body too', () => {
+    const onBlocked = vi.fn().mockReturnValue(true);
+    render(<Host enabled={false} onBlocked={onBlocked} container={portalHost} />);
+    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
+    expect(onBlocked).toHaveBeenCalledWith('undo');
+  });
+});

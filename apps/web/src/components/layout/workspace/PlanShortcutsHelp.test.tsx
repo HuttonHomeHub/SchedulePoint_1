@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 
@@ -54,5 +54,30 @@ describe('the plan shortcuts sheet', () => {
   it('renders nothing while closed', () => {
     render(<PlanShortcutsHelp open={false} onClose={() => {}} editingEnabled view="gantt" />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('the undo/redo rows (undo-redo M5)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lists the Windows/Linux chords, and the text-box exception, in both views', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32');
+    for (const view of ['tsld', 'gantt'] as const) {
+      const { unmount } = render(
+        <PlanShortcutsHelp open onClose={() => {}} editingEnabled view={view} />,
+      );
+      expect(screen.getByText('Ctrl + Z')).toBeInTheDocument();
+      expect(screen.getByText('Ctrl + Y · Ctrl + Shift + Z')).toBeInTheDocument();
+      expect(screen.getByText('Undo your typing, not the plan')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('lists ⌘Z and ⇧⌘Z on a Mac', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled />);
+    expect(screen.getByText('⌘Z')).toBeInTheDocument();
+    expect(screen.getByText('⇧⌘Z')).toBeInTheDocument();
+    expect(screen.queryByText('Ctrl + Z')).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
+import { isTextEntryTarget } from './text-entry';
+
 /**
  * Scoped Undo/Redo keybindings for the plan workspace (ADR-0048 M3.2). Bindings:
  *
@@ -20,11 +22,20 @@ import { useCallback, useEffect, useRef } from 'react';
  * never fires alongside ours. React's synthetic `preventDefault()` calls through to the native
  * event, so the suppression survives the move.
  *
- * The handler no-ops when disabled (flag off or the user can't edit), while focus is in a text
- * field / textarea / select / contenteditable (so typing an undo in a form is never hijacked), and
- * while a modal dialog is open (`modalOpen`) — otherwise `Ctrl+Z` would mutate plan state
- * underneath an open `ConfirmDialog`/`ActivityCreateDialog` (e.g. focus on a confirm's Cancel
- * button, which isn't a text field).
+ * The handler no-ops when disabled (flag off or the user can't edit), while focus is in a
+ * text-entry field (`isTextEntryTarget` — text-type inputs, textarea, select, contenteditable; a
+ * checkbox or button is NOT one, so the plan's undo runs there), and while a modal dialog is open
+ * (`modalOpen`) — otherwise `Ctrl+Z` would mutate plan state underneath an open
+ * `ConfirmDialog`/`ActivityCreateDialog` (e.g. focus on a confirm's Cancel button).
+ *
+ * **Body fallback** (undo-redo M5, spec F-4). A React handler on the workspace root never hears a
+ * keystroke while focus is on `<body>` — which is where it lands after a deselect, a closed dialog
+ * or a click on empty chrome — so Ctrl+Z was dead exactly when a planner had just clicked away. One
+ * document `keydown` listener, installed for the life of the host, covers that case and ONLY that
+ * case: it acts when `document.activeElement` is the body. Focus anywhere inside the workspace is
+ * the React handler's, so the two can never both fire for one keystroke. The listener is also inert
+ * while any modal `<dialog>` is open, so a flag the host forgot to fold into `modalOpen` still
+ * cannot mutate the plan from beneath it.
  *
  * **Disabled is not silent when there was something to undo** (undo-redo M1-T4). A planner who
  * presses `Ctrl+Z` without the pen — or with the Late-start overlay on — used to get nothing at all,
@@ -63,17 +74,16 @@ export function useUndoRedoKeybindings(params: {
   }, [modalOpen, onBlocked]);
   const hasBlocked = onBlocked !== undefined;
 
-  return useCallback(
-    (event: React.KeyboardEvent<HTMLElement>): void => {
+  const handle = useCallback(
+    (event: KeyLike): void => {
       if (!enabled && !hasBlocked) return;
       // Never fire while a modal dialog is open — an undo would mutate plan state under the modal.
       if (modalOpenRef.current) return;
       // Undo/redo are always modified (Cmd on macOS, Ctrl elsewhere) — bail early on a bare key.
       if (!event.metaKey && !event.ctrlKey) return;
       const key = event.key.toLowerCase();
-      // Never hijack an undo the user is typing into a form field (the native edit-undo owns it there).
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // Never hijack an undo the user is typing into a text field (the native edit-undo owns it).
+      if (isTextEntryTarget(event.target)) return;
 
       if (!enabled) {
         const direction =
@@ -104,4 +114,32 @@ export function useUndoRedoKeybindings(params: {
     },
     [enabled, undo, redo, hasBlocked],
   );
+
+  // The latest handler, read by the one document listener so it is installed once rather than
+  // re-bound every time `undo`/`redo` change identity.
+  const handleRef = useRef(handle);
+  useEffect(() => {
+    handleRef.current = handle;
+  }, [handle]);
+
+  useEffect(() => {
+    const onDocumentKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
+      // `activeElement` is null in a document with nothing focusable yet; that is body focus too.
+      const active = document.activeElement;
+      if (active !== null && active !== document.body) return;
+      if (document.querySelector('dialog[open]') !== null) return;
+      handleRef.current(event);
+    };
+    document.addEventListener('keydown', onDocumentKeyDown);
+    return () => document.removeEventListener('keydown', onDocumentKeyDown);
+  }, []);
+
+  return handle;
 }
+
+/** The slice of a keyboard event the handler reads — a React synthetic event and a native one both fit. */
+type KeyLike = Pick<
+  KeyboardEvent,
+  'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'target' | 'preventDefault'
+>;
