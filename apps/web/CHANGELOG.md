@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.170.4
+
+### Patch Changes
+
+- [#832](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/832) [`d59fbf8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d59fbf8a3f4a98f62283a988366ad4934563233a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stop re-asking the server who is signed in every time part of a screen appears. Screens that only show the signed-in user now reuse that answer for up to 30 seconds, like the rest of the app's data, so opening another plan no longer costs a request. Signing in, signing up and changing a password still fetch it fresh.
+
 ## 0.170.3
 
 ### Patch Changes
