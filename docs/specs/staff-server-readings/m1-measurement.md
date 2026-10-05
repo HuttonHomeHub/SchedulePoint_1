@@ -52,17 +52,18 @@ the noise the other figures sit in.)
 - **At 1,000,000 rows four pass and two do not**: the H-1 and H-3 numerators read 524 and 538 ms. Both are
   dominated by the sort behind `count(DISTINCT a.plan_id)` over the joined rows, not by the scan.
 - **The default is applied: ship, with a re-arm trigger the entry observes itself.** The live host holds
-  hundreds of activities today. The trigger is **H-1 `examined` ≥ 500,000** (about half the row count at
-  which the numerators cross the bar, since the cost is roughly linear: 71 ms at 100k to 524 ms at 1M).
-  It is recorded in the registry docblock.
+  hundreds of activities today. There are **two triggers and the first fires much earlier**: the whole press
+  crosses ADR-0140 D7's ~800 ms at roughly 250,000–300,000 rows, and the per-statement 500 ms bar is crossed
+  near 950,000 (cost is roughly linear, 71 ms at 100k to 524 ms at 1M). The re-arm observable is therefore
+  **H-1 `examined` ≥ 250,000**, recorded in the registry docblock, #443 and `DECISIONS.md`.
 - **No index is proposed.** Every statement is a sequential scan, like every other entry in the registry,
   and the cost is the distinct-sort, which an index on `first_recorded_at` would not remove. An index is
   a schema change and would go to database-architect before anything else.
-- **ADR-0140 D7's reopen trigger (the whole press near ~800 ms) is crossed at roughly 300,000 history
-  rows** on this machine (576 ms at 100,000, 1,693 ms at 1,000,000, linear between). That reopens the
-  throttle decision (6 requests per 60 s) and is reported to the product owner rather than decided here.
-  It is not a reason to withhold the entries today: at the live host's size the press cost is unchanged
-  to the millisecond.
+- **ADR-0140 D7's reopen trigger (the whole press near ~800 ms)** is crossed at roughly 250,000–300,000
+  history rows on this machine (576 ms at 100,000, 1,693 ms at 1,000,000; the interpolation is linear and the
+  baseline press drifts, below). That reopens the throttle decision (6 requests per 60 s) and is reported to
+  the product owner rather than decided here. At the live host's size the press cost is unchanged to the
+  millisecond.
 - **Not established:** how a cold cache (a heap that does not fit in memory) changes these figures; the
   1,000,000-row heap here (468 MB) is smaller than ADR-0174's 710 MB estimate and fits the OS cache.
 
@@ -73,3 +74,15 @@ The spec names the rows "History entries begun in the last 28 days" and "History
 property of the question and carries nothing about the installation), so both fail it. The labels shipped as
 "History entries begun in the last four weeks" and "History entries larger than half a kilobyte"; the 28-day
 and 512-byte figures stay in the SQL, the docblock and the sentences. The test was not edited.
+
+## Limits of these readings
+
+- **The two kinds of figure are not comparable.** The per-statement times are `EXPLAIN (ANALYZE)` execution
+  times and exclude Prisma and the network; the whole-press figures are wall-clock through Prisma. Do not
+  subtract one from the other.
+- **The baseline drifted.** The press without the three entries read 395.5 ms in one sitting and 334.8 ms in
+  the other with nothing changed, so every press figure carries about ±60 ms.
+- **The data is synthetic.** 40 plans, one organisation, a uniform random spread of activities and dates. Real
+  history is clustered by plan and time, which changes the distinct-sort's input and the hash join's shape.
+- **The cache was warm.** The 468 MB heap fits the OS cache, so the readings are the optimistic end and the
+  row counts at which the triggers fire are, if anything, high.

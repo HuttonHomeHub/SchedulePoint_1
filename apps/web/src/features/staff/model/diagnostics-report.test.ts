@@ -127,6 +127,11 @@ describe('history entries (staff server readings M1)', () => {
     expect(diagnosticSentence(history())).not.toMatch(/not yet full/);
   });
 
+  it('does not call the window not-full when there is no history at all', () => {
+    // 0 === 0 on an empty table is the absence of a rate, not a rate that is a floor.
+    expect(diagnosticSentence(history({ examined: 0, affected: 0 }))).not.toMatch(/not yet full/);
+  });
+
   it('keys the window clause on the entry, not on the numbers alone', () => {
     // The same equality on another history row is a coincidence of the data, not a window fact.
     expect(

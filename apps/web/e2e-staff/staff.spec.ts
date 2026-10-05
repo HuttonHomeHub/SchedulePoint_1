@@ -1101,7 +1101,10 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
   expect(clipboard).toMatch(
     /History entries begun in the last four weeks \(history-entries-last-28-days\)\n\s+examined\s+[1-9]\d*\n\s+affected\s+[1-9]\d*/,
   );
-  expect(clipboard).toContain('Of those, link and resource entries');
+  // H-2: the member's link is a LOGIC entry begun just now, so it is counted.
+  expect(clipboard).toMatch(
+    /Of those, link and resource entries \(history-entries-links-and-resources-28-days\)\n\s+examined\s+[1-9]\d*\n\s+affected\s+[1-9]\d*/,
+  );
   expect(clipboard).toContain('History entries larger than half a kilobyte');
   expect(clipboard).toMatch(/no plan is above ADR-0174 CQ-2's retention trigger/);
 
