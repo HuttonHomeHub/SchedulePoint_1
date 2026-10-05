@@ -14,7 +14,7 @@ import {
   stepsChanged,
   stepsReplaceCommand,
 } from './record-commands';
-import { notApplicable } from './replay';
+import { notApplicable, ReplayFailure } from './replay';
 
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
@@ -265,6 +265,38 @@ describe('assignment commands', () => {
       server.editAssignment(idOf(server, 'r2')!.id, { budgetedUnits: 99 });
       expect(await command.undo(server.ctx)).toEqual(notApplicable('changed', 'Crane'));
       expect(server.mutations.deleteAssignment).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Review: undo of "assign as driver, displacing D" puts D back; the redo must then be allowed to
+     * displace D again. Forgetting D on the undo made every such redo refuse the driver it had met.
+     */
+    it('assign as driver: undo puts the driver back, and redo displaces it again', async () => {
+      const { server, command } = await assigned([
+        { id: 'as1', resourceId: 'r1', isDriving: true },
+      ]);
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      expect(idOf(server, 'r1')?.isDriving).toBe(true);
+      expect(await command.redo(server.ctx)).toEqual(APPLIED);
+      expect(idOf(server, 'r1')?.isDriving).toBe(false);
+      expect(idOf(server, 'r2')?.isDriving).toBe(true);
+      // …and round again.
+      expect(await command.undo(server.ctx)).toEqual(APPLIED);
+      expect(idOf(server, 'r1')?.isDriving).toBe(true);
+    });
+
+    it('assign as driver: a redo that would displace a different driver is set aside', async () => {
+      const { server, command } = await assigned([
+        { id: 'as1', resourceId: 'r1', isDriving: true },
+        { id: 'as3', resourceId: 'r3', isDriving: false },
+      ]);
+      await command.undo(server.ctx);
+      server.editAssignment('as1', { isDriving: false });
+      server.editAssignment('as3', { isDriving: true });
+      server.mutations.createAssignment.mockClear();
+      expect((await command.redo(server.ctx)).kind).toBe('not-applicable');
+      expect(server.mutations.createAssignment).not.toHaveBeenCalled();
+      expect(idOf(server, 'r3')?.isDriving).toBe(true);
     });
 
     it('an assignment already gone sets the step aside as gone', async () => {
@@ -598,11 +630,51 @@ describe('assignment commands', () => {
         expect(idOf(server, 'r1')).toBeUndefined();
       });
 
+      it('a lost pen that also stops the put-back says the assignment is gone', async () => {
+        const { server, command } = await rateSet();
+        const locked = new ApiFetchError(423, { code: 'LOCKED', message: 'No pen.' });
+        server.mutations.createAssignment
+          .mockRejectedValueOnce(locked)
+          .mockRejectedValueOnce(locked);
+        const failure = await command.undo(server.ctx).catch((e: unknown) => e);
+        expect(failure).toBeInstanceOf(ReplayFailure);
+        expect((failure as ReplayFailure).cause).toBe(locked);
+        expect((failure as ReplayFailure).detail).toMatch(/removed and could not be put back/);
+      });
+
+      it('puts it back as a non-driver when somebody else has become the driver meanwhile', async () => {
+        const { server, command } = await rateSet();
+        server.mutations.createAssignment.mockRejectedValueOnce(refused());
+        // r2 is assigned and driving by the time the compensation reads the list.
+        server.assignments.set(
+          'as9',
+          anAssignment({ id: 'as9', resourceId: 'r2', isDriving: true }),
+        );
+        await expect(command.undo(server.ctx)).rejects.toBeInstanceOf(ReplayFailure);
+        expect(idOf(server, 'r1')).toMatchObject({ isDriving: false });
+        expect(idOf(server, 'r2')).toMatchObject({ isDriving: true });
+      });
+
+      it('does not claim it is gone when somebody has assigned the resource again', async () => {
+        const { server, command } = await rateSet();
+        server.mutations.createAssignment
+          .mockRejectedValueOnce(refused())
+          .mockRejectedValueOnce(new ApiFetchError(409, { code: 'CONFLICT', message: 'Taken.' }));
+        const failure = await command.undo(server.ctx).catch((e: unknown) => e);
+        expect((failure as ReplayFailure).detail).toMatch(/assigned it again since/);
+        expect((failure as ReplayFailure).detail).not.toMatch(/could not be put back/);
+      });
+
       it('a lost pen is rethrown as it is, for the pen contract', async () => {
         const { server, command } = await rateSet();
         const locked = new ApiFetchError(423, { code: 'LOCKED', message: 'No pen.' });
         server.mutations.createAssignment.mockRejectedValueOnce(locked);
-        await expect(command.undo(server.ctx)).rejects.toBe(locked);
+        // The pen is still lost — it travels as the cause for the pen contract — but the failure also
+        // carries the plain sentence, so the planner is told the assignment was removed.
+        const failure = await command.undo(server.ctx).catch((e: unknown) => e);
+        expect(failure).toBeInstanceOf(ReplayFailure);
+        expect((failure as ReplayFailure).cause).toBe(locked);
+        expect((failure as ReplayFailure).detail).toMatch(/put back as it was/);
         expect(idOf(server, 'r1')).toMatchObject({ unitsPerHour: 3 });
       });
     });
@@ -701,7 +773,7 @@ describe('cross-plan link commands', () => {
         }),
       );
       expect(await command.redo(server.ctx)).toEqual(
-        notApplicable('duplicate', 'Other plan work → Excavate'),
+        notApplicable('cycle', 'Other plan work → Excavate'),
       );
     });
 

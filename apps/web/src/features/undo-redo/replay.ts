@@ -24,8 +24,9 @@ import { ApiFetchError } from '@/lib/api/client';
  * - `gone` — a row the step needs is no longer there (deleted since, or 404).
  * - `parent-deleted` — a restore the server refused because the phase it was filed under was deleted.
  * - `duplicate` — re-creating a link the plan already has.
+ * - `cycle` — re-creating a cross-plan link that would now close a loop in the programme's logic.
  */
-export type NotApplicableReason = 'changed' | 'gone' | 'parent-deleted' | 'duplicate';
+export type NotApplicableReason = 'changed' | 'gone' | 'parent-deleted' | 'duplicate' | 'cycle';
 
 export type ReplayResult =
   | { readonly kind: 'applied' }
@@ -196,11 +197,8 @@ export async function writeOrSetAside(
       if (reason === 'PARENT_DELETED') return notApplicable('parent-deleted', subjectName);
       // A cross-plan link the plan already has, or one that would close a programme cycle because
       // somebody else has since linked the other way: both read as "that link cannot be made now".
-      if (
-        reason === 'DUPLICATE_DEPENDENCY' ||
-        reason === 'DUPLICATE_CROSS_PLAN_DEPENDENCY' ||
-        reason === 'CROSS_PLAN_CYCLE_DETECTED'
-      ) {
+      if (reason === 'CROSS_PLAN_CYCLE_DETECTED') return notApplicable('cycle', subjectName);
+      if (reason === 'DUPLICATE_DEPENDENCY' || reason === 'DUPLICATE_CROSS_PLAN_DEPENDENCY') {
         return notApplicable('duplicate', subjectName);
       }
       return notApplicable('changed', subjectName);
@@ -284,6 +282,24 @@ export async function checkDeletable(
     if (!params.isExpectedLink(link)) return blocked(linkName(link));
   }
   return checked;
+}
+
+/**
+ * A replay that failed part-way and knows what state it left the plan in, in the planner's words.
+ *
+ * It is a failure, not a set-aside — the step did not apply — but the generic "couldn't undo, try
+ * again" would hide the one fact that matters (an assignment was removed and may not be back), so the
+ * history shows `detail` instead. `cause` is the original error: a lost pen (423) is still a lost pen,
+ * and the host runs the pen contract for it as well.
+ */
+export class ReplayFailure extends Error {
+  constructor(
+    readonly detail: string,
+    cause: unknown,
+  ) {
+    super(detail, { cause });
+    this.name = 'ReplayFailure';
+  }
 }
 
 /** Whether an error is the server saying the thing is already gone. */

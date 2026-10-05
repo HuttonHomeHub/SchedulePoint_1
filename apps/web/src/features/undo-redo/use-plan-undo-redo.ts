@@ -9,7 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { historyResultMessage, type PostedHistoryResult } from './history-result';
-import { isNotFound, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
+import { isNotFound, ReplayFailure, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
@@ -247,6 +247,14 @@ export function usePlanUndoRedo(params: {
             ? history.undo(replayContext)
             : history.redo(replayContext));
         } catch (err) {
+          if (err instanceof ReplayFailure) {
+            // The step failed part-way and says what state it left the plan in; the planner is told
+            // that, whatever the cause — and a lost pen under it still runs the pen contract.
+            if (err.cause instanceof ApiFetchError && err.cause.status === 423)
+              onLockLost(err.cause);
+            report({ direction, outcome: 'failed', label, detail: err.detail });
+            return;
+          }
           if (err instanceof ApiFetchError && err.status === 423) {
             // Pen lost — the shared pen contract shows the lost-control banner and refetches the
             // lock. The history stays: a step is checked against the server before it writes.

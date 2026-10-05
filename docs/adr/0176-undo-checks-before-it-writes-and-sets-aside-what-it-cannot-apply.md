@@ -149,7 +149,7 @@ was written down, not that a `recorded` seam is wired at every host.
   re-creates the assignment without it. The delete is unversioned (`docs/TECH_DEBT.md` #450 now covers
   assignments), so a create that fails afterwards is **compensated** by re-creating the row as it was
   read, and reported as a distinct failure — "put back as it was", or "could not be put back, assign it
-  again" — never as a set-aside. A lost pen (423) is rethrown as it is. That case does not replay
+  again" — never as a set-aside, and in the strip itself (a `ReplayFailure` carries the sentence; the generic retry line would hide it). If a colleague has assigned the resource again meanwhile, it says "it is there now" instead, and the compensating create puts a driver back as a non-driver when somebody else drives by then. A lost pen (423) still runs the pen contract, beside that sentence. That case does not replay
   `editedField`, so a duration the edit derived is not recomputed. A target the PATCH cannot express
   (a null actual cost) sets the step aside instead of reporting a partial undo as applied.
 - **Identity is the resource, which has one consequence worth stating:** a colleague who deletes an

@@ -38,6 +38,11 @@ export interface HistoryResult {
   readonly label: string;
   /** `blocked` only: the refusal sentence the host composed from the live pen/role state. */
   readonly reason?: string;
+  /**
+   * `failed` only, optional: what a replay that failed part-way knows about the state it left the plan
+   * in, as a plain sentence (an assignment removed and not put back). Replaces the generic retry line.
+   */
+  readonly detail?: string;
   /** `set-aside` only: why, and what comes next. */
   readonly setAside?: SetAside;
   /** `done` only: the step that ran, which is what the strip's lifetime is bound to. */
@@ -71,6 +76,8 @@ function setAsideClause(setAside: SetAside): string {
       return 'the phase it was filed under was deleted after your edit';
     case 'duplicate':
       return 'it is already there';
+    case 'cycle':
+      return 'it would make a loop in the logic';
   }
 }
 
@@ -99,6 +106,9 @@ export function historyResultMessage(result: HistoryResult | PostedHistoryResult
       return `${head} — ${setAsideClause(setAside)}, so that step was skipped.${next}`;
     }
     case 'failed':
+      if (result.detail !== undefined) {
+        return `${historyPhrase(undo ? 'Couldn’t undo' : 'Couldn’t redo', result.label)}. ${result.detail}`;
+      }
       return undo ? UNDO_FAILED_MESSAGE : REDO_FAILED_MESSAGE;
     case 'blocked':
       return result.reason ?? `Can’t ${result.direction} right now.`;

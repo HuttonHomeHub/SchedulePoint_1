@@ -14,6 +14,7 @@ import {
   matches,
   notApplicable,
   pick,
+  ReplayFailure,
   replayActivities,
   writeOrSetAside,
   type ReplayContext,
@@ -446,7 +447,8 @@ function assignmentToggle(params: {
           });
         }
         await writes.deleteAssignment({ assignmentId: row.id, activityId });
-        displaced = undefined;
+        // `displaced` is kept: the next re-assign takes the flag from the same driver again, and
+        // forgetting it would make that redo refuse a driver it is entitled to displace.
         present = false;
       });
     },
@@ -523,10 +525,15 @@ export function assignmentRemoveCommand(params: {
  * Re-create an assignment without the rate it holds — a PATCH cannot clear one (ADR-0040). That is a
  * delete followed by a create, and the delete is unversioned, so a failure of the create would leave
  * the resource unassigned: it is compensated by re-creating the row as it was read, and reported as a
- * distinct failure (never as a set-aside — the step did not apply, and the planner is told which of
- * the two states the plan is in). A lost pen (423) is rethrown as it is so the pen contract runs.
+ * {@link ReplayFailure} that says which of three states the plan is in — back as it was, not back, or
+ * assigned again by somebody else meanwhile. Never a set-aside: the step did not apply. A lost pen
+ * (423) travels as the failure's cause, so the pen contract still runs beside the sentence.
+ *
+ * The compensating create is not blind: if somebody else has become the driver since, the resource
+ * goes back as a non-driver rather than displacing them.
  */
 async function recreateWithout(
+  ctx: ReplayContext,
   writes: AssignmentWrites,
   row: ResourceAssignmentSummary,
   body: AssignmentCreateBody,
@@ -536,21 +543,29 @@ async function recreateWithout(
   try {
     return await writes.createAssignment({ activityId: row.activityId, body });
   } catch (err) {
-    let compensated = true;
+    const original = pick(row, ASSIGNMENT_FIELDS);
+    let outcome: 'back' | 'assigned-again' | 'lost' = 'back';
     try {
+      const list = await ctx.readAssignments(row.activityId);
+      const free =
+        list === undefined || takesOverFrom(list, row.resourceId, original.isDriving, undefined).ok;
       await writes.createAssignment({
         activityId: row.activityId,
-        body: assignmentBodyOf(row.resourceId, pick(row, ASSIGNMENT_FIELDS)),
+        body: assignmentBodyOf(row.resourceId, {
+          ...original,
+          isDriving: original.isDriving && free,
+        }),
       });
-    } catch {
-      compensated = false;
+    } catch (again) {
+      outcome = again instanceof ApiFetchError && again.status === 409 ? 'assigned-again' : 'lost';
     }
-    if (err instanceof ApiFetchError && err.status === 423) throw err;
-    throw new Error(
-      compensated
+    throw new ReplayFailure(
+      outcome === 'back'
         ? `“${resourceName}” could not be changed, and was put back as it was.`
-        : `“${resourceName}” could not be changed, and could not be put back — assign it again.`,
-      { cause: err },
+        : outcome === 'assigned-again'
+          ? `“${resourceName}” was removed to change it, and somebody has assigned it again since, so it is there now.`
+          : `“${resourceName}” was removed and could not be put back — assign it again.`,
+      err,
     );
   }
 }
@@ -629,6 +644,7 @@ export function assignmentEditCommand(params: {
       let saved: ResourceAssignmentSummary = row;
       if (recreate) {
         saved = await recreateWithout(
+          ctx,
           writes,
           row,
           assignmentBodyOf(resourceId, {

@@ -7,8 +7,10 @@ import { autoArrangeCommand, dependencyEditCommand, relaneCommand, type Command 
 import {
   REDO_FAILED_MESSAGE,
   UNDO_FAILED_MESSAGE,
+  historyResultMessage,
   type PostedHistoryResult,
 } from './history-result';
+import { ReplayFailure } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 import { usePlanUndoRedo } from './use-plan-undo-redo';
 
@@ -325,7 +327,7 @@ describe('usePlanUndoRedo — recalculation after a replay', () => {
 
 describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
   const setAside = (
-    reason: 'changed' | 'gone' | 'parent-deleted' | 'duplicate',
+    reason: 'changed' | 'gone' | 'parent-deleted' | 'duplicate' | 'cycle',
     nextLabel: string | null = 'Edit “Pour”',
   ): StepOutcome => ({
     kind: 'set-aside',
@@ -381,6 +383,18 @@ describe('usePlanUndoRedo — a step that cannot apply is set aside', () => {
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith(
         expect.stringContaining('it is already there, so that step was skipped.'),
+      ),
+    );
+  });
+
+  it('says a cross-plan cycle would make a loop in the logic', async () => {
+    const { result, announce } = setup(
+      fakeHistory({ redo: vi.fn().mockResolvedValue(setAside('cycle')) }),
+    );
+    act(() => result.current.redo());
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith(
+        expect.stringContaining('it would make a loop in the logic, so that step was skipped.'),
       ),
     );
   });
@@ -524,6 +538,48 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
       expect(announce).not.toHaveBeenCalled();
     });
   }
+
+  /**
+   * Review (B2): a replay that failed part-way knows what it left behind — an assignment removed and
+   * possibly not back — and the generic "try again" line would hide exactly that.
+   */
+  it('a failure that knows the state it left says so, in place of the generic line', async () => {
+    const onResult = vi.fn();
+    const detail = '“Crane” was removed and could not be put back — assign it again.';
+    const { result } = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(step),
+        undo: vi.fn().mockRejectedValue(new ReplayFailure(detail, err(422))),
+      }),
+      onResult,
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult).toHaveBeenCalledWith({
+      direction: 'undo',
+      outcome: 'failed',
+      label: step.label,
+      detail,
+    });
+    expect(historyResultMessage({ ...onResult.mock.calls[0]![0], id: 1 })).toContain(detail);
+  });
+
+  it('a lost pen under such a failure still runs the pen contract, AND the planner is told', async () => {
+    const onResult = vi.fn();
+    const locked = err(423);
+    const detail = '“Crane” was removed and could not be put back — assign it again.';
+    const { result, onLockLost } = setup(
+      fakeHistory({
+        peekUndo: vi.fn().mockReturnValue(step),
+        undo: vi.fn().mockRejectedValue(new ReplayFailure(detail, locked)),
+      }),
+      onResult,
+    );
+    act(() => result.current.undo());
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onLockLost).toHaveBeenCalledWith(locked);
+    expect(onResult.mock.calls[0]![0]).toMatchObject({ outcome: 'failed', detail });
+  });
 
   it('a lost pen posts nothing — the pen banner is its one announcer', async () => {
     const onResult = vi.fn();
