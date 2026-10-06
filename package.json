@@ -34,7 +34,7 @@
     "check:e2e-roster": "node scripts/check-e2e-roster.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:adr-coverage": "node scripts/check-adr-coverage.mjs",
-    "check:nginx": "node scripts/check-nginx-template.mjs",
+    "check:nginx": "node scripts/check-nginx-template.test.mjs && node scripts/check-nginx-template.mjs",
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "turbo run test:e2e",

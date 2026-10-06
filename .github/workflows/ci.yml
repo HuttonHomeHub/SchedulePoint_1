@@ -1228,6 +1228,20 @@ jobs:
           ! echo "$boot" | grep -qi 'immutable' \
             || { echo 'theme-boot.js must not be immutably cached'; exit 1; }
 
+          # 4. A location with its own `add_header` drops every server-level header unless it
+          #    includes the shared snippet (#457). Read a hashed chunk, the theme script and the
+          #    favicon through the image, so the snippet's rendered path is proved too.
+          asset=$(curl -fsS http://localhost:8080/ | grep -o '/assets/[^"]*\.js' | head -n 1)
+          [ -n "$asset" ] || { echo 'no /assets/ script found in index.html'; exit 1; }
+          for path in "$asset" /theme-boot.js /favicon.svg; do
+            h=$(curl -fsS -D - -o /dev/null "http://localhost:8080$path")
+            for name in x-content-type-options cross-origin-resource-policy \
+              content-security-policy-report-only; do
+              echo "$h" | grep -qi "^$name:" \
+                || { echo "$path is missing $name"; echo "$h"; exit 1; }
+            done
+          done
+
       - name: Dump container logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color

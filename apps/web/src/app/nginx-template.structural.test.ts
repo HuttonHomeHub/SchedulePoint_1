@@ -19,7 +19,13 @@ import { describe, expect, it } from 'vitest';
  * really-rendered config; this runs in the unit suite, so the feedback arrives while the file is
  * being edited rather than after an image build.
  */
-const template = readFileSync(resolve(process.cwd(), 'nginx.conf'), 'utf8');
+const SNIPPET_INCLUDE = 'include /etc/nginx/conf.d/snippets/security-headers.conf;';
+const snippet = readFileSync(resolve(process.cwd(), 'nginx-security-headers.conf'), 'utf8');
+/** nginx expands an `include` in place, so the rendered config is the template with the snippet inlined. */
+const template = readFileSync(resolve(process.cwd(), 'nginx.conf'), 'utf8').replaceAll(
+  SNIPPET_INCLUDE,
+  snippet,
+);
 
 /** Mirrors the entrypoint: substitute ONLY names matching `NGINX_ENVSUBST_FILTER`. */
 function render(env: Record<string, string>, filter = /^CSP_/): string {
@@ -138,6 +144,32 @@ describe('nginx.conf as an envsubst template', () => {
   it('keeps fingerprinted assets immutable', () => {
     expect(render(ENV)).toMatch(/location \/assets\/ \{[^}]*public, immutable/);
   });
+
+  it.each(['/assets/', '= /theme-boot.js', '= /favicon.svg'])(
+    'sends the security headers from `location %s` as well as its Cache-Control (TECH_DEBT #457)',
+    (name) => {
+      // An `add_header` in a location replaces every inherited header, so a location that sets its
+      // own Cache-Control must carry the whole set itself. Read from the rendered config, where the
+      // snippet is inlined as nginx inlines it. The block ends at the location's own closing brace
+      // (two-space indent): the snippet's comments contain `}` characters of their own.
+      const escaped = name.replace(/[\\^$.*+?()[\]{}|/]/g, '\\$&');
+      const block = new RegExp(`location ${escaped} \\{([\\s\\S]*?)\\n  \\}`).exec(
+        render(ENV),
+      )?.[1];
+
+      expect(block, `a \`location ${name}\` block exists`).toBeDefined();
+      expect(block).toContain('add_header Cache-Control');
+      for (const header of [
+        'X-Content-Type-Options "nosniff"',
+        'Cross-Origin-Resource-Policy "same-origin"',
+        'Content-Security-Policy-Report-Only',
+        'Reporting-Endpoints',
+        'X-Frame-Options "DENY"',
+      ]) {
+        expect(block, header).toContain(header);
+      }
+    },
+  );
 
   it('sets no HSTS at the web container, deliberately', () => {
     // Not an omission: this block listens only on plain 8080 and cannot know the browser's scheme

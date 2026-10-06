@@ -45,9 +45,6 @@ touch-and-stylus pass up to M1.
 
 ## Open rows that need a decision or a trigger
 
-- **#457** (security headers on `/assets/`, `/theme-boot.js`, `/favicon.svg`): Low, but security
-  review advised doing it at the next nginx change rather than waiting long; one shared
-  include plus a `check:nginx` assertion.
 - **#458** (submit-guard gate scope), **#456** (no statement timeout on the diagnostics press),
   **#454**, **#449**, **#450**, **#440–#446**, **#432**, **#429**, **#419**, **#405**:
   unchanged or as filed.
@@ -63,8 +60,7 @@ touch-and-stylus pass up to M1.
 Nothing below is approved. Put these to the product owner in plain English:
 
 1. **Gantt M2**, once the parked Surface sheet is run (needs no new spec; the plan has exits per task).
-2. **#457**: the nginx security-header fix (small; no spec: it stays inside the row's behaviour).
-3. Anything from `docs/BACKLOG.md`; a new feature starts with **feature-analyst**.
+2. Anything from `docs/BACKLOG.md`; a new feature starts with **feature-analyst**.
 
 ## Environment notes a new session would otherwise rediscover
 

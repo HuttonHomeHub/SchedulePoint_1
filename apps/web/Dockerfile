@@ -70,6 +70,10 @@ FROM nginx:1.31-alpine AS runtime
 # makes the CSP mode an operator variable rather than a code edit — flipping report-only to
 # enforce, or rolling back, is an env change instead of a release (ADR-0074 §4).
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+# The security header set, included by the server and by each location that sets its own header
+# (TECH_DEBT #457). In a subdirectory so it renders to conf.d/snippets/, which the stock
+# `include conf.d/*.conf` does not load at http level.
+COPY apps/web/nginx-security-headers.conf /etc/nginx/templates/snippets/security-headers.conf.template
 
 # **Essential, not tidy.** Unrestricted, envsubst would replace nginx's OWN variables — $scheme,
 # $host, $remote_addr, $proxy_add_x_forwarded_for, $uri — with empty strings, silently producing a
