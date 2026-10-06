@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Pointer check</title>
+    <!-- External stylesheet and script, not inline: the web origin's Content-Security-Policy allows
+         neither inline style nor inline script (ADR-0074). -->
+    <link rel="stylesheet" href="/pointer-check.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Pointer check</h1>
+      <p>
+        Photograph this screen before each test. It changes by itself when you fold or unfold the
+        keyboard cover.
+      </p>
+      <dl>
+        <dt>pointer</dt>
+        <dd id="pointer">…</dd>
+        <dt>any-pointer</dt>
+        <dd id="any-pointer">…</dd>
+        <dt>hover</dt>
+        <dd id="hover">…</dd>
+        <dt>any-hover</dt>
+        <dd id="any-hover">…</dd>
+        <dt>devicePixelRatio</dt>
+        <dd id="device-pixel-ratio">…</dd>
+        <dt>viewport</dt>
+        <dd id="viewport">…</dd>
+      </dl>
+      <noscript>This page needs JavaScript on to read the screen.</noscript>
+    </main>
+    <script src="/pointer-check.js"></script>
+  </body>
+</html>

@@ -131,10 +131,13 @@ a product idea that has not yet earned a roadmap line:
   view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
   ladder and the `⋯`, so nothing can leave the row". So the citation was stale
   **and** about a different surface. Whether a Gantt-specific coarse pass is
-  owed is deliberately **not asserted here**: ADR-0118 D6 narrowed the
-  house rule to `pointer: coarse` and took the candidate set from 46 to one, and
-  nobody has re-measured this view since. It has no live row, which is the
-  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; the residue above is
+  owed is **specified now** — `docs/specs/gantt-coarse-pointer/` (approved 2026-10-05), whose §0 corrects this
+  sentence: it **has** a live row (`docs/TECH_DEBT.md` #215 names the Gantt's row menu and 28 px rows, with no
+  large-target equivalent; #439 is its `Grid width` divider); the narrowing is ADR-0118 **D1** and **D2**, not
+  D6; "46 to one" is not in ADR-0118 (it measured 46 comparable targets); and the view was partly re-measured
+  (ADR-0173 touched the divider and the column edges). **M0 has measured the rest**
+  (`m0-measurement.md`, 2026-10-06): a finger drag on a bar body is cancelled 12 of 12, selected or not, and
+  an unselected bar's edge is a live accidental-write path.)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; the residue above is
   not a requirement of the brief.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
   stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
