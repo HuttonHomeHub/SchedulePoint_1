@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.173.1
+
+### Patch Changes
+
+- [#849](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/849) [`533cff6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/533cff6c702aeca262bbfc1eba58d12daff28cc4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Send the security headers (`nosniff`, `Cross-Origin-Resource-Policy`, the CSP and the rest) on hashed
+  assets, `/theme-boot.js` and `/favicon.svg`, which answered with `Cache-Control` and nothing else.
+
 ## 0.173.0
 
 ### Minor Changes
