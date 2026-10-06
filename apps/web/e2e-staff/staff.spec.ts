@@ -769,6 +769,18 @@ test('a staff member takes every reading in one press', async ({ browser }) => {
       .catch(() => storeFailureBodies.push(`${String(status)} (body unavailable)`));
   });
 
+  // Every GET of the history, by the page's own request events: a response is not the question,
+  // because a cached or aborted one would still be a request somebody made.
+  const probeReads: string[] = [];
+  staff.on('request', (request) => {
+    if (
+      request.method() === 'GET' &&
+      new URL(request.url()).pathname.endsWith('/staff/probe-results')
+    ) {
+      probeReads.push(request.url());
+    }
+  });
+
   await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
   await staff.goto('/staff');
 
@@ -778,6 +790,29 @@ test('a staff member takes every reading in one press', async ({ browser }) => {
     staff.getByRole('heading', { name: 'Staff console' }),
     'the first test verifies this account; this one assumes it',
   ).toBeVisible({ timeout: 30_000 });
+
+  // ------------------------------------------------------- Performance arrives folded (ADR-0178 D-3)
+  // The history read happens once on load; folding the tools must not mean reading it again when
+  // they open, because each read is an audited act in a table that refuses DELETE.
+  await expect.poll(() => probeReads.length, { message: 'one history read on load' }).toBe(1);
+  const performance = staff.getByRole('region', { name: 'Performance' });
+  const openTools = performance.getByRole('button', { name: 'Open performance tools' });
+  await expect(openTools).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    performance.getByText(/(Last measured .+|Not measured on this installation yet\.)/),
+  ).toBeVisible();
+  await expect(
+    performance.getByRole('button', { name: 'Check the probe works' }),
+    'folded means not rendered, not clipped',
+  ).toHaveCount(0);
+
+  await openTools.click();
+  const hideTools = performance.getByRole('button', { name: 'Hide performance tools' });
+  await expect(hideTools).toHaveAttribute('aria-expanded', 'true');
+  await expect(hideTools, 'focus stays on the button that was pressed').toBeFocused();
+  await expect(performance.getByRole('button', { name: 'Check the probe works' })).toBeVisible();
+  await staff.waitForLoadState('networkidle');
+  expect(probeReads, 'opening the box made no request').toHaveLength(1);
 
   // **The entry point named in the spec, pressed.** If this locator ever stops matching, the
   // capability has no door — which is the defect this test exists to prevent rather than to
@@ -917,27 +952,41 @@ test('a staff member takes every reading in one press', async ({ browser }) => {
 });
 
 /**
+ * Open the **Performance** box, whatever state it is already in.
+ *
+ * It arrives folded (ADR-0178 D-3, staff console redesign M4), so every step that drives a measuring
+ * control starts here. Idempotent by asking for the **Open** button rather than clicking blind: the
+ * label becomes **Hide** once it is open, and a second unconditional click would shut it again and
+ * report the control it then could not find instead of the click that caused it. (A plan-loading
+ * press reloads the page with the box already open, which is why the question is asked each time.)
+ */
+async function openPerformance(page: Page): Promise<void> {
+  const open = page.getByRole('button', { name: 'Open performance tools' });
+  if (await open.isVisible()) await open.click();
+  await expect(page.getByRole('button', { name: 'Hide performance tools' })).toBeVisible();
+}
+
+/**
  * Open the **Measure one thing** disclosure, whatever state it is already in.
  *
- * The three single-run selects moved behind a `<details>` in staff-probe M5, when the two sweep
- * buttons became the panel's primary controls — "which of eight combinations do I want?" is the
- * question an operator asks last. This journey went on driving them without opening it, and on the
- * first run after that rework it timed out at `selectOption` with the accessibility snapshot
- * showing a collapsed `"Measure one thing"` and **no combobox in the tree at all**.
+ * The three single-run selects sit behind a disclosure, because "which of eight combinations do I
+ * want?" is the question an operator asks last. This journey went on driving them without opening
+ * it once, and timed out at `selectOption` with the accessibility snapshot showing a collapsed
+ * `"Measure one thing"` and **no combobox in the tree at all**.
  *
  * **Nothing below this tier could have reported it.** The panel's own unit suite opens the same
- * disclosure — its helper's docblock says why, in as many words — so it passed throughout. One
- * correct pattern applied to a control and not its neighbour, which is the shape this register
- * records most often, arriving here through a control that MOVED rather than one never wired.
+ * disclosure, so it passed throughout: one correct pattern applied to a control and not its
+ * neighbour, arriving here through a control that MOVED rather than one never wired.
  *
- * Idempotent by asking whether the select is reachable rather than by clicking blind: a `<summary>`
+ * Idempotent by asking whether the select is reachable rather than by clicking blind: the trigger
  * toggles, so a second unconditional click shuts it again and the failure names the select instead
  * of the click that caused it.
  */
 async function openMeasureOne(page: Page): Promise<void> {
+  await openPerformance(page);
   const length = page.getByRole('combobox', { name: 'Length' });
   if (await length.isVisible()) return;
-  await page.getByText('Measure one thing').click();
+  await page.getByRole('button', { name: 'Measure one thing' }).click();
   await expect(length).toBeVisible();
 }
 
@@ -1171,6 +1220,7 @@ test('a staff member measures plan loading in one press', async ({ browser }) =>
   await expect(staff.getByRole('heading', { name: 'Staff console' })).toBeVisible({
     timeout: 30_000,
   });
+  await openPerformance(staff);
   await expect(staff.getByRole('button', { name: 'Measure plan loading' })).toBeVisible();
   await staff.waitForLoadState('networkidle');
   const baseline = [...apiPaths].sort();
@@ -1353,6 +1403,7 @@ test('the console keeps focus, shading, announcements and reflow honest (M1)', a
   expect(atRest.violations).toEqual([]);
 
   // ---------------------------------------------------------------- M1-T3/T4: the overlay
+  await openPerformance(staff);
   await staff.getByRole('button', { name: 'Check the probe works' }).click();
   await staff.getByRole('alertdialog').getByRole('button', { name: 'Check the probe' }).click();
 
@@ -1546,7 +1597,19 @@ test('a staff member reads the console by group and acts on a condition', async 
   await expect(tryAll).toHaveCount(0, { timeout: 30_000 });
   await expect(staff.getByText('Working: none failed in the last 24 hours').first()).toBeVisible();
 
+  // ------------------------------------------- `/staff#performance` opens the box and focuses it
+  await staff.setViewportSize({ width: 1280, height: 800 });
+  await staff.goto('/staff#performance');
+  await expect(
+    staff.getByRole('region', { name: 'Performance' }).getByRole('button', {
+      name: 'Hide performance tools',
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(staff.locator('#performance')).toBeFocused();
+
   // ------------------------------------------------------------------------ Axe, at both widths
+  // With the Performance box open, so the controls, the history and the plan-loading section are in
+  // the page the scan and the reflow assertion read.
   for (const width of [1280, 320]) {
     await staff.setViewportSize({ width, height: 800 });
     await expect

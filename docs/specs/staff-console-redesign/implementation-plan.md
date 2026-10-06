@@ -382,6 +382,38 @@ What the next milestone needs:
   `ConsoleBody`), so hoisting it into the panel root is a move, and an expanded Performance box makes no new request
   because the key is already mounted. The panel's `StatusSection` is `announce="change"`.
 
+#### M4 record (2026-10-06)
+
+**Landed.** Readings are in [`m4-measurement.md`](./m4-measurement.md): SC-1 2,905 px (target 3,030), SC-2 one treatment.
+
+- **T1.** The Performance box is folded on arrival with one row: its sentence, the last sitting as a tally ("Last
+  measured 3 days ago on the Dell: 4 passed · 2 ungraded.") or "Not measured on this installation yet.", and
+  **Open performance tools**. Not a `Disclosure`, because the label changes (Hide). Content is not rendered while
+  folded. Hide is `aria-disabled` with the reason "A measurement is running." while a run covers the screen. The history
+  read stays at the panel root beside the screen's own observer: opening makes **no request** (journey counts
+  `GET /staff/probe-results` by request event). It opens by itself for `#performance` (arrival or `hashchange`, and
+  focuses the box) **and for a pending, stale or malformed plan-loading marker**, because that press reloads the page
+  twice and the section that resumes it lives inside the fold; a folded box would have let the marker expire. The
+  summary says "a machine that was not named" rather than the spec's "this browser": the reading may be another staff
+  member's. `useNow` moved to `hooks/use-now.ts` so the summary's relative time stays true.
+- **T2.** `performance-probe-panel.tsx` (1,286 lines) is now shell + overlay (about 350), `use-probe-sweep.ts` (the
+  state and orchestration), `probe-controls.tsx`, `sitting-result.tsx` and `probe-copy.ts` (pure copy). `probe-sittings.tsx`
+  (857) is split into the index and `sitting-block.tsx`. The runner-import gate reads every file in `ui/` and pins which
+  file holds the dynamic import and which names the registry; the `verdictNote` enumeration follows the verdict to
+  `sitting-result.tsx` and `sitting-block.tsx`. The panel suite ran unchanged except for an open step.
+- **T3.** The verdict is a `Badge` (it was the heaviest text in the box). "Measure one thing" is a `Disclosure`, "All
+  sittings" and each sitting's caption are `SubSection`s. The probe's three `toLocale*` calls use `formatTimestamp`. The
+  SC-9 copy gate now reads `features/perf-probe/ui` (not `probe-report.ts`, the pasted record) and ignores template
+  interpolations and `>` comparisons. A long run speaks every 8 s between step boundaries (M1 carry-forward, #259 item
+  11), verified red against an unthrottled announce. The unused `PERFORMANCE` copy left `panel-copy.ts` for
+  `probe-copy.ts` (perf-probe may not import staff). ADR-0178 is **Accepted** (D7 records this milestone).
+- **Not built, and needs a decision:** muting box-level announcements while a page Refresh runs. It adds a prop to
+  `StatusSection` and `QueryPanel` threaded through six panels, which is a component-contract change (ADR-0105), so it
+  stops for a spec; after a Refresh a box whose sentence changed still speaks beside the page sentence.
+- **Journey.** `a staff member takes every reading in one press` starts with the folded state, opens, asserts focus stays
+  and no new history request; `/staff#performance` opens and focuses the box in the group test; every step that drives a
+  measuring control opens the box first (`openPerformance`).
+
 ---
 
 ### Milestone M2: Shared primitives and the ADR

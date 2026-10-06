@@ -1,30 +1,13 @@
-import { useEffect, useState } from 'react';
-
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page';
 import { textLinkVariants } from '@/components/ui/text-link';
 import type { Freshness } from '@/features/staff/model/freshness';
 import { HEADER } from '@/features/staff/model/panel-copy';
+import { useNow } from '@/hooks/use-now';
 import { exactInstant, formatRelative } from '@/lib/relative-time';
-
-const MINUTE = 60_000;
 
 /** Same locale as `formatTimestamp`, so the header and the tables below it read alike (D-9). */
 const CLOCK = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
-
-/** The wall clock, re-read once a minute so "2 minutes ago" stays true without a request. */
-function useNow(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, MINUTE);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
-  return now;
-}
 
 export interface ConsoleHeaderProps {
   email: string;
