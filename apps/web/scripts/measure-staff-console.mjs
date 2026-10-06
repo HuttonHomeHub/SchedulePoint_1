@@ -123,9 +123,12 @@ const readHeadings = () => {
     ].join(' ');
   };
   const groups = new Map();
-  // h3/h4 are the headings below a card title; `summary` is the disclosure heading. Neither the
-  // h2 card titles nor the h1 are sub-headings.
-  for (const e of document.querySelectorAll('main h3, main h4, main summary')) {
+  // Sub-headings are the headings below a box title: `h3` on the flat page, `h4` once the boxes sit
+  // in a group (box titles are then `h3`), plus the `summary` disclosure heading. `h3` is therefore
+  // read only when no group exists, so the count means the same thing before and after M3.
+  const grouped = document.getElementById('staff-group-conditions') !== null;
+  const selector = grouped ? 'main h4, main summary' : 'main h3, main h4, main summary';
+  for (const e of document.querySelectorAll(selector)) {
     const key = sig(e);
     groups.set(key, [...(groups.get(key) ?? []), (e.textContent ?? '').trim().slice(0, 40)]);
   }
@@ -175,7 +178,8 @@ async function openStaff(ctx, email) {
 }
 
 async function waitForConsole(p) {
-  await p.waitForSelector('h2:has-text("Diagnostics")', { timeout: 20000 });
+  // Boxes are `h2` on the flat page and `h3` inside a group (ADR-0178), so either names the console.
+  await p.waitForSelector(':is(h2, h3):has-text("Diagnostics")', { timeout: 20000 });
 }
 
 async function shot(p, name) {

@@ -123,7 +123,8 @@ export interface ProbePairBody {
   treatment: ProbePhaseBody;
 }
 
-const KEY = ['staff', 'probe-results'] as const;
+/** Exported so the console's Refresh can name this read by key (`STAFF_PAGE_READS`). */
+export const PROBE_RESULTS_KEY = ['staff', 'probe-results'] as const;
 
 /**
  * The readings taken on this installation.
@@ -134,7 +135,7 @@ const KEY = ['staff', 'probe-results'] as const;
  */
 export function useProbeResults(): UseQueryResult<ProbeResultRow[]> {
   return useQuery({
-    queryKey: KEY,
+    queryKey: PROBE_RESULTS_KEY,
     queryFn: () => apiFetch<ProbeResultRow[]>('/staff/probe-results'),
     refetchOnWindowFocus: false,
     retry: false,
@@ -185,6 +186,6 @@ export function useRecordProbeResult(): UseMutationResult<
 export function useRefreshProbeResults(): () => void {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: KEY });
+    void queryClient.invalidateQueries({ queryKey: PROBE_RESULTS_KEY });
   }, [queryClient]);
 }

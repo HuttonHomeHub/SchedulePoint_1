@@ -242,16 +242,20 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // trail — and Playwright's strict mode failed it. Which is the panel working: the console records
   // that staff read it, and the reader's own address is what it records.
   await expect(staff.getByText(`Signed in as ${STAFF_EMAIL}.`)).toBeVisible();
-  // **`exact` since the M2 merge, and both halves are asserted.** Mail and retention are one card
-  // now, so `name: 'Mail'` matched the card's own `<h2>Mail and retention</h2>` as well as the
-  // subsection's `<h3>Mail</h3>` — Playwright's default name matching is a case-insensitive
-  // substring. The card's title and BOTH subsection headings are pinned, because keeping retention
-  // reachable by heading navigation was the accepted cost of merging it: folded into mail's prose
-  // it would have left the heading list entirely.
-  await expect(staff.getByRole('heading', { name: 'Mail and retention' })).toBeVisible();
-  await expect(staff.getByRole('heading', { name: 'Mail', exact: true })).toBeVisible();
-  await expect(staff.getByRole('heading', { name: 'Retention', exact: true })).toBeVisible();
-  await expect(staff.getByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
+  // **Grouped by task since the redesign (ADR-0178), and each condition is its own box.** The group
+  // headings are the page's `h2`s and the boxes are `h3`s inside them, so a screen-reader user
+  // navigating by heading walks Conditions, then Mail, Clearing old records, and so on. Mail and
+  // Clearing old records used to be one card; they share a response, not a box.
+  for (const group of ['Conditions', 'This installation', 'Tools', 'Record']) {
+    await expect(staff.getByRole('heading', { level: 2, name: group, exact: true })).toBeVisible();
+  }
+  await expect(staff.getByRole('heading', { level: 3, name: 'Mail', exact: true })).toBeVisible();
+  await expect(
+    staff.getByRole('heading', { level: 3, name: 'Clearing old records', exact: true }),
+  ).toBeVisible();
+  await expect(
+    staff.getByRole('heading', { level: 3, name: 'Browser security reports' }),
+  ).toBeVisible();
   // **Only that the panel renders — not which state it is in.** The empty-state caveat ("not yet
   // proof the policy is clean") is pinned by `staff.test.tsx`, where the payload is controlled.
   // Asserting it here couples this journey to whether `csp_reports` happens to be empty, and it is
@@ -281,7 +285,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   const sectionNames = await staff
     .locator('section[aria-labelledby]')
     .evaluateAll((nodes) =>
-      nodes.map((node) => node.querySelector('h2')?.textContent?.trim() ?? '(unnamed)'),
+      nodes.map((node) => node.querySelector('h2, h3')?.textContent?.trim() ?? '(unnamed)'),
     );
   expect(
     sectionNames.length,
@@ -305,10 +309,12 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     await expect(target).toHaveAttribute('tabindex', '-1');
   }
 
-  await expect(staff.getByRole('heading', { name: 'Retention', exact: true })).toBeVisible();
+  await expect(
+    staff.getByRole('heading', { name: 'Clearing old records', exact: true }),
+  ).toBeVisible();
   // Scoped to the section, never the document — the ADR-0073 C2.5 finding, where a document-scoped
   // assertion passed on the page's prose alone and proved nothing about the table.
-  const retention = staff.getByRole('region', { name: /retention by table/i });
+  const retention = staff.getByRole('region', { name: /what is cleared, and when/i });
   await expect(retention.getByText('Policy violation reports')).toBeVisible();
   await expect(retention.getByText('Mail events')).toBeVisible();
   // The third table, which the staff performance probe added. It appears here without any edit to
@@ -341,7 +347,9 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // perfectly correct panel reading **"Last swept just now"**, because the API boots seconds before
   // the browser arrives and `agoLabel` says "just now" under a minute. The journey was written from
   // the shape of the copy rather than from a run — which is the failure this step exists to catch.
-  await expect(staff.getByText(/Last swept .*, every \d+ minutes\./)).toBeVisible();
+  await expect(
+    staff.getByText(/Working\. Last ran .*; runs every (hour|\d+ minutes)\./),
+  ).toBeVisible();
 
   // 4. NOT bounced to onboarding. This account has no organisation — which is the recommended
   // configuration — and `/staff` sits outside `_authed` precisely so the shell's home resolver
@@ -1039,11 +1047,18 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
 
   // The copy control is shaded with a reason, not hidden (ADR-0082). Reachable, focusable, and its
   // refusal is a description rather than part of its name.
-  const copy = staff.getByRole('button', { name: 'Copy for the record' });
+  const copy = staff.getByRole('button', { name: 'Copy results' });
   await expect(copy).toHaveAttribute('aria-disabled', 'true');
 
   // ---------------------------------------------------------------- The entry point, pressed
   await staff.getByRole('button', { name: 'Run diagnostics' }).click();
+
+  // **The zero-count checks are folded behind one button** (D-12), so the journey opens them before
+  // asking for a heading by name: a check that found nothing is a fact the panel states as a count
+  // and shows on request, and which of the sixteen are folded depends on the database's contents.
+  await expect(staff.locator('[data-diagnostics-result]')).toBeVisible({ timeout: 30_000 });
+  const showAllChecks = staff.getByRole('button', { name: /^Show all \d+$/ });
+  if (await showAllChecks.isVisible()) await showAllChecks.click();
 
   // Both registry entries answer. Located by their labels, which are the accessible headings a
   // reader navigates by — the first test's lesson about locating by role and name rather than by a
@@ -1291,9 +1306,9 @@ test('the console keeps focus, shading, announcements and reflow honest (M1)', a
   // ---------------------------------------------------------------- M1-T1: paging keeps focus
   const accounts = staff.locator('#staff-section-accounts');
   const accountRows = accounts
-    .getByRole('table', { name: 'Unverified accounts, oldest first' })
+    .getByRole('table', { name: 'Unconfirmed accounts, oldest first' })
     .getByRole('row');
-  const showOlder = accounts.getByRole('button', { name: 'Show older' });
+  const showOlder = accounts.getByRole('button', { name: 'Show more' });
   await expect(showOlder).toBeVisible();
   const firstPage = await accountRows.count();
   const firstAddress = await accountRows.nth(1).textContent();
@@ -1318,7 +1333,7 @@ test('the console keeps focus, shading, announcements and reflow honest (M1)', a
   expect(accountRequests, 'one request for the next page, none for the first').toHaveLength(1);
 
   // ---------------------------------------------------------------- M1-T2: resting shading
-  const copy = staff.getByRole('button', { name: 'Copy for the record' });
+  const copy = staff.getByRole('button', { name: 'Copy results' });
   await expect(copy).toHaveAttribute('aria-disabled', 'true');
   expect(
     await copy.evaluate((el) => getComputedStyle(el).pointerEvents),
@@ -1376,6 +1391,174 @@ test('the console keeps focus, shading, announcements and reflow honest (M1)', a
   await expect(announcer).toHaveText(/You stopped this sitting|Sitting finished/, {
     timeout: 15_000,
   });
+
+  await staffContext.close();
+});
+
+/**
+ * **Staff console M3 — the grouped page, read and acted on (ADR-0081, ADR-0178).**
+ *
+ * The milestone's entry points are the "On this page" list, the status rows, **Refresh** and a
+ * condition's **How to fix**, and none of them can be seen by a unit suite: each is a statement
+ * about where a real browser puts focus, what a real cache requests and what a real audit table
+ * records.
+ *
+ * **This suite's server has a mail transport (the SMTP sink) and an armed sweep, and no alert URL.**
+ * So the standing condition available to act on is *Alerts* (`MAIL_ALERT_URL`), not the plan's
+ * "no transport" recipe, which would mean a second server configuration — a new Playwright config,
+ * which ADR-0105 says needs a spec. The shape asserted is the same.
+ *
+ * **The audit cost is read back from the server, not inferred from the requests.** Every read of a
+ * staff panel writes a `staff.panel_read` row to a table that refuses `DELETE`, so "exactly six per
+ * Refresh" is asserted twice: by counting the browser's requests, and by diffing the activity list
+ * (the Staff activity table collapses consecutive reads into one row, so it cannot be counted by
+ * eye).
+ */
+test('a staff member reads the console by group and acts on a condition', async ({ browser }) => {
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+
+  const SIX = [
+    '/staff/health',
+    '/staff/csp-reports',
+    '/staff/accounts',
+    '/staff/installation',
+    '/staff/activity',
+    '/staff/probe-results',
+  ];
+  let requests: string[] = [];
+  staff.on('request', (request) => {
+    const path = new URL(request.url()).pathname.replace('/api/v1', '');
+    if (path.startsWith('/staff/') && !path.endsWith('/staff/me')) requests.push(path);
+  });
+  const countOf = (path: string): number => requests.filter((p) => p === path).length;
+
+  await staff.goto('/staff');
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(staff.getByText(/^Read at /)).toBeVisible({ timeout: 30_000 });
+
+  // ------------------------------------------------ A load is six reads, and never the diagnostics
+  for (const path of SIX) expect(countOf(path), `${path} on load`).toBe(1);
+  expect(countOf('/staff/diagnostics'), 'arriving must not run the diagnostics').toBe(0);
+
+  // ------------------------------------------------------------------ The groups, in order
+  const h2s = await staff.locator('main h2').allTextContents();
+  expect(h2s.map((text) => text.trim())).toEqual([
+    'Status',
+    'Conditions',
+    'This installation',
+    'Tools',
+    'Record',
+  ]);
+
+  // SC-12: the rows keep the page's order. Printed as well as asserted, so the measured reading of
+  // the state this suite's server is in is on record.
+  const rowOrder = await staff
+    .getByRole('region', { name: 'Status' })
+    .getByRole('link')
+    .allTextContents();
+  console.warn(`status row order: ${rowOrder.join(' | ')}`);
+  expect(rowOrder).toEqual([
+    'Mail delivery',
+    'Clearing old records',
+    'Browser security reports',
+    'Unconfirmed accounts',
+    'Alerts',
+  ]);
+
+  // ----------------------------------------------- A status row moves focus to the box that answers
+  await staff.getByRole('region', { name: 'Status' }).getByRole('link', { name: 'Alerts' }).click();
+  const alerts = staff.locator('#staff-section-alerting');
+  await expect(alerts).toBeFocused();
+
+  // The setting name is behind How to fix and nowhere else, and it is absent from the DOM until the
+  // control is pressed (it is `hidden`, not `sr-only`).
+  await expect(alerts).toContainText('Off: nobody is told when emails fail');
+  expect(await alerts.textContent()).not.toContain('MAIL_ALERT_URL');
+  const howToFix = alerts.getByRole('button', { name: 'How to fix' });
+  await expect(howToFix).toHaveAttribute('aria-expanded', 'false');
+  await howToFix.click();
+  await expect(howToFix).toHaveAttribute('aria-expanded', 'true');
+  await expect(alerts.getByText('MAIL_ALERT_URL')).toBeVisible();
+
+  // --------------------------------------------------- The nav moves focus to a group, and back up
+  await staff
+    .getByRole('navigation', { name: 'On this page' })
+    .getByRole('link', { name: 'Tools' })
+    .click();
+  await expect(staff.locator('#staff-group-tools')).toBeFocused();
+  await staff.locator('#staff-group-tools').getByRole('link', { name: 'Back to top' }).click();
+  await expect(staff.locator('#staff-top')).toBeFocused();
+
+  // ------------------------------------------------------------------ Refresh: six reads, six rows
+  const readTime = async (): Promise<string> =>
+    (await staff.locator('time[datetime]').first().getAttribute('datetime')) ?? '';
+  const panelReads = async (): Promise<string[]> => {
+    const res = await staff.request.get('/api/v1/staff/activity');
+    expect(res.ok()).toBe(true);
+    const body = (await res.json()) as unknown;
+    const rows = (Array.isArray(body) ? body : (body as { data: unknown[] }).data) as {
+      id: string;
+      action: string;
+    }[];
+    return rows.filter((row) => row.action === 'staff.panel_read').map((row) => row.id);
+  };
+
+  await expect(staff.getByText('Each refresh is recorded in Staff activity.')).toBeVisible();
+  const before = await panelReads();
+  const timeBefore = await readTime();
+  requests = [];
+
+  const refresh = staff.getByRole('button', { name: 'Refresh' });
+  await refresh.focus();
+  await refresh.click();
+  await expect(staff.locator('[data-testid="announcer"]')).toHaveText(/^Refreshed\./, {
+    timeout: 30_000,
+  });
+  await expect(refresh).toBeFocused();
+  for (const path of SIX) expect(countOf(path), `${path} on Refresh`).toBe(1);
+  expect(countOf('/staff/diagnostics'), 'Refresh must never run the diagnostics').toBe(0);
+  expect(await readTime(), 'the header time moved').not.toBe(timeBefore);
+
+  const after = await panelReads();
+  // The diff's own read (the `before` fetch) is one of the new rows: it landed after `before` was
+  // listed. Six from Refresh plus that one is seven, and `after` itself is not in its own list.
+  const fresh = after.filter((id) => !before.includes(id));
+  expect(
+    fresh,
+    'exactly six audited reads for one Refresh, plus the one the diff made',
+  ).toHaveLength(7);
+
+  // ---------------------------------------- One failed read: both boxes say so, one button heals them
+  await staff.route('**/api/v1/staff/health', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{}}' }),
+  );
+  await refresh.click();
+  const tryAll = staff.getByRole('button', { name: 'Try again for all' });
+  await expect(tryAll).toBeVisible({ timeout: 30_000 });
+  await expect(staff.getByText(/box(es)? could not be read/)).toBeVisible();
+  await staff.unroute('**/api/v1/staff/health');
+  await tryAll.click();
+  await expect(tryAll).toHaveCount(0, { timeout: 30_000 });
+  await expect(staff.getByText('Working: none failed in the last 24 hours').first()).toBeVisible();
+
+  // ------------------------------------------------------------------------ Axe, at both widths
+  for (const width of [1280, 320]) {
+    await staff.setViewportSize({ width, height: 800 });
+    await expect
+      .poll(() => staff.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), {
+        message: `/staff must not scroll sideways at ${String(width)} px (WCAG 1.4.10)`,
+      })
+      .toBe(true);
+    const axe = await new AxeBuilder({ page: staff })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations, `axe at ${String(width)} px`).toEqual([]);
+  }
 
   await staffContext.close();
 });

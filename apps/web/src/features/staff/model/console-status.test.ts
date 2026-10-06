@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHECK_IDS,
+  CHECK_SECTION_ID,
   deriveConsoleStatus,
   type ConsoleStatusInput,
   type QueryFacts,
@@ -66,107 +67,134 @@ function allHealthy(): ConsoleStatusInput {
   };
 }
 
+const NOW = new Date('2026-09-14T03:00:00.000Z');
+const derive = (input: ConsoleStatusInput) => deriveConsoleStatus(input, NOW);
+const valueOf = (status: ReturnType<typeof derive>, id: (typeof CHECK_IDS)[number]) =>
+  status.checks.find((check) => check.id === id)?.value;
+
 describe('deriveConsoleStatus', () => {
   it('reports every check, always, even when all are healthy', () => {
-    const status = deriveConsoleStatus(allHealthy());
+    const status = derive(allHealthy());
 
     expect(status.checks).toHaveLength(CHECK_IDS.length);
     expect(status.allHealthy).toBe(true);
     expect(status.problems).toEqual([]);
+    expect(status.sentence).toBe('Nothing needs attention.');
   });
 
-  // The healthy sentence's whole job is that "nothing needs attention" cannot quietly come to cover
-  // less than it claims. Asserting the CONTENT would let a check be dropped from the vocabulary with
-  // the sentence still reading plausibly; asserting that the sentence NAMES each subject is what
-  // makes a removal visible. `health-rows.ts` carries the same rule for the same reason.
   /**
-   * **The headline distinguishes the same four states the badges do, and it did not.**
-   *
-   * It folded everything that is not `HEALTHY` into the words "need attention", so on every ordinary
-   * page load — before any of the four queries had settled — the console's first paint read
-   * "5 of 5 checks need attention: …". An alarming, false claim on the one screen whose job is
-   * answering *is anything wrong right now?*, and a direct contradiction of this module's own
-   * docblock, which says a console that answers the reader's question wrongly while a request is in
-   * flight is worse than one that says nothing.
-   *
-   * The badges were right throughout, which is why neither file looked wrong: the per-check channel
-   * and the aggregate channel disagreed and only the aggregate was false. **Every existing sentence
-   * assertion was for the all-healthy case or for a per-check sentence**, so the whole M6 suite
-   * passed through the fix unchanged — which is the finding, not a reassurance. The two cases below
-   * are named verbatim in the spec's own edge-case table and had no test.
-   *
-   * Found by the M6 UX review. Verified red against the shipped `problems.length` sentence.
+   * **The rows keep the page's order in every state** (ADR-0178 D-11, amending ADR-0143 D1). The
+   * severity sort moved the same row to a different place from one visit to the next — measured in
+   * M0, where Failure alerting went from second to last between two states — so a reader could not
+   * find a row by where it was. Verified red against the severity sort.
    */
-  it('says it is still checking rather than that everything needs attention', () => {
-    const status = deriveConsoleStatus({
+  it('keeps one fixed order whatever the states', () => {
+    const order = CHECK_IDS.map((id) => id);
+    const mixed = derive({
       health: pending,
-      security: pending,
-      accounts: pending,
-      installation: pending,
-    });
-
-    expect(status.sentence).not.toContain('need attention');
-    expect(status.sentence).toContain('still checking');
-    // No count, because there is no verdict yet: "0 of 5 checks" beside "still checking" reads as
-    // one.
-    expect(status.sentence).not.toMatch(/\d+ of \d+ checks/);
-  });
-
-  it('says a failed read could not be read, which is not the same as needing attention', () => {
-    const status = deriveConsoleStatus({
-      health: failed,
       security: failed,
-      accounts: failed,
-      installation: failed,
+      accounts: settled(accounts({ unverifiedTotal: 4 })),
+      installation: settled(installation()),
     });
 
-    expect(status.sentence).toContain('could not be read');
-    expect(status.sentence).not.toContain('need attention');
+    expect(mixed.checks.map((check) => check.id)).toEqual(order);
+    expect(derive(allHealthy()).checks.map((check) => check.id)).toEqual(order);
+    expect(
+      derive({
+        health: failed,
+        security: failed,
+        accounts: failed,
+        installation: failed,
+      }).checks.map((check) => check.id),
+    ).toEqual(order);
   });
 
-  /** A mixed page says all three things rather than picking the loudest and hiding the rest. */
-  it('states attention, unreadable and pending together when all three are present', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      health: settled(health({ transportConfigured: false })),
-      security: failed,
-      accounts: pending,
+  it('gives each check its own destination (SC-3)', () => {
+    const ids = CHECK_IDS.map((id) => CHECK_SECTION_ID[id]);
+    expect(new Set(ids).size).toBe(CHECK_IDS.length);
+  });
+
+  describe('the headline is grammatical and counted', () => {
+    it('says "1 thing needs attention."', () => {
+      const status = derive({
+        ...allHealthy(),
+        accounts: settled(accounts({ unverifiedTotal: 3 })),
+      });
+      expect(status.sentence).toBe('1 thing needs attention.');
     });
 
-    expect(status.sentence).toContain('needs attention: mail delivery');
-    expect(status.sentence).toContain('could not be read: content-security-policy');
-    expect(status.sentence).toContain('still checking: account verification');
-  });
+    it('says "2 things need attention." rather than "2 of 5 checks needs attention: …"', () => {
+      const status = derive({
+        ...allHealthy(),
+        health: settled(health({ transportConfigured: false })),
+        accounts: settled(accounts({ unverifiedTotal: 3 })),
+      });
+      expect(status.sentence).toBe('2 things need attention.');
+    });
 
-  it('enumerates what was checked, so removing a check would change the sentence', () => {
-    const status = deriveConsoleStatus(allHealthy());
+    /**
+     * **Still checking is not "everything needs attention".** The first paint of an ordinary load
+     * once read "5 of 5 checks need attention" before any query had settled (M6 UX review).
+     */
+    it('says it is checking rather than that everything needs attention', () => {
+      const status = derive({
+        health: pending,
+        security: pending,
+        accounts: pending,
+        installation: pending,
+      });
 
-    for (const id of CHECK_IDS) {
-      const label = status.checks.find((check) => check.id === id)?.label ?? '';
-      expect(status.sentence.toLowerCase()).toContain(label.toLowerCase());
-    }
+      expect(status.sentence).toBe('Checking…');
+    });
+
+    it('says a failed read could not be checked, which is not the same as needing attention', () => {
+      const status = derive({
+        health: failed,
+        security: failed,
+        accounts: failed,
+        installation: failed,
+      });
+
+      expect(status.sentence).toBe('5 could not be checked.');
+      expect(status.unreadableCount).toBe(5);
+    });
+
+    /** A mixed page says all three things rather than picking the loudest and hiding the rest. */
+    it('states attention, unreadable and pending together when all are present', () => {
+      const status = derive({
+        ...allHealthy(),
+        health: settled(health({ transportConfigured: false })),
+        security: failed,
+        accounts: pending,
+      });
+
+      expect(status.sentence).toBe(
+        '1 thing needs attention; 1 could not be checked; 1 still being checked.',
+      );
+    });
   });
 
   // The ADR-0125 `?? 'HEALTHY'` lie, in the two costumes it actually wears. A console that answers
   // "is anything wrong?" with "no" while a request is in flight, or while one failed, is worse than
   // one that says nothing — it answers the question the reader came with, wrongly.
   it('never calls a pending check healthy', () => {
-    const status = deriveConsoleStatus({ ...allHealthy(), health: pending });
+    const status = derive({ ...allHealthy(), health: pending });
 
     expect(status.allHealthy).toBe(false);
     expect(status.checks.find((check) => check.id === 'mail')?.state).toBe('PENDING');
-    expect(status.checks.find((check) => check.id === 'retention')?.state).toBe('PENDING');
+    expect(valueOf(status, 'mail')).toBe('Checking…');
   });
 
-  it('never calls a failed check healthy', () => {
-    const status = deriveConsoleStatus({ ...allHealthy(), security: failed });
+  it('never calls a failed check healthy, and says where to look', () => {
+    const status = derive({ ...allHealthy(), security: failed });
 
     expect(status.allHealthy).toBe(false);
     expect(status.checks.find((check) => check.id === 'security')?.state).toBe('UNREADABLE');
+    expect(valueOf(status, 'security')).toBe("Couldn't load. See the box below");
   });
 
   it('treats settled-but-absent data as unreadable rather than healthy', () => {
-    const status = deriveConsoleStatus({
+    const status = derive({
       ...allHealthy(),
       accounts: { isPending: false, isError: false, data: undefined },
     });
@@ -174,113 +202,129 @@ describe('deriveConsoleStatus', () => {
     expect(status.checks.find((check) => check.id === 'accounts')?.state).toBe('UNREADABLE');
   });
 
-  it('orders attention before unreadable before pending before healthy', () => {
-    const status = deriveConsoleStatus({
-      health: pending,
-      security: failed,
-      accounts: settled(accounts({ unverifiedTotal: 4 })),
-      installation: settled(installation()),
+  describe('every state states a value (SC-12, US-2)', () => {
+    it('says what is wrong with mail, with the number the claim rests on', () => {
+      expect(
+        valueOf(
+          derive({ ...allHealthy(), health: settled(health({ transportConfigured: false })) }),
+          'mail',
+        ),
+      ).toBe("Not set up: emails aren't being sent");
+      expect(
+        valueOf(
+          derive({ ...allHealthy(), health: settled(health({ failuresLast24h: 4 })) }),
+          'mail',
+        ),
+      ).toBe('4 failed in the last 24 hours');
+      expect(valueOf(derive(allHealthy()), 'mail')).toBe(
+        'Working: none failed in the last 24 hours',
+      );
     });
 
-    expect(status.checks.map((check) => check.state)).toEqual([
-      'ATTENTION',
-      'UNREADABLE',
-      'PENDING',
-      'PENDING',
-      'HEALTHY',
-    ]);
-  });
-
-  it('names the number the claim rests on, not just that there is a problem', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      accounts: settled(accounts({ unverifiedTotal: 68 })),
+    /**
+     * Zero failures with no transport is not health: every send is being logged instead of
+     * delivered, which looks identical in a count. Not-set-up is therefore reported first.
+     */
+    it('reads a missing transport as attention even with zero failures', () => {
+      const status = derive({
+        ...allHealthy(),
+        health: settled(health({ transportConfigured: false, failuresLast24h: 0 })),
+      });
+      expect(status.checks.find((check) => check.id === 'mail')?.state).toBe('ATTENTION');
     });
 
-    expect(status.problems[0]?.sentence).toBe(
-      '68 accounts cannot complete verification-gated sign-in.',
-    );
-  });
+    it('reports a switched-off sweep, failing runs, overdue kinds and a healthy last run', () => {
+      const retention = (over: Partial<StaffHealth['retention']>) =>
+        valueOf(
+          derive({
+            ...allHealthy(),
+            health: settled(health({ retention: { ...health().retention, ...over } })),
+          }),
+          'retention',
+        );
 
-  it('says account rather than accounts for one', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      accounts: settled(accounts({ unverifiedTotal: 1 })),
-    });
-
-    expect(status.problems[0]?.sentence).toContain('1 account cannot');
-  });
-
-  // Mail's two failure modes are not the same fact, and the more alarming one is the quieter: zero
-  // failures with NO TRANSPORT is not health, it means every send is being logged instead of
-  // delivered — which looks identical in a count.
-  it('reads a missing transport as attention even with zero failures', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      health: settled(health({ transportConfigured: false, failuresLast24h: 0 })),
-    });
-
-    expect(status.checks.find((check) => check.id === 'mail')?.state).toBe('ATTENTION');
-    expect(status.checks.find((check) => check.id === 'mail')?.sentence).toContain(
-      'No mail transport is configured',
-    );
-  });
-
-  it('reports a disabled sweep ahead of overdue tables, since nothing is being deleted at all', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      health: settled(
-        health({
-          retention: {
-            enabled: false,
-            intervalMinutes: 60,
-            processStartedAt: '2026-09-14T00:00:00.000Z',
-            lastRunAt: null,
-            consecutiveFailures: 0,
-            tables: [],
-          },
+      expect(retention({ enabled: false })).toBe('Switched off: old records are piling up');
+      expect(retention({ consecutiveFailures: 3 })).toBe('Last 3 runs failed');
+      expect(retention({ consecutiveFailures: 1 })).toBe('Last 1 run failed');
+      expect(
+        retention({
+          tables: [
+            {
+              table: 'csp_reports',
+              retentionDays: 30,
+              oldestAt: null,
+              oldestAgeDays: 40,
+              overdue: true,
+              lastDeleted: 0,
+              cappedOut: false,
+              failed: false,
+            },
+          ],
         }),
-      ),
+      ).toBe('1 kind of record overdue');
+      expect(retention({})).toBe('Ran 2 hours ago');
+      expect(retention({ lastRunAt: null })).toBe('Has not run yet');
     });
 
-    expect(status.checks.find((check) => check.id === 'retention')?.sentence).toContain(
-      'Retention sweeping is disabled',
-    );
-  });
-
-  // Alerting is its own check rather than a clause on mail's, because it is the one condition here
-  // that is invisible by construction: with neither webhook set, everything else can go wrong and
-  // the first anybody hears of it is somebody opening this console.
-  it('reports unconfigured alerting as its own check, naming both halves', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      installation: settled(
-        installation({ mailAlertingConfigured: false, heartbeatConfigured: false }),
-      ),
+    it('counts security kinds and times', () => {
+      const row = (count: number): CspReportRow => ({
+        id: String(count),
+        effectiveDirective: 'script-src',
+        blockedUri: 'https://x.test',
+        documentUri: 'https://app.test',
+        disposition: 'report',
+        count,
+        firstSeenAt: '2026-09-14T00:00:00.000Z',
+        lastSeenAt: '2026-09-14T00:00:00.000Z',
+        sourceFile: null,
+        lineNumber: null,
+        columnNumber: null,
+      });
+      expect(valueOf(derive(allHealthy()), 'security')).toBe('None received');
+      expect(
+        valueOf(derive({ ...allHealthy(), security: settled([row(2), row(3)]) }), 'security'),
+      ).toBe('2 kinds blocked, 5 times');
+      expect(valueOf(derive({ ...allHealthy(), security: settled([row(1)]) }), 'security')).toBe(
+        '1 kind blocked, 1 time',
+      );
     });
 
-    const alerting = status.checks.find((check) => check.id === 'alerting');
-    expect(alerting?.state).toBe('ATTENTION');
-    expect(alerting?.sentence).toContain('mail failures or the API going down');
-  });
-
-  it('reports only the missing half when one webhook is set', () => {
-    const status = deriveConsoleStatus({
-      ...allHealthy(),
-      installation: settled(
-        installation({ mailAlertingConfigured: true, heartbeatConfigured: false }),
-      ),
+    it('counts people who cannot sign in', () => {
+      expect(valueOf(derive(allHealthy()), 'accounts')).toBe('None');
+      expect(
+        valueOf(
+          derive({ ...allHealthy(), accounts: settled(accounts({ unverifiedTotal: 68 })) }),
+          'accounts',
+        ),
+      ).toBe("68 people can't sign in yet");
+      expect(
+        valueOf(
+          derive({ ...allHealthy(), accounts: settled(accounts({ unverifiedTotal: 1 })) }),
+          'accounts',
+        ),
+      ).toBe("1 person can't sign in yet");
     });
 
-    expect(status.checks.find((check) => check.id === 'alerting')?.sentence).toBe(
-      'Nothing will report the API going down — only this screen will.',
-    );
+    // Alerting is its own check, because it is the one condition invisible by construction: with
+    // neither webhook set, everything else can go wrong and the first anybody hears of it is
+    // somebody opening this console.
+    it('says which half of alerting is off', () => {
+      const alerting = (over: Partial<StaffInstallation>) =>
+        valueOf(derive({ ...allHealthy(), installation: settled(installation(over)) }), 'alerting');
+
+      expect(alerting({ mailAlertingConfigured: false, heartbeatConfigured: false })).toBe(
+        'Off: nobody is told when something fails',
+      );
+      expect(alerting({ heartbeatConfigured: false })).toBe('Partly on: uptime check off');
+      expect(alerting({ mailAlertingConfigured: false })).toBe('Partly on: mail alerts off');
+      expect(alerting({})).toBe('On');
+    });
   });
 
   // The verdict is a WORD, never a colour alone (WCAG 1.4.1) — `health-rows.ts:20`'s rule, carried
   // here so the two surfaces cannot describe the same four states differently.
   it('gives every check a verdict word and a tone', () => {
-    const status = deriveConsoleStatus({ ...allHealthy(), health: failed });
+    const status = derive({ ...allHealthy(), health: failed });
 
     for (const check of status.checks) {
       expect(check.verdictLabel.length).toBeGreaterThan(0);
@@ -289,17 +333,5 @@ describe('deriveConsoleStatus', () => {
     expect(status.checks.find((check) => check.id === 'mail')?.verdictLabel).toBe(
       'Could not be read',
     );
-  });
-
-  it('gives every check a section to link to', () => {
-    const status = deriveConsoleStatus(allHealthy());
-
-    for (const check of status.checks) expect(check.sectionId.length).toBeGreaterThan(0);
-  });
-
-  it('says nothing about a healthy check', () => {
-    const status = deriveConsoleStatus(allHealthy());
-
-    for (const check of status.checks) expect(check.sentence).toBeNull();
   });
 });

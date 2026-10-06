@@ -49,10 +49,16 @@ beforeEach(() => {
 
 describe('AccountsPanel paging (M1-T1)', () => {
   it('reads one page on load, and appends the next without losing focus or the first rows', async () => {
-    apiFetch.mockResolvedValueOnce(PAGE_1).mockResolvedValueOnce(PAGE_2);
+    // Held, so the loading state is observable rather than a race against a resolved promise.
+    let release: (page: StaffAccounts) => void = () => undefined;
+    apiFetch.mockResolvedValueOnce(PAGE_1).mockReturnValueOnce(
+      new Promise<StaffAccounts>((resolve) => {
+        release = resolve;
+      }),
+    );
     mount();
 
-    const button = await screen.findByRole('button', { name: 'Show older' });
+    const button = await screen.findByRole('button', { name: 'Show more' });
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(apiFetch).toHaveBeenLastCalledWith('/staff/accounts');
 
@@ -63,6 +69,9 @@ describe('AccountsPanel paging (M1-T1)', () => {
     await waitFor(() => {
       expect(button).toHaveAttribute('aria-disabled', 'true');
     });
+    expect(button).toHaveTextContent('Loading more accounts…');
+    expect(document.activeElement).toBe(button);
+    release(PAGE_2);
     await waitFor(() => {
       expect(apiFetch).toHaveBeenCalledTimes(2);
     });
@@ -71,21 +80,19 @@ describe('AccountsPanel paging (M1-T1)', () => {
     await screen.findByText('person3@example.test');
     // Verified red against the per-cursor query: the button was replaced by a spinner (focus fell to
     // <body>) and the first page's rows were gone.
-    expect(button).toBeInTheDocument();
-    expect(document.activeElement).toBe(button);
     expect(screen.getByText('person1@example.test')).toBeInTheDocument();
     expect(screen.getByText('person2@example.test')).toBeInTheDocument();
     // De-duplicated by id: three rows, not four.
     const table = screen.getByRole('table');
     expect(within(table).getAllByRole('row')).toHaveLength(1 + 3);
 
-    // The end state is the same button, shaded, saying why.
-    expect(button).toHaveTextContent('All 3 are shown.');
-    expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(announce).toHaveBeenCalledWith('3 of 3 unverified accounts shown.');
-
-    // And pressing it again asks nothing more.
-    fireEvent.click(button);
+    // The end state is plain text, not a shaded button, and the press that reached it handed focus
+    // to that text rather than dropping it to <body> (ADR-0135).
+    const end = screen.getByText('All 3 are shown.');
+    expect(end.tagName).toBe('P');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(end);
+    expect(announce).toHaveBeenCalledWith('Showing 3 of 3 unconfirmed accounts.');
     expect(apiFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -99,11 +106,11 @@ describe('AccountsPanel paging (M1-T1)', () => {
   it('keeps the rows and says so when a later page fails', async () => {
     apiFetch.mockResolvedValueOnce(PAGE_1).mockRejectedValueOnce(new Error('boom'));
     mount();
-    const button = await screen.findByRole('button', { name: 'Show older' });
+    const button = await screen.findByRole('button', { name: 'Show more' });
     fireEvent.click(button);
-    await screen.findByText(/Could not load more accounts/);
+    await screen.findByText(/load more accounts/);
     expect(screen.getByText('person1@example.test')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show older' })).not.toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Show more' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );

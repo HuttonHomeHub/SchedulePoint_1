@@ -1,7 +1,9 @@
 # ADR-0178: A console is grouped by what the reader came to do
 
-- **Status:** Proposed (filed at M2 of the staff console redesign; accepted at M3's close, when the
-  grouped layout it describes has shipped)
+- **Status:** Proposed (filed at M2 of the staff console redesign). The grouped layout, values,
+  Refresh and announce-on-change shipped in M3; **acceptance moves to M4's close**, because D-3
+  (Performance collapsed at rest, its history read hoisted) is part of what this ADR decides and ships
+  there (implementation plan, M4-T3).
 - **Date:** 2026-10-06
 - **Deciders:** James Ewbank (product owner — approved the spec 2026-10-06: one page with an "On this
   page" jump list rather than tabs, Performance folded by default, a Refresh with an honest note),

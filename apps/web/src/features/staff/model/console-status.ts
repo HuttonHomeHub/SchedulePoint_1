@@ -1,6 +1,7 @@
 import type { CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import type { StaffHealth } from '@/features/staff/api/staff-health';
 import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staff-panels';
+import { formatRelative } from '@/lib/relative-time';
 
 /**
  * The console's one-line answer to "is anything wrong right now?", derived rather than reported.
@@ -55,19 +56,15 @@ export interface CheckView {
   verdictLabel: string;
   /** A tone token name the component maps to a colour; the `health-rows.ts:23` vocabulary. */
   tone: 'pass' | 'fail' | 'muted' | 'info';
-  /** What is wrong, in one sentence. Null when the check is healthy — there is nothing to say. */
-  sentence: string | null;
+  /**
+   * The fact behind the verdict, in plain words — "Not set up: emails aren't being sent", "None
+   * received". Every state has one, healthy included, so a row never answers "how bad?" with a bare
+   * "OK" (staff console redesign, spec D-4, US-2).
+   */
+  value: string;
   /** The `id` of the section that answers this check, for the summary's link. */
   sectionId: string;
 }
-
-/** Severity order. `ATTENTION` first because it is the only state with something to do about it. */
-const SEVERITY: Record<CheckState, number> = {
-  ATTENTION: 0,
-  UNREADABLE: 1,
-  PENDING: 2,
-  HEALTHY: 3,
-};
 
 /** The verdict word and tone for each state — one table, so the two channels cannot disagree. */
 const VERDICT: Record<CheckState, { verdictLabel: string; tone: CheckView['tone'] }> = {
@@ -78,42 +75,31 @@ const VERDICT: Record<CheckState, { verdictLabel: string; tone: CheckView['tone'
 };
 
 /**
- * The section each check links to — **the section that ANSWERS it**, not the one whose name sounds
- * closest.
+ * The section each check links to — **the box that ANSWERS it**, and no two checks share one.
  *
- * `alerting` pointed at `staff-section-installation` until the M6 gate pass, and two reviewers found
- * it independently. Installation renders the API version, the environment, the mail host and the
- * staff count; it says nothing about alerting or heartbeats in its body or its status sentence.
- * Everything a reader needs — the two badges and the two remedy sentences naming `MAIL_ALERT_URL`
- * and `HEARTBEAT_URL` — is in `MailSection`, inside the merged health card. So a reader who saw
- * "Failure alerting — Needs attention" and activated the row was moved to, and focused on, a section
- * containing nothing about what they had just been told.
+ * Until the staff console redesign (ADR-0178) three checks pointed at one box because mail, retention
+ * and the alert switches were drawn from one response and so lived in one card. The card existed
+ * because of a query, not a subject: two observers of one key are one request and one audited read,
+ * so each check now has a box of its own. `check-answers-its-link.test.tsx` pins both halves — that
+ * each destination is about its check, and that none is shared (SC-3).
  *
- * That is the shape this epic exists to remove, arriving inside its own headline feature: the
- * mechanism was built correctly — a whole-row link, a focusable destination, announced focus — and
- * pointed at the wrong place. `check-answers-its-link.test.tsx` is the gate, because every
- * assertion that existed checked the href's SHAPE and never that the destination says anything
- * about the check.
- *
- * `retention` shares `mail`'s id deliberately and not by oversight: the spec asked the summary to
- * link to the **subsection**, and only the outer `SectionCard` carries `tabIndex={-1}`, so an
- * anchor to the inner `<h3>` would move the viewport and leave focus where it was — silently
- * dropping the guarantee the link exists for. The card's heading names both subjects.
+ * `alerting` points at the Alerts and monitoring box, which reads the **installation** response, the
+ * same one this check reads, so the row and the box it opens cannot disagree (spec §0.12).
  */
 export const CHECK_SECTION_ID: Record<CheckId, string> = {
-  mail: 'staff-section-health',
-  retention: 'staff-section-health',
+  mail: 'staff-section-mail',
+  retention: 'staff-section-retention',
   security: 'staff-section-security',
   accounts: 'staff-section-accounts',
-  alerting: 'staff-section-health',
+  alerting: 'staff-section-alerting',
 };
 
 const LABEL: Record<CheckId, string> = {
   mail: 'Mail delivery',
-  retention: 'Retention sweeping',
-  security: 'Content-Security-Policy',
-  accounts: 'Account verification',
-  alerting: 'Failure alerting',
+  retention: 'Clearing old records',
+  security: 'Browser security reports',
+  accounts: 'Unconfirmed accounts',
+  alerting: 'Alerts',
 };
 
 /**
@@ -136,19 +122,20 @@ export interface ConsoleStatusInput {
 }
 
 export interface ConsoleStatus {
-  /** Every check, severity-ordered. Always all of them — a check is never omitted. */
+  /**
+   * Every check, in the page's own order (the order of the boxes below the summary). Always all of
+   * them — a check is never omitted. **Not sorted by severity**: a row that moves between visits
+   * cannot be found by position, and the headline and each row's value now carry the severity
+   * (ADR-0178, amending ADR-0143 D1).
+   */
   checks: CheckView[];
-  /** The checks that are not healthy, in the same order. The summary's rows. */
+  /** The checks that are not healthy, in the same order. */
   problems: CheckView[];
+  /** How many checks could not be read — two or more earns the summary's Try again for all. */
+  unreadableCount: number;
   /** True only when every check is `HEALTHY` — never when one is pending or unreadable. */
   allHealthy: boolean;
-  /**
-   * The sentence the summary announces, enumerating **what was checked**.
-   *
-   * It names the subjects rather than counting them, so "everything is fine" cannot quietly come to
-   * cover less than it claims: removing a check from `CHECK_IDS` changes this string, and there is
-   * a test that says so.
-   */
+  /** The headline: what needs attention, in a grammatical sentence ("2 things need attention."). */
   sentence: string;
 }
 
@@ -159,53 +146,81 @@ function stateOf<T>(query: QueryFacts<T>, verdict: (data: T) => boolean): CheckS
   return verdict(query.data) ? 'ATTENTION' : 'HEALTHY';
 }
 
+/** "1 kind", "3 kinds" — a count with its noun, for the values below. */
+function counted(n: number, one: string, many: string): string {
+  return `${String(n)} ${n === 1 ? one : many}`;
+}
+
+/** What a check says while it has no answer. Both are stated, never left blank. */
+const WAITING: Record<'PENDING' | 'UNREADABLE', string> = {
+  PENDING: 'Checking…',
+  UNREADABLE: "Couldn't load. See the box below",
+};
+
 /**
  * Derive the console's status from what the page has already fetched.
  *
- * Every sentence names the number the claim rests on. "Some accounts cannot sign in" sends a reader
- * to count them; "68 accounts cannot complete verification-gated sign-in" is the fact itself.
+ * Every value names the number the claim rests on. "Some accounts cannot sign in" sends a reader to
+ * count them; "68 people can't sign in yet" is the fact itself.
+ *
+ * `now` is a parameter so the relative time in the retention value is testable and so one render
+ * does not read the clock twice.
  */
-export function deriveConsoleStatus(input: ConsoleStatusInput): ConsoleStatus {
-  const sentences: Partial<Record<CheckId, string>> = {};
+export function deriveConsoleStatus(
+  input: ConsoleStatusInput,
+  now: Date = new Date(),
+): ConsoleStatus {
+  const values: Partial<Record<CheckId, string>> = {};
 
   const states: Record<CheckId, CheckState> = {
     mail: stateOf(input.health, (data) => {
       if (!data.transportConfigured) {
-        sentences.mail = 'No mail transport is configured, so nothing is being delivered.';
+        values.mail = "Not set up: emails aren't being sent";
         return true;
       }
       if (data.failuresLast24h > 0) {
-        sentences.mail = `${String(data.failuresLast24h)} mail failures in the last 24 hours.`;
+        values.mail = `${String(data.failuresLast24h)} failed in the last 24 hours`;
         return true;
       }
+      values.mail = 'Working: none failed in the last 24 hours';
       return false;
     }),
     retention: stateOf(input.health, (data) => {
       const retention = data.retention;
       if (!retention.enabled) {
-        sentences.retention = 'Retention sweeping is disabled, so nothing is being deleted.';
+        values.retention = 'Switched off: old records are piling up';
         return true;
       }
       if (retention.consecutiveFailures > 0) {
-        sentences.retention = `The last ${String(retention.consecutiveFailures)} sweeps failed.`;
+        values.retention = `Last ${String(retention.consecutiveFailures)} ${retention.consecutiveFailures === 1 ? 'run' : 'runs'} failed`;
         return true;
       }
       const overdue = retention.tables.filter((table) => table.overdue).length;
       if (overdue > 0) {
-        sentences.retention = `${String(overdue)} ${overdue === 1 ? 'table is' : 'tables are'} past the period they are kept for.`;
+        values.retention = `${counted(overdue, 'kind', 'kinds')} of record overdue`;
         return true;
       }
+      values.retention =
+        retention.lastRunAt === null
+          ? 'Has not run yet'
+          : `Ran ${formatRelative(retention.lastRunAt, now)}`;
       return false;
     }),
     security: stateOf(input.security, (rows) => {
-      if (rows.length === 0) return false;
+      if (rows.length === 0) {
+        values.security = 'None received';
+        return false;
+      }
       const blocked = rows.reduce((total, row) => total + row.count, 0);
-      sentences.security = `${String(rows.length)} ${rows.length === 1 ? 'directive has' : 'directives have'} been violated, ${String(blocked)} times in total.`;
+      values.security = `${counted(rows.length, 'kind', 'kinds')} blocked, ${counted(blocked, 'time', 'times')}`;
       return true;
     }),
     accounts: stateOf(input.accounts, (data) => {
-      if (data.unverifiedTotal === 0) return false;
-      sentences.accounts = `${String(data.unverifiedTotal)} ${data.unverifiedTotal === 1 ? 'account' : 'accounts'} cannot complete verification-gated sign-in.`;
+      if (data.unverifiedTotal === 0) {
+        values.accounts = 'None';
+        return false;
+      }
+      values.accounts = `${counted(data.unverifiedTotal, 'person', 'people')} can't sign in yet`;
       return true;
     }),
     /**
@@ -215,13 +230,18 @@ export function deriveConsoleStatus(input: ConsoleStatusInput): ConsoleStatus {
      * opening this console. `docs/TECH_DEBT.md` #100 records it as open on the operator half.
      */
     alerting: stateOf(input.installation, (data) => {
-      const missing = [
-        data.mailAlertingConfigured ? null : 'mail failures',
-        data.heartbeatConfigured ? null : 'the API going down',
-      ].filter((item): item is string => item !== null);
-      if (missing.length === 0) return false;
-      sentences.alerting = `Nothing will report ${missing.join(' or ')} — only this screen will.`;
-      return true;
+      const mailOff = !data.mailAlertingConfigured;
+      const uptimeOff = !data.heartbeatConfigured;
+      if (mailOff && uptimeOff) {
+        values.alerting = 'Off: nobody is told when something fails';
+        return true;
+      }
+      if (mailOff || uptimeOff) {
+        values.alerting = `Partly on: ${mailOff ? 'mail alerts' : 'uptime check'} off`;
+        return true;
+      }
+      values.alerting = 'On';
+      return false;
     }),
   };
 
@@ -231,66 +251,52 @@ export function deriveConsoleStatus(input: ConsoleStatusInput): ConsoleStatus {
     state: states[id],
     verdictLabel: VERDICT[states[id]].verdictLabel,
     tone: VERDICT[states[id]].tone,
-    sentence: sentences[id] ?? null,
+    value:
+      states[id] === 'PENDING' || states[id] === 'UNREADABLE'
+        ? WAITING[states[id]]
+        : (values[id] ?? ''),
     sectionId: CHECK_SECTION_ID[id],
-  })).sort(
-    (a, b) =>
-      SEVERITY[a.state] - SEVERITY[b.state] || CHECK_IDS.indexOf(a.id) - CHECK_IDS.indexOf(b.id),
-  );
+  }));
 
   const problems = checks.filter((check) => check.state !== 'HEALTHY');
   const allHealthy = problems.length === 0;
+  const unreadableCount = checks.filter((check) => check.state === 'UNREADABLE').length;
 
-  return { checks, problems, allHealthy, sentence: sentenceFor(checks) };
-}
-
-/** The checks in a given state, lower-cased and joined, for a clause. */
-function named(checks: CheckView[], state: CheckState): string {
-  return checks
-    .filter((check) => check.state === state)
-    .map((check) => check.label.toLowerCase())
-    .join(', ');
+  return { checks, problems, allHealthy, unreadableCount, sentence: sentenceFor(checks) };
 }
 
 /**
  * The console's headline, which must distinguish the same four states the badges do.
  *
- * **It did not, and the M6 UX review found it.** The sentence folded everything that is not
- * `HEALTHY` into the words "need attention" — so on every ordinary page load, before any of the four
- * queries had settled, the console's first paint read
- * **"5 of 5 checks need attention: mail delivery, retention sweeping, …"**. An alarming, false claim,
- * on the one screen whose entire job is answering _is anything wrong right now?_, and a direct
- * contradiction of this module's own docblock four screens up — which says in as many words that a
- * console answering the reader's question wrongly while a request is in flight is worse than one
- * that says nothing.
+ * **It once did not, and the M6 UX review found it**: everything that was not `HEALTHY` was folded
+ * into "need attention", so the first paint of every ordinary load read "5 of 5 checks need
+ * attention" before any query had settled — an alarming false claim on the screen whose whole job is
+ * answering _is anything wrong right now?_. Each state has its own clause, and a clause is emitted
+ * only when something is in that state.
  *
- * The badges were right throughout (`VERDICT` has four entries), which is why nothing looked wrong
- * in either file: the per-check channel and the aggregate channel disagreed, and only the aggregate
- * was false. Untested, too — every sentence assertion was for the all-healthy case or for a
- * per-check sentence, and the spec's own edge-case table named both of these states explicitly.
- *
- * Clauses are ordered by severity and only non-empty ones are emitted, so a mixed page says all
- * three things in one sentence rather than picking the loudest and hiding the rest.
+ * It is counted and grammatical ("1 thing needs attention.", "2 things need attention; 1 could not
+ * be checked."). The earlier "2 of 5 checks needs attention: …" fragment is gone: the values on the
+ * rows below now say which, so the headline need not list them.
  */
 function sentenceFor(checks: CheckView[]): string {
-  const attention = named(checks, 'ATTENTION');
-  const unreadable = named(checks, 'UNREADABLE');
-  const pending = named(checks, 'PENDING');
+  const count = (state: CheckState): number =>
+    checks.filter((check) => check.state === state).length;
+  const attention = count('ATTENTION');
+  const unreadable = count('UNREADABLE');
+  const pending = count('PENDING');
 
   const clauses = [
-    attention === '' ? null : `needs attention: ${attention}`,
-    unreadable === '' ? null : `could not be read: ${unreadable}`,
-    pending === '' ? null : `still checking: ${pending}`,
+    attention === 0
+      ? null
+      : attention === 1
+        ? '1 thing needs attention'
+        : `${String(attention)} things need attention`,
+    unreadable === 0 ? null : `${String(unreadable)} could not be checked`,
+    pending === 0 || (attention === 0 && unreadable === 0)
+      ? null
+      : `${String(pending)} still being checked`,
   ].filter((clause): clause is string => clause !== null);
 
-  if (clauses.length === 0) {
-    return `Nothing needs attention. Checked ${CHECK_IDS.map((id) => LABEL[id].toLowerCase()).join(', ')}.`;
-  }
-
-  // The count is of what NEEDS ATTENTION, and it is omitted entirely when nothing does — "0 of 5
-  // checks" beside "still checking: …" reads as a verdict on a page that has not got one yet.
-  const attentionCount = checks.filter((check) => check.state === 'ATTENTION').length;
-  const head =
-    attentionCount === 0 ? '' : `${String(attentionCount)} of ${String(CHECK_IDS.length)} checks `;
-  return `${head}${clauses.join('; ')}.`;
+  if (clauses.length > 0) return `${clauses.join('; ')}.`;
+  return pending > 0 ? 'Checking…' : 'Nothing needs attention.';
 }

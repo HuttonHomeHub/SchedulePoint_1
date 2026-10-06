@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { SectionCard } from './section-card';
 
 /**
@@ -50,6 +52,21 @@ export interface StatusSectionProps {
    * statement about the content, not a loading indicator: the caller still shows whatever it shows.
    */
   busy?: boolean;
+  /**
+   * When the sentence is spoken (ADR-0178 D-6, amending ADR-0143 D2).
+   *
+   * - `settle` (the default, and what every caller had before) speaks it the moment it first
+   *   appears. Right for a panel whose answer arrives because the reader pressed something
+   *   (Diagnostics, a probe run).
+   * - `change` treats the first sentence as the panel's **resting state**: it is written as plain
+   *   text a reader can reach, and only a LATER, different sentence (a refresh that changed a
+   *   figure, a read that failed, a retry that answered) goes to the live region. A standing
+   *   condition is not an event (ADR-0132), and seven panels each announcing theirs as the page
+   *   loaded was seven interruptions of one reader; the page speaks one sentence instead.
+   */
+  announce?: 'settle' | 'change';
+  /** One sentence saying what the box holds, under its heading. */
+  description?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -59,7 +76,20 @@ export function StatusSection({
   children,
   id,
   busy,
+  announce = 'settle',
+  description,
 }: StatusSectionProps): React.ReactElement {
+  // `baseline` is the first settled sentence and `changed` latches once a different one arrives.
+  // State rather than a ref, set during render under a guard: it is derived from the props alone
+  // and a ref written in render is the pattern the hooks lint rule exists to refuse.
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+  if (announce === 'change') {
+    if (baseline === null && status !== '') setBaseline(status);
+    else if (baseline !== null && !changed && status !== baseline) setChanged(true);
+  }
+  const resting = announce === 'change' && !changed;
+
   return (
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting
     // the prop — spread it conditionally rather than widening `SectionCardProps` to accept one.
@@ -67,10 +97,12 @@ export function StatusSection({
       title={title}
       {...(id === undefined ? {} : { id })}
       {...(busy === true ? { busy } : {})}
+      {...(description === undefined ? {} : { description })}
     >
       <div className="space-y-4">
+        {resting ? <p className="sr-only">{status}</p> : null}
         <p aria-live="polite" className="sr-only">
-          {status}
+          {resting ? '' : status}
         </p>
         {children}
       </div>

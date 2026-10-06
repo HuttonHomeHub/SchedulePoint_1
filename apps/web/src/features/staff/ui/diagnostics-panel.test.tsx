@@ -70,14 +70,10 @@ describe('DiagnosticsPanel', () => {
     // word "only" with a `<strong>`, so the sentence is split across three nodes and a plain text
     // query finds none of them — which reads as missing copy rather than as a query that cannot
     // see it.
-    const explanation = screen
-      .getAllByText(/Counts how many rows/)
-      .map((node) => node.textContent ?? '')
-      .join(' ');
+    const explanation = screen.getByText(/Counts records that may need attention/).textContent;
 
-    expect(explanation).toMatch(/returns only counts/i);
-    expect(explanation).toMatch(/no plan, client, project or activity is named/i);
-    expect(explanation).toMatch(/no parameters at all/i);
+    expect(explanation).toMatch(/only ever returns numbers/i);
+    expect(explanation).toMatch(/never names, plans or customers/i);
   });
 
   it('fires the read on the press', () => {
@@ -103,7 +99,7 @@ describe('DiagnosticsPanel', () => {
     render(<DiagnosticsPanel />);
 
     expect(screen.getByText('17 of 1284 activities, across 3 plans in 1 organisation.'));
-    expect(screen.getByText(/API 0\.63\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/version 0\.63\.0/)).toBeInTheDocument();
   });
 
   it('distinguishes an empty population from an unaffected one', () => {
@@ -122,10 +118,37 @@ describe('DiagnosticsPanel', () => {
     };
     render(<DiagnosticsPanel />);
 
+    // Both are zero-count checks, so they are collapsed behind one button until it is pressed.
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 2' }));
     expect(screen.getByText(/No work of this shape exists/)).toBeInTheDocument();
     expect(
       screen.getByText(/None of the 1284 activities examined is affected/),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * **D-12: a check with something to report is shown in full and the rest are one line**, and
+   * Copy still carries all of them. Verified red against the unconditional list of sixteen cards.
+   */
+  it('shows a non-zero check in full and folds the zero ones behind a count', () => {
+    queryState.data = {
+      ...result,
+      diagnostics: [
+        result.diagnostics[0]!,
+        { ...result.diagnostics[0]!, id: 'quiet', label: 'Quiet one', affected: 0 },
+      ],
+    };
+    render(<DiagnosticsPanel />);
+
+    expect(screen.getByText('1 check found something')).toBeInTheDocument();
+    expect(screen.getByText('1 check found nothing')).toBeInTheDocument();
+    expect(screen.getByText('Day factor divergence (driving resource)')).toBeInTheDocument();
+    expect(screen.queryByText('Quiet one')).not.toBeInTheDocument();
+
+    const showAll = screen.getByRole('button', { name: 'Show all 2' });
+    expect(showAll).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(showAll);
+    expect(screen.getByText('Quiet one')).toBeInTheDocument();
   });
 
   it('reports a failure as an event and renders NO number beside it', () => {
@@ -133,7 +156,7 @@ describe('DiagnosticsPanel', () => {
     render(<DiagnosticsPanel />);
 
     // ADR-0132: a failure is a thing that just happened, so `purpose="event"` gives it a live role.
-    expect(screen.getByRole('alert')).toHaveTextContent(/did not complete/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/didn.t finish/);
     expect(screen.queryByText(/examined/)).not.toBeInTheDocument();
   });
 
@@ -150,7 +173,7 @@ describe('DiagnosticsPanel', () => {
     queryState.isError = true;
     render(<DiagnosticsPanel />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/did not complete/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/didn.t finish/);
     // The screen must not say "there is no number to show" above a block of numbers.
     expect(screen.queryByText(/17 of 1284/)).not.toBeInTheDocument();
     expect(document.querySelector('[data-diagnostics-result]')).toBeNull();
@@ -166,7 +189,7 @@ describe('DiagnosticsPanel', () => {
     queryState.isFetching = true;
     render(<DiagnosticsPanel />);
 
-    const copy = screen.getByRole('button', { name: 'Copy for the record' });
+    const copy = screen.getByRole('button', { name: 'Copy results' });
     expect(copy).toHaveAttribute('aria-disabled', 'true');
     expect(copy).toHaveAccessibleDescription(/Wait for this run to finish/);
     // #458: shaded, and not pointer-inert — a control that rests this way until the first run must
@@ -187,7 +210,7 @@ describe('DiagnosticsPanel', () => {
     queryState.data = result;
     render(<DiagnosticsPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy for the record' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results' }));
 
     expect(await screen.findByText(/Couldn’t copy\. Select the text/)).toBeInTheDocument();
   });
@@ -227,9 +250,9 @@ describe('DiagnosticsPanel', () => {
     render(<DiagnosticsPanel />);
 
     // ADR-0082: shade with a reason when the action is shut by a state the reader can change.
-    const copy = screen.getByRole('button', { name: 'Copy for the record' });
+    const copy = screen.getByRole('button', { name: 'Copy results' });
     expect(copy).toHaveAttribute('aria-disabled', 'true');
-    expect(copy).toHaveAccessibleDescription(/Run the diagnostics first/);
+    expect(copy).toHaveAccessibleDescription(/Run diagnostics first/);
   });
 
   it('refuses to copy while shaded, rather than shading in appearance only', () => {
@@ -237,7 +260,7 @@ describe('DiagnosticsPanel', () => {
     Object.assign(navigator, { clipboard: { writeText } });
     render(<DiagnosticsPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy for the record' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results' }));
 
     expect(writeText).not.toHaveBeenCalled();
   });
@@ -248,7 +271,7 @@ describe('DiagnosticsPanel', () => {
     queryState.data = result;
     render(<DiagnosticsPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy for the record' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results' }));
 
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText.mock.calls[0]![0]).toContain('SchedulePoint staff diagnostics');

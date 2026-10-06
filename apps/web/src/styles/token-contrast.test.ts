@@ -873,6 +873,23 @@ describe.each(THEME_SELECTORS)('%s — an outline Badge on a section card', (the
   });
 });
 
+/**
+ * **The "How to fix" trigger on a condition strip.** `ConditionStrip` draws a ghost button inside a
+ * tinted `Alert` and gives it the tone's own ink (`text-inherit`), so while hovered the text is the
+ * tone's `-text` colour on the ghost button's `--accent` fill, a pair nothing asserted. Held in the
+ * `page` scope, where the console lives; the tint under the fill is a 10 % wash of the same ink and
+ * only ever lightens the ground, so the accent fill is the harder case.
+ */
+describe.each(THEME_SELECTORS)('%s — a condition strip trigger while hovered', (theme) => {
+  it.each(['--info-text', '--destructive-text'])('%s on --accent is legible', (ink) => {
+    const tokens = resolve(theme, 'page');
+    const value = ratio(tokens, '--accent', ink);
+    expect(value, `${ink} on --accent is ${fmtRatio(value)}, needs 4.5:1`).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

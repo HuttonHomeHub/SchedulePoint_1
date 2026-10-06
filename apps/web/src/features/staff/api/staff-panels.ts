@@ -48,9 +48,14 @@ export interface StaffActivityRow {
  * refetched on every tab switch would fill the audit log with evidence of nothing. Paths are
  * relative to `API_BASE_URL`, which is already `/api/v1`.
  */
+/** Named so the page's Refresh lists the reads it makes by key (`STAFF_PAGE_READS`). */
+export const STAFF_INSTALLATION_KEY = ['staff', 'installation'] as const;
+export const STAFF_ACCOUNTS_KEY = ['staff', 'accounts'] as const;
+export const STAFF_ACTIVITY_KEY = ['staff', 'activity'] as const;
+
 export function useStaffInstallation(): UseQueryResult<StaffInstallation> {
   return useQuery({
-    queryKey: ['staff', 'installation'],
+    queryKey: STAFF_INSTALLATION_KEY,
     queryFn: () => apiFetch<StaffInstallation>('/staff/installation'),
     refetchOnWindowFocus: false,
     retry: false,
@@ -73,7 +78,7 @@ export function useStaffAccounts(): UseInfiniteQueryResult<
   InfiniteData<StaffAccounts, string | undefined>
 > {
   return useInfiniteQuery({
-    queryKey: ['staff', 'accounts'],
+    queryKey: STAFF_ACCOUNTS_KEY,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       apiFetch<StaffAccounts>(
@@ -89,7 +94,7 @@ export function useStaffAccounts(): UseInfiniteQueryResult<
 
 export function useStaffActivity(): UseQueryResult<StaffActivityRow[]> {
   return useQuery({
-    queryKey: ['staff', 'activity'],
+    queryKey: STAFF_ACTIVITY_KEY,
     queryFn: () => apiFetch<StaffActivityRow[]>('/staff/activity'),
     refetchOnWindowFocus: false,
     retry: false,

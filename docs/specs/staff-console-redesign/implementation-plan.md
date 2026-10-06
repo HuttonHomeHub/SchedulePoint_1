@@ -330,6 +330,47 @@ What the next milestone needs:
   first adopter is M3. `ConditionStrip`'s `howToFix` is `Disclosure collapsed="hidden"`, so its content is absent
   from the DOM until opened (a journey must press it before asserting `MAIL_SMTP_URL`).
 
+#### M3 record (2026-10-06)
+
+**Landed.** Readings are in [`m3-measurement.md`](./m3-measurement.md). What M4 needs:
+
+- **T1.** The alerting flags come from one setting: `StaffHealthService` reads `config.mailAlertUrl !== undefined`
+  for both `health.alertingConfigured` (`:87`) and `installation.mailAlertingConfigured` (`:274`), so the check was
+  not a stop condition. Mail, Clearing old records and Alerts and monitoring are `QueryPanel`s; each check has its
+  own `CHECK_SECTION_ID` and `check-answers-its-link.test.tsx` asserts no two share one.
+- **T2.** `console-status.ts` carries a `value` per check, no severity sort, and the headline grammar of spec §4.9.
+- **T3.** Groups (`SectionGroup`), `OnThisPage`, `ConsoleHeader` (freshness from the oldest of the six reads, Refresh,
+  the audit note), `STAFF_PAGE_READS` (six keys by name, unit-tested to exclude diagnostics), `useRefreshStaffPageReads`
+  (trims the accounts list to page 1 first so a Refresh is six reads). `StatusSection` gained `announce="change"` (the
+  first settled sentence is plain text, only a later one is spoken) and `description`; `QueryPanel` and the Performance
+  panel use it. One page sentence is spoken when all six reads settle, and one after a Refresh.
+  **The six reads now live in `ConsoleBody`, below the identity gate.** They used to be called above it, so a non-staff
+  caller's browser requested (and was refused and recorded for) each panel; that is gone, and is a behaviour change for
+  the security-reviewer to confirm.
+- **T4.** `model/panel-copy.ts` and `model/enum-copy.ts` hold the §4.9 strings. `copy.structural.test.ts` is the SC-9
+  gate: it reads `features/staff/ui` and the copy modules, strips comments and `howToFix={...}` bodies, and was shown
+  catching an env var, an ADR number and a SQL verb in a string and in JSX text (planted cases). Named exception:
+  `diagnostics-report.ts` (the pasted record). `features/perf-probe/ui` is M4's.
+- **T5, partly dropped.** The approval header dropped phone-only remedies, so **columns are not folded below `md`** on any
+  table (staff or probe). Reflow at 320 px is met by the tables scrolling in their own region, and the journey asserts no
+  sideways scroll and no axe violation at 320. Compact diagnostics (D-12) shipped: non-zero checks in full, the zeros
+  behind one `Disclosure collapsed="hidden"` button, **Copy results** unchanged and still copying all.
+- **Carry-forward.** "All N are shown." is plain muted text and takes focus when the press that reached the end removes
+  the button. The journey presses **How to fix** before asserting a setting name (its body is not in the DOM until opened).
+  No `Disclosure collapsed="described"` sits in a table cell. `loading-probe-section.tsx`'s two headings now read the
+  heading context (the named exception in `archetypes.structural.test.ts` is gone). `SectionGroup`'s Back to top targets
+  `#staff-top`, a focusable wrapper. A token-contrast test pins the info and error ink against the ghost trigger's hover
+  fill. The outline `Badge` is still validated in the `page` scope only.
+- **Journey.** This suite's server has a mail transport and no alert URL, so the condition acted on is **Alerts**
+  (`MAIL_ALERT_URL`), not the plan's no-transport recipe (a second server configuration is a new Playwright config, an
+  ADR-0105 trigger). The audit cost is read back by diffing the activity API (six plus the diff's own read).
+- **ADR-0178 stays Proposed.** D-3 (Performance collapsed) is part of what it decides, so it is accepted at M4's close
+  (M4-T3), not M3's as the M2 header said.
+- **For M4.** SC-1 (3,468 px against at most 3,030) closes with the collapse; SC-2's third treatment is
+  `Measure one thing`'s `summary`. The history read is already observed at the screen root (`useProbeResults` in
+  `ConsoleBody`), so hoisting it into the panel root is a move, and an expanded Performance box makes no new request
+  because the key is already mounted. The panel's `StatusSection` is `announce="change"`.
+
 ---
 
 ### Milestone M2: Shared primitives and the ADR

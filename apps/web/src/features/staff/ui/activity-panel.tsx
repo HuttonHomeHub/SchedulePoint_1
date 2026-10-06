@@ -6,6 +6,7 @@ import {
   groupActivity,
   type ActivityGroup,
 } from '@/features/staff/model/activity-rows';
+import { ACTIVITY } from '@/features/staff/model/panel-copy';
 import { formatTimestamp } from '@/lib/format-date';
 
 /**
@@ -20,12 +21,13 @@ export function ActivityPanel(): React.ReactElement {
   return (
     <QueryPanel
       title="Staff activity"
+      description={ACTIVITY.intro}
       query={activity}
       // The table's own loading shape, which is what the panel showed before it had a primitive: a
       // `DataTable` handed a pending query draws its skeleton and announces `loadingLabel`.
       skeleton={<ActivityTable rows={undefined} />}
-      errorLabel="Could not read staff activity."
-      errorStatus="Staff activity could not be read."
+      errorLabel="Couldn't load staff activity."
+      errorStatus="Staff activity couldn't be loaded."
       settledStatus={(rows) => `Staff activity: ${String(rows.length)} entries.`}
     >
       {(rows) => <ActivityTable rows={rows} />}
@@ -43,22 +45,14 @@ function ActivityTable({ rows }: { rows: StaffActivityRow[] | undefined }): Reac
   const groups = groupActivity(rows ?? []);
 
   const columns: Column<ActivityGroup>[] = [
-    {
-      header: 'When',
-      cell: (row) => formatTimestamp(row.occurredAt),
-      cellClassName: 'py-2 pr-4 md:w-52',
-    },
-    {
-      header: 'Who',
-      cell: (row) => row.actorLabel ?? '—',
-      cellClassName: 'py-2 pr-4 break-all md:w-72',
-    },
-    { header: 'What', cell: (row) => describeActivity(row) },
+    { header: 'When', cell: (row) => formatTimestamp(row.occurredAt), width: 'fit' },
+    { header: 'Who', cell: (row) => row.actorLabel ?? '—', width: 'bounded', wrap: 'anywhere' },
+    { header: 'What', cell: (row) => describeActivity(row), width: 'auto' },
   ];
 
   return (
     <DataTable
-      caption="Staff actions, most recent first"
+      caption={ACTIVITY.caption}
       columns={columns}
       query={{
         isPending: rows === undefined,
@@ -68,7 +62,7 @@ function ActivityTable({ rows }: { rows: StaffActivityRow[] | undefined }): Reac
       }}
       getRowKey={(row) => row.id}
       loadingLabel="Loading staff activity…"
-      empty="Nothing recorded yet."
+      empty={ACTIVITY.empty}
     />
   );
 }
