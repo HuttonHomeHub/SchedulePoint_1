@@ -152,7 +152,7 @@ describe('nginx.conf as an envsubst template', () => {
       // own Cache-Control must carry the whole set itself. Read from the rendered config, where the
       // snippet is inlined as nginx inlines it. The block ends at the location's own closing brace
       // (two-space indent): the snippet's comments contain `}` characters of their own.
-      const escaped = name.replace(/[/.]/g, '\\$&');
+      const escaped = name.replace(/[\\^$.*+?()[\]{}|/]/g, '\\$&');
       const block = new RegExp(`location ${escaped} \\{([\\s\\S]*?)\\n  \\}`).exec(
         render(ENV),
       )?.[1];
