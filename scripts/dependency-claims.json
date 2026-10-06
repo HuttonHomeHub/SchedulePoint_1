@@ -1341,6 +1341,46 @@
       "lines": "4",
       "anchor": "declare function $extends(this: Client, extension: ExtensionArgs",
       "citedBy": ["docs/specs/soft-delete-filter/feature-spec.md"]
+    },
+    {
+      "ref": "not-found.js:40-42",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/not-found.js",
+      "lines": "40-42",
+      "anchor": "function DefaultGlobalNotFound()",
+      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+    },
+    {
+      "ref": "router.js:635",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "635",
+      "anchor": "notFoundMode: options.notFoundMode ?? \"fuzzy\"",
+      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+    },
+    {
+      "ref": "router.js:659-665",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "659-665",
+      "anchor": "findGlobalNotFoundRouteId(this.options.notFoundMode, matchedRoutes)",
+      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+    },
+    {
+      "ref": "new-process-route-tree.js:396",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/new-process-route-tree.js",
+      "lines": "396",
+      "anchor": "isFrameMoreSpecific(bestFuzzy, frame)",
+      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+    },
+    {
+      "ref": "routes-resolver.js:72-82",
+      "package": "@nestjs/core",
+      "path": "router/routes-resolver.js",
+      "lines": "72-82",
+      "anchor": "throw new common_1.NotFoundException(`Cannot ${method} ${url}`)",
+      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
     }
   ]
 }
