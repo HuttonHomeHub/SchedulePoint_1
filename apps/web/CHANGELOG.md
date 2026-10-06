@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.174.0
+
+### Minor Changes
+
+- [#854](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/854) [`b8fc669`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b8fc669dc102080675b0d9994c00a12035ad401e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Staff console: every Copy button now says the same thing ("Copied." or "Couldn’t copy. Select the text and copy it yourself."), and a Copy button with nothing to copy shows its reason as visible text. Timestamps in the console's tables use one date format. New shared building blocks for the redesigned console (section groups, sub-headings, key-value lists, disclosures, condition strips, an outline badge).
+
 ## 0.173.2
 
 ### Patch Changes
