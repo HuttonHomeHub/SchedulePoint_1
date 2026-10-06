@@ -421,7 +421,9 @@ function ShowSittingButton({
 }): React.ReactElement {
   const reasonId = useId();
   return (
-    <>
+    // `relative`: the reason below is `sr-only` (absolute), and without a positioned ancestor it
+    // escapes the table's scroll region and widens the page at 320 px.
+    <div className="relative">
       <Button
         variant="outline"
         size="sm"
@@ -430,12 +432,11 @@ function ShowSittingButton({
         // reason the Copy button carries its sitting's caption.
         aria-label={`Show ${row.when} — ${row.kind}`}
         {...(isShown ? { 'aria-disabled': true, 'aria-describedby': reasonId } : {})}
-        // **The established idiom, not a JS ternary** (`confirm-dialog.tsx`, `scope-save-bar.tsx`,
-        // `WbsBulkAssignBar.tsx` all spell it this way). Static classes reacting to the attribute
-        // that is already conditional — and `pointer-events-none` matters: without it the shown
-        // row's button still lit its hover fill while refusing the click, which is the
-        // looks-live-but-refuses defect ADR-0082 exists to remove. Found by the M7 component review.
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+        // **Shaded at rest, so no `pointer-events-none`** (#458): the sitting already shown is
+        // `aria-disabled` for as long as it stays shown, and a pointer-inert control hands the
+        // pointer to whatever is behind it. The hover fill is cancelled instead, which is the
+        // looks-live-but-refuses defect ADR-0082 exists to remove, and `onClick` refuses the press.
+        className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
         onClick={() => {
           // The guard, not the attribute. `aria-disabled` is a statement to assistive technology
           // and does nothing to the pointer.
@@ -450,7 +451,7 @@ function ShowSittingButton({
           This sitting is already shown above.
         </span>
       )}
-    </>
+    </div>
   );
 }
 

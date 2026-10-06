@@ -51,9 +51,9 @@ export function StaffConsoleScreen(): React.ReactElement {
    * **This adds no request.** Each key is the one its panel already uses, so TanStack dedupes them
    * — which is the same mechanism that already lets the Mail and Retention halves share one
    * response. The one that needed checking rather than assuming is `useStaffAccounts`, which is
-   * keyed by its cursor: called with none here, it is the identical key the panel starts on, and
-   * when a reader presses *Show older* the panel moves to a new key while this one stays cached and
-   * does not refetch. Two requests either way.
+   * one infinite query: this call and the panel's share its key, the summary reads page 1 of it, and
+   * pressing *Show older* fetches the next page into the same entry without refetching the first.
+   * Two requests either way.
    *
    * It matters because reading a staff panel is an audited act — a second request is a second
    * `staff.panel_read` row on every page load, forever, in the table that refuses `DELETE`.
@@ -65,7 +65,13 @@ export function StaffConsoleScreen(): React.ReactElement {
   const status = deriveConsoleStatus({
     health: { isPending: health.isPending, isError: health.isError, data: health.data },
     security: { isPending: security.isPending, isError: security.isError, data: security.data },
-    accounts: { isPending: accounts.isPending, isError: accounts.isError, data: accounts.data },
+    accounts: {
+      isPending: accounts.isPending,
+      // A failed *Show older* leaves the first page standing and is the panel's to report; the
+      // summary is about whether the count could be read at all.
+      isError: accounts.isError && !accounts.isFetchNextPageError,
+      data: accounts.data?.pages[0],
+    },
     installation: {
       isPending: installation.isPending,
       isError: installation.isError,
@@ -76,7 +82,10 @@ export function StaffConsoleScreen(): React.ReactElement {
   // deliberately no link to it — so the title is the first thing a screen reader announces on
   // arrival, and this was the one sibling of the authenticated shell that skipped the hook every
   // other public route calls (WCAG 2.4.2).
-  useDocumentTitle(identity.data ? 'Staff console' : 'Not found');
+  // While identity is pending the title is left as the document's own, `SchedulePoint`: "Not found"
+  // there was a claim made before anything had been asked, and "Staff console" would be the tell
+  // ADR-0086 forbids. Only the settled answers name themselves.
+  useDocumentTitle(identity.isPending ? null : identity.data ? 'Staff console' : 'Not found');
 
   if (identity.isPending) {
     return (

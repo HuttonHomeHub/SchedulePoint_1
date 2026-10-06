@@ -37,6 +37,14 @@ const recordState = { isPending: false, isError: false, isSuccess: false };
 const historyRows: unknown[] = [];
 const refreshHistory = vi.fn();
 
+/**
+ * The app's shared announcer, mocked so what the panel SAYS is observable as calls. The real one
+ * writes through `requestAnimationFrame` into a region outside `<main>`; the property under test
+ * here is only that the panel routes progress and the verdict through it (M1-T3).
+ */
+const announce = vi.fn<(message: string) => void>();
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
+
 vi.mock('../api/probe-results', () => ({
   useRecordProbeResult: () => ({
     mutate: recordMutate,
@@ -286,6 +294,7 @@ beforeEach(() => {
   recordMutateAsync.mockReset();
   recordMutateAsync.mockResolvedValue({});
   refreshHistory.mockReset();
+  announce.mockReset();
   recordState.isPending = false;
   recordState.isError = false;
   recordState.isSuccess = false;
@@ -588,6 +597,8 @@ describe('PerformanceProbePanel', () => {
     // who has seen it work elsewhere is told why it will not here.
     const retry = screen.getByRole('button', { name: 'Retry recording' });
     expect(retry).toHaveAttribute('aria-disabled', 'true');
+    // #458: the attribute alone looked exactly like a live control. Verified red before the class.
+    expect(retry).toHaveClass('aria-disabled:opacity-60');
     expect(document.getElementById(retry.getAttribute('aria-describedby') ?? '')).toHaveTextContent(
       /same reading/i,
     );
@@ -663,11 +674,12 @@ describe('PerformanceProbePanel', () => {
       alerts.filter((el) => kept.test(el.textContent ?? '')).length,
       'the visible alert says what was kept',
     ).toBeGreaterThan(0);
-    // The panel's own live region — `sr-only`, and the only channel a screen-reader user has if
-    // the alert is missed. It must agree, or the two say different things about one event.
+    // The announcer — the only channel a screen-reader user has if the alert is missed, and the one
+    // that survives the panel's `inert` lifting in the same commit. It must agree with the visible
+    // copy, or the two say different things about one event.
     expect(
-      document.querySelector('.sr-only[aria-live]')?.textContent ?? '',
-      'the live region agrees with the visible copy',
+      announce.mock.calls.map(([message]) => message).join('\n'),
+      'the announcement agrees with the visible copy',
     ).toMatch(kept);
     // "The rest were not taken" — NOT "were refused". Two vocabularies: a reading not taken is one
     // nobody tried, a refusal is one the machine declined, and a reader meeting less than they
@@ -775,8 +787,9 @@ describe('PerformanceProbePanel', () => {
     runOnce();
 
     await screen.findByText(/Recorded\./);
-    const live = document.querySelector('[aria-live="polite"].sr-only');
-    expect(live?.textContent).toMatch(/Recorded in this installation’s history/);
+    expect(announce).toHaveBeenLastCalledWith(
+      expect.stringMatching(/Recorded in this installation’s history/),
+    );
   });
 
   it('announces a sweep that finishes AFTER a plan-loading reading, not the older loading status', async () => {
@@ -793,8 +806,12 @@ describe('PerformanceProbePanel', () => {
     runOnce();
 
     await screen.findByText(/Recorded\./);
-    expect(live()).toMatch(/Recorded in this installation’s history/);
-    expect(live()).not.toMatch(/Plan loading measured/);
+    const verdict = announce.mock.calls.at(-1)?.[0] ?? '';
+    expect(verdict).toMatch(/Recorded in this installation’s history/);
+    expect(verdict).not.toMatch(/Plan loading measured/);
+    // The sitting's own sentence is not written a second time into the region the lifted `inert`
+    // just exposed — it was announced once, and the older loading sentence is gone.
+    expect(live()).toBe('');
   });
 
   it('makes the controls behind the overlay unreachable while it runs', async () => {
@@ -1074,5 +1091,110 @@ describe('taking the readings a sitting never got', () => {
     // Four presses, one sitting — and every one of them a real id, not four nulls.
     expect(ids.every((id) => typeof id === 'string')).toBe(true);
     expect(new Set(ids).size).toBe(1);
+  });
+
+  describe('while the page behind the overlay is inert (M1-T3, T4)', () => {
+    it('announces each step boundary, never each frame', async () => {
+      // The runner reports progress many times per step. Only the sweep's boundary is spoken.
+      runProbe.mockImplementation((input) => {
+        const { onProgress } = input as { onProgress: (message: string) => void };
+        for (let frame = 0; frame < 50; frame += 1) onProgress(`frame ${String(frame)}`);
+        return Promise.resolve(measured('PASS'));
+      });
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runAll();
+      await waitFor(() => {
+        expect(runProbe).toHaveBeenCalledTimes(4);
+      });
+      const spoken = announce.mock.calls.map(([message]) => message);
+      expect(spoken.filter((m) => /^Step \d of 4/.test(m))).toHaveLength(4);
+      expect(spoken.some((m) => m.startsWith('frame'))).toBe(false);
+      expect(spoken[0]).toMatch(/^Step 1 of 4/);
+    });
+
+    it('announces the verdict once, and leaves the panel region empty rather than repeating it', async () => {
+      runProbe.mockResolvedValue(measured('PASS'));
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      await screen.findByText('PASS');
+      const verdicts = announce.mock.calls.filter(([m]) =>
+        /Sitting finished|PASS|measured/i.test(m),
+      );
+      expect(verdicts.length).toBeGreaterThan(0);
+      expect(document.querySelector('[aria-live="polite"].sr-only')?.textContent).toBe('');
+    });
+
+    it('carries no progress in the panel region during the run', async () => {
+      runProbe.mockReturnValue(new Promise<ProbeOutcome>(() => undefined));
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      await screen.findByRole('button', { name: /^Stop/ });
+      expect(document.querySelector('[aria-live="polite"].sr-only')?.textContent).toBe('');
+    });
+
+    it('names the overlay, and Stop by a short name beside a visible promise', async () => {
+      runProbe.mockReturnValue(new Promise<ProbeOutcome>(() => undefined));
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      const stop = await screen.findByRole('button', { name: 'Stop' });
+      const overlay = screen.getByRole('region', { name: 'Measurement in progress' });
+      expect(overlay).toContainElement(stop);
+      expect(stop).toHaveAccessibleDescription('Stopping keeps what is already measured.');
+      expect(overlay).toHaveTextContent('Stopping keeps what is already measured.');
+    });
+
+    it('leaves an Escape that another owner already handled alone', async () => {
+      // Verified red against a handler that stopped on every Escape: shouldStop() turned true.
+      const stopAsked = vi.fn<() => void>();
+      runProbe.mockImplementation((input) => {
+        const { shouldStop } = input as { shouldStop: () => boolean };
+        return new Promise<ProbeOutcome>(() => {
+          const poll = (): void => {
+            if (shouldStop()) stopAsked();
+            else setTimeout(poll, 5);
+          };
+          poll();
+        });
+      });
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      await screen.findByRole('button', { name: 'Stop' });
+      const handled = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+      handled.preventDefault();
+      document.dispatchEvent(handled);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(stopAsked).not.toHaveBeenCalled();
+      expect(announce).not.toHaveBeenCalledWith('Stopping after the current repeat.');
+      expect(screen.getByRole('region', { name: 'Measurement in progress' })).toBeInTheDocument();
+    });
+
+    it('stops on Escape, through the same handler as the button', async () => {
+      // Verified red by removing the keydown effect: the overlay ignored Escape and the run went on.
+      runProbe.mockImplementation((input) => {
+        const { shouldStop } = input as { shouldStop: () => boolean };
+        return new Promise<ProbeOutcome>((resolve) => {
+          const poll = (): void => {
+            if (shouldStop()) resolve({ kind: 'cancelled', context: CONTEXT, limbs: [] });
+            else setTimeout(poll, 5);
+          };
+          poll();
+        });
+      });
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      await screen.findByRole('button', { name: 'Stop' });
+      fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.keyDown(document, { key: 'Escape' });
+      // The stop is acknowledged at once and only once, since the run ends at the next repeat.
+      expect(
+        announce.mock.calls.filter(([m]) => m === 'Stopping after the current repeat.'),
+      ).toHaveLength(1);
+      await waitFor(() => {
+        expect(screen.queryByRole('region', { name: 'Measurement in progress' })).toBeNull();
+      });
+      expect(
+        (await screen.findAllByText(/You stopped this run before anything finished/)).length,
+      ).toBeGreaterThan(0);
+    });
   });
 });

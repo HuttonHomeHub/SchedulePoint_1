@@ -436,6 +436,9 @@ describe('the sittings index', () => {
     const shown = screen.getByRole('button', { name: /^Show .*8:00:00 PM — One reading$/ });
     expect(shown).toHaveAttribute('aria-disabled', 'true');
     expect(shown).not.toBeDisabled();
+    // #458: it rests shaded for as long as it stays shown, so it must not be pointer-inert.
+    expect(shown).toHaveClass('aria-disabled:opacity-60');
+    expect(shown).not.toHaveClass('aria-disabled:pointer-events-none');
     expect(shown).toHaveAccessibleDescription('This sitting is already shown above.');
   });
 
