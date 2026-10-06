@@ -1,7 +1,7 @@
 # Feature Spec: October estate polish — one "Page not found", a quiet Refresh, and shading that lives in `Button`
 
-- **Status:** Draft — awaiting approval before implementation.
-- **Decision:** approved in principle by the product owner 2026-10-06 ('Let's do 1, 2 & 3. Only do 1 if a proper page not found is worth it'), pending spec approval.
+- **Status:** Approved — by the product owner, 2026-10-06 ("Plan approved with page not found included"), after all four reviewers returned AGREE on the second pass.
+- **Decision:** approved in principle by the product owner 2026-10-06 ('Let's do 1, 2 & 3. Only do 1 if a proper page not found is worth it'), spec approved the same day, M3 included.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-06 (revised the same day after four reviews — §6)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #459, #460, #461; the staff console redesign's M3 and M4

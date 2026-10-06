@@ -1,7 +1,7 @@
 # Implementation Plan: October estate polish — one "Page not found", a quiet Refresh, and shading that lives in `Button`
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-06, with M3 (page not found) included.
 - **Owner:** Claude Code (builder agent per milestone), for James Ewbank
 
 ## Breakdown
