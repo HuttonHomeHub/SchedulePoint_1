@@ -11927,3 +11927,21 @@ that variant. That is the one-off styling `docs/COMPONENT_LIBRARY.md` forbids, m
 **Next:** move the `aria-disabled:` treatment into `buttonVariants` per variant, delete the caller strings, and let the
 #458 gate assert that no caller writes it. It changes a shared primitive's contract, so it wants a component-reviewer
 pass, and #460's fifteen sites are the natural same change. **Trigger:** the next change to `button.tsx`, or #460.
+
+### 462. The empty canvas's "Draw the first activity" gives a sighted pointer user no reason when it is shaded
+
+**Status:** open · **Verified:** 2026-10-06 (`apps/web/src/features/tsld/components/TsldPanel.tsx`, the empty-canvas
+notice's button and the `sr-only` span linked by its `aria-describedby`; driven by accessibility-reviewer in Chromium for
+estate polish M1a) · **Raised:** 2026-10-06 (accessibility review of estate polish M1a) · **Size:** S · **Owner:** web
+
+On a plan the reader is not editing, the empty canvas's **Draw the first activity** rests `aria-disabled`. Since M1a it
+takes the pointer and refuses the click in its handler (it used to hand the pointer to the canvas behind it), and its
+reason, "Start editing this plan to draw activities.", is announced to a screen reader through `aria-describedby`. The
+reason is `sr-only`, so a sighted mouse or pen user sees a dimmed button that does nothing and no sentence saying why.
+That was equally true before M1a, so nothing regressed; it is the one site in the fifteen that ends as a silent no-op
+for sighted users (`docs/specs/estate-polish-oct/m1a-census.md`, row 14).
+
+**Next:** make the reason visible beside the button (drop `sr-only`, or a visible sentence in the notice), keeping the
+`aria-describedby` link. The notice appears only in the diagram view, which the parked Surface sheet does not exercise,
+so the sheet is not affected. **Trigger:** the next change to the empty-canvas notice, or a planner's report of the
+silent button.

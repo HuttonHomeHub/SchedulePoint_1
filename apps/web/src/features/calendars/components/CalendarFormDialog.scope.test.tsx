@@ -103,6 +103,13 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
     );
   });
 
+  it('links the shaded submit to the reason it is shaded, which sits by the Scope field', () => {
+    renderDialog({ canManageOrg: false });
+    expect(screen.getByRole('button', { name: 'Create calendar' })).toHaveAccessibleDescription(
+      /don’t have permission to add to the shared organisation library/,
+    );
+  });
+
   it('refuses the shaded submit however it is reached: a click and a form submit post nothing', () => {
     renderDialog({ canManageOrg: false });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Standard' } });

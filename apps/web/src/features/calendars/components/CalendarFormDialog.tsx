@@ -374,7 +374,7 @@ function CalendarForm({
               {/* No tier is reachable at all: no `<select>` to operate, just the reason (and the submit is
               disabled above), so the dialog is never a dead end with an unusable control. */}
               {noTierAvailable ? (
-                <p role="alert" className="text-destructive-text text-sm">
+                <p id={scopeErrorId} role="alert" className="text-destructive-text text-sm">
                   {ORG_TIER_DENIED_MESSAGE}
                 </p>
               ) : null}
@@ -471,6 +471,10 @@ function CalendarForm({
                 className="aria-busy:pointer-events-none aria-disabled:opacity-60"
                 aria-disabled={submitBlocked}
                 aria-busy={mutation.isPending}
+                // The reason sits by the Scope field, out of the submit's sight line: link it so a
+                // reader who reaches the shaded submit hears why. Both reason nodes carry this id and
+                // never render together (`showScopeChoice` excludes `noTierAvailable`).
+                aria-describedby={blockedByOrgPermission ? scopeErrorId : undefined}
                 onClick={(event) => {
                   if (submitBlocked) event.preventDefault();
                 }}
