@@ -31,8 +31,8 @@ touch-and-stylus pass up to M1.
   His answers decide **Gantt M2** (bigger edge zones, the summary chevron, sort headers), whether the
   stylus stays gated like touch, and whether a `useLongPress` fallback is needed. **M2-T1 is already
   re-scoped**: the `⋯` trigger overlaps the start edge of bars that begin at the chart's left edge.
-- **The plan-loading reading** (#433): open a plan, then staff panel → Performance → **Measure plan
-  loading** → Copy. Record it in #433 and close or re-scope it.
+- ~~The plan-loading reading~~ **taken 2026-10-06 and #433 closed** (0 of 11 files to the network on
+  reload and revisit; `immutable`; h2). A Dell canvas sitting the same morning is #75 item 11.
 - **The history count on or after 1 November** (ADR-0174 / #443): staff panel → **Run
   diagnostics** → Copy. Record it in #443 and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
@@ -43,7 +43,7 @@ touch-and-stylus pass up to M1.
   review advised doing it at the next nginx change rather than waiting long; one shared
   include plus a `check:nginx` assertion.
 - **#458** (submit-guard gate scope), **#456** (no statement timeout on the diagnostics press),
-  **#454**, **#449**, **#450**, **#440–#446**, **#433**, **#432**, **#429**, **#419**, **#405**:
+  **#454**, **#449**, **#450**, **#440–#446**, **#432**, **#429**, **#419**, **#405**:
   unchanged or as filed.
 - **#435** (the e2e flake row): its green-run count was not advanced this session; the runs on
   #837–#843 are candidates for the count.
