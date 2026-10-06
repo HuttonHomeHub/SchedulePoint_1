@@ -601,7 +601,9 @@ gate reads. It substitutes `apps/web/nginx.conf` exactly as the container does
 rather than restated) and checks the property that has actually broken: a quoted
 directive value containing its own delimiter, which is not a bad header but a
 **boot failure** — nginx refuses the config and the container never serves a
-request. `apps/web/e2e-csp` cannot catch it, because it reads the policy from
+request. It also fails a location that sets its own `add_header` without including the shared
+security header snippet (TECH_DEBT #457: nginx replaces, not merges, inherited headers), pinned red
+by `scripts/check-nginx-template.test.mjs`. `apps/web/e2e-csp` cannot catch the quoting defect, because it reads the policy from
 the compose file and serves it from a preview server: it tests the policy, never
 nginx's parse of the file. Before this, CI's smoke-boot was the only thing that
 would notice, a container build away and minutes after the push.

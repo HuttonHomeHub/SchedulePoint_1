@@ -401,6 +401,11 @@ policy are environment variables read by nginx at container start**, not values 
 image — so switching between observing and enforcing, in either direction, is a restart rather than
 a release. A rollback that needed a new image would be slower than the incident it was fixing.
 
+The whole security header set (this CSP included) lives in one snippet, `apps/web/nginx-security-headers.conf`,
+rendered to `/etc/nginx/conf.d/snippets/` and included by the server and by the hashed-asset,
+`/theme-boot.js` and `/favicon.svg` locations — an `add_header` in a location replaces every inherited
+header, so before `docs/TECH_DEBT.md` #457 those three answered with `Cache-Control` alone.
+
 ```bash
 CSP_HEADER_NAME=Content-Security-Policy-Report-Only   # default: observe
 CSP_HEADER_NAME=Content-Security-Policy               # enforce
