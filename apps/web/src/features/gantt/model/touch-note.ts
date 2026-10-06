@@ -36,7 +36,10 @@ export function takeTouchHint(): boolean {
 export function touchSelectionNote(
   gate: { movable: boolean; reason: string | null },
   hintDue: () => boolean,
+  hasDraggableBar = true,
 ): string | null {
   if (!gate.movable) return gate.reason;
-  return hintDue() ? TOUCH_ARM_HINT : null;
+  // A movable activity whose bar nothing can drag (a diamond, an uncalculated row) has no gesture
+  // to teach, so the hint's once-per-session flag is not spent on it either.
+  return hasDraggableBar && hintDue() ? TOUCH_ARM_HINT : null;
 }

@@ -176,7 +176,9 @@ entry stops being needed.
     keeps the browser's own menu. A live bar drag is cancelled first, and the
     selection is never changed by it. By finger or stylus a bar's body and edges
     respond only once the bar is selected (**tap it, then drag**); until then the
-    chart scrolls.
+    chart scrolls. The diagram (TSLD canvas) differs on purpose: it owns every gesture
+    (`touch-none`) and has no `contextmenu` handler, because it is one canvas and not a
+    scroller of DOM rows (ADR-0177 Consequences).
   - **An action the reader cannot take right now is shaded with the reason, not
     removed** (ADR-0082, extending ADR-0062 M6 into the menu tier). Hiding it
     means a planner never learns the row can do the thing, and never learns what

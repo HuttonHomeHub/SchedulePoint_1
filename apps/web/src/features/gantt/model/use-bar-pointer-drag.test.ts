@@ -362,6 +362,19 @@ describe('useBarPointerDrag', () => {
       }
     });
 
+    it('an empty pointerType is not gated: only touch and pen are', () => {
+      const onCommit = vi.fn();
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: true, touchArmed: false, onCommit }),
+      );
+      act(() => result.current.onPointerDown(typed('')));
+      act(() => {
+        move(160);
+        up(1);
+      });
+      expect(onCommit).toHaveBeenCalledExactlyOnceWith(60);
+    });
+
     it('an unarmed MOUSE press is unchanged: it still drags, and a refused one is still refused', () => {
       const onCommit = vi.fn();
       const onRefused = vi.fn();

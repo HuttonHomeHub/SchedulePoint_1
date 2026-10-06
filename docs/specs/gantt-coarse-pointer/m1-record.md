@@ -50,13 +50,16 @@ default, and each is revisited when the answer arrives:
 
 Statements about what a real browser does with a real focus ring, which jsdom cannot ask:
 
-1. `contextmenu` from Shift+F10 / the Menu key reaches the row's handler (when the existing keydown
-   path does not already `preventDefault` it), anchors to the row's rect, and does not open a second
-   menu if the keydown path opened one. The keyboard origin is recognised by an empty `pointerType`
-   or a zero point; **that Chrome and Firefox report one of the two for a keyboard `contextmenu` is
-   unverified**.
-2. Focus returns to the **row** after a hold or right-click opens the menu and it closes (Escape,
-   Tab, selection), and to the `⋯` when the `⋯` opened it. `restoreFocusRef` is now a local ref the
+1. `contextmenu` from Shift+F10 / the Menu key. **Corrected after the accessibility review (Chromium):**
+   a keyboard `contextmenu` reports `pointerType: "mouse"`, the focused element's centre and
+   `detail: 0`, so the first build's heuristic (empty `pointerType` or a zero point) was wrong and was
+   masked only because the keydown path `preventDefault`s. The row now records the key itself
+   (`keyboardMenu`, set on keydown of `ContextMenu` / Shift+F10, cleared when a `contextmenu` consumes it
+   or on the next pointer press), and `onContextMenu` reads that. The keydown path calls the menu
+   handle's `openAt(rowAnchor, row)` rather than clicking the `⋯`, so one menu opens and focus returns
+   to the ROW. Windows may deliver the `contextmenu` on key-up; unit tests cover both orders.
+2. Focus returns to the **row** after a hold, right-click or the keyboard opens the menu and it closes
+   (Escape, Tab, selection), and to the `⋯` when the `⋯` opened it. `restoreFocusRef` is now a local ref the
    handle repoints.
 3. `cancel()` releases `useBarPointerDrag`'s capture-phase Escape listener, so Escape after a hold
    belongs to the menu and not to a drag that no longer exists.
@@ -64,6 +67,20 @@ Statements about what a real browser does with a real focus ring, which jsdom ca
    browser rather than re-opening the menu.
 5. The status line (`role="status"`) is announced on a finger or stylus selection; whether a screen
    reader announces an inserted-with-text live region reliably is the pass's question.
+
+## Coverage limits worth knowing
+
+- **The stylus has no end-to-end case.** CDP's touch events carry no stylus pointer type, so the
+  journey drives `touch` only; `pen` is covered by hook unit tests (`touchArmed`, both branches).
+- **The scroll case asserts `pointercancel`, not a scroll offset.** The Gantt's zoom buttons are
+  disabled and the chart is framed to the window, so the fixture has nothing to overflow, as M0 found
+  (a narrower window and a wider grid pane did not change it). A handle that took the drag ends in
+  `pointerup`.
+- **A drag's drop is the column the pixel lands in**, and the browser rounds a touch point to a whole
+  pixel, so a journey that drags exactly N columns lands N-1 half the time. The move case drags
+  2.25 columns and asserts exactly two working days.
+- **A real hold is still the device's.** The hold cases synthesise the `contextmenu`; they assert
+  the drag was live first, so cancelling it is a real observation.
 
 ## Device confirmation (M1-T3), for the product owner
 
@@ -74,6 +91,8 @@ On the deployed release, in each posture, about 5 minutes:
       bar unchanged?
 - [ ] 3. Press and hold a row, lift, and check the menu is still open. Did it open while you held or
       after you lifted?
+- [ ] 4. With the keyboard attached, focus a row and press the Menu key (and Shift+F10). Exactly one
+      SchedulePoint menu should open (not also the browser's), and Escape should leave focus on the row.
 
 Plus the stylus pass (checks 1 and 2 with the stylus, and a hold) if it was not already run. The
 answers decide the first two defaults above.

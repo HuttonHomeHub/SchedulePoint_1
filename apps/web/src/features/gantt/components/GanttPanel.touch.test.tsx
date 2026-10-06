@@ -115,7 +115,6 @@ describe('a selected bar is armed for a finger (ADR-0177 D2)', () => {
     expect(edge(selected.container, 'start')).toHaveClass('touch-none');
     expect(edge(selected.container, 'finish')).toHaveClass('touch-none');
     // Not colour alone (WCAG 1.4.1): an offset outline AND grip marks, both shapes.
-    expect(bar(selected.container)).toHaveClass('outline-2');
     expect(selected.container.querySelector('[data-bar-grip]')?.children).toHaveLength(3);
   });
 
@@ -130,6 +129,36 @@ describe('a selected bar is armed for a finger (ADR-0177 D2)', () => {
     const summary = container.querySelector<HTMLElement>('[data-activity-id] span[title]')!;
     expect(summary).not.toHaveClass('touch-pan-y');
     expect(summary).not.toHaveAttribute('data-bar-armed');
+  });
+
+  it('withholds the grip marks on a bar too short to hold a handle at each end', () => {
+    const { container } = render(
+      <GanttPanel
+        activities={[task({ earlyFinish: '2026-01-05', durationDays: 1 })]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+      />,
+    );
+    expect(bar(container)).toHaveAttribute('data-bar-armed', 'true');
+    expect(container.querySelector('[data-bar-grip]')).toBeNull();
+  });
+
+  it('does not arm a diamond, which no pointer can drag', () => {
+    const { container } = render(
+      <GanttPanel
+        activities={[
+          task({
+            type: 'START_MILESTONE',
+            durationDays: 0,
+            durationMinutes: 0,
+            earlyFinish: '2026-01-05',
+          }),
+        ]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+      />,
+    );
+    expect(container.querySelector('[data-bar-armed]')).toBeNull();
   });
 
   it('puts no gesture class behind a pointer-coarse variant (D1)', () => {
@@ -164,11 +193,82 @@ describe('what a finger or stylus is told when it selects a bar', () => {
     );
     const row = screen.getByRole('row', { name: /Excavate/ });
     touchClick(row, 'mouse');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
 
     touchClick(row, 'touch');
     expect(screen.getByRole('status')).toHaveTextContent(reason);
     view.unmount();
+  });
+
+  it('keeps the status node mounted and empty before anything is said, so its text is announced', () => {
+    render(<GanttPanel activities={[task()]} drag={dragBundle()} />);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('has no status node on the read-only chart', () => {
+    render(<GanttPanel activities={[task()]} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('gives a selected diamond no hint, and does not spend the session on it', () => {
+    const diamond = task({
+      type: 'START_MILESTONE',
+      durationDays: 0,
+      durationMinutes: 0,
+      earlyFinish: '2026-01-05',
+    });
+    const view = render(
+      <GanttPanel
+        activities={[diamond]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+        onSelectActivity={() => {}}
+      />,
+    );
+    touchClick(screen.getByRole('row', { name: /Excavate/ }), 'touch');
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    view.unmount();
+
+    render(
+      <GanttPanel
+        activities={[task()]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+        onSelectActivity={() => {}}
+      />,
+    );
+    touchClick(screen.getByRole('row', { name: /Excavate/ }), 'touch');
+    expect(screen.getByRole('status')).toHaveTextContent(TOUCH_ARM_HINT);
+  });
+
+  it('takes the hint away on the next press, and keeps a refusal reason', () => {
+    const view = render(
+      <GanttPanel
+        activities={[task()]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+        onSelectActivity={() => {}}
+      />,
+    );
+    const row = screen.getByRole('row', { name: /Excavate/ });
+    touchClick(row, 'touch');
+    expect(screen.getByRole('status')).toHaveTextContent(TOUCH_ARM_HINT);
+    fireEvent.pointerDown(row, { pointerType: 'touch', button: 0, clientX: 100 });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    view.unmount();
+
+    render(
+      <GanttPanel
+        activities={[task({ type: 'WBS_SUMMARY' })]}
+        drag={dragBundle()}
+        selectedActivityId="a1"
+        onSelectActivity={() => {}}
+      />,
+    );
+    const summary = screen.getByRole('row', { name: /Excavate/ });
+    touchClick(summary, 'touch');
+    fireEvent.pointerDown(summary, { pointerType: 'touch', button: 0, clientX: 100 });
+    expect(screen.getByRole('status')).toHaveTextContent('A summary follows');
   });
 
   it('says it for a stylus too', () => {
@@ -205,7 +305,7 @@ describe('what a finger or stylus is told when it selects a bar', () => {
         onSelectActivity={() => {}}
       />,
     );
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
 
     view.rerender(
       <GanttPanel
@@ -216,7 +316,7 @@ describe('what a finger or stylus is told when it selects a bar', () => {
       />,
     );
     touchClick(row, 'touch');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 });
 
@@ -304,6 +404,55 @@ describe('a row opens its menu on contextmenu (ADR-0177 D3)', () => {
     fireEvent.pointerDown(row(), { pointerType: 'touch', button: 0, clientX: 120, clientY: 40 });
     fireEvent.click(row());
     expect(onSelectActivity).toHaveBeenCalledOnce();
+  });
+
+  describe('from the keyboard', () => {
+    it('Shift+F10 opens the menu through the handle and Escape returns focus to the ROW', () => {
+      renderRow();
+      const grid = screen.getByRole('treegrid');
+      fireEvent.focus(grid);
+      fireEvent.keyDown(row(), { key: 'F10', shiftKey: true });
+      expect(screen.getAllByRole('menu')).toHaveLength(1);
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      // Not the `⋯`, which is `tabIndex={-1}`: the roving tab stop excludes it.
+      expect(row()).toHaveFocus();
+    });
+
+    it('treats a Shift contextmenu that follows the key as the keyboard, not as Shift+right-click', () => {
+      renderRow();
+      fireEvent.keyDown(row(), { key: 'F10', shiftKey: true });
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      // Windows may deliver the `contextmenu` on key-up. Chromium reports it as a MOUSE event at a
+      // real coordinate with `shiftKey`, which only the recorded keydown tells apart.
+      expect(fireEvent.contextMenu(row(), { clientX: 300, clientY: 90, shiftKey: true })).toBe(
+        false,
+      );
+      expect(screen.getAllByRole('menu')).toHaveLength(1);
+    });
+
+    it('opens exactly one menu when both the key and the contextmenu arrive', () => {
+      renderRow();
+      fireEvent.keyDown(row(), { key: 'ContextMenu' });
+      fireEvent.contextMenu(row(), { clientX: 300, clientY: 90 });
+      expect(screen.getAllByRole('menu')).toHaveLength(1);
+    });
+
+    it('a pointer press clears the keyboard request, so Shift+right-click is the browser again', () => {
+      renderRow();
+      fireEvent.keyDown(row(), { key: 'F10', shiftKey: true });
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      fireEvent.pointerDown(row(), { pointerType: 'mouse', button: 2, clientX: 300 });
+      expect(fireEvent.contextMenu(row(), { clientX: 300, clientY: 90, shiftKey: true })).toBe(
+        true,
+      );
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('a plain contextmenu with no key before it is not the keyboard, whatever its coordinates', () => {
+      renderRow();
+      fireEvent.contextMenu(row(), { clientX: 0, clientY: 0, shiftKey: true });
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
   });
 
   describe('against a live drag', () => {

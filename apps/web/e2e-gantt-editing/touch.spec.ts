@@ -76,8 +76,18 @@ async function touchPlan(page: Page): Promise<string> {
   await showGantt(page);
   const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
   expect(coarse, 'the context must report a coarse pointer').toBe(true);
+  // The arithmetic below assumes a Monday start, five working days, so a drop two columns right is
+  // two working days and two columns left of the Friday finish is a Wednesday. Read, not assumed.
+  const first = await seeded(page, orgSlug, 'Seeded 0');
+  expect(new Date(`${first.earlyStart}T00:00:00Z`).getUTCDay(), 'the plan starts on a Monday').toBe(
+    1,
+  );
+  expect(first.durationDays).toBe(5);
   return orgSlug;
 }
+
+const plusDays = (iso: string, days: number): string =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 const barOf = (page: Page, activityId: string) =>
   page.locator(`[data-activity-id="${activityId}"] span[style*="cursor: grab"]`);
@@ -160,14 +170,43 @@ test('a finger moves a bar once it is selected', async ({ page }) => {
     'true',
   );
 
-  await touchDrag(page, cdp, grab, pxPerDay * 2);
+  // Two columns and a quarter: the browser rounds a touch point to a whole pixel, and the drop day
+  // is the column the point lands in, so landing exactly on a boundary is landing a day short half
+  // the time. The quarter keeps the drop inside the intended column.
+  await touchDrag(page, cdp, grab, pxPerDay * 2.25);
 
-  // At the API: the bar moving proves the ghost, not the write.
+  // At the API: the bar moving proves the ghost, not the write. EXACTLY two days, from a Monday, so
+  // a drag that lands a column either side (or on the weekend roll) cannot pass as "moved".
   await expect
     .poll(async () => (await seeded(page, orgSlug, 'Seeded 0')).visualEffectiveStart, {
       timeout: 20_000,
     })
-    .not.toBe(before.visualEffectiveStart);
+    .toBe(plusDays(before.visualEffectiveStart!, 2));
+});
+
+test('a finger resizes the selected bar from its finish edge', async ({ page }) => {
+  test.setTimeout(180_000);
+  const orgSlug = await touchPlan(page);
+  const before = await seeded(page, orgSlug, 'Seeded 0');
+  const cdp = await page.context().newCDPSession(page);
+  const pxPerDay = await pxPerDayOf(page, before);
+
+  const grab = await grabPoint(barOf(page, before.id));
+  await page.touchscreen.tap(grab.x, grab.y);
+  await expect(page.locator(`[data-activity-id="${before.id}"]`)).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  // The handle is `touch-none` only now that the bar is selected. A Friday finish pulled two
+  // columns left is a Wednesday: three working days, counted as the diagram counts them.
+  const handle = await edgeOf(page, before.id, 'finish').boundingBox();
+  if (handle === null) throw new Error('the finish handle has no box');
+  await touchDrag(page, cdp, centreOf(handle), pxPerDay * -2);
+
+  await expect
+    .poll(async () => (await seeded(page, orgSlug, 'Seeded 0')).durationDays, { timeout: 20_000 })
+    .toBe(before.durationDays - 2);
 });
 
 test('a finger on an unselected bar scrolls and writes nothing', async ({ page }) => {
@@ -175,6 +214,19 @@ test('a finger on an unselected bar scrolls and writes nothing', async ({ page }
   const orgSlug = await touchPlan(page);
   const before = await seeded(page, orgSlug, 'Seeded 0');
   const cdp = await page.context().newCDPSession(page);
+
+  // The browser claiming the gesture as a pan shows up as `pointercancel` on the handle. The Gantt's
+  // zoom buttons are disabled and the chart is framed to the window, so this fixture has nothing to
+  // overflow (M0 found the same, and a narrower window or a wider grid pane did not change it); the
+  // cancel is what a scroll looks like from the page, and a handle that took the drag would end in
+  // `pointerup` instead.
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { __ptr: string[] }).__ptr = seen;
+    for (const type of ['pointerup', 'pointercancel']) {
+      window.addEventListener(type, () => seen.push(type), true);
+    }
+  });
   const pxPerDay = await pxPerDayOf(page, before);
 
   // The END of an unselected bar: before this milestone its handle was `touch-none` whatever the
@@ -194,6 +246,8 @@ test('a finger on an unselected bar scrolls and writes nothing', async ({ page }
   const after = await seeded(page, orgSlug, 'Seeded 0');
   expect(after.version).toBe(before.version);
   expect(after.durationDays).toBe(before.durationDays);
+  const ended = await page.evaluate(() => (window as unknown as { __ptr: string[] }).__ptr);
+  expect(ended, 'the browser took the gesture as a pan').toEqual(['pointercancel']);
 });
 
 test('a selected bar that cannot move says why, where a finger can read it', async ({ page }) => {
@@ -232,12 +286,13 @@ test('a selected bar that cannot move says why, where a finger can read it', asy
 const menuOf = (page: Page, name: string) =>
   page.getByRole('menu', { name: `Actions for ${name}` });
 
-async function holdAndContextMenu(
+/** Put a CDP touch down at `at` and, if asked, drag it `moveBy` px. The finger stays down. */
+async function holdTouch(
   page: Page,
   cdp: CDPSession,
   at: { x: number; y: number },
   moveBy: number,
-): Promise<void> {
+): Promise<{ x: number; y: number }> {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] });
   await page.waitForTimeout(120);
   if (moveBy !== 0) {
@@ -249,10 +304,13 @@ async function holdAndContextMenu(
       await page.waitForTimeout(16);
     }
   }
-  const point = { x: at.x + moveBy, y: at.y };
+  return { x: at.x + moveBy, y: at.y };
+}
+
+/** Send the `contextmenu` the OS would send for a hold, at the finger's position. */
+async function fireContextMenu(page: Page, point: { x: number; y: number }): Promise<void> {
   await page.evaluate(({ x, y }) => {
-    const target = document.elementFromPoint(x, y);
-    target?.dispatchEvent(
+    document.elementFromPoint(x, y)?.dispatchEvent(
       new MouseEvent('contextmenu', {
         bubbles: true,
         cancelable: true,
@@ -306,12 +364,27 @@ test('right-clicking a row opens its actions, and Escape hands focus back to the
 test('Shift+right-click keeps the browser menu', async ({ page }) => {
   test.setTimeout(180_000);
   await touchPlan(page);
+  // Recorded at the window, after React's own listener has run: a handler that was never reached
+  // would leave the menu hidden too, so "no menu" alone cannot tell the two apart.
+  await page.evaluate(() => {
+    const seen: { shift: boolean; prevented: boolean }[] = [];
+    (window as unknown as { __cm: typeof seen }).__cm = seen;
+    window.addEventListener('contextmenu', (event) =>
+      seen.push({ shift: event.shiftKey, prevented: event.defaultPrevented }),
+    );
+  });
   await ganttRow(page, 'Seeded 0').click({
     button: 'right',
     modifiers: ['Shift'],
     position: { x: 120, y: 10 },
   });
   await expect(menuOf(page, 'Seeded 0')).toBeHidden();
+  const seen = await page.evaluate(
+    () => (window as unknown as { __cm: { shift: boolean; prevented: boolean }[] }).__cm,
+  );
+  expect(seen, 'the event arrived, with Shift held, and nothing took it from the browser').toEqual([
+    { shift: true, prevented: false },
+  ]);
 });
 
 test('holding the selected bar still opens the menu and abandons the drag', async ({ page }) => {
@@ -325,16 +398,35 @@ test('holding the selected bar still opens the menu and abandons the drag', asyn
   const row = page.locator(`[data-activity-id="${before.id}"]`);
   await expect(row).toHaveAttribute('aria-selected', 'true');
 
-  await holdAndContextMenu(page, cdp, grab, 0);
+  const point = await holdTouch(page, cdp, grab, 0);
+  // The drag the press began is LIVE before the event arrives (its ghost, opacity 0.75). Without
+  // this the assertion after it would pass whether or not anything was ever cancelled.
+  await expect(barOf(page, before.id)).toHaveCSS('opacity', '0.75');
+  await fireContextMenu(page, point);
 
   await expect(menuOf(page, 'Seeded 0')).toBeVisible();
-  // The drag the press began is gone, finger still down: a live one draws its ghost (opacity 0.75).
   await expect(barOf(page, before.id)).not.toHaveCSS('opacity', '0.75');
   await release(page, cdp);
-  // The hold did not change the selection, and the release that followed wrote nothing.
-  await expect(row).toHaveAttribute('aria-selected', 'true');
   await page.waitForTimeout(1_500);
   expect((await seeded(page, orgSlug, 'Seeded 0')).version).toBe(before.version);
+});
+
+test('a hold on an unselected row opens the menu and does not select it', async ({ page }) => {
+  test.setTimeout(180_000);
+  const orgSlug = await touchPlan(page);
+  const other = await seeded(page, orgSlug, 'Seeded 1');
+  const cdp = await page.context().newCDPSession(page);
+  const grab = await grabPoint(barOf(page, other.id));
+  const row = page.locator(`[data-activity-id="${other.id}"]`);
+  await expect(row).not.toHaveAttribute('aria-selected', 'true');
+
+  const point = await holdTouch(page, cdp, grab, 0);
+  await fireContextMenu(page, point);
+  await expect(menuOf(page, 'Seeded 1')).toBeVisible();
+  await release(page, cdp);
+
+  // The lift ends in a `click`, which would select the row it landed on. The row swallows that one.
+  await expect(row).not.toHaveAttribute('aria-selected', 'true');
 });
 
 test('dragging the selected bar opens no menu', async ({ page }) => {
@@ -351,7 +443,8 @@ test('dragging the selected bar opens no menu', async ({ page }) => {
     'true',
   );
 
-  await holdAndContextMenu(page, cdp, grab, pxPerDay * 2);
+  const point = await holdTouch(page, cdp, grab, pxPerDay * 2);
+  await fireContextMenu(page, point);
 
   await expect(menuOf(page, 'Seeded 0')).toBeHidden();
   await release(page, cdp);

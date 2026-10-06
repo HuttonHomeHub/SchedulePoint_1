@@ -66,7 +66,7 @@ import {
   type GanttColumnKey,
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
-import { takeTouchHint, touchSelectionNote } from '../model/touch-note';
+import { TOUCH_ARM_HINT, takeTouchHint, touchSelectionNote } from '../model/touch-note';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs, type GanttGridPrefs } from '../model/use-gantt-grid-prefs';
@@ -121,6 +121,17 @@ const FALLBACK_PX_PER_DAY = 6;
  * and the typed `Start` cell is the route.
  */
 const START_HANDLE_MIN_BAR_PX = 16;
+
+const GRIP_MARKS = [0, 1, 2] as const;
+
+/**
+ * Where a row's menu opens when the keyboard asks for it: the row's left edge (clamped on screen),
+ * at its bottom — the same place the `⋯` anchors, so the two routes do not disagree about it.
+ */
+function rowMenuAnchor(row: HTMLElement): { x: number; y: number } {
+  const box = row.getBoundingClientRect();
+  return { x: Math.max(box.left, 0), y: box.bottom };
+}
 
 /**
  * An edge handle's own classes, **without `touch-none`**: that is added only while the bar is
@@ -380,6 +391,7 @@ function GanttPanelBody({
 }: GanttPanelProps & { gridPrefs: GanttGridPrefs }): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const menuHandles = useRef(new Map<string, GanttRowMenuHandle>());
   const pendingFocus = useRef(false);
 
   // Sort and the collapse set are the panel's own state UNLESS a host supplies `viewState` — the
@@ -419,15 +431,24 @@ function GanttPanelBody({
   // under the finger that just tapped.
   const [touchNote, setTouchNote] = useState<{ id: string; text: string } | null>(null);
   const onTouchSelect = useCallback(
-    (activity: ActivitySummary | null) => {
+    (activity: ActivitySummary | null, hasDraggableBar = true) => {
       if (activity === null || drag === undefined) {
         setTouchNote(null);
         return;
       }
-      const text = touchSelectionNote(barMoveGate(activity, drag), takeTouchHint);
+      const gate = barMoveGate(activity, drag);
+      // A diamond carries no pointer handler (ADR-0095), and an uncalculated row has no bar: "drag
+      // to move" would be a promise nothing keeps. A refusal's reason is still true of either.
+      const text = touchSelectionNote(gate, takeTouchHint, hasDraggableBar);
       setTouchNote(text === null ? null : { id: activity.id, text });
     },
     [drag],
+  );
+  // The hint teaches the gesture, so it goes once the finger starts using one: the first press
+  // after it, or the menu opening. A refusal's reason stays — it is still true.
+  const dismissTouchHint = useCallback(
+    () => setTouchNote((note) => (note?.text === TOUCH_ARM_HINT ? null : note)),
+    [],
   );
   const shownTouchNote =
     touchNote !== null && touchNote.id === selectedActivityId ? touchNote.text : null;
@@ -855,15 +876,18 @@ function GanttPanelBody({
     // menu contains or where it anchors. The selector is the trigger's semantics
     // (`aria-haspopup="menu"`), not a class or a test id, so restyling cannot break it.
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-      const trigger = rowRefs.current
-        .get(rowId(row!))
-        ?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-      // No trigger means no menu is rendered for this row (a bucket row, or a host that supplies no
-      // `rowMenuContextFor`). Leave the key alone rather than consuming it to show nothing, which
-      // reads as a broken control instead of an absent feature.
-      if (trigger) {
+      const rowElement = rowRefs.current.get(rowId(row!));
+      const handle = menuHandles.current.get(rowId(row!));
+      // No handle means no menu is rendered for this row (a bucket row, or a host that supplies no
+      // `rowMenuContextFor`) — and a handle that opens nothing says the same. Leave the key alone
+      // rather than consuming it to show nothing, which reads as a broken control instead of an
+      // absent feature.
+      //
+      // The handle and not the `⋯` trigger's `click()`: the trigger is `tabIndex={-1}`, so closing
+      // the menu handed focus to a control the roving tab stop deliberately excludes. Opening
+      // through `openAt` names the ROW as where focus returns (ADR-0177 D3).
+      if (rowElement && handle?.openAt(rowMenuAnchor(rowElement), rowElement)) {
         event.preventDefault();
-        trigger.click();
       }
       return;
     }
@@ -1302,6 +1326,11 @@ function GanttPanelBody({
                   isSelected={id === selectedActivityId}
                   onSelect={onSelectActivity}
                   onTouchSelect={onTouchSelect}
+                  onTouchEngaged={dismissTouchHint}
+                  registerMenu={(handle: GanttRowMenuHandle | null) => {
+                    if (handle) menuHandles.current.set(id, handle);
+                    else menuHandles.current.delete(id);
+                  }}
                   {...shared}
                 />
               );
@@ -1309,10 +1338,15 @@ function GanttPanelBody({
           </div>
         </div>
       </Surface>
-      {shownTouchNote === null ? null : (
+      {/* **Always mounted, and empty until there is something to say.** A live region inserted
+          already holding its text is announced unreliably, and one that appears also moves the
+          scroller above it. `empty:` collapses the padding and border to nothing, so the node stays
+          in the accessibility tree at zero height (ADR-0177 D2). Only where a host supplies the
+          `drag` bundle — the read-only chart has nothing to say. */}
+      {drag === undefined ? null : (
         <div
           role="status"
-          className="border-border bg-muted text-muted-foreground border-t px-3 py-1 text-xs"
+          className="border-border bg-muted text-muted-foreground border-t px-3 py-1 text-xs empty:border-t-0 empty:p-0"
         >
           {shownTouchNote}
         </div>
@@ -1536,7 +1570,12 @@ interface GanttRowViewProps {
   onFocusRow: () => void;
   onSelect?: ((activity: ActivitySummary) => void) | undefined;
   /** Told which activity a click selected when it came from a finger or stylus, else null. */
-  onTouchSelect?: ((activity: ActivitySummary | null) => void) | undefined;
+  onTouchSelect?:
+    ((activity: ActivitySummary | null, hasDraggableBar?: boolean) => void) | undefined;
+  /** A finger or stylus pressed in this row, or opened its menu: the first-use hint has done its job. */
+  onTouchEngaged?: (() => void) | undefined;
+  /** Hands the panel this row's menu handle, so the keyboard opens it the way a hold does. */
+  registerMenu?: ((handle: GanttRowMenuHandle | null) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
@@ -1593,6 +1632,8 @@ function GanttRowView({
   onFocusRow,
   onSelect,
   onTouchSelect,
+  onTouchEngaged,
+  registerMenu,
   onToggle,
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
@@ -1791,9 +1832,10 @@ function GanttRowView({
    * really begun; cancel the three hooks so no ghost or Escape listener outlives the hold; then
    * open. The selection is untouched, as it is for the `⋯`.
    */
-  const menuRef = useRef<GanttRowMenuHandle>(null);
+  const menuRef = useRef<GanttRowMenuHandle | null>(null);
   const lastPointerType = useRef('');
   const swallowClick = useRef(false);
+  const keyboardMenu = useRef(false);
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (rowMenuContext === null) return;
     // The menu's own items and an open cell input keep the browser's menu (copy and paste is the
@@ -1805,11 +1847,12 @@ function GanttRowView({
     ) {
       return;
     }
-    // The keyboard's `contextmenu` carries no pointer and no coordinates; Chrome reports an empty
-    // `pointerType`, other engines a zero point.
-    const fromKeyboard =
-      (event.nativeEvent as { pointerType?: string }).pointerType === '' ||
-      (event.clientX === 0 && event.clientY === 0);
+    // Whether the keyboard asked for this menu is what the row's own key handlers recorded, not
+    // anything read off the event. A keyboard `contextmenu` reports `pointerType: "mouse"`, the
+    // focused element's centre and `detail: 0` in Chromium — measured by the accessibility review —
+    // so neither an empty pointer type nor a zero point identifies it.
+    const fromKeyboard = keyboardMenu.current;
+    keyboardMenu.current = false;
     // Shift+right-click is the escape hatch to the browser's menu. Shift+F10 also carries
     // `shiftKey`, which is why the keyboard is told apart first.
     if (event.shiftKey && !fromKeyboard) return;
@@ -1823,12 +1866,10 @@ function GanttRowView({
     barResize.cancel();
     barResizeStart.cancel();
     const row = event.currentTarget;
-    const box = row.getBoundingClientRect();
-    const point = fromKeyboard
-      ? { x: Math.max(box.left, 0), y: box.bottom }
-      : { x: event.clientX, y: event.clientY };
+    const point = fromKeyboard ? rowMenuAnchor(row) : { x: event.clientX, y: event.clientY };
     if (!menuRef.current?.openAt(point, row)) return;
     event.preventDefault();
+    onTouchEngaged?.();
     // A hold that opened the menu may still end in a `click` on release; it must not select.
     swallowClick.current = lastPointerType.current === 'touch' || lastPointerType.current === 'pen';
   };
@@ -1863,6 +1904,15 @@ function GanttRowView({
       onPointerDownCapture={(event) => {
         lastPointerType.current = event.pointerType;
         swallowClick.current = false;
+        // A pointer press ends any keyboard request, so a stale one cannot make a later
+        // Shift+right-click look like Shift+F10.
+        keyboardMenu.current = false;
+        if (event.pointerType === 'touch' || event.pointerType === 'pen') onTouchEngaged?.();
+      }}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          keyboardMenu.current = true;
+        }
       }}
       onClick={() => {
         if (swallowClick.current) {
@@ -1874,6 +1924,7 @@ function GanttRowView({
           lastPointerType.current === 'touch' || lastPointerType.current === 'pen'
             ? activity
             : null,
+          geometry !== null && !geometry.milestone,
         );
       }}
       onContextMenu={onContextMenu}
@@ -2030,7 +2081,10 @@ function GanttRowView({
           // untouched: it carries no role, so it is text content rather than an unallowed child.
           <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
             <GanttRowMenu
-              ref={menuRef}
+              ref={(handle) => {
+                menuRef.current = handle;
+                registerMenu?.(handle);
+              }}
               context={() => rowMenuContext(activity)}
               activityName={activity.name}
               {...(rowStructureFor === undefined ? {} : { structure: rowStructureFor(activity) })}
@@ -2124,15 +2178,17 @@ function GanttRowView({
                   style={{ width: `${geometry.progress * 100}%` }}
                 />
               ) : null}
-              {armed ? (
+              {/* Withheld on a bar too short to hold a handle at each end: three marks would sit on
+                  its edges' own grab zones and read as noise, and the outline carries the state. */}
+              {armed && geometry.width >= START_HANDLE_MIN_BAR_PX ? (
                 <span
                   aria-hidden="true"
                   data-bar-grip
                   className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5"
                 >
-                  <span className="bg-foreground/70 h-2 w-px" />
-                  <span className="bg-foreground/70 h-2 w-px" />
-                  <span className="bg-foreground/70 h-2 w-px" />
+                  {GRIP_MARKS.map((mark) => (
+                    <span key={mark} className="bg-foreground/70 h-2 w-px" />
+                  ))}
                 </span>
               ) : null}
             </span>

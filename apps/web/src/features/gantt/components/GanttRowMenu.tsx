@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
-import { useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
@@ -66,6 +66,10 @@ export interface GanttRowMenuProps {
   ref?: Ref<GanttRowMenuHandle>;
 }
 
+/**
+ * The imperative handle a row holds on its menu (ADR-0177 D3). One method, deliberately: the menu's
+ * open state stays local to it, so a host can ask for it to open without owning that state.
+ */
 export interface GanttRowMenuHandle {
   /**
    * Open the menu at a viewport point and hand focus to `restoreTo` when it closes. Returns false,
@@ -114,12 +118,20 @@ export function GanttRowMenu({
   const restoreRef = useRef<HTMLElement | null>(null);
   const open = anchor !== null && resolved !== null;
 
+  // The handle is created once. `context` is a fresh closure every render and `open` changes, so
+  // both are read through refs: depending on them would hand the parent a new handle per render.
+  const contextRef = useRef(context);
+  const openRef = useRef(open);
+  useEffect(() => {
+    contextRef.current = context;
+    openRef.current = open;
+  });
   useImperativeHandle(
     ref,
     () => ({
       openAt: (point, restoreTo) => {
-        if (open) return true;
-        const built = context();
+        if (openRef.current) return true;
+        const built = contextRef.current();
         if (built === null) return false;
         restoreRef.current = restoreTo;
         setResolved(built);
@@ -127,7 +139,7 @@ export function GanttRowMenu({
         return true;
       },
     }),
-    [open, context],
+    [],
   );
 
   // The same classification the coverage gate makes: an item gated on the canvas is not reachable

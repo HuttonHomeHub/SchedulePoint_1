@@ -251,6 +251,9 @@ describe('the WBS band pairs the ink it paints with the fill it paints on', () =
   it.each([
     ['--canvas-bar', '--primary-foreground', "a real summary's name on its bar", 4.5],
     ['--canvas-bar', '--foreground', "the selected summary's INSET ring on its bar", 3],
+    // The Gantt renders only under the canvas scope, so the armed outline is held there: asserted in
+    // every scope it measures 2.97:1 under `auth`, a surface that never draws a bar.
+    ['--accent', '--ring', "the armed bar's offset outline on the selected row (ADR-0177 D2)", 3],
   ] as const)('%s / %s — %s', (fill, ink, _why, floor) => {
     const value = ratio(tokens, fill, ink);
     expect(
