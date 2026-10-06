@@ -27,8 +27,8 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
+import { CopyButton } from '@/components/ui/copy-button';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
 /**
  * Every reading taken on this installation, **grouped into the sittings they were taken in**.
@@ -838,35 +838,20 @@ function CopySittingButton({
   label: string;
 }): React.ReactElement {
   // **The rejection used to set `copied` back to `false`** — byte-identical to never having pressed
-  // the button, in the one configuration the branch exists for. The shared hook owns both outcomes,
-  // and names this sitting in what it announces, for the same reason the button's own label does.
-  const clipboard = useClipboardCopy({
-    copiedMessage: `Report copied to the clipboard — ${label}.`,
-    failedMessage: `Could not reach the clipboard. Select the report text and copy it by hand.`,
-  });
-
+  // the button. `CopyButton` owns both outcomes, and names this sitting in what it announces, for
+  // the same reason the button's own label does.
   return (
-    <span className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        // **Named for its own sitting, because there are N of these on screen.** Every block has one,
-        // and with the bare label an assistive-technology user browsing by button list meets a
-        // column of identical "Copy report" entries with nothing to choose between them. The visible
-        // word stays short; the accessible name carries the caption the block is already titled by.
-        aria-label={`Copy report — ${label}`}
-        onClick={() => {
-          clipboard.copy(formatSitting(sitting));
-        }}
-      >
-        Copy report
-      </Button>
-      {/* The visible cue only. The hook announces through the app's one polite region, so a second
-          `aria-live` here would read the same sentence twice to the same reader. */}
-      <span className="text-muted-foreground text-xs">
-        {clipboard.state === 'copied' ? 'Copied.' : ''}
-        {clipboard.state === 'failed' ? 'Could not copy.' : ''}
-      </span>
-    </span>
+    <CopyButton
+      size="sm"
+      subject={`Report — ${label}`}
+      // **Named for its own sitting, because there are N of these on screen.** Every block has one,
+      // and with the bare label an assistive-technology user browsing by button list meets a
+      // column of identical "Copy report" entries with nothing to choose between them. The visible
+      // word stays short; the accessible name carries the caption the block is already titled by.
+      aria-label={`Copy report — ${label}`}
+      text={() => formatSitting(sitting)}
+    >
+      Copy report
+    </CopyButton>
   );
 }

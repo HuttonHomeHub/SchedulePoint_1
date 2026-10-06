@@ -630,3 +630,29 @@ strip carries a live-updating count (`role="status"`) and a static "nothing here
 all), and a primitive that announced both would make the second one speak every time it mounted.
 Its `messageFit` defaults to `'truncate'`; pass `'grow'` where the sentence must wrap rather than
 lose its second half.
+
+## Primitives: the console set — `SectionGroup`, `SubSection`, `KeyValueList`, `Disclosure`, `ConditionStrip`, `CopyButton` (ADR-0178)
+
+Added by the staff console redesign (M2); each was written once because the console had hand-rolled
+the same thing several times, each slightly different.
+
+- **Heading rank is context, not a prop** (`components/ui/page/heading-level.tsx`). `SectionCard`
+  reads it and defaults to `h2`, so a card outside a `SectionGroup` renders the DOM it always did
+  (`heading-level.test.tsx` pins it). `SectionGroup` is the `h2` and supplies `h3`; a card supplies
+  its own rank plus one to its body, which is what `SubSection` reads. The type stops at `h4`.
+- **`SectionGroup`** is an unnamed `<section>` — generic, not a landmark — because every card inside
+  it is already a named region. **`SubSection`** is the one sub-heading; the staff archetype gate
+  refuses a hand-rolled `<h3>`/`<h4>` on that surface.
+- **`KeyValueList`** is a `<dl>` for _settings_ (a consequence is a second `<dd>`). Choose between its
+  neighbours by what the content is: `StatGrid` is headline figures to scan, `ContextStrip` is the
+  facts beside an edit, `KeyValueList` is the subject of a section in words.
+- **`Disclosure`** takes a required `collapsed`: `'described'` keeps prose in the accessibility tree
+  (clipped) for an `aria-describedby` target; `'hidden'` does not render controls and detail, because
+  invisible focusable content fails WCAG 2.4.7. Focus stays on the button; Enter and Space toggle.
+- **`ConditionStrip`** is `Alert purpose="condition"` with a verdict word, one sentence and an optional
+  **How to fix** disclosure. No bold lead-in, never `success` (a healthy state needs no strip).
+- **`CopyButton`** wraps `useClipboardCopy`: one wording, a visible "Copied." that is _not_ a live
+  region (the hook announces), and, when `text` is `null`, a shaded button with `unavailableReason`
+  as visible text. It never sets `pointer-events-none` at rest (#458); it cancels the hover fill.
+- **`Badge variant="outline"`**, **`Column.wrap: 'anywhere'`** on `DataTable`, and `lib/relative-time.ts`
+  (moved from the overview feature) are the small additions beside them.

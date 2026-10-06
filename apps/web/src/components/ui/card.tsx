@@ -80,7 +80,7 @@ export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement>
    * an `<h2>` because the archetype says so, not because every consumer remembered. Pinned by
    * `card.test.tsx`.
    */
-  level?: 1 | 2 | 3;
+  level?: 1 | 2 | 3 | 4;
 }
 
 export function CardTitle({ className, level = 1, ...props }: CardTitleProps): React.ReactElement {

@@ -594,3 +594,45 @@ describe('DataTable — the windowed mode leaves every other table as it was (AD
     expect(true).toBe(true);
   });
 });
+
+/**
+ * `Column.wrap` is composed like `width` (staff console redesign M2): appended to the column's own
+ * classes on the cell and its header, never replacing them, and absent unless declared.
+ */
+describe('DataTable — Column.wrap', () => {
+  const classesFor = (wrap?: 'anywhere') => {
+    const view = render(
+      <DataTable
+        {...common}
+        columns={[
+          {
+            header: 'Id',
+            cell: (row: Row) => row.name,
+            cellClassName: 'py-2 pr-4 font-mono',
+            ...(wrap === undefined ? {} : { wrap }),
+          },
+        ]}
+        query={query({ data: [{ id: '1', name: 'x'.repeat(80) }] })}
+      />,
+    );
+    const out = {
+      cell: screen.getAllByRole('cell')[0]!.className,
+      head: screen.getAllByRole('columnheader')[0]!.className,
+    };
+    view.unmount();
+    return out;
+  };
+
+  it('adds wrap-anywhere to the cell and its header, keeping the caller’s own classes', () => {
+    const { cell, head } = classesFor('anywhere');
+    expect(cell).toContain('wrap-anywhere');
+    expect(cell).toContain('font-mono');
+    expect(head).toContain('wrap-anywhere');
+  });
+
+  it('adds nothing for a column that does not declare it', () => {
+    const { cell, head } = classesFor();
+    expect(cell).not.toContain('wrap-anywhere');
+    expect(head).not.toContain('wrap-anywhere');
+  });
+});

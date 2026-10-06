@@ -7,6 +7,7 @@ import { QueryPanel } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useStaffAccounts, type UnverifiedAccount } from '@/features/staff/api/staff-panels';
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * Who cannot sign in.
@@ -29,7 +30,7 @@ export function AccountsPanel(): React.ReactElement {
     { header: 'Address', cell: (row) => row.email, cellClassName: 'py-2 pr-4 break-all md:w-96' },
     {
       header: 'Registered',
-      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+      cell: (row) => formatTimestamp(row.createdAt),
     },
   ];
 

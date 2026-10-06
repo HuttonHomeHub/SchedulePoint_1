@@ -643,7 +643,10 @@ describe('weight is a governed axis', () => {
   // sub-headings. A first version dodged the count with `<strong>` inside the heading, which is the
   // same weight placed where this ratchet cannot see it; the count is raised deliberately instead.
   // The limb lines beneath carry none.
-  const SCREEN_WEIGHT_CEILING = 160;
+  // ...and 160 -> 158 (staff console redesign M2, ADR-0178): the two hand-rolled `font-medium`
+  // sub-headings in `diagnostics-panel.tsx` and `performance-probe-panel.tsx` became `SubSection`,
+  // which places the weight once (the primitives' ceiling below rises for it).
+  const SCREEN_WEIGHT_CEILING = 158;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
@@ -683,11 +686,16 @@ describe('weight is a governed axis', () => {
    * sits above a muted sentence and a figure list, so it is what the eye picks an option by. The
    * figures were given a weight in the first draft too and it was removed: the muted label beside
    * each one already sets it apart, so that one was decoration.
+   *
+   * **26 → 28 (staff console redesign M2, ADR-0178).** `SectionGroup` and `SubSection` are new
+   * primitives and each places one `font-semibold`: the group's `h2` and the one sub-heading
+   * treatment. That is this rule's stated trade — screen sites becoming one primitive — and the
+   * screen ceiling above came down by the two hand-rolled sub-headings the second one replaced.
    */
-  it('no more than 26 weights placed inside the primitives', () => {
+  it('no more than 28 weights placed inside the primitives', () => {
     const sites = weightSites().filter((site) => site.startsWith('components/ui/'));
     expect(sites.length, `primitives placing weight rose to ${sites.length}`).toBeLessThanOrEqual(
-      26,
+      28,
     );
   });
 });

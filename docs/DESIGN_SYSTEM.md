@@ -890,7 +890,9 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   `info | success | warning | error`; polite live region; auto-dismiss (persist
   errors); optional action; never the sole channel for critical info.
 - **Badges** — status/label chips using status tokens; text/icon in addition to
-  colour; sizes `sm | md`.
+  colour; sizes `sm | md`. `outline` (a border and the surface's own ink) is for a state
+  that is neither good nor bad — "Checking", "Could not be read" — which the three
+  fills would read as a success or an alarm (ADR-0178).
 - **Breadcrumbs** — for depth ≥ 2; last item is current page (`aria-current`);
   collapse middle items on small screens.
 - **Tabs** — `components/ui/tabs.tsx`. Hand-rolled on the APG `tablist` in the

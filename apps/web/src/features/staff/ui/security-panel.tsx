@@ -3,6 +3,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { StatusSection } from '@/components/ui/page';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * What the Content-Security-Policy is blocking.
@@ -40,7 +41,7 @@ export function SecurityPanel(): React.ReactElement {
     // `—` rather than a guess: the legacy report body carries no disposition in every engine.
     { header: 'Mode', cell: (row) => row.disposition ?? '—' },
     { header: 'Seen', cell: (row) => String(row.count), cellClassName: 'tabular-nums' },
-    { header: 'Last', cell: (row) => new Date(row.lastSeenAt).toLocaleString() },
+    { header: 'Last', cell: (row) => formatTimestamp(row.lastSeenAt) },
   ];
 
   return (

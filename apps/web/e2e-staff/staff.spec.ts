@@ -967,7 +967,7 @@ function rowFor(region: Locator, table: string): Locator {
  */
 test('a staff member runs the diagnostics and can paste the result', async ({ browser }) => {
   // `clipboard-read` as well as `-write`: the block is the deliverable, so this test reads it
-  // back rather than trusting the "Report copied." announcement, which is a claim about the
+  // back rather than trusting the "Copied." announcement, which is a claim about the
   // handler's success branch and not about what is on the clipboard.
   const staffContext = await browser.newContext({
     permissions: ['clipboard-write', 'clipboard-read'],
@@ -1090,7 +1090,7 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
   // nothing, and #86's owed M0-T3 is closed by pasting this into a measurement record.
   await expect(copy).not.toHaveAttribute('aria-disabled', 'true');
   await copy.click();
-  await expect(staff.getByText('Report copied.')).toBeVisible();
+  await expect(staff.getByText('Copied.', { exact: true })).toBeVisible();
 
   const clipboard = await staff.evaluate(() => navigator.clipboard.readText());
   expect(clipboard).toContain('SchedulePoint staff diagnostics');

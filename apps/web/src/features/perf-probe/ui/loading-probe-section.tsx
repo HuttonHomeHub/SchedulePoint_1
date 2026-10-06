@@ -4,7 +4,6 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { LoadingReading } from '../loading/model/limb';
 import { LOADING_MARKER_KEY, readMarker } from '../loading/model/marker';
 import {
-  CLIPBOARD_FAILED_SENTENCE,
   cacheControlLine,
   coldReloadWarning,
   DEVELOPMENT_LABEL,
@@ -20,7 +19,7 @@ import { unsupportedReason } from '../loading/model/support';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
+import { CopyButton } from '@/components/ui/copy-button';
 
 /**
  * Measure plan loading — the second section of the Performance panel (`docs/TECH_DEBT.md` #433).
@@ -69,12 +68,6 @@ export function LoadingProbeSection({
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   // A failure or a discarded run leaves nothing focused after the reload, so the notice takes focus.
   const noticeRef = useRef<HTMLDivElement>(null);
-  const clipboard = useClipboardCopy({
-    copiedMessage: 'Plan loading report copied to the clipboard.',
-    failedMessage: CLIPBOARD_FAILED_SENTENCE,
-  });
-  // The stable half: depending on the whole object would re-create `press` whenever a copy settles.
-  const { reset: resetCopyState } = clipboard;
 
   useEffect(() => {
     if (pending.kind === 'discarded') {
@@ -147,7 +140,6 @@ export function LoadingProbeSection({
     setFailed(false);
     setReading(null);
     setDiscarded(false);
-    resetCopyState();
     try {
       const { browserEnv, startLoadingProbe } = await import('../loading/runner/run-loading-probe');
       startLoadingProbe(browserEnv());
@@ -156,9 +148,8 @@ export function LoadingProbeSection({
       setMeasuring(false);
       setFailed(true);
     }
-  }, [resetCopyState]);
+  }, []);
 
-  const copyBlockedId = useId();
   const unsupportedId = useId();
 
   const blocked = measuring || unsupported !== null;
@@ -192,29 +183,20 @@ export function LoadingProbeSection({
         >
           {measuring ? 'Measuring…' : 'Measure plan loading'}
         </Button>
-        <Button
-          variant="outline"
-          aria-disabled={shown === null}
-          aria-describedby={shown === null ? copyBlockedId : undefined}
-          className="aria-disabled:opacity-60"
-          onClick={() => {
-            if (shown !== null) clipboard.copy(formatLoadingReport(shown));
-          }}
+        {/* `resetKey`: a new measurement clears the confirmation, which would otherwise describe the
+            PREVIOUS reading. `shown` is null for the whole of one. */}
+        <CopyButton
+          subject="Plan loading report"
+          text={shown === null ? null : () => formatLoadingReport(shown)}
+          resetKey={shown}
+          unavailableReason={
+            measuring
+              ? 'Wait for the measurement to finish.'
+              : 'Measure plan loading first — there is nothing to copy yet.'
+          }
         >
           Copy plan loading report
-        </Button>
-        {shown === null ? (
-          <span id={copyBlockedId} className="sr-only">
-            {measuring
-              ? 'Wait for the measurement to finish.'
-              : 'Measure plan loading first — there is nothing to copy yet.'}
-          </span>
-        ) : null}
-        {/* The announcement goes through the shared hook; this is the cue a sighted reader needs. */}
-        <span className="text-muted-foreground text-sm">
-          {clipboard.state === 'copied' ? 'Report copied.' : ''}
-          {clipboard.state === 'failed' ? CLIPBOARD_FAILED_SENTENCE : ''}
-        </span>
+        </CopyButton>
       </div>
 
       {unsupported !== null ? (

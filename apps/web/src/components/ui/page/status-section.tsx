@@ -44,6 +44,12 @@ export interface StatusSectionProps {
    * screen whose entire purpose is "is it broken *now*". The pattern is `AuditEventList`'s.
    */
   status: string;
+  /**
+   * A read is in flight and the figures shown may be about to change — `aria-busy` on the section,
+   * so assistive technology waits for the answer rather than reading a half-updated one. It is a
+   * statement about the content, not a loading indicator: the caller still shows whatever it shows.
+   */
+  busy?: boolean;
   children: React.ReactNode;
 }
 
@@ -52,11 +58,16 @@ export function StatusSection({
   status,
   children,
   id,
+  busy,
 }: StatusSectionProps): React.ReactElement {
   return (
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting
     // the prop — spread it conditionally rather than widening `SectionCardProps` to accept one.
-    <SectionCard title={title} {...(id === undefined ? {} : { id })}>
+    <SectionCard
+      title={title}
+      {...(id === undefined ? {} : { id })}
+      {...(busy === true ? { busy } : {})}
+    >
       <div className="space-y-4">
         <p aria-live="polite" className="sr-only">
           {status}

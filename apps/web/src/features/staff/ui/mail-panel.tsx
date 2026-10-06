@@ -6,6 +6,7 @@ import { StatGrid } from '@/components/ui/page';
 import { QueryErrorState } from '@/components/ui/query-error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { useStaffHealth } from '@/features/staff/api/staff-health';
+import { formatTimestamp } from '@/lib/format-date';
 
 const MAIL_HEADING_ID = 'staff-mail-heading';
 const MAIL_TRANSPORT_ID = 'staff-mail-transport-note';
@@ -45,7 +46,7 @@ export function MailSection(): React.ReactElement {
      */
     {
       header: 'When',
-      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cell: (row) => formatTimestamp(row.occurredAt),
       cellClassName: 'py-2 pr-4 md:w-44',
     },
     {
@@ -128,10 +129,7 @@ export function MailSection(): React.ReactElement {
               },
               {
                 label: 'Last failure',
-                value:
-                  data.lastFailureAt === null
-                    ? 'Never'
-                    : new Date(data.lastFailureAt).toLocaleString(),
+                value: data.lastFailureAt === null ? 'Never' : formatTimestamp(data.lastFailureAt),
               },
             ]}
           />

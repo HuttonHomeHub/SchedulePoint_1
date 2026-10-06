@@ -25,6 +25,12 @@ const WEB_SRC = join(PAGE_DIR, '..', '..', '..');
  * `<DataTable` also renders `<SectionCard` — not that they are nested, which a string scan cannot
  * see and which the journey asserts in a real browser instead. A narrow check that is true beats a
  * broad one that is approximate, and the gap is named rather than left implicit.
+ *
+ * **`routes/staff.tsx` must stay a bare re-export** of `StaffConsoleScreen`. A route with no markup
+ * of its own is followed one hop to the screen it re-exports (`closureOf`, below); the console moved
+ * into `features/staff/ui/` at the staff console redesign's M0, and a route that grew markup again
+ * would stop being hopped and be judged as a route, where the screen's `SectionCard`s are out of
+ * sight and the gate could pass or fail for the wrong reason.
  */
 
 /** Every `.tsx` under a directory, walked from disk so an untracked file is covered too. */

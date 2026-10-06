@@ -1,12 +1,11 @@
 import type { RecentlyChangedPlan } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 
-import { exactInstant, formatRelative } from '../model/relative-time';
-
 import { ActorName } from './ActorName';
 
 import { Badge } from '@/components/ui/badge';
 import { ListRow, RowSubject, rowLinkClass } from '@/components/ui/page';
+import { exactInstant, formatRelative } from '@/lib/relative-time';
 
 /**
  * One plan in "Recently changed".
