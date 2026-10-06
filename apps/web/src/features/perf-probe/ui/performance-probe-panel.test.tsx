@@ -1143,6 +1143,31 @@ describe('taking the readings a sitting never got', () => {
       expect(overlay).toHaveTextContent('Stopping keeps what is already measured.');
     });
 
+    it('leaves an Escape that another owner already handled alone', async () => {
+      // Verified red against a handler that stopped on every Escape: shouldStop() turned true.
+      const stopAsked = vi.fn<() => void>();
+      runProbe.mockImplementation((input) => {
+        const { shouldStop } = input as { shouldStop: () => boolean };
+        return new Promise<ProbeOutcome>(() => {
+          const poll = (): void => {
+            if (shouldStop()) stopAsked();
+            else setTimeout(poll, 5);
+          };
+          poll();
+        });
+      });
+      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      runOnce();
+      await screen.findByRole('button', { name: 'Stop' });
+      const handled = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+      handled.preventDefault();
+      document.dispatchEvent(handled);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(stopAsked).not.toHaveBeenCalled();
+      expect(announce).not.toHaveBeenCalledWith('Stopping after the current repeat.');
+      expect(screen.getByRole('region', { name: 'Measurement in progress' })).toBeInTheDocument();
+    });
+
     it('stops on Escape, through the same handler as the button', async () => {
       // Verified red by removing the keydown effect: the overlay ignored Escape and the run went on.
       runProbe.mockImplementation((input) => {
@@ -1159,6 +1184,11 @@ describe('taking the readings a sitting never got', () => {
       runOnce();
       await screen.findByRole('button', { name: 'Stop' });
       fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.keyDown(document, { key: 'Escape' });
+      // The stop is acknowledged at once and only once, since the run ends at the next repeat.
+      expect(
+        announce.mock.calls.filter(([m]) => m === 'Stopping after the current repeat.'),
+      ).toHaveLength(1);
       await waitFor(() => {
         expect(screen.queryByRole('region', { name: 'Measurement in progress' })).toBeNull();
       });

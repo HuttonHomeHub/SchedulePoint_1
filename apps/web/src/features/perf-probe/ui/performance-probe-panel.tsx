@@ -43,6 +43,7 @@ import { StatusSection } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
 import { useClipboardCopy, type ClipboardCopyState } from '@/hooks/use-clipboard-copy';
+import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 
 /**
  * The Performance panel — a staff member presses one control and gets a real-hardware reading.
@@ -268,9 +269,13 @@ export function PerformanceProbePanel({
    * button they can no longer see for twenty-five seconds.
    */
   const stopHintId = useId();
+  // The run only stops at the next repeat, which can be seconds away, so the press is acknowledged
+  // at once rather than left silent until the verdict.
   const stop = useCallback(() => {
+    if (cancelledRef.current) return;
     cancelledRef.current = true;
-  }, []);
+    announce('Stopping after the current repeat.');
+  }, [announce]);
   /**
    * **Escape stops the run, through the same handler as the button.** The overlay covers the
    * whole viewport and takes focus, so Escape is the key a reader reaches for to leave it; with no
@@ -280,7 +285,11 @@ export function PerformanceProbePanel({
   useEffect(() => {
     if (!running) return;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') stop();
+      // The repository's Escape rungs (lib/escape-rungs.ts): a key another owner already
+      // handled, or one a native modal answers for, is not ours.
+      if (event.key !== 'Escape' || event.defaultPrevented || aNativeModalIsOpen()) return;
+      event.preventDefault();
+      stop();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
