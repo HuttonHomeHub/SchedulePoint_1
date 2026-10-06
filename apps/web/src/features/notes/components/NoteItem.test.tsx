@@ -157,4 +157,19 @@ describe('NoteItem', () => {
     await waitFor(() => expect(onThreadStale).toHaveBeenCalledOnce());
     expect(onFocusRegion).toHaveBeenCalledOnce();
   });
+
+  it('refuses an emptied edit: the shaded Save takes the click and the form submits nothing', () => {
+    vi.mocked(apiFetch).mockReset();
+    renderItem();
+    fireEvent.click(screen.getByRole('button', { name: /^Edit note 1 by/ }));
+    fireEvent.change(screen.getByLabelText('Edit note'), { target: { value: '   ' } });
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(save).not.toHaveClass('aria-disabled:pointer-events-none');
+    fireEvent.click(save);
+    const form = save.closest('form');
+    if (!form) throw new Error('no form');
+    fireEvent.submit(form);
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+  });
 });

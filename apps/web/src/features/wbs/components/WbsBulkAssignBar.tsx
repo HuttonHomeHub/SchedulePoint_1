@@ -134,8 +134,9 @@ export function WbsBulkAssignBar({
           `aria-disabled`, not the native attribute — the `ScopeSaveBar` / `RecalculateButton`
           precedent. A natively disabled button is blurred to `<body>` the moment it flips, and this
           one flips under the user's own focus on every assign: once when `isPending` goes true, and
-          again when the batch lands and the selection clears. `pointer-events-none` stops the
-          mouse; the click guard stops Enter on a focused button.
+          again when the batch lands and the selection clears. The click guard stops the pointer and Enter
+          alike; `aria-busy:pointer-events-none` adds pointer inertness for the batch in flight only,
+          because at rest the button must take the pointer so its reason can be hovered.
         */}
         <Button
           type="button"
@@ -149,7 +150,7 @@ export function WbsBulkAssignBar({
             }
             assign();
           }}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-busy:pointer-events-none aria-disabled:opacity-60"
         >
           {updateParents.isPending ? 'Assigning…' : 'Assign'}
         </Button>

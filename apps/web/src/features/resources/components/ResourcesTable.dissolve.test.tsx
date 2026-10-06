@@ -146,7 +146,12 @@ describe('ResourcesTable — dissolve a group', () => {
     const defaultClasses =
       render(<Button variant="default">x</Button>).container.querySelector('button')?.className ??
       '';
-    for (const token of defaultClasses.split(/\s+/)) expect(confirm.className).toContain(token);
+    // The confirm's own `aria-disabled:opacity-*` replaces the CVA's through `cn`, so that one token is
+    // the caller's to state; every other default-variant token must survive.
+    for (const token of defaultClasses.split(/\s+/)) {
+      if (token.startsWith('aria-disabled:opacity-')) continue;
+      expect(confirm.className).toContain(token);
+    }
   });
 
   it('posts to the dissolve route, then closes, announces the server’s count and focuses the list', async () => {

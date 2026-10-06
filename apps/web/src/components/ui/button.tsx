@@ -3,8 +3,22 @@ import { forwardRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
+/**
+ * **Two shaded states, deliberately different.** A natively `disabled` control stays at 50 % and
+ * `pointer-events-none`: it is out of the tab order and carries no reachable reason, so it is meant
+ * to be the fainter of the two. An `aria-disabled` control stays in the tab order and usually has a
+ * label and a reason a reader is meant to read, so it dims to 60 % and its hover is withheld
+ * (`not-aria-disabled:hover:…`, which compiles to `:not([aria-disabled="true"]):hover` — a caller's
+ * own `bg-*` still wins through `cn`, because nothing here restates a fill).
+ *
+ * **`pointer-events-none` is NOT here, and that is the caller's decision.** Whether a shaded button
+ * should swallow the pointer depends on the expression bound to `aria-disabled`: while a request is
+ * in flight it should, and at rest it must not, because `pointer-events: none` hands the click to
+ * whatever is behind the control and makes its reason unreachable by hover (`docs/TECH_DEBT.md` #458,
+ * #460). `submit-guard.structural.test.ts` reads each site's expression to hold that line.
+ */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-60',
   {
     variants: {
       variant: {
@@ -12,21 +26,23 @@ const buttonVariants = cva(
         // alpha forms these used to carry — the rule the `destructive` comment below states, now
         // applied to its neighbours rather than to one of the three. The alpha census caught
         // `hover:bg-secondary-hover` at **3.8:1** for its own label on both navy scopes.
-        default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
+        default: 'bg-primary text-primary-foreground not-aria-disabled:hover:bg-primary-hover',
+        secondary:
+          'bg-secondary text-secondary-foreground not-aria-disabled:hover:bg-secondary-hover',
         // `text-foreground` is not decoration: a variant that states its own fill and then
         // inherits its ink is a bug wherever it lands (ADR-0055 §2, defect D3) — on a dark
         // surface it inherited light ink onto a light fill and vanished.
         outline:
-          'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
+          'border border-input bg-background text-foreground not-aria-disabled:hover:bg-accent not-aria-disabled:hover:text-accent-foreground',
+        ghost: 'not-aria-disabled:hover:bg-accent not-aria-disabled:hover:text-accent-foreground',
         // `hover:bg-destructive-hover`, never `hover:bg-destructive/90`. The alpha form
         // composites the fill against the PAGE, so on a light surface it lightened toward white
         // and took the label to 4.32:1 — below 1.4.3, on every Delete button in the product. It
         // was invisible to both gates: the contrast matrix resolves tokens and a utility is not
         // one, and the axe suite measures no hover state at all. A token is checkable; an alpha
         // utility is not, and that is the reason for the shape rather than the colour.
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive-hover',
+        destructive:
+          'bg-destructive text-destructive-foreground not-aria-disabled:hover:bg-destructive-hover',
       },
       size: {
         default: 'h-(--control-h) px-4 py-2',

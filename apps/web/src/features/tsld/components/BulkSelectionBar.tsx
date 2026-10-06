@@ -22,8 +22,10 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
  * **`aria-disabled`, never the native attribute.** This is the `ScopeSaveBar` / `WbsBulkAssignBar`
  * lesson, and the repo has now re-learnt it three times (ADR-0060 M6, ADR-0063 M6, ADR-0064 §7): a
  * natively disabled button blurs to `<body>` the instant it flips, and these flip twice per action —
- * once when the write starts under the user's own focus, once when it lands. `pointer-events-none`
- * stops the mouse, the click guard stops the keyboard, and the control never leaves the tab order.
+ * once when the write starts under the user's own focus, once when it lands. The click guard stops
+ * the pointer and the keyboard, `aria-busy:pointer-events-none` adds pointer inertness while the
+ * write is in flight only (a refused action must stay hoverable for its reason), and the control
+ * never leaves the tab order.
  *
  * **One status line, `aria-describedby`-linked** to whichever action it explains — not merely
  * adjacent to it. Proximity is association for a sighted reader and nothing at all in the
@@ -95,7 +97,7 @@ function BulkAction({
         }
         onActivate();
       }}
-      className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+      className="aria-busy:pointer-events-none aria-disabled:opacity-60"
     >
       {icon}
       {label}

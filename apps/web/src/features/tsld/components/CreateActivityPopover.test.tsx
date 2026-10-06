@@ -50,6 +50,25 @@ describe('CreateActivityPopover', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('refuses while saving: a click and a form submit both leave onCommit uncalled', () => {
+    const { onCommit, input } = setup({ saving: true });
+    fireEvent.change(input, { target: { value: 'Excavate' } });
+    const submit = screen.getByRole('button', { name: 'Saving…' });
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(submit);
+    fireEvent.submit(screen.getByRole('form', { name: 'Name the new activity' }));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('is not pointer-inert at rest, and refuses an Enter submit with an empty name', () => {
+    const { onCommit } = setup();
+    expect(screen.getByRole('button', { name: 'Add to plan' })).not.toHaveClass(
+      'aria-disabled:pointer-events-none',
+    );
+    fireEvent.submit(screen.getByRole('form', { name: 'Name the new activity' }));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('names the submit apart from every Add control on the same screen', () => {
     setup();
     // Two on-screen controls sharing an accessible name is ambiguous by voice and in a screen

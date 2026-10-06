@@ -73,7 +73,10 @@ export function CreateActivityPopover({
       className="border-border bg-card absolute z-10 flex w-56 flex-col gap-2 rounded-lg border p-2 shadow-md"
       onSubmit={(event) => {
         event.preventDefault();
-        if (trimmed) onCommit(trimmed);
+        // The same expression the button is shaded by: Enter in the name field submits whatever the
+        // button looks like, and `saving` with a name typed would otherwise commit a second time.
+        if (blocked) return;
+        onCommit(trimmed);
       }}
     >
       <Label htmlFor={nameId}>Name</Label>
@@ -139,12 +142,13 @@ export function CreateActivityPopover({
           aria-disabled={blocked}
           aria-busy={saving}
           {...(reason ? { 'aria-describedby': reasonId } : {})}
-          // `pointer-events-none` covers the mouse; this covers the keyboard, where Enter on a
-          // focused button dispatches a click that would otherwise submit the form.
+          // Refuses the click while blocked, so a press on the shaded button (it takes the pointer
+          // at rest, to show its reason) never submits. `aria-busy` is the pointer-inert half, for
+          // the save in flight only.
           onClick={(event) => {
             if (blocked) event.preventDefault();
           }}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-busy:pointer-events-none aria-disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'Add to plan'}
         </Button>

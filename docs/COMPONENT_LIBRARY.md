@@ -106,6 +106,22 @@ error, empty, and selected/active. A missing state is an incomplete component.
   regression test.
 - Critical flows also get a Playwright journey with accessibility assertions.
 
+## Primitive: `Button` — the shaded (`aria-disabled`) state
+
+- **The look is the CVA's.** `aria-disabled:opacity-60`, and every variant's hover is written
+  `not-aria-disabled:hover:…` (outline and ghost gate the hover ink too), so a shaded button
+  neither dims differently per caller nor lights on hover. Compiled output was checked:
+  `.not-aria-disabled\:hover\:bg-accent:not([aria-disabled=true]):hover`. A caller's own
+  `bg-*` still wins through `cn`, because nothing restates a fill.
+- **Native `disabled` stays at 50 %** — it leaves the tab order and has no reachable reason, so it
+  is deliberately the fainter state.
+- **`pointer-events-none` stays with the caller**, chosen from the expression bound to
+  `aria-disabled`: transient only (see `docs/DESIGN_SYSTEM.md` §Buttons). Submits refuse in
+  `onClick` and `onSubmit`.
+- **Buttons that newly dim** under this change (they bind `aria-disabled` and had no shading):
+  `plan-facts.tsx` Recalculate, `AcceptInvitationCard` (Accept, Sign out), `RecentlyDeletedTable`
+  Restore. Each was judged intended; the census is `docs/specs/estate-polish-oct/m1a-census.md`.
+
 ## Primitive: `Menu` / `MenuItem` (`components/ui/menu.tsx`)
 
 The single **action menu** primitive: a hand-rolled WAI-ARIA APG "Menu Button" on

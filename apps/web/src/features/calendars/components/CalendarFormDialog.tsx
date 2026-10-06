@@ -195,6 +195,9 @@ function CalendarForm({
   // "the only tier is out of reach" and "the disabled ORG option was somehow selected".
   const blockedByOrgPermission =
     noTierAvailable || (showScopeChoice && orgTierUnavailable && chosenScope !== 'PROJECT');
+  // The submit's one shaded state, read by the button, its click guard AND the form's `onSubmit`:
+  // Enter in a field submits regardless of the button, so a guard on the click alone is half a guard.
+  const submitBlocked = mutation.isPending || blockedByOrgPermission;
 
   const [weekProblems, setWeekProblems] = useState<WeekProblem[]>([]);
   /**
@@ -247,7 +250,7 @@ function CalendarForm({
     setWeekProblems(parsed.ok ? [] : parsed.problems);
   };
 
-  const onSubmit = handleSubmit((values) => {
+  const submit = handleSubmit((values) => {
     const parsed = weekRowsToShifts(week);
     if (!parsed.ok) {
       // Stop here rather than sending a body the API will reject: the planner is looking at the
@@ -285,7 +288,17 @@ function CalendarForm({
   return (
     <>
       <FieldGridContainer>
-        <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
+        <form
+          noValidate
+          onSubmit={(event) => {
+            if (submitBlocked) {
+              event.preventDefault();
+              return;
+            }
+            void submit(event);
+          }}
+          className="flex flex-col gap-5"
+        >
           <FormErrorSummary errors={errors} />
           {mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
@@ -451,12 +464,16 @@ function CalendarForm({
             {readOnly ? null : (
               <Button
                 type="submit"
-                // `aria-disabled` + the class pair, never the native attribute: a natively disabled
-                // submit is blurred to `<body>` the instant it flips, and it flips twice per save
-                // (ADR-0060 M6). The `pointer-events-none` is what makes it genuinely inert.
-                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
-                aria-disabled={mutation.isPending || blockedByOrgPermission}
+                // `aria-disabled`, never the native attribute: a natively disabled submit is blurred
+                // to `<body>` the instant it flips, and it flips twice per save (ADR-0060 M6). The
+                // click guard makes it inert; the pointer is refused only while saving, because a
+                // reader without the permission should still be able to hover for the reason.
+                className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+                aria-disabled={submitBlocked}
                 aria-busy={mutation.isPending}
+                onClick={(event) => {
+                  if (submitBlocked) event.preventDefault();
+                }}
               >
                 {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create calendar'}
               </Button>

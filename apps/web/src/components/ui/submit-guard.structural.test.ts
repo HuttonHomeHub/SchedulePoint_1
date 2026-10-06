@@ -83,13 +83,6 @@ function buttonTags(source: string): string[] {
   return tags;
 }
 
-/** The submits this gate governs: a form's own submit that blocks itself during its mutation. */
-function guardedSubmits(source: string): string[] {
-  return buttonTags(source).filter(
-    (tag) => tag.includes('type="submit"') && tag.includes('aria-disabled='),
-  );
-}
-
 function nativeDisabledSubmits(source: string): string[] {
   return buttonTags(source).filter(
     (tag) => tag.includes('type="submit"') && /(?<!aria-)\bdisabled=/.test(tag),
@@ -97,95 +90,57 @@ function nativeDisabledSubmits(source: string): string[] {
 }
 
 /**
- * **The half the first version of this gate could not see.**
+ * **A RESTING `aria-disabled` is never pointer-inert** (`docs/TECH_DEBT.md` #458, closed for the
+ * fifteen sites by #460).
  *
- * `Button`'s CVA base is `disabled:pointer-events-none disabled:opacity-50` — Tailwind's
- * `disabled:` variant, which fires on the **native attribute only**. So swapping to `aria-disabled`
- * removes the native attribute *and silently removes every visual consequence of it*: the button
- * stops dimming and stops being pointer-inert while its request is in flight, with nothing on
- * screen changing except the label.
- *
- * That is what this epic shipped at ten sites before a review caught it, and re-deriving found
- * **seven more that pre-dated it** — including all six public auth forms, where pressing Sign in
- * gave no feedback at all beyond the word. The gate proving the native attribute is absent was
- * asserting the easy half of a two-part rule.
- */
-/**
- * **The one file where `pointer-events-none` is wrong, named with its reason.**
- *
- * The discriminator is not in the tag and cannot be: **is the `aria-disabled` expression transient
- * — a mutation in flight — or can it be the control's resting state?** Sixteen of the seventeen
- * bind it to `mutation.isPending`, about a second, where inertness to the pointer is exactly right.
- * `ResendVerificationButton` binds `send.isPending || address.trim() === ''`, so on `/verify-email`
- * reached without `?email=` it is `aria-disabled` from first paint — and `pointer-events: none`
- * then makes `document.elementFromPoint` return the element **behind** it, so the only route back
- * into an unverified account is pointer-unreachable at rest.
- *
- * That is not hypothetical and is why this exception exists rather than a looser regex:
- * `e2e-public/public-screens.spec.ts` failed on it at all six viewports the first time this epic's
- * rule was applied to all seventeen. A tag scan cannot tell the two bindings apart, so the honest
- * instrument is a register somebody edits deliberately — the shape `dependency-claims.json` and
- * `flag-retirement.json` already use, and ADR-0083's "a named exception with its cost stated".
- *
- * **The cost is stated**: this button loses the pointer-inert half, and keeps its inertness from
- * `submit()`'s own `if (blocked) return;` one level up. Adding a second entry here should be hard,
- * so each one carries the reason it is not the transient case.
- */
-const POINTER_EVENTS_EXEMPT = new Map([
-  [
-    'features/auth/components/ResendVerificationButton.tsx',
-    '`aria-disabled` is a RESTING state (empty address), not a mutation in flight — ' +
-      '`pointer-events: none` makes the primary action of /verify-email unreachable.',
-  ],
-]);
-
-function unshadedSubmits(source: string, file = ''): string[] {
-  const exempt = [...POINTER_EVENTS_EXEMPT.keys()].some((k) => file.endsWith(k));
-  return guardedSubmits(source).filter((tag) => {
-    if (!tag.includes('aria-disabled:opacity')) return true;
-    return exempt ? false : !tag.includes('aria-disabled:pointer-events-none');
-  });
-}
-
-/**
- * **The half the submit gate could not see: a RESTING `aria-disabled` that is pointer-inert**
- * (`docs/TECH_DEBT.md` #458).
- *
- * `aria-disabled:pointer-events-none` is right while a mutation is in flight and wrong at rest:
+ * `pointer-events-none` is right while a mutation is in flight and wrong at rest:
  * `pointer-events: none` makes `document.elementFromPoint` return whatever is **behind** the
  * control, so a button that is shaded from first paint cannot be hovered for its reason, and a
- * sighted pointer user gets neither the control nor an explanation. The submit gate above knows one
- * resting submit by name; this one reads every `<Button>`.
+ * click on it lands on whatever is behind it. This gate reads every `<Button>`, and it is
+ * **unconditional** — there is no register of exceptions, because the fifteen that once lived in one
+ * were all fixed, and a rule with a way round it is the rule that got fifteen sites.
  *
- * **The discriminator is the expression bound to `aria-disabled`, and it is read, not guessed.**
+ * **The discriminator is the expression bound to the state attribute, and it is read, not guessed.**
  * Every `||` term must name a transient fact (`isPending`, `isFetchingNextPage`, `saving`, `running`,
  * `checking`, `refreshing`, `busy`, `submitting`, `loading`). A term that is anything else — `blocked`
  * (a local that folds a permission or a missing prerequisite in beside the pending flag), `!filtered`,
- * `result === undefined` — can be the control's resting state, so the site must either shade without
- * `pointer-events-none` or be a named exception that carries its reason and its register row.
+ * `result === undefined` — can be the control's resting state. Two spellings are read:
  *
- * `Button`'s own `disabled:pointer-events-none` fires on the native attribute only, so the fix at a
- * resting site is `aria-disabled:opacity-60` and a handler guard that refuses — not the pointer class.
+ * - `aria-disabled:pointer-events-none` reads the `aria-disabled` expression: only a transient one
+ *   may carry it.
+ * - `aria-busy:pointer-events-none` reads the `aria-busy` expression the same way. It is the remedy
+ *   for a **mixed** site (a resting refusal AND a request in flight), so it is right exactly when
+ *   `aria-busy` is bound to a transient fact, and a site that writes it with no `aria-busy` of its
+ *   own, or one bound to a resting term, has the same defect under another name.
+ *
+ * `Button`'s own `disabled:pointer-events-none` fires on the native attribute only, and the shading
+ * itself is the CVA's (`aria-disabled:opacity-60`), so the fix at a resting site is a handler guard
+ * that refuses — not the pointer class.
  */
 const TRANSIENT_TERM =
   /^(?!!)[\w.?]*\b(isPending|isFetching\w*|isLoading|pending|saving|running|checking|refreshing|busy|submitting|loading)\b/;
 
+/** The `{…}` expression a `<Button>` binds to `attribute`, `'true'` for a bare one, or `null`. */
+function attributeExpression(tag: string, attribute: string): string | null {
+  const at = tag.indexOf(`${attribute}=`);
+  if (at === -1) return null;
+  const open = tag.indexOf('{', at);
+  if (open === -1 || open !== at + attribute.length + 1) return 'true';
+  let depth = 0;
+  for (let i = open; i < tag.length; i += 1) {
+    if (tag[i] === '{') depth += 1;
+    else if (tag[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return tag.slice(open + 1, i).trim();
+    }
+  }
+  return null;
+}
+
 /** The expression a `<Button>` binds to `aria-disabled`, or `null` where it binds none. */
 function ariaDisabledExpression(tag: string): string | null {
-  const at = tag.indexOf('aria-disabled=');
-  if (at !== -1) {
-    const open = tag.indexOf('{', at);
-    if (open === -1 || open !== at + 'aria-disabled='.length) return 'true';
-    let depth = 0;
-    for (let i = open; i < tag.length; i += 1) {
-      if (tag[i] === '{') depth += 1;
-      else if (tag[i] === '}') {
-        depth -= 1;
-        if (depth === 0) return tag.slice(open + 1, i).trim();
-      }
-    }
-    return null;
-  }
+  const bound = attributeExpression(tag, 'aria-disabled');
+  if (bound !== null) return bound;
   // The spread idiom: `{...(isShown ? { 'aria-disabled': true } : {})}`. The condition is the fact.
   if (tag.includes("'aria-disabled'")) {
     return /\.\.\.\(\s*([^?]+?)\s*\?/.exec(tag)?.[1] ?? 'true';
@@ -197,136 +152,20 @@ function isTransient(expression: string): boolean {
   return expression.split('||').every((term) => TRANSIENT_TERM.test(term.trim()));
 }
 
-/** Every `<Button>` that is pointer-inert while shaded and whose shading can be its resting state. */
+/** Every `<Button>` that is pointer-inert while its state can be a resting one. */
 function restingPointerInert(source: string): string[] {
   return buttonTags(source).filter((tag) => {
-    if (!tag.includes('aria-disabled:pointer-events-none')) return false;
-    const expression = ariaDisabledExpression(tag);
-    return expression !== null && !isTransient(expression);
+    if (tag.includes('aria-disabled:pointer-events-none')) {
+      const expression = ariaDisabledExpression(tag);
+      if (expression !== null && !isTransient(expression)) return true;
+    }
+    if (tag.includes('aria-busy:pointer-events-none')) {
+      const expression = attributeExpression(tag, 'aria-busy');
+      if (expression === null || !isTransient(expression)) return true;
+    }
+    return false;
   });
 }
-
-/**
- * **Named exceptions: sites outside the staff console that the gate found and this change did not
- * fix.** Each carries the register row that owns it and how many sites in the file it covers, so a
- * new site in the same file fails rather than hiding behind the entry. `docs/TECH_DEBT.md` #460 owns
- * the list; the staff console's own three sites were fixed in the change that wrote this gate.
- */
-const RESTING_POINTER_INERT_EXCEPTIONS = new Map<string, { count: number; reason: string }>([
-  [
-    'components/ui/scope-save-bar.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` folds `!gate.writable` and `!dirty` in beside `pending`: resting whenever the form is clean; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/audit/components/AuditEventList.tsx',
-    {
-      count: 1,
-      reason:
-        '`!query.hasNextPage` is the resting end of the list, not a request in flight; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/audit/components/AuditFilterBar.tsx',
-    {
-      count: 1,
-      reason: '`empty` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/calendars/components/CalendarFormDialog.tsx',
-    {
-      count: 1,
-      reason:
-        '`blockedByOrgPermission` is a resting state for a reader without the permission; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/calendars/components/CalendarsTable.tsx',
-    {
-      count: 1,
-      reason: '`!filtered` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/clients/components/ClientsTable.tsx',
-    {
-      count: 1,
-      reason: '`!filtered` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/notes/components/NoteComposer.tsx',
-    {
-      count: 1,
-      reason:
-        '`emptyBody || overLimit` is a resting state of Post before anything is typed; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/notes/components/NoteItem.tsx',
-    {
-      count: 1,
-      reason:
-        '`emptyBody || overLimit` is a resting state of Save while the edit is unchanged; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/resources/components/ResourcesTable.tsx',
-    { count: 1, reason: '`!filtersActive` is a resting state of Clear; docs/TECH_DEBT.md #460.' },
-  ],
-  [
-    'features/tsld/components/ArrangeDialog.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` includes `shadeReason !== null`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/tsld/components/BulkSelectionBar.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` includes `!gate.enabled`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/tsld/components/CreateActivityPopover.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` is a resting refusal with a reason to read, beside the transient `saving`; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/tsld/components/LinkChainDialog.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` includes `refusal !== null`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/tsld/components/TsldPanel.tsx',
-    {
-      count: 1,
-      reason:
-        '`!editingEnabled` is the empty-canvas notice resting refusal when the plan is read-only; docs/TECH_DEBT.md #460.',
-    },
-  ],
-  [
-    'features/wbs/components/WbsBulkAssignBar.tsx',
-    {
-      count: 1,
-      reason:
-        '`blocked` includes `!gate.writable` and `changes.length === 0`, both resting; docs/TECH_DEBT.md #460.',
-    },
-  ],
-]);
 
 describe('a submit never blocks itself with the native attribute', () => {
   const files = sourceFiles(join(WEB_SRC, 'features')).concat(
@@ -367,59 +206,6 @@ describe('a submit never blocks itself with the native attribute', () => {
       nativeDisabledSubmits('<Button type="submit"\n// blurs to `<body>`\ndisabled={busy}>'),
       'a comment inside the tag truncates the read and hides what follows it',
     ).toHaveLength(1);
-
-    expect(
-      unshadedSubmits('<Button type="submit" aria-disabled={busy}>'),
-      'the shading matcher no longer recognises a submit with no visual treatment',
-    ).toHaveLength(1);
-    expect(
-      unshadedSubmits(
-        '<Button type="submit" aria-disabled={busy} className="aria-disabled:pointer-events-none aria-disabled:opacity-60">',
-      ),
-      'the shading matcher fires on the correct shape',
-    ).toHaveLength(0);
-    expect(
-      unshadedSubmits('<Button type="submit" disabled={busy}>'),
-      'the shading matcher reaches a submit this gate already refuses for a different reason',
-    ).toHaveLength(0);
-
-    // The exemption discriminates in BOTH directions, or it is a hole rather than a decision.
-    const restingShape =
-      '<Button type="submit" aria-disabled={blocked} className="aria-disabled:opacity-60">';
-    expect(
-      unshadedSubmits(restingShape, '/x/features/auth/components/ResendVerificationButton.tsx'),
-      'the named exemption does not admit the shape it exists for',
-    ).toHaveLength(0);
-    expect(
-      unshadedSubmits(restingShape, '/x/features/clients/components/ClientFormDialog.tsx'),
-      'the exemption leaks to a file that never asked for it',
-    ).toHaveLength(1);
-  });
-
-  // Every exemption names a real file, so a rename cannot leave a silent hole in the rule.
-  it('every pointer-events exemption still exists', () => {
-    for (const [key, reason] of POINTER_EVENTS_EXEMPT) {
-      expect(
-        files.some((f) => f.endsWith(key)),
-        `${key} is exempt but no such file exists — delete the entry or fix the path`,
-      ).toBe(true);
-      expect(reason.length, `${key}'s exemption carries no reason`).toBeGreaterThan(40);
-    }
-  });
-
-  it('shades every guarded submit, because `disabled:` utilities do not fire on `aria-disabled`', () => {
-    const offenders = files.flatMap((file) => {
-      const found = unshadedSubmits(readFileSync(file, 'utf8'), file);
-      return found.map(() => relative(WEB_SRC, file).split(sep).join('/'));
-    });
-
-    expect(
-      offenders,
-      'add `className="aria-disabled:pointer-events-none aria-disabled:opacity-60"`: ' +
-        "`Button`'s base carries `disabled:opacity-50`, which fires on the native attribute only, " +
-        'so an `aria-disabled` submit with no `aria-disabled:` utility looks and behaves exactly ' +
-        'as it does when idle while its request is in flight',
-    ).toEqual([]);
   });
 
   it('is nowhere in the estate', () => {
@@ -470,26 +256,34 @@ describe('a submit never blocks itself with the native attribute', () => {
     ).toHaveLength(0);
   });
 
+  it('classifies the aria-busy expression of a mixed site the same way', () => {
+    const busy = 'className="aria-busy:pointer-events-none aria-disabled:opacity-60"';
+    expect(
+      restingPointerInert(`<Button aria-disabled={blocked} aria-busy={save.isPending} ${busy}>`),
+      'a mixed site protected by a transient aria-busy is the remedy',
+    ).toHaveLength(0);
+    expect(
+      restingPointerInert(`<Button aria-disabled={blocked} aria-busy={blocked} ${busy}>`),
+      'an aria-busy bound to a resting term is the same defect under another name',
+    ).toHaveLength(1);
+    expect(
+      restingPointerInert(`<Button aria-disabled={blocked} ${busy}>`),
+      'the busy pointer class with no aria-busy of its own protects nothing and is found',
+    ).toHaveLength(1);
+  });
+
   it('keeps a button that can rest aria-disabled pointer-reachable', () => {
-    const found = new Map<string, number>();
+    const found: string[] = [];
     for (const file of files) {
       const hits = restingPointerInert(readFileSync(file, 'utf8')).length;
-      if (hits > 0) found.set(relative(WEB_SRC, file).split(sep).join('/'), hits);
+      if (hits > 0) found.push(`${relative(WEB_SRC, file).split(sep).join('/')} (${String(hits)})`);
     }
-    const unexpected = [...found].filter(
-      ([path, count]) => count !== (RESTING_POINTER_INERT_EXCEPTIONS.get(path)?.count ?? 0),
-    );
     expect(
-      unexpected,
+      found,
       'a `<Button>` shaded with `aria-disabled:pointer-events-none` whose expression can be true at ' +
-        'rest: shade it with `aria-disabled:opacity-60` alone and refuse in the handler — or, for a ' +
-        'site outside this change, add a named exception with a register row',
+        'rest: drop the pointer class and refuse in the handler (for a submit, in `onClick` AND ' +
+        '`onSubmit`) — or, if the site also has a request in flight, use `aria-busy:pointer-events-none` ' +
+        "bound to that request's flag",
     ).toEqual([]);
-    for (const [path, { count, reason }] of RESTING_POINTER_INERT_EXCEPTIONS) {
-      expect(found.get(path), `${path} is excepted for ${String(count)} site(s) but has none`).toBe(
-        count,
-      );
-      expect(reason.length, `${path}'s exception carries no reason`).toBeGreaterThan(40);
-    }
   });
 });

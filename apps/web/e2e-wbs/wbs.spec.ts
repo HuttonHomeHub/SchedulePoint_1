@@ -240,6 +240,21 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   const describedBy = await assign.getAttribute('aria-describedby');
   expect(describedBy).not.toBeNull();
   await expect(page.locator(`[id="${describedBy ?? ''}"]`)).toContainText('Start editing');
+  // The reason is on screen, and the shaded button takes the pointer (#460): it is the element at
+  // its own centre (a pointer-inert one hands the point to what is behind), and a real click
+  // writes nothing.
+  await expect(page.locator(`[id="${describedBy ?? ''}"]`)).toBeVisible();
+  await expect
+    .poll(() =>
+      assign.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return hit !== null && el.contains(hit);
+      }),
+    )
+    .toBe(true);
+  await assign.click({ force: true });
+  await expect(assign).toHaveAttribute('aria-disabled', 'true');
 });
 
 /**

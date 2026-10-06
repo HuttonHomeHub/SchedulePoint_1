@@ -237,6 +237,23 @@ test('the audit log records real actions and only an Org Admin can read them', a
   // refuses the action outright if anything ever sends it.
   await expect(admin.getByRole('button', { name: 'Sign-ins' })).toHaveCount(0);
 
+  // With nothing to clear, Clear filters is shaded but not pointer-inert (#460): it is the element
+  // at its own centre (`pointer-events: none` would hand the point to what is behind it), and a
+  // real click changes nothing.
+  const barClear = admin.getByRole('button', { name: 'Clear filters' });
+  await expect(barClear).toHaveAttribute('aria-disabled', 'true');
+  await expect
+    .poll(() =>
+      barClear.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return hit !== null && el.contains(hit);
+      }),
+    )
+    .toBe(true);
+  await barClear.click({ force: true });
+  expect(new URL(admin.url()).searchParams.get('categories')).toBeNull();
+
   await admin.getByRole('button', { name: 'Deletions' }).click();
   await expect(auditRow(admin, 'Client deleted')).toBeVisible();
   await expect(admin.getByText('Role changed', { exact: true })).toHaveCount(0);
