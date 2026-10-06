@@ -667,18 +667,22 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   remains correct for a control that is **statically** unavailable (no
   permission, nothing selected), where nothing flips underneath the user.
 
-  **And it carries `className="aria-disabled:pointer-events-none
-aria-disabled:opacity-60"`, which is not decoration — it is the other half of
-  the same swap.** `Button`'s CVA base is `disabled:pointer-events-none
-disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
-  attribute only**, so dropping that attribute silently drops every visual
-  consequence of it. A submit converted without the class pair looks and behaves
-  exactly as it does at rest while its request is in flight — nothing dims,
-  nothing becomes inert, and the only change is the label. Page-consistency M5
-  shipped ten such conversions and a review caught it; re-deriving found **seven
-  more that pre-dated the epic**, including all six public auth forms, so
-  pressing Sign in gave no feedback at all. `submit-guard.structural.test.ts`
-  now asserts both halves; before that it asserted the easy one.
+  **And `Button` itself shades it** (estate polish M1a, `docs/TECH_DEBT.md` #460).
+  `Button`'s CVA base carries `disabled:pointer-events-none disabled:opacity-50`, which
+  fires on the **native attribute only**, so the CVA also states `aria-disabled:opacity-60`
+  and gates each variant's hover as `not-aria-disabled:hover:…`. A caller adds nothing to
+  get the dimmed, no-hover look. Native stays fainter (50) on purpose: it leaves the tab
+  order and carries no reachable reason, where an `aria-disabled` control keeps its label
+  and usually a reason to read.
+  **`pointer-events-none` is the caller's call, read from the bound expression.** Add
+  `aria-disabled:pointer-events-none` only where the expression is purely transient (a
+  request in flight). Where the expression can be true at rest (`blocked`, `!dirty`, an
+  empty body), the button must take the pointer so its reason can be hovered and a click
+  cannot fall through to what is behind it — refuse in the handler, and for a **submit**
+  refuse in `onClick` AND in the form's `onSubmit` (Enter in a field submits regardless of
+  the button). A **mixed** site adds `aria-busy:pointer-events-none` for the pending part.
+  `submit-guard.structural.test.ts` enforces this with no exceptions list; before M1a it
+  asserted the opposite half (that the class was present).
   **This clause is narrowed for _fields_ — see "Forms & inputs" below, and read
   the two together.** ADR-0083 D2 corrects it twice: "no permission" is not
   static (the ADR-0028 pen can be taken by a peer mid-session, so the clause

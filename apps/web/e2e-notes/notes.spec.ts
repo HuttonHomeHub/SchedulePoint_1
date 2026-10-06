@@ -44,6 +44,24 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await expect(logic.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(logic.getByText('No notes yet.')).toBeVisible();
 
+  // Empty, Post is shaded but takes the pointer (#460): it is the element at its own centre
+  // (Playwright's `trial` click cannot say so, because it refuses any `aria-disabled` control), and
+  // a real click does nothing: no validation error, no request.
+  const post = logic.getByRole('button', { name: 'Add note' });
+  await expect(post).toHaveAttribute('aria-disabled', 'true');
+  await expect
+    .poll(() =>
+      post.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return hit !== null && el.contains(hit);
+      }),
+    )
+    .toBe(true);
+  await post.click({ force: true });
+  await expect(logic.getByText('No notes yet.')).toBeVisible();
+  await expect(logic.getByText('Enter a note.')).toHaveCount(0);
+
   // Add a note — it lands in the thread, attributed to the author.
   await logic.getByLabel('Add a note').fill('Poured the slab today');
   await logic.getByRole('button', { name: 'Add note' }).click();

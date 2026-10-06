@@ -163,16 +163,15 @@ export function AuditFilterBar({
         // would blur to `<body>` mid-interaction and drop the reader's place (the ScopeSaveBar
         // lesson, ADR-0060/ADR-0063).
         //
-        // The shading is the repo's static attribute-variant, not a computed className. The first
-        // version hand-rolled `empty ? 'opacity-50' : undefined` and so dropped
-        // `pointer-events-none` — leaving a button that looked disabled, still lit its hover
-        // background, and still took the pointer. Two reviewers found it independently.
+        // The shading is the repo's static attribute-variant, not a computed className. It is NOT
+        // pointer-inert: with nothing to clear this is a resting state, and a click that lands on the
+        // button (and does nothing) is better than one that falls through to what is behind it.
         aria-disabled={empty}
         onClick={() => {
           if (empty) return;
           onChange({ categories: '', outcome: '', from: '', to: '' });
         }}
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+        className="aria-disabled:opacity-50"
       >
         <X aria-hidden="true" className="size-4" />
         Clear filters

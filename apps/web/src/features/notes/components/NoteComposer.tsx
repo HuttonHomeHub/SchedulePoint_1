@@ -67,8 +67,11 @@ export function NoteComposer({
   const value = useWatch({ control, name: 'body' }) ?? '';
   const overLimit = value.length > NOTE_BODY_MAX;
   const emptyBody = value.trim().length === 0;
+  // Read by the button, its click guard and the form's `onSubmit`: the shaded Post must do nothing
+  // however it is reached, and a click on it is no longer swallowed by `pointer-events: none`.
+  const blocked = emptyBody || overLimit || create.isPending;
 
-  const onSubmit = handleSubmit((values) => {
+  const submit = handleSubmit((values) => {
     if (overLimit) return;
     create.mutate(values.body, {
       onSuccess: () => {
@@ -79,7 +82,17 @@ export function NoteComposer({
   });
 
   return (
-    <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-2">
+    <form
+      noValidate
+      onSubmit={(event) => {
+        if (blocked) {
+          event.preventDefault();
+          return;
+        }
+        void submit(event);
+      }}
+      className="flex flex-col gap-2"
+    >
       <TextareaField
         label="Add a note"
         rows={3}
@@ -103,9 +116,12 @@ export function NoteComposer({
         <Button
           type="submit"
           size="sm"
-          aria-disabled={emptyBody || overLimit || create.isPending}
+          aria-disabled={blocked}
           aria-busy={create.isPending}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          onClick={(event) => {
+            if (blocked) event.preventDefault();
+          }}
+          className="aria-busy:pointer-events-none aria-disabled:opacity-50"
         >
           {create.isPending ? 'Adding…' : 'Add note'}
         </Button>

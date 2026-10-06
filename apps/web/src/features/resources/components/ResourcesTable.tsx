@@ -567,7 +567,7 @@ export function ResourcesTable({
                 if (!filtersActive) return;
                 clearFilters();
               }}
-              className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              className="aria-disabled:opacity-50"
             >
               <X aria-hidden="true" className="size-4" />
               Clear filters

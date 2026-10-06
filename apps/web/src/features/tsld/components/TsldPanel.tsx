@@ -3156,7 +3156,7 @@ export function TsldPanel({
                 listboxRef.current?.focus();
                 setMode('add-activity');
               }}
-              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              className="aria-disabled:opacity-60"
             >
               Draw the first activity
             </Button>

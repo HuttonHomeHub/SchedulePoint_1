@@ -95,11 +95,31 @@ describe('CalendarFormDialog — scope choice (flag on)', () => {
     ).toBeInTheDocument();
     // The submit is blocked too, so the planner can't fill the form and lose the work to a 403.
     // `aria-disabled`, not the native attribute — a natively disabled submit blurs to `<body>`
-    // the instant it flips (ADR-0060 M6). It is genuinely inert: `pointer-events-none` + a guard.
+    // the instant it flips (ADR-0060 M6). It is inert through its click guard and the form's own
+    // `onSubmit`, and takes the pointer so the reason beside it can be reached.
     expect(screen.getByRole('button', { name: 'Create calendar' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
+  });
+
+  it('links the shaded submit to the reason it is shaded, which sits by the Scope field', () => {
+    renderDialog({ canManageOrg: false });
+    expect(screen.getByRole('button', { name: 'Create calendar' })).toHaveAccessibleDescription(
+      /don’t have permission to add to the shared organisation library/,
+    );
+  });
+
+  it('refuses the shaded submit however it is reached: a click and a form submit post nothing', () => {
+    renderDialog({ canManageOrg: false });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Standard' } });
+    const submit = screen.getByRole('button', { name: 'Create calendar' });
+    expect(submit).not.toHaveClass('aria-disabled:pointer-events-none');
+    fireEvent.click(submit);
+    const form = submit.closest('form');
+    if (!form) throw new Error('no form');
+    fireEvent.submit(form);
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('disables — but keeps — the organisation option beside a usable project option, and says why', () => {

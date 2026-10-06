@@ -29,9 +29,11 @@ not affected** (spec §4.4).
 pointer-inert, refuse pointer/Enter/Space, and show their reason where they have one.
 **Entry point:** e.g. Notes **Add note** with an empty body; audit **Clear filters** with no filter;
 the plan workspace's **Arrange** apply while refused.
-**Journey:** each driven site asserts `click({ trial: true })` succeeds while shaded (Playwright's
-actionability check fails on a pointer-inert element), that a real click and Enter change nothing, and
-that the reason is visible where one exists.
+**Journey:** each driven site asserts the shaded button is the element at its own centre
+(`elementFromPoint`; a pointer-inert button hands the point to whatever is behind it), that a forced
+click and Enter change nothing, and that the reason is visible where one exists. (This said
+`click({ trial: true })` until M1a: Playwright's enabled check refuses any `aria-disabled="true"`
+control, so a trial click fails on every shaded button whatever its pointer state.)
 
 > **Complexity:** M · **Dependencies:** none
 > **Risks:** a submit becomes clickable (empty note → validation error; pending → double submit) → T2
@@ -119,6 +121,11 @@ that the reason is visible where one exists.
   `aria-disabled:pointer-events-none`. Delete `SHADED_BUTTON` (its sites take the per-site class from T0).
 - Update tests asserting caller strings: `copy-button.test.tsx:83-84`,
   `ScheduleHealthPanel.test.tsx:436`, `diagnostics-panel.test.tsx:197` (assert behaviour/the CVA output).
+- `AssignmentRow.tsx` **Save join delay** (found at M1a): its `lagUnavailable ? 'pointer-events-none
+opacity-50' : undefined` is a resting pointer-inert site the gate cannot see; rewrite it to the
+  shaded pattern with a refusing handler, like the fifteen. Same for `SHADED_BUTTON`'s four sites.
+- Consider (component review of M1a): the gate requires a resting-shaded `type="submit"` `<Button>` to
+  have an `onClick` naming its bound expression, since the pointer class no longer protects the click.
 
 ##### M1b-T2 — G1
 

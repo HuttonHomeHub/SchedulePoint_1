@@ -269,13 +269,15 @@ function NoteEditForm({
   const value = useWatch({ control, name: 'body' }) ?? '';
   const overLimit = value.length > NOTE_BODY_MAX;
   const emptyBody = value.trim().length === 0;
+  // Read by the button, its click guard and the form's `onSubmit` (see `NoteComposer`).
+  const blocked = emptyBody || overLimit || update.isPending;
 
   // On opening the editor, move focus into the textarea (SC 2.4.3).
   useEffect(() => {
     setFocus('body');
   }, [setFocus]);
 
-  const onSubmit = handleSubmit((values) => {
+  const submit = handleSubmit((values) => {
     if (overLimit) return;
     update.mutate(
       { noteId: note.id, body: values.body, version: note.version },
@@ -299,7 +301,17 @@ function NoteEditForm({
   });
 
   return (
-    <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-2">
+    <form
+      noValidate
+      onSubmit={(event) => {
+        if (blocked) {
+          event.preventDefault();
+          return;
+        }
+        void submit(event);
+      }}
+      className="flex flex-col gap-2"
+    >
       <TextareaField
         label="Edit note"
         rows={3}
@@ -327,9 +339,12 @@ function NoteEditForm({
           <Button
             type="submit"
             size="sm"
-            aria-disabled={emptyBody || overLimit || update.isPending}
+            aria-disabled={blocked}
             aria-busy={update.isPending}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            onClick={(event) => {
+              if (blocked) event.preventDefault();
+            }}
+            className="aria-busy:pointer-events-none aria-disabled:opacity-50"
           >
             {update.isPending ? 'Saving…' : 'Save'}
           </Button>

@@ -67,11 +67,24 @@ describe('NoteComposer', () => {
     );
   });
 
-  it('rejects a whitespace-only body with a validation message and never posts', async () => {
+  it('refuses a whitespace-only body: the shaded Post takes the click and posts nothing', () => {
     renderComposer();
     fireEvent.change(screen.getByLabelText('Add a note'), { target: { value: '     ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
-    expect(await screen.findByText('Enter a note.')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Add note' });
+    // Shaded at rest but NOT pointer-inert: a click must reach the guard, not whatever is behind.
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    expect(submit).not.toHaveClass('aria-disabled:pointer-events-none');
+    fireEvent.click(submit);
+    expect(screen.queryByText('Enter a note.')).not.toBeInTheDocument();
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+  });
+
+  it('does not submit from the form either while blocked (Enter submits regardless of the button)', () => {
+    const { container } = renderComposer();
+    fireEvent.change(screen.getByLabelText('Add a note'), { target: { value: '   ' } });
+    const form = container.querySelector('form');
+    if (!form) throw new Error('no form');
+    fireEvent.submit(form);
     expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
   });
 

@@ -24,9 +24,14 @@ import { useFieldGate } from '@/components/ui/field-gate';
  * **`aria-disabled`, not the native attribute** (the `RecalculateButton` precedent). A natively
  * disabled button is blurred to `<body>` the instant it flips — and this one flips on *every* save,
  * twice: once when `pending` goes true under the user's own focus, and again when the save lands and
- * `dirty` goes false. That is SC 2.4.3, on the happy path, every time. The `pointer-events-none`
- * rule stops the mouse and the click guard stops the keyboard, so the control is inert without ever
- * leaving the tab order.
+ * `dirty` goes false. That is SC 2.4.3, on the happy path, every time. The click guard stops the
+ * pointer and the keyboard alike (Enter in a field reaches the form through this button's click), so
+ * the control is inert without ever leaving the tab order.
+ *
+ * **Pointer-inert only while saving.** `blocked` is also true at rest — a clean scope, a read-only
+ * one — and `pointer-events: none` there hands the click to whatever is behind the button and hides
+ * the reason from a hover (`docs/TECH_DEBT.md` #460). So `aria-busy:pointer-events-none` covers the
+ * in-flight part and the guard covers the rest.
  *
  * **The reason is `aria-describedby`-linked, not merely adjacent.** The first draft placed the
  * sentence next to the button and the docblock claimed "a reason that lives next to the boolean
@@ -110,12 +115,12 @@ export function ScopeSaveBar({
         aria-disabled={blocked}
         aria-busy={pending}
         {...(describedBy ? { 'aria-describedby': describedBy } : {})}
-        // `pointer-events-none` covers the mouse; this covers the keyboard, where Enter on a focused
-        // button dispatches a click that would otherwise submit the form.
+        // Refuses a click while blocked: a pointer press, Enter or Space on this button, and Enter in
+        // a field (the browser's implicit submission is a click on the default button) all arrive here.
         onClick={(event) => {
           if (blocked) event.preventDefault();
         }}
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        className="aria-busy:pointer-events-none aria-disabled:opacity-60"
       >
         {pending ? pendingLabel : label}
       </Button>

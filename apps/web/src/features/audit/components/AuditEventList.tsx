@@ -201,14 +201,12 @@ export function AuditEventList({
               if (!query.hasNextPage || query.isFetchingNextPage) return;
               void query.fetchNextPage();
             }}
-            // **Shaded, because `button.tsx` shades only native `disabled`.** Its CVA carries
-            // `disabled:opacity-50` and no `aria-disabled:` variant, so an `aria-disabled` control
-            // — which this deliberately is, to stay focusable — rendered at FULL strength: a
-            // filled secondary button whose label is the fact "All events shown". Same treatment
-            // `AuditFilterBar`'s Clear filters already uses. Kept as a button rather than swapped
+            // **Pointer-inert only while a page is loading** (`aria-busy`). At the end of the list
+            // the button is shaded but still takes the pointer, so a click lands on it rather than on
+            // whatever is behind, and the handler above refuses. Kept as a button rather than swapped
             // for text, because pressing Load more until exhausted would otherwise unmount the
             // control holding focus (WCAG 2.4.3).
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="aria-busy:pointer-events-none aria-disabled:opacity-50"
           >
             {loadMoreLabel(query)}
           </Button>
