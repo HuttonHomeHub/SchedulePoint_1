@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -15,9 +15,40 @@ import { describe, expect, it } from 'vitest';
  * is one character of intent: an editor's auto-import writes the static form, everything still
  * works, and the only symptom is a number in a build report nobody reads on that PR.
  */
-const PANEL = readFileSync(join(import.meta.dirname, 'performance-probe-panel.tsx'), 'utf8');
+/**
+ * **Every file of the panel, not one.** The panel was one 1,286-line file and a gate that read it by
+ * name; M4 split it (shell, controls, sweep hook, result, copy), and a gate still reading the old
+ * name alone would pass against a shell that imports nothing while the file that does the work
+ * grew a static edge. So the set is read from the directory, and the pinned positive cases below
+ * name the file each fact is true of — a split that moved the dynamic import would fail them rather
+ * than pass for want of anything to find.
+ */
+const DIR = import.meta.dirname;
+const PANEL_FILES = readdirSync(DIR).filter(
+  (name) =>
+    /\.tsx?$/.test(name) && !name.includes('.test.') && name !== 'loading-probe-section.tsx',
+);
+const read = (name: string): string => readFileSync(join(DIR, name), 'utf8');
+const PANEL = PANEL_FILES.map(read).join('\n');
+/** Where the runner is reached, and where the registry is named: the files that hold those facts. */
+const SWEEP_HOOK = read('use-probe-sweep.ts');
+const CONTROLS = read('probe-controls.tsx');
 
 describe('the panel’s imports', () => {
+  it('reads the whole split', () => {
+    // "No file imports the runner" passes against a scan that found no files at all.
+    expect(PANEL_FILES).toEqual(
+      expect.arrayContaining([
+        'performance-probe-panel.tsx',
+        'probe-controls.tsx',
+        'probe-sittings.tsx',
+        'sitting-block.tsx',
+        'sitting-result.tsx',
+        'use-probe-sweep.ts',
+      ]),
+    );
+  });
+
   it('never statically imports the runner or a scene', () => {
     // **Value imports only.** `import type ... from '../runner/run-probe'` is erased entirely by
     // the compiler and creates no runtime edge, so the panel is free to name the runner's types
@@ -26,7 +57,7 @@ describe('the panel’s imports', () => {
     // types beside the panel) to satisfy a gate about bundle size that types cannot affect.
     //
     // A dynamic `await import(...)` is a split point and is deliberately not matched either.
-    const staticImports = [...PANEL.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)]
+    const staticImports = [...PANEL.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)]
       .map((m) => m[1])
       .filter((spec): spec is string => spec !== undefined);
     const forbidden = staticImports.filter(
@@ -44,16 +75,26 @@ describe('the panel’s imports', () => {
     // line, and adding one type to it broke the mutation — loudly, because the assertion is written
     // so a no-op replace fails rather than passes. That is the right way round, and deriving it is
     // better still: the gate keeps testing the thing it names when the import list changes.
-    const typeImport = /^import type \{[^}]*\} from '\.\.\/runner\/run-probe';$/m.exec(PANEL);
+    const typeImport = /^import type \{[^}]*\} from '\.\.\/runner\/run-probe';$/m.exec(SWEEP_HOOK);
     expect(
       typeImport,
       'the panel must import the runner’s types, or there is nothing to mutate',
     ).not.toBeNull();
-    const withValueImport = PANEL.replace(
+    const withValueImport = SWEEP_HOOK.replace(
       typeImport?.[0] ?? '',
       "import { runProbe } from '../runner/run-probe';",
     );
-    const specs = [...withValueImport.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)].map(
+    const specs = [...withValueImport.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)].map(
+      (m) => m[1],
+    );
+    expect(specs).toContain('../runner/run-probe');
+  });
+
+  it('catches a value import that Prettier wrapped over several lines (component review, M4)', () => {
+    // The scan once read one line per import, so a wrapped `import {\n  runProbe,\n} from …` slipped
+    // past every assertion above. Verified red against the single-line pattern.
+    const wrapped = `${SWEEP_HOOK}\nimport {\n  runProbe,\n  type ProbeOutcome,\n} from '../runner/run-probe';\n`;
+    const specs = [...wrapped.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)].map(
       (m) => m[1],
     );
     expect(specs).toContain('../runner/run-probe');
@@ -62,13 +103,13 @@ describe('the panel’s imports', () => {
   it('DOES reach the runner dynamically — so a green run above cannot mean "it imports nothing"', () => {
     // The pinned positive case (ADR-0093). Without it, deleting the whole feature satisfies the
     // assertion above perfectly, and a green suite could not tell "correctly split" from "gone".
-    expect(PANEL).toMatch(/await import\('\.\.\/runner\/run-probe'\)/);
+    expect(SWEEP_HOOK).toMatch(/await import\('\.\.\/runner\/run-probe'\)/);
   });
 
   it('imports the registry statically, because the list must render before anything downloads', () => {
     // `model/scenarios.ts` is deliberately free of scene imports for exactly this reason: the panel
     // has to name what it can measure without fetching 68 kB to find out.
-    expect(PANEL).toMatch(/^import \{[^}]*SCENARIOS[^}]*\} from '\.\.\/model\/scenarios';/m);
+    expect(CONTROLS).toMatch(/^import \{[^}]*SCENARIOS[^}]*\} from '\.\.\/model\/scenarios';/m);
   });
 });
 
@@ -85,7 +126,7 @@ const SECTION = readFileSync(join(import.meta.dirname, 'loading-probe-section.ts
 
 describe('the loading probe section’s imports', () => {
   const valueImports = (source: string): string[] =>
-    [...source.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)]
+    [...source.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)]
       .map((m) => m[1])
       .filter((spec): spec is string => spec !== undefined);
 

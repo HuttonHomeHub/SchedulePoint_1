@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProbeOutcome } from '../runner/run-probe';
 
@@ -254,6 +254,7 @@ const unjudgeable = (): ProbeOutcome => {
  * assert focus RETURNS to it need to ask for the same element the panel's ref points at.
  */
 function runControl(): HTMLElement {
+  openMeasureOne();
   return screen.getByRole('button', { name: 'Run measurement' });
 }
 
@@ -277,8 +278,7 @@ function confirmIn(label: string): void {
 }
 
 function runOnce(): void {
-  const disclosure = screen.getByText('Measure one thing');
-  fireEvent.click(disclosure);
+  openMeasureOne();
   fireEvent.click(runControl());
   const dialog = screen.getByRole('alertdialog');
   const confirm = [...dialog.querySelectorAll('button')].find(
@@ -286,6 +286,22 @@ function runOnce(): void {
   );
   if (!confirm) throw new Error('the confirmation has no Run measurement button');
   fireEvent.click(confirm);
+}
+
+/**
+ * Render the panel and open it. The box is folded on arrival (ADR-0178 D-3), so every case that
+ * drives a control starts by pressing **Open performance tools**; the folded state has its own cases.
+ */
+function renderOpen(): ReturnType<typeof render> {
+  const view = render(<PerformanceProbePanel apiVersion="0.140.0" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open performance tools' }));
+  return view;
+}
+
+/** Open "Measure one thing", whatever state it is in — a second press would fold it again. */
+function openMeasureOne(): void {
+  const trigger = screen.getByRole('button', { name: 'Measure one thing' });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
 }
 
 beforeEach(() => {
@@ -301,9 +317,122 @@ beforeEach(() => {
   historyRows.length = 0;
 });
 
+describe('PerformanceProbePanel — folded away (ADR-0178 D-3)', () => {
+  afterEach(() => {
+    window.location.hash = '';
+    window.sessionStorage.clear();
+  });
+
+  it('arrives folded: one summary line and an Open button, with no control rendered', () => {
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    const toggle = screen.getByRole('button', { name: 'Open performance tools' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText(/Not measured on this installation yet\./)).toBeInTheDocument();
+    // **Not rendered, rather than clipped**: a clipped control is a focusable thing nobody can see.
+    expect(screen.queryByRole('button', { name: 'Run all measurements' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Measure one thing' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'report a plan loading status' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('summarises the newest sitting while folded', () => {
+    historyRows.push(storedRow({ machineLabel: 'the Dell' }));
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    expect(screen.getByText(/Last measured .+ on the Dell: /)).toBeInTheDocument();
+  });
+
+  it('opens on the button, keeps focus on it, and renames it Hide', () => {
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    const toggle = screen.getByRole('button', { name: 'Open performance tools' });
+    toggle.focus();
+    fireEvent.click(toggle);
+
+    const hide = screen.getByRole('button', { name: 'Hide performance tools' });
+    expect(hide).toBe(toggle);
+    expect(hide).toHaveAttribute('aria-expanded', 'true');
+    expect(hide).toHaveFocus();
+    expect(hide.getAttribute('aria-controls')).toBe(
+      screen.getByRole('button', { name: 'Run all measurements' }).closest('[id]')?.id,
+    );
+    expect(
+      screen.getByRole('button', { name: 'report a plan loading status' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps what was chosen across a Hide and an Open', () => {
+    renderOpen();
+    openMeasureOne();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Machine (optional)' }), {
+      target: { value: 'the Dell' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Hide performance tools' }));
+    expect(screen.queryByRole('textbox', { name: 'Machine (optional)' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open performance tools' }));
+    openMeasureOne();
+    expect(screen.getByRole('textbox', { name: 'Machine (optional)' })).toHaveValue('the Dell');
+  });
+
+  it('shades Hide with its reason while a measurement runs, and the press does nothing', async () => {
+    let resolveRun: (o: ProbeOutcome) => void = () => undefined;
+    runProbe.mockImplementation(
+      () =>
+        new Promise<ProbeOutcome>((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    renderOpen();
+    runOnce();
+    await screen.findByRole('button', { name: /^Stop/ });
+
+    const hide = screen.getByRole('button', { name: 'Hide performance tools' });
+    expect(hide).toHaveAttribute('aria-disabled', 'true');
+    expect(hide).not.toBeDisabled();
+    const reason = hide.getAttribute('aria-describedby');
+    expect(document.getElementById(reason ?? '')).toHaveTextContent('A measurement is running.');
+    fireEvent.click(hide);
+    expect(hide).toHaveAttribute('aria-expanded', 'true');
+
+    resolveRun(measured('PASS'));
+    await screen.findByText('PASS');
+    expect(screen.getByRole('button', { name: 'Hide performance tools' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+
+  it('opens and takes focus when the page is reached at its anchor', () => {
+    window.location.hash = '#performance';
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    expect(screen.getByRole('button', { name: 'Hide performance tools' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Performance' })).toHaveFocus();
+  });
+
+  it('opens when the anchor is followed after arrival', () => {
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    expect(screen.getByRole('button', { name: 'Open performance tools' })).toBeInTheDocument();
+    act(() => {
+      window.location.hash = '#performance';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(screen.getByRole('button', { name: 'Hide performance tools' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Performance' })).toHaveFocus();
+  });
+
+  it('opens when a plan-loading press is pending, or the section could never resume it', () => {
+    // The press reloads the page twice; the section that resumes it lives in the folded content.
+    window.sessionStorage.setItem(
+      'schedulepoint.staff.loading-probe',
+      JSON.stringify({ v: 1, runId: 'r', startedAt: Date.now(), step: 'reload' }),
+    );
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    expect(screen.getByRole('button', { name: 'Hide performance tools' })).toBeInTheDocument();
+  });
+});
+
 describe('PerformanceProbePanel', () => {
   it('hands the API version to the plan-loading section rather than reading it', () => {
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     expect(screen.getByRole('button', { name: 'report a plan loading status' })).toHaveAttribute(
       'data-api-version',
       '0.140.0',
@@ -313,7 +442,7 @@ describe('PerformanceProbePanel', () => {
   it('names its entry point and takes no measurement until asked', () => {
     // ADR-0081: a milestone claiming user-facing capability names its entry point. This is that
     // control, located by role and accessible name rather than by copy (ADR-0091's lesson).
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     expect(runControl()).toBeInTheDocument();
     expect(screen.getByText(/No measurement has been taken in this browser/)).toBeInTheDocument();
     expect(runProbe).not.toHaveBeenCalled();
@@ -322,14 +451,15 @@ describe('PerformanceProbePanel', () => {
   it('lists what it can measure without downloading anything', () => {
     // The registry is imported statically precisely so this list renders before the 68 kB of scene
     // code is fetched. If it ever needed the runner to name a scenario, the split would be pointless.
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
+    openMeasureOne();
     expect(screen.getByRole('combobox', { name: 'Measurement' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Canvas draw budget' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Revision compare overlay' })).toBeInTheDocument();
   });
 
   it('confirms before covering the screen, and says the movement IS the measurement', () => {
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     fireEvent.click(runControl());
     const dialog = screen.getByRole('alertdialog');
     // **The duration is derived, so the assertion is its shape rather than a constant.** The panel
@@ -345,7 +475,7 @@ describe('PerformanceProbePanel', () => {
     // A modal `<dialog>` restores focus from inside the effect that closes it, and lands on `<body>`
     // when the opener has moved — this repository's third-most-repeated defect (ADR-0080, ADR-0096,
     // ADR-0099 M10). Verified red by removing the `focusRun()` call from `onClose`.
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     fireEvent.click(runControl());
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(runControl()).toHaveFocus());
@@ -364,7 +494,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
 
@@ -383,7 +513,7 @@ describe('PerformanceProbePanel', () => {
       },
       context: CONTEXT,
     });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByText(/The run was refused — nothing was measured/);
@@ -397,7 +527,7 @@ describe('PerformanceProbePanel', () => {
 
   it('shows INDETERMINATE with its reason, and never the word PASS', async () => {
     runProbe.mockResolvedValue(measured('INDETERMINATE'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByText('INDETERMINATE');
@@ -409,7 +539,7 @@ describe('PerformanceProbePanel', () => {
     // A chunk that fails to download is a network fact, not a measurement — and it must not read as
     // a failing painter, which is the whole thing this panel is asked about.
     runProbe.mockRejectedValue(new Error('chunk load failed'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByText(/The measurement did not run/);
@@ -428,7 +558,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
     release(measured('PASS'));
@@ -436,7 +566,8 @@ describe('PerformanceProbePanel', () => {
 
   it('records a measured run, carrying the machine note and the scenario version', async () => {
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
+    openMeasureOne();
     fireEvent.change(screen.getByRole('textbox', { name: 'Machine (optional)' }), {
       target: { value: '  the Dell, docked  ' },
     });
@@ -459,7 +590,7 @@ describe('PerformanceProbePanel', () => {
     // The assertion this mock exists for. A refusal means nothing was measured, so a stored row
     // would put a reading in the installation's history that no machine ever produced.
     runProbe.mockResolvedValue(refused());
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // Two matches by design — the alert and the panel's own live region both say it, which is what
@@ -486,7 +617,7 @@ describe('PerformanceProbePanel', () => {
         resolveRun = resolve;
       }),
     );
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // While the overlay is up — it only exists during a run.
@@ -530,7 +661,7 @@ describe('PerformanceProbePanel', () => {
         },
       ],
     });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // The first line still shows — this must not become a test that only the LAST line survives.
@@ -542,7 +673,7 @@ describe('PerformanceProbePanel', () => {
 
   it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
     runProbe.mockResolvedValue(unjudgeable());
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledTimes(1));
@@ -558,7 +689,7 @@ describe('PerformanceProbePanel', () => {
     // about the other three. The step's own status is the truth.
     recordMutateAsync.mockRejectedValue(new Error('network'));
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -587,7 +718,7 @@ describe('PerformanceProbePanel', () => {
      */
     recordMutateAsync.mockRejectedValue(new ApiFetchError(422, { code: 'X', message: 'no' }));
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // The status reaches the operator, and so does the fact that a retry is pointless.
@@ -620,7 +751,7 @@ describe('PerformanceProbePanel', () => {
       new ApiFetchError(429, { code: 'X', message: 'slow down' }),
     );
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -635,7 +766,7 @@ describe('PerformanceProbePanel', () => {
   it('offers no retry and no failure wording when the reading was recorded', async () => {
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByText(/Recorded\./);
@@ -645,7 +776,7 @@ describe('PerformanceProbePanel', () => {
   it('shows one empty state for the history, and it is about having none rather than matching none', async () => {
     // There are no filters here, so "nothing recorded yet" cannot be confused with "nothing
     // matched" — the distinction ADR-0073 C1 found collapsed in a live region.
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     expect(await screen.findByText(/No readings recorded yet/)).toBeInTheDocument();
   });
 
@@ -657,7 +788,7 @@ describe('PerformanceProbePanel', () => {
     const base = measured('PASS');
     if (base.kind !== 'measured') throw new Error('unreachable');
     runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: base.limbs });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // **Both channels, asserted separately.** A document-wide `findAllByText` passes when EITHER
@@ -695,7 +826,7 @@ describe('PerformanceProbePanel', () => {
     // reader could not tell it from never having pressed Run — and nothing said the press had
     // registered. Found by the M5 ux review.
     runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: [] });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // Two elements carry it — the visible alert and the panel's own live region — and that they
@@ -725,7 +856,7 @@ describe('PerformanceProbePanel', () => {
         resolveRun = resolve;
       });
     });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     const stop = await screen.findByRole('button', { name: /^Stop/ });
@@ -747,7 +878,7 @@ describe('PerformanceProbePanel', () => {
     runProbe.mockResolvedValue(measured('PASS'));
     // A retry that never settles, so the in-flight state is observable.
     recordMutate.mockImplementation(() => undefined);
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Retry recording' }));
@@ -762,7 +893,7 @@ describe('PerformanceProbePanel', () => {
     recordMutateAsync.mockRejectedValue(new Error('network'));
     recordMutate.mockImplementation(() => undefined);
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -783,7 +914,7 @@ describe('PerformanceProbePanel', () => {
     // success was a plain paragraph, so a screen-reader user heard the bad news and never the good.
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByText(/Recorded\./);
@@ -797,7 +928,7 @@ describe('PerformanceProbePanel', () => {
     // so every later sweep summary — and its "NOT recorded" warning — went unannounced.
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     fireEvent.click(screen.getByRole('button', { name: 'report a plan loading status' }));
     const live = (): string =>
       document.querySelector('[aria-live="polite"].sr-only')?.textContent ?? '';
@@ -824,7 +955,7 @@ describe('PerformanceProbePanel', () => {
           resolveRun = resolve;
         }),
     );
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await screen.findByRole('button', { name: /^Stop/ });
@@ -842,7 +973,7 @@ describe('PerformanceProbePanel', () => {
     // The commonest outcome on this surface, and it rendered as `REPORTED_ONLY` with nothing beside
     // it — indistinguishable, to a first-time reader, from a failure code.
     runProbe.mockResolvedValue(measured('REPORTED_ONLY'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     expect(await screen.findByText('REPORTED, NOT GRADED')).toBeInTheDocument();
@@ -853,7 +984,7 @@ describe('PerformanceProbePanel', () => {
     // The history had no verdict at all: the server stores samples and thresholds and does not
     // judge, and nothing called the judge on read. The approved spec names the verdict first.
     historyRows.push(storedRow());
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
 
     // Scoped to the sitting's own table: the scenario's label is also an `<option>` in the picker
     // above, and a document-scoped assertion would pass on the picker alone — the ADR-0073 C2.5
@@ -877,7 +1008,7 @@ describe('PerformanceProbePanel', () => {
     // Reachable: a newer web release can store a scenario shape an older one does not know, which
     // is the same skew that keeps `scenario_id` shape-checked rather than value-checked.
     historyRows.push(storedRow({ thresholds: {}, samples: [] }));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
 
     expect(await screen.findByText('Not readable by this version')).toBeInTheDocument();
     expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
@@ -892,7 +1023,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     const run = runControl();
@@ -921,7 +1052,7 @@ describe('the history refresh', () => {
     );
     runProbe.mockResolvedValue(measured('PASS'));
 
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     await waitFor(() => {
@@ -940,7 +1071,7 @@ describe('the history refresh', () => {
       context: CONTEXT,
     });
 
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runOnce();
 
     // Two channels carry it — the visible alert and the panel's live region — which is
@@ -967,7 +1098,7 @@ describe('taking the readings a sitting never got', () => {
       call += 1;
       return Promise.resolve(call === 2 ? refused() : measured('PASS'));
     });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runAll();
 
     await waitFor(() => {
@@ -985,7 +1116,7 @@ describe('taking the readings a sitting never got', () => {
 
   it('does not offer it when every reading landed', async () => {
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runAll();
 
     await waitFor(() => {
@@ -1007,7 +1138,7 @@ describe('taking the readings a sitting never got', () => {
       call += 1;
       return Promise.resolve(call === 2 ? refused() : measured('PASS'));
     });
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runAll();
     await waitFor(() => {
       expect(runProbe).toHaveBeenCalledTimes(4);
@@ -1072,7 +1203,7 @@ describe('taking the readings a sitting never got', () => {
     });
     runProbe.mockResolvedValue(measured('PASS'));
 
-    const { unmount } = render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    const { unmount } = renderOpen();
     runOnce();
     await waitFor(() => {
       expect(ids).toHaveLength(1);
@@ -1083,7 +1214,7 @@ describe('taking the readings a sitting never got', () => {
     unmount();
 
     ids.length = 0;
-    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    renderOpen();
     runAll();
     await waitFor(() => {
       expect(ids).toHaveLength(4);
@@ -1101,7 +1232,7 @@ describe('taking the readings a sitting never got', () => {
         for (let frame = 0; frame < 50; frame += 1) onProgress(`frame ${String(frame)}`);
         return Promise.resolve(measured('PASS'));
       });
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runAll();
       await waitFor(() => {
         expect(runProbe).toHaveBeenCalledTimes(4);
@@ -1112,9 +1243,37 @@ describe('taking the readings a sitting never got', () => {
       expect(spoken[0]).toMatch(/^Step 1 of 4/);
     });
 
+    it('speaks a long run at most once per interval, so a single press is not silent (#259 item 11)', async () => {
+      // One long step, several repeats: before this a single press said "Step 1 of 1" and then
+      // nothing until the verdict, which a screen-reader user cannot tell from a dead run.
+      let clock = 1_000_000;
+      const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+      try {
+        runProbe.mockImplementation((input) => {
+          const { onProgress } = input as { onProgress: (message: string) => void };
+          // Repeats arriving 3 s apart: 3 s, 6 s (both inside the interval), then 9 s and 12 s.
+          for (const message of ['run 1 of 5', 'run 2 of 5', 'run 3 of 5', 'run 4 of 5']) {
+            clock += 3_000;
+            onProgress(message);
+          }
+          return Promise.resolve(measured('PASS'));
+        });
+        renderOpen();
+        runOnce();
+        await screen.findByText('PASS');
+
+        const spoken = announce.mock.calls.map(([message]) => message);
+        // The boundary at t=0, the repeat at 9 s (first one at least 8 s on), the repeat at 12 s is
+        // only 3 s after that and is held back.
+        expect(spoken.filter((m) => m.startsWith('run '))).toEqual(['run 3 of 5']);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
     it('announces the verdict once, and leaves the panel region empty rather than repeating it', async () => {
       runProbe.mockResolvedValue(measured('PASS'));
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runOnce();
       await screen.findByText('PASS');
       const verdicts = announce.mock.calls.filter(([m]) =>
@@ -1126,7 +1285,7 @@ describe('taking the readings a sitting never got', () => {
 
     it('carries no progress in the panel region during the run', async () => {
       runProbe.mockReturnValue(new Promise<ProbeOutcome>(() => undefined));
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runOnce();
       await screen.findByRole('button', { name: /^Stop/ });
       expect(document.querySelector('[aria-live="polite"].sr-only')?.textContent).toBe('');
@@ -1134,7 +1293,7 @@ describe('taking the readings a sitting never got', () => {
 
     it('names the overlay, and Stop by a short name beside a visible promise', async () => {
       runProbe.mockReturnValue(new Promise<ProbeOutcome>(() => undefined));
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runOnce();
       const stop = await screen.findByRole('button', { name: 'Stop' });
       const overlay = screen.getByRole('region', { name: 'Measurement in progress' });
@@ -1156,7 +1315,7 @@ describe('taking the readings a sitting never got', () => {
           poll();
         });
       });
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runOnce();
       await screen.findByRole('button', { name: 'Stop' });
       const handled = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
@@ -1180,7 +1339,7 @@ describe('taking the readings a sitting never got', () => {
           poll();
         });
       });
-      render(<PerformanceProbePanel apiVersion="0.140.0" />);
+      renderOpen();
       runOnce();
       await screen.findByRole('button', { name: 'Stop' });
       fireEvent.keyDown(document, { key: 'Escape' });

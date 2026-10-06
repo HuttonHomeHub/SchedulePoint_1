@@ -253,15 +253,18 @@ describe('the enumeration', () => {
     // a flattened derivation for the flat history table M6 deleted — so it was an enumerated
     // "renderer" that rendered nothing, and this gate's own `calls.length > 0` assertion is what
     // makes removing the function and leaving the entry impossible. The file still derives the
-    // judgement (`storedJudgedResult`); it no longer renders a sentence, and `probe-sittings.tsx`
+    // judgement (`storedJudgedResult`); it no longer renders a sentence, and `sitting-block.tsx`
     // below is the surface that does.
     'ui/probe-report.ts',
-    'ui/performance-probe-panel.tsx',
+    // The panel's own call moved with the verdict into `sitting-result.tsx` when M4 split the file;
+    // an entry naming the shell would now fail its own `calls.length > 0` assertion, which is what
+    // makes a stale name impossible to leave behind.
+    'ui/sitting-result.tsx',
     // M6: the sittings table renders a verdict per reading, so it is a fourth renderer of a delta
     // and joins the enumeration rather than being an exception to it. It was added here BECAUSE
     // this gate went red — which is the enumeration doing its job on the first new renderer since
     // it was written.
-    'ui/probe-sittings.tsx',
+    'ui/sitting-block.tsx',
   ];
 
   const CLI = join(import.meta.dirname, '../../../../scripts/measure-revision-diff.mjs');

@@ -1,5 +1,9 @@
+import { sweepPlan } from '../sweep/sweep-plan';
+
 import type { Verdict } from './judge';
 import { canvasLabelOf, machineLabelOf, type Sitting } from './sitting';
+
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * What one row of the sittings index says.
@@ -107,7 +111,7 @@ export function sittingIndexRow(sitting: Sitting, expectedReadings: number): Sit
   return {
     id: sitting.id,
     sitting,
-    when: new Date(c.startedAt).toLocaleString(),
+    when: formatTimestamp(c.startedAt),
     kind: sitting.kind === 'sweep' ? 'Sweep' : 'One reading',
     readings: sitting.limbs.length,
     // A single press has no expected count — it is not a sweep that fell short of one.
@@ -180,3 +184,17 @@ export function describeReadings(row: SittingIndexRow): string | null {
   }
   return row.readings === 1 ? null : `${String(row.readings)} readings`;
 }
+
+/**
+ * How many readings a complete sweep produces — **derived from the registry, never written down.**
+ *
+ * A literal 6 here would be a second statement of the sweep's shape, and the two would part company
+ * the day a scenario, a framing or a **scale** is added: this table would then call every complete
+ * sitting partial, which is a false claim about somebody's data rather than a stale constant. It is
+ * the sum of each step's limbs rather than the step count, — `canvas-draw`
+ * measures two scales in one press and each is its own row.
+ */
+export const EXPECTED_READINGS = sweepPlan().reduce(
+  (total, step) => total + step.scenario.limbs.length,
+  0,
+);

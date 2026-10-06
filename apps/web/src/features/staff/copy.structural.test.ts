@@ -17,13 +17,18 @@ import { describe, expect, it } from 'vitest';
  *
  * **Named exceptions, each with its reason:**
  *
+ * - `perf-probe/ui/probe-report.ts` is the paste-ready record of a measurement, for the same reason.
  * - `model/diagnostics-report.ts` owns the diagnostics questions and the pasted record (ADR-0140). Its
  *   text is what a staff member copies into a measurement record, where an ADR number is a reference
  *   rather than jargon, and it is not resting prose on the screen.
- * - `features/perf-probe/ui` is the performance box, split and re-worded in M4; it is not scanned here.
+ * - `features/perf-probe/ui` is not a named exception any more: the performance box's own files are
+ *   scanned below (M4), so the box that used to be the one place resting prose was never checked is
+ *   held to the same rule as the rest.
  */
 const FEATURE = join(import.meta.dirname);
 const FORBIDDEN = /ADR-\d|\bDELETE\b|[A-Z]{3,}_[A-Z_]{3,}/;
+
+const PROBE_UI = join(FEATURE, '..', 'perf-probe', 'ui');
 
 const FILES = [
   ...readdirSync(join(FEATURE, 'ui'))
@@ -33,6 +38,14 @@ const FILES = [
   ...readdirSync(join(FEATURE, 'model'))
     .filter((name) => /copy\.ts$/.test(name))
     .map((name) => `model/${name}`),
+  // The performance box (M4): the files that hold its resting prose. `loading-probe-section.tsx` and
+  // the sittings table are the two that print sentences of their own.
+  ...readdirSync(PROBE_UI)
+    // `probe-report.ts` is the pasted record, the same exception as `diagnostics-report.ts` below.
+    .filter(
+      (name) => /\.tsx?$/.test(name) && !name.includes('.test.') && name !== 'probe-report.ts',
+    )
+    .map((name) => `../perf-probe/ui/${name}`),
   'model/console-status.ts',
 ];
 
@@ -65,10 +78,16 @@ function strip(source: string): string {
 /** The prose a reader could see: quoted strings and the text between JSX tags. */
 function resting(source: string): string[] {
   const code = withoutHowToFix(strip(source));
-  const strings = [...code.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)].map(
-    (match) => match[1] ?? match[2] ?? match[3] ?? '',
+  // An interpolation is code, not prose: `${NOT_RECORDED}` names a constant and says nothing a reader
+  // sees, and the probe's sentences are full of them.
+  const strings = [...code.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)].map((match) =>
+    (match[1] ?? match[2] ?? match[3] ?? '').replace(/\$\{[^}]*\}/g, ''),
   );
-  const jsxText = [...code.matchAll(/>([^<>{}=;]+)</g)].map((match) => match[1] ?? '');
+  // A `>` that is a comparison (`a > LIMIT_MS && (`) opens no element; text with an operator in it is
+  // an expression the regex has mistaken for prose.
+  const jsxText = [...code.matchAll(/>([^<>{}=;]+)</g)]
+    .map((match) => match[1] ?? '')
+    .filter((text) => !/&&|\|\|/.test(text));
   return [...strings, ...jsxText];
 }
 
@@ -90,6 +109,17 @@ describe('resting prose on the staff console (SC-9)', () => {
     expect(
       resting('<p>Set <code>HEARTBEAT_URL</code> now</p>').some((s) => FORBIDDEN.test(s)),
     ).toBe(true);
+  });
+
+  it('does not mistake an interpolated constant or a comparison for prose', () => {
+    expect(resting('const a = `taken ${NOT_RECORDED} ago`;').some((s) => FORBIDDEN.test(s))).toBe(
+      false,
+    );
+    expect(
+      resting('{a > SITTING_SPREAD_LIMIT_MS && (\n<Alert>x</Alert>)}').some((s) =>
+        FORBIDDEN.test(s),
+      ),
+    ).toBe(false);
   });
 
   it('allows them inside a howToFix body, and nowhere else in the same element', () => {

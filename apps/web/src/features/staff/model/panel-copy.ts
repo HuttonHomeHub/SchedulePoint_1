@@ -152,11 +152,6 @@ export const DIAGNOSTICS = {
   showAll: (total: number): string => `Show all ${String(total)}`,
 } as const;
 
-export const PERFORMANCE = {
-  intro:
-    'Measurements are taken on this computer, not the server, so results depend on the machine you use.',
-} as const;
-
 export const ACTIVITY = {
   intro:
     'Everything staff have done here, newest first. Opening or refreshing this page is recorded too.',

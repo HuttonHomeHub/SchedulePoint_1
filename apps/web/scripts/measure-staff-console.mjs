@@ -3,8 +3,8 @@
  * the "before" readings its success criteria need, taken from a real browser against a real API
  * (ADR-0142: a remedy is measured before it is built).
  *
- * It reads, per width: full-page height at rest, after **Run diagnostics** and after the probe
- * check (SC-1, SC-10); the elements that stick out past the right edge (SC-8, SC-11); the distinct
+ * It reads, per width: full-page height at rest, after **Run diagnostics**, with Performance opened
+ * (M4: it arrives folded) and after the probe check (SC-1, SC-10); the elements that stick out past the right edge (SC-8, SC-11); the distinct
  * sub-heading treatments (SC-2); the order of the Status rows in three states (SC-12); the polite
  * announcements on load (SC-6); and the `staff.panel_read` rows one load and one reload write
  * (SC-4). It also photographs `/staff` as a non-staff member beside `/no-such-path` (spec D-13).
@@ -124,8 +124,10 @@ const readHeadings = () => {
   };
   const groups = new Map();
   // Sub-headings are the headings below a box title: `h3` on the flat page, `h4` once the boxes sit
-  // in a group (box titles are then `h3`), plus the `summary` disclosure heading. `h3` is therefore
-  // read only when no group exists, so the count means the same thing before and after M3.
+  // in a group (box titles are then `h3`), plus the `summary` disclosure heading that existed until
+  // M4 turned it into a button. `h3` is therefore read only when no group exists, so the count means
+  // the same thing before and after M3; `summary` stays in the selector so the pre-M4 readings of
+  // this script keep their meaning.
   const grouped = document.getElementById('staff-group-conditions') !== null;
   const selector = grouped ? 'main h4, main summary' : 'main h3, main h4, main summary';
   for (const e of document.querySelectorAll(selector)) {
@@ -230,6 +232,14 @@ for (const vp of WIDTHS) {
   await p.waitForTimeout(4000);
   out.afterDiagnostics = await p.evaluate(readPage);
   await shot(p, `${key}-02-diagnostics`);
+
+  // Performance arrives folded (M4), so SC-1's "at rest" reading above is the folded one; this is
+  // the same page with the box opened, which is the height a reader who wants the tools pays.
+  await p.getByRole('button', { name: 'Open performance tools' }).click();
+  await p.waitForTimeout(1000);
+  out.afterOpenPerformance = await p.evaluate(readPage);
+  out.subHeadingsOpen = await p.evaluate(readHeadings);
+  await shot(p, `${key}-02b-performance-open`);
 
   await p.getByRole('button', { name: 'Check the probe works' }).click();
   await p.waitForTimeout(1000);

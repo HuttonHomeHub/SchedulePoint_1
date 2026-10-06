@@ -201,4 +201,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0175](0175-a-spent-budget-is-reported-as-a-spent-budget.md)                                    | A spent budget is reported as a spent budget                                               | Accepted           |
 | [0176](0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)                | Undo checks before it writes, and sets aside what it cannot apply                          | Accepted           |
 | [0177](0177-a-finger-drags-what-it-has-selected.md)                                             | A finger drags what it has selected                                                        | Proposed           |
-| [0178](0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)                              | A console is grouped by what the reader came to do                                         | Proposed           |
+| [0178](0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)                              | A console is grouped by what the reader came to do                                         | Accepted           |

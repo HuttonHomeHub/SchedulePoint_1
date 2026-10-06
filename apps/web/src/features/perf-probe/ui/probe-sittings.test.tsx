@@ -6,6 +6,7 @@ import type { ProbeResultRow } from '../api/probe-results';
 import { ProbeSittings } from './probe-sittings';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { HeadingLevelContext } from '@/components/ui/page/heading-level';
 
 /**
  * The sittings view, which replaces a flat twelve-column table of rows.
@@ -82,16 +83,19 @@ const view = (rows: ProbeResultRow[]): ReturnType<typeof render> =>
     // if the provider were later removed from the route. That exact no-op shipped once
     // (`/staff` had no provider at all until the console redesign).
     <AnnouncerProvider>
-      <ProbeSittings
-        query={
-          {
-            isPending: false,
-            isError: false,
-            data: rows,
-            refetch: () => undefined,
-          } as never
-        }
-      />
+      {/* Rank 4: the box sits in a card inside a `SectionGroup`, so its sub-headings are `h4`s. */}
+      <HeadingLevelContext.Provider value={4}>
+        <ProbeSittings
+          query={
+            {
+              isPending: false,
+              isError: false,
+              data: rows,
+              refetch: () => undefined,
+            } as never
+          }
+        />
+      </HeadingLevelContext.Provider>
     </AnnouncerProvider>,
   );
 
@@ -294,7 +298,7 @@ describe('ProbeSittings', () => {
   it('gives the expanded sitting a visible heading, without a second landmark', () => {
     view([...sweepRows(), row({ id: 'e', runId: 'r9', sweepId: null })]);
 
-    expect(screen.getByRole('heading', { level: 3, name: /Sweep of 4 readings/ })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: /Sweep of 4 readings/ })).toBeVisible();
     // One region for the expanded sitting's table and one for the index — and not one per table
     // plus one per section, which is what naming the `<section>` would produce.
     expect(screen.getAllByRole('region', { name: /readings|sitting/i })).toHaveLength(2);
@@ -411,7 +415,7 @@ describe('the sittings index', () => {
     view(threeSittings());
 
     // The newest is expanded on arrival.
-    expect(screen.getByRole('table', { name: /One reading — .*8:00/ })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /One reading — .*20:00/ })).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: /Sweep of 4 readings/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Show .* — Sweep$/ }));
@@ -433,7 +437,7 @@ describe('the sittings index', () => {
 
     // Disambiguated by time: the fixture holds two single-press sittings and only the newest is
     // the one shown.
-    const shown = screen.getByRole('button', { name: /^Show .*8:00:00 PM — One reading$/ });
+    const shown = screen.getByRole('button', { name: /^Show .*20:00 — One reading$/ });
     expect(shown).toHaveAttribute('aria-disabled', 'true');
     expect(shown).not.toBeDisabled();
     // #458: it rests shaded for as long as it stays shown, so it must not be pointer-inert.
@@ -466,7 +470,7 @@ describe('the sittings index', () => {
     // reports silence — which is what a reader would conclude about the product.
     await waitFor(() => {
       expect(screen.getByTestId('announcer').textContent).toContain(
-        'Showing 9/8/2026, 6:00:00 PM — Sweep, 4 of 6.',
+        'Showing 08 Sept 2026, 18:00 — Sweep, 4 of 6.',
       );
     });
   });

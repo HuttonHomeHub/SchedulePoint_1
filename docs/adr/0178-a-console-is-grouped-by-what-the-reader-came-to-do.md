@@ -1,9 +1,8 @@
 # ADR-0178: A console is grouped by what the reader came to do
 
-- **Status:** Proposed (filed at M2 of the staff console redesign). The grouped layout, values,
-  Refresh and announce-on-change shipped in M3; **acceptance moves to M4's close**, because D-3
-  (Performance collapsed at rest, its history read hoisted) is part of what this ADR decides and ships
-  there (implementation plan, M4-T3).
+- **Status:** Accepted (2026-10-06, at M4's close). Filed Proposed at M2; the grouped layout, values,
+  Refresh and announce-on-change shipped in M3, and D-3 (Performance folded at rest, its history read
+  hoisted to the panel root) shipped in M4 with the split of the probe panel.
 - **Date:** 2026-10-06
 - **Deciders:** James Ewbank (product owner — approved the spec 2026-10-06: one page with an "On this
   page" jump list rather than tabs, Performance folded by default, a Refresh with an honest note),
@@ -47,7 +46,7 @@ landmark: every `SectionCard` inside it is already a named region, and a group t
 nest a landmark around each of them. `SubSection` is the one sub-heading treatment, and the staff
 archetype gate now refuses a hand-rolled `<h3>`/`<h4>` on the surface (one file is a named exception
 with a pinned count: its heading names its own section and takes programmatic focus, which
-`SubSection` does not do; M4 splits that panel and resolves it). `KeyValueList` is a `<dl>` for
+`SubSection` does not do; M3 moved both headings onto the context rank and the exception is gone). `KeyValueList` is a `<dl>` for
 settings, replacing badges used for settings.
 
 **D3 — `components/ui` gains `Disclosure`, `ConditionStrip` and `CopyButton`.**
@@ -92,6 +91,31 @@ each is implemented and tested at M3, which is when this ADR is accepted):
   an audited row (ADR-0086); there is no per-panel refresh.
 - **A collapsed tool keeps its read observer mounted**, so folding it away never writes another audit
   row on expand.
+
+**D7 — The Performance box folds, and what that costs (M4).**
+
+- **Folded on arrival, not remembered.** One summary sentence ("Measures how quickly this browser
+  draws a schedule."), then either the last sitting as a tally ("Last measured 3 days ago on the Dell:
+  4 passed · 2 ungraded.") or "Not measured on this installation yet.", then **Open performance
+  tools**. The tally states counts and ranks nothing (the history already refuses to). The machine is
+  the operator's label, else "a machine that was not named": the reading may be another staff
+  member's, so "this browser" would be a claim nobody checked.
+- **Not a `Disclosure`**, because the button's label changes with its state (Open, then Hide). It sets
+  `aria-expanded` and `aria-controls` as the primitive does, renders the content only while open
+  (controls nobody can see fail WCAG 2.4.7), and is **shaded with a reason while a run covers the
+  screen** (`aria-disabled`, never native `disabled`, ADR-0083).
+- **The history read stays at the panel root**, beside the screen's own observer of the same key, so
+  opening makes no request and the page's reads stay at six. The sweep's state (selection, machine
+  label, the last sitting) lives in a hook above the fold and survives Hide and Open.
+- **It opens by itself when the tools must be mounted:** arriving at, or following, `#performance`
+  (which also focuses the box), and a pending, stale or malformed plan-loading marker. That press
+  reloads the page twice and the section that resumes it is inside the fold; a box that arrived folded
+  would let the marker expire and throw the reading away silently.
+- **A long run speaks every eight seconds** between its step boundaries (`useAnnounce`), so a single
+  press is no longer silent from "Step 1 of 1" to the verdict (`docs/TECH_DEBT.md` #259 item 11).
+- **Its copy lives in `features/perf-probe`**, since that feature may not import `features/staff`, and
+  the SC-9 gate (`copy.structural.test.ts`) now reads the probe's UI files too. "Measure one thing" is
+  a `Disclosure`, so the page has one sub-heading treatment.
 
 ## Alternatives considered
 

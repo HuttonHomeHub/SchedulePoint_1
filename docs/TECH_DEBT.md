@@ -11940,3 +11940,19 @@ is not covered either way.
 delete the exception entry. The estate-wide alternative (moving the `aria-disabled` shading into `buttonVariants`) was
 declined for the redesign and remains its own decision. **Trigger:** the next change to any listed file, or the next
 Surface session's finding about a shaded control.
+
+### 461. The resting `aria-disabled` look is hand-applied at eight sites instead of living in `Button`
+
+**Status:** open · **Verified:** 2026-10-06 (grep for `aria-disabled:hover:bg-background` in `apps/web/src`:
+`copy-button.tsx`, `console-header.tsx`, `status-summary.tsx`, `accounts-panel.tsx`, `sitting-result.tsx`,
+`probe-sittings.tsx`, `performance-probe-panel.tsx`, `probe-controls.tsx`) · **Raised:** 2026-10-06 (component review of
+the staff console redesign, M4) · **Size:** S · **Owner:** web
+
+The shaded state #458 and #460 call for (`aria-disabled:opacity-60` plus a cancelled hover fill, never
+`pointer-events-none`) is written out as the same class string at each caller. `Button`'s CVA shades only the native
+`disabled:` state, so every `aria-disabled` caller repeats the string, and the outline variant's hover pair is specific to
+that variant. That is the one-off styling `docs/COMPONENT_LIBRARY.md` forbids, multiplied.
+
+**Next:** move the `aria-disabled:` treatment into `buttonVariants` per variant, delete the caller strings, and let the
+#458 gate assert that no caller writes it. It changes a shared primitive's contract, so it wants a component-reviewer
+pass, and #460's fifteen sites are the natural same change. **Trigger:** the next change to `button.tsx`, or #460.
