@@ -1,7 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GanttRowMenu, type GanttRowStructureActions } from './GanttRowMenu';
+import {
+  GanttRowMenu,
+  type GanttRowMenuHandle,
+  type GanttRowStructureActions,
+} from './GanttRowMenu';
 
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 
@@ -229,5 +234,62 @@ describe('the structure gestures', () => {
     render(<GanttRowMenu context={() => context()} activityName="Foundations" />);
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
     expect(screen.queryByRole('menuitem', { name: /^Indent/ })).toBeNull();
+  });
+});
+
+describe('the openAt handle (ADR-0177 D3)', () => {
+  const setup = (resolve: () => SelectionBarContext | null) => {
+    const ref = createRef<GanttRowMenuHandle>();
+    const row = document.createElement('div');
+    row.tabIndex = -1;
+    document.body.appendChild(row);
+    render(<GanttRowMenu ref={ref} context={resolve} activityName="Foundations" />);
+    return { ref, row };
+  };
+
+  it('opens the menu at the point, with the same items as the trigger', () => {
+    const { ref, row } = setup(() => context());
+    act(() => {
+      expect(ref.current?.openAt({ x: 40, y: 50 }, row)).toBe(true);
+    });
+    const viaHandle = screen.getAllByRole('menuitem').map((el) => el.textContent);
+    expect(screen.getByRole('menu', { name: 'Actions for Foundations' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
+    expect(screen.getAllByRole('menuitem').map((el) => el.textContent)).toEqual(viaHandle);
+  });
+
+  it('reports false and opens nothing when the row has no context', () => {
+    const { ref, row } = setup(() => null);
+    act(() => {
+      expect(ref.current?.openAt({ x: 40, y: 50 }, row)).toBe(false);
+    });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('builds the context once for a menu that is already open', () => {
+    const resolve = vi.fn(() => context());
+    const { ref, row } = setup(resolve);
+    act(() => void ref.current?.openAt({ x: 40, y: 50 }, row));
+    act(() => void ref.current?.openAt({ x: 90, y: 90 }, row));
+    expect(resolve).toHaveBeenCalledOnce();
+  });
+
+  it('hands focus to the element it was given, not the trigger, on close', () => {
+    const { ref, row } = setup(() => context());
+    act(() => void ref.current?.openAt({ x: 40, y: 50 }, row));
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(row).toHaveFocus();
+  });
+
+  it('still hands focus to the trigger when the trigger opened it', () => {
+    const { ref, row } = setup(() => context());
+    act(() => void ref.current?.openAt({ x: 40, y: 50 }, row));
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    const trigger = screen.getByRole('button', { name: 'Actions for Foundations' });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(trigger).toHaveFocus();
   });
 });

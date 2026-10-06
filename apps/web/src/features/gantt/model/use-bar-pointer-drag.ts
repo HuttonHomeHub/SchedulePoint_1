@@ -19,6 +19,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * Every window event is matched to the **pointer that started the gesture**: a second finger
  * landing mid-drag must not move, drop or cancel it.
+ *
+ * **A finger or a stylus drags only what it has selected** (ADR-0177 D2). A `touch` or `pen`
+ * press on a bar that is not `touchArmed` returns first — before the refusal branch and without a
+ * `preventDefault` — so the browser scrolls and the trailing click selects. It is a separate input
+ * from `enabled` because flipping `enabled` would send an unarmed stylus down the refusal path and
+ * announce a refusal nobody attempted. A mouse is never gated: its press is unambiguous.
  */
 
 export interface BarPointerDrag {
@@ -26,18 +32,34 @@ export interface BarPointerDrag {
   deltaX: number | null;
   /** True while a drag is in progress — for the cursor and the ghost. */
   dragging: boolean;
+  /**
+   * Abandon a live gesture exactly as Escape or `pointercancel` would: the ghost is cleared, the
+   * window and capture-phase Escape listeners are removed, nothing is written. A no-op between
+   * gestures. The row's `contextmenu` handler calls it before opening a menu, so a press-and-hold
+   * does not leave a drag half-alive underneath it.
+   */
+  cancel: () => void;
+  /** True while a live gesture has moved past `DRAG_INTENT_PX` — a drag, not a hold that jittered. */
+  intentExceeded: () => boolean;
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 }
 
-/** How far (px) sideways a press on a refused bar must travel before it counts as a drag attempt. */
-const REFUSED_DRAG_THRESHOLD_PX = 4;
+/**
+ * How far (px) sideways a press must travel before it counts as a drag attempt rather than a tap or
+ * a hold. One threshold for the refusal path and the row's `contextmenu` handler, so "this was a
+ * drag" is not decided two ways.
+ */
+export const DRAG_INTENT_PX = 4;
 
 export function useBarPointerDrag({
   enabled,
+  touchArmed,
   onCommit,
   onRefused,
 }: {
   enabled: boolean;
+  /** Whether a `touch` or `pen` press may start (or be refused) here — the bar is selected. */
+  touchArmed: boolean;
   /** Called once per press that travels past a few pixels on a bar that is NOT draggable
    * (`enabled` false), so the refusal can be spoken instead of the bar silently ignoring a drag. */
   onRefused?: () => void;
@@ -74,11 +96,22 @@ export function useBarPointerDrag({
     [],
   );
 
+  const cancel = useCallback(() => {
+    cancelled.current = true;
+    teardown.current?.();
+  }, []);
+
+  const intentExceeded = useCallback(
+    () => teardown.current !== null && Math.abs(liveDeltaX.current) > DRAG_INTENT_PX,
+    [],
+  );
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       // Primary button only. A right-click opening a context menu must not also start a drag, and a
       // middle-click must not scroll-and-drag at once.
       if (event.button !== 0) return;
+      if ((event.pointerType === 'touch' || event.pointerType === 'pen') && !touchArmed) return;
       if (!enabled) {
         if (!onRefused) return;
         // A finger on a started bar is a scroll or a tap, never a drag attempt worth a refusal.
@@ -93,7 +126,7 @@ export function useBarPointerDrag({
         const onRefusedMove = (moveEvent: PointerEvent): void => {
           if (moveEvent.pointerId !== refusedId) return;
           // Horizontal only: a vertical mouse drag is a text selection, not an attempt to slide the bar.
-          if (Math.abs(moveEvent.clientX - startX) <= REFUSED_DRAG_THRESHOLD_PX) return;
+          if (Math.abs(moveEvent.clientX - startX) <= DRAG_INTENT_PX) return;
           end();
           onRefused();
         };
@@ -175,8 +208,8 @@ export function useBarPointerDrag({
       window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
-    [enabled, onCommit, onRefused, stop],
+    [enabled, touchArmed, onCommit, onRefused, stop],
   );
 
-  return { deltaX, dragging: deltaX !== null, onPointerDown };
+  return { deltaX, dragging: deltaX !== null, cancel, intentExceeded, onPointerDown };
 }

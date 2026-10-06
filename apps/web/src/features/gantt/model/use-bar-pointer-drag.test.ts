@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useBarPointerDrag } from './use-bar-pointer-drag';
+import { DRAG_INTENT_PX, useBarPointerDrag } from './use-bar-pointer-drag';
 
 /**
  * **M3-T2 — the drag's timing, which is the part that goes wrong.**
@@ -65,7 +65,9 @@ const escape = () => {
 describe('useBarPointerDrag', () => {
   it('does not arm when disabled — a bar the reader may not move has no gesture', () => {
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: false, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: false, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     expect(result.current.dragging).toBe(false);
@@ -78,7 +80,9 @@ describe('useBarPointerDrag', () => {
 
   it('ignores a non-primary button, so a right-click cannot start a drag', () => {
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown({ ...pointerDown(100), button: 2 }));
     expect(result.current.dragging).toBe(false);
@@ -88,7 +92,9 @@ describe('useBarPointerDrag', () => {
     // The property the ref exists for. Five moves inside one frame must produce ONE published
     // value, not five — on a virtualized list a publish per pointermove re-renders the window.
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => {
@@ -107,7 +113,9 @@ describe('useBarPointerDrag', () => {
 
   it('commits the total movement once, on release', () => {
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => {
@@ -127,7 +135,9 @@ describe('useBarPointerDrag', () => {
     // Committing zero would burn a version bump and a recalculation on a bar the planner merely
     // touched — and a press on a bar is how selection works.
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => up());
@@ -139,7 +149,9 @@ describe('useBarPointerDrag', () => {
     // starts a drag by accident must finish it and then undo — two writes and a recalculation to
     // repair a slip.
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => {
@@ -165,7 +177,9 @@ describe('useBarPointerDrag', () => {
     // INSTEAD of `pointerup`. With no handler the window listeners stayed attached, and the next
     // unrelated `pointerup` anywhere committed the delta of a drag the planner never finished.
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => {
@@ -181,7 +195,9 @@ describe('useBarPointerDrag', () => {
 
   it('cancels its frame on unmount rather than publishing into a dead tree', () => {
     const onCommit = vi.fn();
-    const { result, unmount } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result, unmount } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => move(150));
@@ -197,7 +213,9 @@ describe('useBarPointerDrag', () => {
     // listeners on the window, and the next unrelated `pointerup` called `onCommit` for a bar that
     // was no longer on screen.
     const onCommit = vi.fn();
-    const { result, unmount } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result, unmount } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100)));
     act(() => move(150));
@@ -211,7 +229,9 @@ describe('useBarPointerDrag', () => {
     // A second finger landing mid-drag must not move the bar, drop it or cancel it — each event is
     // matched to the pointer that started the gesture.
     const onCommit = vi.fn();
-    const { result } = renderHook(() => useBarPointerDrag({ enabled: true, onCommit }));
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
 
     act(() => result.current.onPointerDown(pointerDown(100, 1)));
     act(() => {
@@ -239,7 +259,7 @@ describe('useBarPointerDrag', () => {
       const onCommit = vi.fn();
       const onRefused = vi.fn();
       const { result } = renderHook(() =>
-        useBarPointerDrag({ enabled: false, onCommit, onRefused }),
+        useBarPointerDrag({ enabled: false, touchArmed: true, onCommit, onRefused }),
       );
       act(() => result.current.onPointerDown(refused()));
       act(() => {
@@ -254,7 +274,7 @@ describe('useBarPointerDrag', () => {
     it('ignores a vertical drag, which is a text selection', () => {
       const onRefused = vi.fn();
       const { result } = renderHook(() =>
-        useBarPointerDrag({ enabled: false, onCommit: vi.fn(), onRefused }),
+        useBarPointerDrag({ enabled: false, touchArmed: true, onCommit: vi.fn(), onRefused }),
       );
       act(() => result.current.onPointerDown(refused({ clientY: 0 })));
       act(() => {
@@ -267,7 +287,7 @@ describe('useBarPointerDrag', () => {
     it('ignores a touch, which is a scroll', () => {
       const onRefused = vi.fn();
       const { result } = renderHook(() =>
-        useBarPointerDrag({ enabled: false, onCommit: vi.fn(), onRefused }),
+        useBarPointerDrag({ enabled: false, touchArmed: true, onCommit: vi.fn(), onRefused }),
       );
       act(() => result.current.onPointerDown(refused({ pointerType: 'touch' })));
       act(() => {
@@ -275,6 +295,141 @@ describe('useBarPointerDrag', () => {
         up(1);
       });
       expect(onRefused).not.toHaveBeenCalled();
+    });
+  });
+  describe('a finger or stylus on a bar that is not selected (ADR-0177 D2)', () => {
+    const typed = (pointerType: string, preventDefault = vi.fn()) =>
+      ({
+        ...pointerDown(100),
+        pointerType,
+        preventDefault,
+      }) as unknown as React.PointerEvent<HTMLElement>;
+
+    it.each(['touch', 'pen'])(
+      'an unarmed %s press neither starts, commits, refuses nor prevents the default',
+      (pointerType) => {
+        const onCommit = vi.fn();
+        const onRefused = vi.fn();
+        const preventDefault = vi.fn();
+        const { result } = renderHook(() =>
+          // `enabled: false` is the case that matters: without the early return the press would
+          // reach the refusal path and an unarmed stylus would announce a refusal nobody attempted.
+          useBarPointerDrag({ enabled: false, touchArmed: false, onCommit, onRefused }),
+        );
+        act(() => result.current.onPointerDown(typed(pointerType, preventDefault)));
+        act(() => {
+          move(160);
+          up(1);
+        });
+        expect(result.current.dragging).toBe(false);
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(onRefused).not.toHaveBeenCalled();
+        expect(onCommit).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['touch', 'pen'])(
+      'an unarmed %s press on a MOVABLE bar does not drag it',
+      (pointerType) => {
+        const onCommit = vi.fn();
+        const preventDefault = vi.fn();
+        const { result } = renderHook(() =>
+          useBarPointerDrag({ enabled: true, touchArmed: false, onCommit }),
+        );
+        act(() => result.current.onPointerDown(typed(pointerType, preventDefault)));
+        act(() => {
+          move(160);
+          up(1);
+        });
+        expect(result.current.dragging).toBe(false);
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(onCommit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('an armed touch or pen press drags as a mouse does', () => {
+      for (const pointerType of ['touch', 'pen']) {
+        const onCommit = vi.fn();
+        const { result } = renderHook(() =>
+          useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+        );
+        act(() => result.current.onPointerDown(typed(pointerType)));
+        act(() => {
+          move(160);
+          up(1);
+        });
+        expect(onCommit).toHaveBeenCalledExactlyOnceWith(60);
+      }
+    });
+
+    it('an unarmed MOUSE press is unchanged: it still drags, and a refused one is still refused', () => {
+      const onCommit = vi.fn();
+      const onRefused = vi.fn();
+      const drag = renderHook(() =>
+        useBarPointerDrag({ enabled: true, touchArmed: false, onCommit }),
+      );
+      act(() => drag.result.current.onPointerDown(typed('mouse')));
+      act(() => {
+        move(160);
+        up(1);
+      });
+      expect(onCommit).toHaveBeenCalledExactlyOnceWith(60);
+
+      const refused = renderHook(() =>
+        useBarPointerDrag({ enabled: false, touchArmed: false, onCommit, onRefused }),
+      );
+      act(() => refused.result.current.onPointerDown(typed('mouse')));
+      act(() => {
+        move(160);
+        up(1);
+      });
+      expect(onRefused).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('cancel() and intentExceeded() — what a hold needs before it opens a menu', () => {
+    it('cancel() clears the ghost, removes the Escape listener and commits nothing', () => {
+      const onCommit = vi.fn();
+      const removed = vi.spyOn(window, 'removeEventListener');
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+      );
+      act(() => result.current.onPointerDown(pointerDown(100)));
+      expect(result.current.dragging).toBe(true);
+
+      act(() => result.current.cancel());
+      expect(result.current.dragging).toBe(false);
+      expect(removed).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+
+      // The release that follows the hold must not commit a dead drag.
+      act(() => {
+        move(160);
+        up(1);
+      });
+      expect(onCommit).not.toHaveBeenCalled();
+      removed.mockRestore();
+    });
+
+    it('cancel() between gestures is a no-op', () => {
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: true, touchArmed: true, onCommit: vi.fn() }),
+      );
+      expect(() => act(() => result.current.cancel())).not.toThrow();
+      expect(result.current.dragging).toBe(false);
+    });
+
+    it('reports intent only once the press has travelled past DRAG_INTENT_PX', () => {
+      const { result } = renderHook(() =>
+        useBarPointerDrag({ enabled: true, touchArmed: true, onCommit: vi.fn() }),
+      );
+      expect(result.current.intentExceeded()).toBe(false);
+      act(() => result.current.onPointerDown(pointerDown(100)));
+      act(() => move(100 + DRAG_INTENT_PX));
+      expect(result.current.intentExceeded()).toBe(false);
+      act(() => move(100 + DRAG_INTENT_PX + 1));
+      expect(result.current.intentExceeded()).toBe(true);
+      act(() => result.current.cancel());
+      expect(result.current.intentExceeded()).toBe(false);
     });
   });
 });

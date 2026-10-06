@@ -66,6 +66,7 @@ import {
   type GanttColumnKey,
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
+import { takeTouchHint, touchSelectionNote } from '../model/touch-note';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs, type GanttGridPrefs } from '../model/use-gantt-grid-prefs';
@@ -75,7 +76,7 @@ import { GanttCell } from './GanttCell';
 import { GanttColumnEdge } from './GanttColumnEdge';
 import { GanttLinkOverlay } from './GanttLinkOverlay';
 import type { GanttRowStructureActions } from './GanttRowMenu';
-import { GanttRowMenu } from './GanttRowMenu';
+import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
 import { PanelResizer } from '@/components/ui/panel-resizer';
@@ -120,6 +121,13 @@ const FALLBACK_PX_PER_DAY = 6;
  * and the typed `Start` cell is the route.
  */
 const START_HANDLE_MIN_BAR_PX = 16;
+
+/**
+ * An edge handle's own classes, **without `touch-none`**: that is added only while the bar is
+ * selected (ADR-0177 D2). It used to be unconditional, so a finger landing on the end of ANY bar
+ * resized it instead of scrolling — measured live in 11 of 12 runs (M0 P2b).
+ */
+const EDGE_HANDLE_CLASS = 'absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize';
 
 /** Frames roughly a year — the range a stakeholder reading a programme usually wants first. */
 const DEFAULT_ZOOM: ZoomLevel = 'month';
@@ -313,8 +321,11 @@ export interface GanttPanelProps {
  * Project Explorer already uses), so the live node count is bounded by the viewport whether the
  * plan holds 200 activities or 20,000.
  *
- * Read-only by design for this milestone (spec Q1) — there is no mutation, no pen interaction and
- * no path into the CPM engine anywhere in this subtree.
+ * **A working surface since ADR-0095**, and it said "read-only by design … no mutation, no pen
+ * interaction" until ADR-0177 corrected it: bars move and resize (`drag`), cells edit (`editing`)
+ * and rows reparent (`rowStructure`), each behind a host-supplied bundle the print surface and the
+ * guest view do not pass. What stays true is the last clause: **no path into the CPM engine** —
+ * every write here is the host's, and recalculation is the server's.
  */
 export function GanttPanel(props: GanttPanelProps): React.ReactElement {
   // The host's instance when it supplies one, the panel's own only when mounted bare — a hook cannot
@@ -401,6 +412,25 @@ function GanttPanelBody({
    */
   const DEFAULT_GRID_WIDTH = useMemo(() => defaultGridWidth(COLUMNS, 0), [COLUMNS]);
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
+
+  // The line a finger or stylus is shown when it selects a bar (ADR-0177 D2): the refusal reason, or
+  // the first-session hint. Panel state rather than the row's because it renders OUTSIDE the
+  // scroller — a status line inside it would scroll away, and one above the rows would move them
+  // under the finger that just tapped.
+  const [touchNote, setTouchNote] = useState<{ id: string; text: string } | null>(null);
+  const onTouchSelect = useCallback(
+    (activity: ActivitySummary | null) => {
+      if (activity === null || drag === undefined) {
+        setTouchNote(null);
+        return;
+      }
+      const text = touchSelectionNote(barMoveGate(activity, drag), takeTouchHint);
+      setTouchNote(text === null ? null : { id: activity.id, text });
+    },
+    [drag],
+  );
+  const shownTouchNote =
+    touchNote !== null && touchNote.id === selectedActivityId ? touchNote.text : null;
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
   // space actually available (`pxPerDayForPreset` is width-dependent by design — ADR-0056).
@@ -1271,6 +1301,7 @@ function GanttPanelBody({
                   variance={varianceByActivityId?.get(id)}
                   isSelected={id === selectedActivityId}
                   onSelect={onSelectActivity}
+                  onTouchSelect={onTouchSelect}
                   {...shared}
                 />
               );
@@ -1278,6 +1309,14 @@ function GanttPanelBody({
           </div>
         </div>
       </Surface>
+      {shownTouchNote === null ? null : (
+        <div
+          role="status"
+          className="border-border bg-muted text-muted-foreground border-t px-3 py-1 text-xs"
+        >
+          {shownTouchNote}
+        </div>
+      )}
       {/* The divider itself. `PanelResizer` is the APG window splitter this app already uses for the
           Explorer rail and the Graphite drawer — `role="separator"`, `aria-valuenow`, arrow-key
           steps, Home/End — so §A15's "not a mouse-only handle" is satisfied by reusing the thing
@@ -1496,6 +1535,8 @@ interface GanttRowViewProps {
   registerRef: (element: HTMLDivElement | null) => void;
   onFocusRow: () => void;
   onSelect?: ((activity: ActivitySummary) => void) | undefined;
+  /** Told which activity a click selected when it came from a finger or stylus, else null. */
+  onTouchSelect?: ((activity: ActivitySummary | null) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
@@ -1551,6 +1592,7 @@ function GanttRowView({
   registerRef,
   onFocusRow,
   onSelect,
+  onTouchSelect,
   onToggle,
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
@@ -1605,8 +1647,12 @@ function GanttRowView({
     },
     [drag, barStartIso, geometry, anchorIso, pxPerDay, activity.id, activity.name],
   );
+  // A finger or stylus drags only what it has selected (ADR-0177 D2) — one input for all three
+  // hooks, so the body and both edges arm together.
+  const touchArmed = isSelected;
   const barDrag = useBarPointerDrag({
     enabled: moveGate?.movable === true && geometry !== null,
+    touchArmed,
     onCommit: commitDrag,
     // A drag on a bar that cannot move SAYS why, on the channel the keyboard nudge refuses on —
     // summary, started and read-only alike, so no refused gesture is silent (#431).
@@ -1615,6 +1661,7 @@ function GanttRowView({
     },
   });
   const moveRefusal = moveGate !== null && !moveGate.movable ? moveGate.reason : null;
+  const armed = isSelected && moveGate?.movable === true;
 
   /**
    * The finish-edge resize: the start is held and the duration is the WORKING days from it to
@@ -1658,6 +1705,7 @@ function GanttRowView({
   );
   const barResize = useBarPointerDrag({
     enabled: finishGate?.resizable === true && geometry !== null && !geometry.milestone,
+    touchArmed,
     onCommit: commitResize,
   });
 
@@ -1718,6 +1766,7 @@ function GanttRowView({
       geometry !== null &&
       !geometry.milestone &&
       geometry.width >= START_HANDLE_MIN_BAR_PX,
+    touchArmed,
     onCommit: commitResizeStart,
   });
 
@@ -1734,6 +1783,56 @@ function GanttRowView({
           finishDeltaX: barResize.deltaX,
           startDeltaX: barResizeStart.deltaX,
         });
+  /**
+   * **A hold, the stylus button, a right-click or the Menu key open this row's menu** (ADR-0177 D3).
+   *
+   * One code path with the `⋯`: the handle opens the same `GanttRowMenu`, built from the same
+   * thunk. In order: leave the event to the browser when it is not ours; ignore it when a drag has
+   * really begun; cancel the three hooks so no ghost or Escape listener outlives the hold; then
+   * open. The selection is untouched, as it is for the `⋯`.
+   */
+  const menuRef = useRef<GanttRowMenuHandle>(null);
+  const lastPointerType = useRef('');
+  const swallowClick = useRef(false);
+  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (rowMenuContext === null) return;
+    // The menu's own items and an open cell input keep the browser's menu (copy and paste is the
+    // reason a text field has one). React events follow the React tree, and `GanttRowMenu` portals
+    // to `document.body`, so a right-click inside it still arrives here — `rowOwnsKey`'s lesson.
+    const target = event.target as HTMLElement;
+    if (
+      target.closest('input,textarea,select,[contenteditable="true"],[role="menu"],[role="dialog"]')
+    ) {
+      return;
+    }
+    // The keyboard's `contextmenu` carries no pointer and no coordinates; Chrome reports an empty
+    // `pointerType`, other engines a zero point.
+    const fromKeyboard =
+      (event.nativeEvent as { pointerType?: string }).pointerType === '' ||
+      (event.clientX === 0 && event.clientY === 0);
+    // Shift+right-click is the escape hatch to the browser's menu. Shift+F10 also carries
+    // `shiftKey`, which is why the keyboard is told apart first.
+    if (event.shiftKey && !fromKeyboard) return;
+    if (
+      !fromKeyboard &&
+      (barDrag.intentExceeded() || barResize.intentExceeded() || barResizeStart.intentExceeded())
+    ) {
+      return;
+    }
+    barDrag.cancel();
+    barResize.cancel();
+    barResizeStart.cancel();
+    const row = event.currentTarget;
+    const box = row.getBoundingClientRect();
+    const point = fromKeyboard
+      ? { x: Math.max(box.left, 0), y: box.bottom }
+      : { x: event.clientX, y: event.clientY };
+    if (!menuRef.current?.openAt(point, row)) return;
+    event.preventDefault();
+    // A hold that opened the menu may still end in a `click` on release; it must not select.
+    swallowClick.current = lastPointerType.current === 'touch' || lastPointerType.current === 'pen';
+  };
+
   const ghost =
     showVariance && variance !== undefined
       ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
@@ -1759,7 +1858,25 @@ function GanttRowView({
       {...(isSelected ? { 'aria-selected': true } : {})}
       tabIndex={isTabStop ? 0 : -1}
       onFocus={onFocusRow}
-      onClick={() => onSelect?.(activity)}
+      // Capture, because a bar that starts a drag stops the event's propagation: a bubbling handler
+      // would never learn what kind of pointer pressed, or that a new press has begun.
+      onPointerDownCapture={(event) => {
+        lastPointerType.current = event.pointerType;
+        swallowClick.current = false;
+      }}
+      onClick={() => {
+        if (swallowClick.current) {
+          swallowClick.current = false;
+          return;
+        }
+        onSelect?.(activity);
+        onTouchSelect?.(
+          lastPointerType.current === 'touch' || lastPointerType.current === 'pen'
+            ? activity
+            : null,
+        );
+      }}
+      onContextMenu={onContextMenu}
       // Activation lives on the row rather than the grid's key handler: the row knows which
       // activity it is, and a click-only row would be unreachable by keyboard.
       onKeyDown={(event) => {
@@ -1913,6 +2030,7 @@ function GanttRowView({
           // untouched: it carries no role, so it is text content rather than an unallowed child.
           <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
             <GanttRowMenu
+              ref={menuRef}
               context={() => rowMenuContext(activity)}
               activityName={activity.name}
               {...(rowStructureFor === undefined ? {} : { structure: rowStructureFor(activity) })}
@@ -1975,7 +2093,15 @@ function GanttRowView({
                   : activity.type === 'WBS_SUMMARY'
                     ? 'bg-foreground/70'
                     : 'bg-canvas-bar/60 ring-canvas-bar/70 ring-1 ring-inset',
+                // The armed state: a selected, movable bar is the one a finger may drag. An OUTLINE
+                // (a shape, offset from the bar) plus grip marks below — never a colour change
+                // alone (WCAG 1.4.1) — and an outline, not a ring, so it composes with the critical
+                // bar's own ring instead of replacing it. `pan-y` lets a vertical swipe scroll and
+                // costs pinch-zoom over this one bar (ADR-0177 D2); it is read at `pointerdown`.
+                armed && 'outline-ring outline-2 outline-offset-1',
+                armed && 'touch-pan-y',
               )}
+              data-bar-armed={armed ? 'true' : undefined}
               // The ghost is a TRANSFORM on the live bar, not a second element: one bar means the
               // planner is dragging the thing they grabbed, and it costs no extra node per row.
               style={{
@@ -1997,6 +2123,17 @@ function GanttRowView({
                   className="bg-foreground/45 absolute inset-y-0 left-0"
                   style={{ width: `${geometry.progress * 100}%` }}
                 />
+              ) : null}
+              {armed ? (
+                <span
+                  aria-hidden="true"
+                  data-bar-grip
+                  className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5"
+                >
+                  <span className="bg-foreground/70 h-2 w-px" />
+                  <span className="bg-foreground/70 h-2 w-px" />
+                  <span className="bg-foreground/70 h-2 w-px" />
+                </span>
               ) : null}
             </span>
             {/* **The bar's own name, and its pinned mark** (M5 legibility, B10f). Both `aria-hidden`:
@@ -2046,7 +2183,7 @@ function GanttRowView({
               <span
                 aria-hidden="true"
                 data-bar-edge="start"
-                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize touch-none"
+                className={cn(EDGE_HANDLE_CLASS, isSelected && 'touch-none')}
                 style={{ left: (shown?.x ?? geometry.x) - 4 }}
                 onPointerDown={barResizeStart.onPointerDown}
               />
@@ -2055,7 +2192,7 @@ function GanttRowView({
               <span
                 aria-hidden="true"
                 data-bar-edge="finish"
-                className="absolute top-1/2 h-3.5 w-2 -translate-y-1/2 cursor-ew-resize touch-none"
+                className={cn(EDGE_HANDLE_CLASS, isSelected && 'touch-none')}
                 style={{
                   left: (shown?.x ?? geometry.x) + (shown?.width ?? geometry.width) - 4,
                 }}

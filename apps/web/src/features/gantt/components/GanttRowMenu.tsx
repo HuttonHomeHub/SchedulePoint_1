@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
@@ -54,6 +54,26 @@ export interface GanttRowMenuProps {
    * `Report progress`; it was never a ban on a view having gestures of its own.
    */
   structure?: GanttRowStructureActions | undefined;
+  /**
+   * An imperative way in for the row's own `contextmenu` (ADR-0177 D3): a press-and-hold, the
+   * stylus button, a right-click or the Menu key open THIS menu, with these items, at a point.
+   *
+   * A ref and not controlled `open` / `anchor` props, deliberately. Controlled props would lift
+   * per-row open state into the panel and make every row's menu depend on it, against the cost
+   * note on `context` above; the handle keeps the state where it is and builds nothing until the
+   * menu opens.
+   */
+  ref?: Ref<GanttRowMenuHandle>;
+}
+
+export interface GanttRowMenuHandle {
+  /**
+   * Open the menu at a viewport point and hand focus to `restoreTo` when it closes. Returns false,
+   * opening nothing, when the row has no menu context — so the caller can leave the browser's own
+   * menu alone rather than swallow the event to show nothing. A menu already open is left as it is:
+   * the keyboard's own path may have opened it a moment before.
+   */
+  openAt: (point: { x: number; y: number }, restoreTo: HTMLElement) => boolean;
 }
 
 /** One grid gesture: what it does, and why it cannot (ADR-0082 — shaded with a reason, never gone). */
@@ -82,6 +102,7 @@ export function GanttRowMenu({
   context,
   activityName,
   structure,
+  ref,
 }: GanttRowMenuProps): React.ReactElement {
   // `Menu` anchors at a VIEWPORT POINT, not at an element — it clamps x/y to stay on screen, which
   // an element ref cannot express. Read from the trigger at open time rather than held in state, so
@@ -89,7 +110,25 @@ export function GanttRowMenu({
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const [resolved, setResolved] = useState<SelectionBarContext | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Where focus goes on close: the `⋯` for the button's own path, the row for a `contextmenu` one.
+  const restoreRef = useRef<HTMLElement | null>(null);
   const open = anchor !== null && resolved !== null;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openAt: (point, restoreTo) => {
+        if (open) return true;
+        const built = context();
+        if (built === null) return false;
+        restoreRef.current = restoreTo;
+        setResolved(built);
+        setAnchor(point);
+        return true;
+      },
+    }),
+    [open, context],
+  );
 
   // The same classification the coverage gate makes: an item gated on the canvas is not reachable
   // here, and the two canvas-only actions answer false with `canvas: null`.
@@ -126,6 +165,7 @@ export function GanttRowMenu({
           // from under the planner — the same reason the cell's Enter stops propagating.
           event.stopPropagation();
           const rect = event.currentTarget.getBoundingClientRect();
+          restoreRef.current = triggerRef.current;
           setResolved(context());
           setAnchor({ x: rect.left, y: rect.bottom });
         }}
@@ -141,7 +181,7 @@ export function GanttRowMenu({
         }}
         anchor={anchor ?? { x: 0, y: 0 }}
         label={`Actions for ${activityName}`}
-        restoreFocusRef={triggerRef}
+        restoreFocusRef={restoreRef}
       >
         {items.map((item) => {
           // **`penGated` as well as `isEnabled`, and that distinction was a real defect.**
