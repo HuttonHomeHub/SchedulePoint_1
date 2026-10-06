@@ -254,6 +254,44 @@ Performance → **Check the probe works** (overlay); `/staff` → Diagnostics �
   at rest.
 - **Development steps:** standard; changeset (patch) covering M1.
 
+#### M1 record (2026-10-06)
+
+**Landed.** What the next milestone needs:
+
+- **T1.** `useStaffAccounts()` is one `useInfiniteQuery` under `['staff','accounts']`; the root reads
+  `pages[0]`, the panel accumulates and de-duplicates by id. The button stays mounted and is shaded
+  ("Loading more accounts…", then "All {n} are shown."). A failed next page keeps the rows and reports beside
+  the button; the summary ignores that error (`isFetchNextPageError`). Unit test counts `fetch` calls (one on
+  load, one per press); the journey asserts focus stays in the section and the first page's rows remain.
+  Red: against the per-cursor query the test fails (the button is swapped for a spinner).
+- **T2.** `submit-guard.structural.test.ts` now reads every `<Button>` with `aria-disabled:pointer-events-none`
+  and classifies its bound expression (every `||` term must name a transient fact). **Verified red** against the
+  unfixed tree: it named 17 files, two of them staff (Diagnostics Copy, probe Show). Fixed: Copy, Show, and
+  Retry recording (which had the attribute and no shading at all), by `aria-disabled:opacity-60` plus a
+  cancelled hover fill, no `pointer-events-none`. The other 15 files are named exceptions (count and reason each)
+  owned by **TECH_DEBT #460**; #458 is closed. No Gantt file changed, and the gate does not read the toolbar
+  components, so `docs/specs/gantt-coarse-pointer/device-checklist.md` is unaffected.
+- **T3.** Progress goes through `useAnnounce()` at each step boundary (`stepLabel`), and the verdict is
+  announced once (`verdictFor`, the sentence the panel used to build inline). The panel's own region is empty
+  during a run and while it would only repeat the announced verdict. Journey observes `[data-testid="announcer"]`
+  outside `main[inert]` reading "Step 1 of 4". Four existing assertions that read the panel region for the
+  verdict now read the announcer.
+- **T4.** Overlay is `role="region"` named "Measurement in progress"; the row wraps; the button is **Stop** with a
+  visible line and `aria-describedby`; Escape calls the same handler (a document `keydown` while running).
+- **T5.** `StatGrid` items `min-w-0` and values `wrap-anywhere`. `useDocumentTitle` accepts `null` (sets nothing),
+  so the console keeps the document's own `SchedulePoint` title while identity is pending (a widening of a shared
+  hook, not of a component). **Not reproduced as a second cause:** the 390 px overflow was only the Stop button.
+  The 320 px journey did find two more, both measured: the "Measure one thing" selects were as wide as their
+  longest option (347 px; now `max-w-full min-w-0`), and the page scrolled sideways to 600 px because the
+  sittings table's `sr-only` header and reason spans are `position: absolute` with no positioned ancestor, so in a
+  wide table they escape the table's scroll region. `DataTable` now makes a `srHeader` header `relative` and
+  `ShowSittingButton` wraps its reason in a `relative` box. Any other `sr-only` text inside a wide `DataTable` cell
+  has the same property: M2-M4 should check `document.documentElement.scrollWidth` at 320 px after each panel
+  moves (the journey's reflow assertion does).
+- **For M2:** `CopyButton` should adopt the Copy sites' resting shading (opacity plus a cancelled hover fill); the
+  hover-cancel pair is `aria-disabled:hover:bg-background aria-disabled:hover:text-foreground` and is
+  outline-variant-specific. `verdictFor` is exported from `performance-probe-panel.tsx`.
+
 ---
 
 ### Milestone M2: Shared primitives and the ADR

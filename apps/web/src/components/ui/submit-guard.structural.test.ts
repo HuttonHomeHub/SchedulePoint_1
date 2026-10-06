@@ -147,6 +147,187 @@ function unshadedSubmits(source: string, file = ''): string[] {
   });
 }
 
+/**
+ * **The half the submit gate could not see: a RESTING `aria-disabled` that is pointer-inert**
+ * (`docs/TECH_DEBT.md` #458).
+ *
+ * `aria-disabled:pointer-events-none` is right while a mutation is in flight and wrong at rest:
+ * `pointer-events: none` makes `document.elementFromPoint` return whatever is **behind** the
+ * control, so a button that is shaded from first paint cannot be hovered for its reason, and a
+ * sighted pointer user gets neither the control nor an explanation. The submit gate above knows one
+ * resting submit by name; this one reads every `<Button>`.
+ *
+ * **The discriminator is the expression bound to `aria-disabled`, and it is read, not guessed.**
+ * Every `||` term must name a transient fact (`isPending`, `isFetchingNextPage`, `saving`, `running`,
+ * `checking`, `refreshing`, `busy`, `submitting`, `loading`). A term that is anything else — `blocked`
+ * (a local that folds a permission or a missing prerequisite in beside the pending flag), `!filtered`,
+ * `result === undefined` — can be the control's resting state, so the site must either shade without
+ * `pointer-events-none` or be a named exception that carries its reason and its register row.
+ *
+ * `Button`'s own `disabled:pointer-events-none` fires on the native attribute only, so the fix at a
+ * resting site is `aria-disabled:opacity-60` and a handler guard that refuses — not the pointer class.
+ */
+const TRANSIENT_TERM =
+  /^(?!!)[\w.?]*\b(isPending|isFetching\w*|isLoading|pending|saving|running|checking|refreshing|busy|submitting|loading)\b/;
+
+/** The expression a `<Button>` binds to `aria-disabled`, or `null` where it binds none. */
+function ariaDisabledExpression(tag: string): string | null {
+  const at = tag.indexOf('aria-disabled=');
+  if (at !== -1) {
+    const open = tag.indexOf('{', at);
+    if (open === -1 || open !== at + 'aria-disabled='.length) return 'true';
+    let depth = 0;
+    for (let i = open; i < tag.length; i += 1) {
+      if (tag[i] === '{') depth += 1;
+      else if (tag[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return tag.slice(open + 1, i).trim();
+      }
+    }
+    return null;
+  }
+  // The spread idiom: `{...(isShown ? { 'aria-disabled': true } : {})}`. The condition is the fact.
+  if (tag.includes("'aria-disabled'")) {
+    return /\.\.\.\(\s*([^?]+?)\s*\?/.exec(tag)?.[1] ?? 'true';
+  }
+  return null;
+}
+
+function isTransient(expression: string): boolean {
+  return expression.split('||').every((term) => TRANSIENT_TERM.test(term.trim()));
+}
+
+/** Every `<Button>` that is pointer-inert while shaded and whose shading can be its resting state. */
+function restingPointerInert(source: string): string[] {
+  return buttonTags(source).filter((tag) => {
+    if (!tag.includes('aria-disabled:pointer-events-none')) return false;
+    const expression = ariaDisabledExpression(tag);
+    return expression !== null && !isTransient(expression);
+  });
+}
+
+/**
+ * **Named exceptions: sites outside the staff console that the gate found and this change did not
+ * fix.** Each carries the register row that owns it and how many sites in the file it covers, so a
+ * new site in the same file fails rather than hiding behind the entry. `docs/TECH_DEBT.md` #460 owns
+ * the list; the staff console's own three sites were fixed in the change that wrote this gate.
+ */
+const RESTING_POINTER_INERT_EXCEPTIONS = new Map<string, { count: number; reason: string }>([
+  [
+    'components/ui/scope-save-bar.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` folds `!gate.writable` and `!dirty` in beside `pending`: resting whenever the form is clean; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/audit/components/AuditEventList.tsx',
+    {
+      count: 1,
+      reason:
+        '`!query.hasNextPage` is the resting end of the list, not a request in flight; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/audit/components/AuditFilterBar.tsx',
+    {
+      count: 1,
+      reason: '`empty` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/calendars/components/CalendarFormDialog.tsx',
+    {
+      count: 1,
+      reason:
+        '`blockedByOrgPermission` is a resting state for a reader without the permission; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/calendars/components/CalendarsTable.tsx',
+    {
+      count: 1,
+      reason: '`!filtered` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/clients/components/ClientsTable.tsx',
+    {
+      count: 1,
+      reason: '`!filtered` (no filter set) is a resting state of Clear; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/notes/components/NoteComposer.tsx',
+    {
+      count: 1,
+      reason:
+        '`emptyBody || overLimit` is a resting state of Post before anything is typed; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/notes/components/NoteItem.tsx',
+    {
+      count: 1,
+      reason:
+        '`emptyBody || overLimit` is a resting state of Save while the edit is unchanged; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/resources/components/ResourcesTable.tsx',
+    { count: 1, reason: '`!filtersActive` is a resting state of Clear; docs/TECH_DEBT.md #460.' },
+  ],
+  [
+    'features/tsld/components/ArrangeDialog.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` includes `shadeReason !== null`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/tsld/components/BulkSelectionBar.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` includes `!gate.enabled`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/tsld/components/CreateActivityPopover.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` is a resting refusal with a reason to read, beside the transient `saving`; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/tsld/components/LinkChainDialog.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` includes `refusal !== null`, a resting refusal with a reason to read; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/tsld/components/TsldPanel.tsx',
+    {
+      count: 1,
+      reason:
+        '`!editingEnabled` is the empty-canvas notice resting refusal when the plan is read-only; docs/TECH_DEBT.md #460.',
+    },
+  ],
+  [
+    'features/wbs/components/WbsBulkAssignBar.tsx',
+    {
+      count: 1,
+      reason:
+        '`blocked` includes `!gate.writable` and `changes.length === 0`, both resting; docs/TECH_DEBT.md #460.',
+    },
+  ],
+]);
+
 describe('a submit never blocks itself with the native attribute', () => {
   const files = sourceFiles(join(WEB_SRC, 'features')).concat(
     sourceFiles(join(WEB_SRC, 'components')),
@@ -253,5 +434,62 @@ describe('a submit never blocks itself with the native attribute', () => {
         'order the instant the request starts and returns when it settles, throwing a keyboard ' +
         'user to `<body>` twice per save (`docs/DESIGN_SYSTEM.md` §Buttons)',
     ).toEqual([]);
+  });
+
+  it('classifies the aria-disabled expression the way a reader would', () => {
+    const pe = 'className="aria-disabled:pointer-events-none aria-disabled:opacity-60"';
+    expect(restingPointerInert(`<Button aria-disabled={save.isPending} ${pe}>`)).toHaveLength(0);
+    expect(
+      restingPointerInert(`<Button aria-disabled={a.isPending || b.isFetchingNextPage} ${pe}>`),
+    ).toHaveLength(0);
+    expect(
+      restingPointerInert(`<Button aria-disabled={result === undefined} ${pe}>`),
+      'a resting expression with the pointer class must be found',
+    ).toHaveLength(1);
+    expect(
+      restingPointerInert(
+        `<Button aria-disabled={!query.hasNextPage || query.isFetchingNextPage} ${pe}>`,
+      ),
+      'one resting term makes the whole expression resting-capable',
+    ).toHaveLength(1);
+    expect(
+      restingPointerInert(`<Button aria-disabled={blocked} ${pe}>`),
+      'a local named blocked can fold a prerequisite in beside the pending flag',
+    ).toHaveLength(1);
+    expect(
+      restingPointerInert(
+        `<Button {...(isShown ? { 'aria-disabled': true } : {})} ${pe} onClick={() => {}}>`,
+      ),
+      'the spread idiom is read through to its condition',
+    ).toHaveLength(1);
+    expect(
+      restingPointerInert(
+        '<Button aria-disabled={result === undefined} className="aria-disabled:opacity-60">',
+      ),
+      'a resting control that is shaded without the pointer class is the remedy',
+    ).toHaveLength(0);
+  });
+
+  it('keeps a button that can rest aria-disabled pointer-reachable', () => {
+    const found = new Map<string, number>();
+    for (const file of files) {
+      const hits = restingPointerInert(readFileSync(file, 'utf8')).length;
+      if (hits > 0) found.set(relative(WEB_SRC, file).split(sep).join('/'), hits);
+    }
+    const unexpected = [...found].filter(
+      ([path, count]) => count !== (RESTING_POINTER_INERT_EXCEPTIONS.get(path)?.count ?? 0),
+    );
+    expect(
+      unexpected,
+      'a `<Button>` shaded with `aria-disabled:pointer-events-none` whose expression can be true at ' +
+        'rest: shade it with `aria-disabled:opacity-60` alone and refuse in the handler — or, for a ' +
+        'site outside this change, add a named exception with a register row',
+    ).toEqual([]);
+    for (const [path, { count, reason }] of RESTING_POINTER_INERT_EXCEPTIONS) {
+      expect(found.get(path), `${path} is excepted for ${String(count)} site(s) but has none`).toBe(
+        count,
+      );
+      expect(reason.length, `${path}'s exception carries no reason`).toBeGreaterThan(40);
+    }
   });
 });

@@ -24,12 +24,17 @@ const SUFFIX = 'SchedulePoint';
  * screen rather than a frame later. That ordering is worth keeping on its own — it is the gap in
  * which the old page's name is still current — without resting on the overstated claim above.
  *
+ * `null` sets nothing, so a screen that cannot yet say what it is keeps the document's own title.
+ *
  * It restores the previous title on unmount. Without that, leaving `/reset-password` for the app
  * would leave "Choose a new password · SchedulePoint" in the tab for the rest of the session — the
  * same cleanup mistake `useNoindex` exists to avoid, one attribute along.
  */
-export function useDocumentTitle(title: string): void {
+export function useDocumentTitle(title: string | null): void {
   useLayoutEffect(() => {
+    // `null` leaves the title as it is: for a surface that must not name itself yet (the staff
+    // console, until it knows who is asking — ADR-0086).
+    if (title === null) return;
     const previous = document.title;
     document.title = `${title} · ${SUFFIX}`;
     return () => {

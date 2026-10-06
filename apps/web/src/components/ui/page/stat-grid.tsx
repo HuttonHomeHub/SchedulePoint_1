@@ -99,10 +99,16 @@ export function StatGrid({ items, columns = 4, className }: StatGridProps): Reac
         )}
       >
         {items.map((item) => (
-          <div key={item.label}>
+          // `min-w-0` and `wrap-anywhere`: a grid item will not shrink below its content, so a long
+          // unbroken value (a mail host, a version string) pushed the page wider than a 320 px
+          // viewport (WCAG 1.4.10) instead of wrapping.
+          <div key={item.label} className="min-w-0">
             <dt className="text-muted-foreground text-sm">{item.label}</dt>
             <dd
-              className={cn('text-xl font-semibold tabular-nums', TONE_CLASS[item.tone ?? 'plain'])}
+              className={cn(
+                'text-xl font-semibold wrap-anywhere tabular-nums',
+                TONE_CLASS[item.tone ?? 'plain'],
+              )}
             >
               {item.value}
             </dd>

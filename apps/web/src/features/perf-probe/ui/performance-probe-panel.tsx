@@ -34,6 +34,7 @@ import { formatProbeReport } from './probe-report';
 import { ProbeSittings } from './probe-sittings';
 
 import { Alert } from '@/components/ui/alert';
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
@@ -187,6 +188,19 @@ export function PerformanceProbePanel({
   const [progress, setProgress] = useState('');
   const [outcome, setOutcome] = useState<SweepOutcome | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /**
+   * The verdict the app's shared announcer has already spoken, so the panel's own region does not
+   * speak it a second time.
+   *
+   * **Why the announcer at all:** while a run is going `<main>` is `inert`, which removes the whole
+   * subtree — the panel's polite region included — from the accessibility tree, so progress written
+   * there had no listener. The announcer renders as a sibling of `<main>`
+   * (`components/ui/announcer.tsx`), outside the inert subtree. The verdict goes through it as well
+   * because the run settles in the same commit that lifts `inert`, and a region that appears and is
+   * written in one commit is the case a screen reader is least likely to speak.
+   */
+  const announce = useAnnounce();
+  const [announcedVerdict, setAnnouncedVerdict] = useState('');
   // **The rejection used to set `copied` back to `false`** — indistinguishable from never having
   // pressed the button, which is precisely the defect `diagnostics-panel.tsx` records having had
   // fixed by the M4 accessibility review, in its own file, while this sibling kept it.
@@ -253,6 +267,27 @@ export function PerformanceProbePanel({
    * carries one control. Moving focus into it is what stops a keyboard reader sitting on a Run
    * button they can no longer see for twenty-five seconds.
    */
+  const stopHintId = useId();
+  const stop = useCallback(() => {
+    cancelledRef.current = true;
+  }, []);
+  /**
+   * **Escape stops the run, through the same handler as the button.** The overlay covers the
+   * whole viewport and takes focus, so Escape is the key a reader reaches for to leave it; with no
+   * handler it did nothing. It is the only thing open during a run — the confirmation has closed
+   * before one starts — so no other Escape owner is competing for the key.
+   */
+  useEffect(() => {
+    if (!running) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') stop();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [running, stop]);
+
   const wasRunning = useRef(false);
   useEffect(() => {
     if (running && !wasRunning.current) cancelButtonRef.current?.focus();
@@ -386,6 +421,7 @@ export function PerformanceProbePanel({
       // A sweep starting supersedes the plan-loading sentence: left in place it outranked every
       // later sweep summary in the polite region, so a "NOT recorded" warning was never announced.
       setLoadingStatus('');
+      setAnnouncedVerdict('');
       resetCopyState();
       cancelledRef.current = false;
       setRunning(true);
@@ -398,7 +434,10 @@ export function PerformanceProbePanel({
         const canvas = canvasRef.current;
         const surface = surfaceRef.current;
         if (!canvas || !surface) {
-          setFailure('The measurement surface did not mount, so nothing could be drawn.');
+          const message = 'The measurement surface did not mount, so nothing could be drawn.';
+          setFailure(message);
+          announce(message);
+          setAnnouncedVerdict(message);
           return;
         }
         // A real viewport, because a framing is part of a reading. The overlay is visible while it
@@ -447,31 +486,40 @@ export function PerformanceProbePanel({
             }),
           store: (body) => record.mutateAsync(body),
           onProgress: (state) => {
-            if (state.status === 'running' && plan.length > 1) {
-              setProgress(`${stepLabel(plan, state.step)} — preparing…`);
+            if (state.status === 'running') {
+              // **At a step boundary only, never per frame** — the runner's own sentences arrive
+              // many times a second and a live region that spoke them would talk over itself.
+              announce(stepLabel(plan, state.step));
+              if (plan.length > 1) setProgress(`${stepLabel(plan, state.step)} — preparing…`);
             }
           },
           shouldStop: () => cancelledRef.current,
         });
 
-        setOutcome(resume === null ? result : mergeResumed(resume, result));
+        const settled = resume === null ? result : mergeResumed(resume, result);
+        setOutcome(settled);
+        const verdict = verdictFor(settled);
+        announce(verdict);
+        setAnnouncedVerdict(verdict);
         // **One refresh for the sitting, whatever it wrote** — see `useRefreshProbeResults`. Four
         // POSTs invalidating individually would be four extra audited reads for one press.
         if (result.steps.some((step) => step.status === 'recorded')) refreshHistory();
       } catch (error) {
         // The panel must survive its own dependency being absent — a chunk that fails to load is a
         // network fact, not a measurement, and it must not read as a failing painter.
-        setFailure(
+        const message =
           error instanceof Error
             ? `The measurement could not run: ${error.message}`
-            : 'The measurement could not run.',
-        );
+            : 'The measurement could not run.';
+        setFailure(message);
+        announce(message);
+        setAnnouncedVerdict(message);
       } finally {
         setRunning(false);
         setProgress('');
       }
     },
-    [machineLabel, record, refreshHistory, resetCopyState],
+    [announce, machineLabel, record, refreshHistory, resetCopyState],
   );
 
   const copy = useCallback(() => {
@@ -496,42 +544,24 @@ export function PerformanceProbePanel({
     clipboard.copy(text);
   }, [clipboard, machineLabel, outcome]);
 
-  /**
-   * What the panel says, in the one channel a screen-reader user has.
-   *
-   * **The recording state is part of it**, and it was not: "recorded" rendered as a plain `<p>` with
-   * no role, so a successful store — a row now exists in the installation's history — was completely
-   * silent to assistive technology, while its failure was announced loudly by an `Alert`. WCAG 4.1.3,
-   * found by the M5 accessibility review. The asymmetry is the defect: a reader heard the bad news
-   * and never the good, on a screen whose whole purpose is saying what the state is now.
-   */
-  // **Counted from the steps rather than from one mutation's flags.** A sweep POSTs four times, so
-  // `record.isError` is a fact about the LAST write and says nothing about the other three. The
-  // sitting's own step statuses are the truth, which is why `run-sweep.ts` returns them.
-  const recorded = outcome?.steps.filter((step) => step.status === 'recorded').length ?? 0;
-  const unrecorded = outcome?.steps.filter((step) => step.status === 'not recorded').length ?? 0;
   // **From the outcome's own steps, by the same rule the dialog and the button both read.** The
   // alternative — the panel deciding separately what "missing" means — is two definitions of one
   // set, where a control could offer to re-run a step the sweep would then not include.
   const missing = outcome === null ? [] : missingSteps(outcome);
-  const recordingStatus =
-    outcome === null
-      ? ''
-      : unrecorded > 0
-        ? ` ${String(unrecorded)} of ${String(outcome.steps.length)} were NOT recorded — the figures are still on screen.`
-        : recorded > 0
-          ? ` Recorded in this installation’s history.`
-          : '';
 
-  const status = running
-    ? progress
-    : failure !== null
+  const settledStatus =
+    failure !== null
       ? failure
       : loadingStatus !== ''
         ? loadingStatus
         : outcome
-          ? `${summariseSweep(outcome)}${recordingStatus}`
+          ? verdictFor(outcome)
           : 'No measurement has been taken in this browser.';
+  // **Empty during a run** (progress goes through the announcer, which the inert `<main>` cannot
+  // swallow) **and empty while it merely repeats what the announcer just said**, so lifting `inert`
+  // does not read the verdict twice. Anything that changes it afterwards — a retried recording, a
+  // plan-loading reading — differs from the announced text and is written here as before.
+  const status = running ? '' : settledStatus === announcedVerdict ? '' : settledStatus;
 
   return (
     <StatusSection title="Performance" status={status}>
@@ -613,11 +643,14 @@ export function PerformanceProbePanel({
             which is what that ratchet is for.
           */}
           <summary className="cursor-pointer text-sm">Measure one thing</summary>
+          {/* `max-w-full min-w-0` down the column: a native select is as wide as its longest option, which
+              at 320 px pushed the page sideways (WCAG 1.4.10). */}
           <div className="mt-3 flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1">
+            <div className="flex max-w-full min-w-0 flex-col gap-1">
               <Label htmlFor={scenarioSelectId}>Measurement</Label>
               <Select
                 id={scenarioSelectId}
+                className="max-w-full"
                 value={scenarioId}
                 onChange={(e) => setScenarioId(e.target.value as ScenarioId)}
               >
@@ -628,10 +661,11 @@ export function PerformanceProbePanel({
                 ))}
               </Select>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex max-w-full min-w-0 flex-col gap-1">
               <Label htmlFor={presetSelectId}>Framing</Label>
               <Select
                 id={presetSelectId}
+                className="max-w-full"
                 value={preset}
                 onChange={(e) => setPreset(e.target.value as ScenarioPreset)}
               >
@@ -639,10 +673,11 @@ export function PerformanceProbePanel({
                 <option value="fit">Fit — the whole plan</option>
               </Select>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex max-w-full min-w-0 flex-col gap-1">
               <Label htmlFor={sizeSelectId}>Length</Label>
               <Select
                 id={sizeSelectId}
+                className="max-w-full"
                 value={size}
                 onChange={(e) => setSize(e.target.value as RunSize)}
               >
@@ -658,7 +693,7 @@ export function PerformanceProbePanel({
                 </option>
               </Select>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex max-w-full min-w-0 flex-col gap-1">
               <Label htmlFor={machineLabelId}>Machine (optional)</Label>
               {/* Insert-time only in v1, and the panel says so rather than offering an edit that does
               not exist: an editable note needs `updated_at` and a version column, which is a
@@ -744,7 +779,11 @@ export function PerformanceProbePanel({
             inside it would take the Stop button with it, leaving a two-minute full-screen overlay
             with nothing focusable in it at all — a strictly worse failure than the one being fixed.
           */
-          <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
+          <div
+            role="region"
+            aria-label="Measurement in progress"
+            className="bg-background/95 fixed inset-0 z-50 flex flex-col"
+          >
             {/*
               **The caption the spec asked for and nobody built** (`docs/TECH_DEBT.md` #259 item 9;
               `docs/specs/staff-performance-probe/feature-spec.md:813` — "a visible caption naming
@@ -769,7 +808,7 @@ export function PerformanceProbePanel({
             <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
             </Surface>
-            <div className="flex items-center justify-between gap-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4">
               {/*
               A bare icon, NOT `<Spinner>`. That primitive carries `role="status"`, which would put
               a second live region on screen alongside the panel's own — and two live regions during
@@ -781,15 +820,25 @@ export function PerformanceProbePanel({
                 <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
                 {progress}
               </span>
-              <Button
-                ref={cancelButtonRef}
-                variant="outline"
-                onClick={() => {
-                  cancelledRef.current = true;
-                }}
-              >
-                Stop (keeps what is already measured)
-              </Button>
+              {/*
+                The promise is a visible line beside a short button name rather than a 37-character
+                label: the old label could not fit a 320 px row (WCAG 1.4.10, which still applies
+                with the target set at desktop and Surface), and a name that long is read in full
+                every time the button is focused.
+              */}
+              <span className="flex flex-wrap items-center gap-3">
+                <span id={stopHintId} className="text-muted-foreground text-sm">
+                  Stopping keeps what is already measured.
+                </span>
+                <Button
+                  ref={cancelButtonRef}
+                  variant="outline"
+                  aria-describedby={stopHintId}
+                  onClick={stop}
+                >
+                  Stop
+                </Button>
+              </span>
             </div>
           </div>,
           document.body,
@@ -872,6 +921,30 @@ export function PerformanceProbePanel({
  * It counts what the steps say rather than what the last mutation flag says: a sweep writes four
  * times, so one `isError` is a fact about the fourth write and nothing about the other three.
  */
+/**
+ * The sentence a finished sitting is announced with: what was measured, and whether it is kept.
+ *
+ * **The recording state is part of it**, and it was not: "recorded" rendered as a plain `<p>` with
+ * no role, so a successful store — a row now exists in the installation's history — was completely
+ * silent to assistive technology, while its failure was announced loudly by an `Alert`. WCAG 4.1.3,
+ * found by the M5 accessibility review. The asymmetry is the defect: a reader heard the bad news
+ * and never the good, on a screen whose whole purpose is saying what the state is now.
+ *
+ * Counted from the steps rather than from one mutation's flags: a sweep POSTs four times, so
+ * `record.isError` is a fact about the LAST write and says nothing about the other three.
+ */
+export function verdictFor(outcome: SweepOutcome): string {
+  const recorded = outcome.steps.filter((step) => step.status === 'recorded').length;
+  const unrecorded = outcome.steps.filter((step) => step.status === 'not recorded').length;
+  const recording =
+    unrecorded > 0
+      ? ` ${String(unrecorded)} of ${String(outcome.steps.length)} were NOT recorded — the figures are still on screen.`
+      : recorded > 0
+        ? ` Recorded in this installation’s history.`
+        : '';
+  return `${summariseSweep(outcome)}${recording}`;
+}
+
 export function summariseSweep(outcome: SweepOutcome): string {
   const counts = {
     recorded: outcome.steps.filter((s) => s.status === 'recorded').length,
@@ -1119,6 +1192,9 @@ function SittingResult({
                   // out of the tab order, so the reason linked below becomes unreachable by
                   // keyboard, which is the defect ADR-0082 exists to stop one layer down.
                   aria-disabled={step.storeFailure?.retryable === false ? true : undefined}
+                  // Shaded, because the attribute alone looked exactly like a live control (#458); not
+                  // pointer-inert, because it rests this way for as long as the failure stands.
+                  className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
                   aria-describedby={
                     step.storeFailure?.retryBlockedReason != null
                       ? `${stepKey(step.step)}-retry-blocked`

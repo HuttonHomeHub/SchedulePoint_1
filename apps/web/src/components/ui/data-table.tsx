@@ -457,7 +457,11 @@ export function DataTable<T>({
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left">
                 {columns.map((column) => (
-                  <th key={column.header} scope="col" className={skeletonClassesOf(column, 'head')}>
+                  <th
+                    key={column.header}
+                    scope="col"
+                    className={cn(skeletonClassesOf(column, 'head'), column.srHeader && 'relative')}
+                  >
                     {column.srHeader ? <span className="sr-only">{column.header}</span> : null}
                   </th>
                 ))}
@@ -544,7 +548,11 @@ export function DataTable<T>({
                     headClassesOf(column),
                     'bg-background border-border sticky top-0 z-20 border-b',
                   )
-                : headClassesOf(column)
+                : // `relative` for a screen-reader-only header: an `sr-only` span is `position: absolute`,
+                  // and with no positioned ancestor its containing block is the viewport, so it
+                  // escapes the table's own scroll region and, in a wide table, sat past the right
+                  // edge and widened the whole page at 320 px (WCAG 1.4.10).
+                  cn(headClassesOf(column), column.srHeader && 'relative')
             }
             data-col-width={column.width ?? 'undeclared'}
           >

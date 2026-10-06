@@ -1,4 +1,10 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useQuery,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -52,21 +58,30 @@ export function useStaffInstallation(): UseQueryResult<StaffInstallation> {
 }
 
 /**
- * One page of unverified accounts.
+ * The unverified accounts, one page at a time, accumulated.
  *
- * The cursor is part of the key rather than held outside it, so paging back to a page already
- * fetched is served from the cache and writes **no** second audit row — every read here is audited,
- * and a reader stepping through pages should not be able to inflate that log by going backwards.
+ * **One infinite query under one key**, so the summary at the top of the console reads page 1 of it
+ * while the panel reads every page fetched so far — and the load is still exactly one request, which
+ * is what keeps it at one `staff.panel_read` row (every read here is audited). The previous shape
+ * was a query per cursor: pressing *Show older* mounted a new key, which made the whole body pending
+ * (taking the focused button with it) and **replaced** the rows instead of adding to them.
+ *
+ * Paging forward fetches only the next page, and a page already fetched is served from the cache, so
+ * a reader stepping through cannot inflate the log. Nothing here refetches on its own.
  */
-export function useStaffAccounts(cursor?: string): UseQueryResult<StaffAccounts> {
-  return useQuery({
-    queryKey: ['staff', 'accounts', cursor ?? null],
-    queryFn: () =>
+export function useStaffAccounts(): UseInfiniteQueryResult<
+  InfiniteData<StaffAccounts, string | undefined>
+> {
+  return useInfiniteQuery({
+    queryKey: ['staff', 'accounts'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
       apiFetch<StaffAccounts>(
-        cursor === undefined
+        pageParam === undefined
           ? '/staff/accounts'
-          : `/staff/accounts?cursor=${encodeURIComponent(cursor)}`,
+          : `/staff/accounts?cursor=${encodeURIComponent(pageParam)}`,
       ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     refetchOnWindowFocus: false,
     retry: false,
   });

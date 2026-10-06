@@ -169,6 +169,10 @@ describe('DiagnosticsPanel', () => {
     const copy = screen.getByRole('button', { name: 'Copy for the record' });
     expect(copy).toHaveAttribute('aria-disabled', 'true');
     expect(copy).toHaveAccessibleDescription(/Wait for this run to finish/);
+    // #458: shaded, and not pointer-inert — a control that rests this way until the first run must
+    // stay under the pointer so its reason can be reached. Verified red against the old class pair.
+    expect(copy).toHaveClass('aria-disabled:opacity-60');
+    expect(copy).not.toHaveClass('aria-disabled:pointer-events-none');
 
     fireEvent.click(copy);
     expect(writeText).not.toHaveBeenCalled();

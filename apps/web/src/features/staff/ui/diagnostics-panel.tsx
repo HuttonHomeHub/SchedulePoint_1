@@ -112,7 +112,11 @@ export function DiagnosticsPanel(): React.ReactElement {
           variant="outline"
           aria-disabled={result === undefined}
           aria-describedby={result === undefined ? copyBlockedId : undefined}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          // **No `pointer-events-none`: this is shaded from first paint, until the first run** (#458).
+          // `pointer-events: none` makes the pointer see whatever is behind the button, so the reason
+          // linked above was unreachable by hover. The hover fill is cancelled instead, and `copy`
+          // refuses the press.
+          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
           onClick={copy}
         >
           Copy for the record

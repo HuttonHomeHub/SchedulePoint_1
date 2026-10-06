@@ -1241,3 +1241,141 @@ test('a staff member measures plan loading in one press', async ({ browser }) =>
 
   await staffContext.close();
 });
+
+/**
+ * **Staff console M1 — the accessibility fixes, each in a real browser.**
+ *
+ * Four of the six defects are statements about what Chromium does with focus, `inert` and a 320 px
+ * viewport, which jsdom has none of: that pressing a button whose handler used to unmount it drops
+ * focus to `<body>`, that a live region inside an inert subtree reaches nobody, and that a button
+ * with no `flex-wrap` leaves the viewport. The unit suites mount the components and cannot ask.
+ *
+ * **A fifth `test()` rather than an extension**, for the reason the second gives: the per-test
+ * timeout is 120 s and the probe check is the long step here.
+ *
+ * WCAG 2.2 reflow (SC 1.4.10) is driven at 320 px even though the design targets are a desktop
+ * monitor and a Surface: it is a merge requirement, not a layout.
+ */
+test('the console keeps focus, shading, announcements and reflow honest (M1)', async ({
+  browser,
+}) => {
+  const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
+
+  // **More than one page of unverified accounts, made through the real sign-up route.** A page is
+  // 25 (`staff-health.service.ts`), and the database persists, so the count a previous run left is
+  // not something this test may lean on: it adds its own and asserts only that the list grows.
+  const seedContext = await browser.newContext();
+  const stamp = Date.now();
+  for (let i = 0; i < 26; i += 1) {
+    const res = await seedContext.request.post('/api/auth/sign-up/email', {
+      data: {
+        name: `Unverified ${String(i)}`,
+        email: `staff-m1-${String(stamp)}-${String(i)}@example.com`,
+        password: PASSWORD,
+      },
+      headers: { Origin: baseURL },
+    });
+    expect(res.ok(), `sign-up ${String(i)} must succeed`).toBe(true);
+  }
+  await seedContext.close();
+
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+
+  // ---------------------------------------------------------------- M1-T1: paging keeps focus
+  const accounts = staff.locator('#staff-section-accounts');
+  const accountRows = accounts
+    .getByRole('table', { name: 'Unverified accounts, oldest first' })
+    .getByRole('row');
+  const showOlder = accounts.getByRole('button', { name: 'Show older' });
+  await expect(showOlder).toBeVisible();
+  const firstPage = await accountRows.count();
+  const firstAddress = await accountRows.nth(1).textContent();
+
+  const accountRequests: string[] = [];
+  staff.on('request', (request) => {
+    if (request.url().includes('/staff/accounts')) accountRequests.push(request.url());
+  });
+
+  await showOlder.focus();
+  await showOlder.click();
+  // The same button, still there: it is shaded and renamed rather than replaced, so focus is where
+  // the reader left it. Verified red against the per-cursor query, where the whole body was swapped
+  // for a spinner and `document.activeElement` was `<body>`.
+  await expect(accountRows).not.toHaveCount(firstPage);
+  expect(await accountRows.count(), 'the next page is appended').toBeGreaterThan(firstPage);
+  await expect(accountRows.nth(1), 'the first page is still there').toHaveText(firstAddress ?? '');
+  expect(
+    await staff.evaluate(() => document.activeElement?.closest('#staff-section-accounts') !== null),
+    'focus stayed inside the Accounts section',
+  ).toBe(true);
+  expect(accountRequests, 'one request for the next page, none for the first').toHaveLength(1);
+
+  // ---------------------------------------------------------------- M1-T2: resting shading
+  const copy = staff.getByRole('button', { name: 'Copy for the record' });
+  await expect(copy).toHaveAttribute('aria-disabled', 'true');
+  expect(
+    await copy.evaluate((el) => getComputedStyle(el).pointerEvents),
+    'a control that rests shaded must stay under the pointer so its reason can be reached (#458)',
+  ).not.toBe('none');
+
+  // ---------------------------------------------------------------- M1-T5: reflow at 320 px
+  await staff.setViewportSize({ width: 320, height: 640 });
+  await expect
+    .poll(() => staff.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), {
+      message: '/staff at rest must not scroll sideways at 320 px (WCAG 1.4.10)',
+    })
+    .toBe(true);
+  const atRest = await new AxeBuilder({ page: staff })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(atRest.violations).toEqual([]);
+
+  // ---------------------------------------------------------------- M1-T3/T4: the overlay
+  await staff.getByRole('button', { name: 'Check the probe works' }).click();
+  await staff.getByRole('alertdialog').getByRole('button', { name: 'Check the probe' }).click();
+
+  const overlay = staff.getByRole('region', { name: 'Measurement in progress' });
+  await expect(overlay).toBeVisible();
+  const stop = overlay.getByRole('button', { name: 'Stop' });
+  await expect(stop).toBeVisible();
+  await expect(overlay).toContainText('Stopping keeps what is already measured.');
+
+  const box = await stop.boundingBox();
+  const viewport = staff.viewportSize();
+  expect(box, 'Stop has a box').not.toBeNull();
+  expect(
+    (box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= (viewport?.width ?? 0),
+    `Stop is inside the 320 px viewport (box ${JSON.stringify(box)})`,
+  ).toBe(true);
+
+  // **The announcer is outside the inert subtree, and it speaks.** While the run is going `<main>` is
+  // inert, which removes everything inside it from the accessibility tree, so the panel's own
+  // region cannot be heard. `[data-testid="announcer"]` is a sibling of `<main>`.
+  const announcer = staff.locator('[data-testid="announcer"]');
+  await expect(staff.locator('main[inert]')).toHaveCount(1);
+  await expect(staff.locator('main[inert] [data-testid="announcer"]')).toHaveCount(0);
+  await expect(announcer).toHaveText(/^Step 1 of 4/, { timeout: 30_000 });
+
+  const overlayAxe = await new AxeBuilder({ page: staff })
+    .include('[aria-label="Measurement in progress"]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(overlayAxe.violations).toEqual([]);
+
+  // Escape is Stop. Whichever step the run is in, the sitting says it was stopped, and says it once
+  // through the announcer rather than from inside the region `inert` just lifted from.
+  await staff.keyboard.press('Escape');
+  await expect(overlay).toHaveCount(0, { timeout: 60_000 });
+  await expect(announcer).toHaveText(/You stopped this sitting|Sitting finished/, {
+    timeout: 15_000,
+  });
+
+  await staffContext.close();
+});

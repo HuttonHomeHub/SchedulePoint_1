@@ -8,10 +8,10 @@ import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staf
  * **It is pure, React-free and fetch-free, and it takes query results as ARGUMENTS.** That is not
  * tidiness: reading a staff panel is an audited act on the server, so a summary that called
  * `useStaffAccounts()` for itself would issue a second request and write a second
- * `staff.panel_read` row on every page load — and `useStaffAccounts(cursor)` is keyed by its cursor
- * (`staff-panels.ts:63`), so a summary calling it with no cursor while the panel holds one after
- * *Show older* would be a genuinely different query rather than a deduped one. The component that
- * renders this must not call hooks either; the page root passes what it already has.
+ * `staff.panel_read` row on every page load. (The accounts query is one infinite query, so the
+ * panel's paging would not have split it — but the summary would still be a second observer to keep
+ * in step.) The component that renders this must not call hooks either; the page root passes what it
+ * already has.
  *
  * **The vocabulary is derived from `features/schedule-health/model/health-rows.ts`, not invented**
  * (ADR-0116, spec §8.10). That module is this one's design, shipped three weeks earlier and gated:

@@ -311,6 +311,19 @@ describe('StatGrid', () => {
     ).not.toMatch(/text-destructive-text/);
   });
 
+  it('lets a long unbroken value wrap rather than widen the page', () => {
+    // Verified red against the item without `min-w-0` / `wrap-anywhere`: a grid item will not shrink
+    // below its content, so a mail host overflowed a 320 px viewport.
+    render(
+      <StatGrid
+        items={[{ label: 'Mail host', value: 'smtp.a-very-long-hostname.example.test' }]}
+      />,
+    );
+    const value = screen.getByText('smtp.a-very-long-hostname.example.test');
+    expect(value.className).toMatch(/wrap-anywhere/);
+    expect(value.parentElement?.className).toMatch(/min-w-0/);
+  });
+
   /**
    * The `@container` must be on a WRAPPER, never on the grid itself — an element is not its own
    * query container, so the variant would query an ancestor that does not exist and the base class

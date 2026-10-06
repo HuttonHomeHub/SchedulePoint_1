@@ -225,6 +225,21 @@ describe('DataTable', () => {
  * own classes survive alongside it. That last one is the whole point of composing rather than
  * replacing (`docs/TECH_DEBT.md` #335).
  */
+describe('DataTable — srHeader', () => {
+  it('positions a screen-reader-only header so its hidden text stays inside the scroll region', () => {
+    // Verified red without `relative`: the `sr-only` span is absolute with no positioned ancestor,
+    // so in a wide table it sat past the right edge of the viewport and widened the page at 320 px.
+    render(
+      <DataTable
+        {...common}
+        columns={[{ header: 'Show', srHeader: true, cell: (row: Row) => row.name }]}
+        query={query({ data: [{ id: '1', name: 'A' }] })}
+      />,
+    );
+    expect(screen.getByRole('columnheader', { name: 'Show' })).toHaveClass('relative');
+  });
+});
+
 describe('DataTable — Column.width', () => {
   const rows = [{ id: '1', name: 'Northgate' }];
 
