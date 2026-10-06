@@ -120,7 +120,7 @@ export function ScopeSaveBar({
         onClick={(event) => {
           if (blocked) event.preventDefault();
         }}
-        className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+        className="aria-busy:pointer-events-none"
       >
         {pending ? pendingLabel : label}
       </Button>

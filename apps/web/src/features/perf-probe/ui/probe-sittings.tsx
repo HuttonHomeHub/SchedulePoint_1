@@ -416,7 +416,6 @@ function ShowSittingButton({
         // `aria-disabled` for as long as it stays shown, and a pointer-inert control hands the
         // pointer to whatever is behind it. The hover fill is cancelled instead, which is the
         // looks-live-but-refuses defect ADR-0082 exists to remove, and `onClick` refuses the press.
-        className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
         onClick={() => {
           // The guard, not the attribute. `aria-disabled` is a statement to assistive technology
           // and does nothing to the pointer.

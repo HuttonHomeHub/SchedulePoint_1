@@ -90,7 +90,7 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
           submit button, so the guard covers the keyboard path too (verified in Chromium). */}
       <Button
         type="submit"
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        className="aria-disabled:pointer-events-none"
         aria-disabled={signIn.isPending}
         aria-busy={signIn.isPending}
         onClick={(event) => {

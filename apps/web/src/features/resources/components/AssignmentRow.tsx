@@ -708,8 +708,8 @@ export function AssignmentRow({
                     // blurred to `<body>` by the browser each time. `saveLag` re-checks the same
                     // condition, so the click guard is real rather than decorative.
                     aria-disabled={lagUnavailable || undefined}
-                    className={lagUnavailable ? 'pointer-events-none opacity-50' : undefined}
                     aria-busy={update.isPending}
+                    className="aria-busy:pointer-events-none"
                     onClick={saveLag}
                   >
                     Save

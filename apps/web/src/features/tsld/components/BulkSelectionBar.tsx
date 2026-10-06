@@ -97,7 +97,7 @@ function BulkAction({
         }
         onActivate();
       }}
-      className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+      className="aria-busy:pointer-events-none"
     >
       {icon}
       {label}

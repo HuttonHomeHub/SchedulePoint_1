@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -167,6 +167,49 @@ function restingPointerInert(source: string): string[] {
   });
 }
 
+/**
+ * **G1 — the shaded look has one home, `components/ui/button.tsx`** (`docs/TECH_DEBT.md` #461).
+ *
+ * `Button`'s CVA owns `aria-disabled:opacity-60` and the gated hover. A caller that spells either
+ * wins over the CVA through `cn`, which is how forty-odd sites drifted between 50 and 60 and kept
+ * a hover fill on a shaded control. Whole-file rather than per-tag: a constant (the old
+ * `SHADED_BUTTON`) is exactly the spelling a tag reader cannot see.
+ */
+const SHADED_SPELLING = /aria-disabled:(opacity-|hover:)/;
+
+/**
+ * Files that legitimately spell it, each for a reason. Not `<Button>` callers: they do not inherit
+ * the CVA, so the spelling there is the only shading they have.
+ */
+const SHADED_SPELLING_ALLOWED: Readonly<Record<string, string>> = {
+  'components/ui/button.tsx': 'the CVA that owns the shaded state',
+  'components/ui/radio-card-group.tsx':
+    'a RadioCard is a labelled input, not a Button (out of scope)',
+  'features/revision-compare/components/RevisionComparePanel.tsx':
+    'a raw <button> row that never inherits the Button CVA',
+  'features/revision-compare/components/RevisionChangesView.tsx':
+    'a raw <button> row that never inherits the Button CVA',
+};
+
+function allSourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...allSourceFiles(full));
+    else if (/\.tsx?$/.test(entry.name) && !entry.name.includes('.test.')) out.push(full);
+  }
+  return out;
+}
+
+/** Source with block comments and whole-line or trailing `//` comments removed. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+}
+
+function spellsShadedLook(source: string): boolean {
+  return SHADED_SPELLING.test(stripComments(source));
+}
+
 describe('a submit never blocks itself with the native attribute', () => {
   const files = sourceFiles(join(WEB_SRC, 'features')).concat(
     sourceFiles(join(WEB_SRC, 'components')),
@@ -285,5 +328,50 @@ describe('a submit never blocks itself with the native attribute', () => {
         '`onSubmit`) — or, if the site also has a request in flight, use `aria-busy:pointer-events-none` ' +
         "bound to that request's flag",
     ).toEqual([]);
+  });
+});
+
+describe('G1: the shaded look is spelled in one place', () => {
+  const toPath = (file: string): string => relative(WEB_SRC, file).split(sep).join('/');
+
+  it('is spelled by no caller outside the allow-list', () => {
+    const offenders = allSourceFiles(WEB_SRC)
+      .filter((file) => !(toPath(file) in SHADED_SPELLING_ALLOWED))
+      .filter((file) => spellsShadedLook(readFileSync(file, 'utf8')))
+      .map(toPath);
+
+    expect(
+      offenders,
+      '`Button` owns `aria-disabled:opacity-60` and the gated hover: delete the caller spelling ' +
+        '(a caller string wins over the CVA through `cn`, and that is how 50 and 60 drifted)',
+    ).toEqual([]);
+  });
+
+  it('recognises the spellings, constants included, and ignores a comment', () => {
+    expect(spellsShadedLook("const X = 'aria-disabled:opacity-50';")).toBe(true);
+    expect(spellsShadedLook("const X = 'aria-disabled:hover:bg-background';")).toBe(true);
+    expect(
+      spellsShadedLook('<Button className="aria-disabled:pointer-events-none">'),
+      "the pointer class is the caller's to keep",
+    ).toBe(false);
+    expect(spellsShadedLook('// was aria-disabled:opacity-50\nconst X = 1;')).toBe(false);
+    expect(spellsShadedLook('/* aria-disabled:opacity-50 */\nconst X = 1;')).toBe(false);
+  });
+
+  it('allows only files that still exist', () => {
+    const stale = Object.keys(SHADED_SPELLING_ALLOWED).filter(
+      (file) => !existsSync(join(WEB_SRC, file)),
+    );
+    expect(stale, 'an allow-listed file was moved or deleted: remove its entry').toEqual([]);
+    expect(
+      existsSync(join(WEB_SRC, 'components/ui/not-a-file.tsx')),
+      'the existence check can no longer tell a missing file',
+    ).toBe(false);
+  });
+
+  it('gives every allow-list entry a reason', () => {
+    for (const [file, reason] of Object.entries(SHADED_SPELLING_ALLOWED)) {
+      expect(reason.length, file).toBeGreaterThan(10);
+    }
   });
 });

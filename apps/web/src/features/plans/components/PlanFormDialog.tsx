@@ -160,7 +160,7 @@ function PlanForm({
         </Button>
         <Button
           type="submit"
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-disabled:pointer-events-none"
           aria-disabled={mutation.isPending}
           aria-busy={mutation.isPending}
           onClick={(event) => {

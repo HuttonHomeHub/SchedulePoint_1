@@ -79,9 +79,10 @@ describe('CopyButton', () => {
       // The base button's `disabled:pointer-events-none` is the native attribute's; the resting
       // state must not carry the `aria-disabled:` form.
       expect(button.className).not.toContain('aria-disabled:pointer-events-none');
+      // The shading and the gated hover are the CVA's; the caller spells neither (#461).
       expect(button.className).toContain('aria-disabled:opacity-60');
-      expect(button.className).toContain('aria-disabled:hover:bg-background');
-      expect(button.className).toContain('aria-disabled:hover:text-foreground');
+      expect(button.className).toContain('not-aria-disabled:hover:bg-accent');
+      expect(button.className).not.toContain('aria-disabled:hover:bg-background');
     });
 
     it('shows its reason as visible text and describes the button by it', () => {

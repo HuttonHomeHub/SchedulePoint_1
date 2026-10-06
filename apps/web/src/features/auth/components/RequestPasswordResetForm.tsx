@@ -83,7 +83,7 @@ export function RequestPasswordResetForm({
       />
       <Button
         type="submit"
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        className="aria-disabled:pointer-events-none"
         aria-disabled={request.isPending}
         aria-busy={request.isPending}
         onClick={(event) => {

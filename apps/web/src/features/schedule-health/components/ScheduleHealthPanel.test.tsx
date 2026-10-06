@@ -430,9 +430,9 @@ describe('ScheduleHealthPanel', () => {
     });
     const button = screen.getByRole('button', { name: 'Running…' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    // `Button`'s CVA dims and blocks the pointer on NATIVE `disabled` only, so an `aria-disabled`
-    // control must carry both halves itself or the press changes the label and nothing else
-    // (ADR-0145 M8; found by the #384 M6 component review).
+    // `Button`'s CVA dims an `aria-disabled` control but blocks the pointer on NATIVE `disabled`
+    // only, so the in-flight site keeps its own pointer class or the press changes the label and
+    // nothing else (ADR-0145 M8; found by the #384 M6 component review).
     expect(button).toHaveClass('aria-disabled:pointer-events-none', 'aria-disabled:opacity-60');
     fireEvent.click(button);
     expect(run).not.toHaveBeenCalled();

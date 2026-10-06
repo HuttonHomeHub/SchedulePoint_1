@@ -217,7 +217,7 @@ function EditDependencyForm({
         </Button>
         <Button
           type="submit"
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-disabled:pointer-events-none"
           aria-disabled={update.isPending}
           aria-busy={update.isPending}
           onClick={(event) => {

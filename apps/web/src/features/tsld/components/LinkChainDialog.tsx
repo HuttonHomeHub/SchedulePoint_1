@@ -136,7 +136,7 @@ export function LinkChainDialog({
                 }
                 onConfirm();
               }}
-              className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+              className="aria-busy:pointer-events-none"
             >
               {pending ? 'Linking…' : `Create ${linkCount} ${linkCount === 1 ? 'link' : 'links'}`}
             </Button>

@@ -275,7 +275,7 @@ function ExceptionEditForm({
           // class is not decoration — without it the control announces as unavailable to assistive
           // tech while remaining fully clickable, which is a Name/Role/Value mismatch AND a
           // double-submit. (Shipped without it; caught by the a11y and component gates together.)
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-disabled:pointer-events-none"
           onClick={() => {
             if (updateException.isPending) return;
             onSave();
@@ -557,7 +557,7 @@ export function CalendarExceptionsEditor({
               type="submit"
               // `aria-disabled`, never the native attribute — see the Save button above. The
               // accessible name tracks the visible text so it stays contained in it (SC 2.5.3).
-              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              className="aria-disabled:pointer-events-none"
               aria-disabled={addException.isPending}
               aria-busy={addException.isPending}
               aria-label={addException.isPending ? 'Adding exception' : 'Add exception'}

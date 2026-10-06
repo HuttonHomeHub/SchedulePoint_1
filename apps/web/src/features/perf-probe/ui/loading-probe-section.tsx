@@ -182,7 +182,6 @@ export function LoadingProbeSection({
           aria-disabled={blocked}
           aria-busy={measuring}
           aria-describedby={unsupported === null ? undefined : unsupportedId}
-          className="aria-disabled:opacity-60"
           onClick={() => {
             if (!blocked) setConfirming(true);
           }}

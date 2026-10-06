@@ -128,7 +128,7 @@ export function StaffStatusSummary({
           ref={setButton}
           variant="outline"
           size="sm"
-          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground mt-4 aria-disabled:opacity-60"
+          className="mt-4"
           aria-disabled={retrying}
           aria-busy={retrying}
           onClick={() => {

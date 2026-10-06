@@ -399,7 +399,7 @@ function ApplyLevellingBody({
             variant="outline"
             size="sm"
             aria-disabled={checking}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="aria-disabled:pointer-events-none"
             onClick={() => {
               if (checking) return;
               void checkAgain();
@@ -452,7 +452,7 @@ function ApplyLevellingBody({
               }
               void apply();
             }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="aria-disabled:pointer-events-none"
           >
             {pending ? 'Applying…' : `Apply to ${activityCount(count)}`}
           </Button>
