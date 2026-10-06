@@ -128,7 +128,8 @@ describe('history entries (staff server readings M1)', () => {
   });
 
   it('does not call the window not-full when there is no history at all', () => {
-    // 0 === 0 on an empty table is the absence of a rate, not a rate that is a floor.
+    // 0 === 0 on an empty table is the absence of a rate, not a rate that is a floor. The early
+    // "nothing to examine" return is what guarantees it; this pins that it keeps doing so.
     expect(diagnosticSentence(history({ examined: 0, affected: 0 }))).not.toMatch(/not yet full/);
   });
 
