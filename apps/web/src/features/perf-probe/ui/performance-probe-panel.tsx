@@ -38,9 +38,9 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { StatusSection } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
-import { Panel } from '@/features/staff/ui/panel';
 import { useClipboardCopy, type ClipboardCopyState } from '@/hooks/use-clipboard-copy';
 
 /**
@@ -160,7 +160,18 @@ export function confirmationCopy(
   return `This takes ${describeDuration(seconds)}. ${motion} ${stop}${ungraded}`;
 }
 
-export function PerformanceProbePanel(): React.ReactElement {
+export interface PerformanceProbePanelProps {
+  /**
+   * The API's version, which the plan-loading report names. Passed in rather than read here: the
+   * console's screen already holds the installation query, and reading it from this feature would
+   * be an import of `features/staff` (`no-staff-import.structural.test.ts`).
+   */
+  apiVersion: string | null;
+}
+
+export function PerformanceProbePanel({
+  apiVersion,
+}: PerformanceProbePanelProps): React.ReactElement {
   const scenarioSelectId = useId();
   const presetSelectId = useId();
   const sizeSelectId = useId();
@@ -523,7 +534,7 @@ export function PerformanceProbePanel(): React.ReactElement {
           : 'No measurement has been taken in this browser.';
 
   return (
-    <Panel title="Performance" status={status}>
+    <StatusSection title="Performance" status={status}>
       {/* The anchor the `inert` effect walks up from. `display: contents`, so it adds no box. */}
       <div ref={panelRef} className="contents" />
       <p className="text-muted-foreground text-sm">
@@ -784,7 +795,7 @@ export function PerformanceProbePanel(): React.ReactElement {
           document.body,
         )}
 
-      <LoadingProbeSection onStatusChange={setLoadingStatus} />
+      <LoadingProbeSection apiVersion={apiVersion} onStatusChange={setLoadingStatus} />
 
       <ConfirmDialog
         open={confirming !== null}
@@ -840,7 +851,7 @@ export function PerformanceProbePanel(): React.ReactElement {
         cancelLabel="Not now"
         confirmVariant="default"
       />
-    </Panel>
+    </StatusSection>
   );
 }
 

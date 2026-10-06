@@ -20,7 +20,6 @@ import { unsupportedReason } from '../loading/model/support';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { useStaffInstallation } from '@/features/staff/api/staff-panels';
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
 /**
@@ -36,18 +35,19 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  * chunk is a few kilobytes and a console visit that never presses the control must not pay for it.
  * That includes the resume below — a page with no marker never loads the runner.
  *
- * **The panel owns the one polite region** (`Panel`), so this section reports its status upward
+ * **The panel owns the one polite region** (`StatusSection`), so this section reports its status upward
  * rather than mounting a second live region beside it.
  */
 export interface LoadingProbeSectionProps {
+  /** `null` until the installation read settles; the report then says "unknown version". */
+  apiVersion: string | null;
   onStatusChange: (status: string) => void;
 }
 
 export function LoadingProbeSection({
+  apiVersion,
   onStatusChange,
 }: LoadingProbeSectionProps): React.ReactElement {
-  const installation = useStaffInstallation();
-  const apiVersion = installation.data?.apiVersion ?? null;
   const headingId = useId();
 
   const [confirming, setConfirming] = useState(false);

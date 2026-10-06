@@ -248,6 +248,22 @@ script, at 390, 1280 and 1646 px (ADR-0142: a remedy is measured before it is bu
 | SC-11 | Elements past the right edge at 390 px with Performance open and a sitting shown (`metrics.log` "over") | 6 (`TABLE … right=779`)              | 0                                                                 |
 | SC-12 | Status row order across healthy, attention, error and loading states                                    | changes with state                   | identical in every state (D-11)                                   |
 
+**Re-baselined at M0 (2026-10-06), at the Surface (1368x912), full readings in
+[`m0-measurement.md`](./m0-measurement.md).** The approval header moved the design targets to the desktop
+monitor and the Surface, so the phone-width rows above are read at 1368x912 from here on:
+
+- **SC-1:** 4,664 px at rest at 1368x912 (4,706 at 1920x1080). The reduction target stays -35 %, so at most
+  about 3,030 px at the Surface.
+- **SC-10:** +1,735 px after Run diagnostics at 1368x912 (the same at every width from 1280 up). Target stays
+  at most +600 px.
+- **SC-11:** **0** elements past the right edge at 1368x912 and 1920x1080, so there is no overflow to remove at
+  the targets. The 390 px figure (a `TABLE` at `right=779`) is the WCAG reflow case only: the table must
+  scroll inside its own labelled region at 320 px.
+- **SC-2:** 5 distinct sub-heading treatments by computed style over `h3`, `h4` and `summary` (the digest's 6
+  is not reproduced by that method). **SC-6:** 6 polite regions hold text once the page settles (not 7).
+  **SC-8:** `<main>` does not overflow at 320 px, but two controls are drawn past the edge there (the
+  measurement-mode `<select>` at `right=347`, and the overlay's Stop button at `right=399`); both are M1 work.
+
 ### Open questions
 
 **Critical** (the product owner answers these; a recommended default is given for each, and the

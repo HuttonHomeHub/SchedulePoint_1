@@ -72,12 +72,6 @@ function code(source: string): string {
  */
 const DECLARED_UNFRAMED = new Map<string, string>([
   [
-    'routes/staff.tsx',
-    'The staff console has its own card archetype (`features/staff/ui/panel.tsx`), which predates ' +
-      'this one and frames every table on that screen. Converting it is ADR-0146 M2-T2a, whose ' +
-      'acceptance condition is that the console comes through pixel-unchanged.',
-  ],
-  [
     'routes/plan-detail.tsx',
     'The plan workspace owns its own chrome (ADR-0099/ADR-0109) and is explicitly out of this ' +
       "epic's scope. Its `PageContainer` is the not-found branch, which renders no rows.",
@@ -106,8 +100,13 @@ function directFeatureImports(source: string): string[] {
  * two strings.
  */
 function resolve(spec: string, files: string[]): string[] {
-  const rel = `${spec.replace('@/', '')}/`;
-  return files.filter((f) => `${relative(WEB_SRC, f).split(sep).join('/')}`.startsWith(rel));
+  const rel = spec.replace('@/', '');
+  return files.filter((f) => {
+    const path = relative(WEB_SRC, f).split(sep).join('/');
+    // A directory (a feature barrel) or a single module: the staff console's route is a re-export
+    // of ONE file, and a resolver that only knew directories read it as importing nothing.
+    return path.startsWith(`${rel}/`) || path === `${rel}.tsx` || path === `${rel}.ts`;
+  });
 }
 
 describe('a list of rows sits in a named section', () => {
@@ -124,7 +123,17 @@ describe('a list of rows sits in a named section', () => {
   function closureOf(route: string): string[] {
     const source = readFileSync(route, 'utf8');
     const imported = directFeatureImports(source).flatMap((spec) => resolve(spec, files));
-    return [route, ...imported];
+    // A route with no markup of its own is a re-export of its screen (`routes/staff.tsx` since the
+    // staff console moved into its feature), so the screen's own imports are what it renders. One
+    // more hop and only for those: following every import would let any screen borrow a frame from
+    // anything it can reach, and this gate already under-reports in that direction.
+    const reExport = !/<[A-Za-z]/.test(code(source));
+    const hopped = reExport
+      ? imported.flatMap((file) =>
+          directFeatureImports(readFileSync(file, 'utf8')).flatMap((spec) => resolve(spec, files)),
+        )
+      : [];
+    return [route, ...imported, ...hopped];
   }
 
   // The pinned positive case. Every assertion below passes vacuously against a walk that found no
@@ -142,6 +151,19 @@ describe('a list of rows sits in a named section', () => {
       closureOf(clients as string).length,
       'the import resolver found nothing — every screen would look empty',
     ).toBeGreaterThan(1);
+    // The staff console's route is a re-export of its screen, so its closure must reach the panels
+    // that render its tables — otherwise the console is silently outside this gate (spec §0.17).
+    const staff = routes.find((r) => r.endsWith(`${sep}staff.tsx`));
+    expect(staff, 'the staff route is missing').toBeDefined();
+    const staffClosure = closureOf(staff as string);
+    expect(
+      staffClosure.some((f) => f.endsWith(`${sep}staff-console-screen.tsx`)),
+      'the staff route no longer reaches its screen',
+    ).toBe(true);
+    expect(
+      staffClosure.some((f) => /<DataTable\b/.test(code(readFileSync(f, 'utf8')))),
+      'the staff route no longer reaches a table, so the frame rule is not looking at the console',
+    ).toBe(true);
     expect(/<SectionCard\b/.test(code('<SectionCard title="x">'))).toBe(true);
     expect(/<SectionCard\b/.test(code('// <SectionCard title="x">'))).toBe(false);
     // The overlay discriminator, pinned on the file that forced it to exist.
@@ -171,7 +193,7 @@ describe('a list of rows sits in a named section', () => {
 
   it('declares every unframed screen with a reason', () => {
     expect(DECLARED_UNFRAMED.size, 'the exception list is empty, so nothing above can fail').toBe(
-      2,
+      1,
     );
     for (const [key, reason] of DECLARED_UNFRAMED) {
       expect(routes.map((r) => relative(WEB_SRC, r).split(sep).join('/'))).toContain(key);

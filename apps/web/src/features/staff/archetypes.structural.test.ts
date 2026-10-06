@@ -22,11 +22,19 @@ import { describe, expect, it } from 'vitest';
  * ADR-0131 each recorded a gate failing on. So the scan follows the surface, not the folder: the
  * route file, the feature, and the performance probe's UI, which the console mounts and which is
  * where a bespoke frame would most cheaply be hidden.
+ *
+ * **The screen has since moved into the feature** (staff console redesign M0), which is what makes
+ * the route file the first thing to drop out of this list: a scan pinned to `routes/staff.tsx` would
+ * have gone on passing over a one-line re-export while the screen sat outside it.
  */
 const WEB_SRC = join(import.meta.dirname, '..', '..');
 
-/** The three directories that make up the staff console, relative to `apps/web/src`. */
-const SURFACE = ['routes/staff.tsx', 'features/staff', 'features/perf-probe/ui'];
+/**
+ * The directories that make up the staff console, relative to `apps/web/src`. `routes/staff.tsx` was
+ * the first entry until the screen moved into the feature (staff console redesign M0): it is now a
+ * one-line re-export, and the screen is under `features/staff/ui/`.
+ */
+const SURFACE = ['features/staff', 'features/perf-probe/ui'];
 
 function sourceFiles(path: string): string[] {
   if (!existsSync(path)) return [];
@@ -95,7 +103,7 @@ describe('the staff console is built from the archetypes', () => {
     expect(
       sources.map((file) => file.path),
       'the console screen itself must be in the scanned set',
-    ).toContain('/routes/staff.tsx');
+    ).toContain('/features/staff/ui/staff-console-screen.tsx');
   });
 
   it('imports the page archetypes', () => {
@@ -116,7 +124,13 @@ describe('the staff console is built from the archetypes', () => {
     // by M3**, which reuses `ListRow` + `rowLinkClass` for the status summary precisely because
     // `NeedsAttentionSection` is the same problem already solved. The gate never asserted absence,
     // only presence, so nothing failed and the comment simply went stale (M6 UX review).
-    for (const archetype of ['PageContainer', 'PageHeader', 'SectionCard']) {
+    for (const archetype of [
+      'PageContainer',
+      'PageHeader',
+      'SectionCard',
+      'StatusSection',
+      'QueryPanel',
+    ]) {
       expect([...used], `${archetype} is no longer used by the staff console`).toContain(archetype);
     }
   });

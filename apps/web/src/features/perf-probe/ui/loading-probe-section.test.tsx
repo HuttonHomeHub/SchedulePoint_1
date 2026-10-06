@@ -21,10 +21,6 @@ vi.mock('../loading/runner/run-loading-probe', () => {
   };
 });
 
-vi.mock('@/features/staff/api/staff-panels', () => ({
-  useStaffInstallation: () => ({ data: { apiVersion: '0.140.0' } }),
-}));
-
 const limb = (name: Limb['name'], over: { cache: number; revalidated: number }): Limb => ({
   name,
   status: 'taken',
@@ -54,11 +50,11 @@ const reading: LoadingReading = {
 
 const fresh = JSON.stringify({ v: 1, runId: 'r', startedAt: Date.now(), step: 'reload' });
 
-function mount(): { status: ReturnType<typeof vi.fn> } {
+function mount(apiVersion: string | null = '0.140.0'): { status: ReturnType<typeof vi.fn> } {
   const status = vi.fn();
   render(
     <AnnouncerProvider>
-      <LoadingProbeSection onStatusChange={status} />
+      <LoadingProbeSection apiVersion={apiVersion} onStatusChange={status} />
     </AnnouncerProvider>,
   );
   return { status };
@@ -148,6 +144,18 @@ describe('LoadingProbeSection', () => {
     const text = String(writeText.mock.calls[0]?.[0]);
     expect(text).toContain('SchedulePoint plan-screen loading reading');
     expect(text).toContain('API version: 0.140.0');
+  });
+
+  it('says the version is not yet known while the installation read has not settled', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    window.sessionStorage.setItem(LOADING_MARKER_KEY, fresh);
+    resume.mockResolvedValue({ kind: 'done', reading });
+    mount(null);
+    await screen.findByRole('heading', { name: 'Plan loading reading' });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy plan loading report' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(String(writeText.mock.calls[0]?.[0])).toContain('API version: not yet known');
   });
 
   it('keeps the section "measuring" while the page is about to navigate', async () => {

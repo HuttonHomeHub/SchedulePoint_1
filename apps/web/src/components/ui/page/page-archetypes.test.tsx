@@ -11,6 +11,7 @@ import {
   SectionCard,
   Skeleton,
   StatGrid,
+  StatusSection,
 } from './index';
 
 /**
@@ -485,5 +486,39 @@ describe('SectionCard count', () => {
       </SectionCard>,
     );
     expect(screen.getByRole('region', { name: 'Clients' })).toBeInTheDocument();
+  });
+});
+
+describe('StatusSection', () => {
+  it('is a section named by its own heading, carrying the anchor the status summary links to', () => {
+    render(
+      <StatusSection title="Mail" id="staff-section-health" status="">
+        body
+      </StatusSection>,
+    );
+    const region = screen.getByRole('region', { name: 'Mail' });
+    expect(region).toHaveAttribute('id', 'staff-section-health');
+    expect(screen.getByRole('heading', { level: 2, name: 'Mail' })).toBeInTheDocument();
+  });
+
+  it('carries its settled sentence in a polite region that was mounted before the sentence', () => {
+    // The mechanism is that the region exists while pending and is FILLED later; a region mounted
+    // with its text already in it is not spoken.
+    const { rerender } = render(
+      <StatusSection title="Accounts" status="">
+        body
+      </StatusSection>,
+    );
+    const live = document.querySelector('[aria-live="polite"]');
+    expect(live).not.toBeNull();
+    expect(live).toHaveTextContent('');
+    rerender(
+      <StatusSection title="Accounts" status="0 unverified accounts.">
+        body
+      </StatusSection>,
+    );
+    expect(document.querySelector('[aria-live="polite"]')).toBe(live);
+    expect(live).toHaveTextContent('0 unverified accounts.');
+    expect(live).toHaveClass('sr-only');
   });
 });

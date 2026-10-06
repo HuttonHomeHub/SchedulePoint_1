@@ -9,10 +9,9 @@ import {
   natureSentence,
 } from '../model/diagnostics-report';
 
-import { Panel } from './panel';
-
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { StatusSection } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
@@ -30,7 +29,7 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  * (`enabled: false`) rather than by this component remembering.
  *
  * **Four states, all named** (the ADR-0062 M6 rule): idle with an explanation of what the panel can
- * and cannot return; running, with `aria-busy` and the polite region `Panel` owns; a result,
+ * and cannot return; running, with `aria-busy` and the polite region `StatusSection` owns; a result,
  * including **both** zero shapes, which are different facts and say so; and a failure as an
  * `Alert purpose="event"` (ADR-0132 — this is a thing that just happened, not a standing condition)
  * with **no number rendered beside it**, because a stale count under an error message is the one
@@ -86,7 +85,7 @@ export function DiagnosticsPanel(): React.ReactElement {
   }, [clipboard, query, running]);
 
   return (
-    <Panel title="Diagnostics" status={diagnosticsStatus(result)}>
+    <StatusSection title="Diagnostics" status={diagnosticsStatus(result)}>
       <p className="text-muted-foreground text-sm">
         Counts how many rows answer a named question about customer data — and returns{' '}
         <strong>only</strong> counts. No plan, client, project or activity is named, at any size,
@@ -163,7 +162,7 @@ export function DiagnosticsPanel(): React.ReactElement {
           </p>
         </div>
       ) : null}
-    </Panel>
+    </StatusSection>
   );
 }
 

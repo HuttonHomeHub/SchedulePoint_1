@@ -149,7 +149,7 @@ describe('the page frame is written once', () => {
  */
 const WIDTH_EXCEPTIONS = new Map([
   [
-    join('routes', 'staff.tsx'),
+    join('features', 'staff', 'ui', 'staff-console-screen.tsx'),
     'narrow: the not-found branch is a sentence and a paragraph, and the product measure would set ' +
       'a refusal across an empty screen. It is read rather than scanned.',
   ],
