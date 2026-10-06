@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.175.0
+
+### Minor Changes
+
+- [#856](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/856) [`1e6ea67`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1e6ea67f492432ae78a21ea484a1a81f3b9bbc11) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Staff console redesign: the page is now grouped into Conditions, This installation, Tools and Record, with an "On this page" list under the status summary. The summary states a value for every check, keeps one fixed order, and each check opens its own box. Mail and Clearing old records are two boxes, Alerts and monitoring is new, and the setting names an operator needs sit behind a "How to fix" button. A Refresh button re-reads the page (each refresh is recorded in Staff activity), the page announces one sentence when it loads instead of one per box, Show more adds accounts without losing your place, and diagnostics collapse the checks that found nothing.
+
 ## 0.174.0
 
 ### Minor Changes
