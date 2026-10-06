@@ -11866,3 +11866,54 @@ keep that change to the diagnostics it adds. **Next:** run each press inside one
 `SET LOCAL statement_timeout` (and decide the figure against the measured readings), with a test that a statement
 over the bound surfaces as the existing 500 rather than hanging. **Trigger:** H-1 `examined` ≥ 250,000, or any
 press over ~800 ms reported by the operator, or the next entry whose scan is unbounded by an index.
+
+### 457. `location /assets/` drops every server-level security header from hashed code, `/theme-boot.js` and `/favicon.svg`
+
+**Status:** open · **Verified:** 2026-10-06 (`apps/web/nginx.conf:35-69` and `:94-160` read; the template rendered and
+served by nginx 1.24.0, and the headers read with `curl -I` — see `docs/specs/staff-server-readings/m2-measurement.md`) ·
+**Raised:** 2026-10-06 (found while verifying the plan-loading probe, #433) · **Size:** S · **Owner:** web
+
+`location /assets/` sets `Cache-Control` with `add_header` (`nginx.conf:37`), and the file's own comment (`:46-48`)
+records the rule that makes that costly: an `add_header` in a location **replaces every header inherited from
+`server`**. The same is true of `location = /theme-boot.js` (`:59`) and `location = /favicon.svg` (`:68`). Measured,
+a hashed chunk, `/theme-boot.js` and `/favicon.svg` each answer with `Cache-Control` and nothing else, while
+`/index.html` and `/` carry the full set. **Missing from all three:** `X-Content-Type-Options: nosniff`,
+`Cross-Origin-Resource-Policy: same-origin`, `Cross-Origin-Opener-Policy`, `X-Frame-Options`, `Referrer-Policy`,
+`Permissions-Policy`, the CSP header and `Reporting-Endpoints`. The two that matter for a subresource are `nosniff`
+(a script served without it is subject to MIME sniffing) and `Cross-Origin-Resource-Policy` (without it any origin
+may embed the file; the files are public static assets, so the exposure is the missing defence in depth rather than
+a leak). The CSP and framing headers on a script response are of no practical effect.
+
+**Not fixed here.** The fix is a second look at how `/assets/` is cached: `expires 1y;` already emits
+`Cache-Control: max-age=31536000`, so the `add_header` only adds `public, immutable`, and a repeated `add_header`
+of the security set inside each of the three locations (or an `include` of one snippet) restores them. Either
+changes what the `web` image serves, so it wants `check:nginx` extended to assert the headers on those three paths
+and one reading under the image.
+
+**Next:** the snippet and the `check:nginx` assertion together. **Trigger:** the next change to `nginx.conf`, or a
+security review of the web origin.
+
+### 458. `submit-guard.structural.test.ts` governs submit buttons only, so a resting `aria-disabled:pointer-events-none` on any other button passes
+
+**Status:** open · **Verified:** 2026-10-06 (`apps/web/src/components/ui/submit-guard.structural.test.ts:38-86` read;
+the plan-loading probe's Copy button, below) · **Raised:** 2026-10-06 (accessibility review of the plan-loading probe) ·
+**Size:** S · **Owner:** web
+
+The gate's stated rule is that `pointer-events-none` belongs on **transient** `aria-disabled` states (a mutation in
+flight) and not on one that can be the control's resting state, because `pointer-events: none` makes
+`document.elementFromPoint` return the element behind it. The rule is computed for one shape only:
+`guardedSubmits` keeps a `<Button>` tag that contains `type="submit"` **and** `aria-disabled=`, and the exception list
+names the single submit that rests disabled.
+
+**Evidence that the rule is not computed for other shapes.** The plan-loading probe's **Copy plan loading report**
+button (`ui/loading-probe-section.tsx`, at `e6e1f63f`) was a non-submit `<Button variant="outline" aria-disabled={shown === null}
+className="aria-disabled:pointer-events-none aria-disabled:opacity-50">`: `aria-disabled` from first paint, with the class
+the gate forbids at rest. `pnpm --filter @repo/web test` passed 819 of 819 files with it present, and the accessibility
+review found it by reading. The fix (`6171f128`) pins it with a unit test in the section's own suite, which is the
+per-site coverage this row asks to replace. `performance-probe-panel.tsx` and `diagnostics-panel.tsx` use the same
+class pair on non-submit buttons that rest `aria-disabled`; they were not examined for this row.
+
+**Next:** extend the scan to every `<Button>` carrying `aria-disabled=` (not only submits), and decide, per site,
+transient or resting from the expression bound to it, as the submit case already does with a named exception list.
+Verify against the defect (ADR-0110): the unfixed Copy button must fail it. **Trigger:** the next `aria-disabled` control
+added outside a form, or the next change to this gate.

@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-06 — A staff probe may load member-surface code to measure delivery, never member data
+
+**What was decided.** The staff console's plan-loading probe (`docs/TECH_DEBT.md` #433) loads the plan screen's
+**code** inside the `/staff` document, through the same two loaders a bookmarked plan URL calls at boot
+(`preloadPlanDeepLinkChunks` in `app/router.tsx`). It opens no plan, calls no member route and makes no `/api/`
+request beyond what a plain reload of `/staff` makes; the journey records the request paths of a plain reload and
+requires the press to land on the same set. ADR-0086 D1 is about the **principal**: a `StaffPrincipal` reaches no
+customer data, and nothing here mints another or calls a member service.
+
+**Why.** The question is whether the live server makes a reload pay round trips for hashed code, and the only
+place that can be answered is a real browser behind every proxy. Code files are public static assets any visitor can
+already fetch (they are served before sign-in), so loading them discloses nothing; loading a **plan** is what ADR-0086
+D1 forbids, and the probe has no way to name one. An iframe of a plan URL was refused for the product's own reason
+(`X-Frame-Options: DENY`) and because it would call member routes as the staff member.
+
+**Consequences.** The probe imports `app/router` only through a dynamic import from a lazily loaded runner, so the staff chunk
+does not carry it. If a reviewer judges "staff loads member code" to move a boundary, this becomes a short ADR and the
+design does not change. **The first version of the classifier was wrong in the way verification exists to catch:** it
+trusted an exposed `responseStatus`, and Chromium reports a revalidated file as `200` with `transferSize` ~300 and no body, so
+every revalidated file read as downloaded (`docs/specs/staff-server-readings/m2-measurement.md`).
+
+---
+
 ## 2026-10-05 — Debt-register completeness: the 17 lost numbers are recovered, not exempted
 
 **What was decided.** `check:debt-status` gains A11 (`docs/TECH_DEBT.md` #453): every number from 1 to the

@@ -182,3 +182,24 @@ describe('S2 — the onboarding screen is warmed where it is the likely next scr
     expect(fn![1]).toMatch(/OnboardingScreen\.preload/);
   });
 });
+
+describe('S3 — the staff loading probe asks for what a plan URL asks for (#433)', () => {
+  const source = stripComments(ROUTER);
+
+  it('S3a — the exported function is the one place the two loaders are listed', () => {
+    const fn = /export function preloadPlanDeepLinkChunks\(\)[^{]*\{([\s\S]*?)\n\}/.exec(source);
+    expect(fn, 'preloadPlanDeepLinkChunks is not exported from router.tsx').not.toBeNull();
+    expect(fn![1]).toMatch(/AuthedLayout\.preload/);
+    expect(fn![1]).toMatch(/PlanDetailScreen\.preload/);
+  });
+
+  it('S3b — the PLAN_DEEP_LINK branch calls it rather than re-listing the loaders', () => {
+    // Verified red (ADR-0110 D5) by inlining `void AuthedLayout.preload?.();` and
+    // `void PlanDetailScreen.preload?.();` back into the branch: this assertion fails, because the
+    // branch no longer names the shared function, and so does the `not.toMatch` beneath it.
+    const branch = /if \(PLAN_DEEP_LINK\) \{([\s\S]*?)\n\}/.exec(source);
+    expect(branch, 'the PLAN_DEEP_LINK branch is not found').not.toBeNull();
+    expect(branch![1]).toMatch(/preloadPlanDeepLinkChunks\(\)/);
+    expect(branch![1]).not.toMatch(/\.preload/);
+  });
+});

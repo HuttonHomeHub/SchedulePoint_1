@@ -1110,3 +1110,134 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
 
   await staffContext.close();
 });
+
+/**
+ * **The plan-loading probe, driven end to end — `docs/TECH_DEBT.md` #433, ADR-0081.**
+ *
+ * The locator for the control is the point of the test, as it is for the diagnostics one above: the
+ * unit suites mount the section, and the seams that break are between the section, the runner it
+ * imports lazily, the router function the runner reaches, and a **real reload and a real
+ * navigation** — none of which jsdom performs.
+ *
+ * **What this can and cannot assert.** It runs on `pnpm dev` (`playwright.staff.config.ts`), whose
+ * caching differs from both the preview server and the `web` image, and which serves unbundled
+ * `/src/` modules. So it asserts that the reading is complete and internally consistent, never what
+ * it contains: the contents are verified against the defect by hand (`m2-measurement.md`).
+ *
+ * **Spec S3, recorded rather than argued.** The press must make no request to `/api/` that a plain
+ * reload of `/staff` does not, so the set of API paths a plain reload makes is taken first, in the
+ * same page, and the press has to land on exactly that set.
+ *
+ * **A fourth `test()` rather than an extension**, for the reason the second and third give: the
+ * per-test timeout is 120 s and sign-up spends part of it.
+ */
+test('a staff member measures plan loading in one press', async ({ browser }) => {
+  const staffContext = await browser.newContext({
+    permissions: ['clipboard-write', 'clipboard-read'],
+  });
+  const staff = await staffContext.newPage();
+
+  let apiPaths = new Set<string>();
+  staff.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) apiPaths.add(`${request.method()} ${url.pathname}`);
+  });
+
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+
+  // ---------------------------------------------------------------- The baseline: a plain reload
+  apiPaths = new Set();
+  await staff.reload();
+  await expect(staff.getByRole('heading', { name: 'Staff console' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(staff.getByRole('button', { name: 'Measure plan loading' })).toBeVisible();
+  await staff.waitForLoadState('networkidle');
+  const baseline = [...apiPaths].sort();
+  expect(baseline.length, 'a plain reload of /staff makes API requests of its own').toBeGreaterThan(
+    0,
+  );
+
+  const copy = staff.getByRole('button', { name: 'Copy plan loading report' });
+  await expect(copy, 'nothing to copy before a measurement').toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+
+  // ---------------------------------------------------------------- The entry point, pressed
+  apiPaths = new Set();
+  await staff.getByRole('button', { name: 'Measure plan loading' }).click();
+  await staff
+    .getByRole('alertdialog', { name: 'Measure plan loading?' })
+    .getByRole('button', { name: 'Measure', exact: true })
+    .click();
+
+  // The page reloads and navigates by itself; nothing is touched from here to the result.
+  const result = staff.locator('[data-loading-result]');
+  await expect(result).toBeVisible({ timeout: 90_000 });
+  await staff.waitForLoadState('networkidle');
+  expect(staff.url(), 'the second limb is a navigation to a different URL').toContain(
+    'reading=revisit',
+  );
+
+  // ---------------------------------------------------------------- Every limb, taken
+  await expect(
+    result.getByText('development build: not a reading of the live server'),
+  ).toBeVisible();
+  const limbs = [
+    ['reload', /^Reload \(reload\): taken$/],
+    ['revisit', /^Revisit \(navigate\): taken$/],
+    ['network', /^From the network \(nothing cached\) \(no-store fetch\): taken$/],
+  ] as const;
+  for (const [name, heading] of limbs) {
+    const lines = (await result.locator(`[data-limb="${name}"] li`).allTextContents()).map((l) =>
+      l.trim(),
+    );
+    expect(lines[0], `the ${name} limb was not taken: ${lines.join(' | ')}`).toMatch(heading);
+
+    const observed = Number(/^Code files observed: (\d+)$/.exec(lines[1] ?? '')?.[1]);
+    const split =
+      /^From cache: (\d+), revalidated: (\d+), downloaded: (\d+), not exposed: (\d+)$/.exec(
+        lines[3] ?? '',
+      );
+    expect(observed, `${name}: observed count`).toBeGreaterThan(0);
+    expect(split, `${name}: the split line`).not.toBeNull();
+    const parts = (split ?? []).slice(1).map(Number);
+    expect(
+      parts.reduce((a, b) => a + b, 0),
+      `${name}: cache + revalidated + downloaded + not exposed must equal the files observed`,
+    ).toBe(observed);
+  }
+  await expect(result.locator('[data-cache-control]')).toContainText('Cache-Control');
+
+  // The result takes focus, because a reload leaves nothing focused (ADR-0135).
+  await expect(staff.getByRole('heading', { name: 'Plan loading reading' })).toBeFocused();
+
+  // ---------------------------------------------------------------- Spec S3: no extra API request
+  expect(
+    [...apiPaths].sort(),
+    'a press must make no API request that a plain reload of /staff does not',
+  ).toEqual(baseline);
+
+  // ---------------------------------------------------------------- The deliverable
+  await expect(copy).not.toHaveAttribute('aria-disabled', 'true');
+  await copy.click();
+  const clipboard = await staff.evaluate(() => navigator.clipboard.readText());
+  expect(clipboard).toContain('SchedulePoint plan-screen loading reading');
+  expect(clipboard).toContain('Reload (reload): taken');
+  expect(clipboard).toContain('Revisit (navigate): taken');
+  expect(clipboard).toContain('Cache-Control');
+  expect(clipboard).toContain('Build: development build: not a reading of the live server');
+
+  const axe = await new AxeBuilder({ page: staff })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+
+  await staffContext.close();
+});

@@ -638,7 +638,12 @@ describe('weight is a governed axis', () => {
   // while a sighted one scanning a long timeline for a person has nothing else to find them by. The
   // panel's heading carries none (it sits under the tab that already names it), which is the other
   // weight this change declined.
-  const SCREEN_WEIGHT_CEILING = 158;
+  // ...and 158 -> 160 (staff plan-loading probe, #433): TWO weights, both on headings of the new
+  // "Plan loading" section (its `<h3>` and the result's `<h4>`), matching the Performance panel's own
+  // sub-headings. A first version dodged the count with `<strong>` inside the heading, which is the
+  // same weight placed where this ratchet cannot see it; the count is raised deliberately instead.
+  // The limb lines beneath carry none.
+  const SCREEN_WEIGHT_CEILING = 160;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
