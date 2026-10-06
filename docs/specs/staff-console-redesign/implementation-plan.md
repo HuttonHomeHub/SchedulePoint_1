@@ -1,7 +1,16 @@
 # Implementation Plan: Staff console redesign
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft, awaiting approval before implementation.
-- **Status:** Draft — awaiting approval before implementation.
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Approved 2026-10-06.
+- **Status:** Approved — by the product owner, 2026-10-06 (AskUserQuestion): one page with an "On this page"
+  jump list (not tabs); Performance folded away by default; a Refresh button with a note that each refresh is
+  recorded; all five milestones M0–M4 approved. **Target displays (product owner, same answer):** "a phone is
+  never a true screen size … this app [is] for my PC monitor and my Surface. Surface is probably the lowest
+  cut-off display." So the design targets are the desktop monitor (1920×1080) and the Surface (about
+  1368×912 CSS px); the phone-width success criteria below (SC-1, SC-10, SC-11) are re-baselined at
+  1368×912 in M0, and phone-only remedies (folding table columns under the first cell below `md`) are
+  dropped. **WCAG 2.2 AA reflow (SC 1.4.10, 320 CSS px at 400 % zoom) still applies** and is a merge
+  requirement (CLAUDE.md §13): at narrow widths nothing may be lost or unusable, and a table scrolling
+  inside its own labelled region is acceptable there. It is no longer a layout to design for.
 - **Owner:** web
 
 ## Breakdown
