@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.171.0
+
+### Minor Changes
+
+- [#839](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/839) [`6c99762`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c997621d9d6b708e078f131cf6f6cb4c4241b45) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console's Run diagnostics now shows three activity-history counts (entries in the last 28 days, link and resource entries among them, and entries over 0.5 KB), says when the 28-day window is not yet full, and states in the copied report whether any plan can be above the history retention trigger.
+
+### Patch Changes
+
+- [#838](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/838) [`0c23aca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0c23aca7f25a5f7ab7fa38e63c76d0e62bc97d98) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a pointer-check diagnostic page at `/pointer-check.html`. It prints what the browser reports about the pointer and hover input and updates live; it takes no input and sends nothing.
+
 ## 0.170.4
 
 ### Patch Changes
