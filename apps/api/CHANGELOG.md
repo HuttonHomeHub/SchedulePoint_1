@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.88.0
+
+### Minor Changes
+
+- [#839](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/839) [`6c99762`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c997621d9d6b708e078f131cf6f6cb4c4241b45) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff diagnostics read now also counts activity history: how many entries exist, how many began in the last 28 days (with the plans and organisations they fall in), how many of those are link and resource entries, and how many entries are larger than 0.5 KB. Counts only; nothing of an entry is returned.
+
 ## 0.87.1
 
 ### Patch Changes
