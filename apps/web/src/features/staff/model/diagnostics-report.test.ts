@@ -7,6 +7,7 @@ import {
   diagnosticSentence,
   diagnosticsStatus,
   formatDiagnosticsReport,
+  historyRetentionSentence,
   natureSentence,
 } from './diagnostics-report';
 
@@ -95,6 +96,63 @@ describe('diagnosticSentence', () => {
     expect(
       diagnosticSentence(row({ affected: 2, affectedPlans: 2, affectedOrganizations: 2 })),
     ).toContain('across 2 plans in 2 organisations');
+  });
+});
+
+describe('history entries (staff server readings M1)', () => {
+  const history = (overrides: Partial<StaffDiagnosticRow> = {}) =>
+    row({
+      id: 'history-entries-last-28-days',
+      unit: 'history-entry',
+      nature: 'prospective',
+      examined: 500,
+      affected: 120,
+      affectedPlans: 4,
+      ...overrides,
+    });
+
+  it('names the unit, in both numbers', () => {
+    expect(diagnosticSentence(history())).toBe(
+      '120 of 500 history entries, across 4 plans in 1 organisation.',
+    );
+    expect(diagnosticSentence(history({ examined: 1, affected: 1, affectedPlans: 1 }))).toContain(
+      '1 of 1 history entry,',
+    );
+  });
+
+  it('says the 28-day window is not yet full when every entry began inside it', () => {
+    expect(diagnosticSentence(history({ examined: 120, affected: 120 }))).toMatch(
+      /window is not yet full, so this is a floor/,
+    );
+    expect(diagnosticSentence(history())).not.toMatch(/not yet full/);
+  });
+
+  it('does not call the window not-full when there is no history at all', () => {
+    // 0 === 0 on an empty table is the absence of a rate, not a rate that is a floor. The early
+    // "nothing to examine" return is what guarantees it; this pins that it keeps doing so.
+    expect(diagnosticSentence(history({ examined: 0, affected: 0 }))).not.toMatch(/not yet full/);
+  });
+
+  it('keys the window clause on the entry, not on the numbers alone', () => {
+    // The same equality on another history row is a coincidence of the data, not a window fact.
+    expect(
+      diagnosticSentence(
+        history({ id: 'history-entries-over-512-bytes', examined: 120, affected: 120 }),
+      ),
+    ).not.toMatch(/not yet full/);
+  });
+
+  it('states what the estate total licenses about CQ-2, in the pasted block only', () => {
+    expect(historyRetentionSentence(history({ examined: 999_999 }))).toMatch(
+      /Fewer than 1,000,000 history entries.*no plan is above/,
+    );
+    expect(historyRetentionSentence(history({ examined: 1_000_000 }))).toMatch(
+      /may be above.*cannot say which/,
+    );
+    expect(historyRetentionSentence(row())).toBeNull();
+    const block = formatDiagnosticsReport({ ...result, diagnostics: [row(), history()] });
+    expect(block).toContain('no plan is above ADR-0174 CQ-2');
+    expect(block.match(/CQ-2/g)).toHaveLength(1);
   });
 });
 

@@ -982,6 +982,46 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
     if (response.url().includes('/staff/diagnostics')) statuses.push(response.status());
   });
 
+  // **History to count, written through the real API as an ordinary member.** The three history
+  // rows are counts over `activity_history_entries`, and a press over an empty table would pass on
+  // a query that counted nothing at all. A save by a member is the write path the counts are
+  // about, so the fixture is made there rather than below it (ADR-0066). The member is a separate
+  // context: the staff account is deliberately not a member of anything (ADR-0086 D1).
+  const memberContext = await browser.newContext();
+  const member = await memberContext.newPage();
+  await signUpOrIn(member, `staff-history-${Date.now()}@example.com`, 'History Author');
+  const orgRes = await member.request.post('/api/v1/organizations', {
+    data: { name: `History ${Date.now()}` },
+  });
+  expect(orgRes.ok()).toBe(true);
+  const base = `/api/v1/organizations/${((await orgRes.json()) as { data: { slug: string } }).data.slug}`;
+  const created = async (path: string, data: object): Promise<{ id: string; version: number }> => {
+    const res = await member.request.post(`${base}${path}`, { data });
+    expect(res.ok(), `${path} must succeed`).toBe(true);
+    return ((await res.json()) as { data: { id: string; version: number } }).data;
+  };
+  const client = await created('/clients', { name: 'History client' });
+  const project = await created(`/clients/${client.id}/projects`, { name: 'History project' });
+  const plan = await created(`/projects/${project.id}/plans`, {
+    name: 'History plan',
+    plannedStart: '2026-01-01',
+  });
+  const first = await created(`/plans/${plan.id}/activities`, {
+    name: 'Excavate',
+    durationDays: 5,
+  });
+  const second = await created(`/plans/${plan.id}/activities`, { name: 'Pour', durationDays: 3 });
+  // A definition edit and a link, so there is an entry in each of two scopes.
+  const edited = await member.request.patch(`${base}/activities/${first.id}`, {
+    data: { name: 'Excavate (revised)', version: first.version },
+  });
+  expect(edited.ok()).toBe(true);
+  await created(`/plans/${plan.id}/dependencies`, {
+    predecessorId: first.id,
+    successorId: second.id,
+  });
+  await memberContext.close();
+
   await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
   await staff.goto('/staff');
 
@@ -1017,6 +1057,17 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
 
   expect(statuses, 'the read must have succeeded, not merely returned').toEqual([200]);
 
+  // The three history readings (staff server readings M1). The e2e database persists across runs,
+  // so the assertion is that each answers about a non-empty table, not what the table holds: the
+  // member's save and link above guarantee at least two entries begun in the window.
+  for (const label of [
+    'History entries begun in the last four weeks',
+    'Of those, link and resource entries',
+    'History entries larger than half a kilobyte',
+  ]) {
+    await expect(staff.getByRole('heading', { name: label })).toBeVisible();
+  }
+
   // **Counts only.** Asserted over the whole panel rather than over named fields: the point is that
   // nothing leaks, and a field-by-field check only ever proves it about the fields somebody thought
   // of. A UUID anywhere here would be an id, and an id is the whole disclosure ADR-0086 D6 protects.
@@ -1045,6 +1096,17 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
   expect(clipboard).toContain('SchedulePoint staff diagnostics');
   expect(clipboard).toContain('API version');
   expect(clipboard).toContain('accepts no parameter');
+  // The history rows are in the deliverable, with a non-zero denominator and a non-zero window
+  // count — a zero on either would mean the SQL ran and counted nothing the fixture just wrote.
+  expect(clipboard).toMatch(
+    /History entries begun in the last four weeks \(history-entries-last-28-days\)\n\s+examined\s+[1-9]\d*\n\s+affected\s+[1-9]\d*/,
+  );
+  // H-2: the member's link is a LOGIC entry begun just now, so it is counted.
+  expect(clipboard).toMatch(
+    /Of those, link and resource entries \(history-entries-links-and-resources-28-days\)\n\s+examined\s+[1-9]\d*\n\s+affected\s+[1-9]\d*/,
+  );
+  expect(clipboard).toContain('History entries larger than half a kilobyte');
+  expect(clipboard).toMatch(/no plan is above ADR-0174 CQ-2's retention trigger/);
 
   await staffContext.close();
 });

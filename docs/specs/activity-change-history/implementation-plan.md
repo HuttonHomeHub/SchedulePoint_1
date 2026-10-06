@@ -665,6 +665,10 @@ mis-cited.**
 - **Description:** on the product owner's host four weeks after M2, count entries per plan per day,
   bytes per entry, and the share from `LOGIC` / `RESOURCES`; replace the spec's estimate in ADR-0174.
   **Trigger to revisit retention (CQ-2):** any single plan above 1M entries.
+- **Status: instrument shipped 2026-10-05; reading owed on or after 2026-11-01.** The three counts are
+  `history-entries-*` in the staff **Run diagnostics** press (`docs/specs/staff-server-readings/`, M1),
+  count-only per ADR-0140: "bytes per entry" is the share above 512 bytes, and the per-plan figure is the
+  window count divided by H-1's affected plans. The reading is that spec's M3-T2.
 
 ---
 

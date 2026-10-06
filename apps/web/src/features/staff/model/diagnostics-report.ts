@@ -39,11 +39,41 @@ export function diagnosticSentence(row: StaffDiagnosticRow): string {
   // fact exactly when it is most surprising: an absence a reader cannot tell from a fact, which is
   // the ADR-0073 C3.1 rule. The count is still printed by {@link diagnosticBreakdown}.
   const spread = row.unit === 'plan' ? '' : `across ${count(row.affectedPlans, 'plan', 'plans')} `;
-  return (
+  const sentence =
     `${String(row.affected)} of ${count(row.examined, one, many)}, ` +
     spread +
-    `in ${count(row.affectedOrganizations, 'organisation', 'organisations')}.`
-  );
+    `in ${count(row.affectedOrganizations, 'organisation', 'organisations')}.`;
+  return row.id === HISTORY_RATE_ID && row.examined === row.affected
+    ? `${sentence} ${WINDOW_NOT_FULL}`
+    : sentence;
+}
+
+/**
+ * The one entry whose `affected` is a rate over a fixed 28-day window, so the only one where
+ * `examined === affected` carries a meaning: every entry that exists began inside the window, which
+ * means the window reaches back past the day recording began and the rate is a floor. An empty table
+ * (0 of 0) never reaches this clause: the `examined === 0` branch above returns first with the
+ * "nothing to examine" sentence, and a unit test pins that. Keyed on the id, never inferred from the
+ * numbers alone, because the same equality on any other row is a
+ * coincidence of the data (`docs/specs/staff-server-readings/` D-2).
+ */
+const HISTORY_RATE_ID = 'history-entries-last-28-days';
+const WINDOW_NOT_FULL = 'The 28-day window is not yet full, so this is a floor on the rate.';
+
+/** ADR-0174 CQ-2's retention trigger is one plan above this many entries; the copy below spells it out. */
+const HISTORY_RETENTION_TRIGGER = 1_000_000;
+
+/**
+ * What the history row's `examined` licenses the reader to infer, said in the paste-ready block.
+ * The row shape cannot carry "the largest plan", so the inference is stated instead: an estate
+ * below CQ-2's trigger cannot hold a plan above it. `null` for every other row, and above the
+ * trigger it makes no claim either way.
+ */
+export function historyRetentionSentence(row: StaffDiagnosticRow): string | null {
+  if (row.id !== HISTORY_RATE_ID) return null;
+  return row.examined < HISTORY_RETENTION_TRIGGER
+    ? "Fewer than 1,000,000 history entries exist, so no plan is above ADR-0174 CQ-2's retention trigger."
+    : "1,000,000 or more history entries exist, so a plan may be above ADR-0174 CQ-2's retention trigger; this row cannot say which.";
 }
 
 /**
@@ -60,6 +90,7 @@ const UNIT_NOUNS: Record<DiagnosticUnit, { one: string; many: string }> = {
   activity: { one: 'activity', many: 'activities' },
   plan: { one: 'plan', many: 'plans' },
   baseline: { one: 'baseline', many: 'baselines' },
+  'history-entry': { one: 'history entry', many: 'history entries' },
 };
 
 /**
@@ -111,8 +142,10 @@ export function formatDiagnosticsReport(result: StaffDiagnostics): string {
       `  elapsed                ${String(row.elapsedMs)} ms`,
       `  ${diagnosticSentence(row)}`,
       `  ${natureSentence(row)}`,
-      '',
     );
+    const retention = historyRetentionSentence(row);
+    if (retention !== null) lines.push(`  ${retention}`);
+    lines.push('');
   }
 
   lines.push(
