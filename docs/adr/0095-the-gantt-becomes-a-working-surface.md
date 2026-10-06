@@ -6,6 +6,8 @@
 - **Supersedes:** nothing
 - **Amended by:** ADR-0170 (2026-10-02) — the deferral of the start-edge resize in the closing section is
   lifted; the Gantt offers it, with the diagram's write and working-day arithmetic.
+- **Amended by:** ADR-0177 (2026-10-06) — on touch and stylus a bar's body and edges respond only once
+  the bar is selected, and a row's `contextmenu` opens its menu.
 - **Amends:** ADR-0059 (its §4 "read-only, no dependency arrows" first ship, and its §2 shared time
   axis extended to the inverse direction), ADR-0093 (discharges the promise it left outstanding)
 - **Builds on:** ADR-0022/0023/0033 (recalculation, dates, scheduling modes), ADR-0028 (the pen),

@@ -445,9 +445,11 @@ describe('the bar gestures in the rendered row', () => {
     );
     expect(handle(container, 'start')).toHaveLength(1);
     expect(handle(container, 'finish')).toHaveLength(1);
-    // `touch-none`: without it the browser claims a touch drag for panning and cancels it.
-    expect(handle(container, 'start')[0]).toHaveClass('touch-none');
-    expect(handle(container, 'finish')[0]).toHaveClass('touch-none');
+    // Unselected: no touch rule, so a finger scrolls instead of resizing (ADR-0177 D2). The
+    // selected case — where `touch-none` is what lets the browser hand the drag over — is asserted
+    // in `GanttPanel.touch.test.tsx`.
+    expect(handle(container, 'start')[0]).not.toHaveClass('touch-none');
+    expect(handle(container, 'finish')[0]).not.toHaveClass('touch-none');
     unmount();
 
     // Shut: no handle at all rather than an inert grab zone. A handle that does nothing is the

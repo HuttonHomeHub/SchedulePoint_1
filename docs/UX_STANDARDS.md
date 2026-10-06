@@ -170,6 +170,15 @@ entry stops being needed.
   Shift+F10 on the focused row), and touch long-press — **never hover-only**. The
   menu roves focus with the arrow keys and returns focus to the trigger on
   Esc/Tab/selection.
+  - **On the Gantt, "right-click" and "touch long-press" are one event, `contextmenu`**
+    (ADR-0177 D3): **right-click** on a Gantt row, or a press-and-hold by finger or
+    stylus, opens the same menu the `⋯` opens, at the press point. Shift+right-click
+    keeps the browser's own menu. A live bar drag is cancelled first, and the
+    selection is never changed by it. By finger or stylus a bar's body and edges
+    respond only once the bar is selected (**tap it, then drag**); until then the
+    chart scrolls. The diagram (TSLD canvas) differs on purpose: it owns every gesture
+    (`touch-none`) and has no `contextmenu` handler, because it is one canvas and not a
+    scroller of DOM rows (ADR-0177 Consequences).
   - **An action the reader cannot take right now is shaded with the reason, not
     removed** (ADR-0082, extending ADR-0062 M6 into the menu tier). Hiding it
     means a planner never learns the row can do the thing, and never learns what

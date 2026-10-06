@@ -794,6 +794,10 @@ discriminators. Each becomes a spec/plan before build:
   ADR-0026 chose canvas for. It shipped **read-only by design**, with dependency arrows and editing
   named as the deliberate next candidates; both landed on 2026-08-17 (ADR-0095), so that sentence is
   no longer the current state and the deferred M5 is closed.
+  **Under a finger and a stylus** (M1 of `docs/specs/gantt-coarse-pointer/`, **ADR-0177**): a bar
+  moves by finger or stylus once it is selected (tap, then drag) while an unselected one scrolls, and
+  a press-and-hold or right-click on a row opens its actions. The coarse-geometry half (M2) waits on
+  the device.
 - **WBS improvements** — **shipped** (ADR-0063, `VITE_WBS_IMPROVEMENTS` default-on 2026-07-30):
   making the shipped WBS (ADR-0038) workable rather than merely present. Membership is managed
   from the summary (a Members tab) **and** from the list (table multi-select + bulk assign);
