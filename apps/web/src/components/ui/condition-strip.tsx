@@ -40,9 +40,9 @@ export function ConditionStrip({
 }: ConditionStripProps): React.ReactElement {
   return (
     <Alert purpose="condition" tone={tone} {...(id === undefined ? {} : { id })}>
-      <p>
+      <div>
         {verdict}. {children}
-      </p>
+      </div>
       {howToFix === undefined ? null : (
         <Disclosure
           label="How to fix"

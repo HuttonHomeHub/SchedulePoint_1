@@ -108,7 +108,7 @@ export interface SectionCardProps {
  * a page is not that, so this passes the context's rank once, here — rather than asking sixteen
  * screens to remember. **The rank is `2` unless a `SectionGroup` is above it**, which supplies `3`
  * (`heading-level.tsx`); a consumer outside any group renders exactly the DOM it always did, which
- * `section-card.heading-level.test.tsx` pins. Getting it wrong in either direction is invisible on screen and wrong in the heading
+ * `page/heading-level.test.tsx` pins. Getting it wrong in either direction is invisible on screen and wrong in the heading
  * tree, which is precisely the kind of decision an archetype exists to make once.
  *
  * It composes `Card` rather than reimplementing it, so a section and a card cannot drift apart —

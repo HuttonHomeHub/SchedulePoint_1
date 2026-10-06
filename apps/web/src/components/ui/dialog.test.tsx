@@ -4,8 +4,25 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
+import { SubSection } from '@/components/ui/page';
+import { HeadingLevelContext } from '@/components/ui/page/heading-level';
 
 describe('Dialog', () => {
+  // A dialog portalled from inside a deep card would otherwise inherit that card's heading rank
+  // and put an h4 straight under its own h2 title (accessibility review of the console M2).
+  it('ranks its content under its own h2 title, whatever card it was opened from', () => {
+    render(
+      <HeadingLevelContext.Provider value={4}>
+        <Dialog open onClose={vi.fn()} title="Share links">
+          <SubSection title="Links">
+            <p>Body</p>
+          </SubSection>
+        </Dialog>
+      </HeadingLevelContext.Provider>,
+    );
+    expect(screen.getByRole('heading', { name: 'Links' }).tagName).toBe('H3');
+  });
+
   it('calls onClose when its own close button is used', () => {
     const onClose = vi.fn();
     render(

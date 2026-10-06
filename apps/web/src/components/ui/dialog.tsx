@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
+import { HeadingLevelContext } from '@/components/ui/page/heading-level';
 import { cn } from '@/lib/utils';
 
 /**
@@ -126,7 +127,9 @@ export function Dialog({
               <X aria-hidden="true" className="size-4" />
             </Button>
           </div>
-          {children}
+          {/* A dialog's content is ranked under its own `h2` title, never under the card it was
+              opened from: the heading context does not cross into the top layer. */}
+          <HeadingLevelContext.Provider value={3}>{children}</HeadingLevelContext.Provider>
         </div>
       ) : null}
     </dialog>

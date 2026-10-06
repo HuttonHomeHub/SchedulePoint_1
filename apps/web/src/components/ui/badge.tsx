@@ -29,7 +29,8 @@ const badgeVariants = cva('inline-flex items-center rounded-full font-medium whi
       // **For a state that is neither good nor bad** — "Checking", "Could not be read" — which the
       // three fills above cannot say: `neutral` reads as a quiet success and the other two as an
       // alarm. A border and the surface's own ink, so it asserts no tone. The ink is `--foreground`
-      // on the card, a pair the contrast census asserts (`token-contrast.test.ts`).
+      // on the card, a pair the contrast census asserts (`token-contrast.test.ts`) for the page scope
+      // only, so use it on page-scope cards; no other scope's pair is validated.
       outline: 'border border-border text-foreground',
     },
     size: {

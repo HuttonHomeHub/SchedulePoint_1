@@ -41,8 +41,8 @@ export function KeyValueList({ items, className }: KeyValueListProps): React.Rea
   return (
     <div className={cn('@container', className)}>
       <dl className="grid grid-cols-1 gap-x-8 gap-y-3 @md:grid-cols-2">
-        {items.map((item) => (
-          <div key={item.label} className="min-w-0">
+        {items.map((item, index) => (
+          <div key={`${String(index)}-${item.label}`} className="min-w-0">
             <dt className="text-muted-foreground text-sm">{item.label}</dt>
             <dd className="text-sm wrap-anywhere">{item.value}</dd>
             {item.consequence === undefined ? null : (
