@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.176.0
+
+### Minor Changes
+
+- [#858](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/858) [`d548184`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d5481847f3672104d81141a455eea029009dc053) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Staff console: the Performance box now arrives folded, with one line about the last measurement and an "Open performance tools" button; opening it makes no extra request, and `/staff#performance` opens and focuses it. A long measurement now speaks its progress every few seconds instead of staying silent, the verdict is a badge rather than the heaviest text in the box, "Measure one thing" is a button like the console's other folds, and times in the history use the console's one format.
+
 ## 0.175.0
 
 ### Minor Changes
