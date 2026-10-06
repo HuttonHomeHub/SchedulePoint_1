@@ -138,4 +138,17 @@ assert.deepEqual(problemsFor(undefined), [], 'the shipped config is clean');
   assert.ok(problems.some((p) => p.includes('no `location = /favicon.svg`')));
 }
 
+// Red when: the include in a location is commented out rather than removed.
+{
+  const problems = problemsFor({
+    file: conf,
+    apply: (text) =>
+      text.replace(
+        /(location \/assets\/ \{[^}]*?)include ([^\n]*security-headers\.conf;)/,
+        '$1# include $2',
+      ),
+  });
+  assert.ok(problems.some((p) => p.includes('location /assets/')));
+}
+
 console.log('check-nginx-template.test.mjs: ok');

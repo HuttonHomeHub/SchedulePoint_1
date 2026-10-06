@@ -174,13 +174,15 @@ export function runCheck(root) {
         problems.push(`${SNIPPET} does not add the security header ${name}.`);
       }
     }
+    // Whole-line comments are dropped first, so a commented-out `# include …;` does not count.
+    const live = template.replace(/^\s*#.*$/gm, '');
     // The server level reads the same snippet, so `/`, `/api/` and error pages carry it too.
-    const outsideLocations = template.replace(/location\s+[^{]+\{[^}]*\}/g, '');
+    const outsideLocations = live.replace(/location\s+[^{]+\{[^}]*\}/g, '');
     if (!outsideLocations.includes(INCLUDE)) {
       problems.push(`${TEMPLATE} does not include the security header snippet at server level.`);
     }
     const locations = new Map(
-      [...template.matchAll(/location\s+([^{]+?)\s*\{([^}]*)\}/g)].map((m) => [m[1], m[2]]),
+      [...live.matchAll(/location\s+([^{]+?)\s*\{([^}]*)\}/g)].map((m) => [m[1], m[2]]),
     );
     for (const name of SUBRESOURCE_LOCATIONS) {
       if (!locations.has(name)) {
