@@ -41,8 +41,11 @@ const text = (id: string): string => document.getElementById(id)?.textContent ??
 
 describe('pointer-check page', () => {
   beforeEach(() => {
-    document.body.innerHTML =
-      /<body>([\s\S]*)<\/body>/.exec(html)?.[1]?.replace(/<script[\s\S]*?<\/script>/g, '') ?? '';
+    // Parsed, not regex-stripped: the page's own `<script>` is dropped as a node so this test runs it
+    // exactly once, through `run()`.
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    parsed.querySelectorAll('script').forEach((script) => script.remove());
+    document.body.replaceChildren(...Array.from(parsed.body.childNodes));
   });
 
   afterEach(() => {
