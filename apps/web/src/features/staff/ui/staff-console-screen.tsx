@@ -1,27 +1,43 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { Alert } from '@/components/ui/alert';
-import { AnnouncerProvider } from '@/components/ui/announcer';
-import { buttonVariants } from '@/components/ui/button';
+import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import {
   PageContainer,
   PageGrid,
   PageGridItem,
   PageHeader,
-  StatusSection,
+  SectionGroup,
 } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
+import { useProbeResults } from '@/features/perf-probe/api/probe-results';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
+import { useRefreshStaffPageReads } from '@/features/staff/api/refresh-page-reads';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
 import { useStaffHealth } from '@/features/staff/api/staff-health';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
-import { useStaffAccounts, useStaffInstallation } from '@/features/staff/api/staff-panels';
-import { CHECK_SECTION_ID, deriveConsoleStatus } from '@/features/staff/model/console-status';
-import { statusSentence } from '@/features/staff/model/retention-copy';
+import {
+  useStaffAccounts,
+  useStaffActivity,
+  useStaffInstallation,
+} from '@/features/staff/api/staff-panels';
+import { deriveConsoleStatus } from '@/features/staff/model/console-status';
+import { freshnessOf } from '@/features/staff/model/freshness';
+import {
+  GROUPS,
+  HEADER,
+  loadedAnnouncement,
+  refreshedAnnouncement,
+} from '@/features/staff/model/panel-copy';
 import { AccountsPanel } from '@/features/staff/ui/accounts-panel';
 import { ActivityPanel } from '@/features/staff/ui/activity-panel';
+import { AlertingPanel } from '@/features/staff/ui/alerting-panel';
+import { ConsoleHeader } from '@/features/staff/ui/console-header';
 import { DiagnosticsPanel } from '@/features/staff/ui/diagnostics-panel';
 import { InstallationPanel } from '@/features/staff/ui/installation-panel';
-import { MailSection } from '@/features/staff/ui/mail-panel';
-import { RetentionSection } from '@/features/staff/ui/retention-panel';
+import { MailPanel } from '@/features/staff/ui/mail-panel';
+import { OnThisPage } from '@/features/staff/ui/on-this-page';
+import { RetentionPanel } from '@/features/staff/ui/retention-panel';
 import { SecurityPanel } from '@/features/staff/ui/security-panel';
 import { StaffStatusSummary } from '@/features/staff/ui/status-summary';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -45,39 +61,6 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
  */
 export function StaffConsoleScreen(): React.ReactElement {
   const identity = useStaffIdentity();
-  /**
-   * The four queries the summary reads, called HERE and passed down as facts.
-   *
-   * **This adds no request.** Each key is the one its panel already uses, so TanStack dedupes them
-   * — which is the same mechanism that already lets the Mail and Retention halves share one
-   * response. The one that needed checking rather than assuming is `useStaffAccounts`, which is
-   * one infinite query: this call and the panel's share its key, the summary reads page 1 of it, and
-   * pressing *Show older* fetches the next page into the same entry without refetching the first.
-   * Two requests either way.
-   *
-   * It matters because reading a staff panel is an audited act — a second request is a second
-   * `staff.panel_read` row on every page load, forever, in the table that refuses `DELETE`.
-   */
-  const health = useStaffHealth();
-  const security = useStaffCspReports();
-  const accounts = useStaffAccounts();
-  const installation = useStaffInstallation();
-  const status = deriveConsoleStatus({
-    health: { isPending: health.isPending, isError: health.isError, data: health.data },
-    security: { isPending: security.isPending, isError: security.isError, data: security.data },
-    accounts: {
-      isPending: accounts.isPending,
-      // A failed *Show older* leaves the first page standing and is the panel's to report; the
-      // summary is about whether the count could be read at all.
-      isError: accounts.isError && !accounts.isFetchNextPageError,
-      data: accounts.data?.pages[0],
-    },
-    installation: {
-      isPending: installation.isPending,
-      isError: installation.isError,
-      data: installation.data,
-    },
-  });
   // Both landable states name themselves. `/staff` is reached only by typing the address — there is
   // deliberately no link to it — so the title is the first thing a screen reader announces on
   // arrival, and this was the one sibling of the authenticated shell that skipped the hook every
@@ -127,123 +110,13 @@ export function StaffConsoleScreen(): React.ReactElement {
      * `AnnouncerProvider` is mounted by the authenticated app shell and by the auth shell; this
      * route is a sibling of both (ADR-0086) and had neither. `useAnnounce()` returns a **no-op** when
      * there is no provider above it, so the first component here to announce anything would have
-     * done so into nothing — silently, with no error and nothing on screen looking wrong. Three of
-     * `useClipboardCopy`'s five call sites are on this page, so mounting it is part of that change
-     * rather than an extra: a mechanism that looks right and does nothing is worse than the defect
-     * it replaces.
+     * done so into nothing — silently, with no error and nothing on screen looking wrong. A
+     * mechanism that looks right and does nothing is worse than the defect it replaces.
      */
     <AnnouncerProvider>
       <main>
         <PageContainer className="space-y-6">
-          {/* `actions` carries the way back, and until now there was none. The authenticated branch
-            rendered a header with no link home while the NOT-FOUND branch above has one — so the
-            branch for people who cannot use this page had a way out and the branch for people who
-            can did not, and there is no app shell here to supply one. Nobody had noticed: not the
-            spec, not M0's pictures. `docs/UX_STANDARDS.md:122`, and spec §8.15. */}
-          <PageHeader
-            title="Staff console"
-            description={
-              <>
-                Signed in as {identity.data.email}. This console operates the installation — it
-                cannot reach any customer&rsquo;s clients, projects or plans.
-              </>
-            }
-            actions={
-              /* A plain `<a>`, not a router `<Link>`: `/staff` is outside the `_authed` shell and a
-               staff account need not be a member of anything, so the destination is the app's front
-               door rather than a route this one knows about. `buttonVariants` is the established way
-               to give a link a button's treatment (`InviteExitLinks.tsx:29`) — `Button` renders a
-               `<button>` and has no `asChild`. */
-              <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/">
-                Back to SchedulePoint
-              </a>
-            }
-          />
-          {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
-            staff member out on day one — and the compensation it named was that the console says
-            which hat is active. That was decided and never built; the UX review found it.
-
-            It is a SIBLING of `PageHeader` and deliberately not one of its `actions`: that slot
-            renders in a `flex shrink-0 items-center gap-2` (`page-header.tsx:60`), which is right
-            for a button and wrong for a full-width banner. The plan's "keep it exactly as it is"
-            was ambiguous about placement (spec §8.19). */}
-          {identity.data.dualHatted && (
-            <Alert purpose="condition" tone="info">
-              {/* **The weight came out, and the third sentence with it** (M5-T1). A bold lead-in
-                  earns its place when an alert is long enough that a scanning reader would
-                  otherwise have to READ it to tell which condition it is — which is why the other
-                  four on this page keep theirs. This one is two sentences inside a tinted block
-                  with a leading icon and a tone colour, so the weight was a fourth channel saying
-                  what three already said: the ADR-0097 precedent the weight ratchet's own comment
-                  chain records. The dropped sentence restated "nothing you do here is done as a
-                  member" in the other direction. */}
-              This account is also an organisation member. Staff-ness confers nothing inside any
-              organisation, and nothing you do here is done as a member.
-            </Alert>
-          )}
-          {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
-            column it would be one of two things a reader's eye has to choose between, on the screen
-            whose entire job is to answer one question before anything else is read.
-
-            The derivation takes the page's OWN query results as arguments and issues nothing.
-            Reading a staff panel is an audited act, so a summary that fetched for itself would
-            write a second `staff.panel_read` row on every page load — and `useStaffAccounts` is
-            keyed by its cursor, so a summary calling it with no cursor while the panel below holds
-            one after *Show older* would be a different query rather than a deduped one. */}
-          <StaffStatusSummary status={status} />
-          {/* **The order is priority, and the spans are content width demand — two separate
-            decisions that a single-column stack conflated.**
-
-            ORDER answers "what does an operator arrive wanting to know?", and it is also DOM order
-            and therefore the order a screen reader walks. Conditions first (mail, policy
-            violations, accounts that cannot sign in), then what this installation IS, then the
-            tools, then the record. M0 measured the old order's cost: Performance and Diagnostics
-            sat at positions 2 and 3, inert until a button is pressed, taking ~550 px of the best
-            space on the page between the panel reporting a live failure and the panels reporting
-            standing conditions.
-
-            SPAN answers "how wide does this body need to be?" — never "how important is it". A
-            section whose body is a `DataTable` is `wide`, because the console's tables carry up to
-            five columns including `break-all` URI and address fields, and "the tables look cramped"
-            is the diagnosis this epic was opened on. At the product measure a spanning section gets
-            1,438 px of table against today's 798 (+80 %); the pair below gets 732 px each, which is
-            ample for four facts or three buttons.
-
-            **Only one pair falls out of that rule, and it is recorded rather than engineered.**
-            Five of the seven sections are table-bodied, so the two-column grid buys exactly one
-            paired row. That is a smaller win than "two columns" sounds like, and it is the honest
-            one: what actually fixes this page is the WIDTH the spanning sections gain, the ORDER,
-            and (M3) the summary. Pairing more would mean either narrowing a table — which FC-4
-            forbids, and which is the regression the whole span rule exists to prevent — or making a
-            span depend on how much data happened to arrive, which would make the layout a function
-            of the database. */}
-          <PageGrid>
-            <PageGridItem span="wide">
-              <MailAndRetentionPanel />
-            </PageGridItem>
-            <PageGridItem span="wide">
-              <SecurityPanel />
-            </PageGridItem>
-            <PageGridItem span="wide">
-              <AccountsPanel />
-            </PageGridItem>
-            {/* The one paired row: four facts beside two controls. Installation says what this
-              installation is; Diagnostics is how you ask it a question. Neither has a table, and
-              neither is an order of magnitude taller than the other — which is the condition that
-              keeps a two-column row from leaving the ragged void that reads as unfinished. */}
-            <PageGridItem span="narrow">
-              <InstallationPanel />
-            </PageGridItem>
-            <PageGridItem span="narrow">
-              <DiagnosticsPanel />
-            </PageGridItem>
-            <PageGridItem span="wide">
-              <PerformanceProbePanel apiVersion={installation.data?.apiVersion ?? null} />
-            </PageGridItem>
-            <PageGridItem span="wide">
-              <ActivityPanel />
-            </PageGridItem>
-          </PageGrid>
+          <ConsoleBody email={identity.data.email} dualHatted={identity.data.dualHatted} />
         </PageContainer>
       </main>
     </AnnouncerProvider>
@@ -251,54 +124,158 @@ export function StaffConsoleScreen(): React.ReactElement {
 }
 
 /**
- * Mail and retention, in one card — CQ-3.
+ * The console proper: six reads, one status, four groups.
  *
- * **Why they are one section at all.** Both are rendered from a single `useStaffHealth` response,
- * so two cards drew a boundary the data does not have. They are also the same kind of question:
- * *what is this installation doing with data over time* — messages going out, rows being deleted —
- * and an operator who wants one usually wants the other.
+ * **It is a component of its own so the six reads are made only for somebody the server has already
+ * said is staff.** They used to be called at the top of the screen, above the identity gate, so a
+ * non-staff caller's browser asked for them too and each was refused (and recorded) — an audited
+ * denial for every visit by anyone who typed the address, which is the opposite of the uniform
+ * "nothing here" ADR-0086 wants. It is also what lets it call `useAnnounce()`, which needs the
+ * provider the screen mounts.
  *
- * **The title is neutral and both halves are `<h3>`s of equal rank, which departs from the spec's
- * own resolution** (`feature-spec.md` §8.12 said the card keeps the title "Mail" with retention as
- * a subsection). That would make retention read as a KIND of mail, which it is not, and it would
- * demote the panel an operator goes looking for by name when they want to know whether the sweep is
- * arming. A neutral parent with two equal children says what is true; a "Mail" parent says
- * something false about the hierarchy, in the one channel — the heading tree — that a screen-reader
- * user navigates by.
- *
- * **Retention keeps a heading, and that was the accepted cost of the merge.** Today it is an
- * `<h2>`, independently reachable by heading navigation; folded into mail's prose it would have
- * left the heading list entirely, and a reader would have had to open "Mail" and read its body to
- * find it. That cuts against exactly the "seasoned admin navigating with ease" framing this epic
- * was given, because **an expert AT user relies on heading and landmark shortcuts more, not less**.
- * `CardTitle` already supports `level={3}`, so this costs no shared contract change — §4.5's
- * objection was to pushing EVERY section heading down a level across the whole page, which is a
- * different and much larger thing.
- *
- * **The status sentence is composed, not concatenated.** `StatusSection` announces one polite sentence and
- * there are now two independently-settling facts behind it. They are joined with a full stop and a
- * space and each names its own subject ("Mail: …", "Retention: …"), so a screen reader speaks two
- * complete sentences rather than one run-on whose halves a listener has to separate by ear. While
- * either half is still pending its clause is absent rather than empty — a trailing separator is a
- * pause that means nothing.
+ * **The reads are called HERE and passed down as facts.** Each key is the one its panel already
+ * uses, so TanStack dedupes them: two observers of a key are one request. That is the property that
+ * keeps a load at six audited reads (SC-4) however many boxes read the same response — Mail and
+ * Clearing old records share `health`, Version and settings and Alerts and monitoring share
+ * `installation`. A second request is a second `staff.panel_read` row on every load, forever, in the
+ * table that refuses `DELETE`.
  */
-function MailAndRetentionPanel(): React.ReactElement {
+function ConsoleBody({
+  email,
+  dualHatted,
+}: {
+  email: string;
+  dualHatted: boolean;
+}): React.ReactElement {
   const health = useStaffHealth();
-  const retention = health.data?.retention;
+  const security = useStaffCspReports();
+  const accounts = useStaffAccounts();
+  const installation = useStaffInstallation();
+  // The two reads the summary does not draw on but the freshness line and the load sentence do.
+  const activity = useStaffActivity();
+  const probeHistory = useProbeResults();
 
-  const clauses = health.isPending
-    ? []
-    : health.isError
-      ? ['Mail and retention state could not be read.']
-      : [
-          `Mail: ${String(health.data?.failuresLast24h ?? 0)} failures in the last 24 hours.`,
-          retention === undefined ? null : statusSentence(retention),
-        ].filter((clause): clause is string => clause !== null);
+  const status = deriveConsoleStatus({
+    health: { isPending: health.isPending, isError: health.isError, data: health.data },
+    security: { isPending: security.isPending, isError: security.isError, data: security.data },
+    accounts: {
+      isPending: accounts.isPending,
+      // A failed *Show more* leaves the rows standing and is the box's to report; the summary is
+      // about whether the count could be read at all.
+      isError: accounts.isError && !accounts.isFetchNextPageError,
+      data: accounts.data?.pages[0],
+    },
+    installation: {
+      isPending: installation.isPending,
+      isError: installation.isError,
+      data: installation.data,
+    },
+  });
+  const freshness = freshnessOf(
+    [health, security, accounts, installation, activity, probeHistory].map((query) => ({
+      dataUpdatedAt: query.dataUpdatedAt,
+      isError: query.isError && !(query === accounts && accounts.isFetchNextPageError),
+      isPending: query.isPending,
+    })),
+  );
+
+  const announce = useAnnounce();
+  const refreshReads = useRefreshStaffPageReads();
+  const [refreshing, setRefreshing] = useState(false);
+  // Set when a refresh has finished and is waiting for the render that shows its answer.
+  const [refreshed, setRefreshed] = useState<{ firstPageSize: number | null } | null>(null);
+  const loadAnnounced = useRef(false);
+
+  // **One sentence when the page has settled, instead of one per box** (ADR-0178 D-6, SC-6). A
+  // standing condition is not an event (ADR-0132); the summary above is not live either, so this is
+  // the single place the page speaks on arrival.
+  useEffect(() => {
+    if (!freshness.settled || loadAnnounced.current) return;
+    loadAnnounced.current = true;
+    announce(loadedAnnouncement(status.sentence));
+  }, [announce, freshness.settled, status.sentence]);
+
+  // **After the render that carries the new answer, not before it.** Query observers are notified
+  // on a later task than the one the refetch resolves on, so announcing from the click handler would
+  // read the headline of the page as it was. The sentence is read through a ref so a later change to
+  // the headline does not announce a refresh that already happened; only a new `refreshed` does.
+  const sentence = useRef(status.sentence);
+  useEffect(() => {
+    sentence.current = status.sentence;
+  });
+  useEffect(() => {
+    if (refreshed === null) return;
+    announce(refreshedAnnouncement(sentence.current, refreshed.firstPageSize));
+  }, [announce, refreshed]);
+
+  const refresh = useCallback(() => {
+    if (refreshing) return;
+    setRefreshing(true);
+    void refreshReads()
+      .then(
+        (result) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              setRefreshed(result);
+              resolve();
+            }, 0);
+          }),
+      )
+      .finally(() => {
+        setRefreshing(false);
+      });
+  }, [refreshReads, refreshing]);
 
   return (
-    <StatusSection title="Mail and retention" id={CHECK_SECTION_ID.mail} status={clauses.join(' ')}>
-      <MailSection />
-      <RetentionSection />
-    </StatusSection>
+    <>
+      <ConsoleHeader
+        email={email}
+        freshness={freshness}
+        refreshing={refreshing}
+        onRefresh={refresh}
+      />
+      {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
+          staff member out on day one — and the compensation it named was that the console says
+          which hat is active. It is a SIBLING of the header and not one of its `actions`: that slot
+          is a `flex shrink-0` row, right for a button and wrong for a full-width banner. */}
+      {dualHatted && (
+        <Alert purpose="condition" tone="info">
+          {HEADER.dualHat}
+        </Alert>
+      )}
+      {/* **Never columned.** A status answer must not sit beside anything: placed in a column it
+          would be one of two things a reader's eye has to choose between, on the screen whose
+          entire job is to answer one question before anything else is read. */}
+      <StaffStatusSummary status={status} onRetryAll={refresh} retrying={refreshing} />
+      <OnThisPage />
+      {/* **Grouped by what the reader came to do, not by where the data comes from** (ADR-0178):
+          conditions, then what this installation is, then the tools, then the record. The order is
+          DOM order and therefore the order a screen reader walks; the one pair side by side is two
+          short key-value lists, which is the only place a second column buys anything (ADR-0143 D3's
+          span-by-demand rule, kept). */}
+      <SectionGroup {...GROUPS.conditions} backToTopHref="#staff-top">
+        <MailPanel />
+        <RetentionPanel />
+        <SecurityPanel />
+        <AccountsPanel />
+      </SectionGroup>
+      <SectionGroup {...GROUPS.installation} backToTopHref="#staff-top">
+        <PageGrid>
+          <PageGridItem span="narrow">
+            <InstallationPanel />
+          </PageGridItem>
+          <PageGridItem span="narrow">
+            <AlertingPanel />
+          </PageGridItem>
+        </PageGrid>
+      </SectionGroup>
+      <SectionGroup {...GROUPS.tools} backToTopHref="#staff-top">
+        <DiagnosticsPanel />
+        <PerformanceProbePanel apiVersion={installation.data?.apiVersion ?? null} />
+      </SectionGroup>
+      <SectionGroup {...GROUPS.record} backToTopHref="#staff-top">
+        <ActivityPanel />
+      </SectionGroup>
+    </>
   );
 }

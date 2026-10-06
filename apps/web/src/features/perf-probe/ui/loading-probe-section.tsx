@@ -20,6 +20,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CopyButton } from '@/components/ui/copy-button';
+import { useHeadingLevel } from '@/components/ui/page/heading-level';
 
 /**
  * Measure plan loading — the second section of the Performance panel (`docs/TECH_DEBT.md` #433).
@@ -151,14 +152,19 @@ export function LoadingProbeSection({
   }, []);
 
   const unsupportedId = useId();
+  // Both headings take their rank from where the section sits (ADR-0178): hard-coded h3/h4 were
+  // right under the old flat page and mis-rank under a `SectionGroup`. The type stops at h4, so the
+  // result heading is the section heading's sibling, never a skipped level.
+  const level = useHeadingLevel();
+  const Heading = `h${level}` as const;
 
   const blocked = measuring || unsupported !== null;
 
   return (
     <section aria-labelledby={headingId} className="space-y-4 border-t pt-4">
-      <h3 id={headingId} className="text-sm font-medium">
+      <Heading id={headingId} className="text-sm font-semibold">
         Plan loading
-      </h3>
+      </Heading>
       <p className="text-muted-foreground text-sm">
         Checks whether this server makes the plan screen download its code again when you reload it.{' '}
         {MEASURES_SENTENCE}
@@ -231,13 +237,13 @@ export function LoadingProbeSection({
 
       {shown !== null ? (
         <div className="space-y-3" data-loading-result>
-          <h4
+          <Heading
             ref={resultHeadingRef}
             tabIndex={-1}
-            className="focus:ring-ring focus:ring-offset-background rounded-sm text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-none"
+            className="focus:ring-ring focus:ring-offset-background rounded-sm text-sm font-semibold focus:ring-2 focus:ring-offset-2 focus:outline-none"
           >
             Plan loading reading
-          </h4>
+          </Heading>
           <p className="text-sm">{plainVerdict(shown)}</p>
           {coldReloadWarning(shown) !== null ? (
             <Alert purpose="condition" tone="info">

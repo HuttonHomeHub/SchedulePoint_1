@@ -60,9 +60,12 @@ export interface StaffHealth {
  * not refetched on window focus: every read writes a row, and a panel that refetched on every tab
  * switch would fill the audit log with evidence of nothing.
  */
+/** Named so the page's Refresh lists the reads it makes by key (`STAFF_PAGE_READS`). */
+export const STAFF_HEALTH_KEY = ['staff', 'health'] as const;
+
 export function useStaffHealth(): UseQueryResult<StaffHealth> {
   return useQuery({
-    queryKey: ['staff', 'health'],
+    queryKey: STAFF_HEALTH_KEY,
     queryFn: () => apiFetch<StaffHealth>('/staff/health'),
     refetchOnWindowFocus: false,
     retry: false,

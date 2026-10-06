@@ -286,7 +286,7 @@ describe('StaffConsoleScreen', () => {
       ],
     });
 
-    expect(await screen.findByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Browser security reports' })).toBeVisible();
     expect(await screen.findByText('script-src-elem')).toBeInTheDocument();
     // The source location is the part that names what to CHANGE — the blocked URI often cannot.
     expect(screen.getByText(/index-abc\.js:42/)).toBeInTheDocument();
@@ -298,10 +298,24 @@ describe('StaffConsoleScreen', () => {
     // somebody later adds a field to the config object.
     renderStaffWith({});
 
-    expect(await screen.findByRole('heading', { name: 'Installation' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Version and settings' })).toBeVisible();
     expect(await screen.findByText('smtp.example:465')).toBeInTheDocument();
-    expect(screen.queryByText(/PASSWORD|password@/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Email verification: enforced')).toBeInTheDocument();
+    expect(screen.queryByText(/PASSWORD|password@/)).not.toBeInTheDocument();
+    // A short value with its consequence beneath, so the rows of the list line up.
+    expect(screen.getByText('Email confirmation')).toBeInTheDocument();
+    expect(screen.getByText('Required')).toBeInTheDocument();
+    expect(
+      screen.getByText('People must confirm their email before they sign in.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not repeat "none failed" in an empty table under figures that already say it', async () => {
+    renderStaffWith({});
+
+    expect(await screen.findByRole('heading', { name: 'Mail' })).toBeVisible();
+    expect(await screen.findByText('Last failure')).toBeInTheDocument();
+    expect(screen.queryByText('No emails have failed.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recent failed emails' })).not.toBeInTheDocument();
   });
 
   it('lists unverified accounts with the total beside the page', async () => {
@@ -318,10 +332,10 @@ describe('StaffConsoleScreen', () => {
       },
     });
 
-    expect(await screen.findByRole('heading', { name: 'Unverified accounts' })).toBeVisible();
-    await screen.findByRole('region', { name: 'Unverified accounts' });
+    expect(await screen.findByRole('heading', { name: 'Unconfirmed accounts' })).toBeVisible();
+    await screen.findByRole('region', { name: 'Unconfirmed accounts' });
     expect(
-      withinSection('Unverified accounts').getByText(/3 accounts cannot complete/i),
+      withinSection('Unconfirmed accounts').getByText(/3 people have signed up/i),
     ).toBeInTheDocument();
     expect(await screen.findByText('stuck@example.test')).toBeInTheDocument();
   });
@@ -393,8 +407,8 @@ describe('StaffConsoleScreen', () => {
     // decision the panel exists to inform.
     renderStaffWith({ '/staff/csp-reports': [] });
 
-    expect(await screen.findByText(/No violations recorded/i)).toBeInTheDocument();
-    expect(screen.getByText(/not proof the policy is clean/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No reports received/i)).toBeInTheDocument();
+    expect(screen.getByText(/doesn't prove nothing was blocked/i)).toBeInTheDocument();
   });
 
   /**
@@ -428,13 +442,13 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByText('script-src-elem')).toBeInTheDocument();
-    const caveat = screen.getByText(/not proof the policy is clean/i).closest('[id]');
+    const caveat = screen.getByText(/doesn't prove nothing was blocked/i).closest('[id]');
     expect(caveat).not.toBeNull();
 
     // A screen-reader user navigating by landmark lands INSIDE the table's region, so placement
     // above it is not enough (ADR-0073 C2.5). The link is what makes the caveat reachable there.
     const region = screen.getByRole('region', {
-      name: /Distinct policy violations, most recent activity first/i,
+      name: /Blocked or reported by browsers, most recent first/i,
     });
     expect(region.getAttribute('aria-describedby')).toBe(caveat?.getAttribute('id'));
   });
@@ -453,7 +467,7 @@ describe('StaffConsoleScreen', () => {
    */
   it('gives no two elements the same id', async () => {
     renderStaffWith({});
-    await screen.findByRole('heading', { name: 'Mail and retention' });
+    await screen.findByRole('heading', { name: 'Mail' });
 
     const ids = [...document.querySelectorAll('[id]')].map((el) => el.id);
     expect(
@@ -507,7 +521,7 @@ describe('StaffConsoleScreen', () => {
         retention: healthyRetention(),
       },
     });
-    await screen.findByRole('heading', { name: 'Mail and retention' });
+    await screen.findByRole('region', { name: 'Recent failed emails' });
 
     const regions = screen.getAllByRole('region');
     const described = regions.filter((region) => region.hasAttribute('aria-describedby'));
@@ -529,8 +543,8 @@ describe('StaffConsoleScreen', () => {
       (region.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
     );
     const text = ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
-    expect(text).toMatch(/written to the log instead of sent/i);
-    expect(text).toMatch(/only tables swept on a schedule/i);
+    expect(text).toMatch(/written to the server log instead of being sent/i);
+    expect(text).toMatch(/audit log is never cleared/i);
   });
 
   it('says a missing transport is NOT health', async () => {
@@ -560,12 +574,17 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    await screen.findByRole('region', { name: 'Mail and retention' });
+    await screen.findByRole('region', { name: 'Mail' });
     expect(
-      withinSection('Mail and retention').getByText(/No mail transport is configured/i),
+      await within(await screen.findByRole('region', { name: 'Mail' })).findByText(
+        /Emails are written to the server log/i,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText('Failure alerting: off')).toBeInTheDocument();
-    expect(screen.getByText('Heartbeat: off')).toBeInTheDocument();
+    // The alert switches have a box of their own now, and say what being off costs.
+    const alerting = await screen.findByRole('region', { name: 'Alerts and monitoring' });
+    expect(
+      within(alerting).getByText('Off: nothing notices if SchedulePoint goes down'),
+    ).toBeInTheDocument();
   });
 
   it('names itself in the document title, on both landable states', async () => {
@@ -601,7 +620,7 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    expect(await screen.findByText(/also an organisation member/i)).toBeInTheDocument();
+    expect(await screen.findByText(/also a member of an organisation/i)).toBeInTheDocument();
   });
 
   it('offers a way to reach the accounts it says exist', async () => {
@@ -651,7 +670,7 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    fireEvent.click(await screen.findByRole('button', { name: /show older/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /show more/i }));
 
     expect(await screen.findByText('later@example.test')).toBeInTheDocument();
   });
@@ -710,11 +729,11 @@ describe('a failed refetch', () => {
       expect(screen.getByText('7')).toBeInTheDocument();
     });
 
-    // Now make it fail, the way a reader would: the retry button.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0]!);
+    // Now make it fail, the way a reader would: press Refresh, whose second read of health fails.
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Could not read mail health.')).toBeInTheDocument();
+      expect(screen.getAllByText("Couldn't load mail.").length).toBeGreaterThan(0);
     });
     expect(
       screen.queryByText('7'),
@@ -747,7 +766,7 @@ async function renderRetention(
   // Waits for the panel's CONTENT, not its heading. The heading renders while the query is still
   // pending, so awaiting it and then reading synchronously asserts against the spinner — which is
   // how the first version of these six tests failed with the panel working perfectly.
-  await screen.findByText('Retention by table');
+  await screen.findByText('What is cleared, and when');
 }
 
 describe('the Retention section', () => {
@@ -796,15 +815,15 @@ describe('the Retention section', () => {
     await renderRetention({ enabled: false, lastRunAt: new Date().toISOString() });
 
     expect(
-      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+      withinSection('Clearing old records').getByText(/Old records are not being deleted/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Last swept/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last ran/)).not.toBeInTheDocument();
   });
 
   it('tells a process that has not swept from one that swept and deleted nothing', async () => {
     await renderRetention({
       lastRunAt: null,
-      processStartedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      processStartedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
       tables: [
         {
           table: 'csp_reports',
@@ -819,17 +838,21 @@ describe('the Retention section', () => {
       ],
     });
 
-    expect(screen.getByText(/has not swept yet/)).toBeInTheDocument();
-    expect(screen.getByText(/started 3 days ago/)).toBeInTheDocument();
+    // Just booted is the routine case: a plain sentence, not a condition.
+    expect(screen.getByText(/has not swept yet/).closest('p')).not.toBeNull();
+    expect(screen.getByText(/started 10 minutes ago/)).toBeInTheDocument();
     expect(screen.getByText('Not swept yet')).toBeInTheDocument();
   });
 
   it('surfaces a run of failures, and says where the reason is', async () => {
     await renderRetention({ consecutiveFailures: 3 });
 
-    expect(
-      withinSection('Mail and retention').getByText(/The last 3 sweeps failed/),
-    ).toBeInTheDocument();
+    const box = withinSection('Clearing old records');
+    expect(box.getByText(/The last 3 runs failed/)).toBeInTheDocument();
+    // The log search is the operator's step, so it sits behind How to fix and is not in the DOM
+    // until that is pressed.
+    expect(screen.queryByText(/retention\.sweep_failed/)).not.toBeInTheDocument();
+    fireEvent.click(box.getByRole('button', { name: 'How to fix' }));
     expect(screen.getByText(/retention\.sweep_failed/)).toBeInTheDocument();
   });
 
@@ -840,13 +863,13 @@ describe('the Retention section', () => {
     // panel most likely to be misread did not.
     await renderRetention({ consecutiveFailures: 3 }, { alertingConfigured: false });
 
-    expect(screen.getByText(/Nobody has been notified/)).toBeInTheDocument();
+    expect(screen.getByText(/Nobody has been told, because alerts are off/)).toBeInTheDocument();
   });
 
   it('says an alert WAS sent when a webhook is configured', async () => {
     await renderRetention({ consecutiveFailures: 3 }, { alertingConfigured: true });
 
-    expect(screen.getByText(/An alert was sent to your webhook/)).toBeInTheDocument();
+    expect(screen.getByText(/An alert was sent\./)).toBeInTheDocument();
   });
 
   it('never announces "every table is inside its period" while the sweep is failing', async () => {
@@ -855,32 +878,32 @@ describe('the Retention section', () => {
     // opposite of the visible alert two elements away.
     await renderRetention({ consecutiveFailures: 3 });
 
-    // Asserted on the POLITE REGION specifically, not on the document: the visible alert says the
-    // same words, and matching either would let the sr-only line go back to claiming health while
-    // the test stayed green — which is exactly the shape of the defect.
-    //
-    // Read as the region's TEXT rather than by `getByText`, since the M2 merge: mail and retention
-    // are one card and one polite sentence, so the retention clause is now a substring of it and an
-    // exact-text query cannot see it. The property under test is unchanged — this region says the
-    // sweep is failing and does not say everything is inside its period — and the discrimination
-    // that matters is unchanged too, because it is still the sr-only region being read and not the
-    // document.
-    await waitFor(() => {
-      expect(politeRegionText()).toContain('Retention: the last 3 sweeps failed.');
-    });
-    expect(politeRegionText()).not.toContain('Retention: every table is inside its period.');
+    // The resting sentence is plain text now (ADR-0178 D-6), so the property is asserted on the
+    // whole page: neither the text nor any live region may say everything is inside its period.
+    expect(screen.getByText('Retention: the last 3 sweeps failed.')).toBeInTheDocument();
+    expect(screen.queryByText('Retention: every table is inside its period.')).toBeNull();
+    expect(politeRegionText()).not.toContain('every table is inside its period');
   });
 
-  it('ties the disabled and failing caveats to the table they qualify', async () => {
+  it('ties the switched-off note and the footnote to the table they qualify', async () => {
     // `DataTable` is a focusable `role="region"`, so a reader navigating by landmark lands INSIDE
-    // it and skips whatever sits above — which here is the sentence saying the ages below will keep
-    // growing. `describedById` is the established fix; this pins that it is actually passed.
-    await renderRetention({ enabled: false, consecutiveFailures: 3 });
+    // it and skips whatever sits above. `describedById` is the established fix; this pins that it
+    // is passed, and that every id it names is on the page.
+    await renderRetention({ enabled: false });
 
-    const region = screen.getByRole('region', { name: 'Retention by table' });
-    const described = region.getAttribute('aria-describedby') ?? '';
-    expect(described).toContain('retention-disabled-note');
-    expect(described).toContain('retention-failing-note');
+    const region = screen.getByRole('region', { name: 'What is cleared, and when' });
+    const described = (region.getAttribute('aria-describedby') ?? '').split(/\s+/);
+    expect(described).toEqual(['staff-retention-off-note', 'staff-retention-footnote']);
+    for (const id of described) expect(document.getElementById(id)).not.toBeNull();
+  });
+
+  it('ties the failing note to the table, and only the note that is on screen', async () => {
+    await renderRetention({ consecutiveFailures: 3 });
+
+    const region = screen.getByRole('region', { name: 'What is cleared, and when' });
+    const described = (region.getAttribute('aria-describedby') ?? '').split(/\s+/);
+    expect(described).toEqual(['staff-retention-failing-note', 'staff-retention-footnote']);
+    for (const id of described) expect(document.getElementById(id)).not.toBeNull();
   });
 
   it('escalates a process that has gone a whole interval without sweeping', async () => {
@@ -898,9 +921,8 @@ describe('the Retention section', () => {
     // escalated rendering is an `Alert` — a bordered block with a leading icon — while the routine
     // just-booted case is a plain `<p>` with neither. Asserted in both directions so it cannot pass
     // against a third rendering that happens to have an icon.
-    const escalated = screen.getByText(/has not swept yet/);
-    expect(escalated.closest('p')).toBeNull();
-    expect(escalated.parentElement?.querySelector('svg')).not.toBeNull();
+    const escalated = screen.getByText(/It should have run by now/);
+    expect(escalated.closest('[class*="border-l-4"]')?.querySelector('svg')).not.toBeNull();
   });
 
   it('states that audit_events is deliberately NOT swept', async () => {
@@ -908,19 +930,16 @@ describe('the Retention section', () => {
     // bounded, and the most sensitive table in the system is deliberately not.
     await renderRetention({});
 
-    expect(screen.getByText(/refuses/)).toBeInTheDocument();
-    expect(screen.getByText('audit_events')).toBeInTheDocument();
+    expect(screen.getByText(/The audit log is never cleared/)).toBeInTheDocument();
   });
 
-  it('announces its settled state politely', async () => {
-    // The ADR-0086 M6 accessibility fix, applied to the new panel rather than left to the next
-    // review to find: each panel's `Spinner` unmounts silently, so without this a screen-reader
-    // user has to re-explore the page to learn that a panel has finished.
+  it('keeps its resting sentence as plain text, and out of the live region', async () => {
+    // ADR-0178 D-6: a standing state is not an event. The box states it as text a reader can reach;
+    // the page speaks one sentence for all of them, and a box speaks only when it changes.
     await renderRetention({});
 
-    await waitFor(() => {
-      expect(politeRegionText()).toContain('Retention: every table is inside its period.');
-    });
+    expect(screen.getByText('Retention: every table is inside its period.')).toBeInTheDocument();
+    expect(politeRegionText()).not.toContain('every table is inside its period');
   });
 
   it('offers a retry rather than a dead end when the read fails', async () => {
@@ -938,8 +957,8 @@ describe('the Retention section', () => {
 
     renderScreen();
 
-    await screen.findByRole('heading', { name: 'Retention' });
-    expect(await screen.findByText('Could not read retention state.')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Clearing old records' });
+    expect(await screen.findByText("Couldn't load old-record clearing.")).toBeInTheDocument();
   });
 
   /**
@@ -980,12 +999,14 @@ describe('the Retention section', () => {
     });
 
     // ── The pinned positive: the conditions are on screen and readable.
-    await screen.findByRole('region', { name: 'Mail and retention' });
+    await screen.findByRole('region', { name: 'Mail' });
     expect(
-      withinSection('Mail and retention').getByText(/No mail transport is configured/),
+      await within(await screen.findByRole('region', { name: 'Mail' })).findByText(
+        /Emails are written to the server log/,
+      ),
     ).toBeInTheDocument();
     expect(
-      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+      withinSection('Clearing old records').getByText(/Old records are not being deleted/),
     ).toBeInTheDocument();
 
     // ── Nothing on this screen interrupts. `role="alert"` is assertive, and not one of the facts

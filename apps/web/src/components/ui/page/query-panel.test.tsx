@@ -43,16 +43,29 @@ describe('QueryPanel', () => {
     expect(polite()).toHaveTextContent('');
   });
 
-  it('renders the body and announces the settled sentence when answered', () => {
-    render(panel({ isPending: false, isError: false, data: { n: 7 } }));
+  // ADR-0178 D-6: the first settled sentence is a resting state. It is reachable as plain text and
+  // is NOT spoken; only a later, different one is.
+  it('renders the body and keeps the first settled sentence out of the live region', () => {
+    const { rerender } = render(panel({ isPending: true, isError: false, data: undefined }));
+    rerender(panel({ isPending: false, isError: false, data: { n: 7 } }));
     expect(screen.getByText('value 7')).toBeInTheDocument();
     expect(screen.queryByText('skeleton slot')).not.toBeInTheDocument();
-    expect(polite()).toHaveTextContent('7 counted.');
+    expect(polite()).toHaveTextContent('');
+    expect(screen.getByText('7 counted.')).toBeInTheDocument();
+  });
+
+  it('announces a later change to the settled sentence', () => {
+    const { rerender } = render(panel({ isPending: false, isError: false, data: { n: 7 } }));
+    rerender(panel({ isPending: false, isError: false, data: { n: 8 } }));
+    expect(polite()).toHaveTextContent('8 counted.');
   });
 
   it('shows the failure shape with a retry, and announces the failure', () => {
     const refetch = vi.fn();
-    render(panel({ isPending: false, isError: true, data: undefined }, refetch));
+    const { rerender } = render(
+      panel({ isPending: false, isError: false, data: { n: 1 } }, refetch),
+    );
+    rerender(panel({ isPending: false, isError: true, data: undefined }, refetch));
     expect(screen.getByRole('alert')).toHaveTextContent('Could not read counts.');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(refetch).toHaveBeenCalledTimes(1);
@@ -62,7 +75,8 @@ describe('QueryPanel', () => {
   it('shows ONLY the error when a failed refetch left earlier data behind', () => {
     // A failed refetch does not clear `query.data`; rendering both puts "could not read" on top of
     // figures that look current.
-    render(panel({ isPending: false, isError: true, data: { n: 3 } }));
+    const { rerender } = render(panel({ isPending: false, isError: false, data: { n: 3 } }));
+    rerender(panel({ isPending: false, isError: true, data: { n: 3 } }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
     expect(polite()).toHaveTextContent('Counts could not be read.');
@@ -107,5 +121,16 @@ describe('QueryPanel', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
+  });
+
+  // A failure on first load is the section's baseline sentence, so the polite region stays quiet;
+  // the alert from `QueryErrorState` is what a screen reader hears (see `StatusSection`).
+  it('announces a first-load failure through the error state’s alert', () => {
+    const { rerender } = render(panel({ isPending: true, isError: false, data: undefined }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    rerender(panel({ isPending: false, isError: true, data: undefined }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not read counts.');
+    expect(polite()).toHaveTextContent('');
   });
 });

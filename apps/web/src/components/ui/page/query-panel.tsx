@@ -30,6 +30,8 @@ export interface QueryPanelProps<T> {
    * caller says which.
    */
   skeleton: React.ReactNode;
+  /** One sentence saying what the box holds, under its heading. */
+  description?: React.ReactNode;
   /** The failure shape's sentence: "Could not read accounts." */
   errorLabel: string;
   /** What the polite region says when the query fails: "Accounts could not be read." */
@@ -71,6 +73,7 @@ export interface QueryPanelProps<T> {
 export function QueryPanel<T>({
   title,
   id,
+  description,
   query,
   skeleton,
   errorLabel,
@@ -87,6 +90,9 @@ export function QueryPanel<T>({
       {...(id === undefined ? {} : { id })}
       status={query.isError ? errorStatus : answered ? settledStatus(data) : ''}
       busy={query.isFetching === true}
+      // A page read: its first sentence is a resting state, and the page announces it once.
+      announce="change"
+      {...(description === undefined ? {} : { description })}
     >
       {query.isPending && skeleton}
       {query.isError && <QueryErrorState label={errorLabel} onRetry={() => void query.refetch()} />}

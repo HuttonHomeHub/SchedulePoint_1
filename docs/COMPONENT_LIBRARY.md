@@ -656,3 +656,16 @@ the same thing several times, each slightly different.
   as visible text. It never sets `pointer-events-none` at rest (#458); it cancels the hover fill.
 - **`Badge variant="outline"`**, **`Column.wrap: 'anywhere'`** on `DataTable`, and `lib/relative-time.ts`
   (moved from the overview feature) are the small additions beside them.
+
+### `StatusSection` and `QueryPanel`: what the polite sentence does (ADR-0178 D-6)
+
+- **`status`** is the one sentence the panel says about itself, empty while pending. **`announce`**
+  decides when it is spoken: `settle` (default) speaks it the moment it appears; `change` treats the
+  first settled sentence as the panel's resting state, written as plain text, and speaks only a later,
+  different one. `QueryPanel` uses `change`.
+- **A first-load failure is the baseline**, so it is not spoken from the polite region. The error
+  state's `role="alert"` carries it, which is why a `change` panel must render one.
+- **The switch is a one-way latch**: after the first change every sentence is spoken, including a
+  return to the baseline.
+- **`description`** is one sentence under the heading. The body sits one fixed distance beneath it
+  whatever the body starts with, so a panel never adds its own gap there.

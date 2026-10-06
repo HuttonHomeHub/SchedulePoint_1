@@ -38,19 +38,21 @@ import { StaffStatusSummary } from '@/features/staff/ui/status-summary';
 /** What each check's destination must be able to talk about. Written from the reader's question. */
 const SUBJECT: Record<CheckId, RegExp> = {
   mail: /mail/i,
-  retention: /retention/i,
-  security: /content-security-policy/i,
-  accounts: /unverified accounts/i,
-  // The badges and the two `Set …_URL` sentences, which is what an operator has come to read.
-  alerting: /mail|alerting|heartbeat/i,
+  retention: /clearing old records/i,
+  security: /security reports/i,
+  accounts: /unconfirmed accounts/i,
+  // The two switches and the `How to fix` that names the settings, which is what an operator has
+  // come to read.
+  alerting: /alerts/i,
 };
 
 /** The heading each section id actually carries, as the page renders it. */
 const SECTION_HEADING: Record<string, string> = {
-  'staff-section-health': 'Mail and retention',
-  'staff-section-security': 'Content-Security-Policy',
-  'staff-section-accounts': 'Unverified accounts',
-  'staff-section-installation': 'Installation',
+  'staff-section-mail': 'Mail',
+  'staff-section-retention': 'Clearing old records',
+  'staff-section-security': 'Browser security reports',
+  'staff-section-accounts': 'Unconfirmed accounts',
+  'staff-section-alerting': 'Alerts and monitoring',
 };
 
 const HEALTH: StaffHealth = {
@@ -114,6 +116,16 @@ describe('every summary row links to the section that answers it', () => {
           `page gained a section or the mapping points at nothing`,
       ).toBeDefined();
     }
+  });
+
+  /**
+   * **SC-3: no two checks share a destination.** Three rows once opened one card (`mail`,
+   * `retention` and `alerting` all pointed at the health card), so a reader who activated any of them
+   * landed in the same place and had to find their own answer. Verified red against that mapping.
+   */
+  it('gives every check a destination no other check shares', () => {
+    const destinations = CHECK_IDS.map((id) => CHECK_SECTION_ID[id]);
+    expect(new Set(destinations).size).toBe(CHECK_IDS.length);
   });
 
   it.each(CHECK_IDS)('sends %s somewhere that is about it', (id) => {

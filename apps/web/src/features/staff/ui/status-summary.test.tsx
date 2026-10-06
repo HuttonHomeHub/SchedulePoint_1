@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { StaffStatusSummary } from './status-summary';
 
@@ -95,6 +96,7 @@ describe('StaffStatusSummary', () => {
     const rows = screen.getAllByRole('listitem');
     expect(rows).toHaveLength(5);
     expect(screen.getByRole('link', { name: 'Mail delivery' })).toBeInTheDocument();
+    expect(screen.getByText('Working: none failed in the last 24 hours')).toBeInTheDocument();
   });
 
   it('renders the same rows when things are wrong', () => {
@@ -117,14 +119,51 @@ describe('StaffStatusSummary', () => {
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
   });
 
-  it('puts what needs attention first', () => {
+  /** ADR-0178 (amending ADR-0143 D1): the rows keep the page's order, so a row has one place. */
+  it('keeps the page order whatever needs attention', () => {
     renderSummary({
       ...healthy(),
       accounts: settled({ ...ACCOUNTS, unverifiedTotal: 68 }),
     });
 
-    const first = screen.getAllByRole('listitem')[0];
-    expect(within(first!).getByRole('link')).toHaveAccessibleName('Account verification');
+    expect(
+      screen.getAllByRole('listitem').map((item) => within(item).getByRole('link').textContent),
+    ).toEqual([
+      'Mail delivery',
+      'Clearing old records',
+      'Browser security reports',
+      'Unconfirmed accounts',
+      'Alerts',
+    ]);
+  });
+
+  it('draws Checking and Could not be read as an outline, unlike OK', () => {
+    renderSummary({ ...healthy(), security: { isPending: false, isError: true, data: undefined } });
+
+    const unreadable = screen.getByText('Could not be read');
+    expect(unreadable.className).toContain('border');
+    expect(screen.getAllByText('OK')[0]!.className).not.toContain('border');
+  });
+
+  it('offers Try again for all only when two or more could not be read', () => {
+    const failed = { isPending: false, isError: true, data: undefined };
+    const retry = vi.fn();
+    const { rerender } = render(
+      <StaffStatusSummary
+        status={deriveConsoleStatus({ ...healthy(), security: failed })}
+        onRetryAll={retry}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Try again for all' })).not.toBeInTheDocument();
+
+    rerender(
+      <StaffStatusSummary
+        status={deriveConsoleStatus({ ...healthy(), security: failed, accounts: failed })}
+        onRetryAll={retry}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try again for all' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it('names the number the claim rests on', () => {
@@ -133,9 +172,7 @@ describe('StaffStatusSummary', () => {
       accounts: settled({ ...ACCOUNTS, unverifiedTotal: 68 }),
     });
 
-    expect(
-      screen.getByText('68 accounts cannot complete verification-gated sign-in.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText("68 people can't sign in yet")).toBeInTheDocument();
   });
 
   /**
@@ -154,5 +191,67 @@ describe('StaffStatusSummary', () => {
     for (const link of screen.getAllByRole('link')) {
       expect(link.getAttribute('href')).toMatch(/^#staff-section-/);
     }
+  });
+
+  /**
+   * WCAG 2.4.3 / ADR-0135: the button that has focus must not be what the retry removes. The retry
+   * that heals the page takes the unreadable count below two, which used to unmount the button with
+   * focus on it (focus fell to `<body>`). Verified red against the old `unreadableCount >= 2` guard.
+   */
+  describe('Try again for all keeps focus when its own retry heals the page', () => {
+    const failed = { isPending: false, isError: true, data: undefined };
+    const broken = (): ConsoleStatusInput => ({ ...healthy(), security: failed, accounts: failed });
+
+    function Harness(): React.ReactElement {
+      const [input, setInput] = useState<ConsoleStatusInput>(broken());
+      const [retrying, setRetrying] = useState(false);
+      return (
+        <>
+          <StaffStatusSummary
+            status={deriveConsoleStatus(input)}
+            retrying={retrying}
+            onRetryAll={() => {
+              setRetrying(true);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setInput(healthy());
+            }}
+          >
+            reads answer
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRetrying(false);
+            }}
+          >
+            run ends
+          </button>
+        </>
+      );
+    }
+
+    it('stays mounted and shaded while it runs, then hands focus to the Status section', async () => {
+      render(<Harness />);
+      const button = screen.getByRole('button', { name: 'Try again for all' });
+      button.focus();
+      fireEvent.click(button);
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(button).toHaveTextContent('Trying again…');
+
+      // The answers land while the run is still going.
+      fireEvent.click(screen.getByRole('button', { name: 'reads answer' }));
+      expect(screen.getByRole('button', { name: 'Trying again…' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'run ends' }));
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /Try(ing)? again/ })).not.toBeInTheDocument();
+      });
+      expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Status' }));
+    });
   });
 });

@@ -23,13 +23,16 @@ export interface CspReportRow {
  * read is the privileged act — so this is not polled and not refetched on window focus: a panel that
  * refetched on every tab switch would fill the audit log with evidence of nothing.
  */
+/** Named so the page's Refresh lists the reads it makes by key (`STAFF_PAGE_READS`). */
+export const STAFF_CSP_REPORTS_KEY = ['staff', 'csp-reports'] as const;
+
 export function useStaffCspReports(): UseQueryResult<CspReportRow[]> {
   return useQuery({
     // `/staff/csp-reports`, not `/api/v1/staff/csp-reports`: `apiFetch` prefixes `API_BASE_URL`,
     // which is already `/api/v1`. The first version of this feature doubled it, and the component
     // tests could not see it because they mock `apiFetch` and assert back whatever path they are
     // handed — only the Playwright journey caught it.
-    queryKey: ['staff', 'csp-reports'],
+    queryKey: STAFF_CSP_REPORTS_KEY,
     queryFn: () => apiFetch<CspReportRow[]>('/staff/csp-reports'),
     refetchOnWindowFocus: false,
     retry: false,

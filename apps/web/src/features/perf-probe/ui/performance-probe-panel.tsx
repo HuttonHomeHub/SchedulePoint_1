@@ -564,8 +564,10 @@ export function PerformanceProbePanel({
   // plan-loading reading — differs from the announced text and is written here as before.
   const status = running ? '' : settledStatus === announcedVerdict ? '' : settledStatus;
 
+  // `announce="change"`: the resting sentence ("No measurement has been taken…") is a standing fact
+  // that the page-level load sentence replaces (ADR-0178 D-6); a run's outcome is a change and is spoken.
   return (
-    <StatusSection title="Performance" status={status}>
+    <StatusSection title="Performance" status={status} announce="change">
       {/* The anchor the `inert` effect walks up from. `display: contents`, so it adds no box. */}
       <div ref={panelRef} className="contents" />
       <p className="text-muted-foreground text-sm">

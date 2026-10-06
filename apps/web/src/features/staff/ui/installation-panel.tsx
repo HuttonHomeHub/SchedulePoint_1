@@ -1,51 +1,52 @@
-import { Badge } from '@/components/ui/badge';
-import { QueryPanel, StatGrid } from '@/components/ui/page';
+import { KeyValueList, QueryPanel } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useStaffInstallation } from '@/features/staff/api/staff-panels';
+import { environmentLabel } from '@/features/staff/model/enum-copy';
+import { INSTALLATION } from '@/features/staff/model/panel-copy';
 
-/** What this installation is running. Never the mail credential — the API sends host and port only. */
+/**
+ * What this installation is: its version, environment and the main safety switches, as a readable
+ * list rather than four figures and two badges. A setting is a fact about the installation, not a
+ * headline number, so it is a `KeyValueList` and the consequence of a switch being off sits on the
+ * line under it (ADR-0178).
+ *
+ * **No `id`, deliberately.** Nothing links here: the status summary's five checks each have a box of
+ * their own, and `id` is what makes a section a focus target. Giving this one the id another section
+ * already carried is how two sections once shared one, which is invalid and makes an anchor's
+ * destination ambiguous.
+ */
 export function InstallationPanel(): React.ReactElement {
   const installation = useStaffInstallation();
 
   return (
-    // **No `id`, deliberately.** It carried `CHECK_SECTION_ID.alerting` only because the alerting
-    // check used to point here, and when M6 sent that check to the section that answers it this
-    // panel kept the constant — so two sections shared one `id`, which is invalid and makes the
-    // anchor's destination ambiguous. Found by the journey on the first run after the fix; no unit
-    // test could see it, because each renders its own subtree and the collision exists only in the
-    // whole page. `id` is what makes a section a focus target, and nothing links here, so the
-    // honest state is to have neither. One correct pattern applied to a control and not its
-    // neighbour — inside the commit fixing an instance of exactly that.
     <QueryPanel
-      title="Installation"
+      title="Version and settings"
       query={installation}
-      skeleton={<Spinner label="Loading installation…" />}
-      errorLabel="Could not read installation state."
-      errorStatus="Installation state could not be read."
-      settledStatus={(data) => `Installation: API ${data.apiVersion}, ${data.environment}.`}
+      skeleton={<Spinner label="Loading version and settings…" />}
+      errorLabel="Couldn't load version and settings."
+      errorStatus="Version and settings couldn't be loaded."
+      settledStatus={(data) =>
+        `Version ${data.apiVersion}, ${environmentLabel(data.environment).toLowerCase()}.`
+      }
     >
-      {(data) => (
-        <>
-          <StatGrid
+      {(data) => {
+        const confirmation = data.requireEmailVerification
+          ? INSTALLATION.confirmation.on
+          : INSTALLATION.confirmation.off;
+        const lock = data.planEditLockEnforced ? INSTALLATION.lock.on : INSTALLATION.lock.off;
+        return (
+          <KeyValueList
             items={[
-              { label: 'API version', value: data.apiVersion },
-              { label: 'Environment', value: data.environment },
-              { label: 'Mail host', value: data.mailHost ?? 'Not configured' },
-              { label: 'Staff addresses', value: String(data.staffCount) },
+              { label: 'App version', value: data.apiVersion },
+              { label: 'Environment', value: environmentLabel(data.environment) },
+              { label: 'Mail server', value: data.mailHost ?? 'Not set up' },
+              { label: 'Staff accounts', value: String(data.staffCount) },
+              { label: 'Email confirmation', ...confirmation },
+              { label: 'One editor at a time', ...lock },
             ]}
           />
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={data.requireEmailVerification ? 'neutral' : 'warning'}>
-              {data.requireEmailVerification
-                ? 'Email verification: enforced'
-                : 'Email verification: off'}
-            </Badge>
-            <Badge variant={data.planEditLockEnforced ? 'neutral' : 'warning'}>
-              {data.planEditLockEnforced ? 'Edit lock: enforced' : 'Edit lock: off'}
-            </Badge>
-          </div>
-        </>
-      )}
+        );
+      }}
     </QueryPanel>
   );
 }

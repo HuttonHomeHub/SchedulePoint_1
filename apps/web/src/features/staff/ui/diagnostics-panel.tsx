@@ -1,6 +1,10 @@
 import { useCallback } from 'react';
 
-import { useStaffDiagnostics, type StaffDiagnosticRow } from '../api/staff-diagnostics';
+import {
+  useStaffDiagnostics,
+  type StaffDiagnosticRow,
+  type StaffDiagnostics,
+} from '../api/staff-diagnostics';
 import {
   diagnosticBreakdown,
   diagnosticSentence,
@@ -12,9 +16,11 @@ import {
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
+import { Disclosure } from '@/components/ui/disclosure';
 import { StatusSection, SubSection } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
-import { formatTimestamp } from '@/lib/format-date';
+import { DIAGNOSTICS } from '@/features/staff/model/panel-copy';
+import { formatRelative, exactInstant } from '@/lib/relative-time';
 
 /**
  * The Diagnostics panel — a staff member presses one control and gets a count (ADR-0140).
@@ -65,20 +71,14 @@ export function DiagnosticsPanel(): React.ReactElement {
   }, [query, running]);
 
   return (
-    <StatusSection title="Diagnostics" status={diagnosticsStatus(result)}>
-      <p className="text-muted-foreground text-sm">
-        Counts how many rows answer a named question about customer data — and returns{' '}
-        <strong>only</strong> counts. No plan, client, project or activity is named, at any size,
-        and the check cannot be pointed at one organisation: it has no parameters at all. What it
-        replaces is a database shell on the host, which has none of those limits and leaves no
-        record.
-      </p>
-
+    <StatusSection
+      title="Diagnostics"
+      status={diagnosticsStatus(result)}
+      description={DIAGNOSTICS.intro}
+    >
       <div className="flex flex-wrap items-center gap-3">
         {/* `aria-disabled:` utilities rather than the native attribute, and paired with the
-            shading — every other `aria-disabled` control in this codebase carries both, and this
-            one shipped with the attribute and no visual treatment at all, so a sighted mouse user
-            got no cue before pressing a control that would do nothing. */}
+            shading — every other `aria-disabled` control in this codebase carries both. */}
         <Button
           onClick={run}
           aria-busy={running}
@@ -95,13 +95,9 @@ export function DiagnosticsPanel(): React.ReactElement {
           subject="Diagnostics report"
           text={result === undefined ? null : () => formatDiagnosticsReport(result)}
           resetKey={result}
-          unavailableReason={
-            running
-              ? 'Wait for this run to finish — copying now would take the previous reading.'
-              : 'Run the diagnostics first — there is nothing to copy yet.'
-          }
+          unavailableReason={running ? DIAGNOSTICS.copyWaiting : DIAGNOSTICS.copyUnavailable}
         >
-          Copy for the record
+          Copy results
         </CopyButton>
       </div>
 
@@ -109,35 +105,62 @@ export function DiagnosticsPanel(): React.ReactElement {
 
       {query.isError && !running ? (
         <Alert purpose="event" tone="error">
-          The diagnostics did not complete, so there is no number to show. Try again; if it keeps
-          failing, the API log will say why.
+          {DIAGNOSTICS.error}
         </Alert>
       ) : null}
 
-      {result !== undefined ? (
-        <div className="space-y-4" data-diagnostics-result>
-          {result.diagnostics.map((row) => (
-            <DiagnosticResult key={row.id} row={row} />
-          ))}
-          <p className="text-muted-foreground text-xs">
-            Taken {formatTimestamp(result.takenAt)} by API {result.apiVersion}. Both are the
-            server&rsquo;s — a reading pasted into a record is only comparable with one taken a
-            release later if it says which release produced it, and the block the Copy button
-            produces carries the exact timestamp rather than this local rendering of it.
-          </p>
-        </div>
-      ) : null}
+      {result !== undefined ? <DiagnosticsResults result={result} /> : null}
     </StatusSection>
   );
 }
 
 /**
- * One question's answer.
+ * **Compact: a question with something to report is shown in full, the rest are one line** (D-12).
  *
- * The denominator is rendered beside the count and never behind a disclosure. A count on its own
- * lets a reader conclude a defect is large when it is a rounding error, which is the failure this
- * whole panel exists to remove.
+ * Sixteen near-identical cards, most repeating the same zero-count sentence, added about 1,700 px
+ * to the page after one press. A check that found nothing is a fact the reader needs to know was
+ * made, not a block they need to read, so the zeros collapse into a count and a button that shows
+ * them. `Disclosure collapsed="hidden"`: the zero cards contain no controls, but nothing in them is
+ * worth a screen-reader stop either until asked for. **Copy results still copies all of them**,
+ * because it formats the whole response and not what is on screen, so a pasted record is unchanged.
  */
+function DiagnosticsResults({ result }: { result: StaffDiagnostics }): React.ReactElement {
+  const found = result.diagnostics.filter((row) => row.affected > 0);
+  const nothing = result.diagnostics.filter((row) => row.affected === 0);
+
+  return (
+    <div className="space-y-4" data-diagnostics-result>
+      {found.length === 0 ? null : (
+        <>
+          <p className="text-sm font-medium">{DIAGNOSTICS.found(found.length)}</p>
+          {found.map((row) => (
+            <DiagnosticResult key={row.id} row={row} />
+          ))}
+        </>
+      )}
+      {nothing.length === 0 ? null : (
+        <div>
+          <p className="text-muted-foreground text-sm">{DIAGNOSTICS.nothing(nothing.length)}</p>
+          <Disclosure label={DIAGNOSTICS.showAll(result.diagnostics.length)} collapsed="hidden">
+            <div className="space-y-4">
+              {nothing.map((row) => (
+                <DiagnosticResult key={row.id} row={row} />
+              ))}
+            </div>
+          </Disclosure>
+        </div>
+      )}
+      <p className="text-muted-foreground text-xs">
+        Taken{' '}
+        <time dateTime={result.takenAt} title={exactInstant(result.takenAt)}>
+          {formatRelative(result.takenAt, new Date())}
+        </time>{' '}
+        by version {result.apiVersion}.
+      </p>
+    </div>
+  );
+}
+
 function DiagnosticResult({ row }: { row: StaffDiagnosticRow }): React.ReactElement {
   return (
     <SubSection title={row.label}>
