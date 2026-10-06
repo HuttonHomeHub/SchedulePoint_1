@@ -8,56 +8,61 @@
 
 ```mermaid
 flowchart LR
-  E[Estate polish] --> M1[M1 Button shading<br/>#460 + #461 · M]
-  E --> M2[M2 Quiet Refresh<br/>staff console · S]
-  E --> M3[M3 Page not found<br/>#459 + API parity · S<br/>conditional on Q1]
+  E[Estate polish] --> M1a[M1a Button contract + fifteen sites<br/>#460 · M]
+  M1a --> M1b[M1b Caller strings deleted + G1<br/>#461 · S-M, mechanical]
+  E --> M2[M2 Quiet Refresh · S]
+  E --> M3[M3 Page not found + 404 body<br/>#459 · S · conditional on Q1]
 ```
 
-Three milestones, **one PR each**, merged in order M1 → M2 → M3. None depends on another's code, but
-M2 and M3 both edit `staff-console-screen.tsx` and M1 edits three staff files, and local e2e shares one
-database (`docs/HANDOFF.md`), so they run one at a time. No flag (ADR-0088 D1). No schema change. No new
-Playwright config or CI step. **No new ADR**; ADR-0178 gains D8 at M2.
+Four PRs, merged **M1a → M1b → M2 → M3**, one at a time (shared staff files; one local e2e database,
+`docs/HANDOFF.md`). M1 is split so the contract change is reviewed apart from ~60 mechanical deletions.
+Every slice is releasable: between M1a and M1b a caller's own `aria-disabled:opacity-50` simply wins over
+the CVA's 60 via `cn`'s merge. No flag (ADR-0088 D1), no schema change, no new Playwright config or CI
+step, **no new ADR** (ADR-0178 gains D8 at M2). Each PR description carries one line: **Surface sheet
+not affected** (spec §4.4).
 
 ---
 
-### Milestone M1: The shaded look lives in `Button`, and resting shaded buttons keep the pointer (#460, #461)
+### Milestone M1a: `Button` carries the shaded look; the fifteen resting sites keep the pointer safely (#460)
 
-**Outcome:** every `aria-disabled` `<Button>` looks the same shaded whatever its variant, and the fifteen
-resting sites can be hovered for their reason and refuse a click in their handler.
-**Entry point:** existing controls, e.g. the Notes composer's **Post** with an empty body; the audit log's
-**Clear filters** with no filter set; the plan workspace's **Arrange** dialog's apply while it is refused.
-**Journey:** each driven site below gains `await button.click({ trial: true })` while shaded (Playwright's
-actionability check fails on a pointer-inert element, so this is the reachability assertion) and
-asserts nothing changed.
+**Outcome:** every `aria-disabled` `<Button>` shades the same way; the fifteen resting sites are no longer
+pointer-inert, refuse pointer/Enter/Space, and show their reason where they have one.
+**Entry point:** e.g. Notes **Add note** with an empty body; audit **Clear filters** with no filter;
+the plan workspace's **Arrange** apply while refused.
+**Journey:** each driven site asserts `click({ trial: true })` succeeds while shaded (Playwright's
+actionability check fails on a pointer-inert element), that a real click and Enter change nothing, and
+that the reason is visible where one exists.
 
 > **Complexity:** M · **Dependencies:** none
-> **Risks:** (1) a `<Button>` that binds `aria-disabled` with no shading today starts to dim → T0 census,
-> reviewer confirms each; (2) an existing journey relies on the pointer-inert shape (e.g. `force: true`,
-> or audit `audit.spec.ts:272-276`) → run every listed suite locally; (3) a resting site whose handler
-> does not refuse becomes clickable → T2 reads each handler and adds a unit test per site that pressing
-> it while shaded calls nothing.
-> **Testing requirements:** `button.test.tsx` (each variant's shaded classes); gate fixtures (G1 red
-> then green, ADR-0110); a unit per #460 site; the journeys below.
+> **Risks:** a submit becomes clickable (empty note → validation error; pending → double submit) → T2
+> guards both `onClick` and `onSubmit`, unit per site; a `<Button>` that never dimmed starts to → T0
+> dimming list signed off by component-reviewer; journeys that relied on inertness (e.g.
+> `e2e-audit/audit.spec.ts:272-276`) → run every suite below locally.
 
-##### Task M1-T0 — Census (no code)
+##### M1a-T0 — Census (no code; results in the PR description)
 
-- Re-derive with the gate's own `buttonTags` reader: (a) every `<Button>` writing `aria-disabled:opacity-*`
-  or `aria-disabled:hover:*` (grep today: 57 files, 63 occurrences, values 50 and 60); (b) every
-  `<Button>` binding `aria-disabled` with **no** shading class (candidates in spec §2 Edge cases);
-  (c) any `buttonVariants(...)` consumer that is not `<Button>`; (d) for each of the fifteen #460 sites,
-  whether the handler already refuses and whether a reason is attached. Record the lists in the PR
-  description.
+1. Recount, with the gate's own reader plus a whole-file scan, every `aria-disabled:opacity-*` /
+   `aria-disabled:hover:*` spelling (my grep: 57 non-test files / 63; reviewers: ~63 / ~75). Include
+   constants (`SHADED_BUTTON`, `ActivityProgressPanels.tsx:309`).
+2. Classify each of the fifteen (and `SHADED_BUTTON`'s four) as **resting / transient / mixed**, and
+   mark the five submits (spec §0.6).
+3. Per site: reason exists? visible? mechanism (visible text via `aria-describedby` / tooltip /
+   `title`, no touch on the Surface)? End state: reachable reason / stays inert with reason / accepted no-op.
+4. **Dimming list:** every `<Button>` binding `aria-disabled` with no shading today, each marked
+   _intended_ or _use native `disabled` / `aria-busy` instead_.
+5. Any `buttonVariants()` consumer that is not `<Button>`.
+
+##### M1a-T1 — `buttonVariants`
+
+- **Files:** `components/ui/button.tsx`, `button.test.tsx`.
+- Base `aria-disabled:opacity-60`; each variant's hover written `not-aria-disabled:hover:…` (outline and
+  ghost: text too). Confirm the compiled selector in the built CSS; fall back to restatement under
+  `aria-disabled:hover:` only if it does not compile, with the reason in the docblock. Docblock also
+  says why native stays at 50 and why `pointer-events-none` stays with the caller.
+- **Tests:** each variant's string; `<Button className="bg-x" aria-disabled>` keeps `bg-x` and the shading.
 - **Complexity:** S
 
-##### Task M1-T1 — `buttonVariants` carries the look
-
-- **Files:** `apps/web/src/components/ui/button.tsx`, `button.test.tsx`.
-- Base gains `aria-disabled:opacity-60`; each variant gains its `aria-disabled:hover:` reset (spec §4.3).
-  Docblock states why `pointer-events-none` stays with the caller.
-- **Complexity:** S · **Testing:** one assertion per variant; `token-contrast` unaffected (shaded controls
-  are exempt from 1.4.3, and no token changes).
-
-##### Task M1-T2 — Fifteen resting sites keep the pointer
+##### M1a-T2 — The fifteen sites
 
 - **Files:** `components/ui/scope-save-bar.tsx`; `features/audit/components/AuditEventList.tsx`,
   `AuditFilterBar.tsx`; `features/calendars/components/CalendarFormDialog.tsx`, `CalendarsTable.tsx`;
@@ -65,156 +70,184 @@ asserts nothing changed.
   `NoteItem.tsx`; `features/resources/components/ResourcesTable.tsx`;
   `features/tsld/components/ArrangeDialog.tsx`, `BulkSelectionBar.tsx`, `CreateActivityPopover.tsx`,
   `LinkChainDialog.tsx`, `TsldPanel.tsx`; `features/wbs/components/WbsBulkAssignBar.tsx`.
-- Delete `aria-disabled:pointer-events-none`; add or confirm `if (<expression>) return;` in the handler.
-- **Complexity:** M · **Testing:** a unit per site (press while shaded → mutation/handler not called).
-  Existing `scope-save-bar-assertions.ts` is checked for a pointer-events assertion.
+- Resting: drop `aria-disabled:pointer-events-none`, add the handler refusal. Mixed: the same, plus
+  `aria-busy:pointer-events-none` where the site sets `aria-busy`, else an `isPending` handler guard.
+  Submits: `onClick` `preventDefault` when blocked **and** `onSubmit` returns early on the same expression.
+- **Tests:** one unit per site — click the shaded button and press Enter in a field: neither the
+  mutation nor `onSubmit`'s body runs.
+- **Complexity:** M
 
-##### Task M1-T3 — Delete the caller strings; extend the gate
+##### M1a-T3 — Pointer gate
 
-- Delete `aria-disabled:opacity-*` and `aria-disabled:hover:*` from every `<Button>` in the T0 list,
-  including the seven #461 sites, the transient sites (they keep only `aria-disabled:pointer-events-none`)
-  and `gantt-columns-group.tsx:233`. Update `copy-button.test.tsx:83-84` to assert the shaded state via
-  `buttonVariants` rather than the caller string.
-- **`submit-guard.structural.test.ts`:** add **G1** (no `<Button>` writes the look); retire
-  `unshadedSubmits` and `POINTER_EVENTS_EXEMPT`; delete `RESTING_POINTER_INERT_EXCEPTIONS` so the
-  resting rule is an unconditional `toEqual([])`. Pinned fixtures: G1 fires on
-  `className="aria-disabled:opacity-60"`, not on `aria-disabled:pointer-events-none` alone. Verify red
-  by re-adding one string at one site.
-- **Complexity:** M (mechanical, wide)
+- `submit-guard.structural.test.ts`: delete `RESTING_POINTER_INERT_EXCEPTIONS`; the resting rule is
+  `toEqual([])`; classify `aria-busy:pointer-events-none`'s `aria-busy` expression with the same
+  `TRANSIENT_TERM`; retire `unshadedSubmits` and `POINTER_EVENTS_EXEMPT` (shading is now the CVA's).
+  Verify red by restoring one pointer class at one resting site (ADR-0110).
+- **Complexity:** S
 
-##### Task M1-T4 — Journeys, docs, release
+##### M1a-T4 — Journeys, docs, release
 
-- **Suites** (each run with `scripts/e2e-local.sh web:<suite>`): `e2e-notes` (Post, Save),
-  `e2e-audit` (Clear filters, Show older), `e2e-library` (Calendars/Resources Clear),
-  `e2e-calendar-shifts` (calendar form), `e2e-arrange` (Arrange), `e2e-multi-select` (BulkSelectionBar,
-  Link chain), `e2e-authoring` / `e2e-authoring-flow` (CreateActivityPopover, empty-canvas notice),
-  `e2e-wbs` (WbsBulkAssignBar), `e2e-activity-editor` (scope save bar), `e2e-staff` (unchanged look),
-  `e2e-public` (auth submits now 60 %). Which suite drives Clients **Clear** is confirmed in T0 (grep
-  finds no driver today); if none, the unit test is the evidence and the PR says so.
-- **Docs:** `docs/TECH_DEBT.md` #460 and #461 closed; `docs/COMPONENT_LIBRARY.md` (Button shaded
-  state), `docs/DESIGN_SYSTEM.md` §Buttons. **Surface sheet: not affected** (spec §4.4) — one line in
-  the PR description.
-- **Changeset:** `@repo/web` patch.
-- **Reviewers:** **component-reviewer** (the Button contract) before merge; **accessibility-reviewer**
-  before release (ADR-0111: shading and pointer reachability of fifteen controls).
+- **Suites** (`scripts/e2e-local.sh web:<suite>`): `e2e-notes`, `e2e-audit`, `e2e-library`
+  (Calendars/Resources Clear), `e2e-calendar-shifts` (calendar form), `e2e-arrange`, `e2e-multi-select`
+  (BulkSelectionBar, Link chain), `e2e-authoring` / `e2e-authoring-flow` (CreateActivityPopover,
+  empty-canvas notice), `e2e-wbs`, `e2e-activity-editor` (scope save bar), `e2e-staff`, `e2e-public`.
+  Clients **Clear** has no driver today (grep); if T0 confirms, the unit test is the evidence and the PR
+  says so.
+- **Docs:** #460 closed; `docs/COMPONENT_LIBRARY.md` (Button shaded state, the dimming list);
+  `docs/DESIGN_SYSTEM.md` §Buttons.
+- **Changeset:** `@repo/web` patch — "shaded buttons no longer let a click through to what is behind
+  them; some buttons that did not look shaded now do".
+- **Reviewers:** component-reviewer (contract, dimming list) before merge; **accessibility-reviewer on
+  the diff before release**, driving pointer, Enter and Space on shaded buttons (ADR-0111).
+
+---
+
+### Milestone M1b: Delete the caller strings; G1 makes the CVA the only home (#461)
+
+**Outcome:** no caller spells the shaded look; transient sites move from 50 % to 60 %.
+**Entry point:** n/a beyond M1a's — a visual consistency change; screenshots before/after in the PR.
+**Journey:** M1a's suites re-run; `e2e-public` covers the auth submits that move 50 → 60.
+
+> **Complexity:** S–M (wide, mechanical) · **Dependencies:** M1a
+> **Risks:** a deletion drops a non-shading class beside it → the diff is class-attribute-only and
+> reviewed as such; G1 under-matches → pinned fixtures.
+
+##### M1b-T1 — Deletions
+
+- Remove `aria-disabled:opacity-*` and `aria-disabled:hover:*` from every caller in T0's list (the seven
+  #461 sites, the transient sites, `gantt-columns-group.tsx:233`); transient sites keep only
+  `aria-disabled:pointer-events-none`. Delete `SHADED_BUTTON` (its sites take the per-site class from T0).
+- Update tests asserting caller strings: `copy-button.test.tsx:83-84`,
+  `ScheduleHealthPanel.test.tsx:436`, `diagnostics-panel.test.tsx:197` (assert behaviour/the CVA output).
+
+##### M1b-T2 — G1
+
+- Whole-file scan of `apps/web/src` (comments stripped, tests excluded) for `aria-disabled:opacity-` and
+  `aria-disabled:hover:`; allow-list `components/ui/button.tsx`, `components/ui/radio-card-group.tsx`,
+  `features/revision-compare/components/RevisionComparePanel.tsx`, `RevisionChangesView.tsx`, each with
+  a reason. Fixtures: a constant spelling is caught; a comment is not; an allow-listed file that no longer
+  exists fails.
+- **Docs:** #461 closed. **Changeset:** `@repo/web` patch — "the shaded state of in-flight buttons is
+  slightly less faint (50 % → 60 %)". **Reviewer:** component-reviewer.
 
 ---
 
 ### Milestone M2: A Refresh speaks once (staff console)
 
-**Outcome:** after Refresh or **Try again for all**, a screen-reader user hears one sentence.
-**Entry point:** `/staff` (as staff) → **Refresh** in the header; **Try again for all** in Status.
-**Journey:** `e2e-staff`, in the existing Refresh step: after Refresh, every `[aria-live="polite"]`
-inside a section is empty, and the page announcer holds `Refreshed. …`.
+**Outcome:** after Refresh or **Try again for all**, one polite sentence; a newly failed read still alerts.
+**Entry point:** `/staff` (as staff) → **Refresh**; **Try again for all** in Status.
+**Journey:** `e2e-staff`'s Refresh step: afterwards every section's `[aria-live="polite"]` is empty and
+the page announcer holds `Refreshed. …`.
 
-> **Complexity:** S · **Dependencies:** none (after M1 merges, to avoid rebasing three staff files)
-> **Risks:** the mute ends before a late query notification lands → mute ends in the existing `finally`
-> after `setRefreshed`'s task (`staff-console-screen.tsx:211-227`); a unit test drives a sentence change
-> one task after the refetch resolves. A box that newly fails inside a Refresh is unspoken → the
-> unreadable tail (US-2).
-> **Testing requirements:** `status-section.test.tsx`, `staff-console-screen.test.tsx`, `panel-copy`
-> unit, `e2e-staff`.
+> **Complexity:** S · **Dependencies:** M1b merged
+> **Risks:** unmute before the committed announcement → mute ended from that effect; strict-mode render
+> desync → re-baseline in an effect; background refetch inside the window is muted → stated in D8.
 
-##### Task M2-T1 — `StatusMuteProvider` and the re-baseline
+##### M2-T1 — `status-mute.tsx` and `StatusSection`
 
-- **Files:** `apps/web/src/components/ui/page/status-section.tsx` (+ barrel export), its test.
-- Context default `false`. A muted `announce="change"` section renders its sentence as plain text,
-  keeps the polite region empty, and re-baselines (latch reset). `settle` sections ignore it.
-- **Tests:** muted change → region text unchanged; unmute → still unchanged; next change → spoken;
-  `settle` under mute → spoken; no provider → identical DOM to today (pins every other caller).
-- **Complexity:** S
+- **Files:** `components/ui/page/status-mute.tsx` (`StatusMuteContext`, `useStatusMuted`,
+  `StatusMuteProvider`, docblock "why not a prop"), `index.ts` barrel, `status-section.tsx`, tests.
+- **Tests:** provider in isolation (default `false`); `StatusSection` inside `QueryPanel` under the
+  provider: muted change → region silent, plain text updated; unmute → silent; a change one task after
+  unmute → spoken; `settle` under mute → spoken; no provider → DOM identical to today.
 
-##### Task M2-T2 — The screen provides it; the page sentence counts failures
+##### M2-T2 — The screen
 
-- **Files:** `features/staff/ui/staff-console-screen.tsx` (wrap the four `SectionGroup`s),
-  `features/staff/model/panel-copy.ts` (`refreshedAnnouncement(headline, firstPageSize, unreadable)`),
-  their tests.
-- **Complexity:** S
+- **Files:** `features/staff/ui/staff-console-screen.tsx` (a separate `muted` state set with Refresh,
+  cleared in the effect that announces the committed `refreshed`; provider around the four groups),
+  `staff-console-screen.test.tsx` (one polite announcement per Refresh). **No copy change**
+  (`panel-copy.ts` untouched).
 
-##### Task M2-T3 — Docs, release
+##### M2-T3 — Docs, release
 
-- ADR-0178 **D8** (the mute and the re-baseline; amends D6's ADR-0143 D2 bullet); the CLAUDE.md §16
-  line is unchanged (the ADR's title does not change). `docs/COMPONENT_LIBRARY.md` StatusSection
-  contract. The staff plan's M3/M4 "Not folded / Not built" bullets gain "→ built in
-  `docs/specs/estate-polish-oct/` M2".
-- **Changeset:** `@repo/web` patch.
-- **Reviewers:** **accessibility-reviewer before release** (ADR-0111 — a live-region behaviour change),
-  **component-reviewer** (new export on the archetype barrel).
+- ADR-0178 **D8** (mute, effect-timed re-baseline, background changes muted, non-headline recovery
+  unspoken by acceptance); `docs/COMPONENT_LIBRARY.md` StatusSection contract; the staff plan's M3/M4
+  "not built" bullets point here.
+- **Changeset:** `@repo/web` patch. **Reviewers:** accessibility-reviewer before release (ADR-0111);
+  component-reviewer (new barrel export).
 
 ---
 
 ### Milestone M3: One "Page not found", and one 404 body (#459) — **conditional on Q1**
 
-**Outcome:** every unknown address, and a non-staff `/staff`, shows the same titled page with a way home;
-the API's unmapped-route 404 and the staff refusal are byte-identical.
+**Outcome:** a signed-in non-staff member cannot tell `/staff` from an unknown address on the settled
+page or in an API body; every lost reader gets a titled page with a way on.
 **Entry point:** any unknown URL, e.g. `/no-such-path`.
-**Journey:** `e2e-public` gains `{ path: '/no-such-path', heading: 'Page not found', primary: 'Go to
-SchedulePoint' }` in `URL_STATES` (`e2e-public/support.ts:73-100`), so it gets the suite's layout, reflow
-and axe passes at every viewport for free. `e2e-staff`'s member block (`staff.spec.ts:124-145`) gains the
-**parity step**: for `/staff`, `/staff/x`, `/no-such-path` and `/orgs/<slug>/nope`, capture
-`document.title`, the `main` element's normalised `innerHTML` and the `h1` text, and assert all four
-equal; then `request.get('/api/v1/staff/me')` and `request.get('/api/v1/no-such-route')` bodies equal.
+**Journey:** `e2e-public` adds `{ path: '/no-such-path', heading: 'Page not found', primary: 'Sign in' }`
+to `URL_STATES` (`e2e-public/support.ts:73-100`; signed-out label), gaining layout, reflow and axe at every
+viewport. `e2e-staff`'s member block (`staff.spec.ts:124-145`) adds the **parity step** on the settled
+state: `/staff`, `/staff/`, `/staff/x`, `/no-such-path`, `/orgs/<slug>/nope` → equal `document.title`,
+`<html lang>`, `<meta>` set, normalised `<main>` HTML, focused `<h1>`, link **Go to the home page**; then
+`GET`/`POST /api/v1/staff/me`, `GET /api/v1/staff/no-such-route`, `GET /api/v1/x` → equal body,
+`content-type`, `content-length` and security headers.
 
-> **Complexity:** S · **Dependencies:** none (after M2)
-> **Risks:** (1) root not-found mode changes how `_authed`'s `beforeLoad` interacts with an unknown
-> `/orgs/…` path → T0 drives it first and the spec's §0.3 is corrected if the reading was wrong;
-> (2) `AuthShell` pulls a chunk into the entry graph → compare the build's asset list before/after
-> (expected none: `SignInScreen` is already eager); (3) a client or test parses `Cannot GET` → grep
-> found only a comment (`test/revision-delta-m0.e2e-spec.ts:313-314`).
-> **Testing requirements:** unit for `NotFoundScreen`; filter spec; API e2e; the two journeys.
+> **Complexity:** S · **Dependencies:** M2 merged
+> **Risks:** root mode removes the shell for in-org mistypes (accepted; debt row filed) and may replace
+> a signed-out sign-in redirect with the 404 (changeset); a sign-in return-URL loop → T0 checks;
+> `AuthShell` adds a chunk → compare asset lists.
 
-##### Task M3-T0 — Drive the four URLs before changing anything
+##### M3-T0 — Measure before changing
 
-- Signed in and signed out, record title, landmarks and heading for `/no-such-path`, `/staff/x`,
-  `/orgs/<slug>/nope`, `/orgs/<slug>/plans/<id>/x`, and a non-staff `/staff`, and one `curl` of each API
-  404 body. Paste into the PR. **Complexity:** S
+- Signed in (non-staff) and signed out: title, landmarks, heading and focus for `/no-such-path`,
+  `/staff`, `/staff/`, `/staff/x`, `/orgs/<slug>/nope`, `/orgs/<slug>/plans/<id>/x`; follow the sign-in
+  `?redirect=` for an unknown URL to confirm no loop.
+- Supertest/curl as a signed-in non-staff member: unmapped `/api/v1/x`, `/api/v1/staff/no-such-route`,
+  `GET` and `POST /api/v1/staff/me` — body, `content-type`, `content-length`, security headers.
+- Record the grep for `NotFoundException`, `HttpStatus.NOT_FOUND` and `, 404)` across `apps/api/src`
+  and `apps/api/test`.
 
-##### Task M3-T1 — `NotFoundScreen` and the router
+##### M3-T1 — `NotFoundScreen` and the router
 
-- **Files:** `apps/web/src/components/layout/not-found-screen.tsx` (+ test), `app/router.tsx`
-  (`defaultNotFoundComponent`, `notFoundMode: 'root'`, docblock), `features/staff/ui/staff-console-screen.tsx`
-  (branch + title), `routes/staff.test.tsx`, `staff-console-screen.test.tsx`, `e2e-staff/staff.spec.ts:127,155`
-  (heading becomes "Page not found").
-- **Complexity:** S
+- **Files:** `components/layout/not-found-screen.tsx` (no props; TSDoc why) + `not-found-screen.test.tsx`
+  (role queries: `main`, `h1` focused, link name per session state — **Sign in** / **Go to the home
+  page** — and title); `app/router.tsx` (`defaultNotFoundComponent`, `notFoundMode: 'root'`, docblock
+  with the trade-off); `features/staff/ui/staff-console-screen.tsx` (branch + title);
+  `routes/staff.test.tsx`, `staff-console-screen.test.tsx` (identity 404, 5xx, network → the screen);
+  `e2e-staff/staff.spec.ts:127,155` (heading "Page not found").
 
-##### Task M3-T2 — The API's 404 body
+##### M3-T2 — The API's 404 body
 
-- **Files:** `apps/api/src/common/filters/all-exceptions.filter.ts` (`mapHttp`: 404 → `'Not found'`),
-  `all-exceptions.filter.spec.ts`, `apps/api/test/staff.e2e-spec.ts` (assert **bodies**, not just status,
-  against an unmapped route).
-- **Complexity:** S · run `scripts/e2e-local.sh api`.
+- **Files:** `common/filters/all-exceptions.filter.ts` (404 + `^Cannot [A-Z]+ /` → `'Not found'`),
+  `all-exceptions.filter.spec.ts` (Nest default → `Not found`, body contains no `/api`; a deliberate 404
+  message survives), `test/staff.e2e-spec.ts` (bodies and headers vs an unmapped route). Run the **full**
+  `scripts/e2e-local.sh api`.
 
-##### Task M3-T3 — Docs, release
+##### M3-T3 — Docs, release
 
-- `docs/TECH_DEBT.md` #459 closed (residue recorded: the pending-identity spinner, anonymous 401, staff
-  throttle — all inside security's Low); `docs/API.md:1453-1455` ("same status and body");
-  `docs/FRONTEND_ARCHITECTURE.md` routing (unknown URLs render `NotFoundScreen` at root);
-  `docs/BACKEND_ARCHITECTURE.md` error handling (Nest 404s carry a fixed message).
-- **Changesets:** `@repo/web` minor (a new screen every unknown URL reaches), `@repo/api` patch.
-- **Reviewers:** **security-reviewer** (closes #459), **accessibility-reviewer** (new page; ADR-0111 not
-  strictly triggered, but it is the page every lost reader meets), **api-reviewer** (error body).
+- `docs/TECH_DEBT.md`: #459 closed with the residue list (spec §2); **new row** — the in-shell not-found
+  for signed-in mistypes under `/orgs/<slug>/`. `docs/API.md:1453-1455` ("same status and body for a
+  signed-in non-staff member", plus residue); `docs/BACKEND_ARCHITECTURE.md` (Nest's default 404
+  message is not echoed); `docs/FRONTEND_ARCHITECTURE.md` (no route adds URL-level not-found markup);
+  `docs/COMPONENT_LIBRARY.md` (`NotFoundScreen`).
+- **Changesets:** `@repo/web` minor (new screen; signed-in in-org mistypes leave the shell; signed-out
+  deep mistypes may 404 rather than redirect), `@repo/api` patch.
+- **Reviewers:** security-reviewer (closes #459), accessibility-reviewer, api-reviewer, ux-reviewer
+  (link copy).
 
 ---
 
 ## Sequencing & slices
 
-M1 → M2 → M3, each releasable alone. If Q1 is answered no, M3 is dropped and nothing else changes. After
-the last merge, write `docs/HANDOFF.md` (CLAUDE.md §19.14). `pnpm prepush` before every push; the e2e
-halves named per milestone.
+M1a → M1b → M2 → M3, each releasable alone. If Q1 is no, M3 is dropped and nothing else changes.
+`pnpm prepush` before every push plus the e2e halves named per milestone. After the last merge, write
+`docs/HANDOFF.md` (CLAUDE.md §19.14).
 
 ## Definition of Done (per task)
 
-Each PR meets the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md): code, tests,
-docs, security, performance, accessibility, Docker build, CI green (deduped check runs on the current
-head, CLAUDE.md §19.9), changeset, version impact.
+Each PR meets the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md): code, tests, docs,
+security, performance, accessibility, Docker build, CI green (deduped check runs on the current head,
+CLAUDE.md §19.9), changeset, version impact.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                            | Likelihood | Impact | Mitigation                                                                      |
-| ------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------- |
-| A `<Button>` that was never meant to dim starts dimming (M1) | med        | low    | T0 census; component-reviewer signs off the list                                |
-| A resting site becomes clickable without a guard (M1)        | low        | med    | Unit per site; journey `click({ trial: true })` then assert no change           |
-| Existing journeys depend on pointer-inert buttons (M1)       | med        | low    | Run every listed suite locally before push                                      |
-| Mute window misses a late query notification (M2)            | low        | low    | Mute ends after `setRefreshed`'s task; unit pins the ordering                   |
-| §0.3's reading of fuzzy not-found is wrong (M3)              | med        | low    | T0 drives it before any change; root mode makes the outcome uniform anyway      |
-| A Surface-sheet step is affected after all                   | low        | med    | §4.4 table; any milestone that finds otherwise updates the sheet in the same PR |
+| Risk / assumption                                              | Likelihood | Impact | Mitigation                                                                                |
+| -------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------- |
+| A shaded submit becomes clickable or double-submits (M1a)      | med        | high   | `onClick` + `onSubmit` guards; `aria-busy:pointer-events-none` for pending; unit per site |
+| A greyed button becomes hoverable with no reason to show (M1a) | med        | low    | T0 reason census; three declared end states; journey asserts the reason                   |
+| A `<Button>` that was never meant to dim starts dimming (M1a)  | med        | low    | Dimming list signed off by component-reviewer                                             |
+| `not-aria-disabled:` does not compile as expected (M1a)        | low        | low    | Checked in built CSS; documented restatement fallback                                     |
+| The 50 → 60 % change is noticed (M1b)                          | high       | low    | Stated in the changeset with screenshots                                                  |
+| Mute window misses or swallows a late notification (M2)        | low        | low    | Ended from the committed-announcement effect; post-unmute test; D8 states it              |
+| Signed-in in-org mistype loses the shell (M3)                  | high       | low    | Accepted trade-off; changeset; debt row for the in-shell variant                          |
+| §0.3's reading of fuzzy not-found is wrong (M3)                | med        | low    | T0 drives it first; root mode makes the outcome uniform                                   |
+| A Surface-sheet step turns out to be affected                  | low        | med    | §4.4 table; the PR that finds it updates the sheet in the same PR                         |
