@@ -13,8 +13,8 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 
 - Address to open: ______________________________ (the live site, a release that includes the
   `pointer-check` page)
-- Plan to open: ______________________________ (it has grouped "summary" rows, each with a small
-  arrow at its left)
+- Plan to open: any plan with grouped "summary" rows (each has a small arrow at its left). A practice
+  plan is best, because dragging a bar really moves it; otherwise press **Undo** after each drag.
 - [ ] Sign in, open the plan, and open the **Gantt** view (the bar chart with a table on its left).
 - [ ] Press **Start editing** at the top. Nothing below works until you do.
 
@@ -61,6 +61,11 @@ Items 7 and 8 are extra and only needed here: they decide whether larger touch a
       When: [ ] while holding [ ] after lifting
 - [ ] 5. [ ] text box opened [ ] nothing [ ] other: __________
 - [ ] 6. Missed, out of 10: dots ____ / 10 arrow ____ / 10
+- [ ] **7. Tap a bar once, then press on its right-hand end and drag it slightly, ten times** (press
+      **Undo** after each).
+      Times it stretched the bar, out of 10: ____ / 10 Times something else happened: ____ / 10
+- [ ] **8. Tap a column heading in the table (for example "Start") ten times to sort by it.**
+      Times it missed or hit the wrong thing, out of 10: ____ / 10
 
 ## Stylus pass (about 5 minutes, either posture)
 
