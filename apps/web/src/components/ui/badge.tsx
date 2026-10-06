@@ -26,6 +26,11 @@ const badgeVariants = cva('inline-flex items-center rounded-full font-medium whi
       neutral: 'bg-muted text-foreground',
       critical: 'bg-destructive/10 text-destructive-text',
       warning: 'bg-warning/15 text-warning-text',
+      // **For a state that is neither good nor bad** — "Checking", "Could not be read" — which the
+      // three fills above cannot say: `neutral` reads as a quiet success and the other two as an
+      // alarm. A border and the surface's own ink, so it asserts no tone. The ink is `--foreground`
+      // on the card, a pair the contrast census asserts (`token-contrast.test.ts`).
+      outline: 'border border-border text-foreground',
     },
     size: {
       sm: 'px-1.5 py-0.5 text-micro',

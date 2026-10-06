@@ -189,7 +189,7 @@ describe('DiagnosticsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy for the record' }));
 
-    expect(await screen.findByText(/Could not reach the clipboard/)).toBeInTheDocument();
+    expect(await screen.findByText(/Couldn’t copy\. Select the text/)).toBeInTheDocument();
   });
 
   it('says what a non-zero count means, beside the count', () => {
@@ -252,7 +252,7 @@ describe('DiagnosticsPanel', () => {
 
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText.mock.calls[0]![0]).toContain('SchedulePoint staff diagnostics');
-    expect(await screen.findByText('Report copied.')).toBeInTheDocument();
+    expect(await screen.findByText('Copied.')).toBeInTheDocument();
   });
 
   it('keeps focus on the pressed button THROUGH the relabel, not merely across a no-op', () => {

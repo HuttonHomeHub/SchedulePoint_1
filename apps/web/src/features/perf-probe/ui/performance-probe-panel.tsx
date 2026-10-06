@@ -37,12 +37,12 @@ import { Alert } from '@/components/ui/alert';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CopyButton } from '@/components/ui/copy-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { StatusSection } from '@/components/ui/page';
+import { StatusSection, SubSection } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
-import { useClipboardCopy, type ClipboardCopyState } from '@/hooks/use-clipboard-copy';
 import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 
 /**
@@ -202,16 +202,6 @@ export function PerformanceProbePanel({
    */
   const announce = useAnnounce();
   const [announcedVerdict, setAnnouncedVerdict] = useState('');
-  // **The rejection used to set `copied` back to `false`** — indistinguishable from never having
-  // pressed the button, which is precisely the defect `diagnostics-panel.tsx` records having had
-  // fixed by the M4 accessibility review, in its own file, while this sibling kept it.
-  const clipboard = useClipboardCopy({
-    copiedMessage: 'Full report copied to the clipboard.',
-    failedMessage: 'Could not reach the clipboard. Select the report text and copy it by hand.',
-  });
-  // Destructured because it is the STABLE half. Depending on the whole object would re-create the
-  // sweep callback whenever a copy settles, which is a different subject entirely.
-  const { reset: resetCopyState } = clipboard;
   const [machineLabel, setMachineLabel] = useState('');
   // The plan-loading section's sentence for the panel's one polite region; see `LoadingProbeSection`.
   const [loadingStatus, setLoadingStatus] = useState('');
@@ -431,7 +421,6 @@ export function PerformanceProbePanel({
       // later sweep summary in the polite region, so a "NOT recorded" warning was never announced.
       setLoadingStatus('');
       setAnnouncedVerdict('');
-      resetCopyState();
       cancelledRef.current = false;
       setRunning(true);
       setProgress('Preparing…');
@@ -528,11 +517,14 @@ export function PerformanceProbePanel({
         setProgress('');
       }
     },
-    [announce, machineLabel, record, refreshHistory, resetCopyState],
+    [announce, machineLabel, record, refreshHistory],
   );
 
-  const copy = useCallback(() => {
-    if (!outcome) return;
+  // **The text, not the act of copying.** `CopyButton` owns the clipboard, the wording and the
+  // confirmation (and clears it when `outcome` is replaced by the next sweep), so this only says what
+  // the report IS.
+  const copyText = useCallback(() => {
+    if (!outcome) return '';
     // One block per sitting, its steps in the order they ran — the operator pastes ONE thing into
     // a document, not four. A step that was refused or never taken says so in its own line rather
     // than being omitted, because a block missing a reading is indistinguishable from a sweep that
@@ -550,8 +542,8 @@ export function PerformanceProbePanel({
             ),
       )
       .join('\n\n');
-    clipboard.copy(text);
-  }, [clipboard, machineLabel, outcome]);
+    return text;
+  }, [machineLabel, outcome]);
 
   // **From the outcome's own steps, by the same rule the dialog and the button both read.** The
   // alternative — the panel deciding separately what "missing" means — is two definitions of one
@@ -744,8 +736,7 @@ export function PerformanceProbePanel({
         {outcome !== null && (
           <SittingResult
             outcome={outcome}
-            onCopy={copy}
-            copyState={clipboard.state}
+            copyText={copyText}
             onRetry={retryStore}
             retrying={retrying}
             missingCount={missing.length}
@@ -1024,7 +1015,7 @@ function ProbeResult({ outcome }: { outcome: ProbeOutcome }): React.ReactElement
       ) : (
         outcome.limbs.map((limb) => (
           <div key={limb.limbId} className="border-border rounded-md border p-3">
-            <h3 className="font-medium">{limb.limbLabel}</h3>
+            <SubSection title={limb.limbLabel} />
             <p className="text-muted-foreground mt-1 text-sm">{limb.sceneSummary}</p>
             <p className="text-muted-foreground text-sm">
               {limb.visibleBars} bars on screen at {limb.pxPerDay.toFixed(2)} px/day · floor{' '}
@@ -1098,16 +1089,14 @@ function recordedCount(outcome: SweepOutcome): number {
 
 function SittingResult({
   outcome,
-  onCopy,
-  copyState,
+  copyText,
   onRetry,
   retrying,
   missingCount,
   onRunMissing,
 }: {
   outcome: SweepOutcome;
-  onCopy: () => void;
-  copyState: ClipboardCopyState;
+  copyText: () => string;
   onRetry: (key: string, body: ProbeResultBody) => void;
   retrying: ReadonlySet<string>;
   /** How many readings were refused or never taken. Counted by the caller, from one definition. */
@@ -1137,9 +1126,7 @@ function SittingResult({
 
       {outcome.steps.map((step) => (
         <div key={stepKey(step.step)} className="space-y-2">
-          {outcome.steps.length > 1 && (
-            <h3 className="text-muted-foreground text-sm">{stepLabel(plan, step.step)}</h3>
-          )}
+          {outcome.steps.length > 1 && <SubSection title={stepLabel(plan, step.step)} />}
 
           {step.status === 'not taken' && (
             <Alert purpose="event" tone="info">
@@ -1257,17 +1244,11 @@ function SittingResult({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={onCopy}>
-          Copy full report
-        </Button>
-        {/* The visible cue only — `useClipboardCopy` announces through the app's one polite region,
-            so a second `aria-live` here would read the same sentence twice to the same reader. */}
-        <span className="text-muted-foreground text-sm">
-          {copyState === 'copied' ? 'Report copied.' : ''}
-          {copyState === 'failed' ? 'Could not copy the report.' : ''}
-        </span>
-      </div>
+      {/* `resetKey`: a new sweep replaces `outcome`, and "Copied." beside a report that has since been
+          replaced describes a clipboard holding the PREVIOUS sitting. */}
+      <CopyButton subject="Full report" text={copyText} resetKey={outcome}>
+        Copy full report
+      </CopyButton>
     </div>
   );
 }

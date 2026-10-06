@@ -858,6 +858,21 @@ describe('the diagram grid is readable on both of its grounds', () => {
   });
 });
 
+/**
+ * **The outline `Badge`'s label** ("Checking", "Could not be read"). It paints no fill, so its ink
+ * sits on whatever holds it — on the staff console, a section card. `--card` is a reset outside every
+ * scope (ADR-0097), so it is not the `--background` the pair above asserts, and a scope's
+ * `--foreground` is only legible on it where the scope's ground is light. The `page` scope is the one
+ * cards live in. The border is the pill's edge and not its meaning (the word is), so it falls under
+ * the decorative-border note in the matrix below.
+ */
+describe.each(THEME_SELECTORS)('%s — an outline Badge on a section card', (theme) => {
+  it('is legible in the page scope', () => {
+    const tokens = resolve(theme, 'page');
+    expect(ratio(tokens, '--card', '--foreground')).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

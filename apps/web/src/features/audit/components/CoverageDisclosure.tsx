@@ -1,8 +1,4 @@
-import { ChevronDown } from 'lucide-react';
-import { useId, useState } from 'react';
-
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Disclosure } from '@/components/ui/disclosure';
 
 /**
  * **The coverage rule: folded away for a sighted reader, always announced to a screen reader.**
@@ -35,6 +31,10 @@ import { cn } from '@/lib/utils';
  *
  * A `<button aria-expanded>` rather than `<summary>`, because `<summary>` only exists inside
  * `<details>` and `<details>` is the thing that cannot hold this content.
+ *
+ * **The mechanism now lives in `components/ui/disclosure.tsx`** (staff console redesign M2), with
+ * `collapsed="described"` — the mode this component's measurement is the reason for. This is a
+ * caller: the label and the id are all it decides.
  */
 export function CoverageDisclosure({
   contentId,
@@ -44,50 +44,14 @@ export function CoverageDisclosure({
   contentId: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  const [open, setOpen] = useState(false);
-  const labelId = useId();
-
   return (
-    <div className="mt-3">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        id={labelId}
-        aria-expanded={open}
-        aria-controls={contentId}
-        onClick={() => setOpen((previous) => !previous)}
-        className="text-muted-foreground -ml-3"
-      >
-        {/*
-          **A chevron, because a bold phrase on its own line reads as a heading with missing
-          content.** The product owner's screenshot shows "What this records" sitting above the
-          filter block with nothing beneath it, and nothing about it says it is pressable.
-
-          **Only the visual layer changes here.** `aria-expanded`, `aria-controls` and the
-          `sr-only`-not-`hidden` rule below are untouched — those mechanics are correct and were
-          established by a CDP measurement recorded in this file's own docblock, so the existing
-          test passing unchanged is what proves this did not disturb them. The icon is
-          `aria-hidden`: the state is already on the button, and announcing it twice is how a
-          reader hears "expanded" and then "chevron".
-        */}
-        <ChevronDown
-          aria-hidden="true"
-          className={cn('size-4 transition-transform', open && 'rotate-180')}
-        />
-        What this records
-      </Button>
-      {/* `sr-only` when collapsed, NOT `hidden` and NOT unmounted: this element is the
-          `aria-describedby` target, so it has to stay in the accessibility tree whatever the
-          toggle says. Clipped is the one state that hides it from sight while leaving it
-          announceable — verified rather than assumed, in the same probe that disproved the
-          `<details>` version. */}
-      <div
-        id={contentId}
-        className={open ? 'text-muted-foreground mt-2 flex flex-col gap-2 text-sm' : 'sr-only'}
-      >
-        {children}
-      </div>
-    </div>
+    <Disclosure
+      label="What this records"
+      collapsed="described"
+      contentId={contentId}
+      className="mt-3"
+    >
+      {children}
+    </Disclosure>
   );
 }

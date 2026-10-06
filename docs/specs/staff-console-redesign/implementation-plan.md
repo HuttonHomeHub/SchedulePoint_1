@@ -292,6 +292,44 @@ Performance → **Check the probe works** (overlay); `/staff` → Diagnostics �
   hover-cancel pair is `aria-disabled:hover:bg-background aria-disabled:hover:text-foreground` and is
   outline-variant-specific. `verdictFor` is exported from `performance-probe-panel.tsx`.
 
+#### M2 record (2026-10-06)
+
+**Landed.** ADR-0178 filed (Proposed; accepted at M3's close) with its one §16 line, its `docs/adr/README.md`
+row and a written exemption in `scripts/adr-coverage.json` (R1: an operator surface has no roadmap theme).
+What the next milestone needs:
+
+- **T1.** `HeadingLevelContext` (`page/heading-level.tsx`, default 2, type stops at `h4`). `SectionCard` reads it
+  and gives its body `deeper(level)`; `CardTitle` accepts `level` 4. `SectionGroup` is an unnamed `<section>`
+  (not a landmark) and the `h2`. `SubSection` takes its rank from context and now allows no children (a
+  caption). `heading-level.test.tsx` renders a card outside any group and asserts the same DOM, and walks a
+  grouped page for skipped levels. The staff archetype gate refuses `<h3>`/`<h4>`; **verified red** against the
+  tree (named `diagnostics-panel.tsx`, `performance-probe-panel.tsx` x2, `loading-probe-section.tsx` x2). Fixed
+  by `SubSection` at the first two; **`loading-probe-section.tsx` is a named exception with its count pinned**
+  (its `h3` names the `<section>` through `aria-labelledby` and its result `h4` takes programmatic focus, which
+  `SubSection` does not carry): **M4 resolves it** when it splits the panel.
+- **T2.** `Disclosure` (`components/ui/disclosure.tsx`) with a required `collapsed`; `hidden` omits
+  `aria-controls` while folded. `CoverageDisclosure` is a thin caller and its own tests pass unchanged.
+  `ConditionStrip` renders `Alert purpose="condition"`, no bold lead-in.
+- **T3.** `KeyValueList`, `Badge` `outline` (contrast pair asserted in the `page` scope only: `--card` is a reset
+  outside every scope, so the all-scope matrix could not hold it), `DataTable` `Column.wrap`, `CopyButton`.
+  **Four** staff-surface Copy sites, not five (diagnostics, probe "Copy full report", sittings, loading); the
+  reason is visible text beside a shaded button. One wording: "Copied." / "Couldn’t copy. Select the text and copy
+  it yourself." The `e2e-staff` assertion that read "Report copied." reads "Copied.". `CLIPBOARD_FAILED_SENTENCE`
+  was removed with its last caller. `QueryPanel` gained optional `isFetching` (`aria-busy`, via a small `busy`
+  widening of `SectionCard`/`StatusSection`); stale data is shown while a read is in flight and withheld the
+  moment it fails (tested); `settledStatus` is documented as pure; the id-omitted branch is tested.
+- **T4.** `formatRelative`/`exactInstant` moved to `lib/relative-time.ts` (the overview barrel re-exports them).
+  The six `toLocale*` calls in `features/staff/ui` are now `formatTimestamp`; the three in `features/perf-probe`
+  (`sitting-index.ts`, `probe-sittings.tsx` x2) are **not** touched and belong to M4's sittings work.
+- **T5.** `COMPONENT_LIBRARY.md`, `DESIGN_SYSTEM.md` (Badge) and `UX_STANDARDS.md` (How-to-fix, non-sticky nav)
+  updated; changeset (minor, web). `page-frame.structural.test.ts` now says `routes/staff.tsx` must stay a bare
+  re-export. **Not yet done, owed before release:** accessibility-reviewer on `Disclosure`, `SectionGroup`,
+  heading context, `SubSection`, `ConditionStrip`, `CopyButton`, and component-reviewer on each primitive.
+- **For M3:** `StatusSection` announce-on-change (D-6) is **not** in M2 (it is a behaviour change, not a
+  primitive). Nothing in `/staff` uses `SectionGroup`, `KeyValueList`, `ConditionStrip` or `Disclosure` yet; the
+  first adopter is M3. `ConditionStrip`'s `howToFix` is `Disclosure collapsed="hidden"`, so its content is absent
+  from the DOM until opened (a journey must press it before asserting `MAIL_SMTP_URL`).
+
 ---
 
 ### Milestone M2: Shared primitives and the ADR

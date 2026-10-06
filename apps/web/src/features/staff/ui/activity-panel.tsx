@@ -6,6 +6,7 @@ import {
   groupActivity,
   type ActivityGroup,
 } from '@/features/staff/model/activity-rows';
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * What staff have done.
@@ -44,7 +45,7 @@ function ActivityTable({ rows }: { rows: StaffActivityRow[] | undefined }): Reac
   const columns: Column<ActivityGroup>[] = [
     {
       header: 'When',
-      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cell: (row) => formatTimestamp(row.occurredAt),
       cellClassName: 'py-2 pr-4 md:w-52',
     },
     {

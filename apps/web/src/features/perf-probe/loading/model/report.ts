@@ -161,6 +161,3 @@ export function coldReloadWarning(reading: LoadingReading): string | null {
 /** What a failed run says to a reader. The raw error goes to the console, never to the screen. */
 export const FAILURE_SENTENCE =
   'The measurement could not finish. Press Measure plan loading to try again.';
-
-export const CLIPBOARD_FAILED_SENTENCE =
-  'Could not reach the clipboard. The numbers are below — copy them by hand.';

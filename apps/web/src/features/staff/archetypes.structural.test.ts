@@ -135,6 +135,31 @@ describe('the staff console is built from the archetypes', () => {
     }
   });
 
+  /**
+   * **A sub-heading is `SubSection`'s, and its rank is derived from where it sits** (staff console
+   * redesign M2, ADR-0178). Six hand-rolled `<h3>`/`<h4>`s on this surface were each their own size
+   * and weight, each a rank chosen by its author; with `SectionGroup` above them, a literal `<h3>`
+   * would also be the wrong rank (a card inside a group is itself an `h3`).
+   *
+   * **The two named exceptions are one file, and the reason is a capability `SubSection` does not
+   * have:** the loading section's heading names its own `<section>` (`aria-labelledby`) and its
+   * result heading takes programmatic focus (a ref and `tabIndex={-1}`). Widening a new primitive's
+   * contract to carry both for one caller is the wrong trade; the panel is split in M4, which is
+   * where they are resolved. The count is pinned so a third cannot arrive under the exception.
+   */
+  const SUBHEADING_EXCEPTIONS: Record<string, number> = {
+    '/features/perf-probe/ui/loading-probe-section.tsx': 2,
+  };
+
+  it('hand-rolls no sub-heading beyond the named exceptions (SubSection owns the rank)', () => {
+    const found = Object.fromEntries(
+      sources
+        .map((file) => [file.path, (file.text.match(/<h[34][\s>]/g) ?? []).length] as const)
+        .filter(([, count]) => count > 0),
+    );
+    expect(found).toEqual(SUBHEADING_EXCEPTIONS);
+  });
+
   it.each(HAND_ROLLED)('hand-rolls no $name', ({ pattern }) => {
     const offenders = sources.filter((file) => pattern.test(file.text)).map((file) => file.path);
     expect(offenders).toEqual([]);

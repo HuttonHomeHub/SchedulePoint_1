@@ -305,6 +305,12 @@ entry stops being needed.
     one case with a named trigger to revisit (a report about the taken-over or
     take-over states).
 - Breadcrumbs for anything two or more levels deep.
+- **A long single page with several groups gets an "On this page" list, and it is not sticky**
+  (ADR-0178). A sticky list covers a tenth or more of a phone viewport and can hide the focused
+  target (WCAG 2.4.11). Each group is a `SectionGroup` with a "Back to top" link.
+- **A condition says what is wrong in plain words and puts the remedy behind "How to fix"**
+  (`ConditionStrip`). Environment-variable names and log keys appear only inside the disclosure,
+  never in the sentence a reader scans.
 - Deep-linkable everything: filters, tabs, and pagination live in the URL so a
   view can be shared and restored.
 

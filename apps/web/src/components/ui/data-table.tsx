@@ -74,6 +74,17 @@ export interface Column<T> {
    * merge buys nothing this needs.
    */
   width?: 'fit' | 'bounded' | 'auto';
+  /**
+   * `'anywhere'` lets the cell break inside a word (`overflow-wrap: anywhere`), for a column whose
+   * values are one long unbreakable token — an identifier, an email address, a hash.
+   *
+   * **`anywhere` and not `break-words`, for the reason `CardTitle` records:** only `anywhere` lowers
+   * the cell's min-content width, which is what decides a table column's width, so only it keeps
+   * such a value from widening the whole table past its scroll region. Composed like `width` — the
+   * class is appended to the column's own classes rather than replacing them — and it is **not** a
+   * `cellClassName` merge, which ADR-0145 M4 declined for seven deliberate overrides.
+   */
+  wrap?: 'anywhere';
 }
 
 /**
@@ -133,12 +144,20 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
  * who genuinely wants their own cap says `width: 'auto'` and owns it.
  */
 function headClassesOf<T>(column: Column<T>): string {
-  return cn(column.headClassName ?? 'py-2 pr-4 font-medium', WIDTH_CLASSES[column.width ?? 'auto']);
+  return cn(
+    column.headClassName ?? 'py-2 pr-4 font-medium',
+    WIDTH_CLASSES[column.width ?? 'auto'],
+    column.wrap === 'anywhere' && 'wrap-anywhere',
+  );
 }
 
 /** A column's cell classes, its declared width composed with whatever the caller passed. */
 function cellClassesOf<T>(column: Column<T>): string {
-  return cn(column.cellClassName ?? 'py-2 pr-4', WIDTH_CLASSES[column.width ?? 'auto']);
+  return cn(
+    column.cellClassName ?? 'py-2 pr-4',
+    WIDTH_CLASSES[column.width ?? 'auto'],
+    column.wrap === 'anywhere' && 'wrap-anywhere',
+  );
 }
 
 /**

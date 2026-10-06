@@ -1,4 +1,4 @@
-import { useCallback, useId } from 'react';
+import { useCallback } from 'react';
 
 import { useStaffDiagnostics, type StaffDiagnosticRow } from '../api/staff-diagnostics';
 import {
@@ -11,9 +11,10 @@ import {
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { StatusSection } from '@/components/ui/page';
+import { CopyButton } from '@/components/ui/copy-button';
+import { StatusSection, SubSection } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
-import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * The Diagnostics panel — a staff member presses one control and gets a count (ADR-0140).
@@ -39,7 +40,6 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  */
 export function DiagnosticsPanel(): React.ReactElement {
   const query = useStaffDiagnostics();
-  const copyBlockedId = useId();
 
   const running = query.isFetching;
 
@@ -58,31 +58,11 @@ export function DiagnosticsPanel(): React.ReactElement {
    */
   const result = running || query.isError ? undefined : query.data;
 
-  // **The rejection branch this file used to own alone now lives in the shared hook.** Its comment
-  // recorded the M4 accessibility review finding that setting `copied` back to `false` is
-  // indistinguishable from never having pressed the button (WCAG 4.1.3) — and three sibling call
-  // sites still carried exactly that. Moving the fix into `useClipboardCopy` is what stops the
-  // fourth from arriving.
-  const clipboard = useClipboardCopy({
-    copiedMessage: 'Diagnostics report copied to the clipboard.',
-    failedMessage: 'Could not reach the clipboard. The numbers are below — copy them by hand.',
-  });
-
-  const copy = useCallback(() => {
-    // The guard the shading promises. A shaded control that still fires is a shading in appearance
-    // only, which is worse than none because it looks considered.
-    if (result === undefined) return;
-    clipboard.copy(formatDiagnosticsReport(result));
-  }, [clipboard, result]);
-
   const run = useCallback(() => {
-    // A shaded control that still fires is a shading in appearance only — the same rule as Copy.
+    // A shaded control that still fires is a shading in appearance only.
     if (running) return;
-    // Clearing the copy state on a new run rather than leaving it: "Report copied." beside numbers
-    // that have since been replaced describes a clipboard holding the PREVIOUS reading.
-    clipboard.reset();
     void query.refetch();
-  }, [clipboard, query, running]);
+  }, [query, running]);
 
   return (
     <StatusSection title="Diagnostics" status={diagnosticsStatus(result)}>
@@ -108,40 +88,21 @@ export function DiagnosticsPanel(): React.ReactElement {
           {running ? 'Running…' : 'Run diagnostics'}
         </Button>
 
-        <Button
-          variant="outline"
-          aria-disabled={result === undefined}
-          aria-describedby={result === undefined ? copyBlockedId : undefined}
-          // **No `pointer-events-none`: this is shaded from first paint, until the first run** (#458).
-          // `pointer-events: none` makes the pointer see whatever is behind the button, so the reason
-          // linked above was unreachable by hover. The hover fill is cancelled instead, and `copy`
-          // refuses the press.
-          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
-          onClick={copy}
+        {/* **A new run clears the confirmation** (`resetKey`): "Copied." beside numbers that have since
+            been replaced describes a clipboard holding the PREVIOUS reading. `result` is undefined
+            for the whole of a run, so the key changes the moment one starts. */}
+        <CopyButton
+          subject="Diagnostics report"
+          text={result === undefined ? null : () => formatDiagnosticsReport(result)}
+          resetKey={result}
+          unavailableReason={
+            running
+              ? 'Wait for this run to finish — copying now would take the previous reading.'
+              : 'Run the diagnostics first — there is nothing to copy yet.'
+          }
         >
           Copy for the record
-        </Button>
-        {result === undefined ? (
-          // An `sr-only` SIBLING rather than text folded into the button, or the reason joins the
-          // accessible name and a screen-reader user hears the action and its refusal as one
-          // run-on label (ADR-0082, ADR-0117's `purpose` distinction).
-          <span id={copyBlockedId} className="sr-only">
-            {running
-              ? 'Wait for this run to finish — copying now would take the previous reading.'
-              : 'Run the diagnostics first — there is nothing to copy yet.'}
-          </span>
-        ) : null}
-
-        {/* **Not a live region any more, and that is the point of the shared hook.** It announces
-            through the app's one polite region, so a second `aria-live` here would read the same
-            sentence twice to the same reader. What stays is the visible cue a sighted user needs,
-            which the announcement cannot give them. */}
-        <span className="text-muted-foreground text-sm">
-          {clipboard.state === 'copied' ? 'Report copied.' : ''}
-          {clipboard.state === 'failed'
-            ? 'Could not reach the clipboard. The numbers are below — copy them by hand.'
-            : ''}
-        </span>
+        </CopyButton>
       </div>
 
       {running ? <Spinner label="Running diagnostics…" /> : null}
@@ -159,8 +120,8 @@ export function DiagnosticsPanel(): React.ReactElement {
             <DiagnosticResult key={row.id} row={row} />
           ))}
           <p className="text-muted-foreground text-xs">
-            Taken {new Date(result.takenAt).toLocaleString()} by API {result.apiVersion}. Both are
-            the server&rsquo;s — a reading pasted into a record is only comparable with one taken a
+            Taken {formatTimestamp(result.takenAt)} by API {result.apiVersion}. Both are the
+            server&rsquo;s — a reading pasted into a record is only comparable with one taken a
             release later if it says which release produced it, and the block the Copy button
             produces carries the exact timestamp rather than this local rendering of it.
           </p>
@@ -179,14 +140,13 @@ export function DiagnosticsPanel(): React.ReactElement {
  */
 function DiagnosticResult({ row }: { row: StaffDiagnosticRow }): React.ReactElement {
   return (
-    <div className="space-y-1">
-      <h3 className="text-sm font-medium">{row.label}</h3>
+    <SubSection title={row.label}>
       <p className="text-sm">{diagnosticSentence(row)}</p>
       {/* What a non-zero count MEANS, beside the count rather than in a footnote: without it "17 of
           1,284" reads as "17 activities are broken right now", which is the misreading this panel
           is most likely to produce and the one it can least afford. */}
       <p className="text-muted-foreground text-xs">{natureSentence(row)}</p>
       <p className="text-muted-foreground text-xs">{diagnosticBreakdown(row)}</p>
-    </div>
+    </SubSection>
   );
 }

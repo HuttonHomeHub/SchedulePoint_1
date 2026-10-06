@@ -8,13 +8,20 @@ interface Row {
 }
 
 function panel(
-  query: { isPending: boolean; isError: boolean; data: Row | undefined },
+  query: {
+    isPending: boolean;
+    isError: boolean;
+    data: Row | undefined;
+    isFetching?: boolean;
+  },
   refetch = vi.fn(),
+  // `null`, not `undefined`: a default parameter would swallow an explicit `undefined`.
+  id: string | null = 'counts-section',
 ): React.ReactElement {
   return (
     <QueryPanel
       title="Counts"
-      id="counts-section"
+      {...(id === null ? {} : { id })}
       query={{ ...query, refetch }}
       skeleton={<p>skeleton slot</p>}
       errorLabel="Could not read counts."
@@ -71,5 +78,34 @@ describe('QueryPanel', () => {
   it('is a named section carrying the anchor id', () => {
     render(panel({ isPending: true, isError: false, data: undefined }));
     expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('id', 'counts-section');
+  });
+
+  it('omits the id when none is given, rather than rendering an empty one', () => {
+    render(panel({ isPending: true, isError: false, data: undefined }, vi.fn(), null));
+    const section = screen.getByRole('region', { name: 'Counts' });
+    expect(section).not.toHaveAttribute('id');
+    expect(section).not.toHaveAttribute('tabindex');
+  });
+
+  it('keeps earlier data visible and marks the section busy while a refetch is in flight', () => {
+    render(panel({ isPending: false, isError: false, data: { n: 4 }, isFetching: true }));
+    expect(screen.getByText('value 4')).toBeInTheDocument();
+    expect(screen.queryByText('skeleton slot')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('is not busy when idle, and does not say busy when no isFetching is passed', () => {
+    const { rerender } = render(panel({ isPending: false, isError: false, data: { n: 4 } }));
+    expect(screen.getByRole('region', { name: 'Counts' })).not.toHaveAttribute('aria-busy');
+    rerender(panel({ isPending: false, isError: false, data: { n: 4 }, isFetching: false }));
+    expect(screen.getByRole('region', { name: 'Counts' })).not.toHaveAttribute('aria-busy');
+  });
+
+  it('withholds placeholder data the moment the read fails, while still saying a retry is in flight', () => {
+    // A refetch that fails while earlier (placeholder) data is still held: the error wins.
+    render(panel({ isPending: false, isError: true, data: { n: 4 }, isFetching: true }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText(/value/)).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
   });
 });

@@ -1,10 +1,15 @@
 import { useId } from 'react';
 
+import { HeadingLevelContext, deeper, useHeadingLevel } from './heading-level';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export interface SectionCardProps {
-  /** The section's heading. Rendered as an `<h2>` — see below for why the archetype decides that. */
+  /**
+   * The section's heading. Rendered as an `<h2>`, or one rank deeper inside a `SectionGroup` — see
+   * below for why the archetype decides that.
+   */
   title: React.ReactNode;
   /** One line saying what the section holds, when the title alone is not enough. */
   description?: React.ReactNode;
@@ -87,6 +92,12 @@ export interface SectionCardProps {
    * any other, and `Card` already spreads its rest props onto the element.
    */
   ref?: React.Ref<HTMLElement> | undefined;
+  /**
+   * The content is being refreshed — `aria-busy` on the section. Added for `StatusSection`, whose
+   * panels keep earlier figures on screen while a refetch is in flight; nothing else passes it, so
+   * every other consumer's DOM is unchanged.
+   */
+  busy?: boolean;
 }
 
 /**
@@ -94,8 +105,10 @@ export interface SectionCardProps {
  *
  * **The archetype owns the heading rank, and that is the point.** `CardTitle` defaults to `<h1>`
  * because eleven existing call sites are a page's only heading (see its docblock). A section inside
- * a page is not that, so this passes `level={2}` once, here — rather than asking sixteen screens to
- * remember. Getting it wrong in either direction is invisible on screen and wrong in the heading
+ * a page is not that, so this passes the context's rank once, here — rather than asking sixteen
+ * screens to remember. **The rank is `2` unless a `SectionGroup` is above it**, which supplies `3`
+ * (`heading-level.tsx`); a consumer outside any group renders exactly the DOM it always did, which
+ * `section-card.heading-level.test.tsx` pins. Getting it wrong in either direction is invisible on screen and wrong in the heading
  * tree, which is precisely the kind of decision an archetype exists to make once.
  *
  * It composes `Card` rather than reimplementing it, so a section and a card cannot drift apart —
@@ -123,13 +136,16 @@ export function SectionCard({
   fill,
   id,
   ref,
+  busy,
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
+  const level = useHeadingLevel();
   return (
     <Card
       as="section"
       ref={ref}
       aria-labelledby={titleId}
+      {...(busy === true ? { 'aria-busy': true } : {})}
       /**
        * **The focus treatment is conditional on `id`, and it is a RING rather than nothing.**
        *
@@ -179,7 +195,7 @@ export function SectionCard({
       >
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
-            <CardTitle id={titleId} level={2} className="text-base">
+            <CardTitle id={titleId} level={level} className="text-base">
               {title}
             </CardTitle>
             {count === undefined ? null : (
@@ -246,7 +262,10 @@ export function SectionCard({
          */
         {...(fill === true ? { tabIndex: 0 } : {})}
       >
-        {children}
+        {/* The body's own headings (`SubSection`) sit one rank below this card's. */}
+        <HeadingLevelContext.Provider value={deeper(level)}>
+          {children}
+        </HeadingLevelContext.Provider>
       </CardContent>
     </Card>
   );

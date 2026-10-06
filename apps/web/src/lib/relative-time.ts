@@ -4,8 +4,10 @@
  * **This is the fifth relative-time implementation in this repository** — `NoteItem`, `staff.tsx`'s
  * retention copy, `lock-copy` and `float-path-rows` each grew their own. Rather than becoming the
  * fifth by default it lives here, pure and injectable, and the others move to it when they are next
- * touched. It sits in a feature's `model/` rather than `components/ui/` deliberately: it is a
- * formatting concern, not a component, and `components/ui` is for things that render.
+ * touched. It sits in `lib/` rather than `components/ui/` deliberately: it is a formatting concern,
+ * not a component, and `components/ui` is for things that render. **It moved here from
+ * `features/overview/model/`** (staff console redesign M2) when a second feature, the staff console,
+ * needed it — a feature importing another feature's `model/` is the coupling `lib/` exists to avoid.
  *
  * **`now` is a parameter, never `Date.now()` inside.** `docs/TESTING.md` forbids reliance on the
  * wall clock, and a function that reads it cannot be tested at a boundary — which is where every
