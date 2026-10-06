@@ -9,10 +9,14 @@ stylus. Your answers decide which fixes get built and which are dropped. There a
 **How to answer.** Tick a box, or write a few words on the line. Photos and a screen recording are
 fine instead of writing. Windows: Snipping Tool, then Record.
 
-## Before you start (the assistant fills this in)
+> **Keep this sheet current (product owner, 2026-10-06).** The sheet is **parked** until the product
+> owner runs it. Any change that alters what a step tests — Gantt touch, stylus, right-click or
+> keyboard-menu behaviour, the Gantt's targets, or `/pointer-check.html` — updates this file in the
+> same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 
-- Address to open: ______________________________ (the live site, a release that includes the
-  `pointer-check` page)
+## Before you start
+
+- Address to open: your SchedulePoint site (version 0.173.0 or later)
 - Plan to open: any plan with grouped "summary" rows (each has a small arrow at its left). A practice
   plan is best, because dragging a bar really moves it; otherwise press **Undo** after each drag.
 - [ ] Sign in, open the plan, and open the **Gantt** view (the bar chart with a table on its left).
@@ -78,6 +82,18 @@ Use the stylus in place of your finger. Say which posture: [ ] cover attached [ 
 - [ ] **4. Press and hold on a row for about one second, then let go.**
       Appeared: [ ] nothing [ ] browser menu [ ] highlighted text [ ] SchedulePoint menu.
       When: [ ] while holding [ ] after lifting
+
+## Extra checks for the new touch features (keyboard cover attached, about 5 minutes)
+
+Version 0.173.0 added "tap a bar, then drag it" and "press and hold a row for its menu". These
+confirm them on the real Surface.
+
+- [ ] **9. Click a row in the table so it is selected, then press the keyboard's Menu key** (the key
+      with a little list picture, near the right-hand Ctrl; if there isn't one, press Shift+F10).
+      [ ] exactly one SchedulePoint menu opened [ ] two menus [ ] the browser's own menu [ ] nothing
+- [ ] **10. Press Escape.** Is the same row still highlighted? [ ] yes [ ] no
+- [ ] **11. With the mouse, right-click a row while holding Shift.**
+      [ ] the browser's own menu appeared (expected) [ ] SchedulePoint's menu [ ] nothing
 
 ## When you are done
 
