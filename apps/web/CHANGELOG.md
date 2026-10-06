@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.172.0
+
+### Minor Changes
+
+- [#841](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/841) [`cbc9ebe`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cbc9ebece0c7be90f76f84c6295b5582954988c9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a "Measure plan loading" control to the staff console's Performance panel. One press reloads the page, then navigates it once more, and reports how many of the plan screen's code files this browser fetched from the network, revalidated or reused from cache, over which protocol, and under which `Cache-Control` header. It makes no request to the API and opens no plan.
+
 ## 0.171.0
 
 ### Minor Changes
