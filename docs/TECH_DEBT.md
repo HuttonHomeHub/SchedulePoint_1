@@ -11892,3 +11892,28 @@ and one reading under the image.
 
 **Next:** the snippet and the `check:nginx` assertion together. **Trigger:** the next change to `nginx.conf`, or a
 security review of the web origin.
+
+### 458. `submit-guard.structural.test.ts` governs submit buttons only, so a resting `aria-disabled:pointer-events-none` on any other button passes
+
+**Status:** open · **Verified:** 2026-10-06 (`apps/web/src/components/ui/submit-guard.structural.test.ts:38-86` read;
+the plan-loading probe's Copy button, below) · **Raised:** 2026-10-06 (accessibility review of the plan-loading probe) ·
+**Size:** S · **Owner:** web
+
+The gate's stated rule is that `pointer-events-none` belongs on **transient** `aria-disabled` states (a mutation in
+flight) and not on one that can be the control's resting state, because `pointer-events: none` makes
+`document.elementFromPoint` return the element behind it. The rule is computed for one shape only:
+`guardedSubmits` keeps a `<Button>` tag that contains `type="submit"` **and** `aria-disabled=`, and the exception list
+names the single submit that rests disabled.
+
+**Evidence that the rule is not computed for other shapes.** The plan-loading probe's **Copy plan loading report**
+button (`ui/loading-probe-section.tsx`, at `e6e1f63f`) was a non-submit `<Button variant="outline" aria-disabled={shown === null}
+className="aria-disabled:pointer-events-none aria-disabled:opacity-50">`: `aria-disabled` from first paint, with the class
+the gate forbids at rest. `pnpm --filter @repo/web test` passed 819 of 819 files with it present, and the accessibility
+review found it by reading. The fix (`6171f128`) pins it with a unit test in the section's own suite, which is the
+per-site coverage this row asks to replace. `performance-probe-panel.tsx` and `diagnostics-panel.tsx` use the same
+class pair on non-submit buttons that rest `aria-disabled`; they were not examined for this row.
+
+**Next:** extend the scan to every `<Button>` carrying `aria-disabled=` (not only submits), and decide, per site,
+transient or resting from the expression bound to it, as the submit case already does with a named exception list.
+Verify against the defect (ADR-0110): the unfixed Copy button must fail it. **Trigger:** the next `aria-disabled` control
+added outside a form, or the next change to this gate.
