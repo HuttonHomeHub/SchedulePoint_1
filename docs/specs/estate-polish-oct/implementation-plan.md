@@ -29,9 +29,11 @@ not affected** (spec §4.4).
 pointer-inert, refuse pointer/Enter/Space, and show their reason where they have one.
 **Entry point:** e.g. Notes **Add note** with an empty body; audit **Clear filters** with no filter;
 the plan workspace's **Arrange** apply while refused.
-**Journey:** each driven site asserts `click({ trial: true })` succeeds while shaded (Playwright's
-actionability check fails on a pointer-inert element), that a real click and Enter change nothing, and
-that the reason is visible where one exists.
+**Journey:** each driven site asserts the shaded button is the element at its own centre
+(`elementFromPoint`; a pointer-inert button hands the point to whatever is behind it), that a forced
+click and Enter change nothing, and that the reason is visible where one exists. (This said
+`click({ trial: true })` until M1a: Playwright's enabled check refuses any `aria-disabled="true"`
+control, so a trial click fails on every shaded button whatever its pointer state.)
 
 > **Complexity:** M · **Dependencies:** none
 > **Risks:** a submit becomes clickable (empty note → validation error; pending → double submit) → T2
