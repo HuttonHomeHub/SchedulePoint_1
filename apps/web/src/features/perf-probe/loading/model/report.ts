@@ -66,7 +66,8 @@ function pathOf(url: string): string {
 }
 
 /**
- * The browser name and major version, from the user agent, or the raw agent when nothing matches.
+ * The browser name and major version, from the user agent, or "unrecognised browser" when nothing
+ * matches. **Never the raw agent**: it is free text that ends up in a block pasted into a record.
  * Order matters: Edge and Opera carry `Chrome/` too, and Chrome carries `Safari/`.
  */
 export function describeBrowser(userAgent: string): string {
@@ -81,12 +82,12 @@ export function describeBrowser(userAgent: string): string {
     const match = pattern.exec(userAgent);
     if (match?.[1] !== undefined) return `${name} ${match[1]}`;
   }
-  return userAgent === '' ? 'unknown browser' : userAgent;
+  return 'unrecognised browser';
 }
 
 /** What the section is for, in one place so the screen and the pasted block say the same thing. */
 export const MEASURES_SENTENCE =
-  'This measures how the plan screen’s code reaches this browser on a reload and on a revisit. It does not measure the plan’s own data requests, any other browser, or the “+17 %” comparison, which needs a build this server does not run.';
+  'This measures how the plan screen’s code reaches this browser on a reload and on a revisit. It does not measure the plan’s own data requests or any other browser.';
 
 /**
  * Why the reload limb can read as "downloaded" on a perfect server: a browser that has never opened
@@ -116,7 +117,7 @@ export function formatLoadingReport(reading: LoadingReading): string {
     '',
     MEASURES_SENTENCE,
     PRIME_SENTENCE,
-    'Nothing was sent anywhere: the press made no request to the API and stored nothing.',
+    'Nothing was sent anywhere: the press made no request to the API and stored nothing on the server.',
   ].join('\n');
 }
 
@@ -128,3 +129,38 @@ export function loadingStatus(reading: LoadingReading): string {
       : `${limb.name} ${String(limb.tally.revalidated + limb.tally.downloaded)} of ${String(limb.tally.observed)} to the network${limb.status === 'incomplete' ? ' (incomplete)' : ''}`;
   return `Plan loading measured${reading.development ? ' on a development build' : ''}: ${part(reading.reload)}; ${part(reading.revisit)}.`;
 }
+
+/**
+ * The answer in one plain line, above the raw ones. "Reloading a plan re-downloads its code" is the
+ * row's own question; the raw lines stay for the pasted record.
+ */
+export function plainVerdict(reading: LoadingReading): string {
+  const limb = reading.reload;
+  if (limb.status !== 'taken') {
+    return 'Reloading a plan re-downloads its code: could not be told from this run.';
+  }
+  const toNetwork = limb.tally.revalidated + limb.tally.downloaded;
+  return toNetwork > 0
+    ? `Reloading a plan re-downloads its code: yes — ${String(toNetwork)} of ${String(limb.tally.observed)} files went to the network.`
+    : 'Reloading a plan re-downloads its code: no — every file came from this browser’s cache.';
+}
+
+/**
+ * A reload that downloaded while the revisit, right after it, used the cache is what a browser that
+ * had never opened a plan looks like. The probe cannot see whether a plan was opened first, so the
+ * screen says what that pattern probably is rather than leaving it as a finding.
+ */
+export function coldReloadWarning(reading: LoadingReading): string | null {
+  const { reload, revisit } = reading;
+  if (reload.status !== 'taken' || revisit.status !== 'taken') return null;
+  return reload.tally.downloaded > 0 && revisit.tally.revalidated + revisit.tally.downloaded === 0
+    ? 'The reload downloaded files that the revisit then reused. If no plan had been opened in this browser first, this is probably a false alarm: open a plan, then measure again.'
+    : null;
+}
+
+/** What a failed run says to a reader. The raw error goes to the console, never to the screen. */
+export const FAILURE_SENTENCE =
+  'The measurement could not finish. Press Measure plan loading to try again.';
+
+export const CLIPBOARD_FAILED_SENTENCE =
+  'Could not reach the clipboard. The numbers are below — copy them by hand.';

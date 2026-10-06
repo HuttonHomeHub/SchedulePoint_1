@@ -130,7 +130,10 @@ async function step(env: ProbeEnv, marker: LoadingMarker): Promise<ResumeResult>
     const reload = marker.reload;
     if (reload === undefined) return { kind: 'failed', message: 'The first reading was lost.' };
     const revisit = await measureLimb(env, 'revisit', 'navigate');
-    const urls = [...new Set([...(marker.urls ?? []), ...revisit.urls])];
+    // The marker is storage any script in the tab can write, and the network limb sends a
+    // credentialed GET to each URL, so what it carries is filtered like an observed entry.
+    const carried = (marker.urls ?? []).filter((url) => isCodeEntry({ name: url }, env.origin));
+    const urls = [...new Set([...carried, ...revisit.urls])];
     const network = await measureNetwork(env, urls);
     const cacheControl = await readCacheControl(env, urls);
     return {

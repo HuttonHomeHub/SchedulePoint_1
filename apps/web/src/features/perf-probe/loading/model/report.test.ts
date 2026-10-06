@@ -7,7 +7,9 @@ import {
   describeBrowser,
   formatLoadingReport,
   limbLines,
+  coldReloadWarning,
   loadingStatus,
+  plainVerdict,
   protocolText,
 } from './report';
 
@@ -82,9 +84,9 @@ describe('formatLoadingReport', () => {
         '',
         'Cache-Control on /assets/plan-abc.js: public, max-age=31536000, immutable (immutable: yes)',
         '',
-        'This measures how the plan screen’s code reaches this browser on a reload and on a revisit. It does not measure the plan’s own data requests, any other browser, or the “+17 %” comparison, which needs a build this server does not run.',
+        'This measures how the plan screen’s code reaches this browser on a reload and on a revisit. It does not measure the plan’s own data requests or any other browser.',
         'Open a plan in this browser before measuring: files it has never fetched are downloaded on the reload whatever the server says, and the revisit is the reading that always has them to reuse.',
-        'Nothing was sent anywhere: the press made no request to the API and stored nothing.',
+        'Nothing was sent anywhere: the press made no request to the API and stored nothing on the server.',
       ].join('\n'),
     );
   });
@@ -186,8 +188,8 @@ describe('describeBrowser', () => {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
       'Safari 17',
     ],
-    ['curl/8', 'curl/8'],
-    ['', 'unknown browser'],
+    ['curl/8', 'unrecognised browser'],
+    ['', 'unrecognised browser'],
   ])('%s -> %s', (ua, expected) => {
     expect(describeBrowser(ua)).toBe(expected);
   });
@@ -198,5 +200,39 @@ describe('loadingStatus', () => {
     expect(loadingStatus(reading)).toBe(
       'Plan loading measured: reload 0 of 8 to the network; revisit 6 of 8 to the network.',
     );
+  });
+});
+
+describe('plainVerdict and coldReloadWarning', () => {
+  it('says no when every reload file came from cache', () => {
+    expect(plainVerdict(reading)).toBe(
+      'Reloading a plan re-downloads its code: no — every file came from this browser’s cache.',
+    );
+  });
+
+  it('says yes with the count when files went to the network', () => {
+    const r = {
+      ...reading,
+      reload: { ...reading.reload, tally: tally({ cache: 2, revalidated: 6 }) } as Limb,
+    };
+    expect(plainVerdict(r)).toContain('yes — 6 of 8 files went to the network');
+  });
+
+  it('says it could not be told when the reload limb was not taken', () => {
+    const r = {
+      ...reading,
+      reload: { name: 'reload', status: 'not-taken', reason: 'x' } as Limb,
+    };
+    expect(plainVerdict(r)).toContain('could not be told');
+  });
+
+  it('calls a reload that downloaded beside a revisit that reused probably a false alarm', () => {
+    const r = {
+      ...reading,
+      reload: { ...reading.reload, tally: tally({ cache: 0, downloaded: 8 }) } as Limb,
+      revisit: { ...reading.revisit, tally: tally({}) } as Limb,
+    };
+    expect(coldReloadWarning(r)).toMatch(/probably a false alarm/);
+    expect(coldReloadWarning(reading)).toBeNull();
   });
 });

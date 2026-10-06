@@ -372,6 +372,9 @@ export function PerformanceProbePanel(): React.ReactElement {
       // been lost. They are in the database; only the screen would have forgotten them.
       if (resume === null) setOutcome(null);
       setFailure(null);
+      // A sweep starting supersedes the plan-loading sentence: left in place it outranked every
+      // later sweep summary in the polite region, so a "NOT recorded" warning was never announced.
+      setLoadingStatus('');
       resetCopyState();
       cancelledRef.current = false;
       setRunning(true);

@@ -54,6 +54,16 @@ vi.mock('../api/probe-results', () => ({
   }),
 }));
 
+// The plan-loading section has its own suite. Here it is a button that reports a status upward,
+// which is the only seam the panel's announcement precedence depends on.
+vi.mock('./loading-probe-section', () => ({
+  LoadingProbeSection: ({ onStatusChange }: { onStatusChange: (status: string) => void }) => (
+    <button type="button" onClick={() => onStatusChange('Plan loading measured: reload 0 of 8.')}>
+      report a plan loading status
+    </button>
+  ),
+}));
+
 // The plan-loading section reads the API version for its report. This file is about the canvas
 // probe, so the query is stubbed out; the section has its own suite.
 vi.mock('@/features/staff/api/staff-panels', () => ({
@@ -755,6 +765,24 @@ describe('PerformanceProbePanel', () => {
     await screen.findByText(/Recorded\./);
     const live = document.querySelector('[aria-live="polite"].sr-only');
     expect(live?.textContent).toMatch(/Recorded in this installation’s history/);
+  });
+
+  it('announces a sweep that finishes AFTER a plan-loading reading, not the older loading status', async () => {
+    // WCAG 4.1.3. The loading status used to outrank everything once set and was never cleared,
+    // so every later sweep summary — and its "NOT recorded" warning — went unannounced.
+    recordState.isSuccess = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'report a plan loading status' }));
+    const live = (): string =>
+      document.querySelector('[aria-live="polite"].sr-only')?.textContent ?? '';
+    expect(live()).toMatch(/Plan loading measured/);
+
+    runOnce();
+
+    await screen.findByText(/Recorded\./);
+    expect(live()).toMatch(/Recorded in this installation’s history/);
+    expect(live()).not.toMatch(/Plan loading measured/);
   });
 
   it('makes the controls behind the overlay unreachable while it runs', async () => {

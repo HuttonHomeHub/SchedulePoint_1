@@ -1,6 +1,6 @@
 # M2 measurement: the plan-loading probe, verified against the defect it names
 
-- **Task:** M2-T3 of `implementation-plan.md` (shipped with the milestone-1 change) (the plan names this file
+- **Task:** M2-T3 of [`implementation-plan.md`](./implementation-plan.md) (the plan names this file
   `m2-verification.md`; the brief that dispatched the work named it `m2-measurement.md`, and this is the one that exists).
 - **Subject:** `docs/TECH_DEBT.md` #433 and the **Measure plan loading** control (`/staff` → Performance).
 - **Date:** 2026-10-06.

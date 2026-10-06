@@ -4,14 +4,18 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { LoadingReading } from '../loading/model/limb';
 import { LOADING_MARKER_KEY, readMarker } from '../loading/model/marker';
 import {
+  CLIPBOARD_FAILED_SENTENCE,
   cacheControlLine,
+  coldReloadWarning,
   DEVELOPMENT_LABEL,
+  FAILURE_SENTENCE,
   formatLoadingReport,
   limbLines,
   loadingStatus,
   MEASURES_SENTENCE,
-  PRIME_SENTENCE,
+  plainVerdict,
 } from '../loading/model/report';
+import { unsupportedReason } from '../loading/model/support';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -35,11 +39,13 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  * **The panel owns the one polite region** (`Panel`), so this section reports its status upward
  * rather than mounting a second live region beside it.
  */
+export interface LoadingProbeSectionProps {
+  onStatusChange: (status: string) => void;
+}
+
 export function LoadingProbeSection({
   onStatusChange,
-}: {
-  onStatusChange: (status: string) => void;
-}): React.ReactElement {
+}: LoadingProbeSectionProps): React.ReactElement {
   const installation = useStaffInstallation();
   const apiVersion = installation.data?.apiVersion ?? null;
   const headingId = useId();
@@ -47,17 +53,25 @@ export function LoadingProbeSection({
   const [confirming, setConfirming] = useState(false);
   // Read once, synchronously, so a resumed page paints "measuring" at once rather than offering
   // the button for the first frames of a cycle already under way.
-  const [pending] = useState(() => readMarker(window.sessionStorage, Date.now()));
+  // An unsupported browser is offered nothing and reads no marker: it cannot have left one.
+  const [unsupported] = useState(() => unsupportedReason());
+  const [pending] = useState(() =>
+    unsupported === null
+      ? readMarker(window.sessionStorage, Date.now())
+      : ({ kind: 'none' } as const),
+  );
   const [measuring, setMeasuring] = useState(pending.kind === 'pending');
   const [reading, setReading] = useState<LoadingReading | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [discarded, setDiscarded] = useState(pending.kind === 'discarded');
 
   const pressRef = useRef<HTMLButtonElement>(null);
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  // A failure or a discarded run leaves nothing focused after the reload, so the notice takes focus.
+  const noticeRef = useRef<HTMLDivElement>(null);
   const clipboard = useClipboardCopy({
     copiedMessage: 'Plan loading report copied to the clipboard.',
-    failedMessage: 'Could not reach the clipboard. The numbers are below — copy them by hand.',
+    failedMessage: CLIPBOARD_FAILED_SENTENCE,
   });
   // The stable half: depending on the whole object would re-create `press` whenever a copy settles.
   const { reset: resetCopyState } = clipboard;
@@ -79,7 +93,9 @@ export function LoadingProbeSection({
         setReading(result.reading);
         setMeasuring(false);
       } else if (result.kind === 'failed') {
-        setFailure(result.message);
+        // The raw error is for the console; the screen gets a sentence a reader can act on.
+        console.error('plan loading probe failed:', result.message);
+        setFailed(true);
         setMeasuring(false);
       } else if (result.kind === 'discarded') {
         setDiscarded(true);
@@ -110,21 +126,25 @@ export function LoadingProbeSection({
   }, [shown]);
 
   useEffect(() => {
+    if ((failed || discarded) && !measuring) noticeRef.current?.focus();
+  }, [failed, discarded, measuring]);
+
+  useEffect(() => {
     onStatusChange(
       measuring
         ? 'Measuring plan loading. The page will reload and navigate by itself.'
-        : failure !== null
-          ? 'Plan loading could not be measured.'
+        : failed
+          ? FAILURE_SENTENCE
           : shown !== null
             ? loadingStatus(shown)
             : '',
     );
-  }, [failure, measuring, onStatusChange, shown]);
+  }, [failed, measuring, onStatusChange, shown]);
 
   const press = useCallback(async () => {
     setConfirming(false);
     setMeasuring(true);
-    setFailure(null);
+    setFailed(false);
     setReading(null);
     setDiscarded(false);
     resetCopyState();
@@ -132,37 +152,42 @@ export function LoadingProbeSection({
       const { browserEnv, startLoadingProbe } = await import('../loading/runner/run-loading-probe');
       startLoadingProbe(browserEnv());
     } catch (error) {
+      console.error('plan loading probe could not start:', error);
       setMeasuring(false);
-      setFailure(error instanceof Error ? error.message : String(error));
+      setFailed(true);
     }
   }, [resetCopyState]);
 
   const copyBlockedId = useId();
+  const unsupportedId = useId();
+
+  const blocked = measuring || unsupported !== null;
 
   return (
     <section aria-labelledby={headingId} className="space-y-4 border-t pt-4">
-      {/* `<strong>` rather than a placed weight: the screens' weight ceiling counts every
-          `font-*` class, and a heading's weight is the heading's own. */}
-      <h3 id={headingId} className="text-sm">
-        <strong>Plan loading</strong>
+      <h3 id={headingId} className="text-sm font-medium">
+        Plan loading
       </h3>
       <p className="text-muted-foreground text-sm">
-        Measures whether this server makes a reload or a revisit of the plan screen fetch its code
-        again, which protocol it travels over, and which <code>Cache-Control</code> header arrives
-        after every proxy. The page reloads and navigates by itself, about ten to twenty seconds,
-        and nothing is sent anywhere: it makes no request to the API and loads no plan.
+        Checks whether this server makes the plan screen download its code again when you reload it.{' '}
+        {MEASURES_SENTENCE}
       </p>
-      <p className="text-muted-foreground text-sm">{MEASURES_SENTENCE}</p>
-      <p className="text-muted-foreground text-sm">{PRIME_SENTENCE}</p>
+      <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
+        <li>Open any plan in this browser.</li>
+        <li>
+          Come back here and press <strong>Measure plan loading</strong>.
+        </li>
+      </ol>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button
           ref={pressRef}
-          aria-disabled={measuring}
+          aria-disabled={blocked}
           aria-busy={measuring}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          aria-describedby={unsupported === null ? undefined : unsupportedId}
+          className="aria-disabled:opacity-60"
           onClick={() => {
-            if (!measuring) setConfirming(true);
+            if (!blocked) setConfirming(true);
           }}
         >
           {measuring ? 'Measuring…' : 'Measure plan loading'}
@@ -171,7 +196,7 @@ export function LoadingProbeSection({
           variant="outline"
           aria-disabled={shown === null}
           aria-describedby={shown === null ? copyBlockedId : undefined}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          className="aria-disabled:opacity-60"
           onClick={() => {
             if (shown !== null) clipboard.copy(formatLoadingReport(shown));
           }}
@@ -188,38 +213,55 @@ export function LoadingProbeSection({
         {/* The announcement goes through the shared hook; this is the cue a sighted reader needs. */}
         <span className="text-muted-foreground text-sm">
           {clipboard.state === 'copied' ? 'Report copied.' : ''}
-          {clipboard.state === 'failed'
-            ? 'Could not reach the clipboard. The numbers are below — copy them by hand.'
-            : ''}
+          {clipboard.state === 'failed' ? CLIPBOARD_FAILED_SENTENCE : ''}
         </span>
       </div>
+
+      {unsupported !== null ? (
+        <p id={unsupportedId} className="text-sm">
+          {unsupported}
+        </p>
+      ) : null}
 
       {measuring ? (
         // A bare icon, not `<Spinner>`: its `role="status"` would be a second live region.
         <p className="flex items-center gap-2 text-sm">
           <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
-          Measuring. Leave this tab alone until the result appears.
+          The page will reload once and then briefly navigate. This is normal — leave this tab alone
+          until the result appears.
         </p>
       ) : null}
 
-      {discarded ? (
-        <Alert purpose="event" tone="info">
-          An earlier measurement did not finish and was discarded. Press the control to take a new
-          one.
-        </Alert>
-      ) : null}
-
-      {failure !== null ? (
-        <Alert purpose="event" tone="error">
-          The measurement did not complete, so there is no reading: {failure}
-        </Alert>
+      {discarded || failed ? (
+        <div ref={noticeRef} tabIndex={-1} className="focus:outline-none">
+          {discarded ? (
+            <Alert purpose="event" tone="info">
+              An earlier measurement did not finish and was discarded. Press{' '}
+              <strong>Measure plan loading</strong> to take a new one.
+            </Alert>
+          ) : (
+            <Alert purpose="event" tone="error">
+              {FAILURE_SENTENCE}
+            </Alert>
+          )}
+        </div>
       ) : null}
 
       {shown !== null ? (
         <div className="space-y-3" data-loading-result>
-          <h4 ref={resultHeadingRef} tabIndex={-1} className="text-sm">
-            <strong>Plan loading reading</strong>
+          <h4
+            ref={resultHeadingRef}
+            tabIndex={-1}
+            className="focus:ring-ring focus:ring-offset-background rounded-sm text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-none"
+          >
+            Plan loading reading
           </h4>
+          <p className="text-sm">{plainVerdict(shown)}</p>
+          {coldReloadWarning(shown) !== null ? (
+            <Alert purpose="condition" tone="info">
+              {coldReloadWarning(shown)}
+            </Alert>
+          ) : null}
           {shown.development ? (
             <Alert purpose="condition" tone="info">
               {DEVELOPMENT_LABEL}
@@ -228,11 +270,13 @@ export function LoadingProbeSection({
           {[shown.reload, shown.revisit, shown.network].map((limb) => (
             <ul key={limb.name} className="text-sm" data-limb={limb.name}>
               {limbLines(limb).map((line, index) => (
+                // The index is part of the key because two lines of one limb can read the same;
+                // the list is rebuilt whole from `limbLines` and never reordered.
                 <li
                   key={`${String(index)}-${line}`}
                   className={index === 0 ? undefined : 'text-muted-foreground'}
                 >
-                  {index === 0 ? <strong>{line.trim()}</strong> : line.trim()}
+                  {line.trim()}
                 </li>
               ))}
             </ul>

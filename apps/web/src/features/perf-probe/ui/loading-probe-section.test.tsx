@@ -158,12 +158,49 @@ describe('LoadingProbeSection', () => {
     expect(screen.getByRole('button', { name: 'Measuring…' })).toBeInTheDocument();
   });
 
-  it('reports a failed measurement as an event, with no numbers', async () => {
+  it('reports a failed measurement in plain words, never the raw error, and focuses it', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     window.sessionStorage.setItem(LOADING_MARKER_KEY, fresh);
     resume.mockResolvedValue({ kind: 'failed', message: 'boom' });
     mount();
-    expect(await screen.findByText(/did not complete, so there is no reading: boom/)).toBeVisible();
+    const alert = await screen.findByText(/could not finish\. Press Measure plan loading/);
+    expect(alert).toBeVisible();
+    expect(screen.queryByText(/boom/)).toBeNull();
+    expect(log).toHaveBeenCalledWith('plan loading probe failed:', 'boom');
+    await waitFor(() => expect(alert.closest('[tabindex="-1"]')).toHaveFocus());
     expect(screen.queryByText('Plan loading reading')).toBeNull();
+    log.mockRestore();
+  });
+
+  it('puts the plain verdict above the raw lines', async () => {
+    window.sessionStorage.setItem(LOADING_MARKER_KEY, fresh);
+    resume.mockResolvedValue({ kind: 'done', reading });
+    mount();
+    expect(await screen.findByText(/Reloading a plan re-downloads its code: no/)).toBeVisible();
+  });
+
+  it('keeps both buttons reachable by pointer at rest (submit-guard rule)', () => {
+    mount();
+    for (const name of ['Measure plan loading', 'Copy plan loading report']) {
+      expect(screen.getByRole('button', { name }).className).not.toMatch(
+        /aria-disabled:pointer-events-none/,
+      );
+    }
+  });
+
+  it('offers nothing in a browser that cannot take the measurement', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'PerformanceObserver');
+    Object.defineProperty(window, 'PerformanceObserver', { value: undefined, configurable: true });
+    try {
+      mount();
+      expect(screen.getByText(/can’t take this measurement — use Chrome or Edge/)).toBeVisible();
+      const press = screen.getByRole('button', { name: 'Measure plan loading' });
+      expect(press).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(press);
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    } finally {
+      if (original) Object.defineProperty(window, 'PerformanceObserver', original);
+    }
   });
 
   it('discards a stale marker with a notice, and never loads the runner for it', async () => {

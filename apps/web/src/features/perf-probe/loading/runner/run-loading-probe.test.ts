@@ -238,6 +238,32 @@ describe('resumeLoadingProbe', () => {
       expect(h.calls.filter((c) => c === 'head')).toHaveLength(1);
     });
 
+    it('never fetches a marker URL that is not a same-origin code file', async () => {
+      // sessionStorage is writable by anything running in the tab, and the network limb sends
+      // credentialed GETs to every URL it is given. A crafted marker must not steer them.
+      const h = harness();
+      h.setNav('navigate');
+      h.storage.setItem(
+        LOADING_MARKER_KEY,
+        marker({
+          step: 'revisit',
+          reload: reloadLimb as never,
+          urls: [
+            `${ORIGIN}/api/v1/auth/sign-out`,
+            'https://evil.test/assets/x.js',
+            `${ORIGIN}/assets/logo.png`,
+            `${ORIGIN}/assets/chunk-0.js`,
+          ],
+        }),
+      );
+      await resumeLoadingProbe(h.env);
+      const fetched = h.calls.filter((c) => c.startsWith('fetch:')).map((c) => c.slice(6));
+      expect(fetched).not.toContain(`${ORIGIN}/api/v1/auth/sign-out`);
+      expect(fetched).not.toContain('https://evil.test/assets/x.js');
+      expect(fetched).not.toContain(`${ORIGIN}/assets/logo.png`);
+      expect(fetched).toContain(`${ORIGIN}/assets/chunk-0.js`);
+    });
+
     it('does not take the revisit limb when the page was reloaded instead of navigated to', async () => {
       const h = harness();
       h.setNav('reload');
