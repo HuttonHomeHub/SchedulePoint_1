@@ -121,6 +121,11 @@ control, so a trial click fails on every shaded button whatever its pointer stat
   `aria-disabled:pointer-events-none`. Delete `SHADED_BUTTON` (its sites take the per-site class from T0).
 - Update tests asserting caller strings: `copy-button.test.tsx:83-84`,
   `ScheduleHealthPanel.test.tsx:436`, `diagnostics-panel.test.tsx:197` (assert behaviour/the CVA output).
+- `AssignmentRow.tsx` **Save join delay** (found at M1a): its `lagUnavailable ? 'pointer-events-none
+opacity-50' : undefined` is a resting pointer-inert site the gate cannot see; rewrite it to the
+  shaded pattern with a refusing handler, like the fifteen. Same for `SHADED_BUTTON`'s four sites.
+- Consider (component review of M1a): the gate requires a resting-shaded `type="submit"` `<Button>` to
+  have an `onClick` naming its bound expression, since the pointer class no longer protects the click.
 
 ##### M1b-T2 — G1
 

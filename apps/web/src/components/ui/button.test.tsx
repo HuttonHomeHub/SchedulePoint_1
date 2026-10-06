@@ -63,7 +63,7 @@ describe('buttonVariants', () => {
     );
     const button = screen.getByRole('button', { name: 'Save' });
     expect(button).toHaveClass('bg-x', 'aria-disabled:opacity-60');
-    // The caller's fill replaces the variant's, so there is no fill left to restate on hover.
+    // The caller's fill replaces the variant's; the gated hover class stays but is inert while shaded.
     expect(button).not.toHaveClass('bg-primary');
   });
 });

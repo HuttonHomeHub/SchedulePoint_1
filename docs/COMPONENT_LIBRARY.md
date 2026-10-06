@@ -110,7 +110,8 @@ error, empty, and selected/active. A missing state is an incomplete component.
 
 - **The look is the CVA's.** `aria-disabled:opacity-60`, and every variant's hover is written
   `not-aria-disabled:hover:…` (outline and ghost gate the hover ink too), so a shaded button
-  neither dims differently per caller nor lights on hover. Compiled output was checked:
+  does not light on hover and, once #461's caller strings are deleted (estate polish M1b), does not
+  dim differently per caller either. Compiled output was checked:
   `.not-aria-disabled\:hover\:bg-accent:not([aria-disabled=true]):hover`. A caller's own
   `bg-*` still wins through `cn`, because nothing restates a fill.
 - **Native `disabled` stays at 50 %** — it leaves the tab order and has no reachable reason, so it
