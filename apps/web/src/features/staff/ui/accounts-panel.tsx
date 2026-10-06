@@ -27,7 +27,8 @@ import { formatTimestamp } from '@/lib/format-date';
  * **At the end the button gives way to a plain sentence, not to a shaded button.** "All 168 are
  * shown." is a statement, and a control that can never be pressed again is a control that says so by
  * being one. Focus is handed to the sentence when the press that reached the end removes the button
- * from under it (ADR-0135), so it never falls to `<body>`.
+ * from under it (ADR-0135), so it never falls to `<body>`; and when a Refresh later trims the list and
+ * removes the sentence while it has focus, focus goes to the box.
  */
 export function AccountsPanel(): React.ReactElement {
   const accounts = useStaffAccounts();
@@ -58,12 +59,31 @@ export function AccountsPanel(): React.ReactElement {
   const { fetchNextPage, isFetchingNextPage, hasNextPage } = accounts;
   const atEnd = !hasNextPage && pages.length > 1;
   const pressed = useRef(false);
-  const endRef = useRef<HTMLParagraphElement>(null);
+  const endRef = useRef<HTMLParagraphElement | null>(null);
+  const endHadFocus = useRef(false);
+
+  // React runs a ref's cleanup while the node is still attached, which is the only moment its
+  // focus can be read: once the sentence is removed the browser has already moved focus to `<body>`.
+  const setEnd = useCallback((node: HTMLParagraphElement | null) => {
+    endRef.current = node;
+    if (node === null) return;
+    return () => {
+      if (document.activeElement === node) endHadFocus.current = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!atEnd || !pressed.current) return;
-    pressed.current = false;
-    endRef.current?.focus();
+    if (atEnd) {
+      if (!pressed.current) return;
+      pressed.current = false;
+      endRef.current?.focus();
+      return;
+    }
+    // A Refresh sent the list back to its first page and took the sentence out from under a reader
+    // who was on it (ADR-0135): hand focus to the box, which is a focus target by its `id`.
+    if (!endHadFocus.current) return;
+    endHadFocus.current = false;
+    document.getElementById(CHECK_SECTION_ID.accounts)?.focus();
   }, [atEnd]);
 
   const showMore = useCallback(() => {
@@ -143,7 +163,7 @@ export function AccountsPanel(): React.ReactElement {
             </div>
           ) : atEnd ? (
             <p
-              ref={endRef}
+              ref={setEnd}
               tabIndex={-1}
               className="text-muted-foreground focus-visible:ring-ring rounded-sm text-sm focus-visible:ring-2 focus-visible:outline-none"
             >

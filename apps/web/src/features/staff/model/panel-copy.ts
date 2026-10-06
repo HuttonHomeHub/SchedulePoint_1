@@ -50,6 +50,7 @@ export const HEADER = {
   dualHat:
     'This account is also a member of an organisation. Nothing you do here is done as that member.',
   refreshNote: 'Each refresh is recorded in Staff activity.',
+  unreadable: (n: number): string => `${String(n)} ${n === 1 ? 'box' : 'boxes'} could not be read`,
 } as const;
 
 export const MAIL = {
@@ -65,7 +66,6 @@ export const MAIL = {
   }),
   healthy: 'Working. No emails have failed in the last 24 hours.',
   caption: 'Recent failed emails',
-  empty: 'No emails have failed.',
   status: (health: StaffHealth): string =>
     !health.transportConfigured
       ? 'Mail: not set up.'
@@ -119,9 +119,19 @@ export const ACCOUNTS = {
     `Showing ${String(shown)} of ${String(total)} unconfirmed accounts.`,
 } as const;
 
+/** Each setting is a short value and the consequence of it, so the rows of the list line up. */
 export const INSTALLATION = {
-  confirmationOff: 'No: people can sign in without confirming their email',
-  lockOff: 'Off: two people can change the same plan at once',
+  confirmation: {
+    on: { value: 'Required', consequence: 'People must confirm their email before they sign in.' },
+    off: {
+      value: 'Not required',
+      consequence: 'People can sign in without confirming their email.',
+    },
+  },
+  lock: {
+    on: { value: 'On', consequence: 'Only one person can change a plan at a time.' },
+    off: { value: 'Off', consequence: 'Two people can change the same plan at once.' },
+  },
 } as const;
 
 export const ALERTING = {

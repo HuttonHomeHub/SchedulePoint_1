@@ -107,23 +107,27 @@ function MailBody({ health }: { health: StaffHealth }): React.ReactElement {
         ]}
       />
 
-      <DataTable
-        caption={MAIL.caption}
-        // The table is a focusable region, so a reader navigating by landmark lands INSIDE it having
-        // skipped whatever sits above — and the not-set-up note is the one that explains why the
-        // counts read as healthy.
-        {...(health.transportConfigured ? {} : { describedById: MAIL_NOTE_ID })}
-        columns={columns}
-        query={{
-          isPending: false,
-          isError: false,
-          data: health.recentFailures,
-          refetch: () => undefined,
-        }}
-        getRowKey={(row) => row.id}
-        loadingLabel="Loading failed emails…"
-        empty={MAIL.empty}
-      />
+      {/* The three figures above already say "0, 0, Never" when nothing has failed, so an empty table
+          saying it again was the same fact twice. */}
+      {health.recentFailures.length === 0 ? null : (
+        <DataTable
+          caption={MAIL.caption}
+          // The table is a focusable region, so a reader navigating by landmark lands INSIDE it having
+          // skipped whatever sits above — and the not-set-up note is the one that explains why the
+          // counts read as healthy.
+          {...(health.transportConfigured ? {} : { describedById: MAIL_NOTE_ID })}
+          columns={columns}
+          query={{
+            isPending: false,
+            isError: false,
+            data: health.recentFailures,
+            refetch: () => undefined,
+          }}
+          getRowKey={(row) => row.id}
+          loadingLabel="Loading failed emails…"
+          empty={<></>}
+        />
+      )}
     </>
   );
 }

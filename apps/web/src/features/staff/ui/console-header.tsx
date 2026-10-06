@@ -79,9 +79,7 @@ export function ConsoleHeader({
               {CLOCK.format(readAt)}
             </time>{' '}
             ({formatRelative(readAt, now)})
-            {unreadable === 0
-              ? null
-              : ` · ${String(unreadable)} ${unreadable === 1 ? 'box' : 'boxes'} could not be read`}
+            {unreadable === 0 ? null : ` · ${HEADER.unreadable(unreadable)}`}
           </p>
         )}
         <Button

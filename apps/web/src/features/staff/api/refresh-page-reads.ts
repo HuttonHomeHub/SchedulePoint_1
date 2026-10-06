@@ -22,6 +22,11 @@ export interface RefreshResult {
  * and "exactly six" would be true only for people who had not used the page. Trimming the cached
  * pages first makes the refetch one request however far the list had been read (spec D-5, SC-5).
  *
+ * **`cancelRefetch: false`: a second call while one is running joins the request in flight.** The
+ * default cancels it and starts another, so two overlapping calls (the shaded button's guard is a
+ * UI promise, and a second tab or a stale closure is not covered by it) would make twelve audited
+ * reads, not six. One press is six reads whatever state the UI was in.
+ *
  * `exact: true` and a key per read, from `STAFF_PAGE_READS`: a prefix would take Diagnostics with it.
  * `refetchQueries` does not reject on a failed read, so each box reports its own failure and the
  * rest still refresh.
@@ -42,7 +47,9 @@ export function useRefreshStaffPageReads(): () => Promise<RefreshResult> {
       );
     }
     await Promise.all(
-      STAFF_PAGE_READS.map((queryKey) => queryClient.refetchQueries({ queryKey, exact: true })),
+      STAFF_PAGE_READS.map((queryKey) =>
+        queryClient.refetchQueries({ queryKey, exact: true }, { cancelRefetch: false }),
+      ),
     );
     return { firstPageSize };
   }, [queryClient]);

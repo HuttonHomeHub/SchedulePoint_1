@@ -366,6 +366,17 @@ What the next milestone needs:
   ADR-0105 trigger). The audit cost is read back by diffing the activity API (six plus the diff's own read).
 - **ADR-0178 stays Proposed.** D-3 (Performance collapsed) is part of what it decides, so it is accepted at M4's close
   (M4-T3), not M3's as the M2 header said.
+- **Review findings, folded.** ux, accessibility, component and security reviews found: **Try again for all** unmounted
+  with focus on it when its own retry healed the page (now kept mounted, shaded, then focus goes to the Status section,
+  ADR-0135); "All N are shown." losing focus when Refresh trims the list (focus goes to the box); a double Refresh
+  making twelve audited reads (`cancelRefetch: false`, so a second call joins the first); `StatusSection`'s doc
+  misdescribing a first-load failure (it is the baseline, carried by `QueryErrorState`'s alert; contract now in
+  `COMPONENT_LIBRARY.md`, latch pinned by a test); the header's inline plural and a hand-listed copy scan (both moved
+  to `model/*copy.ts`); uneven description-to-body gaps (one `-mt-2` on `StatusSection`'s body; **not measured in a
+  browser here**, so the journey and a screenshot should confirm); the Mail card's duplicated "none failed" block; and
+  long settings values. **Not folded:** muting box-level change announcements while a Refresh runs. It needs a prop on
+  `StatusSection` and `QueryPanel` threaded through six panels, which is a component contract change (ADR-0105), so it
+  is left for M4 to decide; after a Refresh a box whose sentence changed still speaks beside the page sentence.
 - **For M4.** SC-1 (3,468 px against at most 3,030) closes with the collapse; SC-2's third treatment is
   `Measure one thing`'s `summary`. The history read is already observed at the screen root (`useProbeResults` in
   `ConsoleBody`), so hoisting it into the panel root is a move, and an expanded Performance box makes no new request

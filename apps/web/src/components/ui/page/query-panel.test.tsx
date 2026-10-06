@@ -122,4 +122,15 @@ describe('QueryPanel', () => {
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
   });
+
+  // A failure on first load is the section's baseline sentence, so the polite region stays quiet;
+  // the alert from `QueryErrorState` is what a screen reader hears (see `StatusSection`).
+  it('announces a first-load failure through the error state’s alert', () => {
+    const { rerender } = render(panel({ isPending: true, isError: false, data: undefined }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    rerender(panel({ isPending: false, isError: true, data: undefined }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not read counts.');
+    expect(polite()).toHaveTextContent('');
+  });
 });

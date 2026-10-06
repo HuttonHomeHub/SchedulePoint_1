@@ -29,10 +29,11 @@ const FILES = [
   ...readdirSync(join(FEATURE, 'ui'))
     .filter((name) => /\.tsx$/.test(name) && !name.includes('.test.'))
     .map((name) => `ui/${name}`),
-  'model/panel-copy.ts',
-  'model/enum-copy.ts',
+  // Every `*copy.ts` in `model`, so a new copy module is scanned without somebody remembering to list it.
+  ...readdirSync(join(FEATURE, 'model'))
+    .filter((name) => /copy\.ts$/.test(name))
+    .map((name) => `model/${name}`),
   'model/console-status.ts',
-  'model/retention-copy.ts',
 ];
 
 /** Remove `howToFix={ … }` by brace depth, since the body is arbitrary JSX. */
@@ -62,7 +63,7 @@ function strip(source: string): string {
 }
 
 /** The prose a reader could see: quoted strings and the text between JSX tags. */
-export function resting(source: string): string[] {
+function resting(source: string): string[] {
   const code = withoutHowToFix(strip(source));
   const strings = [...code.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)].map(
     (match) => match[1] ?? match[2] ?? match[3] ?? '',

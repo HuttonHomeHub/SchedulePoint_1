@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StaffAccounts } from '@/features/staff/api/staff-panels';
+import { STAFF_ACCOUNTS_KEY, type StaffAccounts } from '@/features/staff/api/staff-panels';
 import { AccountsPanel } from '@/features/staff/ui/accounts-panel';
 
 const apiFetch = vi.fn<(path: string) => Promise<StaffAccounts>>();
@@ -33,13 +33,14 @@ const PAGE_2: StaffAccounts = {
   nextCursor: null,
 };
 
-function mount(): void {
+function mount(): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <AccountsPanel />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 beforeEach(() => {
@@ -114,5 +115,48 @@ describe('AccountsPanel paging (M1-T1)', () => {
       'aria-disabled',
       'true',
     );
+  });
+
+  /**
+   * ADR-0135: a Refresh trims the list to its first page, which removes "All 3 are shown." — and a
+   * reader sitting on that sentence lost focus to `<body>`. Verified red against the panel without
+   * the hand-off. The trim is applied exactly as `useRefreshStaffPageReads` applies it.
+   */
+  it('hands focus to the box when a refresh removes the sentence it is on', async () => {
+    apiFetch.mockResolvedValueOnce(PAGE_1).mockResolvedValueOnce(PAGE_2);
+    const client = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+    const end = await screen.findByText('All 3 are shown.');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(end);
+    });
+
+    act(() => {
+      client.setQueryData(STAFF_ACCOUNTS_KEY, { pages: [PAGE_1], pageParams: [undefined] });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('All 3 are shown.')).not.toBeInTheDocument();
+    });
+    expect(document.activeElement).toBe(
+      screen.getByRole('region', { name: 'Unconfirmed accounts' }),
+    );
+  });
+
+  it('leaves focus alone when the sentence is removed while somebody else has it', async () => {
+    apiFetch.mockResolvedValueOnce(PAGE_1).mockResolvedValueOnce(PAGE_2);
+    const client = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+    await screen.findByText('All 3 are shown.');
+    (document.activeElement as HTMLElement).blur();
+
+    act(() => {
+      client.setQueryData(STAFF_ACCOUNTS_KEY, { pages: [PAGE_1], pageParams: [undefined] });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('All 3 are shown.')).not.toBeInTheDocument();
+    });
+    expect(document.activeElement).toBe(document.body);
   });
 });

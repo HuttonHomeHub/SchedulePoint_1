@@ -301,8 +301,21 @@ describe('StaffConsoleScreen', () => {
     expect(await screen.findByRole('heading', { name: 'Version and settings' })).toBeVisible();
     expect(await screen.findByText('smtp.example:465')).toBeInTheDocument();
     expect(screen.queryByText(/PASSWORD|password@/)).not.toBeInTheDocument();
-    expect(screen.getByText('Email confirmation required')).toBeInTheDocument();
-    expect(screen.getByText('Yes')).toBeInTheDocument();
+    // A short value with its consequence beneath, so the rows of the list line up.
+    expect(screen.getByText('Email confirmation')).toBeInTheDocument();
+    expect(screen.getByText('Required')).toBeInTheDocument();
+    expect(
+      screen.getByText('People must confirm their email before they sign in.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not repeat "none failed" in an empty table under figures that already say it', async () => {
+    renderStaffWith({});
+
+    expect(await screen.findByRole('heading', { name: 'Mail' })).toBeVisible();
+    expect(await screen.findByText('Last failure')).toBeInTheDocument();
+    expect(screen.queryByText('No emails have failed.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recent failed emails' })).not.toBeInTheDocument();
   });
 
   it('lists unverified accounts with the total beside the page', async () => {

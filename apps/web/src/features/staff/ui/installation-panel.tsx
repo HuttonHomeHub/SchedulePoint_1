@@ -29,24 +29,24 @@ export function InstallationPanel(): React.ReactElement {
         `Version ${data.apiVersion}, ${environmentLabel(data.environment).toLowerCase()}.`
       }
     >
-      {(data) => (
-        <KeyValueList
-          items={[
-            { label: 'App version', value: data.apiVersion },
-            { label: 'Environment', value: environmentLabel(data.environment) },
-            { label: 'Mail server', value: data.mailHost ?? 'Not set up' },
-            { label: 'Staff accounts', value: String(data.staffCount) },
-            {
-              label: 'Email confirmation required',
-              value: data.requireEmailVerification ? 'Yes' : INSTALLATION.confirmationOff,
-            },
-            {
-              label: 'One editor at a time',
-              value: data.planEditLockEnforced ? 'On' : INSTALLATION.lockOff,
-            },
-          ]}
-        />
-      )}
+      {(data) => {
+        const confirmation = data.requireEmailVerification
+          ? INSTALLATION.confirmation.on
+          : INSTALLATION.confirmation.off;
+        const lock = data.planEditLockEnforced ? INSTALLATION.lock.on : INSTALLATION.lock.off;
+        return (
+          <KeyValueList
+            items={[
+              { label: 'App version', value: data.apiVersion },
+              { label: 'Environment', value: environmentLabel(data.environment) },
+              { label: 'Mail server', value: data.mailHost ?? 'Not set up' },
+              { label: 'Staff accounts', value: String(data.staffCount) },
+              { label: 'Email confirmation', ...confirmation },
+              { label: 'One editor at a time', ...lock },
+            ]}
+          />
+        );
+      }}
     </QueryPanel>
   );
 }

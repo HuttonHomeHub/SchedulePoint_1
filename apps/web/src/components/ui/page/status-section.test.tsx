@@ -52,4 +52,22 @@ describe('StatusSection announce', () => {
     );
     expect(screen.getByText('What this holds.')).toBeInTheDocument();
   });
+
+  // The latch is one-way: after the first change every sentence is spoken, including a return to the
+  // baseline, because "fine again" is as much news as "failed" was.
+  it('with announce="change" keeps speaking after the first change, even back to the baseline', () => {
+    const view = (status: string): React.ReactElement => (
+      <StatusSection title="Box" status={status} announce="change">
+        x
+      </StatusSection>
+    );
+    const { rerender } = render(view(''));
+    rerender(view('Fine.'));
+    rerender(view('Failed.'));
+    expect(polite()).toHaveTextContent('Failed.');
+
+    rerender(view('Fine.'));
+    expect(polite()).toHaveTextContent('Fine.');
+    expect(screen.getAllByText('Fine.')).toHaveLength(1);
+  });
 });

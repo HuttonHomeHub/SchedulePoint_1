@@ -60,9 +60,19 @@ export interface StatusSectionProps {
    *   (Diagnostics, a probe run).
    * - `change` treats the first sentence as the panel's **resting state**: it is written as plain
    *   text a reader can reach, and only a LATER, different sentence (a refresh that changed a
-   *   figure, a read that failed, a retry that answered) goes to the live region. A standing
-   *   condition is not an event (ADR-0132), and seven panels each announcing theirs as the page
-   *   loaded was seven interruptions of one reader; the page speaks one sentence instead.
+   *   figure, a retry that answered, a read that failed after it had answered) goes to the live
+   *   region. A standing condition is not an event (ADR-0132), and seven panels each announcing
+   *   theirs as the page loaded was seven interruptions of one reader; the page speaks one sentence
+   *   instead.
+   *
+   *   **A failure on first load is the baseline too, and is NOT spoken from here.** Its sentence
+   *   is the first one the panel settles on, so it is plain text; what a screen reader hears is
+   *   `QueryErrorState`'s own `role="alert"` (`QueryPanel` renders it). A caller that uses `change`
+   *   without a body that announces its own failure would leave a first-load failure silent.
+   *
+   *   **The switch is a one-way latch.** Once any later sentence has arrived the section speaks
+   *   every sentence from then on, including one equal to the baseline: a reader who was told
+   *   "failed" must also be told it is "fine" again.
    */
   announce?: 'settle' | 'change';
   /** One sentence saying what the box holds, under its heading. */
@@ -99,7 +109,9 @@ export function StatusSection({
       {...(busy === true ? { busy } : {})}
       {...(description === undefined ? {} : { description })}
     >
-      <div className="space-y-4">
+      {/* `-mt-2` takes the header's 24 px bottom padding to 16: every panel's first line sits one
+          fixed distance under its description (or heading), whatever that first line is. */}
+      <div className="-mt-2 space-y-4">
         {resting ? <p className="sr-only">{status}</p> : null}
         <p aria-live="polite" className="sr-only">
           {resting ? '' : status}

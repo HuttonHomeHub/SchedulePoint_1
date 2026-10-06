@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ListRow, SectionCard, rowLinkClass } from '@/components/ui/page';
@@ -56,7 +58,11 @@ export interface StaffStatusSummaryProps {
    * checks could not be read, so a single failure keeps its box's own Try again and nothing else.
    */
   onRetryAll?: () => void;
-  /** A refresh is in flight; the button is shaded and its handler refuses. */
+  /**
+   * A refresh is in flight; the button is shaded and its handler refuses. It stays mounted for the
+   * whole run even when the retry takes the unreadable count below two, because it is the control
+   * that has focus (ADR-0135): removing it mid-run drops focus to `<body>`.
+   */
   retrying?: boolean;
 }
 
@@ -65,9 +71,35 @@ export function StaffStatusSummary({
   onRetryAll,
   retrying = false,
 }: StaffStatusSummaryProps): React.ReactElement {
+  const sectionRef = useRef<HTMLElement>(null);
+  const hadFocus = useRef(false);
+  // Set by a press of the button, so it outlives the condition that offered it until the run ends.
+  const [pressed, setPressed] = useState(false);
+  if (pressed && !retrying) setPressed(false);
+  const offered = onRetryAll !== undefined && (status.unreadableCount >= 2 || pressed);
+
+  // A ref's cleanup runs while the node is still attached, the only moment its focus can be read.
+  const setButton = useCallback((node: HTMLButtonElement | null) => {
+    if (node === null) return;
+    return () => {
+      if (document.activeElement === node) hadFocus.current = true;
+    };
+  }, []);
+
+  // When the run has settled and the button is withdrawn with focus on it, hand focus to the section
+  // it sat in (WCAG 2.4.3). The section is always mounted and is a focus target by its `id`, so focus
+  // lands somewhere stable instead of on `<body>`.
+  useEffect(() => {
+    if (!hadFocus.current) return;
+    hadFocus.current = false;
+    sectionRef.current?.focus();
+  });
+
   return (
     <SectionCard
       title="Status"
+      id="staff-status"
+      ref={sectionRef}
       description={status.sentence}
       {...(status.allHealthy ? {} : { className: 'border-warning/40' })}
     >
@@ -91,18 +123,21 @@ export function StaffStatusSummary({
           </li>
         ))}
       </ul>
-      {onRetryAll !== undefined && status.unreadableCount >= 2 ? (
+      {offered ? (
         <Button
+          ref={setButton}
           variant="outline"
           size="sm"
-          className="mt-4 aria-disabled:opacity-60"
+          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground mt-4 aria-disabled:opacity-60"
           aria-disabled={retrying}
+          aria-busy={retrying}
           onClick={() => {
-            if (retrying) return;
+            if (retrying || onRetryAll === undefined) return;
+            setPressed(true);
             onRetryAll();
           }}
         >
-          Try again for all
+          {retrying ? 'Trying again…' : 'Try again for all'}
         </Button>
       ) : null}
     </SectionCard>

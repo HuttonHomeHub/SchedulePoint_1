@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StaffStatusSummary } from './status-summary';
@@ -190,5 +191,67 @@ describe('StaffStatusSummary', () => {
     for (const link of screen.getAllByRole('link')) {
       expect(link.getAttribute('href')).toMatch(/^#staff-section-/);
     }
+  });
+
+  /**
+   * WCAG 2.4.3 / ADR-0135: the button that has focus must not be what the retry removes. The retry
+   * that heals the page takes the unreadable count below two, which used to unmount the button with
+   * focus on it (focus fell to `<body>`). Verified red against the old `unreadableCount >= 2` guard.
+   */
+  describe('Try again for all keeps focus when its own retry heals the page', () => {
+    const failed = { isPending: false, isError: true, data: undefined };
+    const broken = (): ConsoleStatusInput => ({ ...healthy(), security: failed, accounts: failed });
+
+    function Harness(): React.ReactElement {
+      const [input, setInput] = useState<ConsoleStatusInput>(broken());
+      const [retrying, setRetrying] = useState(false);
+      return (
+        <>
+          <StaffStatusSummary
+            status={deriveConsoleStatus(input)}
+            retrying={retrying}
+            onRetryAll={() => {
+              setRetrying(true);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setInput(healthy());
+            }}
+          >
+            reads answer
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRetrying(false);
+            }}
+          >
+            run ends
+          </button>
+        </>
+      );
+    }
+
+    it('stays mounted and shaded while it runs, then hands focus to the Status section', async () => {
+      render(<Harness />);
+      const button = screen.getByRole('button', { name: 'Try again for all' });
+      button.focus();
+      fireEvent.click(button);
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(button).toHaveTextContent('Trying again…');
+
+      // The answers land while the run is still going.
+      fireEvent.click(screen.getByRole('button', { name: 'reads answer' }));
+      expect(screen.getByRole('button', { name: 'Trying again…' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'run ends' }));
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /Try(ing)? again/ })).not.toBeInTheDocument();
+      });
+      expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Status' }));
+    });
   });
 });
