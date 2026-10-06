@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.176.1
+
+### Patch Changes
+
+- [#862](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/862) [`0ed28ad`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0ed28ad89cf00c6fcfd03c6256f28705e0780a09) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A greyed-out button you can see a reason for no longer swallows the click: fifteen buttons (Add note, Save in the activity editor, Clear filters, Arrange, Link in sequence, the bulk bars and others) now take the pointer while shaded, do nothing when pressed, and keep their hover quiet. Shaded buttons now dim to 60% by default (native disabled stays at 50%), so a few that did not look shaded before now do; some still state 50% themselves until the follow-up change removes that.
+
 ## 0.176.0
 
 ### Minor Changes
