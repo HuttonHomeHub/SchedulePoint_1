@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.173.0
+
+### Minor Changes
+
+- [#843](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/843) [`2dfff0c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2dfff0c8ff13f492e152c818fa82f20e8c9bb159) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Drag a selected Gantt bar with a finger or stylus: tap the bar, then drag it. An unselected bar now
+  scrolls under a finger instead of resizing from its edge. Press and hold, or right-click, a Gantt
+  row to open its actions (Shift+right-click keeps the browser's menu).
+
 ## 0.172.0
 
 ### Minor Changes
