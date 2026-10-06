@@ -133,6 +133,34 @@ nothing regressed.
   error plus prior data shows **only** the error), and the skeleton slot.
 - **Development steps:** 1. primitive + tests; 2. adopt at three sites; 3. archetype gate lists it.
 
+#### M0 record (2026-10-06)
+
+**Landed with no visible change.** What the next milestone needs:
+
+- Baselines, the environment line and the measurement script are in [`m0-measurement.md`](./m0-measurement.md)
+  and `apps/web/scripts/measure-staff-console.mjs` (re-run it for the M3 and M4 readings).
+- **A real finding for the security-reviewer:** a non-staff member's `/staff` differs from `/no-such-path` in
+  title, markup and picture, so ADR-0086's property does not hold on the web side. Filed as
+  `docs/TECH_DEBT.md` #459, **not fixed here**. M1-T5 changes only the pending-identity title.
+- **The 390 px transient overflow (M1-T5) reproduced**, and it is the probe overlay's Stop button
+  (`right=399`), the same defect as M1-T4. There is no second cause.
+- `routes/staff.tsx` is now a one-line re-export, so `app/router.tsx`'s lazy import and the `staff` chunk
+  name are unchanged (build compared before and after: the same 43 asset names; the staff chunk 102.45 kB
+  before, 102.18 kB after).
+- DOM equality was checked, not assumed: a normalised `body` dump of `/staff` in the loaded, all-reads-fail
+  and reads-held states, before and after, differs in two lines only, the order in which concurrently written
+  audit rows were named ("6 panel reads - accounts, security" against the same six names in another order).
+- **Gates moved with the files and each was shown failing.** `no-staff-import.structural.test.ts` (new) was
+  red against the original tree, naming four files. `archetypes.structural.test.ts` now pins
+  `staff-console-screen.tsx` and its `SURFACE` no longer lists the route file; a planted `<h2>` in the
+  screen file fails it. `page-frame.structural.test.ts` lost its `routes/staff.tsx` exception (the console
+  is now framed through `StatusSection`) and its resolver learned to follow a single-file import and a
+  re-export route one hop, with a pinned case that fails without that. `page-container.structural.test.ts`
+  re-keyed its width exception to the screen file (it failed first, 2 tests, when the screen moved).
+- `PerformanceProbePanel` takes `apiVersion`; M4's split keeps that prop. `QueryPanel` is adopted by
+  Installation, Accounts and Activity only. Activity passes a pending `DataTable` as its `skeleton`, so its
+  loading shape is the table's own, as before.
+
 ---
 
 ### Milestone M1: Accessibility fixes (needed whatever the layout)

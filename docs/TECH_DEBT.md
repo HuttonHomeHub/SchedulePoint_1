@@ -11916,3 +11916,21 @@ class pair on non-submit buttons that rest `aria-disabled`; they were not examin
 transient or resting from the expression bound to it, as the submit case already does with a named exception list.
 Verify against the defect (ADR-0110): the unfixed Copy button must fail it. **Trigger:** the next `aria-disabled` control
 added outside a form, or the next change to this gate.
+
+### 459. A non-staff member's `/staff` is distinguishable from a route that does not exist
+
+**Status:** open · **Verified:** 2026-10-06 (`docs/specs/staff-console-redesign/m0-measurement.md`, "Non-staff
+`/staff` beside `/no-such-path`": both addresses loaded as a signed-in non-staff account in Chromium at 1368x912,
+screenshots and DOM read) · **Raised:** 2026-10-06 (staff console redesign, M0-T1) · **Size:** S · **Owner:** web
+
+ADR-0086's property is that the API answers a non-staff caller with the same 404 it gives a route that does not exist,
+so the console cannot be told apart from nothing. The **web** half does not keep it. `/staff` for a non-staff account
+renders `PageHeader` "Not found" with a sentence and a link, in the narrow container, under the document title
+`Not found · SchedulePoint`. `/no-such-path` renders the router's default not-found: the two words "Not Found" in the
+top-left corner, no heading, no `<main>`, no link, under the title `SchedulePoint`. Title, markup and picture all differ,
+so anybody who tries both learns that `/staff` is a real surface, which is the tell ADR-0086 forbids.
+
+**Next:** hand to security-reviewer. The remedy is probably to render the app's own not-found for the non-staff branch
+(or to give the router one not-found screen that both use), which touches a user-facing route and so wants a short spec
+(ADR-0105). **Not folded into the staff console redesign** (spec D-13). **Trigger:** the redesign's M1-T5 (document
+title) or any change to the router's not-found handling.

@@ -1,8 +1,13 @@
-import { SectionCard } from '@/components/ui/page';
+import { SectionCard } from './section-card';
 
 /**
  * One shape for every panel: the page archetype, plus the one thing the archetype does not have —
  * a polite status region.
+ *
+ * **It lives here, and not in `features/staff`, because two features use it.** It was
+ * `features/staff/ui/panel.tsx` and the performance probe imported it from there, a feature-to-feature
+ * import that would have become a cycle the moment the console's screen moved into `features/staff`
+ * (spec §0.3, staff console redesign M0).
  *
  * **It composes `SectionCard` rather than reimplementing it** (ADR-0062's extraction argument,
  * applied before the divergence rather than after it), so a staff panel and every other titled
@@ -25,12 +30,7 @@ import { SectionCard } from '@/components/ui/page';
  * has one"* — was right and is now the archetype's problem rather than this file's: `SectionCard`
  * passes `level={2}` once, centrally, so eight panels stop each making the same decision.
  */
-export function Panel({
-  title,
-  status,
-  children,
-  id,
-}: {
+export interface StatusSectionProps {
   title: string;
   /** The section's anchor id — the target of the status summary's "jump to" link (spec §8.4). */
   id?: string;
@@ -45,7 +45,14 @@ export function Panel({
    */
   status: string;
   children: React.ReactNode;
-}): React.ReactElement {
+}
+
+export function StatusSection({
+  title,
+  status,
+  children,
+  id,
+}: StatusSectionProps): React.ReactElement {
   return (
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting
     // the prop — spread it conditionally rather than widening `SectionCardProps` to accept one.

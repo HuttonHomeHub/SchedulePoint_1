@@ -94,7 +94,7 @@ const UNIT_NOUNS: Record<DiagnosticUnit, { one: string; many: string }> = {
 };
 
 /**
- * The whole panel's one-line status, for the polite region `Panel` owns.
+ * The whole panel's one-line status, for the polite region `StatusSection` owns.
  *
  * It names the questions rather than summing them. Two diagnostics ask different questions of
  * different populations, so a total would be a number with no meaning — and the panel exists

@@ -57,17 +57,21 @@ vi.mock('../api/probe-results', () => ({
 // The plan-loading section has its own suite. Here it is a button that reports a status upward,
 // which is the only seam the panel's announcement precedence depends on.
 vi.mock('./loading-probe-section', () => ({
-  LoadingProbeSection: ({ onStatusChange }: { onStatusChange: (status: string) => void }) => (
-    <button type="button" onClick={() => onStatusChange('Plan loading measured: reload 0 of 8.')}>
+  LoadingProbeSection: ({
+    apiVersion,
+    onStatusChange,
+  }: {
+    apiVersion: string | null;
+    onStatusChange: (status: string) => void;
+  }) => (
+    <button
+      type="button"
+      data-api-version={apiVersion ?? 'none'}
+      onClick={() => onStatusChange('Plan loading measured: reload 0 of 8.')}
+    >
       report a plan loading status
     </button>
   ),
-}));
-
-// The plan-loading section reads the API version for its report. This file is about the canvas
-// probe, so the query is stubbed out; the section has its own suite.
-vi.mock('@/features/staff/api/staff-panels', () => ({
-  useStaffInstallation: () => ({ data: undefined }),
 }));
 
 /**
@@ -289,10 +293,18 @@ beforeEach(() => {
 });
 
 describe('PerformanceProbePanel', () => {
+  it('hands the API version to the plan-loading section rather than reading it', () => {
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
+    expect(screen.getByRole('button', { name: 'report a plan loading status' })).toHaveAttribute(
+      'data-api-version',
+      '0.140.0',
+    );
+  });
+
   it('names its entry point and takes no measurement until asked', () => {
     // ADR-0081: a milestone claiming user-facing capability names its entry point. This is that
     // control, located by role and accessible name rather than by copy (ADR-0091's lesson).
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     expect(runControl()).toBeInTheDocument();
     expect(screen.getByText(/No measurement has been taken in this browser/)).toBeInTheDocument();
     expect(runProbe).not.toHaveBeenCalled();
@@ -301,14 +313,14 @@ describe('PerformanceProbePanel', () => {
   it('lists what it can measure without downloading anything', () => {
     // The registry is imported statically precisely so this list renders before the 68 kB of scene
     // code is fetched. If it ever needed the runner to name a scenario, the split would be pointless.
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     expect(screen.getByRole('combobox', { name: 'Measurement' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Canvas draw budget' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Revision compare overlay' })).toBeInTheDocument();
   });
 
   it('confirms before covering the screen, and says the movement IS the measurement', () => {
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     fireEvent.click(runControl());
     const dialog = screen.getByRole('alertdialog');
     // **The duration is derived, so the assertion is its shape rather than a constant.** The panel
@@ -324,7 +336,7 @@ describe('PerformanceProbePanel', () => {
     // A modal `<dialog>` restores focus from inside the effect that closes it, and lands on `<body>`
     // when the opener has moved — this repository's third-most-repeated defect (ADR-0080, ADR-0096,
     // ADR-0099 M10). Verified red by removing the `focusRun()` call from `onClose`.
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     fireEvent.click(runControl());
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(runControl()).toHaveFocus());
@@ -343,7 +355,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
 
@@ -362,7 +374,7 @@ describe('PerformanceProbePanel', () => {
       },
       context: CONTEXT,
     });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByText(/The run was refused — nothing was measured/);
@@ -376,7 +388,7 @@ describe('PerformanceProbePanel', () => {
 
   it('shows INDETERMINATE with its reason, and never the word PASS', async () => {
     runProbe.mockResolvedValue(measured('INDETERMINATE'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByText('INDETERMINATE');
@@ -388,7 +400,7 @@ describe('PerformanceProbePanel', () => {
     // A chunk that fails to download is a network fact, not a measurement — and it must not read as
     // a failing painter, which is the whole thing this panel is asked about.
     runProbe.mockRejectedValue(new Error('chunk load failed'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByText(/The measurement did not run/);
@@ -407,7 +419,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
     release(measured('PASS'));
@@ -415,7 +427,7 @@ describe('PerformanceProbePanel', () => {
 
   it('records a measured run, carrying the machine note and the scenario version', async () => {
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Machine (optional)' }), {
       target: { value: '  the Dell, docked  ' },
     });
@@ -438,7 +450,7 @@ describe('PerformanceProbePanel', () => {
     // The assertion this mock exists for. A refusal means nothing was measured, so a stored row
     // would put a reading in the installation's history that no machine ever produced.
     runProbe.mockResolvedValue(refused());
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // Two matches by design — the alert and the panel's own live region both say it, which is what
@@ -465,7 +477,7 @@ describe('PerformanceProbePanel', () => {
         resolveRun = resolve;
       }),
     );
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // While the overlay is up — it only exists during a run.
@@ -509,7 +521,7 @@ describe('PerformanceProbePanel', () => {
         },
       ],
     });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // The first line still shows — this must not become a test that only the LAST line survives.
@@ -521,7 +533,7 @@ describe('PerformanceProbePanel', () => {
 
   it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
     runProbe.mockResolvedValue(unjudgeable());
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledTimes(1));
@@ -537,7 +549,7 @@ describe('PerformanceProbePanel', () => {
     // about the other three. The step's own status is the truth.
     recordMutateAsync.mockRejectedValue(new Error('network'));
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -566,7 +578,7 @@ describe('PerformanceProbePanel', () => {
      */
     recordMutateAsync.mockRejectedValue(new ApiFetchError(422, { code: 'X', message: 'no' }));
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // The status reaches the operator, and so does the fact that a retry is pointless.
@@ -597,7 +609,7 @@ describe('PerformanceProbePanel', () => {
       new ApiFetchError(429, { code: 'X', message: 'slow down' }),
     );
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -612,7 +624,7 @@ describe('PerformanceProbePanel', () => {
   it('offers no retry and no failure wording when the reading was recorded', async () => {
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByText(/Recorded\./);
@@ -622,7 +634,7 @@ describe('PerformanceProbePanel', () => {
   it('shows one empty state for the history, and it is about having none rather than matching none', async () => {
     // There are no filters here, so "nothing recorded yet" cannot be confused with "nothing
     // matched" — the distinction ADR-0073 C1 found collapsed in a live region.
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     expect(await screen.findByText(/No readings recorded yet/)).toBeInTheDocument();
   });
 
@@ -634,7 +646,7 @@ describe('PerformanceProbePanel', () => {
     const base = measured('PASS');
     if (base.kind !== 'measured') throw new Error('unreachable');
     runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: base.limbs });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // **Both channels, asserted separately.** A document-wide `findAllByText` passes when EITHER
@@ -671,7 +683,7 @@ describe('PerformanceProbePanel', () => {
     // reader could not tell it from never having pressed Run — and nothing said the press had
     // registered. Found by the M5 ux review.
     runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: [] });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // Two elements carry it — the visible alert and the panel's own live region — and that they
@@ -701,7 +713,7 @@ describe('PerformanceProbePanel', () => {
         resolveRun = resolve;
       });
     });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     const stop = await screen.findByRole('button', { name: /^Stop/ });
@@ -723,7 +735,7 @@ describe('PerformanceProbePanel', () => {
     runProbe.mockResolvedValue(measured('PASS'));
     // A retry that never settles, so the in-flight state is observable.
     recordMutate.mockImplementation(() => undefined);
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Retry recording' }));
@@ -738,7 +750,7 @@ describe('PerformanceProbePanel', () => {
     recordMutateAsync.mockRejectedValue(new Error('network'));
     recordMutate.mockImplementation(() => undefined);
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
@@ -759,7 +771,7 @@ describe('PerformanceProbePanel', () => {
     // success was a plain paragraph, so a screen-reader user heard the bad news and never the good.
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByText(/Recorded\./);
@@ -772,7 +784,7 @@ describe('PerformanceProbePanel', () => {
     // so every later sweep summary — and its "NOT recorded" warning — went unannounced.
     recordState.isSuccess = true;
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     fireEvent.click(screen.getByRole('button', { name: 'report a plan loading status' }));
     const live = (): string =>
       document.querySelector('[aria-live="polite"].sr-only')?.textContent ?? '';
@@ -795,7 +807,7 @@ describe('PerformanceProbePanel', () => {
           resolveRun = resolve;
         }),
     );
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await screen.findByRole('button', { name: /^Stop/ });
@@ -813,7 +825,7 @@ describe('PerformanceProbePanel', () => {
     // The commonest outcome on this surface, and it rendered as `REPORTED_ONLY` with nothing beside
     // it — indistinguishable, to a first-time reader, from a failure code.
     runProbe.mockResolvedValue(measured('REPORTED_ONLY'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     expect(await screen.findByText('REPORTED, NOT GRADED')).toBeInTheDocument();
@@ -824,7 +836,7 @@ describe('PerformanceProbePanel', () => {
     // The history had no verdict at all: the server stores samples and thresholds and does not
     // judge, and nothing called the judge on read. The approved spec names the verdict first.
     historyRows.push(storedRow());
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
 
     // Scoped to the sitting's own table: the scenario's label is also an `<option>` in the picker
     // above, and a document-scoped assertion would pass on the picker alone — the ADR-0073 C2.5
@@ -848,7 +860,7 @@ describe('PerformanceProbePanel', () => {
     // Reachable: a newer web release can store a scenario shape an older one does not know, which
     // is the same skew that keeps `scenario_id` shape-checked rather than value-checked.
     historyRows.push(storedRow({ thresholds: {}, samples: [] }));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
 
     expect(await screen.findByText('Not readable by this version')).toBeInTheDocument();
     expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
@@ -863,7 +875,7 @@ describe('PerformanceProbePanel', () => {
         release = resolve;
       }),
     );
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     const run = runControl();
@@ -892,7 +904,7 @@ describe('the history refresh', () => {
     );
     runProbe.mockResolvedValue(measured('PASS'));
 
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     await waitFor(() => {
@@ -911,7 +923,7 @@ describe('the history refresh', () => {
       context: CONTEXT,
     });
 
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
 
     // Two channels carry it — the visible alert and the panel's live region — which is
@@ -938,7 +950,7 @@ describe('taking the readings a sitting never got', () => {
       call += 1;
       return Promise.resolve(call === 2 ? refused() : measured('PASS'));
     });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runAll();
 
     await waitFor(() => {
@@ -956,7 +968,7 @@ describe('taking the readings a sitting never got', () => {
 
   it('does not offer it when every reading landed', async () => {
     runProbe.mockResolvedValue(measured('PASS'));
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runAll();
 
     await waitFor(() => {
@@ -978,7 +990,7 @@ describe('taking the readings a sitting never got', () => {
       call += 1;
       return Promise.resolve(call === 2 ? refused() : measured('PASS'));
     });
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runAll();
     await waitFor(() => {
       expect(runProbe).toHaveBeenCalledTimes(4);
@@ -1043,7 +1055,7 @@ describe('taking the readings a sitting never got', () => {
     });
     runProbe.mockResolvedValue(measured('PASS'));
 
-    const { unmount } = render(<PerformanceProbePanel />);
+    const { unmount } = render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runOnce();
     await waitFor(() => {
       expect(ids).toHaveLength(1);
@@ -1054,7 +1066,7 @@ describe('taking the readings a sitting never got', () => {
     unmount();
 
     ids.length = 0;
-    render(<PerformanceProbePanel />);
+    render(<PerformanceProbePanel apiVersion="0.140.0" />);
     runAll();
     await waitFor(() => {
       expect(ids).toHaveLength(4);

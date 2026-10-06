@@ -359,7 +359,7 @@ function SittingIndex({
           onShow={() => {
             onShow(row.id);
             // The detail slot is above the control that changed it and outside the reader's
-            // focus, so nothing about the press announces itself. `Panel`'s polite region is the
+            // focus, so nothing about the press announces itself. `StatusSection`'s polite region is the
             // app's one channel for that, and `/staff` has carried an `AnnouncerProvider` since
             // the console redesign — before that `useAnnounce()` there was a silent no-op.
             // `describeReadings` is `null` where a count would be a tautology, so the sentence is
