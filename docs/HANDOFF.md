@@ -26,15 +26,21 @@ touch-and-stylus pass up to M1.
 
 ## Waiting on the product owner
 
-- **The Surface test sheet** (`docs/specs/gantt-coarse-pointer/device-checklist.md`, sent 2026-10-06),
-  plus the extra tick-boxes in `m1-record.md` (Menu key opens exactly one menu; stylus behaviour).
-  His answers decide **Gantt M2** (bigger edge zones, the summary chevron, sort headers), whether the
-  stylus stays gated like touch, and whether a `useLongPress` fallback is needed. **M2-T1 is already
-  re-scoped**: the `⋯` trigger overlaps the start edge of bars that begin at the chart's left edge.
+- **The Surface test sheet is PARKED** (product owner, 2026-10-06: "we will do it later").
+  `docs/specs/gantt-coarse-pointer/device-checklist.md` now holds the full sheet as sent, items 1–11
+  (9–11 cover the Menu key, focus after Escape, and Shift+right-click from `m1-record.md`).
+  **Standing instruction: if a change alters anything the sheet tests (Gantt touch, stylus,
+  right-click or keyboard-menu behaviour, the Gantt's targets, `/pointer-check.html`), update the
+  sheet in the same PR.** When the product owner runs it, the answers decide **Gantt M2** (bigger edge zones, the
+  summary chevron, sort headers), whether the stylus stays gated like touch, and whether a
+  `useLongPress` fallback is needed. **M2-T1 is already re-scoped**: the `⋯` trigger overlaps the
+  start edge of bars that begin at the chart's left edge.
 - ~~The plan-loading reading~~ **taken 2026-10-06 and #433 closed** (0 of 11 files to the network on
-  reload and revisit; `immutable`; h2). A Dell canvas sitting the same morning is #75 item 11.
+  reload and revisit; `immutable`; h2 on the Dell, h3 on the Surface). Same-day canvas sittings are
+  #75 item 11 (Dell) and **item 12 (Surface, on battery: Fit/2000 26.0 → 32.9 fps, now above the
+  30 fps floor)** — #846 and #847.
 - **The history count on or after 1 November** (ADR-0174 / #443): staff panel → **Run
-  diagnostics** → Copy. Record it in #443 and the activity-history plan's M3-T2.
+  diagnostics** → Copy. Record it in #443 (on 2026-10-06 it read 2 entries — the feature is new) and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
 
 ## Open rows that need a decision or a trigger
@@ -56,7 +62,7 @@ touch-and-stylus pass up to M1.
 
 Nothing below is approved. Put these to the product owner in plain English:
 
-1. **Gantt M2**, once the device answers are in (needs no new spec; the plan has exits per task).
+1. **Gantt M2**, once the parked Surface sheet is run (needs no new spec; the plan has exits per task).
 2. **#457**: the nginx security-header fix (small; no spec: it stays inside the row's behaviour).
 3. Anything from `docs/BACKLOG.md`; a new feature starts with **feature-analyst**.
 
