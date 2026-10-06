@@ -7397,10 +7397,10 @@ holding at the moment a run ends. The content is redundant rather than contradic
     ledger exists to prevent — the register disagreeing with itself about what a number means._
 
 11. ~~**`revision-diff` narrates progress once for a whole multi-pair run**~~ — **closed
-    2026-09-11.** `BenchOptions` gains an optional `onPairStart`, called at the start of each pair, and
-    the runner passes one that narrates in the same shape the absolute runner uses per repeat. So a
-    screen-reader user now hears where the run has got to instead of one sentence followed by up to
-    twenty-five seconds of silence, which is indistinguishable from a run that has died.
+2026-09-11.** `BenchOptions` gains an optional `onPairStart`, called at the start of each pair, and
+the runner passes one that narrates in the same shape the absolute runner uses per repeat. So a
+screen-reader user now hears where the run has got to instead of one sentence followed by up to
+twenty-five seconds of silence, which is indistinguishable from a run that has died.
 
             **The difference was never a decision, which is why it is worth stating**: `canvas-draw`'s
             repeat loop lives in the runner where `onProgress` is already in scope, and this scene's pair
@@ -7415,8 +7415,8 @@ holding at the moment a run ends. The content is redundant rather than contradic
 
 2026-09-11.** It rendered `message.split('\n')[0]`, so everything after the first line was dropped
 on screen while the paste-ready report carried it whole. The dropped part is the part that matters:
-`NothingToJudgeError`'s non-vacuity message ends *"This is NOT a pass. A number measured on an
-almost-empty canvas is a number about the cull"* — the one sentence whose job is to stop a refusal
+`NothingToJudgeError`'s non-vacuity message ends _"This is NOT a pass. A number measured on an
+almost-empty canvas is a number about the cull"_ — the one sentence whose job is to stop a refusal
 being read as a clean run, which is the mistake ADR-0066 records **actually happening**. Now renders
 the whole message with `whitespace-pre-line` rather than re-flowing it into paragraphs: the judge
 composes these as text with deliberate breaks and an indented detail line, and re-laying them out
