@@ -370,3 +370,5 @@ Four reviews returned **agree with changes**. Blocking points and how each was r
 **Declined:** none in substance. Two adjustments: G1 lands in **M1b**, not M1a, because it cannot pass until
 the caller strings are deleted (M1a tightens the pointer gate instead); and the reviewers' "Calendar/Resource/Client
 form dialogs" are not #460 sites (§0.6), so they get no handler change, only the class deletion.
+
+**Second pass (2026-10-06):** accessibility-reviewer, component-reviewer, ux-reviewer and security-reviewer each re-read the revision and returned **AGREE** with no blocking points. Build reminders they left: record the built-CSS check for `not-aria-disabled:` in the M1a PR; drive Enter and Space on the five shaded submits in a real browser before release (ADR-0111); a visual check of the 60% shading at ~1368x912; the not-found link must not change its text under a focused keyboard user while the session resolves.
