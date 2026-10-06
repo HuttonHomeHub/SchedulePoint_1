@@ -57,7 +57,7 @@ describe('the panel’s imports', () => {
     // types beside the panel) to satisfy a gate about bundle size that types cannot affect.
     //
     // A dynamic `await import(...)` is a split point and is deliberately not matched either.
-    const staticImports = [...PANEL.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)]
+    const staticImports = [...PANEL.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)]
       .map((m) => m[1])
       .filter((spec): spec is string => spec !== undefined);
     const forbidden = staticImports.filter(
@@ -84,7 +84,17 @@ describe('the panel’s imports', () => {
       typeImport?.[0] ?? '',
       "import { runProbe } from '../runner/run-probe';",
     );
-    const specs = [...withValueImport.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)].map(
+    const specs = [...withValueImport.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)].map(
+      (m) => m[1],
+    );
+    expect(specs).toContain('../runner/run-probe');
+  });
+
+  it('catches a value import that Prettier wrapped over several lines (component review, M4)', () => {
+    // The scan once read one line per import, so a wrapped `import {\n  runProbe,\n} from …` slipped
+    // past every assertion above. Verified red against the single-line pattern.
+    const wrapped = `${SWEEP_HOOK}\nimport {\n  runProbe,\n  type ProbeOutcome,\n} from '../runner/run-probe';\n`;
+    const specs = [...wrapped.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)].map(
       (m) => m[1],
     );
     expect(specs).toContain('../runner/run-probe');
@@ -116,7 +126,7 @@ const SECTION = readFileSync(join(import.meta.dirname, 'loading-probe-section.ts
 
 describe('the loading probe section’s imports', () => {
   const valueImports = (source: string): string[] =>
-    [...source.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)]
+    [...source.matchAll(/^import (?!type )[^;]*?from\s+'([^']+)';/gm)]
       .map((m) => m[1])
       .filter((spec): spec is string => spec !== undefined);
 
