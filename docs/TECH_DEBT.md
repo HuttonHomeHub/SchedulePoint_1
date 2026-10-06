@@ -11780,6 +11780,13 @@ wraps it. **Trigger:** touch use of any divider, or the next change to `PanelRes
 > pointer logic into `usePointerDrag` verbatim and added no `touch-action`. The touch reading of the new strip on a
 > fine-primary touch device is owed (`m2-measurement.md`).
 
+> **2026-10-06 (gantt-coarse-pointer M0).** Re-measured by touch in two viewports and both pointer contexts, three
+> runs each (`docs/specs/gantt-coarse-pointer/m0-measurement.md`): `touch-action: auto`, `pointercancel` 12 of 12,
+> the value moving 584 to 598 before the cancel. The separator's own box is 1 px wide, so the grab area is its
+> descendant. **It has also never been swept at any pointer**: `command-surface.spec.ts`'s selector list has no
+> `[role="separator"]` (`:104-106`) and its coarse projection never enters the Gantt, so no gate would see a fix
+> or a regression here. Folded in rather than opened as a row; the sweep is M2-T4's.
+
 ### 454. The per-plan remount (#451) is pinned only by a journey, and two guards it made redundant remain
 
 **Status:** open · **Verified:** 2026-10-05 (`routes/plan-detail.tsx:24-39`; `use-plan-workspace-model.ts:473-476`
