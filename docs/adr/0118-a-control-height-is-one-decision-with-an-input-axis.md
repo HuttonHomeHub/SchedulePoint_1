@@ -1,6 +1,8 @@
 # ADR-0118 — A control height is one decision, and the input is an axis of it
 
 - **Status:** Accepted (M0–M4 landed 2026-08-29)
+- **Amended by:** ADR-0177 (2026-10-06) — D1's exception list gains the Gantt's entries, each with its
+  equivalent (written at that ADR's D4).
 - **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)
