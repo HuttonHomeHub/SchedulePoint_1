@@ -29,6 +29,7 @@ import {
 import { describeDuration, estimateSweepSeconds } from '../sweep/sweep-duration';
 import { sweepPlan, type SweepStep } from '../sweep/sweep-plan';
 
+import { LoadingProbeSection } from './loading-probe-section';
 import { formatProbeReport } from './probe-report';
 import { ProbeSittings } from './probe-sittings';
 
@@ -186,6 +187,8 @@ export function PerformanceProbePanel(): React.ReactElement {
   // sweep callback whenever a copy settles, which is a different subject entirely.
   const { reset: resetCopyState } = clipboard;
   const [machineLabel, setMachineLabel] = useState('');
+  // The plan-loading section's sentence for the panel's one polite region; see `LoadingProbeSection`.
+  const [loadingStatus, setLoadingStatus] = useState('');
 
   const record = useRecordProbeResult();
   const history = useProbeResults();
@@ -510,9 +513,11 @@ export function PerformanceProbePanel(): React.ReactElement {
     ? progress
     : failure !== null
       ? failure
-      : outcome
-        ? `${summariseSweep(outcome)}${recordingStatus}`
-        : 'No measurement has been taken in this browser.';
+      : loadingStatus !== ''
+        ? loadingStatus
+        : outcome
+          ? `${summariseSweep(outcome)}${recordingStatus}`
+          : 'No measurement has been taken in this browser.';
 
   return (
     <Panel title="Performance" status={status}>
@@ -775,6 +780,8 @@ export function PerformanceProbePanel(): React.ReactElement {
           </div>,
           document.body,
         )}
+
+      <LoadingProbeSection onStatusChange={setLoadingStatus} />
 
       <ConfirmDialog
         open={confirming !== null}

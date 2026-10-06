@@ -71,3 +71,48 @@ describe('the panel’s imports', () => {
     expect(PANEL).toMatch(/^import \{[^}]*SCENARIOS[^}]*\} from '\.\.\/model\/scenarios';/m);
   });
 });
+
+/**
+ * **The loading probe's split point, pinned the same way** (`docs/TECH_DEBT.md` #433).
+ *
+ * The runner reaches the router, so a static edge to it from the staff chunk would make every visit
+ * to the console pay for it. The section is the only place that reaches the runner, and it does so
+ * twice, both dynamic: to start a press, and to resume one on mount. Both are asserted, because a
+ * page with no pending press must load nothing, and a section that never resumes would drop the
+ * result on the floor after the reload.
+ */
+const SECTION = readFileSync(join(import.meta.dirname, 'loading-probe-section.tsx'), 'utf8');
+
+describe('the loading probe section’s imports', () => {
+  const valueImports = (source: string): string[] =>
+    [...source.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)]
+      .map((m) => m[1])
+      .filter((spec): spec is string => spec !== undefined);
+
+  it.each([
+    ['the panel', PANEL],
+    ['the section', SECTION],
+  ])('%s never statically imports the loading runner', (_name, source) => {
+    expect(valueImports(source).filter((spec) => spec.includes('/loading/runner/'))).toEqual([]);
+  });
+
+  it('still catches a VALUE import of the loading runner', () => {
+    // Verified red: a static `import { browserEnv } from '../loading/runner/run-loading-probe'`
+    // appended to the section is named by the filter above.
+    const mutated = `${SECTION}\nimport { browserEnv } from '../loading/runner/run-loading-probe';\n`;
+    expect(valueImports(mutated).filter((spec) => spec.includes('/loading/runner/'))).toEqual([
+      '../loading/runner/run-loading-probe',
+    ]);
+  });
+
+  it('DOES reach the runner dynamically, to start a press and to resume one', () => {
+    const dynamic = SECTION.match(/await import\('\.\.\/loading\/runner\/run-loading-probe'\)/g);
+    expect(dynamic?.length).toBe(2);
+    expect(SECTION).toMatch(/resumeLoadingProbe/);
+    expect(SECTION).toMatch(/startLoadingProbe/);
+  });
+
+  it('asks whether a press is pending from the static marker module, not from the runner', () => {
+    expect(SECTION).toMatch(/from '\.\.\/loading\/model\/marker'/);
+  });
+});

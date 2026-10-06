@@ -54,6 +54,12 @@ vi.mock('../api/probe-results', () => ({
   }),
 }));
 
+// The plan-loading section reads the API version for its report. This file is about the canvas
+// probe, so the query is stubbed out; the section has its own suite.
+vi.mock('@/features/staff/api/staff-panels', () => ({
+  useStaffInstallation: () => ({ data: undefined }),
+}));
+
 /**
  * A stored row, as the API hands it back.
  *

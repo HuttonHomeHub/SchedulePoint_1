@@ -11866,3 +11866,29 @@ keep that change to the diagnostics it adds. **Next:** run each press inside one
 `SET LOCAL statement_timeout` (and decide the figure against the measured readings), with a test that a statement
 over the bound surfaces as the existing 500 rather than hanging. **Trigger:** H-1 `examined` ≥ 250,000, or any
 press over ~800 ms reported by the operator, or the next entry whose scan is unbounded by an index.
+
+### 457. `location /assets/` drops every server-level security header from hashed code, `/theme-boot.js` and `/favicon.svg`
+
+**Status:** open · **Verified:** 2026-10-06 (`apps/web/nginx.conf:35-69` and `:94-160` read; the template rendered and
+served by nginx 1.24.0, and the headers read with `curl -I` — see `docs/specs/staff-server-readings/m2-measurement.md`) ·
+**Raised:** 2026-10-06 (found while verifying the plan-loading probe, #433) · **Size:** S · **Owner:** web
+
+`location /assets/` sets `Cache-Control` with `add_header` (`nginx.conf:37`), and the file's own comment (`:46-48`)
+records the rule that makes that costly: an `add_header` in a location **replaces every header inherited from
+`server`**. The same is true of `location = /theme-boot.js` (`:59`) and `location = /favicon.svg` (`:68`). Measured,
+a hashed chunk, `/theme-boot.js` and `/favicon.svg` each answer with `Cache-Control` and nothing else, while
+`/index.html` and `/` carry the full set. **Missing from all three:** `X-Content-Type-Options: nosniff`,
+`Cross-Origin-Resource-Policy: same-origin`, `Cross-Origin-Opener-Policy`, `X-Frame-Options`, `Referrer-Policy`,
+`Permissions-Policy`, the CSP header and `Reporting-Endpoints`. The two that matter for a subresource are `nosniff`
+(a script served without it is subject to MIME sniffing) and `Cross-Origin-Resource-Policy` (without it any origin
+may embed the file; the files are public static assets, so the exposure is the missing defence in depth rather than
+a leak). The CSP and framing headers on a script response are of no practical effect.
+
+**Not fixed here.** The fix is a second look at how `/assets/` is cached: `expires 1y;` already emits
+`Cache-Control: max-age=31536000`, so the `add_header` only adds `public, immutable`, and a repeated `add_header`
+of the security set inside each of the three locations (or an `include` of one snippet) restores them. Either
+changes what the `web` image serves, so it wants `check:nginx` extended to assert the headers on those three paths
+and one reading under the image.
+
+**Next:** the snippet and the `check:nginx` assertion together. **Trigger:** the next change to `nginx.conf`, or a
+security review of the web origin.

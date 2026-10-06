@@ -169,9 +169,23 @@ const signUpRoute = createRoute({
  * place where the destination is known before the session is.
  */
 const PLAN_DEEP_LINK = /^\/orgs\/[^/]+\/plans\/[^/]+/.test(window.location.pathname);
+
+/**
+ * The two loaders a plan URL calls at boot, as one function.
+ *
+ * **Exported so the staff console's loading probe asks for exactly what a bookmark asks for**
+ * (`docs/TECH_DEBT.md` #433). A probe that kept its own copy would go on measuring yesterday's
+ * chunk set the day this list changed, and nothing on screen would say so; `router-splitting.structural.test.ts`
+ * pins that the branch below calls this rather than re-listing the loaders. It resolves when both
+ * chunks have been fetched and evaluated, and never rejects (`lazyRouteComponent`'s loader catches
+ * its own failure), so a chunk that did not arrive shows up as a missing timing entry.
+ */
+export function preloadPlanDeepLinkChunks(): Promise<unknown> {
+  return Promise.all([AuthedLayout.preload?.(), PlanDetailScreen.preload?.()]);
+}
+
 if (PLAN_DEEP_LINK) {
-  void AuthedLayout.preload?.();
-  void PlanDetailScreen.preload?.();
+  void preloadPlanDeepLinkChunks();
 }
 
 /** Whether the hierarchy warm-up has run; it only ever needs to. */
