@@ -201,7 +201,12 @@ function allSourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Source with block comments and whole-line or trailing `//` comments removed. */
+/**
+ * Source with block comments and whole-line or trailing `//` comments removed. A regex, not a
+ * tokenizer, so it fails OPEN on a string holding ` //` or `/*` (a URL, a glob such as
+ * `'**' + '/*.ts'`): text after it is dropped and could hide a spelling. Nothing in the tree does
+ * that today; a TypeScript-aware scan is the remedy if one ever appears.
+ */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
 }
