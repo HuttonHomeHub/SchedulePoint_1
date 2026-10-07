@@ -2,26 +2,46 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshPageReads from '@/features/staff/api/refresh-page-reads';
+import { STAFF_ACTIVITY_KEY } from '@/features/staff/api/staff-panels';
 import { StaffConsoleScreen } from '@/features/staff/ui/staff-console-screen';
 
+type RefreshModule = typeof RefreshPageReads;
 const apiFetch = vi.fn<(path: string) => Promise<unknown>>();
 vi.mock('@/lib/api/client', () => ({
   apiFetch: (path: string) => apiFetch(path),
   apiFetchEnvelope: (path: string) => apiFetch(path),
 }));
 
-function mount(): void {
+// Wraps the real hook so one test can make the Refresh itself reject: a failed read does not reject
+// `refetchQueries` (it settles with the query in error), so the rejection path needs a seam.
+const refreshOutcome = { rejectWith: null as Error | null };
+vi.mock('@/features/staff/api/refresh-page-reads', async (importOriginal) => {
+  const original = await importOriginal<RefreshModule>();
+  return {
+    ...original,
+    useRefreshStaffPageReads: () => {
+      const real = original.useRefreshStaffPageReads();
+      return () =>
+        refreshOutcome.rejectWith === null ? real() : Promise.reject(refreshOutcome.rejectWith);
+    },
+  };
+});
+
+function mount(): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <StaffConsoleScreen />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 beforeEach(() => {
   document.title = 'SchedulePoint';
   apiFetch.mockReset();
+  refreshOutcome.rejectWith = null;
 });
 afterEach(() => {
   document.title = '';
@@ -216,6 +236,103 @@ describe('the grouped console', () => {
         'Refreshed. 3 things need attention. Showing the first 2 unconfirmed accounts.',
       );
     });
+  });
+
+  /**
+   * SC-3: one polite announcement per Refresh. The Activity read changes its sentence on the refetch
+   * (two entries, then one), which on its own would speak from that box; the mute holds it, and the
+   * page says the whole of it once. A change arriving after the window closed is spoken (asserted
+   * on `StatusSection` in `status-mute.test.tsx`, where a task can be placed exactly).
+   */
+  it('speaks once per Refresh, with every box silent', async () => {
+    let activityReads = 0;
+    const entry = (n: number) => ({
+      id: `e${String(n)}`,
+      occurredAt: '2026-09-14T00:00:00.000Z',
+      action: 'staff.panel_read',
+      actorLabel: null,
+      subjectLabel: null,
+    });
+    apiFetch.mockImplementation((path) => {
+      if (path !== '/staff/activity') return answerStaff(path);
+      activityReads += 1;
+      return Promise.resolve(activityReads === 1 ? [entry(1), entry(2)] : [entry(1)]);
+    });
+    const client = mount();
+    const announcer = await screen.findByTestId('announcer');
+    await screen.findByText('Staff activity: 2 entries.');
+    const boxes = (): (string | null)[] =>
+      [...document.querySelectorAll('[aria-live="polite"]')]
+        .filter((node) => node !== announcer)
+        .map((node) => node.textContent);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(announcer).toHaveTextContent('Refreshed. 3 things need attention.');
+    });
+    // The sentence moved and is reachable as plain text, and no box spoke it.
+    expect(screen.getByText('Staff activity: 1 entries.')).toBeInTheDocument();
+    expect(boxes().every((text) => text === '')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(boxes().every((text) => text === '')).toBe(true);
+
+    // The window has closed: news after it is spoken. Verified red with the unmute removed. The
+    // `.finally` placement is not distinguishable here: React batches both updates in jsdom.
+    apiFetch.mockImplementation((path) => {
+      if (path !== '/staff/activity') return answerStaff(path);
+      return Promise.resolve([entry(1), entry(2), entry(3)]);
+    });
+    await client.invalidateQueries({ queryKey: STAFF_ACTIVITY_KEY });
+    await waitFor(() => {
+      expect(boxes()).toContain('Staff activity: 3 entries.');
+    });
+  });
+
+  /**
+   * A Refresh whose read rejects never reaches the announcing effect, the only thing that lifts the
+   * mute, so the boxes would stay silent for the session. Verified red with the `.catch` removed:
+   * the later sentence is never spoken.
+   */
+  it('unmutes the boxes when a Refresh rejects, and says so on the console', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const entry = (n: number) => ({
+      id: `e${String(n)}`,
+      occurredAt: '2026-09-14T00:00:00.000Z',
+      action: 'staff.panel_read',
+      actorLabel: null,
+      subjectLabel: null,
+    });
+    apiFetch.mockImplementation((path) =>
+      path === '/staff/activity' ? Promise.resolve([entry(1)]) : answerStaff(path),
+    );
+    const client = mount();
+    const announcer = await screen.findByTestId('announcer');
+    await screen.findByText('Staff activity: 1 entries.');
+    const boxes = (): (string | null)[] =>
+      [...document.querySelectorAll('[aria-live="polite"]')]
+        .filter((node) => node !== announcer)
+        .map((node) => node.textContent);
+
+    refreshOutcome.rejectWith = new Error('refresh failed');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        'Could not refresh the staff console reads',
+        refreshOutcome.rejectWith,
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    });
+
+    apiFetch.mockImplementation((path) =>
+      path === '/staff/activity' ? Promise.resolve([entry(1), entry(2)]) : answerStaff(path),
+    );
+    await client.invalidateQueries({ queryKey: STAFF_ACTIVITY_KEY });
+    await waitFor(() => {
+      expect(boxes()).toContain('Staff activity: 2 entries.');
+    });
+    consoleError.mockRestore();
   });
 
   it('offers Try again for all when two reads fail, and one retry heals both health boxes', async () => {

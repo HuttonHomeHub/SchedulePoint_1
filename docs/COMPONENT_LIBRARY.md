@@ -684,5 +684,9 @@ the same thing several times, each slightly different.
   state's `role="alert"` carries it, which is why a `change` panel must render one.
 - **The switch is a one-way latch**: after the first change every sentence is spoken, including a
   return to the baseline.
+- **A muted window** (`StatusMuteProvider` / `useStatusMuted`, ADR-0178 D8): while the screen has
+  muted its sections, a `change` section writes any new sentence as plain text and re-baselines (in an
+  effect), so nothing it reached during the window is spoken after it. The default is not muted; a
+  caller outside the staff console is unaffected.
 - **`description`** is one sentence under the heading. The body sits one fixed distance beneath it
   whatever the body starts with, so a panel never adds its own gap there.

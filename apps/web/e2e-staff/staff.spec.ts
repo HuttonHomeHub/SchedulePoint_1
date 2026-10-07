@@ -1566,11 +1566,67 @@ test('a staff member reads the console by group and acts on a condition', async 
 
   const refresh = staff.getByRole('button', { name: 'Refresh' });
   await refresh.focus();
+
+  // **Make a box's sentence move, or the silence below proves nothing.** Staff activity is capped
+  // at 50 and a Refresh adds six rows to it, so on a busy host its count never changes and "no box
+  // spoke" would pass whatever the mute did. The real response is fetched and served back with one
+  // entry removed, so the sentence goes from N to N - 1.
+  const countBefore = Number(
+    /Staff activity: (\d+) entries\./.exec(
+      (await staff.getByText(/^Staff activity: \d+ entries\.$/).textContent()) ?? '',
+    )?.[1],
+  );
+  expect(countBefore, 'the Activity box states a count').toBeGreaterThan(0);
+  await staff.route('**/api/v1/staff/activity**', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as unknown;
+    const trimmed = Array.isArray(body)
+      ? body.slice(0, -1)
+      : { ...(body as { data: unknown[] }), data: (body as { data: unknown[] }).data.slice(0, -1) };
+    await route.fulfill({ response, json: trimmed });
+  });
+  // Records any text change inside a box's own live region, from the click to the end of the window.
+  await staff.evaluate(() => {
+    const spoken: string[] = [];
+    const page: string[] = [];
+    (window as unknown as { __boxSpeech: string[] }).__boxSpeech = spoken;
+    (window as unknown as { __pageSpeech: string[] }).__pageSpeech = page;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const element =
+          record.target instanceof Element ? record.target : record.target.parentElement;
+        const region = element?.closest('[aria-live="polite"]');
+        if (region?.getAttribute('data-testid') === 'announcer') {
+          if (region.textContent) page.push(region.textContent);
+        } else if (region) {
+          spoken.push(region.textContent ?? '');
+        }
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
   await refresh.click();
   await expect(staff.locator('[data-testid="announcer"]')).toHaveText(/^Refreshed\./, {
     timeout: 30_000,
   });
   await expect(refresh).toBeFocused();
+  // One polite sentence per Refresh (ADR-0178 D8): the page announcer holds it and no box's own
+  // region does. Read a beat later, so a box that speaks late (the mute ending too early) is caught.
+  await staff.waitForTimeout(500);
+  await staff.unroute('**/api/v1/staff/activity**');
+  await expect(
+    staff.getByText(`Staff activity: ${String(countBefore - 1)} entries.`),
+    'the sentence moved, and is reachable as plain text',
+  ).toBeVisible();
+  expect(
+    await staff.evaluate(() => (window as unknown as { __boxSpeech: string[] }).__boxSpeech),
+    'no box speaks on Refresh',
+  ).toEqual([]);
+  expect(
+    new Set(
+      await staff.evaluate(() => (window as unknown as { __pageSpeech: string[] }).__pageSpeech),
+    ).size,
+    'the page announcer spoke one sentence',
+  ).toBe(1);
   for (const path of SIX) expect(countOf(path), `${path} on Refresh`).toBe(1);
   expect(countOf('/staff/diagnostics'), 'Refresh must never run the diagnostics').toBe(0);
   expect(await readTime(), 'the header time moved').not.toBe(timeBefore);

@@ -32,6 +32,8 @@ export {
 export { PageGrid, PageGridItem, type PageGridProps, type PageGridItemProps } from './page-grid';
 export { StatGrid, type StatGridProps, type StatItem, type StatTone } from './stat-grid';
 export { StatusSection, type StatusSectionProps } from './status-section';
+export { StatusMuteProvider, useStatusMuted } from './status-mute';
+export type { StatusMuteProviderProps } from './status-mute';
 export { QueryPanel, type QueryPanelProps } from './query-panel';
 export { SectionGroup, type SectionGroupProps } from './section-group';
 export { SubSection, type SubSectionProps } from './sub-section';

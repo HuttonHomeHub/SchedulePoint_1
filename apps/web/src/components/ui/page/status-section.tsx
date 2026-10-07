@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { SectionCard } from './section-card';
+import { useStatusMuted } from './status-mute';
 
 /**
  * One shape for every panel: the page archetype, plus the one thing the archetype does not have —
@@ -73,6 +74,11 @@ export interface StatusSectionProps {
    *   **The switch is a one-way latch.** Once any later sentence has arrived the section speaks
    *   every sentence from then on, including one equal to the baseline: a reader who was told
    *   "failed" must also be told it is "fine" again.
+   *
+   * While the screen has muted its sections (`StatusMuteProvider`, ADR-0178 D8) a `change` section
+   * writes any sentence as plain text and makes it the new baseline, latch reset — **from an
+   * effect, so a strict-mode double render cannot desynchronise it** — and so nothing reached
+   * during the window is spoken after it.
    */
   announce?: 'settle' | 'change';
   /** One sentence saying what the box holds, under its heading. */
@@ -94,11 +100,21 @@ export function StatusSection({
   // and a ref written in render is the pattern the hooks lint rule exists to refuse.
   const [baseline, setBaseline] = useState<string | null>(null);
   const [changed, setChanged] = useState(false);
-  if (announce === 'change') {
+  const muted = useStatusMuted();
+  if (announce === 'change' && !muted) {
     if (baseline === null && status !== '') setBaseline(status);
     else if (baseline !== null && !changed && status !== baseline) setChanged(true);
   }
-  const resting = announce === 'change' && !changed;
+  const resting = announce === 'change' && (muted || !changed);
+  // The re-baseline for a muted window. An effect and not render: the unmute lands in a later
+  // commit, and every commit that carried a new sentence has run this effect before it, so the
+  // first unmuted render finds baseline === status and speaks nothing it merely witnessed.
+  useEffect(() => {
+    if (announce !== 'change' || !muted) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- must not run in render: strict mode replays it
+    if (status !== '') setBaseline(status);
+    setChanged(false);
+  }, [announce, muted, status]);
 
   return (
     // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting

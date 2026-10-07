@@ -8,6 +8,7 @@ import {
   PageGridItem,
   PageHeader,
   SectionGroup,
+  StatusMuteProvider,
 } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useProbeResults } from '@/features/perf-probe/api/probe-results';
@@ -182,6 +183,11 @@ function ConsoleBody({
   const announce = useAnnounce();
   const refreshReads = useRefreshStaffPageReads();
   const [refreshing, setRefreshing] = useState(false);
+  // **A second flag, not `refreshing`** (ADR-0178 D8). `refreshing` clears one microtask after
+  // `setRefreshed`, which is before the render that carries the answer has been committed and the
+  // page has spoken; unmuting there would let a late query notification speak from a box. This one
+  // is cleared by the effect below, after `announce(...)`.
+  const [muted, setMuted] = useState(false);
   // Set when a refresh has finished and is waiting for the render that shows its answer.
   const [refreshed, setRefreshed] = useState<{ firstPageSize: number | null } | null>(null);
   const loadAnnounced = useRef(false);
@@ -206,11 +212,14 @@ function ConsoleBody({
   useEffect(() => {
     if (refreshed === null) return;
     announce(refreshedAnnouncement(sentence.current, refreshed.firstPageSize));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the unmute must follow the committed announcement, which only an effect observes
+    setMuted(false);
   }, [announce, refreshed]);
 
   const refresh = useCallback(() => {
     if (refreshing) return;
     setRefreshing(true);
+    setMuted(true);
     void refreshReads()
       .then(
         (result) =>
@@ -221,6 +230,13 @@ function ConsoleBody({
             }, 0);
           }),
       )
+      // A read that rejects never reaches the announcing effect, which is the only thing that
+      // unmutes: without this the boxes would stay silent for the rest of the session. Not in
+      // `.finally`, which would also unmute on success before the page has spoken.
+      .catch((error: unknown) => {
+        setMuted(false);
+        console.error('Could not refresh the staff console reads', error);
+      })
       .finally(() => {
         setRefreshing(false);
       });
@@ -253,29 +269,31 @@ function ConsoleBody({
           DOM order and therefore the order a screen reader walks; the one pair side by side is two
           short key-value lists, which is the only place a second column buys anything (ADR-0143 D3's
           span-by-demand rule, kept). */}
-      <SectionGroup {...GROUPS.conditions} backToTopHref="#staff-top">
-        <MailPanel />
-        <RetentionPanel />
-        <SecurityPanel />
-        <AccountsPanel />
-      </SectionGroup>
-      <SectionGroup {...GROUPS.installation} backToTopHref="#staff-top">
-        <PageGrid>
-          <PageGridItem span="narrow">
-            <InstallationPanel />
-          </PageGridItem>
-          <PageGridItem span="narrow">
-            <AlertingPanel />
-          </PageGridItem>
-        </PageGrid>
-      </SectionGroup>
-      <SectionGroup {...GROUPS.tools} backToTopHref="#staff-top">
-        <DiagnosticsPanel />
-        <PerformanceProbePanel apiVersion={installation.data?.apiVersion ?? null} />
-      </SectionGroup>
-      <SectionGroup {...GROUPS.record} backToTopHref="#staff-top">
-        <ActivityPanel />
-      </SectionGroup>
+      <StatusMuteProvider muted={muted}>
+        <SectionGroup {...GROUPS.conditions} backToTopHref="#staff-top">
+          <MailPanel />
+          <RetentionPanel />
+          <SecurityPanel />
+          <AccountsPanel />
+        </SectionGroup>
+        <SectionGroup {...GROUPS.installation} backToTopHref="#staff-top">
+          <PageGrid>
+            <PageGridItem span="narrow">
+              <InstallationPanel />
+            </PageGridItem>
+            <PageGridItem span="narrow">
+              <AlertingPanel />
+            </PageGridItem>
+          </PageGrid>
+        </SectionGroup>
+        <SectionGroup {...GROUPS.tools} backToTopHref="#staff-top">
+          <DiagnosticsPanel />
+          <PerformanceProbePanel apiVersion={installation.data?.apiVersion ?? null} />
+        </SectionGroup>
+        <SectionGroup {...GROUPS.record} backToTopHref="#staff-top">
+          <ActivityPanel />
+        </SectionGroup>
+      </StatusMuteProvider>
     </>
   );
 }
