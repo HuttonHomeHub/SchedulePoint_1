@@ -194,7 +194,6 @@ export function SittingResult({
                   aria-disabled={step.storeFailure?.retryable === false ? true : undefined}
                   // Shaded, because the attribute alone looked exactly like a live control (#458); not
                   // pointer-inert, because it rests this way for as long as the failure stands.
-                  className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
                   aria-describedby={
                     step.storeFailure?.retryBlockedReason != null
                       ? `${stepKey(step.step)}-retry-blocked`

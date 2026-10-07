@@ -300,14 +300,6 @@ export function ValueMeasurePanel({
   );
 }
 
-/**
- * A control the gate or the list's end shades stays in the tab order (ADR-0083, ADR-0135): a native
- * `disabled` drops focus to <body> the instant the pen is lost under a reader mid-edit. The class
- * pairs with `aria-disabled`, and every handler checks the same condition, so it is inert without
- * ever leaving the focus ring.
- */
-const SHADED_BUTTON = 'aria-disabled:pointer-events-none aria-disabled:opacity-60';
-
 /** A blank list starts empty; append adds equally-weighted rows so a first save is a plain average. */
 const NEW_STEP = { name: '', weight: 1, percentComplete: 0 } as const;
 
@@ -577,7 +569,6 @@ export function WeightedStepsPanel({
                           variant="outline"
                           data-step-up=""
                           aria-disabled={!gate.writable || index === 0}
-                          className={SHADED_BUTTON}
                           aria-label={`Move up, step ${index + 1}`}
                           onClick={() => {
                             if (gate.writable && index > 0) moveStep(index, -1);
@@ -591,7 +582,6 @@ export function WeightedStepsPanel({
                           variant="outline"
                           data-step-down=""
                           aria-disabled={!gate.writable || index === fields.length - 1}
-                          className={SHADED_BUTTON}
                           aria-label={`Move down, step ${index + 1}`}
                           onClick={() => {
                             if (gate.writable && index < fields.length - 1) moveStep(index, 1);
@@ -605,7 +595,6 @@ export function WeightedStepsPanel({
                           variant="ghost"
                           data-step-remove=""
                           aria-disabled={!gate.writable}
-                          className={SHADED_BUTTON}
                           aria-label={`Remove step ${index + 1}`}
                           onClick={() => {
                             if (gate.writable) removeStep(index);
@@ -626,7 +615,6 @@ export function WeightedStepsPanel({
                 type="button"
                 variant="outline"
                 aria-disabled={!gate.writable}
-                className={SHADED_BUTTON}
                 onClick={() => {
                   if (gate.writable) addStep();
                 }}

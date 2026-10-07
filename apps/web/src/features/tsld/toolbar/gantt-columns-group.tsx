@@ -230,7 +230,6 @@ export function GanttColumnsGroup({
         size="sm"
         aria-disabled={columns.isDefault || undefined}
         aria-describedby={columns.isDefault ? resetReasonId : undefined}
-        className="aria-disabled:opacity-60"
         onClick={() => {
           if (columns.isDefault) return;
           columns.reset();

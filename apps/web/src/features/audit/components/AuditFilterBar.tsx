@@ -171,7 +171,6 @@ export function AuditFilterBar({
           if (empty) return;
           onChange({ categories: '', outcome: '', from: '', to: '' });
         }}
-        className="aria-disabled:opacity-50"
       >
         <X aria-hidden="true" className="size-4" />
         Clear filters

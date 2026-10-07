@@ -468,7 +468,7 @@ function CalendarForm({
                 // to `<body>` the instant it flips, and it flips twice per save (ADR-0060 M6). The
                 // click guard makes it inert; the pointer is refused only while saving, because a
                 // reader without the permission should still be able to hover for the reason.
-                className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+                className="aria-busy:pointer-events-none"
                 aria-disabled={submitBlocked}
                 aria-busy={mutation.isPending}
                 // The reason sits by the Scope field, out of the submit's sight line: link it so a

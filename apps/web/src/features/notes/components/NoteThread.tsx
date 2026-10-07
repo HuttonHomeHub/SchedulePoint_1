@@ -118,7 +118,7 @@ export function NoteThread({
             onClick={loadMore}
             aria-disabled={thread.isFetchingNextPage}
             aria-busy={thread.isFetchingNextPage}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="aria-disabled:pointer-events-none"
           >
             {thread.isFetchingNextPage ? 'Loading…' : 'Load more'}
           </Button>

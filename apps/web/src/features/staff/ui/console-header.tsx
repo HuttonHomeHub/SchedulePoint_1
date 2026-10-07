@@ -70,7 +70,6 @@ export function ConsoleHeader({
           size="sm"
           aria-disabled={refreshing}
           aria-busy={refreshing}
-          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
           onClick={() => {
             // The guard the shading promises: `aria-disabled` stops no click.
             if (refreshing) return;

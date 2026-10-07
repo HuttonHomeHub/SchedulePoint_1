@@ -86,7 +86,6 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
           value={member.role}
           aria-disabled={changeRole.isPending}
           aria-busy={changeRole.isPending}
-          className="aria-disabled:opacity-60"
           onChange={(event) => {
             if (changeRole.isPending) return;
             setError(null);

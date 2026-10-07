@@ -344,7 +344,7 @@ function NoteEditForm({
             onClick={(event) => {
               if (blocked) event.preventDefault();
             }}
-            className="aria-busy:pointer-events-none aria-disabled:opacity-50"
+            className="aria-busy:pointer-events-none"
           >
             {update.isPending ? 'Saving…' : 'Save'}
           </Button>

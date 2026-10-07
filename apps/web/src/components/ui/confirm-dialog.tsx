@@ -64,7 +64,7 @@ export function ConfirmDialog({
             // handler is guarded so a busy button can't re-fire.
             aria-disabled={pending}
             aria-busy={pending}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="aria-disabled:pointer-events-none"
             onClick={() => {
               if (!pending) onConfirm();
             }}

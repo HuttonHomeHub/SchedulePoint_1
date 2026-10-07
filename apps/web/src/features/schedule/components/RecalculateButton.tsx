@@ -43,7 +43,7 @@ export function RecalculateButton({
         aria-disabled={isPending}
         aria-busy={isPending}
         aria-describedby={inlineError ? errorId : undefined}
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        className="aria-disabled:pointer-events-none"
       >
         {isPending ? 'Recalculating…' : 'Recalculate'}
       </Button>

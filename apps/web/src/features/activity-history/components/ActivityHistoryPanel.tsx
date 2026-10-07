@@ -116,7 +116,7 @@ export function ActivityHistoryPanel({
             }}
             aria-disabled={history.isFetchingNextPage}
             aria-busy={history.isFetchingNextPage}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="aria-disabled:pointer-events-none"
           >
             {history.isFetchingNextPage ? 'Loading…' : 'Load older'}
           </Button>

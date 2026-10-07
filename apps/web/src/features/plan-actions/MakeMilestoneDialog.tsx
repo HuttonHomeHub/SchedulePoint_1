@@ -136,7 +136,7 @@ export function MakeMilestoneDialog({
               }
               void confirm();
             }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="aria-disabled:pointer-events-none"
           >
             {pending ? 'Converting…' : 'Make milestone'}
           </Button>

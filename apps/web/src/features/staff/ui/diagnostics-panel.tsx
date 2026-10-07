@@ -83,7 +83,7 @@ export function DiagnosticsPanel(): React.ReactElement {
           onClick={run}
           aria-busy={running}
           aria-disabled={running}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          className="aria-disabled:pointer-events-none"
         >
           {running ? 'Running…' : 'Run diagnostics'}
         </Button>

@@ -132,7 +132,7 @@ export function CreateActivityPopover({
             }
             onCancel();
           }}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-disabled:pointer-events-none"
         >
           Cancel
         </Button>
@@ -148,7 +148,7 @@ export function CreateActivityPopover({
           onClick={(event) => {
             if (blocked) event.preventDefault();
           }}
-          className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+          className="aria-busy:pointer-events-none"
         >
           {saving ? 'Saving…' : 'Add to plan'}
         </Button>

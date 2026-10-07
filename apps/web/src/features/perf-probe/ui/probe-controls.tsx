@@ -60,7 +60,7 @@ export function ProbeControls({ sweep }: { sweep: ProbeSweep }): React.ReactElem
           // ScopeSaveBar lesson re-learnt in ADR-0063 M6).
           aria-disabled={running}
           aria-busy={running}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          className="aria-disabled:pointer-events-none"
         >
           Run all measurements
         </Button>
@@ -72,7 +72,7 @@ export function ProbeControls({ sweep }: { sweep: ProbeSweep }): React.ReactElem
             setConfirming('check');
           }}
           aria-disabled={running}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          className="aria-disabled:pointer-events-none"
         >
           Check the probe works
         </Button>
@@ -158,7 +158,7 @@ export function ProbeControls({ sweep }: { sweep: ProbeSweep }): React.ReactElem
               setConfirming('one');
             }}
             aria-disabled={running}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="aria-disabled:pointer-events-none"
           >
             Run measurement
           </Button>

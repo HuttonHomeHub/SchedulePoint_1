@@ -206,7 +206,7 @@ export function AuditEventList({
             // whatever is behind, and the handler above refuses. Kept as a button rather than swapped
             // for text, because pressing Load more until exhausted would otherwise unmount the
             // control holding focus (WCAG 2.4.3).
-            className="aria-busy:pointer-events-none aria-disabled:opacity-50"
+            className="aria-busy:pointer-events-none"
           >
             {loadMoreLabel(query)}
           </Button>

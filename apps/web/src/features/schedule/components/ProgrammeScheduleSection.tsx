@@ -130,7 +130,7 @@ export function ProgrammeScheduleSection({
             aria-disabled={recalc.isPending}
             aria-busy={recalc.isPending}
             aria-describedby={genericError ? errorId : undefined}
-            className="shrink-0 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            className="shrink-0 aria-disabled:pointer-events-none"
           >
             {recalc.isPending ? 'Recalculating…' : 'Recalculate programme'}
           </Button>

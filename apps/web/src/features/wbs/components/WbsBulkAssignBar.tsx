@@ -150,7 +150,7 @@ export function WbsBulkAssignBar({
             }
             assign();
           }}
-          className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+          className="aria-busy:pointer-events-none"
         >
           {updateParents.isPending ? 'Assigning…' : 'Assign'}
         </Button>

@@ -152,7 +152,6 @@ export function AccountsPanel(): React.ReactElement {
                 aria-busy={isFetchingNextPage}
                 // Transient shading while a page loads: no `pointer-events-none` needed (#458), the
                 // hover fill is cancelled and `showMore` refuses the press.
-                className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
                 onClick={showMore}
               >
                 {isFetchingNextPage ? ACCOUNTS.loadingMore : 'Show more'}

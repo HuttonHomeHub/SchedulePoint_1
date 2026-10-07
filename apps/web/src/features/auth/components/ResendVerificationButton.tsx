@@ -125,7 +125,7 @@ export function ResendVerificationButton({
         type="submit"
         aria-disabled={blocked}
         aria-busy={send.isPending}
-        className="whitespace-normal aria-disabled:opacity-60"
+        className="whitespace-normal"
       >
         {send.isPending ? 'Sending…' : 'Send another verification email'}
       </Button>

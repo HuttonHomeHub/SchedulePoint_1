@@ -102,7 +102,7 @@ function CaptureBaselineForm({
         </Button>
         <Button
           type="submit"
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="aria-disabled:pointer-events-none"
           aria-disabled={capture.isPending}
           aria-busy={capture.isPending}
           onClick={(event) => {

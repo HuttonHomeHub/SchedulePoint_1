@@ -173,7 +173,6 @@ export function PerformanceProbePanel({
           aria-expanded={open}
           {...(open ? { 'aria-controls': contentId } : {})}
           {...(open && running ? { 'aria-disabled': true, 'aria-describedby': hideReasonId } : {})}
-          className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
           onClick={() => {
             if (running) return;
             setOpen((previous) => !previous);

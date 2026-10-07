@@ -191,7 +191,7 @@ export function ArrangeDialog({
               }
               onConfirm(choice, outcome);
             }}
-            className="aria-busy:pointer-events-none aria-disabled:opacity-60"
+            className="aria-busy:pointer-events-none"
           >
             {pending
               ? 'Arranging…'

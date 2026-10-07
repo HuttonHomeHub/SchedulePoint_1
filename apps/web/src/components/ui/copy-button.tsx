@@ -89,7 +89,6 @@ export function CopyButton({
         aria-disabled={shaded}
         aria-describedby={shaded && unavailableReason !== undefined ? reasonId : undefined}
         {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
-        className="aria-disabled:hover:bg-background aria-disabled:hover:text-foreground aria-disabled:opacity-60"
         onClick={() => {
           // The guard the shading promises: a shaded control that still fires is a shading in
           // appearance only.
