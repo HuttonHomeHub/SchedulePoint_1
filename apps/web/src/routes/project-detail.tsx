@@ -1,4 +1,4 @@
-import { Link, useParams } from '@tanstack/react-router';
+import { useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ChildCounts, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
@@ -15,6 +15,7 @@ import {
   canManageOrgCalendars,
   useOrgRole,
 } from '@/hooks/use-org-role';
+import { EntityLoadFailure } from '@/routes/entity-not-found';
 
 /**
  * A project's plans screen (`/orgs/$orgSlug/projects/$projectId`): the project's
@@ -48,34 +49,12 @@ export function ProjectDetailScreen(): React.ReactElement {
 
   if (project.isError) {
     return (
-      <PageContainer>
-        <Breadcrumbs
-          items={[
-            { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
-            { label: 'Not found' },
-          ]}
-        />
-        <PageHeader className="mt-2" title="Project not found" />
-        {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
-            This branch is `query.isError` — the project does not exist, was deleted, or the reader
-            has no access. Drawn as a dashed centred box it read as "there is nothing here", which
-            is a statement about the project when the truth may be a statement about the reader.
-            `role="alert"` + destructive ink is the shape `DataTable` already uses for the same
-            condition. The exit link stays: `isError` also covers a transient network failure, so a
-            reader who is not lost must not be stranded. */}
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            This project doesn’t exist, was deleted, or you don’t have access to it.
-          </p>
-          <Link
-            to="/orgs/$orgSlug/clients"
-            params={{ orgSlug }}
-            className="text-foreground underline underline-offset-4"
-          >
-            Back to clients
-          </Link>
-        </div>
-      </PageContainer>
+      <EntityLoadFailure
+        entity="Project"
+        orgSlug={orgSlug}
+        error={project.error}
+        onRetry={() => void project.refetch()}
+      />
     );
   }
 

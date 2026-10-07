@@ -1,4 +1,4 @@
-import { Link, useParams } from '@tanstack/react-router';
+import { useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChildCounts, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable } from '@/features/projects';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { EntityLoadFailure } from '@/routes/entity-not-found';
 
 /** A client's projects screen (`/orgs/$orgSlug/clients/$clientId`). */
 export function ClientDetailScreen(): React.ReactElement {
@@ -25,34 +26,12 @@ export function ClientDetailScreen(): React.ReactElement {
 
   if (client.isError) {
     return (
-      <PageContainer>
-        <Breadcrumbs
-          items={[
-            { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
-            { label: 'Not found' },
-          ]}
-        />
-        <PageHeader className="mt-2" title="Client not found" />
-        {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
-            This branch is `query.isError` — the client does not exist, was deleted, or the reader
-            has no access. Drawn as a dashed centred box it read as "there is nothing here", which
-            is a statement about the client when the truth may be a statement about the reader.
-            `role="alert"` + destructive ink is the shape `DataTable` already uses for the same
-            condition. The exit link stays: `isError` also covers a transient network failure, so a
-            reader who is not lost must not be stranded. */}
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            This client doesn’t exist, was deleted, or you don’t have access to it.
-          </p>
-          <Link
-            to="/orgs/$orgSlug/clients"
-            params={{ orgSlug }}
-            className="text-foreground underline underline-offset-4"
-          >
-            Back to clients
-          </Link>
-        </div>
-      </PageContainer>
+      <EntityLoadFailure
+        entity="Client"
+        orgSlug={orgSlug}
+        error={client.error}
+        onRetry={() => void client.refetch()}
+      />
     );
   }
 

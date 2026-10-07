@@ -311,7 +311,10 @@ entry stops being needed.
   and a signed-out visitor is sent to sign-in first. The two share their words
   (`not-found-copy.ts`), neither echoes the unknown address, and the router decides which by looking
   the slug up in the caller's **own** organisations — so a foreign and a nonexistent organisation
-  stay indistinguishable (ADR-0086, `docs/specs/in-shell-not-found/`).
+  stay indistinguishable (ADR-0086, `docs/specs/in-shell-not-found/`). **A plan, project or client
+  that does not exist (HTTP 404) is the same page** (`EntityLoadFailure`: "Plan not found", heading
+  focused, no alert, a link to the organisation overview). Any other failure to load one — a dropped
+  connection, a 5xx — says nothing about the entity, so it stays a `role="alert"` in destructive ink.
 - **A long single page with several groups gets an "On this page" list, and it is not sticky**
   (ADR-0178). A sticky list covers a tenth or more of a phone viewport and can hide the focused
   target (WCAG 2.4.11). Each group is a `SectionGroup` with a "Back to top" link.

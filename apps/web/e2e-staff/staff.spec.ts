@@ -279,6 +279,22 @@ async function inOrganisationNotFound(
       .analyze();
     expect(axe.violations, `${width}: axe`).toEqual([]);
   }
+
+  // A mistyped plan id is the same picture, drawn for the entity: the API answers a plan that does
+  // not exist with 404, which `EntityLoadFailure` renders as a destination rather than an alert.
+  await member.setViewportSize({ width: 1368, height: 912 });
+  await member.goto(`/orgs/${slug}/plans/00000000-0000-4000-8000-000000000000`);
+  const planHeading = member.getByRole('heading', { level: 1, name: 'Plan not found' });
+  await expect(planHeading, 'a missing plan: the heading, in the shell').toBeVisible();
+  await expect(planHeading, 'a missing plan: focus moved to it').toBeFocused();
+  const planAxe = await new AxeBuilder({ page: member })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(planAxe.violations, 'a missing plan: axe').toEqual([]);
+  await expect(member.locator('nav[aria-label="Project Explorer"]')).toBeVisible();
+  await expect(member.locator('main [role="alert"]'), 'a missing plan: no alert').toHaveCount(0);
+  await expect(overview, 'a missing plan: the way home').toHaveAttribute('href', `/orgs/${slug}`);
+
   await member.setViewportSize({ width: 1920, height: 1080 });
 }
 
