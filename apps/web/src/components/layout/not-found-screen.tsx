@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { AuthShell } from './auth-shell';
+import { NOT_FOUND_COPY } from './not-found-copy';
 
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { textLinkVariants } from '@/components/ui/text-link';
@@ -30,11 +31,18 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
  * pointer user who never focuses it simply sees the label settle. Resolving is treated as signed in
  * so the common case (a signed-in reader, whose `/me` is usually cached) never flickers.
  *
+ * **The words live in `not-found-copy.ts`**, shared with the one sibling: `routes/org-not-found.tsx`
+ * renders the same heading and sentence inside the shell, for a signed-in **member** whose mistyped
+ * address is under an organisation they belong to (`docs/TECH_DEBT.md` #463). It is members-only
+ * because it can only be reached after the router has looked the slug up in the caller's own
+ * organisations; for anyone else this screen is still the only picture, so a foreign and a
+ * nonexistent organisation stay indistinguishable.
+ *
  * It is a plain `<a>`: a full load of `/` or `/sign-in` is the right recovery from an address the
  * router could not place, and it keeps this screen free of router context.
  */
 export function NotFoundScreen(): React.ReactElement {
-  useDocumentTitle('Page not found');
+  useDocumentTitle(NOT_FOUND_COPY.title);
   // `CardTitle` takes no ref (adding one would widen a shared primitive's contract for one caller),
   // so the focus target is found through the element that wraps it.
   const header = useRef<HTMLDivElement>(null);
@@ -53,9 +61,9 @@ export function NotFoundScreen(): React.ReactElement {
       <div ref={header}>
         <CardHeader className="text-center">
           <CardTitle tabIndex={-1} className="outline-none">
-            Page not found
+            {NOT_FOUND_COPY.title}
           </CardTitle>
-          <CardDescription>There is nothing at this address.</CardDescription>
+          <CardDescription>{NOT_FOUND_COPY.description}</CardDescription>
         </CardHeader>
       </div>
       <CardContent className="text-center">

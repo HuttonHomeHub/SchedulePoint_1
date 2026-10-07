@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Locator, type Page } from '@playwright/test';
+import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
 import { expect, test } from '../e2e-support/test';
@@ -106,6 +106,182 @@ async function signUpOrIn(page: Page, email: string, name: string): Promise<void
   await page.waitForLoadState('networkidle');
 }
 
+/**
+ * **An unmatched address under an organisation (#463, `docs/specs/in-shell-not-found/`).**
+ *
+ * Three claims only a real browser can settle, against the real router and the real API:
+ *
+ * 1. **Foreign = nonexistent, for every shape of address.** The guarantee is not "looks like
+ *    `/no-such-path`" (a cold load of `/orgs/x/nope` now asks for the organisation list, which
+ *    `/no-such-path` never does) but that a slug the member is not in and a slug nobody holds are
+ *    indistinguishable: same settled page, same requests. Driven for an unmatched path and for a
+ *    real route name, which redirects instead.
+ * 2. **The shell never paints for a non-member.** With the organisation list held back, a
+ *    `MutationObserver` records any node of the shell attaching; the pending skeleton is the only
+ *    thing on the page for either slug.
+ * 3. **A member's mistype keeps the shell**, with focus on the heading, one `<main>`, one `<h1>`, a
+ *    working link back, no live region, no overflow at two widths, and axe clean.
+ */
+async function inOrganisationNotFound(
+  member: Page,
+  memberContext: BrowserContext,
+  { slug, foreignSlug, goneSlug }: { slug: string; foreignSlug: string; goneSlug: string },
+): Promise<void> {
+  const NOT_FOUND = { level: 1, name: 'Page not found' } as const;
+  const SHELL = 'a[href="#main"], nav[aria-label="Project Explorer"], #main';
+
+  // ------------------------------------------------ 1. Foreign = nonexistent, every shape
+  const normalise = (text: string, target: string): string => text.split(target).join('<slug>');
+  async function settle(path: string, target: string) {
+    const page = await memberContext.newPage();
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith('/api/'))
+        requests.push(`${request.method()} ${normalise(pathname, target)}`);
+    });
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const picture = {
+      url: normalise(new URL(page.url()).pathname, target),
+      title: await page.title(),
+      h1s: await page.getByRole('heading', { level: 1 }).allTextContents(),
+      mains: await page.locator('main').count(),
+      shell: await page.locator(SHELL).count(),
+      requests: requests.sort(),
+    };
+    await page.close();
+    return picture;
+  }
+  // `a/b` is a deeper unmatched path and `nope/` a trailing-slash variant: neither may tell a
+  // foreign slug from a nonexistent one any more than `nope` does.
+  for (const shape of ['nope', 'a/b', 'nope/', 'members']) {
+    const foreign = await settle(`/orgs/${foreignSlug}/${shape}`, foreignSlug);
+    const gone = await settle(`/orgs/${goneSlug}/${shape}`, goneSlug);
+    expect(
+      gone,
+      `/orgs/<slug>/${shape}: a foreign slug and a nonexistent one are one picture`,
+    ).toEqual(foreign);
+    if (shape !== 'members') {
+      expect(foreign.h1s, 'an unmatched address is the root not-found').toEqual(['Page not found']);
+      expect(foreign.shell, 'and it is outside the shell').toBe(0);
+    } else {
+      expect(foreign.url, 'a real route redirects a non-member home, as it always did').toBe(
+        `/orgs/${slug}`,
+      );
+    }
+  }
+
+  // ------------------------------------------------ 2. No shell, ever, for a non-member
+  for (const target of [foreignSlug, goneSlug]) {
+    const page = await memberContext.newPage();
+    await page.addInitScript((selector: string) => {
+      const seen = window as unknown as { shellSeen: boolean };
+      seen.shellSeen = false;
+      const check = (): void => {
+        if (document.querySelector(selector)) seen.shellSeen = true;
+      };
+      new MutationObserver(check).observe(document, { childList: true, subtree: true });
+      check();
+    }, SHELL);
+    // Held back for longer than the router's 1000 ms pending threshold, so the skeleton shows.
+    await page.route(/\/api\/v1\/organizations(\?.*)?$/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      await route.continue();
+    });
+    await page.goto(`/orgs/${target}/nope`);
+    await expect(page.getByTestId('route-pending'), `${target}: the skeleton shows`).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.getByRole('heading', NOT_FOUND)).toBeVisible({ timeout: 10_000 });
+    expect(
+      await page.evaluate(() => (window as unknown as { shellSeen: boolean }).shellSeen),
+      `${target}: no node of the shell attached at any point of the load`,
+    ).toBe(false);
+    await page.close();
+  }
+
+  // ------------------------------------------------ 3. A member's mistype keeps the shell
+  await member.setViewportSize({ width: 1368, height: 912 });
+  const heading = member.getByRole('heading', NOT_FOUND);
+  const overview = member.getByRole('link', { name: 'Go to the organisation overview' });
+  const trail = member.getByRole('navigation', { name: 'Breadcrumb' });
+
+  async function expectInShell(label: string): Promise<void> {
+    await expect(heading, `${label}: the one heading`).toBeVisible();
+    await expect(heading, `${label}: focus moved to it`).toBeFocused();
+    await expect(
+      member.locator('nav[aria-label="Project Explorer"]'),
+      `${label}: Explorer`,
+    ).toBeVisible();
+    await expect(member.locator('main'), `${label}: one main`).toHaveCount(1);
+    await expect(member.getByRole('heading', { level: 1 }), `${label}: one h1`).toHaveCount(1);
+    expect(await member.title(), `${label}: title`).toBe('Page not found · SchedulePoint');
+    await expect(overview, `${label}: link`).toHaveAttribute('href', `/orgs/${slug}`);
+    await expect(trail.getByRole('link').first(), `${label}: first crumb`).toHaveText('Overview');
+    await expect(trail.locator('[aria-current="page"]'), `${label}: current crumb`).toHaveText([
+      'Page not found',
+    ]);
+    await expect(member.locator('main [role="alert"]'), `${label}: no alert`).toHaveCount(0);
+  }
+
+  // Cold arrival.
+  await member.goto(`/orgs/${slug}/nope`);
+  await expectInShell('cold');
+  // Tab from the heading lands on the next control in reading order: the link.
+  await member.keyboard.press('Tab');
+  await expect(overview, 'Tab from the heading reaches the link').toBeFocused();
+
+  // Client-side arrival: from inside the app, with a marker that a document reload would erase.
+  await member.goto(`/orgs/${slug}`);
+  await expect(member.locator('nav[aria-label="Project Explorer"]')).toBeVisible();
+  await member.evaluate((path) => {
+    (window as unknown as { marker: number }).marker = 1;
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, `/orgs/${slug}/plans/abc/x`);
+  await expectInShell('client-side');
+
+  // Client-side to a DIFFERENT unmatched path under the same organisation re-uses the match, so
+  // focus must come back to the heading from wherever the reader had moved it.
+  await overview.focus();
+  await expect(overview, 'focus is off the heading').toBeFocused();
+  await member.evaluate((path) => {
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, `/orgs/${slug}/another/unmatched`);
+  await expect(heading, 'a second unmatched path pulls focus back to the heading').toBeFocused();
+
+  // Pressing the link reaches the overview without a document reload.
+  await overview.click();
+  await expect(member).toHaveURL(new RegExp(`/orgs/${slug}$`));
+  expect(
+    await member.evaluate(() => (window as unknown as { marker?: number }).marker),
+    'the link navigated client-side',
+  ).toBe(1);
+
+  // Two widths: no horizontal overflow, axe clean once focus has settled.
+  for (const width of [1368, 390]) {
+    await member.setViewportSize({ width, height: width === 390 ? 844 : 912 });
+    await member.goto(`/orgs/${slug}/nope`);
+    await expect(heading, `${width}: focus settled`).toBeFocused();
+    const overflow = await member.evaluate(() => ({
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      main:
+        (document.querySelector('main')?.scrollWidth ?? 0) -
+        (document.querySelector('main')?.clientWidth ?? 0),
+    }));
+    expect(overflow.document, `${width}: the document does not overflow`).toBeLessThanOrEqual(0);
+    expect(overflow.main, `${width}: main does not overflow`).toBeLessThanOrEqual(0);
+    const axe = await new AxeBuilder({ page: member })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations, `${width}: axe`).toEqual([]);
+  }
+  await member.setViewportSize({ width: 1920, height: 1080 });
+}
+
 test('a staff member reaches the console; a member cannot tell it exists', async ({ browser }) => {
   const stamp = Date.now();
   const memberEmail = `staff-outsider-${stamp}@example.com`;
@@ -152,39 +328,68 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   });
   const slug = ((await created.json()) as { data: { slug: string } }).data.slug;
   expect(slug, 'the member has an organisation to mistype under').toBeTruthy();
-  const settled: Array<{
-    path: string;
-    title: string;
-    lang: string;
-    metas: string[];
-    mains: number;
-    main: string;
-    h1s: Array<string | null>;
-  }> = [];
-  for (const path of ['/staff', '/staff/', '/staff/x', '/no-such-path', `/orgs/${slug}/nope`]) {
-    await member.goto(path);
-    const h1 = member.getByRole('heading', { level: 1, name: 'Page not found' });
-    await expect(h1, `${path}: the one heading`).toBeVisible();
-    await expect(h1, `${path}: focus moved to it`).toBeFocused();
-    await expect(member.getByRole('link', { name: 'Go to the home page' })).toHaveCount(1);
-    settled.push({
-      path,
-      ...(await member.evaluate(() => ({
-        title: document.title,
-        lang: document.documentElement.lang,
-        metas: [...document.querySelectorAll('head meta')].map((meta) => meta.outerHTML).sort(),
-        mains: document.querySelectorAll('main').length,
-        main: (document.querySelector('main')?.outerHTML ?? '').replace(/\s+/g, ' '),
-        h1s: [...document.querySelectorAll('h1')].map((node) => node.textContent),
-      }))),
+  // **A second account's organisation**, which `member` is not in: the parity comparison below needs
+  // a slug that EXISTS and is not theirs, as well as one that does not exist (#463).
+  const ownerContext = await browser.newContext();
+  try {
+    const owner = await ownerContext.newPage();
+    await signUpOrIn(owner, `staff-owner-${stamp}@example.com`, 'Org Owner');
+    const foreignCreated = await owner.request.post('/api/v1/organizations', {
+      data: { name: `Foreign ${stamp}` },
+      headers: { Origin: 'http://localhost:5173' },
     });
+    const foreignSlug = ((await foreignCreated.json()) as { data: { slug: string } }).data.slug;
+    expect(foreignSlug, 'a second account owns an organisation the member is not in').toBeTruthy();
+    expect(foreignSlug).not.toBe(slug);
+    const goneSlug = `no-such-org-${stamp}`;
+    const settled: Array<{
+      path: string;
+      title: string;
+      lang: string;
+      metas: string[];
+      mains: number;
+      main: string;
+      h1s: Array<string | null>;
+    }> = [];
+    // `/orgs/<slug>/nope` for a slug the member is NOT in — foreign and nonexistent — must settle to the
+    // root picture exactly as `/staff` does. The member's own organisation moved into the shell (#463)
+    // and is asserted separately below.
+    for (const path of [
+      '/staff',
+      '/staff/',
+      '/staff/x',
+      '/no-such-path',
+      `/orgs/${foreignSlug}/nope`,
+      `/orgs/${goneSlug}/nope`,
+    ]) {
+      await member.goto(path);
+      const h1 = member.getByRole('heading', { level: 1, name: 'Page not found' });
+      await expect(h1, `${path}: the one heading`).toBeVisible();
+      await expect(h1, `${path}: focus moved to it`).toBeFocused();
+      await expect(member.getByRole('link', { name: 'Go to the home page' })).toHaveCount(1);
+      settled.push({
+        path,
+        ...(await member.evaluate(() => ({
+          title: document.title,
+          lang: document.documentElement.lang,
+          metas: [...document.querySelectorAll('head meta')].map((meta) => meta.outerHTML).sort(),
+          mains: document.querySelectorAll('main').length,
+          main: (document.querySelector('main')?.outerHTML ?? '').replace(/\s+/g, ' '),
+          h1s: [...document.querySelectorAll('h1')].map((node) => node.textContent),
+        }))),
+      });
+    }
+    const { path: _first, ...reference } = settled[0]!;
+    for (const { path, ...picture } of settled) {
+      expect(picture, `${path} settles to the same page as /staff`).toEqual(reference);
+    }
+    expect(reference.title).toBe('Page not found · SchedulePoint');
+    expect(reference.mains).toBe(1);
+
+    await inOrganisationNotFound(member, memberContext, { slug, foreignSlug, goneSlug });
+  } finally {
+    await ownerContext.close();
   }
-  const { path: _first, ...reference } = settled[0]!;
-  for (const { path, ...picture } of settled) {
-    expect(picture, `${path} settles to the same page as /staff`).toEqual(reference);
-  }
-  expect(reference.title).toBe('Page not found · SchedulePoint');
-  expect(reference.mains).toBe(1);
 
   // Every call carries the browser's Origin, as the page's own requests do: the CORS headers answer
   // the Origin, not the route, so sending it on one call only would compare two kinds of request.

@@ -113,10 +113,10 @@ describe('S1 — route code splitting is the rule, and eager is the named except
   });
 
   it('S1b — the pinned positive case: the census finds the routes that exist', () => {
-    // Without this, S1a passes just as happily over a census that matched nothing. 22 routes
-    // carry a `component` (23 `createRoute` calls, and the index route has none).
+    // Without this, S1a passes just as happily over a census that matched nothing. 23 routes
+    // carry a `component` (24 `createRoute` calls, and the index route has none).
     const { routes } = census(ROUTER);
-    expect(routes.length).toBe(22);
+    expect(routes.length).toBe(23);
     const byComponent = new Map(routes.map((r) => [r.component, r.name]));
     expect(byComponent.get('SignInScreen')).toBe('signInRoute');
     expect(byComponent.get('AccountScreen')).toBe('accountRoute');
@@ -127,7 +127,7 @@ describe('S1 — route code splitting is the rule, and eager is the named except
   it('S1c — an empty population is refused, not read as "nothing unclassified"', () => {
     expect(census('').routes).toEqual([]);
     // The assertion S1b makes, applied to the fixture: a scan of nothing must not be able to pass.
-    expect(census('').routes.length).not.toBe(22);
+    expect(census('').routes.length).not.toBe(23);
   });
 
   it('S1d — a statically imported route is named, and a route in a comment is not a route', () => {

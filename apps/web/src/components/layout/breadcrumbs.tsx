@@ -13,7 +13,8 @@ export interface Crumb {
 /**
  * Ancestor trail for the hierarchy screens (Clients → client → project …). The
  * last crumb is the current page (rendered as plain text with
- * `aria-current="page"`); earlier crumbs link to their ancestor route.
+ * `aria-current="page"`); earlier crumbs link to their ancestor route. Ancestors match `exact` on
+ * purpose, so a page beneath one never marks it current: only the last crumb is.
  *
  * **`variant="nowrap"` is for a trail inside a fixed-height band**, which is a different
  * problem from the one the default solves. On a hierarchy screen the trail is free to wrap
@@ -63,6 +64,10 @@ export function Breadcrumbs({
                   <Link
                     to={crumb.to}
                     {...(crumb.params ? { params: crumb.params } : {})}
+                    // Exact, or the router marks an ancestor `aria-current="page"` whenever the
+                    // current page sits beneath it — and then TWO crumbs claim to be the current
+                    // page (the same defect `brand-mark.tsx` records for the wordmark).
+                    activeOptions={{ exact: true }}
                     // **A crumb is this epic's one NAMED exception to the house rule, and it is an
                     // exception on BOTH pointers** (ADR-0118 M3). Measured: 58 x 20 at 1646 and
                     // 23 x 20 at 390.

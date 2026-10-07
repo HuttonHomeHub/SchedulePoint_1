@@ -18,11 +18,11 @@ export interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement>
    * screens "felt different", since nothing on them could line up with the page they were being
    * aligned to. See `docs/specs/page-composition/m0-measurement.md` §7.
    *
-   * `narrow` is for a screen that is **read rather than scanned**. Its only consumer is the staff
-   * console's not-found branch (`staff.tsx:107`), where a refusal is a sentence and a paragraph and
-   * the product's measure would set it across an empty screen. This docblock used to justify the
-   * key by the organisation overview at 1646px; that screen has not used it since ADR-0144, and the
-   * reason recorded here is the one that is true.
+   * `narrow` is for a screen that is **read rather than scanned**. Its only consumer is the in-shell
+   * not-found (`routes/org-not-found.tsx`, #463), a sentence and a link that the product's measure
+   * would set across an empty screen. This docblock used to name the staff console's not-found
+   * branch (`staff.tsx:107`), which began rendering the shared `NotFoundScreen` in #459 and has not
+   * used the key since — and before that, the organisation overview, which left it at ADR-0144.
    *
    * `full` opts out entirely, for a screen that manages its own width.
    *
