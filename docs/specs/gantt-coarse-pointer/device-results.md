@@ -64,3 +64,21 @@ rather than delivering the `contextmenu` the row handles. M1's record names this
 its fallback ("revisit when item 4 shows no `contextmenu` on a touch hold"): extract a `useLongPress` on
 the tooltip precedent, or stop text selection in the grid's cells under touch. Either is a design choice
 for M2's scope, not a fix to make silently; recorded as `docs/TECH_DEBT.md` #464.
+
+## Re-check, 2026-10-07 (web 0.177.4)
+
+Item 12 re-run on the Surface after M2-T5 shipped `select-none` on the idle cell text spans.
+
+| Item | Test                                                                      | Result                                                                  |
+| ---- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 12a  | Hold on the words in the table half (cover/finger, tablet/finger, stylus) | **PASS**: SchedulePoint's menu, no highlighted text, in all three runs. |
+| 12b  | Hold on an empty part of the table half (e.g. blank space in a Code cell) | **FAIL**: the browser's menu, in all three runs.                        |
+| 6    | Dots and disclosure arrow, 10 taps each, both postures                    | **PASS**: 0 misses.                                                     |
+
+Note from the product owner, verbatim: "looks to work menus appears when i release".
+
+**Reading.** The selectability of what is under the finger decides whether the hold reaches the row's
+`contextmenu`: fixing the spans proved it for words (12a). The blank area is the gridcell div and the
+table-half container, still `user-select: auto`, plus selectable `sr-only` spans (the off-float-path
+marker, the cell's reason span) that a span-level class misses. The follow-up moves the variant to the
+whole table-half container of a row, except a row with an open cell.

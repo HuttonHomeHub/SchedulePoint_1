@@ -464,7 +464,7 @@ test('dragging the selected bar opens no menu', async ({ page }) => {
  *
  * The chart half delivers `contextmenu` on a hold; the table half has text under the finger, and a
  * hold on selectable text is a selection gesture. The remedy is one attribute at the grid root
- * (`data-last-input`, written in `pointerdown` capture) and a `select-none` variant on idle cell text.
+ * (`data-last-input`, written in `pointerdown` capture) and a `select-none` variant on the row's whole table half.
  *
  * **What this proves, and what it does not.** That the CSS is applied while a touch is down, and that
  * the menu opens on a synthesised event. It cannot prove Windows suppresses its selection, or that
@@ -497,6 +497,10 @@ test('a touch held on the table text makes it unselectable (red against the pare
   await holdTouch(page, cdp, at, 0);
   try {
     await expect.poll(() => text.evaluate((el) => getComputedStyle(el).userSelect)).toBe('none');
+    // The red-at-parent assertion for the blank-space hold (device check 12b): the gridcell div
+    // itself, not a span inside it. The class sat on the spans only, so the div stayed `auto`.
+    const cell = ganttRow(page, 'Seeded 0').getByRole('gridcell', { name: /^Seeded 0\b/ });
+    await expect.poll(() => cell.evaluate((el) => getComputedStyle(el).userSelect)).toBe('none');
     await expect(page.getByTestId('gantt-scroll')).toHaveAttribute('data-last-input', 'touch');
   } finally {
     await release(page, cdp);

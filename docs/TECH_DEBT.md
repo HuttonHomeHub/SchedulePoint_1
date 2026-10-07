@@ -11945,6 +11945,8 @@ hybrid user who touches and then types cannot select cell text with the keyboard
 Copying still works through a double tap (the open field) or row menu → Edit. **Close this row when item 12 confirms
 a hold reaches SchedulePoint's menu on the table half in both postures.**
 
+**Device re-check 2026-10-07 (`web` 0.177.4):** 12a (hold on the words) passed in all three runs; 12b (hold on blank space) failed with the browser's menu. The follow-up moves the `select-none` variant from the text spans to the row's whole table-half container (idle rows); the row stays open until 12b passes.
+
 **Was:** decide with Gantt M2 between a `useLongPress` hook on the tooltip precedent and stopping text
 selection in the grid's cells under touch, then reproduce with a CDP touch hold on cell text before
 building. Either changes what the Surface sheet tests, so the sheet updates in the same PR. **Trigger:**
