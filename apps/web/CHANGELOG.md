@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.177.1
+
+### Patch Changes
+
+- [#871](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/871) [`044146c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/044146c8e0fbf7008090e5a7b56b78cca8e8cd84) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When you are not editing a plan, the empty canvas now shows why "Draw the first activity" is unavailable ("Start editing this plan to draw activities.") instead of leaving a dimmed button that does nothing.
+
 ## 0.177.0
 
 ### Minor Changes
