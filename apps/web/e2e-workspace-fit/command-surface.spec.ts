@@ -1120,11 +1120,21 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       await count('cell-input'),
       `no 'cell-input' exemption element in the Gantt at ${width}`,
     ).toBeGreaterThan(0);
-    const targets = await sweep(page, '[role="treegrid"]', ganttExempt(), true);
+    // Swept WITHOUT the `cell-input` exemption, so the open input is visible to the sweep: it must
+    // be the one sub-44 target, which proves the kind covers a real under-size control rather than
+    // excluding a set the sweep never saw (test-engineer review of M2-T4).
+    const targets = await sweep(
+      page,
+      '[role="treegrid"]',
+      ganttExempt(['disclosure', 'row-menu', 'sort']),
+      true,
+    );
     expect(
-      targets.filter((t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET)),
-      `the open cell input is not exempt at ${width}`,
-    ).toEqual([]);
+      targets
+        .filter((t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET))
+        .map((t) => t.tag),
+      `the open cell input is the only sub-44 control while a cell is open at ${width}`,
+    ).toEqual(['input']);
     await page.keyboard.press('Escape');
     await expect(page.locator(ganttExempt(['cell-input']))).toHaveCount(0);
   }
