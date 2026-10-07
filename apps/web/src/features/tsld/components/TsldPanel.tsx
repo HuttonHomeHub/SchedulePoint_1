@@ -3128,7 +3128,24 @@ export function TsldPanel({
           <NoticeStrip
             data-testid="canvas-empty-state"
             emphasis="dashed"
-            message="This plan has no activities yet."
+            // Without the pen the reason is part of the visible sentence (docs/TECH_DEBT.md #462):
+            // `sr-only`, a sighted pointer user pressing the shaded button got a silent no-op. It
+            // sits in the message so it wraps under reflow — a third flex child beside a truncating
+            // message and a no-wrap button would squeeze both to an ellipsis on a narrow canvas.
+            {...(editingEnabled
+              ? { message: 'This plan has no activities yet.' }
+              : {
+                  messageFit: 'grow' as const,
+                  density: 'comfortable' as const,
+                  message: (
+                    <>
+                      This plan has no activities yet.{' '}
+                      <span id={emptyStateReasonId}>
+                        Start editing this plan to draw activities.
+                      </span>
+                    </>
+                  ),
+                })}
           >
             <Button
               type="button"
@@ -3159,11 +3176,6 @@ export function TsldPanel({
             >
               Draw the first activity
             </Button>
-            {editingEnabled ? null : (
-              <span id={emptyStateReasonId} className="sr-only">
-                Start editing this plan to draw activities.
-              </span>
-            )}
           </NoticeStrip>
         ) : null}
 
