@@ -374,9 +374,9 @@ What the next milestone needs:
   `COMPONENT_LIBRARY.md`, latch pinned by a test); the header's inline plural and a hand-listed copy scan (both moved
   to `model/*copy.ts`); uneven description-to-body gaps (one `-mt-2` on `StatusSection`'s body; **not measured in a
   browser here**, so the journey and a screenshot should confirm); the Mail card's duplicated "none failed" block; and
-  long settings values. **Not folded:** muting box-level change announcements while a Refresh runs. It needs a prop on
-  `StatusSection` and `QueryPanel` threaded through six panels, which is a component contract change (ADR-0105), so it
-  is left for M4 to decide; after a Refresh a box whose sentence changed still speaks beside the page sentence.
+  long settings values. **Not folded at M3, built later:** muting box-level change announcements while a Refresh runs. It was specified
+  as a context rather than a prop and shipped in the estate-polish-oct programme's M2 (ADR-0178 D8,
+  `components/ui/page/status-mute.tsx`).
 - **For M4.** SC-1 (3,468 px against at most 3,030) closes with the collapse; SC-2's third treatment is
   `Measure one thing`'s `summary`. The history read is already observed at the screen root (`useProbeResults` in
   `ConsoleBody`), so hoisting it into the panel root is a move, and an expanded Performance box makes no new request
@@ -407,9 +407,8 @@ What the next milestone needs:
   interpolations and `>` comparisons. A long run speaks every 8 s between step boundaries (M1 carry-forward, #259 item
   11), verified red against an unthrottled announce. The unused `PERFORMANCE` copy left `panel-copy.ts` for
   `probe-copy.ts` (perf-probe may not import staff). ADR-0178 is **Accepted** (D7 records this milestone).
-- **Not built, and needs a decision:** muting box-level announcements while a page Refresh runs. It adds a prop to
-  `StatusSection` and `QueryPanel` threaded through six panels, which is a component-contract change (ADR-0105), so it
-  stops for a spec; after a Refresh a box whose sentence changed still speaks beside the page sentence.
+- **Not built at M4, built later:** muting box-level announcements while a page Refresh runs. It stopped for a spec and
+  shipped in the estate-polish-oct programme's M2 as a context the screen provides (ADR-0178 D8), not a prop.
 - **Journey.** `a staff member takes every reading in one press` starts with the folded state, opens, asserts focus stays
   and no new history request; `/staff#performance` opens and focuses the box in the group test; every step that drives a
   measuring control opens the box first (`openPerformance`).

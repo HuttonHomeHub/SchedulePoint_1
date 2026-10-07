@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (2026-10-06, at M4's close). Filed Proposed at M2; the grouped layout, values,
   Refresh and announce-on-change shipped in M3, and D-3 (Performance folded at rest, its history read
-  hoisted to the panel root) shipped in M4 with the split of the probe panel.
+  hoisted to the panel root) shipped in M4 with the split of the probe panel. D8 (a Refresh speaks
+  once) followed in estate-polish-oct M2.
 - **Date:** 2026-10-06
 - **Deciders:** James Ewbank (product owner — approved the spec 2026-10-06: one page with an "On this
   page" jump list rather than tabs, Performance folded by default, a Refresh with an honest note),
@@ -116,6 +117,28 @@ each is implemented and tested at M3, which is when this ADR is accepted):
 - **Its copy lives in `features/perf-probe`**, since that feature may not import `features/staff`, and
   the SC-9 gate (`copy.structural.test.ts`) now reads the probe's UI files too. "Measure one thing" is
   a `Disclosure`, so the page has one sub-heading treatment.
+
+**D8 — A Refresh speaks once (estate-polish-oct M2).**
+
+- **The screen mutes its boxes; the page speaks.** `StatusMuteProvider` (`components/ui/page/status-mute.tsx`)
+  wraps the four groups and `ConsoleBody` sets it for the length of a Refresh or **Try again for all**.
+  Under it an `announce="change"` section writes its new sentence as plain text, keeps its polite region
+  empty, and takes that sentence as its baseline (latch reset). **A context, not a prop**: the fact
+  belongs to the screen, the sections sit three levels down in two features, and `perf-probe` may not
+  import `staff` (D1's `HeadingLevelContext` is the precedent). The default is `false`, so no other
+  caller changes.
+- **Timing.** The mute is its own state, **not** `refreshing`, and is cleared from the effect that
+  announces the committed `refreshed` render, after `announce(...)`. `refreshing` clears one microtask
+  after `setRefreshed`, before that commit, which would let a late query notification speak. The
+  re-baseline is an effect too, so a strict-mode double render cannot desynchronise it; every commit
+  that carried a new sentence has run it before the unmute commit.
+- **Errors still interrupt.** `QueryErrorState`'s `role="alert"` is untouched, so a read that newly
+  fails still speaks, and the headline's "N could not be checked" says how many. SC-3 is therefore "one
+  polite announcement; a newly failed read may add its alert", with no "N reads failed" tail.
+- **Accepted, stated plainly.** Any change inside the window is muted, including a background refetch
+  that happened to land there, and the recovery of a read that is not in the headline (activity and
+  probe history) is told by nobody; the plain text updates and a reader who walks the page finds it.
+  The window is a Refresh's length, so the cost is bounded.
 
 ## Alternatives considered
 

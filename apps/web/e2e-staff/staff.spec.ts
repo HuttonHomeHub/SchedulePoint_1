@@ -1571,6 +1571,18 @@ test('a staff member reads the console by group and acts on a condition', async 
     timeout: 30_000,
   });
   await expect(refresh).toBeFocused();
+  // One polite sentence per Refresh (ADR-0178 D8): the page announcer holds it and no box's own
+  // region does. Read a beat later, so a box that speaks late (the mute ending too early) is caught.
+  await staff.waitForTimeout(500);
+  expect(
+    await staff.evaluate(() =>
+      [...document.querySelectorAll('[aria-live="polite"]')]
+        .filter((node) => node.getAttribute('data-testid') !== 'announcer')
+        .map((node) => node.textContent ?? '')
+        .filter((text) => text !== ''),
+    ),
+    'no box speaks on Refresh',
+  ).toEqual([]);
   for (const path of SIX) expect(countOf(path), `${path} on Refresh`).toBe(1);
   expect(countOf('/staff/diagnostics'), 'Refresh must never run the diagnostics').toBe(0);
   expect(await readTime(), 'the header time moved').not.toBe(timeBefore);
