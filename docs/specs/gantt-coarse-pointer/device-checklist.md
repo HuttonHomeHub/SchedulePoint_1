@@ -9,8 +9,11 @@ stylus. Your answers decide which fixes get built and which are dropped. There a
 **How to answer.** Tick a box, or write a few words on the line. Photos and a screen recording are
 fine instead of writing. Windows: Snipping Tool, then Record.
 
-> **Keep this sheet current (product owner, 2026-10-06).** The sheet is **parked** until the product
-> owner runs it. Any change that alters what a step tests — Gantt touch, stylus, right-click or
+> **Answered 2026-10-07** on `web` 0.177.2: the results and what they decide are in
+> [`device-results.md`](device-results.md).
+>
+> **Keep this sheet current (product owner, 2026-10-06).** The sheet was **parked** until the product
+> owner ran it. Any change that alters what a step tests — Gantt touch, stylus, right-click or
 > keyboard-menu behaviour, the Gantt's targets, or `/pointer-check.html` — updates this file in the
 > same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 

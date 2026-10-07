@@ -11897,3 +11897,21 @@ keep that change to the diagnostics it adds. **Next:** run each press inside one
 `SET LOCAL statement_timeout` (and decide the figure against the measured readings), with a test that a statement
 over the bound surfaces as the existing 500 rather than hanging. **Trigger:** H-1 `examined` ≥ 250,000, or any
 press over ~800 ms reported by the operator, or the next entry whose scan is unbounded by an index.
+
+### 464. A press-and-hold on the Gantt's table half opens the browser's menu, not SchedulePoint's
+
+**Status:** open · **Verified:** 2026-10-07 (the product owner on his Surface, `web` 0.177.2, recorded in
+`docs/specs/gantt-coarse-pointer/device-results.md`; the row's one `onContextMenu` handler in
+`apps/web/src/features/gantt/components/GanttPanel.tsx` read, not reproduced) · **Raised:** 2026-10-07
+(Surface test sheet) · **Size:** S · **Owner:** web
+
+On the Surface a press-and-hold on a Gantt row opens SchedulePoint's row menu on the chart half and the
+browser's own menu on the table half, in both postures. The handler covers the whole row, so the likeliest
+cause is that a hold on selectable cell text is taken as a text-selection gesture and never reaches the
+row as a `contextmenu`; that is a reading, not a reproduction. M1's record names this as the trigger for
+its fallback.
+
+**Next:** decide with Gantt M2 between a `useLongPress` hook on the tooltip precedent and stopping text
+selection in the grid's cells under touch, then reproduce with a CDP touch hold on cell text before
+building. Either changes what the Surface sheet tests, so the sheet updates in the same PR. **Trigger:**
+Gantt M2 starting, or a planner reporting the browser menu on a hold.

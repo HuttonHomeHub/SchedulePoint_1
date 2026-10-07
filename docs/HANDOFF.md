@@ -25,9 +25,10 @@ well"; spec approved the same day: "Approved, go with the sign-in page for signe
 
 ## Waiting on the product owner
 
-- **The Surface test sheet is still PARKED** (`docs/specs/gantt-coarse-pointer/device-checklist.md`).
-  Standing instruction unchanged: a change to anything it tests updates the sheet in the same PR. Its
-  answers decide **Gantt M2**. Nothing in this batch changed what it tests (each PR says why).
+- **The Surface test sheet is ANSWERED** (2026-10-07, `web` 0.177.2): results and what they decide
+  are in `docs/specs/gantt-coarse-pointer/device-results.md`. The sheet stays the record of what is
+  tested: a change to anything it tests still updates it in the same PR. **The Surface runs at
+  1912 × 1114 CSS px (DPR 1.5)**, not the ~1368 × 912 this file and M0 assumed.
 - **The history count on or after 1 November** (ADR-0174 / #443): staff console → Tools →
   **Run diagnostics** → **Copy results**. Record it in #443 and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
@@ -36,7 +37,10 @@ well"; spec approved the same day: "Approved, go with the sign-in page for signe
 
 ## Decisions to put to the product owner (none approved)
 
-1. **Gantt M2** (after the Surface sheet), and anything from `docs/BACKLOG.md`.
+1. **Gantt M2**, now much smaller: the device dropped M2-T1 and M2-T3 (10 / 10 hits). Left: M2-T2
+   (the 12 × 12 chevron: a §2.5.8 exemption or a 24 × 24 box, accessibility-reviewer's call), M2-T4
+   (gates, ADR-0177 D4 and Accepted), and **#464** (a hold on the table half opens the browser's
+   menu). Then anything from `docs/BACKLOG.md`.
 
 ## Open rows unchanged this batch
 
