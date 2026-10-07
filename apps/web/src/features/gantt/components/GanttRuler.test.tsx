@@ -19,9 +19,21 @@ describe('GanttRuler', () => {
   });
 
   it('labels a month tick with its month and year', () => {
-    const { container } = render(<GanttRuler anchorIso="2026-03-01" widthPx={10} pxPerDay={1} />);
+    const { container } = render(<GanttRuler anchorIso="2026-03-01" widthPx={30} pxPerDay={3} />);
     expect(container.textContent).toMatch(/Mar/);
     expect(container.textContent).toMatch(/2026/);
+  });
+
+  // Thinned labels keep their month line; an empty string must not become an empty, padded span.
+  it('draws a month line with no text where the zoom leaves it unlabelled', () => {
+    const { container } = render(
+      <GanttRuler anchorIso="2026-01-01" widthPx={600} pxPerDay={1.1} />,
+    );
+    const lines = majorTicks(container);
+    expect(lines).toHaveLength(19);
+    const bare = lines.filter((t) => t.textContent === '');
+    expect(bare.length).toBeGreaterThan(0);
+    for (const t of bare) expect(t.querySelector('span')).toBeNull();
   });
 
   // A tick per day below ~14px is illegible hatching, not information.

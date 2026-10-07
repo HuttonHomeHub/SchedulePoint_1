@@ -20,8 +20,9 @@ export interface GanttRulerProps {
  * uses.
  *
  * Level of detail is deliberate: at a wide zoom a tick per day is illegible noise, so day ticks
- * appear only once each has room to be read. Month labels are always present, because a bar chart
- * with no month boundaries cannot be read at all. That decision is the shared
+ * appear only once each has room to be read. Month lines are always present, because a bar chart
+ * with no month boundaries cannot be read at all; their labels thin to every second month, quarter
+ * or year as the zoom drops, so names never overprint. That decision is the shared
  * {@link buildRulerTicks}, so the printed document places months identically.
  */
 export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): React.ReactElement {
@@ -42,7 +43,7 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
           }
           style={{ left: tick.x }}
         >
-          {tick.major ? (
+          {tick.label !== '' ? (
             <span className="text-muted-foreground text-micro pointer-events-none absolute top-1 left-1 whitespace-nowrap">
               {tick.label}
             </span>
