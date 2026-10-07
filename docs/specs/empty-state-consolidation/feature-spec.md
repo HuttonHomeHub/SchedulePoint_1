@@ -299,6 +299,10 @@ yet" vs. "nothing matches what you asked for"). **They become the error shape** 
 the existing `text-destructive-text` + Try again pattern that `DataTable.tsx:90-100` already
 implements — plus the existing "Back to clients" link, which is a genuinely useful exit and stays.
 
+> **Amended 2026-10-07:** the error shape now applies to non-404 failures only. A 404 on the plan,
+> project or client query is the calm in-shell "not found" page (`routes/entity-not-found.tsx`,
+> matching #463), and the exit link is "Go to the organisation overview".
+
 **Two permission refusals.** `audit-log.tsx:86` and `EarnedValuePanel.tsx:131`. Both already carry
 `role="status"` and both are correct about _what_ they say; what is wrong is the costume. A
 refusal is `EmptyState`'s "fact" case with a name — ADR-0082 is the register's decision on this

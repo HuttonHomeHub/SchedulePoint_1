@@ -150,6 +150,11 @@ describe('the page frame is written once', () => {
  */
 const WIDTH_EXCEPTIONS = new Map<string, string>([
   [
+    'routes/entity-not-found.tsx',
+    'The missing plan, project or client page is the in-shell not-found page for an entity: a sentence ' +
+      'and a link, so it declares `narrow` exactly as `routes/org-not-found.tsx` does.',
+  ],
+  [
     'routes/org-not-found.tsx',
     'A not-found page is a sentence and a link, read rather than scanned; the product measure would ' +
       "set it across an empty screen (the same reason the staff console's branch once declared " +

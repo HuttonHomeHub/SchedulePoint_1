@@ -1,11 +1,10 @@
-import { Link, useParams } from '@tanstack/react-router';
+import { useParams } from '@tanstack/react-router';
 
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
-import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
+import { EntityLoadFailure } from '@/routes/entity-not-found';
 
 /**
  * A single plan (`/orgs/$orgSlug/plans/$planId`). Route-composed orchestration (queries, gating,
@@ -17,6 +16,12 @@ import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
  * with the flag. The model lives where it does because two layouts once shared it; it stays there
  * because the split between "what this plan needs" and "how it is laid out" is worth keeping
  * whether or not there is a second layout to prove it.
+ *
+ * **A failed plan query is two pictures, split by HTTP status** ({@link EntityLoadFailure}). A 404 —
+ * the plan does not exist, was deleted, or belongs to somebody else's organisation — is a destination
+ * that matches the in-shell "Page not found" (#463): calm, heading focused, no alert. Any other error
+ * (a dropped connection, a 5xx) stays a `role="alert"` in destructive ink, because it says nothing
+ * about the plan and "doesn't exist" would be false (`docs/specs/empty-state-consolidation/` §1.5.2 M2).
  *
  * Its one other job is to tell the overview's "Jump back in" that this plan was opened
  * ({@link useRememberPlan}) — one call, ids only, written once per plan rather than per render.
@@ -63,34 +68,12 @@ function PlanDetail({ orgSlug, planId }: { orgSlug: string; planId: string }): R
 
   if (planQuery.isError) {
     return (
-      <PageContainer>
-        <Breadcrumbs
-          items={[
-            { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
-            { label: 'Not found' },
-          ]}
-        />
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Plan not found</h1>
-        {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
-            This branch is `query.isError` — the plan does not exist, was deleted, or the reader
-            has no access. Drawn as a dashed centred box it read as "there is nothing here", which
-            is a statement about the plan when the truth may be a statement about the reader.
-            `role="alert"` + destructive ink is the shape `DataTable` already uses for the same
-            condition. The exit link stays: `isError` also covers a transient network failure, so a
-            reader who is not lost must not be stranded. */}
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            This plan doesn’t exist, was deleted, or you don’t have access to it.
-          </p>
-          <Link
-            to="/orgs/$orgSlug/clients"
-            params={{ orgSlug }}
-            className="text-foreground underline underline-offset-4"
-          >
-            Back to clients
-          </Link>
-        </div>
-      </PageContainer>
+      <EntityLoadFailure
+        entity="Plan"
+        orgSlug={orgSlug}
+        error={planQuery.error}
+        onRetry={() => void planQuery.refetch()}
+      />
     );
   }
 
