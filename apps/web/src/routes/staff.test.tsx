@@ -185,7 +185,7 @@ afterEach(() => {
 });
 
 describe('StaffConsoleScreen', () => {
-  it('shows a plain "not found" to a non-staff caller — never "access denied"', async () => {
+  it('shows the one "Page not found" to a non-staff caller — never "access denied"', async () => {
     // The API answers a non-staff caller with the same 404 it gives a route that does not exist.
     // The screen must say the same thing: "access denied" would confirm the surface exists and is
     // worth attacking, which is the oracle the guard's uniform 404 exists to close.
@@ -193,7 +193,8 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    expect(await screen.findByRole('heading', { name: 'Not found' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByText(/denied|permission|staff console/i)).not.toBeInTheDocument();
   });
 
@@ -204,7 +205,16 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    expect(await screen.findByRole('heading', { name: 'Not found' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+  });
+
+  it('shows the same thing when the identity request never reaches the API', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderScreen();
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(document.title).toBe('Page not found · SchedulePoint');
   });
 
   it('renders the console and the mail panel for a staff caller', async () => {

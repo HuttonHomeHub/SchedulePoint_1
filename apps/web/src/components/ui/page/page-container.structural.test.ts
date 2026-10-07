@@ -143,17 +143,13 @@ describe('the page frame is written once', () => {
  * rather than converting call sites: a conversion leaves the failure mode armed for screen
  * fourteen.
  *
- * So an explicit `width` is now a **declaration**, and a declaration owes a reason. Today there is
- * exactly one, and it is the pinned positive case: without a real entry here, every assertion below
- * passes against a scan that matched nothing (ADR-0093, ADR-0108).
+ * So an explicit `width` is now a **declaration**, and a declaration owes a reason. Today there are
+ * none: the one that stood here, the staff console's not-found sentence, went when that branch began
+ * rendering the shared `NotFoundScreen` (#459). The scan is still pinned by the matcher's own positive
+ * case below, so an empty list is a clean estate and not a scan that matched nothing (ADR-0093,
+ * ADR-0108).
  */
-const WIDTH_EXCEPTIONS = new Map([
-  [
-    join('features', 'staff', 'ui', 'staff-console-screen.tsx'),
-    'narrow: the not-found branch is a sentence and a paragraph, and the product measure would set ' +
-      'a refusal across an empty screen. It is read rather than scanned.',
-  ],
-]);
+const WIDTH_EXCEPTIONS = new Map<string, string>();
 
 /** Every explicit `width="…"` passed to `PageContainer`, by file. */
 function widthPropsIn(source: string): string[] {
@@ -198,7 +194,6 @@ describe('the measure is the default unless a screen declares otherwise', () => 
   });
 
   it('declares every width exception with a reason, and none that has lapsed', () => {
-    expect(WIDTH_EXCEPTIONS.size, 'the exception list is empty, so nothing above can fail').toBe(1);
     for (const [key, reason] of WIDTH_EXCEPTIONS) {
       const widths = widthPropsIn(readFileSync(join(WEB_SRC, key), 'utf8'));
       expect(widths.length, `${key} no longer passes an explicit width — drop it`).toBeGreaterThan(

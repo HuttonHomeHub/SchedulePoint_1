@@ -370,7 +370,7 @@ test.describe('the tallest state', () => {
  *   weaker second opinion pretending to be a stronger one.
  * - **Firefox and WebKit.** Chromium-first (`CLAUDE.md` §17, TECH_DEBT #25a), like all 26 siblings.
  * - **Real mail.** No message is sent or read here; `e2e-account` owns the SMTP round trip.
- * - **Ten of the thirty-three landable states are driven by URL; three more by a real invitation
+ * - **Eleven of the thirty-four landable states are driven by URL; three more by a real invitation
  *   against a real API; one is synthesised by fulfilling a 429.** The remaining nineteen are
  *   *outcome* states behind a successful mutation ("Check your email", "Password changed", the
  *   pending and error branches of each form) and are asserted in each route's own unit suite, where

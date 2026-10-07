@@ -11,6 +11,7 @@ import { Suspense, lazy } from 'react';
 
 import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
+import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Spinner } from '@/components/ui/spinner';
 import {
   ACCOUNT_SETTINGS_ENABLED,
@@ -651,6 +652,16 @@ export const router = createRouter({
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: RouteErrorScreen,
+  // **One "Page not found" for every address that is not a page** (`docs/TECH_DEBT.md` #459), and in
+  // 'root' mode so it is the SAME picture everywhere. The library's default ('fuzzy') hands an
+  // unmatched `/orgs/<slug>/nope` to the nearest matched parent, so a signed-in mistype rendered
+  // inside `_authed`'s outlet and a signed-out one was redirected to sign-in first — three pictures
+  // for one fact. Accepted trade-off: a signed-in mistype under `/orgs/<slug>/` now renders outside the
+  // shell (no Project Explorer, no breadcrumbs); an in-shell variant is filed in `docs/TECH_DEBT.md`.
+  // Entity-level "not found" (a plan, project or client the query could not return) is a different,
+  // deliberate picture inside the shell and is untouched.
+  defaultNotFoundComponent: NotFoundScreen,
+  notFoundMode: 'root',
   // The timing (1000 ms before it shows, 500 ms minimum) is the library default, left unset on
   // purpose — see `route-pending.tsx`.
   defaultPendingComponent: RoutePending,

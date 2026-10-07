@@ -14,7 +14,7 @@ import { expect, test } from '../e2e-support/test';
  *
  * Four things are only testable here:
  *
- * 1. **A non-staff member sees "Not found", not "access denied".** The API answers every non-staff
+ * 1. **A non-staff member sees "Page not found", not "access denied".** The API answers every non-staff
  *    caller with the 404 it gives an unmapped route; the screen must say the same, or it confirms
  *    the surface exists and is worth attacking. A mocked fetch cannot be wrong about which status
  *    the real guard chose.
@@ -124,7 +124,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await member.goto('/staff');
   // The whole surface argument, driven against the real guard: "Not found", never "access denied",
   // never a sign-in bounce that implies signing in as somebody else would help.
-  await expect(member.getByRole('heading', { name: 'Not found' })).toBeVisible();
+  await expect(member.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await expect(member.getByText(/denied|permission|not authorised|staff/i)).toHaveCount(0);
 
   // ...and the account menu offers them nothing either. Absent, never shaded: a disabled "Staff
@@ -142,6 +142,76 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // carries the member's own session cookies, which is what makes it attributable.
   const probe = await member.request.get('/api/v1/staff/health');
   expect(probe.status(), 'a panel route refuses a member with the same 404').toBe(404);
+
+  // **Parity (#459): `/staff` is not distinguishable from an address that was never a page.** The
+  // unit suites each assert one half; only a real browser against the real guard can compare the
+  // settled pages and the API bodies with each other.
+  const created = await member.request.post('/api/v1/organizations', {
+    data: { name: `Parity ${stamp}` },
+    headers: { Origin: 'http://localhost:5173' },
+  });
+  const slug = ((await created.json()) as { data: { slug: string } }).data.slug;
+  expect(slug, 'the member has an organisation to mistype under').toBeTruthy();
+  const settled: Array<{
+    path: string;
+    title: string;
+    lang: string;
+    metas: string[];
+    mains: number;
+    main: string;
+    h1s: Array<string | null>;
+  }> = [];
+  for (const path of ['/staff', '/staff/', '/staff/x', '/no-such-path', `/orgs/${slug}/nope`]) {
+    await member.goto(path);
+    const h1 = member.getByRole('heading', { level: 1, name: 'Page not found' });
+    await expect(h1, `${path}: the one heading`).toBeVisible();
+    await expect(h1, `${path}: focus moved to it`).toBeFocused();
+    await expect(member.getByRole('link', { name: 'Go to the home page' })).toHaveCount(1);
+    settled.push({
+      path,
+      ...(await member.evaluate(() => ({
+        title: document.title,
+        lang: document.documentElement.lang,
+        metas: [...document.querySelectorAll('head meta')].map((meta) => meta.outerHTML).sort(),
+        mains: document.querySelectorAll('main').length,
+        main: (document.querySelector('main')?.outerHTML ?? '').replace(/\s+/g, ' '),
+        h1s: [...document.querySelectorAll('h1')].map((node) => node.textContent),
+      }))),
+    });
+  }
+  const { path: _first, ...reference } = settled[0]!;
+  for (const { path, ...picture } of settled) {
+    expect(picture, `${path} settles to the same page as /staff`).toEqual(reference);
+  }
+  expect(reference.title).toBe('Page not found · SchedulePoint');
+  expect(reference.mains).toBe(1);
+
+  // Every call carries the browser's Origin, as the page's own requests do: the CORS headers answer
+  // the Origin, not the route, so sending it on one call only would compare two kinds of request.
+  const asBrowser = { headers: { Origin: 'http://localhost:5173' } };
+  const apiCalls = [
+    () => member.request.get('/api/v1/staff/me', asBrowser),
+    () => member.request.post('/api/v1/staff/me', asBrowser),
+    () => member.request.get('/api/v1/staff/no-such-route', asBrowser),
+    () => member.request.get('/api/v1/x', asBrowser),
+  ];
+  // The throttle's own headers and per-request values are residue (spec §2), not parity.
+  const volatile = (name: string): boolean =>
+    ['date', 'x-correlation-id'].includes(name) || name.startsWith('x-ratelimit-');
+  const answers = [];
+  for (const call of apiCalls) {
+    const response = await call();
+    answers.push({
+      status: response.status(),
+      body: await response.text(),
+      headers: Object.fromEntries(
+        Object.entries(response.headers()).filter(([name]) => !volatile(name)),
+      ),
+    });
+  }
+  const [firstAnswer, ...otherAnswers] = answers;
+  expect(firstAnswer?.body).toBe('{"error":{"code":"NOT_FOUND","message":"Not found"}}');
+  for (const answer of otherAnswers) expect(answer).toEqual(firstAnswer);
   await memberContext.close();
 
   // -------------------------------------------------- Allowlisted, but unverified: still refused
@@ -152,7 +222,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   const squatter = await squatterContext.newPage();
   await signUpOrIn(squatter, UNVERIFIED_STAFF_EMAIL, 'Unverified Ops');
   await squatter.goto('/staff');
-  await expect(squatter.getByRole('heading', { name: 'Not found' })).toBeVisible();
+  await expect(squatter.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await squatterContext.close();
 
   // ---------------------------------------------------------------- The staff member
@@ -175,7 +245,9 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // "not the console" for a page that had not finished rendering anything at all — which then sent
   // the run down the verification branch and failed waiting for mail nobody was going to send.
   // Asserting that one of the two headings is present first makes the branch a real observation.
-  await expect(staff.getByRole('heading', { name: /^(Staff console|Not found)$/ })).toBeVisible({
+  await expect(
+    staff.getByRole('heading', { name: /^(Staff console|Page not found)$/ }),
+  ).toBeVisible({
     timeout: 30_000,
   });
   const alreadyIn = await staff

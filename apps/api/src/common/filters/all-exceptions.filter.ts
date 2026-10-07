@@ -28,6 +28,17 @@ interface Mapped {
   details?: unknown;
 }
 
+/**
+ * The text Nest's own router gives a request no handler matched — `Cannot GET /api/v1/x`
+ * (`@nestjs/core` `router/routes-resolver.js`, `registerNotFoundHandler`). It echoes the method and the
+ * full path and query, which is the one thing that tells an unmapped route from a guarded one that
+ * answers `Not found` (`StaffGuard`, ADR-0086), and an error body is not meant to echo the request
+ * (the filter's own rule above). Matched on its shape rather than on every 404, so a message somebody
+ * wrote on purpose survives.
+ */
+const NEST_DEFAULT_NOT_FOUND = /^Cannot [A-Z]+ \//;
+const NOT_FOUND_MESSAGE = 'Not found';
+
 // Fixed texts: the parser's own message echoes the request (byte counts, the charset it named, the
 // JSON parse position), so none of it is passed on.
 const BAD_BODY: Mapped = {
@@ -182,7 +193,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private mapHttp(exception: HttpException): Mapped {
-    const status = exception.getStatus();
+    const status: HttpStatus = exception.getStatus();
     const res = exception.getResponse();
     // Nest's ValidationPipe returns { message: string[], error, statusCode }.
     let message = exception.message;
@@ -195,6 +206,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else if (typeof record.message === 'string') {
         message = record.message;
       }
+    }
+    if (status === HttpStatus.NOT_FOUND && NEST_DEFAULT_NOT_FOUND.test(message)) {
+      message = NOT_FOUND_MESSAGE;
     }
     return { status, code: this.statusCode(status), message, details };
   }

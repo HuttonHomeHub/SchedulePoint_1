@@ -66,8 +66,8 @@ export const MD = 768;
  * A public state this suite can reach from a URL alone, with the heading that identifies it and the
  * control a reader is meant to press.
  *
- * These ten are the **driven** states. `public-screens.spec.ts`'s closing docblock lists what is
- * synthesised and what is not covered at all — a suite that quietly measures ten of thirty-three
+ * These eleven are the **driven** states. `public-screens.spec.ts`'s closing docblock lists what is
+ * synthesised and what is not covered at all — a suite that quietly measures eleven of thirty-four
  * while reading as though it measured all of them is the defect class this repository keeps naming.
  */
 export const URL_STATES = [
@@ -97,6 +97,9 @@ export const URL_STATES = [
     heading: 'Invitation not found',
     primary: 'Sign in',
   },
+  // The one "Page not found" (#459): a signed-out visitor's way on is Sign in. The signed-in label
+  // is asserted in `e2e-staff`, where a session exists.
+  { path: '/no-such-path', heading: 'Page not found', primary: 'Sign in' },
 ] as const;
 
 /**
