@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.176.3
+
+### Patch Changes
+
+- [#866](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/866) [`3494cb7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3494cb7bd1ffcee36e5822dcabd0ab8a926bd3d6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A staff console Refresh is now announced once. The page says "Refreshed. …" and no box adds its own sentence to it: a box whose figure changed during the refresh updates its text silently. A read that newly fails still alerts, and a change after the refresh has finished is still spoken.
+
 ## 0.176.2
 
 ### Patch Changes
