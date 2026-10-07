@@ -2,4 +2,4 @@
 '@repo/web': patch
 ---
 
-In the Gantt, the small arrow that opens and closes a summary row now sits beside the activity name, is easier to tap, and the indent follows the name rather than the code. After you touch the table with a finger or stylus, its words can no longer be highlighted, so holding a finger on the table now opens SchedulePoint's menu for that row, as it already did on the chart.
+In the Gantt, the arrow that opens and closes a summary row now sits next to the activity name and is larger and easier to tap; the indent now follows the name instead of the Code column. After a finger or stylus press, text in the table half of a row is no longer selectable, so holding a finger there opens the row menu, as it already does on the chart.

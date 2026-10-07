@@ -678,6 +678,17 @@ Everything below is folded into the sections above.
 | 9   | test                | Exemptions nothing exercises cannot fail                                                 | Every kind is asserted present, with a planted regression; edge handles are listed but unswept  |
 | 10  | a11y                | D4 sentences; the arrow's click and a hold                                               | Kept. Found: a hold on the arrow would also toggle it; the arrow now honours the row's swallow  |
 
+##### Build review (2026-10-07)
+
+| Reviewer      | Finding                                                                            | Resolution                                                                           |
+| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| accessibility | **Blocking.** The name input jumped when a cell opened for editing                 | Fixed with the `lead` prop on `GanttCell`; AGREE after                               |
+| component     | None                                                                               | AGREE                                                                                |
+| test-engineer | Gate review: the open-cell sweep assertion could not fail                          | Made able to fail (`57ce3018`); AGREE                                                |
+| ux            | **Blocking.** Bucket rows lose alignment with names when the Code column is hidden | Fixed: the bucket's arrow and label sit in the name cell, with a test for both cases |
+| ux            | Device sheet and changeset wording                                                 | Folded: plain words, one posture line per run, changeset reworded                    |
+| ux            | Indent at depth 4-5 uses about 80-95 px of the name column's width                 | Noted, not changed                                                                   |
+
 ---
 
 #### Feature: M2-F1 — Coarse targets and the AA floor

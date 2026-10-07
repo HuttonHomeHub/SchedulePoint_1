@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GANTT_COLUMNS } from '../layout/grid-columns';
-import { DEFAULT_HIDDEN_COLUMNS } from '../model/gantt-view-state';
+import { DEFAULT_HIDDEN_COLUMNS, type GanttColumnKey } from '../model/gantt-view-state';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 import { GanttPrintSurface } from './GanttPrintSurface';
@@ -124,6 +124,39 @@ describe('the summary row arrow', () => {
     expect(slot).toHaveAttribute('aria-hidden', 'true');
     expect(arrow(bucket)).toBeNull();
     expect(cellOf(bucket, 1)).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['shown', new Set<GanttColumnKey>(['predecessors']), 2],
+    ['hidden', new Set<GanttColumnKey>(['predecessors', 'code']), 1],
+  ])('starts a bucket row in the name cell with Code %s', (_label, hiddenColumns, nameColindex) => {
+    render(
+      <GanttPanel
+        activities={NESTED}
+        viewState={{
+          sort: { key: 'name', direction: 'asc' },
+          hiddenColumns,
+          collapsed: new Set(),
+          onSortChange: () => {},
+          onHiddenColumnsChange: () => {},
+          onCollapsedChange: () => {},
+          collapsedWithheld: 0,
+        }}
+      />,
+    );
+    const bucket = rowOf('Unassigned');
+    const slotCell = bucket
+      .querySelector('[class*="size-6"]')!
+      .closest<HTMLElement>('[role="gridcell"]')!;
+    expect(slotCell).toBe(cellOf(bucket, nameColindex));
+    expect(slotCell).toHaveTextContent('Unassigned');
+    // Same cell position as a leaf's name, so the two lines start at the same left edge.
+    const leafSlot = rowOf('Loose end').querySelector<HTMLElement>('[class*="size-6"]')!;
+    expect(leafSlot.closest('[role="gridcell"]')).toHaveAttribute(
+      'aria-colindex',
+      String(nameColindex),
+    );
+    expect(bucket.querySelectorAll('[role="gridcell"]')).toHaveLength(nameColindex + 1);
   });
 
   it('toggles on a tap without selecting the row', () => {

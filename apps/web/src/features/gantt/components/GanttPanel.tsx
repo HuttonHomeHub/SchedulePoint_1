@@ -174,8 +174,9 @@ const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
 /**
  * **The disclosure slot: a 24 × 24 box, drawn on every row of the Activity column** (ADR-0177
  * D4). `size-6` is WCAG 2.2 §2.5.8's 24 px floor, not a rhythm choice: the arrow was a bare 12 px
- * icon, and the row it sits in is itself a target, so no spacing exception applied. The icon stays 12 px and the row stays 28 — the BOX grew, not the
- * glyph. A leaf and a bucket row draw the same empty box so the names line up whatever their kind.
+ * icon, and the row it sits in is itself a target, so no spacing exception applied. The icon stays
+ * 12 px and the row stays 28 — the BOX grew, not the glyph. A leaf and a bucket row draw the same
+ * empty box so the names line up whatever their kind.
  */
 const DISCLOSURE_SLOT_CLASS =
   'inline-flex size-6 shrink-0 items-center justify-center align-middle';
@@ -1477,6 +1478,16 @@ function GanttBucketRowView({
   // One composer, shared with the TSLD's WBS band (`docs/TECH_DEBT.md` #232) — the reasoning that
   // used to sit here moved into its docblock rather than being deleted with the literal.
   const label = wbsGroupAccessibleName({ label: row.label, count: row.count });
+  // The name column's position, not a literal 1: Code is hideable, and the bucket's arrow and label
+  // belong in the same cell a leaf's name is in.
+  const nameIndex = Math.max(
+    0,
+    COLUMNS.findIndex((column) => column.key === 'name'),
+  );
+  const leadingWidth = COLUMNS.slice(0, nameIndex).reduce(
+    (sum, column) => sum + resolveColumnWidth(column),
+    0,
+  );
 
   return (
     <div
@@ -1507,17 +1518,22 @@ function GanttBucketRowView({
         className="border-border bg-background sticky left-0 z-10 flex h-full shrink-0 items-center border-r"
         style={{ width: gridWidth }}
       >
+        {/* One empty cell per column ahead of the name, so the arrow and label sit where the data
+            rows' names do whether or not the hideable Code column is showing. */}
+        {COLUMNS.slice(0, nameIndex).map((column, i) => (
+          <div
+            key={column.key}
+            role="gridcell"
+            aria-colindex={i + 1}
+            className="text-muted-foreground shrink-0 truncate px-2 text-xs"
+            style={{ width: resolveColumnWidth(column) }}
+          />
+        ))}
         <div
           role="gridcell"
-          aria-colindex={1}
-          className="text-muted-foreground shrink-0 truncate px-2 text-xs"
-          style={{ width: resolveColumnWidth(COLUMNS[0]!) }}
-        />
-        <div
-          role="gridcell"
-          aria-colindex={2}
+          aria-colindex={nameIndex + 1}
           className="text-muted-foreground shrink-0 truncate px-2 text-xs italic"
-          style={{ width: gridWidth - resolveColumnWidth(COLUMNS[0]!) }}
+          style={{ width: gridWidth - leadingWidth }}
         >
           <span aria-hidden="true" className={cn(DISCLOSURE_SLOT_CLASS, 'text-muted-foreground')}>
             {row.expanded ? (

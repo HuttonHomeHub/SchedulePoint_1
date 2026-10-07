@@ -54,8 +54,8 @@ Use **one finger**. Pick a normal task row (a bar, not a grey summary row).
 - [ ] **5. Double-tap a Duration number.**
       [ ] a text box opened [ ] nothing happened [ ] something else: __________
 - [ ] **6. Tap the three dots at the end of a row ten times. Then tap the small arrow beside a summary
-      row ten times.** (The arrow now sits just before the summary's activity name, in the Activity
-      column, and is a little larger; it used to be in the Code column.)
+      row ten times.** (The arrow sits just before the summary's activity name, in the Activity
+      column, the one with the task names.)
       Missed or hit the wrong thing, out of 10: dots ____ / 10 arrow ____ / 10
 
 ## Pass B: tablet (keyboard cover folded back or removed)
@@ -106,14 +106,16 @@ This version stops the table's words from being highlighted after you touch the 
 hold can reach SchedulePoint's menu (#464). Do it once with a finger and once with the stylus, in
 each posture.
 
-- [ ] **12a. Press and hold on the words in the table half of a row (a task name, for example) for
-      about one second, then let go.**
-      What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
-      Was a word highlighted, with little round handles? [ ] yes [ ] no
-- [ ] **12b. Press and hold on an EMPTY part of the table half (a blank Code cell, or the space beside
-      a short value).**
-      What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
-- [ ] **Posture:** [ ] cover attached [ ] tablet. **Input:** [ ] finger [ ] stylus
+For each run, first note the posture and the input, then do 12a and 12b.
+
+- **Posture:** [ ] cover attached [ ] tablet. **Input:** [ ] finger [ ] stylus
+  - [ ] **12a. Press and hold on the words in the table half of a row (a task name, for example)
+        for about one second, then let go.**
+        What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
+        Was a word highlighted, with little round handles? [ ] yes [ ] no
+  - [ ] **12b. Press and hold on an EMPTY part of the table half (the empty space inside a Code
+        cell; if Code is hidden, a blank Duration cell).**
+        What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
 
 ## When you are done
 
