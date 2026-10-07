@@ -1364,7 +1364,34 @@
       "path": "dist/esm/router.js",
       "lines": "659-665",
       "anchor": "findGlobalNotFoundRouteId(this.options.notFoundMode, matchedRoutes)",
-      "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/estate-polish-oct/feature-spec.md",
+        "docs/specs/in-shell-not-found/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "router.js:958-968",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "958-968",
+      "anchor": "function findGlobalNotFoundRouteId(notFoundMode, routes) {",
+      "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
+    },
+    {
+      "ref": "load-client.js:611-618",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/load-client.js",
+      "lines": "611-618",
+      "anchor": "if (router.options.notFoundMode !== \"root\" && plannedBoundary >= 0) {",
+      "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
+    },
+    {
+      "ref": "load-client.js:40-42",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/load-client.js",
+      "lines": "40-42",
+      "anchor": "const end = matches.findIndex((match) => match.status !== \"success\" || match._notFound) + 1;",
+      "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
     },
     {
       "ref": "new-process-route-tree.js:396",
