@@ -210,7 +210,8 @@ Defaults taken without asking:
   - Bar move: the typed `Start` cell.
   - Edge resize: the typed `Start` / `Finish` / `Duration` cells.
   - All of them also through row menu → `Edit` (the activity editor) and, by keyboard, F2.
-  - **On touch**, the cells' only entry is a double tap, which is P9 and INDETERMINATE. So touch's
+  - **On touch**, the cells' only entry is a double tap, which is P9 and INDETERMINATE (**2026-10-07:**
+    the device opened a text box on a double tap in both postures, item 5). So touch's
     **guaranteed** route is long-press → `Edit` or the 28 px `⋯` → `Edit`. That is why M1-T2 is owed
     whatever M0 says about cells.
 - **2.5.8 Target Size (Minimum) (AA).** See US-5. The open cell input is 24 px tall (`GanttCell.tsx:155`).
@@ -327,10 +328,10 @@ flowchart LR
     AS["armed state + reason surface"]
   end
   subgraph Media["@media (pointer: coarse) only (M2)"]
-    EZ["selected bar's edge zones grow outward"]
-    SH["sort header fills its cell"]
+    EZ["selected bar's edge zones grow outward<br/>(DROPPED 2026-10-07)"]
+    SH["sort header fills its cell<br/>(DROPPED 2026-10-07)"]
   end
-  AA["Chevron: 24 x 24 or named exception<br/>(AA, both pointers; may land early)"]
+  AA["Chevron: 24 x 24 box<br/>(no exception holds, 2026-10-07)"]
   GP[GanttPanel.tsx] --> ARM & CM & AS & EZ & SH & AA
   CM -->|"cancel() x3, then ref.openAt"| RM[GanttRowMenu] --> MENU["Menu (shared, unchanged)"]
   ARM --> HOOK["useBarPointerDrag x3"] --> DRAG["drag.moveTo / resizeTo / resizeStart"]
@@ -411,7 +412,10 @@ gesture remedy.
     `getBoundingClientRect()`, and the row swallows the trailing click after a long-press opens the menu.
   - Docblock at `:316` corrected.
   - M2 (conditional): the selected bar's edges grow outward under `pointer-coarse:`, to the row's
-    height. The chevron gets a 24 × 24 box, or a recorded exemption.
+    height. The chevron gets a 24 × 24 box, or a recorded exemption. **Amended 2026-10-07:** the edge
+    zones are dropped (device, 10 / 10); no exemption holds, so the chevron gets the box (plan, "M2 as
+    re-scoped by the device"). Idle cells take `select-none` after a touch or stylus press, so a hold on
+    the table half reaches the row menu (#464, plan M2-T5).
 - **`GanttRowMenu`** gains one optional prop, nothing more: `ref?: Ref<{ openAt(point: {x: number; y:
 number}, restoreTo: HTMLElement): void }>` (React 19 ref-as-prop).
   - `openAt` calls the existing `context()` thunk, sets the existing local `anchor` / `resolved` state,
@@ -425,7 +429,7 @@ number}, restoreTo: HTMLElement): void }>` (React 19 ref-as-prop).
   always jitters. Both existing copies migrate to it, which takes the copies from three to one. That
   makes it an ADR-0111 component-reviewer item.
 - **Sort header buttons** (M2): under coarse they fill the 34 px header cell, which still makes them a
-  named exception.
+  named exception. **Dropped 2026-10-07** (device, 0 / 10 misses); they stay 24 tall.
 
 ### 4.7 Implementation approach & alternatives
 
@@ -461,20 +465,25 @@ geometry only where it is measured and reachable (M2). The chevron may land as s
   - **Fine pointer, §2.5.8 equivalent exception:**
     - the 8 × 14 edge handles and the 14 px bar body → typed `Start` / `Finish` / `Duration` cells, F2,
       and row menu → `Edit`;
-    - the chevron, only if exempted rather than fixed.
+    - ~~the chevron, only if exempted rather than fixed.~~ (2026-10-07: fixed, not exempted.)
   - **Coarse pointer, ADR-0118 D1, below 44:**
     - the `⋯` (28) → long-press;
-    - the edge zones' height (28) → typed cells / `Edit`;
-    - the sort headers (34) → none at a large target. Sorting has no other route, and that is said
-      plainly;
-    - the open cell input (24 tall) → the activity editor.
+    - ~~the edge zones' height (28)~~ the edge handles (8 × 14, not grown — M2-T1 dropped
+      2026-10-07) → typed cells / `Edit`;
+    - the sort headers (~~34~~ 24 tall, `Float left` 32 — M2-T3 dropped 2026-10-07) → none at a large
+      target. Sorting has no other route, and that is said plainly;
+    - the open cell input (24 tall) → the activity editor;
+    - the compact `View ▾` checkboxes (28 px row, 16 × 16; M0 P12), added 2026-10-07;
+    - the summary-row arrow (24 × 24 once fixed for AA) → none at a large target, said plainly; added
+      2026-10-07 (plan, M2-T4 re-scoped).
 
   D4 is written at M2's close in the ADR-0118 D6 manner.
 
 - **Consequences.**
   - Right-click on a Gantt row changes for mouse users.
   - The difference from the TSLD canvas is recorded as deliberate.
-  - The quick-duration-by-touch gap stays **open**.
+  - The quick-duration-by-touch gap stays **open**. **Amended 2026-10-07:** closed by the device — a
+    double tap opened a text box in both postures (`device-results.md`, item 5).
   - Recalculation is untouched.
 - **Amends:** ADR-0095 (bar gesture contract) and ADR-0118 D1 (exceptions). Their headers and
   `CLAUDE.md` §16 lines gain "amended by ADR-0177".
