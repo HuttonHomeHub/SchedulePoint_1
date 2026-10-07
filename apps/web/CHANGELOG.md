@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.177.4
+
+### Patch Changes
+
+- [#881](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/881) [`4a3bc6e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4a3bc6ece67b222ca4c647b45d42cefeaae1ceb6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the Gantt, the arrow that opens and closes a summary row now sits next to the activity name and is larger and easier to tap; the indent now follows the name instead of the Code column. After a finger or stylus press, text in the table half of a row is no longer selectable, so holding a finger there opens the row menu, as it already does on the chart.
+
 ## 0.177.3
 
 ### Patch Changes
