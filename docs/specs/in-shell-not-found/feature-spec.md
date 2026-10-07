@@ -110,12 +110,12 @@ n/a — the slug is only compared against the caller's own list; the redirect pa
 
 ### Error scenarios
 
-| Scenario                             | Detection                                 | User-facing result                     | Status |
-| ------------------------------------ | ----------------------------------------- | -------------------------------------- | ------ |
-| Member, unmatched path under own org | splat route, slug in own list             | in-shell "Page not found"              | n/a    |
-| Non-member / nonexistent slug        | splat route, slug not in own list         | root `NotFoundScreen` (no shell)       | n/a    |
-| Signed out                           | `_authed` guard                           | `/sign-in?redirect=<full path>` (Q1)   | n/a    |
-| `GET /organizations` fails           | `ensureQueryData` rejects in `beforeLoad` | `RouteErrorScreen`, as every org route | n/a    |
+| Scenario                             | Detection                                 | User-facing result                                                                                                                                                    | Status |
+| ------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Member, unmatched path under own org | splat route, slug in own list             | in-shell "Page not found"                                                                                                                                             | n/a    |
+| Non-member / nonexistent slug        | splat route, slug not in own list         | root `NotFoundScreen` (no shell)                                                                                                                                      | n/a    |
+| Signed out                           | `_authed` guard                           | `/sign-in?redirect=<full path>` (Q1)                                                                                                                                  | n/a    |
+| `GET /organizations` fails           | `ensureQueryData` rejects in `beforeLoad` | `RouteErrorScreen` **without the shell** for `/orgs/*` (it now rejects in `_authed`, where it used to reject inside the shell); retry stays reachable — unit-asserted | n/a    |
 
 ## 3. Technical analysis
 
@@ -300,6 +300,17 @@ Four reviews of the first draft (commit `f2ccb422`). Verdicts and what was folde
 | Component     | 3 blocking                            | **B1** `not-found-copy.ts` + parity unit test. **B2** `PageContainer width="narrow"` (declared; stale docblock fixed) + `PageHeader`; no hand-rolled `<h1>`; added to `SURFACE`; focus via a new `headingFocusRef` prop, chosen over a local mechanism with the reason in §4.5. **B3** `loadMemberOrganization` shared; splat skips `setLastActiveOrg`; memory-history router unit test. Suggestions: `useParams({ from })`, no-props TSDoc, docblock pointer, one-heading/no-main/no-alert/router-`Link` test — all folded.                                                                                                                                                                                                                                                                             |
 | UX            | Pass with nits                        | `PageHeader` (as component B2); link `textLinkVariants({ size: 'sm' })`, left-aligned, no card; crumbs **Overview** → **Page not found**, no path echo, `wrap`; both crumb and link kept; shared sentence; responsive line and no-overflow checks at 1368×912 and 390 wide with axe at both; where `RoutePending` shows (§4.2); sign-in carries the full path (0.10); `UX_STANDARDS.md` rule (§5, plan T4); Q1 reworded plainly.                                                                                                                                                                                                                                                                                                                                                                         |
 | Accessibility | No blocking                           | Re-focus on pathname change (§4.5, unit test); cold-load skip-link bypass accepted; `tabIndex=-1` + `outline-none` via the prop; docblock on why this route moves focus; no live-region roles; link activation drops focus like every in-shell navigation; journey: focus on cold and client-side arrival, one `h1`, one `main`, link name + href, last crumb `aria-current`, title, no alert, logical Tab; axe with `wcag2a/2aa/21a/21aa/22aa` after focus settles at both widths.                                                                                                                                                                                                                                                                                                                      |
+
+**Second pass (commit `8a941496`): all four AGREE, no blocking items.** Non-blocking notes folded
+here as build requirements: (a) the `_authed` organisations await runs **only for `/orgs/*`** and
+**after** the `!session` redirect, so a signed-out visitor never requests `GET /organizations` and
+`/onboarding`, `/staff` are untouched (UX); (b) a failed organisations request on `/orgs/*` now
+renders `RouteErrorScreen` without the shell — the error row in §2 says so, and a unit test asserts
+the root error screen with its retry (security, accessibility); (c) `headingFocusRef`'s TSDoc says
+passing it makes the heading programmatically focusable, and that it is for destinations that replace
+content the reader did not ask for, so ordinary in-shell routes do not adopt it (component,
+accessibility). ADR-0111 review by accessibility-reviewer and component-reviewer is still owed
+before the `PageHeader` change ships.
 
 **Declined:** none. **Not done in this revision:** the `docs/UX_STANDARDS.md` rule is written at build
 (plan T4), not here, because this revision is confined to the spec directory.
