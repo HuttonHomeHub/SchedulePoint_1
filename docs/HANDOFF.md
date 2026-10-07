@@ -3,12 +3,13 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-07, after the **#462 / #463** batch (the product owner: "Do #462 and #463 as
-well"; spec approved the same day: "Approved, go with the sign-in page for signed-out visitors").
+**Written:** 2026-10-07 (evening), after the **#462 / #463** batch and its follow-ons the same day:
+the matching not-found screens, the Surface test sheet answered, and **Gantt M2 + #464** (product
+owner: "go ahead with Gantt M2 and #464", then "C and accept").
 
 ## Where things stand
 
-- `main` holds everything below. Latest releases: **web 0.177.2, api 0.88.1** (check the tags).
+- `main` holds everything below. Latest releases: **web 0.177.4, api 0.88.1** (check the tags).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
   (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
 - The previous hand-off was accurate when checked (main ended with #870; web 0.177.0, api 0.88.1;
@@ -22,13 +23,20 @@ well"; spec approved the same day: "Approved, go with the sign-in page for signe
 | #871 | **#462 closed** (register-row fix, no spec): without the pen, the empty canvas's notice says "Start editing this plan to draw activities." visibly, inside its wrapping message, still the shaded button's `aria-describedby`.                                                                                                                                                                                                                                                                                                                 | web 0.177.1 |
 | #873 | Spec + plan `docs/specs/in-shell-not-found/`; four reviewers (security, a11y, component, UX) agreed on a second pass.                                                                                                                                                                                                                                                                                                                                                                                                                          | none        |
 | #874 | **#463 closed**: a member's mistyped `/orgs/<slug>/…` renders "Page not found" inside the shell (splat `/orgs/$orgSlug/$`, `routes/org-not-found.tsx`); non-member and nonexistent slugs keep the root page, identical for every path shape; signed out → sign-in with the full path. Also: `orgHomeRoute` is now an index route (`/orgs/$orgSlug/`, the trailing slash is load-bearing), shared `Breadcrumbs` marks only the last crumb current, `PageHeader` gains `headingFocusRef`, and the sign-in `redirect` sanitiser rejects `/\host`. | 0.177.2     |
+| #877 | Surface test sheet answers recorded (`docs/specs/gantt-coarse-pointer/device-results.md`); TECH_DEBT #464 filed.                                                                                                                                                                                                                                                                                                                                                                                                                               | none        |
+| #878 | A missing plan, project or client shows a calm "<Entity> not found" like the in-shell page (404 only); any other load error says "couldn't load" with **Try again**. `routes/entity-not-found.tsx`.                                                                                                                                                                                                                                                                                                                                            | web 0.177.3 |
+| #879 | Gantt M2 re-scoped by the device: M2-T1/T3 dropped; M2-T2 24 × 24 arrow, option C; M2-T5 for #464. Four reviewers agreed twice.                                                                                                                                                                                                                                                                                                                                                                                                                | none        |
+| #881 | **Gantt M2 shipped**: the summary arrow is a 24 × 24 target beside the name, with the indent, in the Activity column (bucket rows aligned with Code shown or hidden; `GanttCell` gains a Gantt-local `lead` so nothing moves while editing); a `data-last-input` attribute makes idle cell text `select-none` after a touch/stylus press (#464); coarse gate covers the Gantt grid with four exemption kinds; **ADR-0177 Accepted**.                                                                                                           | web 0.177.4 |
 
 ## Waiting on the product owner
 
-- **The Surface test sheet is ANSWERED** (2026-10-07, `web` 0.177.2): results and what they decide
-  are in `docs/specs/gantt-coarse-pointer/device-results.md`. The sheet stays the record of what is
-  tested: a change to anything it tests still updates it in the same PR. **The Surface runs at
-  1912 × 1114 CSS px (DPR 1.5)**, not the ~1368 × 912 this file and M0 assumed.
+- **Re-check two items on the Surface** (`docs/specs/gantt-coarse-pointer/device-checklist.md`):
+  **item 6** (the arrow's new place) and **new item 12** (press and hold on the words, and on an empty
+  part, of the table half). Item 12 decides **#464**: it stays open until it passes; if the browser's
+  menu still appears, the plan's fallback is to revert M2-T5 and bring a `useLongPress` back as a new
+  task. The sheet stays the record of what is tested: a change to anything it tests updates it in the
+  same PR. The Surface runs at **1912 × 1114 CSS px (DPR 1.5)**; the monitor at **1912 × 948
+  (DPR 1, mouse only)**.
 - **The history count on or after 1 November** (ADR-0174 / #443): staff console → Tools →
   **Run diagnostics** → **Copy results**. Record it in #443 and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
@@ -37,15 +45,15 @@ well"; spec approved the same day: "Approved, go with the sign-in page for signe
 
 ## Decisions to put to the product owner (none approved)
 
-1. **Gantt M2**, now much smaller: the device dropped M2-T1 and M2-T3 (10 / 10 hits). Left: M2-T2
-   (the 12 × 12 chevron: a §2.5.8 exemption or a 24 × 24 box, accessibility-reviewer's call), M2-T4
-   (gates, ADR-0177 D4 and Accepted), and **#464** (a hold on the table half opens the browser's
-   menu). Then anything from `docs/BACKLOG.md`.
+1. Anything from `docs/BACKLOG.md` (rewritten by Gantt M2: #464's device check, #438, #439, #215).
+2. Optional follow-ups noted by reviewers, not filed as work: a shared "Go to the organisation
+   overview" link component (it is duplicated in `org-not-found.tsx` and `entity-not-found.tsx`);
+   name width at WBS depth 4–5 (about 80–95 px of the Activity cell before the text).
 
 ## Open rows unchanged this batch
 
-**#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
-**#419**, **#405**. ADR-0177 stays Proposed until D4 at Gantt M2. `wip/history-numerator-preaggregate`
+**#464** (until item 12), **#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
+**#419**, **#405**. `wip/history-numerator-preaggregate`
 (`64ff45d4`) is still the first remedy to measure when the 250,000 trigger fires.
 
 ## Environment notes a new session would otherwise rediscover
@@ -68,6 +76,11 @@ well"; spec approved the same day: "Approved, go with the sign-in page for signe
 - **Never let two Playwright or DB-backed runs overlap** (one database, one set of ports). Brief
   every agent that may run e2e — reviewers included — to check `pgrep -f "playwright test|e2e-local"`
   first, or tell reviewers not to run e2e at all while you do.
+- **GitHub can refuse a job re-run with a 500** (both the MCP tool and `gh api …/rerun-failed-jobs`).
+  A CI job that dies before any test body (e.g. a 30-minute `apt` install on a slow mirror) then needs
+  a genuine new commit to re-run; never an empty one.
+- **`gh api …/jobs/<id>/logs` redirects to a blob host the proxy blocks**; use the GitHub MCP
+  `get_job_logs` with `return_content` instead.
 - **A change to `/orgs/*` routing or a shared layout primitive** warrants the base `web` journey plus
   `web:shell`, `web:overview`, `web:page-composition` and `web:narrow-shell` (about 7 minutes run one
   after another).
