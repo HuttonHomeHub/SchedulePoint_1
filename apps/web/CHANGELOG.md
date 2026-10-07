@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.177.3
+
+### Patch Changes
+
+- [#878](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/878) [`55e2829`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/55e282957034993ad26b215a9ee7cb4cbb4215b9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A link to a plan, project or client that no longer exists now shows a calm "not found" page like a mistyped address does, with a link back to the organisation overview. If it fails to load for another reason, it says so and offers Try again.
+
 ## 0.177.2
 
 ### Patch Changes
