@@ -36,6 +36,17 @@ export interface PageHeaderProps {
    * the sentence is what a reader checks the layout against.
    */
   actions?: React.ReactNode;
+  /**
+   * Makes the `<h1>` programmatically focusable (`tabIndex={-1}`, no focus ring) and hands the
+   * caller its element, so a screen can move focus to its heading.
+   *
+   * **For destinations that replace content the reader did not ask for** — a not-found page that
+   * took the place of what they were navigating to — as `NotFoundScreen` and `RouteErrorScreen`
+   * do for their own headings. An ordinary in-shell route must not adopt it: focus stays where the
+   * navigation left it, and a heading that steals focus on every page is noise to a keyboard user.
+   * Absent, the heading is rendered exactly as before.
+   */
+  headingFocusRef?: React.Ref<HTMLHeadingElement>;
   className?: string;
 }
 
@@ -63,6 +74,7 @@ export function PageHeader({
   description,
   aside,
   actions,
+  headingFocusRef,
   className,
 }: PageHeaderProps): React.ReactElement {
   const descriptionId = useId();
@@ -79,7 +91,13 @@ export function PageHeader({
           `EmptyState` already uses one file over. */}
       <div className="min-w-0 flex-1">
         <h1
-          className="text-2xl font-semibold tracking-tight wrap-anywhere"
+          className={cn(
+            'text-2xl font-semibold tracking-tight wrap-anywhere',
+            headingFocusRef ? 'outline-none' : null,
+          )}
+          // Conditional: an unconditional `tabIndex={-1}` would make every page heading a focus
+          // target, when only a page that moves focus on arrival wants one.
+          {...(headingFocusRef ? { ref: headingFocusRef, tabIndex: -1 } : {})}
           {...(describedBy ? { 'aria-describedby': describedBy } : {})}
         >
           {title}

@@ -49,6 +49,7 @@ const SURFACE = [
   'routes/audit-log.tsx',
   'routes/recently-deleted.tsx',
   'routes/my-activity.tsx',
+  'routes/org-not-found.tsx',
   'features/calendars/components/ProjectCalendarsSection.tsx',
 ];
 

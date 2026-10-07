@@ -363,6 +363,21 @@ test.describe('the tallest state', () => {
 });
 
 /**
+ * **A signed-out visitor following a mistyped organisation address signs in first** (#463, product
+ * owner's answer to Q1). `_authed` guards everything under `/orgs/`, including an address no route
+ * claims, so the visitor is sent to sign-in carrying the WHOLE path — query string included — and
+ * lands on the right picture afterwards. It happens for every slug alike, so it names no
+ * organisation. Before this change the same address showed "Page not found" signed out.
+ */
+test('a signed-out visitor at an unmatched organisation address is sent to sign-in with the full path', async ({
+  page,
+}) => {
+  await page.goto('/orgs/acme/plnas?x=1');
+  await expect(page).toHaveURL(/\/sign-in\?redirect=%2Forgs%2Facme%2Fplnas%3Fx%3D1$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+});
+
+/**
  * **What this suite does not cover, said out loud.**
  *
  * - **Contrast.** The computed token matrix (`styles/token-contrast.test.ts`) owns every ratio

@@ -42,6 +42,19 @@ describe('Breadcrumbs', () => {
     expect(current.closest('a')).toBeNull();
   });
 
+  it('does not mark an ancestor current while the URL is beneath it', () => {
+    render(
+      <Breadcrumbs
+        items={[
+          { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug: 'acme' } },
+          { label: 'Northgate' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Clients' })).not.toHaveAttribute('aria-current');
+  });
+
   // `variant="nowrap"` is the ADR-0097 D1b chrome-band trail. Its whole point is that a
   // long plan name must not wrap: a wrapped crumb grows a fixed-height band and silently
   // gives back the vertical space the merge was measured to win. So the classes below are

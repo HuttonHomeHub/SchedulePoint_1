@@ -143,13 +143,19 @@ describe('the page frame is written once', () => {
  * rather than converting call sites: a conversion leaves the failure mode armed for screen
  * fourteen.
  *
- * So an explicit `width` is now a **declaration**, and a declaration owes a reason. Today there are
- * none: the one that stood here, the staff console's not-found sentence, went when that branch began
- * rendering the shared `NotFoundScreen` (#459). The scan is still pinned by the matcher's own positive
- * case below, so an empty list is a clean estate and not a scan that matched nothing (ADR-0093,
- * ADR-0108).
+ * So an explicit `width` is now a **declaration**, and a declaration owes a reason. The staff
+ * console's not-found sentence stood here until that branch began rendering the shared
+ * `NotFoundScreen` (#459); the in-shell not-found (#463) declares `narrow` for the same reason. The
+ * scan is pinned by the matcher's own positive case below (ADR-0093, ADR-0108).
  */
-const WIDTH_EXCEPTIONS = new Map<string, string>();
+const WIDTH_EXCEPTIONS = new Map<string, string>([
+  [
+    'routes/org-not-found.tsx',
+    'A not-found page is a sentence and a link, read rather than scanned; the product measure would ' +
+      "set it across an empty screen (the same reason the staff console's branch once declared " +
+      '`narrow`).',
+  ],
+]);
 
 /** Every explicit `width="…"` passed to `PageContainer`, by file. */
 function widthPropsIn(source: string): string[] {

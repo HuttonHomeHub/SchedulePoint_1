@@ -305,6 +305,13 @@ entry stops being needed.
     one case with a named trigger to revisit (a report about the taken-over or
     take-over states).
 - Breadcrumbs for anything two or more levels deep.
+- **An address that is not a page says so once.** An unknown address inside an organisation the
+  reader belongs to keeps the shell (`OrgNotFoundScreen`: Project Explorer, an Overview crumb, a link
+  back, focus on the heading); anywhere else it is the one root "Page not found" (`NotFoundScreen`),
+  and a signed-out visitor is sent to sign-in first. The two share their words
+  (`not-found-copy.ts`), neither echoes the unknown address, and the router decides which by looking
+  the slug up in the caller's **own** organisations — so a foreign and a nonexistent organisation
+  stay indistinguishable (ADR-0086, `docs/specs/in-shell-not-found/`).
 - **A long single page with several groups gets an "On this page" list, and it is not sticky**
   (ADR-0178). A sticky list covers a tenth or more of a phone viewport and can hide the focused
   target (WCAG 2.4.11). Each group is a `SectionGroup` with a "Back to top" link.

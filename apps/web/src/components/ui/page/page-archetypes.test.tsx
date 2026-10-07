@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -66,6 +67,22 @@ describe('PageHeader', () => {
     // Not an empty `aria-describedby` pointing at nothing, which is worse than no attribute.
     render(<PageHeader title="Clients" />);
     expect(screen.getByRole('heading', { level: 1 })).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('makes the heading a programmatic focus target only when asked', () => {
+    const ref = createRef<HTMLHeadingElement>();
+    const { unmount } = render(<PageHeader title="Page not found" headingFocusRef={ref} />);
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(ref.current).toBe(heading);
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(heading).toHaveClass('outline-none');
+    unmount();
+
+    // Absent, the output is what it was before the prop existed: no tabindex, no outline override.
+    render(<PageHeader title="Clients" />);
+    const plain = screen.getByRole('heading', { level: 1 });
+    expect(plain).not.toHaveAttribute('tabindex');
+    expect(plain.className).toBe('text-2xl font-semibold tracking-tight wrap-anywhere');
   });
 
   /**

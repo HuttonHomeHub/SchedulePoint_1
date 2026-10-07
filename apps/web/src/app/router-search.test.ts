@@ -125,6 +125,10 @@ describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
     expect(validate('/sign-in', '?redirect=//evil.test/phish')).toEqual({});
   });
 
+  it('drops a backslash form, which browsers normalise to a protocol-relative URL', () => {
+    expect(validate('/sign-in', '?redirect=/%5Cevil.test')).toEqual({});
+  });
+
   it('drops an absolute URL', () => {
     expect(validate('/sign-in', '?redirect=https://evil.test')).toEqual({});
   });

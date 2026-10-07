@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { Suspense, lazy } from 'react';
 
+import { loadMemberOrganization, orgNotFoundBeforeLoad } from '@/app/org-membership';
 import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
 import { NotFoundScreen } from '@/components/layout/not-found-screen';
@@ -59,6 +60,10 @@ const MyActivityScreen = lazyRouteComponent(
   'MyActivityScreen',
 );
 const OrgHomeScreen = lazyRouteComponent(() => import('@/routes/org-home'), 'OrgHomeScreen');
+const OrgNotFoundScreen = lazyRouteComponent(
+  () => import('@/routes/org-not-found'),
+  'OrgNotFoundScreen',
+);
 const PlanDetailScreen = lazyRouteComponent(
   () => import('@/routes/plan-detail'),
   'PlanDetailScreen',
@@ -131,11 +136,13 @@ const signInRoute = createRoute({
     // ordinary refactor away, on the screen every unauthenticated arrival lands on.
     //
     // The rule is one leading slash and not two: `/plans/1` is ours, `//evil.test` is a
-    // protocol-relative URL the browser resolves to another origin, and `https://evil.test` is not
+    // protocol-relative URL the browser resolves to another origin (as is `/\evil.test`, which
+    // browsers normalise to `//evil.test` — hence the backslash is refused in second place too), and `https://evil.test` is not
     // a path at all. A malformed value is DROPPED rather than repaired — the fallback is `/`, which
     // is exactly where a reader with no destination should land.
     const requested = searchString(search.redirect);
-    const redirect = requested !== undefined && /^\/(?!\/)/.test(requested) ? requested : undefined;
+    const redirect =
+      requested !== undefined && /^\/(?![/\\])/.test(requested) ? requested : undefined;
     // `?signedOut` is how a completed sign-out reaches its confirmation, since the action and the
     // message it earns happen on two different screens (ADR-0077 §9).
     //
@@ -253,6 +260,15 @@ const authedRoute = createRoute({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: '/sign-in', search: { redirect: location.href } });
     }
+    // **The organisations list is awaited here, for addresses under `/orgs/` only and after the redirect above**, so a
+    // signed-out visitor never requests it and `/onboarding` and `/staff` are untouched. It is what
+    // keeps the shell from painting around a pending outlet for an address under an organisation the
+    // caller is not in: while this match is pending, `RoutePending` is the only content on the page
+    // (`docs/specs/in-shell-not-found/feature-spec.md` §4.2). Every organisation route awaits this list
+    // already, so it is fetched earlier rather than additionally.
+    if (location.pathname.startsWith('/orgs/')) {
+      await context.queryClient.ensureQueryData(organizationsQueryOptions);
+    }
     if (!warmed) deferUntilIdle(warmHierarchyScreens);
     return { session };
   },
@@ -289,8 +305,7 @@ const onboardingRoute = createRoute({
 
 /** Validate that the caller belongs to `orgSlug`; record it as the active org. */
 async function ensureOrgMembership(queryClient: QueryClient, orgSlug: string): Promise<void> {
-  const organizations = await queryClient.ensureQueryData(organizationsQueryOptions);
-  const organization = organizations.find((o) => o.slug === orgSlug);
+  const organization = await loadMemberOrganization(queryClient, orgSlug);
   if (!organization) {
     // Not a member (or no such org) → let the home resolver re-route.
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
@@ -300,12 +315,34 @@ async function ensureOrgMembership(queryClient: QueryClient, orgSlug: string): P
   if (session) setLastActiveOrg(session.user.id, organization.slug);
 }
 
-/** Organisation-scoped home. */
+/**
+ * Organisation-scoped home.
+ *
+ * **The trailing slash is load-bearing.** A splat matches an empty remainder, and the router breaks a
+ * tie between equally specific candidates in favour of the deeper node — so `/orgs/acme` resolved to
+ * `orgNotFoundRoute` (`/orgs/$orgSlug/$`) and the overview became "Page not found". An index route
+ * outranks a wildcard (`isFrameMoreSpecific`, `new-process-route-tree.ts`), and `org-not-found-router
+ * .test.tsx` pins that `/orgs/acme` still reaches this screen. Links to `/orgs/$orgSlug` are unchanged.
+ */
 const orgHomeRoute = createRoute({
   getParentRoute: () => authedRoute,
-  path: '/orgs/$orgSlug',
+  path: '/orgs/$orgSlug/',
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: OrgHomeScreen,
+});
+
+/**
+ * An address under an organisation that no route claims: a member's mistype stays in the shell, and
+ * anyone else gets the root "Page not found" (`docs/specs/in-shell-not-found/`, TECH_DEBT #463).
+ *
+ * Unconditional, and a splat so it ranks below every real sibling — `/orgs/x/members` still matches
+ * `membersRoute`. It declares no `validateSearch`: the screen reads no search.
+ */
+const orgNotFoundRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/$',
+  beforeLoad: ({ context, params }) => orgNotFoundBeforeLoad(context.queryClient, params.orgSlug),
+  component: OrgNotFoundScreen,
 });
 
 /** Organisation members management. */
@@ -619,6 +656,7 @@ const routeTree = rootRoute.addChildren([
     projectDetailRoute,
     planDetailRoute,
     recentlyDeletedRoute,
+    orgNotFoundRoute,
     // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
     // app is byte-identical when off (no route, no nav link, no row action).
     ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
@@ -656,8 +694,9 @@ export const router = createRouter({
   // 'root' mode so it is the SAME picture everywhere. The library's default ('fuzzy') hands an
   // unmatched `/orgs/<slug>/nope` to the nearest matched parent, so a signed-in mistype rendered
   // inside `_authed`'s outlet and a signed-out one was redirected to sign-in first — three pictures
-  // for one fact. Accepted trade-off: a signed-in mistype under `/orgs/<slug>/` now renders outside the
-  // shell (no Project Explorer, no breadcrumbs); an in-shell variant is filed in `docs/TECH_DEBT.md`.
+  // for one fact. Under `/orgs/<slug>/` a MEMBER's mistype is the exception: `orgNotFoundRoute` (a
+  // splat) renders the in-shell variant for them (#463), and throws back to this root picture for
+  // anyone who is not a member of the slug, so the shell is never painted for them.
   // Entity-level "not found" (a plan, project or client the query could not return) is a different,
   // deliberate picture inside the shell and is untouched.
   defaultNotFoundComponent: NotFoundScreen,
