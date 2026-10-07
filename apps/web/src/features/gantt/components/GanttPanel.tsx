@@ -171,6 +171,30 @@ const DEFAULT_HIDDEN_SET: ReadonlySet<GanttColumnKey> = new Set(DEFAULT_HIDDEN_C
  */
 const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
 
+/**
+ * **The disclosure slot: a 24 × 24 box, drawn on every row of the Activity column** (ADR-0177
+ * D4). `size-6` is WCAG 2.2 §2.5.8's 24 px floor, not a rhythm choice: the arrow was a bare 12 px
+ * icon, and the row it sits in is itself a target, so no spacing exception applied. The icon stays 12 px and the row stays 28 — the BOX grew, not the
+ * glyph. A leaf and a bucket row draw the same empty box so the names line up whatever their kind.
+ */
+const DISCLOSURE_SLOT_CLASS =
+  'inline-flex size-6 shrink-0 items-center justify-center align-middle';
+
+/** Indent per WBS level, ahead of the slot, in the Activity column. */
+const NAME_INDENT_PX = 14;
+
+/**
+ * **Cell text gives way to a long-press after a finger or stylus** (`docs/TECH_DEBT.md` #464).
+ *
+ * A hold on selectable text is a text-selection gesture, and only the table half of a row has any
+ * text to select. `data-last-input` is written once, at the grid root, by the scroll surface's
+ * `pointerdown` capture — keyed on the input event rather than `pointer-coarse:`, because the
+ * Surface reports `pointer: fine` with the cover attached (ADR-0118 D7). It is a DOM attribute
+ * rather than state so a press does not re-render every virtualised row. Only IDLE cell text
+ * carries the class: an open cell renders an `<input>`, so the field can never match.
+ */
+const SELECT_NONE_AFTER_TOUCH = 'group-data-[last-input=touch]/grid:select-none';
+
 export interface GanttPanelProps {
   activities: readonly ActivitySummary[];
   /**
@@ -1074,8 +1098,18 @@ function GanttPanelBody({
       <Surface
         tone="canvas"
         ref={scrollRef}
-        className="relative min-h-0 flex-1 overflow-auto"
+        className="group/grid relative min-h-0 flex-1 overflow-auto"
         data-testid="gantt-scroll"
+        // Capture, so it lands before any bar that stops propagation, and before the `mousedown`
+        // whose default action would start a selection. `pointerType` only: the compatibility
+        // mouse events a touch emits afterwards must not flip it back, and a pen counts as touch.
+        onPointerDownCapture={(event) => {
+          const { pointerType } = event;
+          if (pointerType === 'mouse') event.currentTarget.dataset.lastInput = 'mouse';
+          else if (pointerType === 'touch' || pointerType === 'pen') {
+            event.currentTarget.dataset.lastInput = 'touch';
+          }
+        }}
       >
         {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
           version of this change and it was wrong twice over: a reader met a chart column with no
@@ -1476,23 +1510,22 @@ function GanttBucketRowView({
           role="gridcell"
           aria-colindex={1}
           className="text-muted-foreground shrink-0 truncate px-2 text-xs"
-          style={{ width: resolveColumnWidth(COLUMNS[0]!), paddingLeft: 8 }}
-        >
-          <span aria-hidden="true" className="text-muted-foreground mr-1 inline-flex align-middle">
-            {row.expanded ? (
-              <ChevronDown className="size-3" />
-            ) : (
-              <ChevronRight className="size-3" />
-            )}
-          </span>
-        </div>
+          style={{ width: resolveColumnWidth(COLUMNS[0]!) }}
+        />
         <div
           role="gridcell"
           aria-colindex={2}
           className="text-muted-foreground shrink-0 truncate px-2 text-xs italic"
           style={{ width: gridWidth - resolveColumnWidth(COLUMNS[0]!) }}
         >
-          {label}
+          <span aria-hidden="true" className={cn(DISCLOSURE_SLOT_CLASS, 'text-muted-foreground')}>
+            {row.expanded ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3" />
+            )}
+          </span>
+          <span className={SELECT_NONE_AFTER_TOUCH}>{label}</span>
           {/* The bucket fades with everything else off the path, so it needs the same marker the
               activity rows carry. Without it a screen-reader user gets no sign that this row
               receded while every sighted user watches it dim (WCAG 1.4.1) — the a11y gate's
@@ -1964,6 +1997,49 @@ function GanttRowView({
             predecessorNames,
           );
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
+          // Keyed on the column, not on `i === 1`: the Code column is hideable, and the indent and
+          // the arrow belong to the name wherever it sits.
+          const isNameCell = column.key === 'name';
+          const lead = isNameCell ? (
+            hasChildren ? (
+              <button
+                type="button"
+                data-gantt-disclosure=""
+                // The row already carries aria-expanded; this control is its visual affordance,
+                // so it is hidden from the accessibility tree rather than announcing a second,
+                // competing expanded state.
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  // The click a touch hold ends in must neither select the row (its own handler)
+                  // nor toggle it here: honour the row's swallow, and consume it.
+                  if (swallowClick.current) {
+                    swallowClick.current = false;
+                    return;
+                  }
+                  onToggle(activity.id, expanded === true);
+                }}
+                // The name cell opens its editor on a double-click; two quick taps on the arrow
+                // are two toggles, not a request to edit.
+                onDoubleClick={(event) => event.stopPropagation()}
+                className={cn(DISCLOSURE_SLOT_CLASS, 'text-muted-foreground hover:text-foreground')}
+                style={{ marginLeft: depth * NAME_INDENT_PX }}
+              >
+                {expanded === true ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )}
+              </button>
+            ) : (
+              <span
+                aria-hidden="true"
+                className={DISCLOSURE_SLOT_CLASS}
+                style={{ marginLeft: depth * NAME_INDENT_PX }}
+              />
+            )
+          ) : null;
           // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
           // column maps to one. Neither implies the other — the print surface has no bundle, and
           // `code`/`totalFloat` are engine output nobody types.
@@ -1994,10 +2070,16 @@ function GanttRowView({
                 onCancel={editing.cancel}
                 className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
               >
-                <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
+                {lead}
+                <span
+                  className={cn(
+                    SELECT_NONE_AFTER_TOUCH,
+                    activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold',
+                  )}
+                >
                   {text}
                 </span>
-                {offFloatPath && i === 1 ? (
+                {offFloatPath && isNameCell ? (
                   <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
                 ) : null}
               </GanttCell>
@@ -2013,47 +2095,22 @@ function GanttRowView({
                 'shrink-0 truncate px-2 text-xs',
                 column.align === 'right' ? 'text-right' : 'text-left',
               )}
-              style={{
-                width: resolveColumnWidth(column),
-                // Indentation belongs to the first column only, so the date columns stay aligned
-                // down the page however deep the hierarchy goes.
-                ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),
-              }}
+              style={{ width: resolveColumnWidth(column) }}
             >
-              {i === 0 && hasChildren ? (
-                <button
-                  type="button"
-                  // The row already carries aria-expanded; this control is its visual affordance,
-                  // so it is hidden from the accessibility tree rather than announcing a second,
-                  // competing expanded state.
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onToggle(activity.id, expanded === true);
-                  }}
-                  className="text-muted-foreground hover:text-foreground mr-1 inline-flex align-middle"
-                >
-                  {expanded === true ? (
-                    <ChevronDown className="size-3" />
-                  ) : (
-                    <ChevronRight className="size-3" />
-                  )}
-                </button>
-              ) : null}
-              <span className={cn(activity.type === 'WBS_SUMMARY' && i === 1 && 'font-semibold')}>
-                {column.value(
-                  activity,
-                  barDateSource,
-                  hoursPerDayFor?.(activity),
-                  predecessorNames,
+              {lead}
+              <span
+                className={cn(
+                  SELECT_NONE_AFTER_TOUCH,
+                  activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold',
                 )}
+              >
+                {text}
               </span>
               {/* The de-emphasis in WORDS, in the name cell — the fade above is emphasis alone, and
                 emphasis alone is precisely the WCAG 1.4.1 defect ADR-0055 exists about. Rendered
                 `sr-only` because the sighted cue is the fade and a visible tag on every off-path
                 row would drown the on-path ones it exists to pick out. */}
-              {offFloatPath && i === 1 ? (
+              {offFloatPath && isNameCell ? (
                 <span className="sr-only"> ({OFF_FLOAT_PATH_LABEL})</span>
               ) : null}
             </div>

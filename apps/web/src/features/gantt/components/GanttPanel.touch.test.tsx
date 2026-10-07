@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GanttBarDrag } from '../model/bar-drag';
+import type { GanttGridEditing } from '../model/cell-edit';
 import { TOUCH_ARM_HINT } from '../model/touch-note';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
@@ -511,5 +512,90 @@ describe('a row opens its menu on contextmenu (ADR-0177 D3)', () => {
       });
       expect(moveSpy).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe('idle cell text gives way to a long-press after a finger or stylus (#464)', () => {
+  const VARIANT = 'group-data-[last-input=touch]/grid:select-none';
+  const surface = () => screen.getByTestId('gantt-scroll');
+  const nameSpan = () => screen.getByText('Excavate');
+  const editingBundle = (): GanttGridEditing => ({
+    state: { status: 'idle' },
+    hasComputedSchedule: true,
+    gateFor: () => ({ readable: true, writable: true, readOnly: false, reason: null }),
+    begin: vi.fn(),
+    change: vi.fn(),
+    commit: vi.fn(),
+    cancel: vi.fn(),
+    errorMessage: null,
+    onCellClosed: vi.fn(),
+  });
+
+  it('writes nothing before any press, so selection is allowed', () => {
+    render(<GanttPanel activities={[task()]} />);
+    expect(surface()).not.toHaveAttribute('data-last-input');
+  });
+
+  it('flips to touch on a touch press and on a pen press, and back on a mouse press', () => {
+    render(<GanttPanel activities={[task()]} />);
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'touch', button: 0 });
+    expect(surface()).toHaveAttribute('data-last-input', 'touch');
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'mouse', button: 0 });
+    expect(surface()).toHaveAttribute('data-last-input', 'mouse');
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'pen', button: 0 });
+    expect(surface()).toHaveAttribute('data-last-input', 'touch');
+  });
+
+  it('is not undone by the compatibility mouse events a pen press is followed by', () => {
+    render(<GanttPanel activities={[task()]} />);
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'pen', button: 0 });
+    fireEvent.mouseDown(nameSpan(), { button: 0 });
+    fireEvent.mouseUp(nameSpan(), { button: 0 });
+    expect(surface()).toHaveAttribute('data-last-input', 'touch');
+  });
+
+  it('puts the variant on the idle text spans and the grid root group, and never on the input', () => {
+    const view = render(<GanttPanel activities={[task()]} editing={editingBundle()} />);
+    expect(surface()).toHaveClass('group/grid');
+    expect(nameSpan()).toHaveClass(VARIANT);
+
+    // A touch press, then the double-tap that opens the cell: the host answers `begin` by passing
+    // the open state back down.
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'touch', button: 0 });
+    const editing = editingBundle();
+    view.rerender(<GanttPanel activities={[task()]} editing={editing} />);
+    fireEvent.doubleClick(nameSpan().closest('[role="gridcell"]')!);
+    expect(editing.begin).toHaveBeenCalled();
+    view.rerender(
+      <GanttPanel
+        activities={[task()]}
+        editing={{
+          ...editingBundle(),
+          state: {
+            status: 'editing',
+            target: { activityId: 'a1', key: 'name' },
+            text: 'Excavate',
+            seed: 'Excavate',
+          },
+        }}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Activity, Excavate' });
+    expect(input.closest(`[class~="${VARIANT}"]`)).toBeNull();
+  });
+
+  it('opens the menu on a contextmenu from a table-half span, cancelling the default', () => {
+    render(
+      <GanttPanel
+        activities={[task()]}
+        drag={dragBundle()}
+        rowMenuContextFor={rowContext}
+        rowStructure={rowStructure}
+        onSelectActivity={() => {}}
+      />,
+    );
+    fireEvent.pointerDown(nameSpan(), { pointerType: 'touch', button: 0, clientX: 20 });
+    expect(fireEvent.contextMenu(nameSpan(), { clientX: 20, clientY: 10 })).toBe(false);
+    expect(screen.getByRole('menu', { name: 'Actions for Excavate' })).toBeInTheDocument();
   });
 });
