@@ -1,6 +1,6 @@
 # Feature Spec: The Gantt under a finger and a stylus
 
-- **Status:** Approved — by the product owner, 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here)
+- **Status:** Accepted — shipped (ADR-0177). Approved by the product owner 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here). **Caveat:** #464's fix is shipped but the issue stays open until the device re-check (checklist item 12).
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-05
 - **Tracking issue / epic:** — (chosen from `docs/BACKLOG.md` "The Gantt's remaining editing gaps", the

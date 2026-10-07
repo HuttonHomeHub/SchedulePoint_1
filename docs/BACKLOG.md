@@ -125,20 +125,14 @@ a product idea that has not yet earned a roadmap line:
   left handle writes what the diagram's does, and the Gantt's finish-edge drag and
   typed `Start`/`Finish` now count working days. **Column widths shipped on 2026-10-04** (ADR-0173: typed in `View ▾`, dragged at the header edge,
   remembered per device) — this row said the grid "has no resize handle" for a month after Graphite M8
-  shipped one. **What is actually left**: a **coarse-pointer** pass _(the citation here
-  read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed
-  on 2026-08-28**, and its subject was the merged command **strip**, not this
-  view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
-  ladder and the `⋯`, so nothing can leave the row". So the citation was stale
-  **and** about a different surface. Whether a Gantt-specific coarse pass is
-  owed is **specified now** — `docs/specs/gantt-coarse-pointer/` (approved 2026-10-05), whose §0 corrects this
-  sentence: it **has** a live row (`docs/TECH_DEBT.md` #215 names the Gantt's row menu and 28 px rows, with no
-  large-target equivalent; #439 is its `Grid width` divider); the narrowing is ADR-0118 **D1** and **D2**, not
-  D6; "46 to one" is not in ADR-0118 (it measured 46 comparable targets); and the view was partly re-measured
-  (ADR-0173 touched the divider and the column edges). **M0 has measured the rest**
-  (`m0-measurement.md`, 2026-10-06): a finger drag on a bar body is cancelled 12 of 12, selected or not, and
-  an unselected bar's edge is a live accidental-write path.)_. `PROJECT_BRIEF.md` §8's "edit supported" is met; the residue above is
-  not a requirement of the brief.
+  shipped one. **What is left** (2026-10-07). The **coarse-pointer pass shipped** (ADR-0177, `docs/specs/gantt-coarse-pointer/`):
+  a finger drags what it has selected, a press-and-hold anywhere on a row opens its menu, the summary-row arrow is a
+  24 × 24 box beside the name, and the grid's targets are gated by `e2e-workspace-fit` (24 px fine, 44 px coarse with
+  four named exceptions). A double tap opens a cell's text box on the device, so touch has a quick-edit route and
+  there is no gap to track. What remains is **small and tracked elsewhere**: the device re-check of a hold on the
+  table half (`docs/TECH_DEBT.md` **#464**, checklist item 12), the Gantt at 390 px (**#438**), the `Grid width`
+  divider's `touch-action` (**#439**), and the dense-row height decision that would let the `⋯` and the arrow grow
+  (**#215**). `PROJECT_BRIEF.md` §8's "edit supported" is met; none of the residue is a requirement of the brief.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
   stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
   most of its length arguing was the half that was left.

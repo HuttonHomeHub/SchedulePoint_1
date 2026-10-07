@@ -62,6 +62,12 @@ export interface GanttCellProps {
   onCommit: () => void;
   onCancel: () => void;
   className?: string | undefined;
+  /**
+   * A leading slot (the name cell's indent and disclosure arrow) drawn before the value AND before
+   * the open field, so opening the editor does not move the text left. Additive, one caller, and
+   * Gantt-feature-local — not a shared primitive's contract (ADR-0105).
+   */
+  lead?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -81,6 +87,7 @@ export function GanttCell({
   onCommit,
   onCancel,
   className,
+  lead,
   children,
 }: GanttCellProps): React.ReactElement {
   const reasonId = useId();
@@ -100,6 +107,88 @@ export function GanttCell({
 
   // The refusal belongs to the open field, so it is only shown (and only linked) while one is open.
   const errorShown = editing && errorMessage !== null;
+
+  const field = (
+    <input
+      ref={inputRef}
+      // ADR-0177 D4's coarse list: the open input is 24 px (`h-6`) and its large-target route
+      // is the activity editor. Read by `e2e-workspace-fit`'s coarse sweep.
+      data-gantt-coarse-exempt="cell-input"
+      value={text}
+      readOnly={busy}
+      aria-busy={busy || undefined}
+      aria-label={label}
+      // The refusal is linked and flagged on the INPUT, the control a screen reader is in. It
+      // sat on the gridcell wrapper until the ADR-0170 accessibility gate (WCAG 3.3.1 / 4.1.2):
+      // a description on the wrapper is not read while focus is in the field, and nothing said
+      // the field was invalid. Nothing is announced when it appears — the commit already speaks
+      // the refusal through the polite live region (`use-gantt-grid-editing.ts`), which is the
+      // only route that reaches a user whose focus is already in the field. `aria-describedby`
+      // is read on arrival, so the two never fire for the same event.
+      aria-invalid={errorShown || undefined}
+      {...(errorShown ? { 'aria-describedby': errorId } : {})}
+      className={cn(
+        'bg-field text-field-foreground border-input h-6 rounded border px-1',
+        lead === undefined ? 'w-full' : 'min-w-0 flex-1',
+      )}
+      // Guarded as well as `readOnly`. The reducer already drops a `change` while committing, so
+      // this is belt-and-braces — but the test that asserted "no callback while busy" failed
+      // against the attribute alone: jsdom does not enforce `readOnly` for a programmatic value
+      // set, and neither does anything that drives this component other than a real keyboard.
+      // Making the assertion true beat weakening it to match.
+      onChange={(event) => {
+        if (busy) return;
+        onChange(event.target.value);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          // Stop the row's own handler seeing it — Enter on a Gantt row activates the row, and
+          // committing a cell must not also change the selection out from under the planner.
+          event.stopPropagation();
+          onCommit();
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          // Likewise: Escape belongs to the field that is open, which is ADR-0079's rule for
+          // the search box applied to a cell. Without this the canvas-era window handler would
+          // also disarm a tool the planner never armed.
+          event.stopPropagation();
+          onCancel();
+          return;
+        }
+        if (event.key === 'Tab') {
+          // Commit and let focus move — a spreadsheet's Tab saves, it does not discard.
+          onCommit();
+          return;
+        }
+        // **Every other navigation key belongs to the field while the field is open.**
+        //
+        // This was the M6 accessibility gate's first finding and it is a DATA-LOSS path, not a
+        // nicety. The grid's own handler runs unconditionally on the bubbled event, so an
+        // ArrowLeft meant to move the caret toggled the row's disclosure AND had its default
+        // cancelled — and an ArrowUp moved real focus to another row while the reducer still
+        // held this cell as `editing`, orphaning the typed text with no announcement. F2 on the
+        // new row then overwrote it silently.
+        //
+        // `stopPropagation` only: the field's own default behaviour (caret movement, selection)
+        // is exactly what should happen, so `preventDefault` would trade one broken key for
+        // another. Same rule as Enter and Escape above — ADR-0079's "a key typed into a field
+        // belongs to that field", which this component applied to two keys and not to six.
+        if (
+          event.key.startsWith('Arrow') ||
+          event.key === 'Home' ||
+          event.key === 'End' ||
+          event.key === 'PageUp' ||
+          event.key === 'PageDown'
+        ) {
+          event.stopPropagation();
+        }
+      }}
+      onBlur={onCancel}
+    />
+  );
 
   return (
     <div
@@ -136,82 +225,19 @@ export function GanttCell({
       style={{ width }}
       onDoubleClick={gate.writable ? onBegin : undefined}
     >
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={text}
-          readOnly={busy}
-          aria-busy={busy || undefined}
-          aria-label={label}
-          // The refusal is linked and flagged on the INPUT, the control a screen reader is in. It
-          // sat on the gridcell wrapper until the ADR-0170 accessibility gate (WCAG 3.3.1 / 4.1.2):
-          // a description on the wrapper is not read while focus is in the field, and nothing said
-          // the field was invalid. Nothing is announced when it appears — the commit already speaks
-          // the refusal through the polite live region (`use-gantt-grid-editing.ts`), which is the
-          // only route that reaches a user whose focus is already in the field. `aria-describedby`
-          // is read on arrival, so the two never fire for the same event.
-          aria-invalid={errorShown || undefined}
-          {...(errorShown ? { 'aria-describedby': errorId } : {})}
-          className="bg-field text-field-foreground border-input h-6 w-full rounded border px-1"
-          // Guarded as well as `readOnly`. The reducer already drops a `change` while committing, so
-          // this is belt-and-braces — but the test that asserted "no callback while busy" failed
-          // against the attribute alone: jsdom does not enforce `readOnly` for a programmatic value
-          // set, and neither does anything that drives this component other than a real keyboard.
-          // Making the assertion true beat weakening it to match.
-          onChange={(event) => {
-            if (busy) return;
-            onChange(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              // Stop the row's own handler seeing it — Enter on a Gantt row activates the row, and
-              // committing a cell must not also change the selection out from under the planner.
-              event.stopPropagation();
-              onCommit();
-              return;
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              // Likewise: Escape belongs to the field that is open, which is ADR-0079's rule for
-              // the search box applied to a cell. Without this the canvas-era window handler would
-              // also disarm a tool the planner never armed.
-              event.stopPropagation();
-              onCancel();
-              return;
-            }
-            if (event.key === 'Tab') {
-              // Commit and let focus move — a spreadsheet's Tab saves, it does not discard.
-              onCommit();
-              return;
-            }
-            // **Every other navigation key belongs to the field while the field is open.**
-            //
-            // This was the M6 accessibility gate's first finding and it is a DATA-LOSS path, not a
-            // nicety. The grid's own handler runs unconditionally on the bubbled event, so an
-            // ArrowLeft meant to move the caret toggled the row's disclosure AND had its default
-            // cancelled — and an ArrowUp moved real focus to another row while the reducer still
-            // held this cell as `editing`, orphaning the typed text with no announcement. F2 on the
-            // new row then overwrote it silently.
-            //
-            // `stopPropagation` only: the field's own default behaviour (caret movement, selection)
-            // is exactly what should happen, so `preventDefault` would trade one broken key for
-            // another. Same rule as Enter and Escape above — ADR-0079's "a key typed into a field
-            // belongs to that field", which this component applied to two keys and not to six.
-            if (
-              event.key.startsWith('Arrow') ||
-              event.key === 'Home' ||
-              event.key === 'End' ||
-              event.key === 'PageUp' ||
-              event.key === 'PageDown'
-            ) {
-              event.stopPropagation();
-            }
-          }}
-          onBlur={onCancel}
-        />
+      {lead === undefined ? (
+        editing ? (
+          field
+        ) : (
+          (children ?? value)
+        )
       ) : (
-        (children ?? value)
+        // One wrapper in both states, so the arrow keeps its DOM identity when the field opens: a
+        // press on it blurs the field (cancel) and the same node must still receive the click.
+        <div className="flex items-center">
+          {lead}
+          {editing ? field : <span className="min-w-0 truncate">{children ?? value}</span>}
+        </div>
       )}
 
       {gate.reason === null ? null : (

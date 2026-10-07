@@ -65,7 +65,7 @@ async function seeded(page: Page, orgSlug: string, name: string): Promise<Activi
   return row;
 }
 
-async function touchPlan(page: Page): Promise<string> {
+async function touchPlan(page: Page, pointer: 'coarse' | 'fine' = 'coarse'): Promise<string> {
   const orgSlug = await onboard(page, Date.now());
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
@@ -74,8 +74,11 @@ async function touchPlan(page: Page): Promise<string> {
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
-  const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
-  expect(coarse, 'the context must report a coarse pointer').toBe(true);
+  const matches = await page.evaluate(
+    (kind) => window.matchMedia(`(pointer: ${kind})`).matches,
+    pointer,
+  );
+  expect(matches, `the context must report a ${pointer} pointer`).toBe(true);
   // The arithmetic below assumes a Monday start, five working days, so a drop two columns right is
   // two working days and two columns left of the Friday finish is a Wednesday. Read, not assumed.
   const first = await seeded(page, orgSlug, 'Seeded 0');
@@ -454,4 +457,128 @@ test('dragging the selected bar opens no menu', async ({ page }) => {
       timeout: 20_000,
     })
     .not.toBe(before.visualEffectiveStart);
+});
+
+/**
+ * **A hold on the table half reaches the row menu** (M2-T5, `docs/TECH_DEBT.md` #464).
+ *
+ * The chart half delivers `contextmenu` on a hold; the table half has text under the finger, and a
+ * hold on selectable text is a selection gesture. The remedy is one attribute at the grid root
+ * (`data-last-input`, written in `pointerdown` capture) and a `select-none` variant on idle cell text.
+ *
+ * **What this proves, and what it does not.** That the CSS is applied while a touch is down, and that
+ * the menu opens on a synthesised event. It cannot prove Windows suppresses its selection, or that
+ * #464 is fixed: CDP does not synthesise the OS long-press. Device item 12 is the arbiter.
+ *
+ * Pen is covered by the unit suite only: CDP cannot emit a stylus pointer type.
+ */
+// Inside the name cell: the chart half labels its bar with the same words.
+const nameText = (page: Page, name: string) =>
+  ganttRow(page, name)
+    .getByRole('gridcell', { name: new RegExp(`^${name}\\b`) })
+    .getByText(name, { exact: true });
+
+async function centreOfLocator(locator: Locator): Promise<{ x: number; y: number }> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('the cell text has no box');
+  return centreOf(box);
+}
+
+test('a touch held on the table text makes it unselectable (red against the parent)', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await touchPlan(page);
+  const text = nameText(page, 'Seeded 0');
+  const cdp = await page.context().newCDPSession(page);
+  const at = await centreOfLocator(text);
+
+  // Held, so a tap cannot open the editor and the press is still the live gesture.
+  await holdTouch(page, cdp, at, 0);
+  try {
+    await expect.poll(() => text.evaluate((el) => getComputedStyle(el).userSelect)).toBe('none');
+    await expect(page.getByTestId('gantt-scroll')).toHaveAttribute('data-last-input', 'touch');
+  } finally {
+    await release(page, cdp);
+  }
+});
+
+test('characterisation: a contextmenu on a table-half span opens the menu and is cancelled', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await touchPlan(page);
+  const text = nameText(page, 'Seeded 0');
+  const cdp = await page.context().newCDPSession(page);
+  const at = await centreOfLocator(text);
+
+  // This passes at the parent too: it pins the handler path the chart half already takes, so a
+  // later change to either half cannot silently separate them. It is not the #464 assertion.
+  await holdTouch(page, cdp, at, 0);
+  const cancelled = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    if (target === null) throw new Error('nothing at the finger');
+    return !target.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        button: 2,
+      }),
+    );
+  }, at);
+  expect(cancelled, 'SchedulePoint cancelled the browser menu').toBe(true);
+  await expect(menuOf(page, 'Seeded 0')).toBeVisible();
+  await release(page, cdp);
+});
+
+test('the first mouse press after a touch can still select cell text (guards select-none)', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await touchPlan(page);
+  const text = nameText(page, 'Seeded 0');
+  const cdp = await page.context().newCDPSession(page);
+  const at = await centreOfLocator(text);
+
+  await holdTouch(page, cdp, at, 0);
+  await release(page, cdp);
+  await expect(page.getByTestId('gantt-scroll')).toHaveAttribute('data-last-input', 'touch');
+
+  // The attribute flips in `pointerdown` capture, before the `mousedown` whose default action
+  // starts a selection, so this very first press selects. Fails only against an unconditional
+  // `select-none`; "no selection after a touch hold" is not asserted, because M0 P8 saw none at the
+  // parent and it could not fail.
+  const box = await text.boundingBox();
+  if (box === null) throw new Error('the cell text has no box');
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + 1, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1, y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId('gantt-scroll')).toHaveAttribute('data-last-input', 'mouse');
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).not.toBe('');
+});
+
+test.describe('in a context that reports a fine pointer', () => {
+  test.use({ hasTouch: false });
+
+  test('a touch held on the table text still makes it unselectable', async ({ page }) => {
+    test.setTimeout(180_000);
+    // The cover-attached Surface reports `pointer: fine` and still sends a finger: the remedy is
+    // keyed on the input event, so a `pointer-coarse:` variant would pass the coarse case above and
+    // fail here.
+    await touchPlan(page, 'fine');
+    const text = nameText(page, 'Seeded 0');
+    const cdp = await page.context().newCDPSession(page);
+    const at = await centreOfLocator(text);
+
+    await holdTouch(page, cdp, at, 0);
+    try {
+      await expect.poll(() => text.evaluate((el) => getComputedStyle(el).userSelect)).toBe('none');
+    } finally {
+      await release(page, cdp);
+    }
+  });
 });

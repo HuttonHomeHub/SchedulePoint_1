@@ -1,7 +1,7 @@
 # Implementation Plan: The Gantt under a finger and a stylus
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here)
+- **Status:** Accepted — shipped (ADR-0177). Approved by the product owner 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here). **Caveat:** #464's fix is shipped but the issue stays open until the device re-check (checklist item 12).
 - **Decision:** M2 go-ahead and #464 added by the product owner 2026-10-07 ('go ahead with Gantt M2 and #464'); amendment agreed by accessibility-, ux-, component-reviewer and test-engineer on a second pass; product owner answered 2026-10-07 "C and accept" (Q-M2-1 = C, Q-M2-2 = accept). See "M2 as re-scoped by the device (2026-10-07)" under Milestone 2.
 - **Owner:** builder agent (Sonnet), reviewed as listed per milestone
 
@@ -677,6 +677,17 @@ Everything below is folded into the sections above.
 | 8   | test                | The chevron positive needs a marker                                                      | `data-gantt-disclosure`                                                                         |
 | 9   | test                | Exemptions nothing exercises cannot fail                                                 | Every kind is asserted present, with a planted regression; edge handles are listed but unswept  |
 | 10  | a11y                | D4 sentences; the arrow's click and a hold                                               | Kept. Found: a hold on the arrow would also toggle it; the arrow now honours the row's swallow  |
+
+##### Build review (2026-10-07)
+
+| Reviewer      | Finding                                                                            | Resolution                                                                           |
+| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| accessibility | **Blocking.** The name input jumped when a cell opened for editing                 | Fixed with the `lead` prop on `GanttCell`; AGREE after                               |
+| component     | None                                                                               | AGREE                                                                                |
+| test-engineer | Gate review: the open-cell sweep assertion could not fail                          | Made able to fail (`57ce3018`); AGREE                                                |
+| ux            | **Blocking.** Bucket rows lose alignment with names when the Code column is hidden | Fixed: the bucket's arrow and label sit in the name cell, with a test for both cases |
+| ux            | Device sheet and changeset wording                                                 | Folded: plain words, one posture line per run, changeset reworded                    |
+| ux            | Indent at depth 4-5 uses about 80-95 px of the name column's width                 | Noted, not changed                                                                   |
 
 ---
 

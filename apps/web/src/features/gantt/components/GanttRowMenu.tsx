@@ -155,6 +155,9 @@ export function GanttRowMenu({
     <>
       <Button
         ref={triggerRef}
+        // ADR-0177 D4's coarse list: 28 px (`icon-sm`, #215); a press-and-hold anywhere on the row
+        // is the large-target route. Read by `e2e-workspace-fit`'s coarse sweep.
+        data-gantt-coarse-exempt="row-menu"
         variant="ghost"
         size="icon-sm"
         // **`tabIndex={-1}`, and that is the whole point of a roving tab stop.**

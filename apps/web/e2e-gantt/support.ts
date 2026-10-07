@@ -182,6 +182,68 @@ export async function seedActivities(
 }
 
 /**
+ * **A nest of five WBS summaries with a task at the bottom**, through the public API: `Phase 1` at
+ * depth 0 down to `Phase 5` at depth 4, and `Pour footing and backfill` (a task) under `Phase 5`.
+ *
+ * Test-local, and it exists because nothing else here can reach depth 4. The catalogue's
+ * `plan:capability-types-and-wbs` stops at depth 1 (one summary, two leaves) and `seedActivities`
+ * cannot set a parent; `parentId` is on the create DTO, so each child names its parent when it is
+ * made. Recalculated and synced as `seedActivities` does, then the Gantt is opened (an empty plan
+ * has no grid to open), and **only then** is every level's row asserted visible: the panel starts
+ * with nothing collapsed, and the Gantt has no expand-all control to drive, so visibility is the
+ * thing to check rather than a step to take.
+ */
+export async function seedNestedWbs(page: Page, orgSlug: string): Promise<string[]> {
+  const planId = openPlanId(page);
+  const names = ['Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5'];
+  const failures = await page.evaluate(
+    async ({ org, id, summaries }: { org: string; id: string; summaries: string[] }) => {
+      const url = `/api/v1/organizations/${org}/plans/${id}/activities`;
+      const post = async (body: Record<string, unknown>): Promise<string> => {
+        const response = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`${String(body.name)}: ${response.status}`);
+        return ((await response.json()) as { data: { id: string } }).data.id;
+      };
+      try {
+        let parentId: string | null = null;
+        for (const name of summaries) {
+          parentId = await post({
+            name,
+            type: 'WBS_SUMMARY',
+            ...(parentId === null ? {} : { parentId }),
+          });
+        }
+        await post({ name: 'Pour footing and backfill', durationDays: 5, parentId });
+        const recalc = await fetch(
+          `/api/v1/organizations/${org}/plans/${id}/schedule/recalculate`,
+          {
+            method: 'POST',
+            credentials: 'include',
+          },
+        );
+        if (!recalc.ok) throw new Error(`recalculate: ${recalc.status}`);
+        return null;
+      } catch (error) {
+        return String(error);
+      }
+    },
+    { org: orgSlug, id: planId, summaries: names },
+  );
+  if (failures !== null) throw new Error(`seedNestedWbs: ${failures}`);
+  await syncClient(page);
+  await showGantt(page);
+  for (const name of [...names, 'Pour footing and backfill']) {
+    await expect(ganttRow(page, name), `${name} is visible after the recalculation`).toBeVisible();
+  }
+  return names;
+}
+
+/**
  * **Make the open page aware of a write that went straight to the REST API.**
  *
  * Named rather than inlined because it is a rule, not a step: **a journey that writes through the
