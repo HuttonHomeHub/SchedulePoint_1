@@ -1206,6 +1206,7 @@ function GanttPanelBody({
                     {sortable ? (
                       <button
                         type="button"
+                        data-gantt-coarse-exempt="sort"
                         onClick={() => onSort(column.key as GanttSortKey)}
                         className={cn(
                           'focus-visible:ring-ring flex w-full items-end rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
@@ -2005,6 +2006,9 @@ function GanttRowView({
               <button
                 type="button"
                 data-gantt-disclosure=""
+                // Named in ADR-0177 D4's coarse list and exempted from the 44 px sweep by this
+                // attribute, never by size: a 44 px box cannot sit in a 28 px row (#215).
+                data-gantt-coarse-exempt="disclosure"
                 // The row already carries aria-expanded; this control is its visual affordance,
                 // so it is hidden from the accessibility tree rather than announcing a second,
                 // competing expanded state.
@@ -2020,8 +2024,8 @@ function GanttRowView({
                   }
                   onToggle(activity.id, expanded === true);
                 }}
-                // The name cell opens its editor on a double-click; two quick taps on the arrow
-                // are two toggles, not a request to edit.
+                // The name cell opens its editor on a double-click (F2 from the keyboard); two quick
+                // taps on the arrow are two toggles, not a request to edit.
                 onDoubleClick={(event) => event.stopPropagation()}
                 className={cn(DISCLOSURE_SLOT_CLASS, 'text-muted-foreground hover:text-foreground')}
                 style={{ marginLeft: depth * NAME_INDENT_PX }}
@@ -2069,8 +2073,8 @@ function GanttRowView({
                 onCommit={editing.commit}
                 onCancel={editing.cancel}
                 className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
+                {...(lead === null ? {} : { lead })}
               >
-                {lead}
                 <span
                   className={cn(
                     SELECT_NONE_AFTER_TOUCH,

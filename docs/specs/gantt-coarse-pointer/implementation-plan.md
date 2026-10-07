@@ -1,7 +1,7 @@
 # Implementation Plan: The Gantt under a finger and a stylus
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here)
+- **Status:** Accepted — shipped (ADR-0177). Approved by the product owner 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here). **Caveat:** #464's fix is shipped but the issue stays open until the device re-check (checklist item 12).
 - **Decision:** M2 go-ahead and #464 added by the product owner 2026-10-07 ('go ahead with Gantt M2 and #464'); amendment agreed by accessibility-, ux-, component-reviewer and test-engineer on a second pass; product owner answered 2026-10-07 "C and accept" (Q-M2-1 = C, Q-M2-2 = accept). See "M2 as re-scoped by the device (2026-10-07)" under Milestone 2.
 - **Owner:** builder agent (Sonnet), reviewed as listed per milestone
 

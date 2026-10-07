@@ -844,3 +844,76 @@ describe('what a row says it is', () => {
     expect(named).toHaveLength(1);
   });
 });
+
+describe('the name cell keeps its lead while the field is open', () => {
+  const NESTED = [
+    activity({ id: 'p', code: 'P', name: 'Substructure', type: 'WBS_SUMMARY', laneIndex: 0 }),
+    activity({ id: 'c', code: 'C', name: 'Piling', parentId: 'p', laneIndex: 1 }),
+  ];
+  const openName = (activityId: string) =>
+    reduceCellEdit(IDLE, {
+      type: 'begin',
+      target: { activityId, key: 'name' },
+      seed: activityId === 'p' ? 'Substructure' : 'Piling',
+    });
+  const nameCell = (row: string): HTMLElement =>
+    screen
+      .getByRole('row', { name: new RegExp(row) })
+      .querySelector<HTMLElement>('[role="gridcell"][aria-colindex="2"]')!;
+
+  it('draws the arrow before the field, on the node it had when idle', () => {
+    const { rerender } = renderGrid(editingBundle(), NESTED);
+    const idleArrow = nameCell('Substructure').querySelector('[data-gantt-disclosure]');
+    expect(idleArrow).not.toBeNull();
+
+    rerender(<GanttPanel activities={NESTED} editing={editingBundle({ state: openName('p') })} />);
+    const input = within(nameCell('Substructure')).getByRole('textbox');
+    const openArrow = nameCell('Substructure').querySelector('[data-gantt-disclosure]');
+    // Same node: a press that blurs the field must still land its click on the arrow.
+    expect(openArrow).toBe(idleArrow);
+    expect(
+      openArrow!.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(openArrow!.parentElement).toBe(input.parentElement);
+    expect(input).not.toHaveClass('select-none');
+  });
+
+  it('keeps a leaf’s indent slot before the field', () => {
+    renderGrid(editingBundle({ state: openName('c') }), NESTED);
+    const input = within(nameCell('Piling')).getByRole('textbox');
+    const slot = input.previousElementSibling as HTMLElement;
+    expect(slot).toHaveClass('size-6');
+    expect(slot.style.marginLeft).toBe('14px');
+  });
+
+  it('cancels the edit and toggles the row when the arrow is pressed', () => {
+    const cancel = vi.fn();
+    renderGrid(editingBundle({ state: openName('p'), cancel }), NESTED);
+    const row = screen.getByRole('row', { name: /Substructure/ });
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    const input = within(nameCell('Substructure')).getByRole('textbox');
+    const arrow = nameCell('Substructure').querySelector<HTMLElement>('[data-gantt-disclosure]')!;
+
+    fireEvent.blur(input);
+    fireEvent.click(arrow);
+
+    expect(cancel).toHaveBeenCalled();
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('still opens a cell without a lead as a plain full-width field', () => {
+    renderGrid(
+      editingBundle({
+        state: reduceCellEdit(IDLE, {
+          type: 'begin',
+          target: { activityId: 'p', key: 'duration' },
+          seed: '0 d',
+        }),
+      }),
+      NESTED,
+    );
+    const input = within(cellUnder('Duration')).getByRole('textbox');
+    expect(input).toHaveClass('w-full');
+    expect(input.parentElement).toHaveAttribute('role', 'gridcell');
+  });
+});

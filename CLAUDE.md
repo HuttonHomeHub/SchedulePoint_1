@@ -576,7 +576,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)
 - **ADR-0176** _(Accepted)_ — Undo checks before it writes, and sets aside what it cannot apply → [`0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md`](docs/adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)
-- **ADR-0177** _(Proposed; D4 at M2's close)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
+- **ADR-0177** _(Accepted)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
 
 A lighter-weight running log of smaller decisions is in

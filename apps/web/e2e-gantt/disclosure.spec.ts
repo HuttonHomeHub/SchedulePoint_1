@@ -144,21 +144,39 @@ for (const pointer of ['fine', 'coarse'] as const) {
           .getByRole('gridcell', { name: new RegExp(`^${name}`) })
           .first();
       const cell = cellOf('Pour footing and backfill');
+      // The clipper is the nearest box from the name outward that clips with an ellipsis: the cell
+      // itself where the lead is an inline child, the name's own span where the cell holds a flex
+      // row (an editable cell, whose lead sits beside the field and must not move when it opens).
       const verdict = await cell.evaluate((el) => {
-        const style = getComputedStyle(el);
+        const text = [...el.querySelectorAll('span')].find(
+          (sp) => sp.textContent === 'Pour footing and backfill',
+        );
+        let clipper: Element = el;
+        for (let a: Element | null = text ?? null; a !== null; a = a.parentElement) {
+          const st = getComputedStyle(a);
+          if (st.overflowX === 'hidden' && st.textOverflow === 'ellipsis') {
+            clipper = a;
+            break;
+          }
+          if (a === el) break;
+        }
+        const style = getComputedStyle(clipper);
         return {
           overflow: style.overflowX,
           ellipsis: style.textOverflow,
-          clipped: el.scrollWidth > el.clientWidth,
+          clipped: clipper.scrollWidth > clipper.clientWidth,
           width: Math.round(el.getBoundingClientRect().width),
+          spilled: el.scrollWidth > el.clientWidth,
         };
       });
       expect(verdict.width).toBe(120);
       expect(verdict.overflow).toBe('hidden');
       expect(verdict.ellipsis).toBe('ellipsis');
-      expect(verdict.clipped, 'the long name is cut by the cell, not spilled into the next').toBe(
-        true,
-      );
+      expect(
+        verdict.clipped,
+        'the long name is cut by its clipper, not spilled into the next',
+      ).toBe(true);
+      expect(verdict.spilled, 'nothing spills out of the cell itself').toBe(false);
       // Depth changes the cell's contents and nothing about its identity: the same title as a
       // depth-0 summary's cell (both writable, so both none).
       expect(await cellOf(DEPTH_4).getAttribute('title')).toBe(

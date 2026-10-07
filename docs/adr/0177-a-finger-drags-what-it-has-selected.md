@@ -1,7 +1,7 @@
 # ADR-0177: A finger drags what it has selected
 
-- **Status:** Proposed (D1–D3 landed with M1; D4 is written at M2's close, and the ADR is Accepted
-  then)
+- **Status:** Accepted (D1–D3 landed with M1; D4 written at M2's close, 2026-10-07; D3's table-half
+  hold is shipped and pending the device's confirmation, `docs/TECH_DEBT.md` #464)
 - **Date:** 2026-10-06
 - **Deciders:** James Ewbank (product owner — approved 2026-10-05: both postures, select then
   drag), with Claude Code
@@ -83,6 +83,14 @@ which the row swallows once. Bucket rows and hosts without a menu context keep t
 
 This is the large-target equivalent ADR-0118 D1 asks of `docs/TECH_DEBT.md` #215's Gantt half.
 
+**The table half needed one more thing (#464).** A hold on selectable cell text is taken by the
+browser as a text-selection gesture and never arrives as `contextmenu`, so after a touch or stylus
+press idle cell text is `select-none`, through **one attribute at the grid root** (`data-last-input`,
+written in `pointerdown` capture from `pointerType`, pen counting as touch); a mouse press clears it
+and keeps selection. The cost, accepted by the product owner: until the next mouse press cell text
+cannot be selected after a touch, hybrid touch-then-keyboard users included; copying stays reachable
+through a double tap (the open field) and row menu → `Edit`.
+
 **Native `contextmenu` first.** Whether Windows fires `contextmenu` on a touch hold, and whether on
 hold or on release, is the device's answer (M0 P8: no event in emulation, because CDP does not
 synthesise the OS long-press). No `useLongPress` primitive is built on speculation; it is extracted
@@ -90,10 +98,29 @@ only if the device shows no `contextmenu` on a hold.
 
 ### D4 — Exception lists
 
-Written at M2's close, each entry with its equivalent and each matching a sweep exemption: the
-fine-pointer §2.5.8 equivalent exceptions (the 8 × 14 edge handles and 14 px bar body, whose
-equivalents are the typed `Start` / `Finish` / `Duration` cells, F2 and row menu → `Edit`), and the
-coarse-pointer entries below 44 px.
+Each entry names its equivalent, and each **swept** coarse entry matches a
+`data-gantt-coarse-exempt` kind inside `[role="treegrid"]` in `e2e-workspace-fit/command-surface.spec.ts`
+(never a size threshold). Every kind is asserted present at least once and was planted red
+(ADR-0110).
+
+**Fine pointer — WCAG 2.2 §2.5.8, equivalent exception.** The 8 × 14 edge handles and the 14 px bar
+body. Equivalent: the typed `Start` / `Finish` / `Duration` cells, reachable by keyboard (F2) and by
+touch (a double tap opens the cell, item 5 of the device sheet), and row menu → `Edit`. The summary-row
+arrow is **fixed, not listed**: it is a 24 × 24 box, because no §2.5.8 exception holds for it.
+
+**Coarse pointer — ADR-0118 D1, under 44 px.**
+
+| Entry                      | Size                   | Equivalent at a large target                                                        | Swept as                                                                          |
+| -------------------------- | ---------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| the `⋯`                    | 28 × 28                | press-and-hold anywhere on the row (D3)                                             | `row-menu`                                                                        |
+| the summary-row arrow      | 24 × 24                | **none** — keyboard ArrowRight / Left only; hit 10 of 10 on the device (item 6)     | `disclosure`                                                                      |
+| the sort headers           | 24 tall                | **none**, said plainly; spacing test passed (`Float left` 32 tall)                  | `sort`                                                                            |
+| the open cell input        | 24 tall                | the activity editor                                                                 | `cell-input`                                                                      |
+| the edge handles, bar body | 8 × 14, 14 px          | typed cells / `Edit`; **spans, outside the sweep's selectors**, held by class tests | unswept: it cannot see them                                                       |
+| the `View ▾` checkboxes    | 16 × 16 in a 28 px row | none at a large target                                                              | unswept: no coarse surface opens `View ▾` (the projection sweeps closed surfaces) |
+
+The arrow is not grown to 44: a 44 px box cannot sit in a 28 px row without #215's row-height decision,
+the same reason the 24 px sort headers are listed rather than grown.
 
 ## Consequences
 
@@ -101,10 +128,8 @@ coarse-pointer entries below 44 px.
   Shift+right-click keeps the browser's menu. Stated in the changeset and `docs/UX_STANDARDS.md`.
 - **A finger on an unselected bar now scrolls**, where it used to write on an edge and cancel on the
   body.
-- **Touch quick-edit stays slower than a mouse, and that gap is open.** A double tap on a cell
-  synthesised `dblclick` in emulation (P9, INDETERMINATE — emulation is not a Surface). If it does not
-  on the device, touch's route to a duration is hold → `Edit` → the activity editor, which is correct
-  and slower. It is recorded as unresolved rather than closed by declaring an equivalent.
+- **Touch quick-edit works.** A double tap on a cell opened a text box on the device in both postures
+  (item 5, 2026-10-07), resolving P9 (INDETERMINATE in emulation). There is no quick-edit gap to track.
 - **The TSLD canvas differs, deliberately.** It is `touch-none` throughout and owns every gesture
   (P16); the Gantt is a DOM scroller with one bar per row. This ADR does not change the canvas.
 - **Recalculation is untouched**: no scheduling input changes and `computeSchedule` is not imported

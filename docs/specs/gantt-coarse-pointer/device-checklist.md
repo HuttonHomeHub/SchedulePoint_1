@@ -15,8 +15,8 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > **Keep this sheet current (product owner, 2026-10-06).** The sheet was **parked** until the product
 > owner ran it. Any change that alters what a step tests — Gantt touch, stylus, right-click or
 > keyboard-menu behaviour, the Gantt's targets, or `/pointer-check.html` — updates this file in the
-> same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843); item 12 for #464 and the
-> arrow's move (item 6's wording changed with it).
+> same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
+> Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
 
 ## Before you start
 
@@ -100,18 +100,20 @@ confirm them on the real Surface.
 - [ ] **11. With the mouse, right-click a row while holding Shift.**
       [ ] the browser's own menu appeared (expected) [ ] SchedulePoint's menu [ ] nothing
 
-## Item 12: press and hold on the words in the table (both postures, about 2 minutes each)
+## Extra check for the table hold (about 2 minutes per posture)
 
-Version after 0.177.2 stops the table's words from being highlighted after you touch the screen, so
-that a hold can reach SchedulePoint's menu (#464). Do this once in each posture, with a finger, then
-once with the stylus.
+This version stops the table's words from being highlighted after you touch the screen, so that a
+hold can reach SchedulePoint's menu (#464). Do it once with a finger and once with the stylus, in
+each posture.
 
-- [ ] **12. Press and hold on the words in the table half of a row (a task name, for example) for
+- [ ] **12a. Press and hold on the words in the table half of a row (a task name, for example) for
       about one second, then let go.**
-      What appeared: [ ] nothing [ ] a small menu from the browser [ ] highlighted text
-      [ ] a menu from SchedulePoint - Was a word highlighted, with little round handles? [ ] yes [ ] no - Press and hold on an **empty** part of the table (a blank Code cell, or the space beside a short
-      value). What appeared: [ ] nothing [ ] browser menu [ ] highlighted text
-      [ ] SchedulePoint menu - Posture: [ ] cover attached [ ] tablet. Input: [ ] finger [ ] stylus
+      What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
+      Was a word highlighted, with little round handles? [ ] yes [ ] no
+- [ ] **12b. Press and hold on an EMPTY part of the table half (a blank Code cell, or the space beside
+      a short value).**
+      What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
+- [ ] **Posture:** [ ] cover attached [ ] tablet. **Input:** [ ] finger [ ] stylus
 
 ## When you are done
 

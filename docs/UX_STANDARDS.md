@@ -344,10 +344,12 @@ entry stops being needed.
   coarse-only 44 px costs a mouse user **0 px** of diagram and a touch user 16 px
   of 808. A surface that cannot meet the house rule is **named in ADR-0118 §D1
   with the equivalent it offers a non-pointer user**, and the list has **two**
-  entries: a breadcrumb crumb (a truncated crumb's width is the space left over, so
+  entries here and the Gantt's own (below): a breadcrumb crumb (a truncated crumb's width is the space left over, so
   no CSS makes it 44px wide — a box was built, measured **16 × 44**, and withdrawn),
   and `icon-sm`'s dense-row consumers, whose containers are fixed independently of
-  them (`docs/TECH_DEBT.md` #215). This sentence read "that list is empty today"
+  them (`docs/TECH_DEBT.md` #215). **The Gantt's coarse list is ADR-0177 D4** — the `⋯` (28), the summary-row
+  arrow (24), the sort headers (24) and an open cell input (24), each excluded from the coarse sweep by
+  `data-gantt-coarse-exempt` inside the treegrid, never by size. This sentence read "that list is empty today"
   until 2026-08-29 — written when it was true and left standing when ADR-0118 §D6
   added the first entry, which is the drift class that ADR exists to close, in the
   standards doc that states the rule.

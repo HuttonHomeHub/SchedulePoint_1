@@ -6082,7 +6082,7 @@ every one of those buttons 44 px inside a container that did not grow. The sharp
 absolute row style and the virtualizer's `estimateSize` — so a 44 px button centred in a 28 px row
 overflows 8 px into the row above and 8 px into the row below, on a list whose rows are packed edge
 to edge and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e. permanently visible on
-exactly the device that would see it. `GanttPanel.tsx`'s `GANTT_ROW_HEIGHT = 28` is architecturally
+exactly the device that would see it. `GanttPanel.tsx`'s `GANTT_ROW_HEIGHT` (28) is architecturally
 identical. `explorer-column.tsx`'s `SPINE_WIDTH = 34` is the same defect on the other axis.
 
 **Three of the five ADR-0118 gate-pass reviews found it independently, and the epic's own gate could
@@ -6103,6 +6103,14 @@ the same menu on touch, and Menu/Shift+F10 opens it from the keyboard on the foc
 other **four** have no large-target equivalent, which is the honest reason this is a register row
 and not a closed question.
 
+**The Gantt's half, stated by ADR-0177 D4 (2026-10-07).** `GanttRowMenu`'s `⋯` (28) and the summary-row
+arrow (24, `data-gantt-disclosure`) sit in a 28 px `GANTT_ROW_HEIGHT` row, so neither grows. Their large-target
+equivalents are different: the `⋯` has a press-and-hold anywhere on the row (ADR-0177 D3, and #464's fix for
+the table half); the arrow has **none** at a large target — ArrowRight / ArrowLeft only, and 10 of 10 hits by
+finger in both postures on the device. They are exempted from the coarse projection by
+`[role="treegrid"] [data-gantt-coarse-exempt="row-menu" | "disclosure"]`, never by size, with the grid's sort
+headers and the open cell input (`sort`, `cell-input`). Each kind is asserted present and was planted red.
+
 **Where it is exempted, so it cannot hide.** `e2e-workspace-fit/command-surface.spec.ts` excludes
 `[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and
 `apps/web/src/styles/control-height.structural.test.ts` exempts `button.tsx::size-7` with the same
@@ -6118,7 +6126,7 @@ row defends is about containers and that one is about a default.
 
 > **Re-derived and exact but for one line** (2026-09-13). Nine `icon-sm` consumer files besides
 > `button.tsx`; the five dense-row consumers are exactly the five named; `SPINE_WIDTH = 34`
-> (`explorer-column.tsx:25`) and `GANTT_ROW_HEIGHT = 28` (`GanttPanel.tsx:81`) both hold.
+> (`explorer-column.tsx:25`) and `GANTT_ROW_HEIGHT = 28` (`GanttPanel.tsx:81`, now cited by symbol: it moved to `:107`) both hold.
 > `ROW_HEIGHT` had moved `:26` → `:28`, corrected above — the constant's **value** is unchanged, so
 > nothing about the diagnosis moves. `button.tsx:52` cites the same constant without a line number
 > and is therefore still right, which is the argument for citing a symbol rather than a position
@@ -11900,7 +11908,7 @@ press over ~800 ms reported by the operator, or the next entry whose scan is unb
 
 ### 464. A press-and-hold on the Gantt's table half opens the browser's menu, not SchedulePoint's
 
-**Status:** open · **Verified:** 2026-10-07 (the product owner on his Surface, `web` 0.177.2, recorded in
+**Status:** open — **the fix shipped in Gantt M2-T5 (ADR-0177 D3) and stays open until the device re-check (checklist item 12)** · **Verified:** 2026-10-07 (the product owner on his Surface, `web` 0.177.2, recorded in
 `docs/specs/gantt-coarse-pointer/device-results.md`; the row's one `onContextMenu` handler in
 `apps/web/src/features/gantt/components/GanttPanel.tsx` read, not reproduced) · **Raised:** 2026-10-07
 (Surface test sheet) · **Size:** S · **Owner:** web
@@ -11911,7 +11919,14 @@ cause is that a hold on selectable cell text is taken as a text-selection gestur
 row as a `contextmenu`; that is a reading, not a reproduction. M1's record names this as the trigger for
 its fallback.
 
-**Next:** decide with Gantt M2 between a `useLongPress` hook on the tooltip precedent and stopping text
+**What shipped, and what it cost.** After a touch or stylus press the idle cell text is `select-none`, through one
+`data-last-input` attribute at the grid root, so a hold reaches the row's `contextmenu`. **The trade-off, accepted by the
+product owner 2026-10-07:** after a touch or stylus press cell text cannot be selected until the next mouse press — so a
+hybrid user who touches and then types cannot select cell text with the keyboard either, until the mouse is used.
+Copying still works through a double tap (the open field) or row menu → Edit. **Close this row when item 12 confirms
+a hold reaches SchedulePoint's menu on the table half in both postures.**
+
+**Was:** decide with Gantt M2 between a `useLongPress` hook on the tooltip precedent and stopping text
 selection in the grid's cells under touch, then reproduce with a CDP touch hold on cell text before
 building. Either changes what the Surface sheet tests, so the sheet updates in the same PR. **Trigger:**
 Gantt M2 starting, or a planner reporting the browser menu on a hold.

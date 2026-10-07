@@ -1,11 +1,13 @@
 import { type Page } from '@playwright/test';
 
+import { ganttRow } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,
   newPlan,
   onboard,
+  openPlanId,
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
@@ -78,9 +80,15 @@ async function sweep(
    * is renamed, which is the quietest possible way for an exclusion to become a hole.
    */
   exemptWithin?: string,
+  /**
+   * Whether a root whose every control is exempt may legitimately sweep to nothing. Only the Gantt
+   * grid under a coarse pointer is in that state, and its positive is then the exempt side's
+   * marker counts (`assertGanttExemptionsPresent`) rather than a swept count.
+   */
+  allowEmpty = false,
 ): Promise<Target[]> {
   return page.evaluate(
-    ({ minTarget, root: rootSelector, exemptWithin: exempt }) => {
+    ({ minTarget, root: rootSelector, exemptWithin: exempt, allowEmpty: mayBeEmpty }) => {
       const deck = document.querySelector(rootSelector);
       if (!deck) throw new Error(`command-surface: no surface matched ${rootSelector}`);
 
@@ -197,13 +205,72 @@ async function sweep(
           });
         }
       }
-      if (out.length === 0)
+      if (out.length === 0 && !mayBeEmpty)
         throw new Error(`command-surface: ${rootSelector} reported no controls`);
       void minTarget;
       return out;
     },
-    { minTarget: MIN_TARGET, root, exemptWithin },
+    { minTarget: MIN_TARGET, root, exemptWithin, allowEmpty },
   );
+}
+
+/** The summary row the Gantt sweeps need, and the child that keeps it expanded and visible. */
+const WBS_SUMMARY = 'Substructure package';
+const WBS_CHILD = 'Pour pile caps';
+
+/**
+ * **A WBS summary with one child, through the public API** (ADR-0177 M2-T4).
+ *
+ * Both seeds were two flat tasks, so the Gantt grid never drew a summary row and the disclosure
+ * arrow — a real 24 × 24 `<button>` this gate has to see — was never in the DOM. The same shape
+ * as `e2e-gantt/support.ts`'s `seedNestedWbs`, one level deep: that helper also opens the Gantt
+ * and builds five levels, which would change the diagram this file's other cases sweep. The
+ * panel starts with nothing collapsed, so the child's visibility is asserted where the Gantt is
+ * opened, rather than a step taken here.
+ */
+// **Own lanes, deliberately**: two bars sharing a lane raise the "overlap" banner, which makes the
+// foot row 57 px against `FOOT_MAX_PX` and fails an unrelated gate (the first run of this seed did).
+async function seedWbsSummary(page: Page, orgSlug: string): Promise<void> {
+  const planId = openPlanId(page);
+  const failure = await page.evaluate(
+    async ({ org, id, summary, child }) => {
+      const url = `/api/v1/organizations/${org}/plans/${id}/activities`;
+      const post = async (body: Record<string, unknown>): Promise<string> => {
+        const response = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`${String(body.name)}: ${response.status}`);
+        return ((await response.json()) as { data: { id: string } }).data.id;
+      };
+      try {
+        const parentId = await post({ name: summary, type: 'WBS_SUMMARY', laneIndex: 2 });
+        await post({ name: child, type: 'TASK', durationDays: 6, laneIndex: 3, parentId });
+        return null;
+      } catch (error) {
+        return String(error);
+      }
+    },
+    { org: orgSlug, id: planId, summary: WBS_SUMMARY, child: WBS_CHILD },
+  );
+  if (failure !== null) throw new Error(`seedWbsSummary: ${failure}`);
+}
+
+/** Switch to the Gantt and assert the summary is EXPANDED: its child's row is painted. */
+async function openGanttExpanded(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Gantt', exact: true }).click();
+  await expect(page.getByRole('treegrid', { name: 'Schedule as a bar chart' })).toBeVisible();
+  await expect(
+    ganttRow(page, WBS_SUMMARY),
+    'the summary row is painted — the arrow cannot be swept without it',
+  ).toBeVisible();
+  await expect(ganttRow(page, WBS_SUMMARY)).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    ganttRow(page, WBS_CHILD),
+    'the summary is expanded, so its child is painted',
+  ).toBeVisible();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -231,6 +298,7 @@ test.describe('The plan command surface', () => {
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
     ]);
+    await seedWbsSummary(page, orgSlug);
     await recalculate(page, orgSlug);
     // `recalculate` reloads, which drops the pen. Take it back: the deck is pen-gated, so a sweep
     // without it measures a different, smaller set of enabled controls.
@@ -747,9 +815,7 @@ test.describe('The plan command surface', () => {
    */
   test('every command and every grid control clears 24 × 24 in the Gantt view too', async () => {
     test.setTimeout(240_000);
-    await page.getByRole('button', { name: 'Gantt', exact: true }).click();
-    const grid = page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
-    await expect(grid).toBeVisible();
+    await openGanttExpanded(page);
 
     const SURFACES = [
       { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
@@ -788,6 +854,26 @@ test.describe('The plan command surface', () => {
           `${surface.name}: a pointer cannot reach these in the Gantt at ${viewport.width}: ${JSON.stringify(unreachable)}`,
         ).toEqual([]);
       }
+
+      // **The pinned positive for the summary-row arrow** (ADR-0177 M2-T4). `atLeast` on the grid
+      // does not do this job — the six sort headers satisfy it on their own — and a swept target's
+      // id is '' for a button with no name, so the arrow is counted by its own marker. It is a real
+      // 24 × 24 `<button>` (§2.5.8 allows no exception for it), so each box is asserted, not only
+      // counted.
+      const arrows = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="treegrid"] [data-gantt-disclosure]')].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { w: Math.round(r.width), h: Math.round(r.height) };
+        }),
+      );
+      expect(
+        arrows.length,
+        `no disclosure arrow in the Gantt at ${viewport.width}`,
+      ).toBeGreaterThan(0);
+      expect(
+        arrows.filter((a) => a.w < MIN_TARGET || a.h < MIN_TARGET),
+        `a disclosure arrow below ${MIN_TARGET}×${MIN_TARGET} at ${viewport.width}`,
+      ).toEqual([]);
     }
   });
 
@@ -879,7 +965,18 @@ const HOUSE_TARGET = 44;
  * controls still under the house rule after M2, including the six Explorer destinations, which are
  * how a planner LEAVES a plan.
  */
-const COARSE_SURFACES = [
+interface CoarseSurface {
+  name: string;
+  root: string;
+  atLeast: number;
+  /** Every control is exempt, so the positive is the exemption markers, not a swept count. */
+  markersOnly?: boolean;
+  minWidth?: number;
+  /** The plan view this surface is only drawn in. */
+  view?: 'gantt';
+}
+
+const COARSE_SURFACES: readonly CoarseSurface[] = [
   { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
   { name: 'plan header', root: 'header', atLeast: 5 },
   // `minWidth` because below `lg` the pinned Explorer is not rendered at all — it becomes the
@@ -890,7 +987,21 @@ const COARSE_SURFACES = [
   // destinations plus the rail's two controls. The floor still proves the destinations are there,
   // which is the class M3 fixed and the reason this surface is swept at all.
   { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 6, minWidth: 1024 },
-] as const;
+  // Switched to in the test, not here. `minWidth` is 834 because of #438: the pinned grid block is
+  // 584 px, so at 390 the grid overflows its scroller and its controls sit outside the viewport,
+  // where a reachability assertion would fail for a layout reason that has its own row.
+  // Every control in the grid is one of D4's four named kinds, so the swept set is EMPTY by design
+  // and the positive is the marker counts (`assertGanttExemptionsPresent`): a grid that rendered
+  // nothing has no markers, and a control that lost its marker is swept and fails the house rule.
+  {
+    name: 'Gantt grid',
+    root: '[role="treegrid"]',
+    atLeast: 0,
+    markersOnly: true,
+    minWidth: 834,
+    view: 'gantt',
+  },
+];
 
 /**
  * **Two named exceptions, both excluded by an ANCESTOR SELECTOR rather than by a size threshold**,
@@ -911,6 +1022,21 @@ const COARSE_SURFACES = [
  * 2.2 §2.5.8's Inline exception; `breadcrumbs.tsx` carries the reasoning.
  */
 const EXEMPT_WITHIN = ['nav[aria-label="Breadcrumb"]', '[role="tree"]'].join(',');
+
+/**
+ * **The Gantt grid's four named coarse exceptions** (ADR-0177 D4, swept entries), each excluded by
+ * an attribute **inside `[role="treegrid"]`** and never by size. The list below is the whole of D4's
+ * swept coarse list; an entry added there without a kind here goes red, and a kind with no element
+ * is caught by `GANTT_EXEMPT_KINDS`' presence assertion.
+ *
+ * - `disclosure` — the summary-row arrow, 24 × 24 in a 28 px row (`docs/TECH_DEBT.md` #215).
+ * - `row-menu` — the `⋯`, 28 × 28 (`icon-sm`); a press-and-hold on the row is the large route.
+ * - `sort` — the column-header buttons, exactly 24 tall with the spacing test passed.
+ * - `cell-input` — an open cell's field, 24 px; the activity editor is the large route.
+ */
+const GANTT_EXEMPT_KINDS = ['disclosure', 'row-menu', 'sort', 'cell-input'] as const;
+const ganttExempt = (kinds: readonly string[] = GANTT_EXEMPT_KINDS): string =>
+  kinds.map((kind) => `[role="treegrid"] [data-gantt-coarse-exempt="${kind}"]`).join(',');
 
 /**
  * **390 is in the list, and it is the width this epic's own repair was made at** (ADR-0118 M4).
@@ -948,6 +1074,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
     ]);
+    await seedWbsSummary(page, orgSlug);
     await recalculate(page, orgSlug);
     await ensurePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
@@ -956,6 +1083,51 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   test.afterAll(async () => {
     await page.close();
   });
+
+  async function showView(view: 'gantt' | 'tsld'): Promise<void> {
+    const grid = page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
+    if (view === 'gantt') {
+      if (!(await grid.isVisible())) await openGanttExpanded(page);
+      return;
+    }
+    if (await grid.isVisible()) {
+      await page.getByRole('button', { name: 'Diagram', exact: true }).click();
+      await expect(grid).toBeHidden();
+    }
+  }
+
+  /**
+   * **Each exemption kind is exercised, so each can fail (ADR-0110 D5).** An exemption nothing
+   * carries could never go red: the sweep would be excluding an empty set and reading as cover.
+   * The marker counts are also the Gantt surface's pinned positive on the exempt side.
+   * `cell-input` exists only while a cell is open, so one Duration cell is opened for the pass and
+   * closed again with Escape.
+   */
+  async function assertGanttExemptionsPresent(width: number): Promise<void> {
+    const count = (kind: string): Promise<number> => page.locator(ganttExempt([kind])).count();
+    for (const kind of ['disclosure', 'row-menu', 'sort'] as const) {
+      expect(
+        await count(kind),
+        `no '${kind}' exemption element in the Gantt at ${width}`,
+      ).toBeGreaterThan(0);
+    }
+    await ganttRow(page, 'Site setup')
+      .getByRole('gridcell')
+      .filter({ hasText: /^12 ?d/ })
+      .first()
+      .dblclick();
+    expect(
+      await count('cell-input'),
+      `no 'cell-input' exemption element in the Gantt at ${width}`,
+    ).toBeGreaterThan(0);
+    const targets = await sweep(page, '[role="treegrid"]', ganttExempt(), true);
+    expect(
+      targets.filter((t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET)),
+      `the open cell input is not exempt at ${width}`,
+    ).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(ganttExempt(['cell-input']))).toHaveCount(0);
+  }
 
   test('every command clears 44 × 44 and a pointer can reach it, at every width', async () => {
     test.setTimeout(240_000);
@@ -975,15 +1147,20 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       await page.waitForTimeout(500);
 
       for (const surface of COARSE_SURFACES) {
-        if ('minWidth' in surface && viewport.width < surface.minWidth) continue;
-        const targets = await sweep(page, surface.root, EXEMPT_WITHIN);
+        if (surface.minWidth !== undefined && viewport.width < surface.minWidth) continue;
+        // The Gantt grid exists only in its own view; every other surface is swept in the diagram.
+        await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
+        const exempt = surface.view === 'gantt' ? ganttExempt() : EXEMPT_WITHIN;
+        const targets = await sweep(page, surface.root, exempt, surface.markersOnly === true);
 
         // The pinned positive, per surface — the sweep passes just as happily against a surface
         // rendering nothing at all (the ADR-0093 shape).
-        expect(
-          targets.length,
-          `no controls swept on ${surface.name} at ${viewport.width}`,
-        ).toBeGreaterThan(surface.atLeast);
+        if (surface.markersOnly !== true) {
+          expect(
+            targets.length,
+            `no controls swept on ${surface.name} at ${viewport.width}`,
+          ).toBeGreaterThan(surface.atLeast);
+        }
 
         const belowHouse = targets.filter(
           (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
@@ -1004,6 +1181,8 @@ test.describe('The plan command surface, under a coarse pointer', () => {
           unreachable,
           `${surface.name}: a pointer cannot reach these at ${viewport.width}: ${JSON.stringify(unreachable)}`,
         ).toEqual([]);
+
+        if (surface.view === 'gantt') await assertGanttExemptionsPresent(viewport.width);
       }
     }
   });
