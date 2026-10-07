@@ -2,7 +2,7 @@
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Status:** Approved — by the product owner, 2026-10-05 (in advance, conditional on reviewer agreement; accessibility-, ux-reviewer and ui-architect agreed with changes, folded here)
-- **Decision:** M2 go-ahead and #464 added by the product owner 2026-10-07 ('go ahead with Gantt M2 and #464'); amendment pending reviewer agreement. See "M2 as re-scoped by the device (2026-10-07)" under Milestone 2.
+- **Decision:** M2 go-ahead and #464 added by the product owner 2026-10-07 ('go ahead with Gantt M2 and #464'); amendment agreed by accessibility-, ux-, component-reviewer and test-engineer on a second pass; product owner answered 2026-10-07 "C and accept" (Q-M2-1 = C, Q-M2-2 = accept). See "M2 as re-scoped by the device (2026-10-07)" under Milestone 2.
 - **Owner:** builder agent (Sonnet), reviewed as listed per milestone
 
 **Terms.** "Stylus" is the device. "Pen" means only the ADR-0028 edit lock. **Defaults adopted:**
@@ -362,7 +362,7 @@ Outcome, Entry point and Journey above, and the task texts below where they disa
 - **M2-T2 — a 24 × 24 box; no exception.** Below.
 - **M2-T5 — NEW (#464).** Below.
 - **Order: M2-T2, then M2-T5, then M2-T4.** Each is one commit; `main` stays releasable.
-- **Open questions for the product owner:** Q-M2-1 (where the arrow goes) and Q-M2-2 (the #464
+- **Answered by the product owner 2026-10-07 ("C and accept"):** Q-M2-1 = **C**, Q-M2-2 = **accept**. Were: Q-M2-1 (where the arrow goes) and Q-M2-2 (the #464
   trade-off), at the end of this section.
 
 **Outcome (re-scoped):** at both pointers the summary-row arrow is ≥ 24 × 24; a press-and-hold anywhere
