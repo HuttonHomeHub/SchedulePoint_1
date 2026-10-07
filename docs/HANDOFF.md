@@ -3,30 +3,25 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-07, after the **estate polish** batch (spec #861, approved 2026-10-06 with the
-"Page not found" item included): TECH_DEBT #459, #460 and #461, and the staff console's quiet Refresh.
+**Written:** 2026-10-07, after the **#462 / #463** batch (the product owner: "Do #462 and #463 as
+well"; spec approved the same day: "Approved, go with the sign-in page for signed-out visitors").
 
 ## Where things stand
 
-- `main` holds everything below. Latest releases: **web 0.177.0, api 0.88.1** (check the tags).
+- `main` holds everything below. Latest releases: **web 0.177.2, api 0.88.1** (check the tags).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
   (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
-- The previous hand-off was accurate when checked (main ended with #860; web 0.176.0, api 0.88.0;
-  no open PRs; no wake-ups).
+- The previous hand-off was accurate when checked (main ended with #870; web 0.177.0, api 0.88.1;
+  no open PRs; no wake-ups), except that `.claude/worktrees/` was **not** excluded in a fresh
+  container — see the environment notes.
 
 ## What this batch shipped
 
-| PR   | What                                                                                                                                                                                                                                                     | Release                 |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| #861 | Spec + plan `docs/specs/estate-polish-oct/`; four reviewers (a11y, component, UX, security) agreed on a second pass.                                                                                                                                     | none                    |
-| #862 | **M1a** (#460 closed): `Button`'s CVA owns the `aria-disabled` look (`opacity-60`, hover gated `not-aria-disabled:`); the fifteen resting pointer-inert sites take the pointer and refuse in their handlers; submits refuse in `onClick` and `onSubmit`. | web 0.176.1             |
-| #864 | **M1b** (#461 closed): caller shading strings deleted from 54 files; `SHADED_BUTTON` and `AssignmentRow`'s hidden inert class gone; gate **G1** scans whole files for the shading spellings.                                                             | web 0.176.2             |
-| #866 | **M2**: a staff-console Refresh speaks once (`StatusMuteProvider` / `useStatusMuted`, ADR-0178 D8); a rejected Refresh unmutes.                                                                                                                          | web 0.176.3             |
-| #868 | **M3** (#459 closed): one `NotFoundScreen` for every address that is not a page (router `notFoundMode: 'root'`, staff non-staff branch); the API answers Nest's own 404 with `Not found`.                                                                | web 0.177.0, api 0.88.1 |
-
-Filed this batch: **#462** (the empty canvas's "Draw the first activity" reason is screen-reader
-only) and **#463** (a signed-in mistype under `/orgs/<slug>/` now renders outside the shell — an
-in-shell variant needs a spec and must stay indistinguishable for non-members).
+| PR   | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Release     |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| #871 | **#462 closed** (register-row fix, no spec): without the pen, the empty canvas's notice says "Start editing this plan to draw activities." visibly, inside its wrapping message, still the shaded button's `aria-describedby`.                                                                                                                                                                                                                                                                                                                 | web 0.177.1 |
+| #873 | Spec + plan `docs/specs/in-shell-not-found/`; four reviewers (security, a11y, component, UX) agreed on a second pass.                                                                                                                                                                                                                                                                                                                                                                                                                          | none        |
+| #874 | **#463 closed**: a member's mistyped `/orgs/<slug>/…` renders "Page not found" inside the shell (splat `/orgs/$orgSlug/$`, `routes/org-not-found.tsx`); non-member and nonexistent slugs keep the root page, identical for every path shape; signed out → sign-in with the full path. Also: `orgHomeRoute` is now an index route (`/orgs/$orgSlug/`, the trailing slash is load-bearing), shared `Breadcrumbs` marks only the last crumb current, `PageHeader` gains `headingFocusRef`, and the sign-in `redirect` sanitiser rejects `/\host`. | 0.177.2     |
 
 ## Waiting on the product owner
 
@@ -36,14 +31,12 @@ in-shell variant needs a spec and must stay indistinguishable for non-members).
 - **The history count on or after 1 November** (ADR-0174 / #443): staff console → Tools →
   **Run diagnostics** → **Copy results**. Record it in #443 and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
-- **Worth a look on the Surface:** shaded buttons now dim to 60 % everywhere (they were 50 % on the
-  public forms and notes); the reviewers judged it still reads as unavailable.
+- **Worth a look on the Surface:** shaded buttons dim to 60 % everywhere (from the last batch), and a
+  mistyped address inside an organisation now stays in the app.
 
 ## Decisions to put to the product owner (none approved)
 
 1. **Gantt M2** (after the Surface sheet), and anything from `docs/BACKLOG.md`.
-2. **#462** (a visible reason beside the empty canvas's button) and **#463** (an in-shell not-found)
-   — both small, both need a decision before work; #463 needs a spec (ADR-0105).
 
 ## Open rows unchanged this batch
 
@@ -53,39 +46,48 @@ in-shell variant needs a spec and must stay indistinguishable for non-members).
 
 ## Environment notes a new session would otherwise rediscover
 
-- **The container restarted three times in one night (2026-10-07) and every restart killed the
-  running agents and background tasks.** What survived: files on disk in worktrees, pushed branches
-  and `send_later` wake-ups. So: tell builders to **commit a WIP and push after every substantial
-  step**; after a restart run `list_triggers`, `git worktree list` and `git -C <worktree> status`,
-  save uncommitted work as a WIP commit, push it, and resume (squash the WIPs onto the milestone
-  base before the PR). Short milestones that fit between restarts were finished directly rather than
-  through a new builder.
+- **`send_later` is refused once a session chain is eight deep** ("lineage depth 8 (limit 8)"), and
+  this session hit it, so it could arm no wake-ups at all. A session started fresh by the product
+  owner (rather than by another session) resets the depth. If the tool refuses, say so to the product
+  owner, keep everything inside the turn, and rely on agent and PR notifications to resume.
+- **The container restarts without warning and kills running agents and background tasks.** What
+  survives: files in worktrees, pushed branches and `send_later` wake-ups. Tell builders to **commit
+  a WIP and push after every substantial step** (commitlint refuses a bare `wip`: use
+  `chore(web): wip …`); after a restart run `list_triggers`, `git worktree list` and
+  `git -C <worktree> status`, save uncommitted work as a WIP commit, push it, and resume.
+- **`.claude/worktrees/` must be added to `.git/info/exclude` in each fresh container**
+  (`echo ".claude/worktrees/" >> .git/info/exclude`), or the stop hook reports untracked files.
 - **An interrupted e2e run can leave test data that breaks the next one.** The staff journey creates
   `ops@schedulepoint.test`; a run that stops between sign-up and verification leaves it unverified,
-  and the resend is throttled, so the next run waits for mail that never comes. Fix in the local DB:
-  `service postgresql start`, then
+  and the resend is throttled. Fix: `service postgresql start`, then
   `PGPASSWORD=app psql -h localhost -U app app_test -c "update users set email_verified=true where email='ops@schedulepoint.test'"`.
 - **Never let two Playwright or DB-backed runs overlap** (one database, one set of ports). Brief
   every agent that may run e2e — reviewers included — to check `pgrep -f "playwright test|e2e-local"`
-  first; a reviewer overlapped a builder's run once this batch.
+  first, or tell reviewers not to run e2e at all while you do.
+- **A change to `/orgs/*` routing or a shared layout primitive** warrants the base `web` journey plus
+  `web:shell`, `web:overview`, `web:page-composition` and `web:narrow-shell` (about 7 minutes run one
+  after another).
 - **`check:claims` gates a spec too:** a dependency-internal `file.js:line` citation in a doc must be
-  registered in `scripts/dependency-claims.json` (the spec PR failed CI on this once).
-- **Playwright refuses `click({ trial: true })` on any `aria-disabled="true"` control**, so a journey
-  proves a shaded button keeps the pointer with `elementFromPoint` at its centre plus a forced click.
+  registered in `scripts/dependency-claims.json`.
+- **ADR-0131's spec gate reads the first word of `Status:`** — keep "approved in principle" in a
+  separate `Decision:` line, or a draft reads as approved.
+- **Playwright refuses `click({ trial: true })` on any `aria-disabled="true"` control.**
 - **Setup.** `pnpm install --frozen-lockfile`, `pnpm --filter "./packages/*" build`,
   `pnpm --filter @repo/api exec prisma generate` — in **every git worktree** too.
 - **Keep the main checkout detached at `origin/main`** and do branch work in worktrees; brief every
   builder to work only inside its worktree path and to check `git -C <main checkout> status --short`
-  is empty before editing. `.claude/worktrees/` is excluded via `.git/info/exclude`.
-- **Chaining milestones on unmerged branches works**: base the next builder on the previous branch,
-  then after the squash-merge `git rebase --onto origin/main <old tip>` and force-push with lease.
+  is empty before editing.
+- **Chaining a build on an unmerged spec branch works**: base the build worktree on the spec branch,
+  then after the spec's squash-merge `git rebase --onto origin/main <spec tip>` and force-push.
 - **The `@repo/interchange` "decodes CP1252 high bytes" test fails in the container only**, which
-  stops turbo, so `pnpm prepush` reports `FAILED: test`; run `pnpm --filter @repo/web test` and
-  `pnpm --filter @repo/api test` on their own afterwards.
+  stops turbo, so `pnpm prepush` reports `FAILED: test`; run `pnpm --filter @repo/web test` (and api)
+  on their own afterwards.
 - **Parallel branches collide on register numbers and the `CLAUDE.md` banner count.**
 - **A PR title over ~93 characters fails `pr-title.yml`** once GitHub appends ` (#NNN)`.
-- **CodeQL flags incomplete regex escaping even in tests** — escape the full metacharacter set.
-- **`gh pr list` is blocked (GraphQL 403)** — use `gh api repos/HuttonHomeHub/SchedulePoint_1/...`.
+- **CodeQL flags incomplete regex escaping even in tests** — escape the full set, or write the
+  character as a URL escape in test input.
+- **`gh pr list` is blocked (GraphQL 403)**; `gh api repos/HuttonHomeHub/SchedulePoint_1/...` (REST)
+  works, including `actions/workflows/release.yml/runs?head_sha=<sha>` to find the release run.
 - **Playwright in the container:** Chromium binary `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
 - **Commit bodies are limited to 100 characters per line** (commitlint).
 - **Never use the global `prettier`**; use `pnpm exec prettier`.
