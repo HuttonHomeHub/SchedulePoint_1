@@ -362,8 +362,8 @@ Outcome, Entry point and Journey above, and the task texts below where they disa
 - **M2-T2 — a 24 × 24 box; no exception.** Below.
 - **M2-T5 — NEW (#464).** Below.
 - **Order: M2-T2, then M2-T5, then M2-T4.** Each is one commit; `main` stays releasable.
-- **Open question Q-M2-1 (product owner):** where the summary-row arrow goes once it is 24 px wide.
-  **Default:** beside the activity name, with every name shifted 24 px so they line up (option 3 below).
+- **Open questions for the product owner:** Q-M2-1 (where the arrow goes) and Q-M2-2 (the #464
+  trade-off), at the end of this section.
 
 **Outcome (re-scoped):** at both pointers the summary-row arrow is ≥ 24 × 24; a press-and-hold anywhere
 on an activity row, table half included, opens SchedulePoint's row menu; the gates see both.
@@ -380,31 +380,79 @@ case in `e2e-gantt/` and by M2-T4's sweep. The coarse edge-zone case above goes 
   not apply. The device's 0 / 10 misses show low urgency, not an exemption.
 - **The change.** The activity-row arrow (`GanttPanel.tsx:2023-2043`: `aria-hidden`, `tabIndex={-1}`,
   `mr-1 inline-flex align-middle`, a `size-3` icon) becomes a 24 × 24 box (`size-6 shrink-0
-items-center justify-center`, `mr-1` dropped); the icon stays 12 px; the row stays 28 px; it keeps
-  `aria-hidden`, `tabIndex={-1}` and its `stopPropagation`. The bucket-row arrow (`:1481-1487`) is a
-  non-interactive `span` and is unchanged.
+items-center justify-center`, `mr-1` dropped). The icon stays 12 px, and the row stays 28 px.
+  - It keeps `aria-hidden`, `tabIndex={-1}` and its click `stopPropagation` (`:2031-2034`).
+  - It carries `data-gantt-disclosure`, the marker M2-T4's pinned positive counts.
+  - Its comment follows the `min-h-6` style ("§2.5.8's 24 px floor, not a rhythm choice",
+    `:1178-1189`).
+  - It stays clear of the row-menu trigger.
+- **A hold on the arrow.** The row has no long-press timer; M1 kept the native `contextmenu` only
+  (`m1-record.md:16`). So a tap on the arrow cannot open the menu. A deliberate hold on it opens the row
+  menu, as a hold does anywhere on the row.
+  - **Gap found:** the arrow's own `onClick` stops propagation before the row's `swallowClick`
+    (`:1917-1921`) can see the trailing click. A hold that opened the menu would therefore also toggle
+    the row.
+  - **Fix:** the arrow honours the same swallow.
+  - Whether Windows sends that trailing click is the device's to say; the row already assumes it might
+    (spec §2, edge cases).
 - **Where it goes — the problem.** It sits in the Code column today, after the depth indent
-  (`paddingLeft: 8 + depth * 14`, `:2020`; `px-2`, `:2013`). Code is 80 px by default and 48 px at
-  minimum (`layout/column-widths.ts:40, 52`), so the room left is `80 - 16 - 14·depth`: 22 px at depth 3,
-  8 px at depth 4 (a 24 px box needs 88 px there). At 48 px the box does not fit past depth 0.
-  - (1) Cap the Code indent — hides hierarchy past the cap.
-  - (2) Let the box overflow into the cell padding — collides with Code text at the minimum width.
-  - **(3) Move the arrow to the start of the Activity column** — elastic (seeded 180 px,
-    `column-widths.ts:49`), beside the name it controls. **Recommended** (accessibility-reviewer), with
-    a 24 px leading slot on **every** activity row (empty on leaves) so names stay aligned. The depth
-    indent stays in Code. **Visible effect:** the arrow moves from the Code column to just before the
-    summary's name, and every activity name shifts 24 px right. The printed programme renders the same
-    rows and changes the same way. Bucket rows keep their arrow in Code (a visible difference between
-    the two row kinds). **Placement is the product owner's call** (open question Q-M2-1).
+  (`paddingLeft: 8 + depth * 14`, `:2020`; `px-2`, `:2013`).
+  - Code is 80 px by default and 48 px at minimum (`layout/column-widths.ts:40, 52`).
+  - So the room left is `80 - 16 - 14·depth`: 22 px at depth 3 and 8 px at depth 4. A 24 px box needs
+    88 px at depth 4.
+  - At 48 px wide the box does not fit past depth 0.
+- **The options:**
+  - **(A) Arrow only into the Activity column. This is the minimal alternative.** The indent stays in
+    Code, so the hierarchy shows only in Code while the toggle sits in Activity. The two are separated
+    by the Code text.
+  - **(B) Keep the arrow in Code; cap the indent or let the box overflow. Rejected:** it fails at 48 px
+    whatever the cap.
+  - **(C) Indent and arrow both move into the Activity column. Recommended** (ux-reviewer;
+    accessibility-reviewer prefers Activity placement and moving the bucket arrows too):
+    - The order is indent → arrow → name, the Project Explorer's shape (`HierarchyTree.tsx:61`).
+    - **The Code column becomes plain.**
+    - Every row (activity rows and bucket rows) gets the same 24 px slot. A leaf's slot is empty. The
+      bucket arrow stays a decorative `span` (`:1481-1487`), so the Activity column has one rule.
+    - The slot always exists, because the Activity column cannot be hidden (`gantt-view-state.ts:47-58`).
+    - The indent keys on `column.key === 'name'`, not on `i === 0`, so hiding Code changes nothing.
+  - **Visible effect of (C):**
+    - Codes stop being indented.
+    - Names indent by depth and gain a 24 px slot.
+    - The arrow sits immediately before the summary's name.
+    - Bucket rows match.
+  - **The printed programme is unchanged.** `GanttPrintSurface.tsx:313-345` is a separate `<table>`
+    with no arrow and its own indent (`4 + depth * 10`, `:339`). An earlier draft of this section said
+    print would change; that was wrong.
+  - Placement is the product owner's call (Q-M2-1).
 - **Tests.**
-  - **Unit:** the arrow carries the 24 px box classes, sits in the Activity cell, is still
-    `aria-hidden` / `tabIndex -1`, toggles, and does not select the row.
-  - **Journey (`e2e-gantt/`), red against the parent first (ADR-0110):** the arrow's bounding box is
-    ≥ 24 × 24 at fine and coarse, at depth 0 and depth 4, with Code at its default and at 48 px (typed,
-    ADR-0173); `elementFromPoint` at its centre is the arrow, not the `⋯` and not the name text. A WBS
-    five levels deep is seeded through the API (whether `plan:capability-types-and-wbs` reaches depth 4
-    was not checked).
-  - M2-T4's 24 px sweep gains its ≥ 1 chevron positive.
+  - **Unit:**
+    - the arrow carries the 24 px box classes and `data-gantt-disclosure`, and sits in the Activity
+      cell;
+    - it is still `aria-hidden` and `tabIndex -1`;
+    - a tap toggles and does not select the row;
+    - a hold that opened the menu does not also toggle;
+    - under (C), the Code cell carries no depth padding, and bucket rows render the same slot.
+  - **Journey (`e2e-gantt/`), run red against the parent first (ADR-0110):**
+    - The arrow's box is at least 24 × 24 at fine and coarse, at depth 0 and depth 4, with Code at its
+      default width and at 48 px (typed, ADR-0173).
+    - `elementFromPoint` at the arrow's centre is the arrow, not the `⋯` and not the name text.
+    - Under (C), the name's x-offset grows with depth.
+    - At the narrowest Activity width the grid allows, the name still truncates with an ellipsis inside
+      its cell and keeps any `title` it has today.
+    - The fixture comes from **a new test-local helper**, `seedNestedWbs`, in the suite's support file.
+      It creates five nested `WBS_SUMMARY` activities and a leaf through the public API, linking each
+      child by `parentId` (`create-activity.dto.ts:287-288`), then recalculates.
+    - **`plan:capability-types-and-wbs` reaches depth 1 only** (`types-wbs.ts:43-50`: one summary,
+      two leaves), and the existing `seedActivities` helpers cannot set a parent. The catalogue plan is
+      not touched.
+    - **Expand-all:** the panel starts with nothing collapsed (`GanttPanel.tsx:403`). The helper
+      therefore asserts every level's row is visible, rather than driving a control; the Gantt has none
+      that expands everything.
+  - **Print tests stay green unchanged**, plus one assertion that no leading slot or
+    `data-gantt-disclosure` appears in the print surface.
+  - Under (C), any test reading the Code cell's `paddingLeft` moves to the Activity cell. A grep on
+    2026-10-07 found none under `e2e-gantt*` or the gantt unit tests; the builder re-greps for
+    `depth * 14`.
 - **The Surface sheet changes in this commit:** item 6 says where the arrow now is.
 - **ADR-0111:** no key or focus behaviour changes (still `tabIndex -1`, keyboard toggles unchanged).
   **ADR-0105:** no new public contract. **Changeset:** `@repo/web` **patch**.
@@ -453,63 +501,182 @@ items-center justify-center`, `mr-1` dropped); the icon stays 12 px; the row sta
 spec §4.6 extracts it only if `contextmenu` does not fire on a hold, and the chart half shows it does; a
 timer of our own would also race the browser's selection rather than stop it.
 
-- **Scope, keyed on the input event (ADR-0177 D1), not the media query.** A `pointer-coarse:` scope
-  would miss the cover-attached posture, which reports `pointer: fine` (`device-results.md`, The device)
-  and is one of the two postures that failed; the structural test already forbids it
-  (`GanttPanel.touch.test.tsx:165-172`). The panel keeps the last press's kind (touch / stylus versus
-  mouse) and the **idle** cells carry `select-none` while it is touch or stylus — the plain cell
-  (`:2012-2015`) and `GanttCell` through its existing `className` (`:1995`, applied at
-  `GanttCell.tsx:126-135`), **never** while that cell is open, so a typing user keeps caret and
-  selection. The press already reaches the panel (`onTouchEngaged`, `:1910`, wired to
-  `dismissTouchHint` at `:1329`); the state changes only when the input kind does, so it costs one
-  re-render per switch, not per press. Set at `pointerdown`, it is in place before a hold can become one.
-- **Cost.** A mouse (and the Surface's touchpad, which is a mouse) keeps cell text selection, except
-  between a touch press and the next mouse press. A **stylus** can no longer drag-select cell text.
-  Something does rely on selecting text with a mouse: the copy shortcut stands down for a live text
-  selection so a planner who selects table text and presses Ctrl+C gets the text
-  (`use-clipboard-keybindings.ts:12-18, 66-67`). No test selects Gantt cell text (grep for
-  `getSelection` under `apps/web/e2e-gantt*`: none; the copy-paste journey selects a heading,
-  `e2e-copy-paste/copy-paste.spec.ts:217-225`), which is why the mouse is kept rather than assumed
-  unaffected. The simpler unconditional `select-none` was rejected for exactly that cost.
+- **Scope, keyed on the input event (ADR-0177 D1), not the media query.**
+  - **Why not `pointer-coarse:`.** It would miss the cover-attached posture, which reports
+    `pointer: fine` (`device-results.md`, The device) and is one of the two postures that failed. The
+    structural test already forbids it (`GanttPanel.touch.test.tsx:165-172`).
+  - **One attribute at the grid root, no React state.** The rows are not memoised, so panel state would
+    re-render every virtualised row.
+    - The existing scroll `Surface` (`GanttPanel.tsx:1074-1079`) gets an `onPointerDownCapture`.
+    - The handler writes `event.currentTarget.dataset.lastInput`: `touch` for `touch` **and** `pen`,
+      `mouse` for `mouse`.
+    - `Surface` forwards both `className` and the rest props (`components/ui/surface.tsx:107-130`), so
+      the root also takes `group/grid` (the builder greps that the group name is unused).
+    - React never renders `data-last-input`, so it does not fight the write.
+    - With no attribute (before any press), selection is allowed.
+  - **What carries the class.** The **idle** cell text spans (`:1997-1999`, `:2044-2051`, and the name
+    span wherever Q-M2-1 puts it) carry `group-data-[last-input=touch]/grid:select-none`.
+  - **"Never on an open cell" is structural.** An open cell renders an `<input>`, not the idle span
+    (`GanttCell.tsx:139-215`), so nothing on the field can match.
+  - **Timing.** Written at `pointerdown`, the attribute is in place before a hold can become one.
+  - **No shared hook.** One in `components/ui/` would be an ADR-0105 public contract.
+- **Cost.**
+  - **Mouse.** A mouse, and the Surface's touchpad (which reports as a mouse), keeps cell text
+    selection, except between a touch or stylus press and the next mouse press.
+  - **Stylus.** A stylus can no longer drag-select cell text.
+  - **Something does rely on mouse selection.** The copy shortcut stands down for a live text
+    selection, so a planner who selects table text and presses Ctrl+C gets the text
+    (`use-clipboard-keybindings.ts:12-18, 66-67`).
+  - **No test selects Gantt cell text.** A grep for `getSelection` under `apps/web/e2e-gantt*` found
+    none; the copy-paste journey selects a heading (`e2e-copy-paste/copy-paste.spec.ts:217-225`). This
+    is why the mouse is deliberately kept, and the unconditional `select-none` is rejected.
+  - **How a touch or stylus user copies a cell value:**
+    - **Editable cells:** double-tap opens the field. That worked in both postures (item 5). The
+      contents open selected (`GanttCell.tsx:93-99`), and the browser's own menu, with Copy, stays
+      inside an open field (`GanttPanel.tsx:1844-1849`).
+    - **Code and Total float** are not editable cells (`:1967-1969`). Their route is row menu → `Edit`
+      (`selection-actions.tsx:678`), the activity editor. Whether the editor shows the code as a
+      selectable field was **not checked**.
+    - The row menu has no text "Copy" item. `Duplicate` copies the activity, not its text.
 - **Tests.**
-  - **Unit (`GanttPanel.touch.test.tsx`):** after a `touch` and after a `pen` press, idle cells carry
-    `select-none`; after a `mouse` press they do not; an open cell never does; a `contextmenu` dispatched
-    on a table-half cell's text span opens the menu and is `defaultPrevented`, as on the chart half.
-  - **Journey (`e2e-gantt-editing/touch.spec.ts`), red against the parent first:** a CDP touch press on a
-    cell → the span's computed `user-select` is `none`; then the synthesised hold `contextmenu` on that
-    span opens `Actions for <activity>`. A mouse press → `user-select` is back, and a mouse drag across a
-    cell's text leaves a non-empty `getSelection()`. `grid-edit.spec.ts`'s mouse double-click cases stay
-    green **unchanged**. These prove the application's response, not that Windows sends the event.
-  - **Device:** a new **item 12** in `device-checklist.md` (both postures): "Press and hold on the
-    **words** in the table half of a row, then let go. What appeared?" — the sheet updates in this
-    commit, because it changes what item 4 tests.
-- **If the device still shows the browser's menu**, cause 1 is refuted and the diagnosis reopens; no
-  further remedy is pre-approved.
-- **ADR-0111:** no key or focus behaviour changes, so no pre-release pass is owed for this task.
-  **ADR-0105:** no new public contract (panel-internal state; `GanttCell`'s `className` exists). Had
-  `useLongPress` been extracted into `components/ui/`, that **would** be a new public contract and a
-  component-reviewer item; it is not. **Changeset:** `@repo/web` **patch** ("a press and hold on the
+  - **Unit (`GanttPanel.touch.test.tsx`):**
+    - the attribute flips to `touch` on a `touch` press and on a `pen` press, and back on a `mouse`
+      press;
+    - idle spans carry the variant class, and an open cell's input does not;
+    - accessibility-reviewer's case: a touch press, then a double-click opens the cell, and the input
+      is not inside any element carrying the variant;
+    - a `contextmenu` on a table-half span opens the menu with `defaultPrevented`.
+    - **Pen is covered here only.** CDP cannot emit a stylus pointer type (`m1-record.md:73-74`).
+  - **Journey (`e2e-gantt-editing/touch.spec.ts`):**
+    - **Hold the CDP touch down**, as the existing hold cases do, so a tap cannot open the editor.
+    - While it is held, the span's computed `user-select` is `none` (`expect.poll` / `toHaveCSS`).
+      **This is the only red-at-parent assertion.**
+    - Then dispatch the synthesised `contextmenu` on that span: the menu `Actions for <activity>`
+      opens. This passes at the parent too, so it is labelled a **characterisation guard**.
+    - Release, then on the **first** mouse press after the touch, drag across the cell text:
+      `getSelection()` is non-empty. That works because the attribute flips in `pointerdown` capture,
+      before the `mousedown` whose default action starts a selection. This case fails only against an
+      unconditional `select-none`, and it is labelled so.
+    - **Not asserted:** "no selection after a touch hold". M0 P8 saw none at the parent, so it cannot
+      fail.
+    - The `user-select` case also runs in a context whose `matchMedia('(pointer: fine)')` is asserted
+      true, following the `measure-gantt` fine-context precedent. That separates the input-keyed fix
+      from a `pointer-coarse:` one. If that context cannot deliver CDP touch, the case records the
+      reason and the structural test carries the claim.
+    - `grid-edit.spec.ts`'s mouse double-click cases stay green **unchanged**.
+    - **What the journey proves:** the CSS is applied, and the menu opens on a synthesised event.
+    - **What it does not prove:** that Windows suppresses the selection, or that #464 is fixed. Device
+      item 12 is the arbiter.
+  - **Device:** a new **item 12** in `device-checklist.md`, both postures: "Press and hold on the
+    **words** in the table half of a row, then let go. What appeared?"
+    - Two follow-ups: "Was a word highlighted?" and "Hold on an empty part of the table: what
+      appeared?"
+    - The sheet updates in this commit.
+- **Explicit fallback if item 12 still shows the browser's menu:**
+  1. M2-T5's commit is **reverted**, because it would cost the stylus its text selection for nothing.
+  2. #464 stays open with the answer recorded.
+  3. The two follow-up answers decide between causes 1 and 2.
+  4. If they show the event never arrives, a `useLongPress` on the tooltip precedent returns to the
+     product owner as a **new task**, not a silent change. It would be a `components/ui/` public
+     contract (ADR-0105) and a component-reviewer item.
+- **ADR-0111:** no key or focus behaviour changes, so no pre-release pass is owed.
+  **ADR-0105:** no new public contract. **Changeset:** `@repo/web` **patch** ("a press and hold on the
   Gantt's table opens the row's actions, as on the chart").
 - **Complexity:** S · **Dependencies:** none within M2 · **Reviews:** component-reviewer, test-engineer.
 
 ##### M2-T4 (re-scoped) — what it now covers
 
-- **Gates** unchanged from the task below: the WBS seeds, the chevron positive, the Gantt coarse
-  projection and the scoped exemptions.
+- **Gates (`e2e-workspace-fit/command-surface.spec.ts`).**
+  - **Seeds.** Both seeds (`:230-233`, `:947-950`) gain a WBS summary with a child, via M2-T2's
+    `seedNestedWbs` (or a one-level use of it). The rows are asserted expanded before sweeping, and
+    every pinned count is re-checked.
+  - **The fine 24 px sweep's chevron positive** counts `[data-gantt-disclosure]` inside the treegrid
+    (at least 1), and asserts each box is at least 24 × 24.
+    - A marker is needed because a swept target's id is `''`.
+    - `atLeast: 1` on the grid (`:756`) does not do this job: the sort headers already satisfy it.
+  - **The coarse projection gains the Gantt grid surface.** It asserts at least 44 for every swept
+    target (`HOUSE_TARGET`, `:874`; the assertion at `:988-994`).
+    - The 24 × 24 arrow is a real `<button>` that sweep picks up, so without a decision this task's
+      own gate goes red on M2-T2.
+    - **Decision: the arrow is listed in D4's coarse list and exempted, not grown to 44.** A 44 px box
+      cannot sit in a 28 px row without #215's row-height decision. That is the same reason the 24 px
+      sort headers are listed rather than grown, and the device hit the arrow 10 / 10 in both postures
+      (item 6).
+  - **Exemptions** use `[role="treegrid"] [data-gantt-coarse-exempt="<kind>"]`, added beside
+    `EXEMPT_WITHIN` (`:913`), never by size.
+    - The kinds are `disclosure`, `row-menu`, `sort` and `cell-input`.
+    - **Each is exercised, so each can fail (ADR-0110).** The gate asserts every kind is present at
+      least once. For `cell-input`, it opens a Duration cell for one pass.
+    - **A planted regression per kind:** delete that element's attribute, and the element must appear
+      in `belowHouse` (red).
+    - The marker counts are also the Gantt surface's pinned positive, so an empty grid cannot pass.
+  - **Not exempted, because the sweep cannot see them:**
+    - **The edge handles and the bar body** are `span`s, which are outside the sweep's selector list
+      (`:101-108`). An exemption for them could never fail. D4 lists them, and the unit class tests
+      (`GanttPanel.touch.test.tsx:102-116`) hold them.
+    - **The compact `View ▾` checkboxes:** whether any coarse surface sweeps the open `View ▾` was not
+      checked.
+      - If one does, they get a kind and a planted regression.
+      - If none does, they are listed in D4 as **unswept**, with that reason, and no exemption is added.
 - **ADR-0177 → Accepted**, with:
-  - **D4, fine pointer (§2.5.8 equivalent):** the 8 × 14 edge handles and 14 px bar body → typed
-    `Start` / `Finish` / `Duration` cells, F2, row menu → `Edit`. The chevron is **fixed**, not listed.
-  - **D4, coarse (ADR-0118 D1, under 44):** the `⋯` (28) → press-and-hold; the edge handles (8 × 14,
-    not grown) → typed cells / `Edit`; the sort headers (24 tall; `Float left` 32, M0 P5) → none at a
-    large target, said plainly; the open cell input (24) → the activity editor; the compact `View ▾`
-    checkboxes (28 row, 16 × 16, M0 P12). Each list matches a sweep exemption.
-  - **D3:** one sentence — a hold anywhere on the row reaches the menu, and idle cell text gives way to
-    it after a touch or stylus press (M2-T5).
+  - **D4, fine pointer (§2.5.8 equivalent exception):**
+    - The 8 × 14 edge handles and the 14 px bar body → typed `Start` / `Finish` / `Duration` cells, F2,
+      row menu → `Edit`.
+    - **Keep the sentence:** the handles rely on the typed-cell equivalent, which is reachable by
+      keyboard (F2) and by touch (double tap, item 5).
+    - The arrow is **fixed**, not listed.
+  - **D4, coarse (ADR-0118 D1, under 44):**
+    - the `⋯` (28) → press-and-hold;
+    - the summary-row arrow (24) → none at a large target. Say plainly: keyboard ArrowRight / Left only,
+      and 10 / 10 on the device;
+    - the edge handles (8 × 14, not grown) → typed cells / `Edit`;
+    - the sort headers, **exactly 24** tall with the spacing test passed (`Float left` 32, M0 P5) → none
+      at a large target, said plainly;
+    - the open cell input (24) → the activity editor;
+    - the compact checkboxes, as decided above.
+    - Each swept entry matches a `data-gantt-coarse-exempt` kind. Each unswept one says why.
+  - **D3:** one sentence. A hold anywhere on the row reaches the menu, and idle cell text gives way to
+    it through **one attribute at the grid root** after a touch or stylus press (M2-T5).
   - **Consequences:** the "touch quick-edit gap is open" bullet is corrected — a double tap opened a
     text box in both postures (item 5).
 - **Docs:** `docs/UX_STANDARDS.md`, `docs/DESIGN_SYSTEM.md` exception lists; #215 (the Gantt
   equivalent, by symbol); **#464 closed**; spec and plan headers `Accepted — shipped (ADR-0177)`;
   `docs/BACKLOG.md` rewritten to what is left, **without** the quick-duration-by-touch gap.
+
+##### Questions for the product owner
+
+- **Q-M2-1 — Where should the small arrow on a summary row go?** At its required size it no longer
+  fits in the narrow Code column once rows are nested three or four deep.
+  - **Default (C):** move the arrow **and** the indentation into the Activity column, so a row reads
+    indent → arrow → name, like the Project Explorer.
+    - Codes stop being indented.
+    - Every name gets a 24 px slot, so names line up.
+    - The grey grouping rows match.
+    - The printed programme does not change.
+  - **Alternative (A):** move only the arrow. Codes stay indented, and the arrow sits by the name.
+- **Q-M2-2 — #464's trade-off.** After you touch the table with a finger or the stylus, the text in its
+  cells cannot be highlighted until you next use the mouse or touchpad. The stylus can no longer
+  highlight cell text at all.
+  - Copying still works by double-tapping a cell to open it, or through row menu → Edit.
+  - **Default:** accept.
+
+##### Review record — the amendment (2026-10-07)
+
+Four reviewers checked the first draft (commit `56305024`): accessibility, component, ux and test.
+Everything below is folded into the sections above.
+
+| #   | Reviewer            | Finding                                                                                  | Resolution                                                                                      |
+| --- | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | a11y, component     | **Blocking.** Print does not change: `GanttPrintSurface.tsx:313-345` is a separate table | Claim withdrawn; print tests stay green unchanged, plus a no-leak assertion                     |
+| 2   | test                | **Blocking.** The coarse projection's ≥ 44 assertion would fail on the 24 px arrow       | The arrow is listed in D4 coarse and exempted by kind (not grown: 28 px row, #215)              |
+| 3   | test                | **Blocking.** The catalogue plan reaches depth 1; no helper can seed parents             | New test-local `seedNestedWbs`; the "not checked" flag is answered: no                          |
+| 4   | ux, a11y, component | Placement                                                                                | (C) is the default, (A) the minimal alternative, (B) rejected; bucket rows get the same slot    |
+| 5   | component           | Panel state would re-render every row                                                    | `data-last-input` on the scroll `Surface`, written in capture; a `group-data` variant; no state |
+| 6   | ux, test            | Journey design                                                                           | Held touch; first-mouse-press selection; red-vs-guard labels; a fine-context run; scope stated  |
+| 7   | a11y                | Copy route for touch; an explicit fallback                                               | Both added (the editor's code field is not checked)                                             |
+| 8   | test                | The chevron positive needs a marker                                                      | `data-gantt-disclosure`                                                                         |
+| 9   | test                | Exemptions nothing exercises cannot fail                                                 | Every kind is asserted present, with a planted regression; edge handles are listed but unswept  |
+| 10  | a11y                | D4 sentences; the arrow's click and a hold                                               | Kept. Found: a hold on the arrow would also toggle it; the arrow now honours the row's swallow  |
 
 ---
 

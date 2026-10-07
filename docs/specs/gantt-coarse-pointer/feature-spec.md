@@ -473,7 +473,9 @@ geometry only where it is measured and reachable (M2). The chevron may land as s
     - the sort headers (~~34~~ 24 tall, `Float left` 32 — M2-T3 dropped 2026-10-07) → none at a large
       target. Sorting has no other route, and that is said plainly;
     - the open cell input (24 tall) → the activity editor;
-    - the compact `View ▾` checkboxes (28 px row, 16 × 16; M0 P12), added 2026-10-07.
+    - the compact `View ▾` checkboxes (28 px row, 16 × 16; M0 P12), added 2026-10-07;
+    - the summary-row arrow (24 × 24 once fixed for AA) → none at a large target, said plainly; added
+      2026-10-07 (plan, M2-T4 re-scoped).
 
   D4 is written at M2's close in the ADR-0118 D6 manner.
 
