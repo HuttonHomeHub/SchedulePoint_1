@@ -480,6 +480,17 @@ anything, and three new public screens were about to make that five callers on t
 ADR-0062 shape, where each looks right alone and only a reader who opens the same thing two ways
 ever notices one is a version behind.
 
+## Layout: `NotFoundScreen` (`components/layout/not-found-screen.tsx`)
+
+The one "Page not found" — the router's `defaultNotFoundComponent` (`notFoundMode: 'root'`) and the staff
+console's non-staff branch render it, so an address that is not a page looks the same wherever it was typed
+(`docs/TECH_DEBT.md` #459). **It takes no props**, so two callers cannot word it differently. It sits on
+`AuthShell` (the single `main`), titles the document "Page not found", and moves focus to its `h1` on mount
+as `RouteErrorScreen` does. Its one link is session-aware — **Sign in** (`/sign-in`) when the session is
+known absent, **Go to the home page** (`/`) when signed in or still resolving — and the label is frozen at the
+first focus, so a keyboard user's link never changes under them. A new route does not write its own
+URL-level not-found markup; it renders this.
+
 ## Primitive: `ServerError` (`components/ui/server-error.tsx`)
 
 The failure that came back from the server, given the same weight as the client-side validation

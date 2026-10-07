@@ -1452,7 +1452,14 @@ data is a compile error. Three properties follow, and they are unlike the rest o
 
 - **Every non-staff caller gets a uniform `404`, never `403`.** An authenticated member, an Org
   Admin and an allowlisted address that has not verified all get the same answer an unmapped route
-  gives. A 403 would tell a prober their guess was interesting.
+  gives — **the same status and the same body** (`{"error":{"code":"NOT_FOUND","message":"Not found"}}`)
+  for a signed-in non-staff caller, because `AllExceptionsFilter` replaces Nest's own
+  `Cannot GET /api/v1/…` 404 text, which echoed the method and path (`docs/TECH_DEBT.md` #459). A 403
+  would tell a prober their guess was interesting. Residue, not claimed away: the controller's throttle
+  adds `x-ratelimit-*` headers and a `429` after 30 requests a minute that no other route has, and an
+  anonymous caller gets `401` on `/api/v1/staff/*` and `404` elsewhere. On the web side a non-staff
+  `/staff` also loads the staff route's code chunk and asks `GET /api/v1/staff/me` (which writes a
+  `staff.access_denied` audit row); an address that is not a page does none of those.
 - **Every route is audited, including the reads.** The ordinary rule (a read earns no row) is
   deliberately inverted here, because on this surface the read _is_ the privileged act. A route
   census assertion derives this from the path, so a staff route added later is covered the day it

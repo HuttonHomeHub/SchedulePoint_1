@@ -50,13 +50,14 @@ afterEach(() => {
 describe('the console names itself only once it knows who is asking (M1-T5)', () => {
   it('keeps the document title while identity is pending', () => {
     // Verified red against `identity.data ? 'Staff console' : 'Not found'`, which set
-    // "Not found · SchedulePoint" for the first moments of every staff visit.
+    // "Not found · SchedulePoint" for the first moments of every staff visit — and a non-null
+    // fallback title would do the same now, so the pending state must set nothing at all.
     apiFetch.mockReturnValue(new Promise(() => undefined));
     mount();
     expect(document.title).toBe('SchedulePoint');
   });
 
-  it('says "Not found" once a non-staff answer arrives', async () => {
+  it('takes the unknown-address title once a non-staff answer arrives', async () => {
     apiFetch.mockImplementation((path) =>
       path.endsWith('/staff/me') || path.includes('identity')
         ? Promise.resolve(null)
@@ -64,7 +65,7 @@ describe('the console names itself only once it knows who is asking (M1-T5)', ()
     );
     mount();
     await waitFor(() => {
-      expect(document.title).toBe('Not found · SchedulePoint');
+      expect(document.title).toBe('Page not found · SchedulePoint');
     });
   });
 });

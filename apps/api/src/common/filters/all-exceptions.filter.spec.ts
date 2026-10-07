@@ -1,4 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, NotFoundException } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
 import type { ApiError } from '@repo/types';
 import type { Request, Response } from 'express';
@@ -221,5 +221,36 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
     filter.catch(Object.assign(new Error('boom'), { status: 413 }), host);
     expect(sent.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(sent.body?.error.code).toBe('INTERNAL_ERROR');
+  });
+});
+
+describe('AllExceptionsFilter — Nest’s default 404 does not echo the request (#459)', () => {
+  const filter = new AllExceptionsFilter();
+  vi.spyOn(filter['logger'], 'warn').mockImplementation(() => undefined);
+
+  it.each([
+    ['GET', '/api/v1/x'],
+    ['POST', '/api/v1/staff/me'],
+    ['GET', '/api/v1/staff/no-such-route?secret=1'],
+  ])('answers an unmapped %s %s with "Not found" and no path', (method, path) => {
+    // The exact exception Nest's router throws for an unmatched route
+    // (`@nestjs/core` `router/routes-resolver.js`), so this is the shape the guard-less path sees.
+    const { host, sent } = mockHost();
+    filter.catch(new NotFoundException(`Cannot ${method} ${path}`), host);
+    expect(sent.status).toBe(HttpStatus.NOT_FOUND);
+    expect(sent.body).toEqual({ error: { code: 'NOT_FOUND', message: 'Not found' } });
+    expect(JSON.stringify(sent.body)).not.toContain('/api');
+  });
+
+  it('keeps a 404 message somebody wrote on purpose', () => {
+    const { host, sent } = mockHost();
+    filter.catch(new NotFoundException('That share link has expired.'), host);
+    expect(sent.body?.error.message).toBe('That share link has expired.');
+  });
+
+  it('leaves a non-404 whose text looks like Nest’s default alone', () => {
+    const { host, sent } = mockHost();
+    filter.catch(new ForbiddenError('Cannot GET /api/v1/x'), host);
+    expect(sent.body?.error.message).toBe('Cannot GET /api/v1/x');
   });
 });

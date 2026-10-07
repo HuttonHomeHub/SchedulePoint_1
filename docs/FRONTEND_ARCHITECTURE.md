@@ -168,6 +168,11 @@ and components. Deleting a feature should mean deleting one folder.
   reloaded once by itself, `lazyRouteComponent.js:37-44`) and withholds the
   reload while offline. nginx serves `index.html` `no-cache` and `/assets/`
   immutable, which is what lets a release replace its chunk names safely.
+  **No route adds its own URL-level not-found markup:** the router's
+  `defaultNotFoundComponent` is `NotFoundScreen` in `notFoundMode: 'root'`, and a screen that must answer
+  "there is nothing here" for an address (the staff console's non-staff branch) renders that same component,
+  because a second picture is a tell (`docs/TECH_DEBT.md` #459). Entity-level not-found inside a route is a
+  different, deliberate picture.
   [`specs/route-code-splitting/`](specs/route-code-splitting/) has the numbers.
 
 ## Data fetching & caching (ADR-0004)

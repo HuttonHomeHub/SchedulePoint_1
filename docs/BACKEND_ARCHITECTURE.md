@@ -95,6 +95,9 @@ The dotted edges are **decided, not built**. Everything solid is live.
   `GoneError`, `LockedError`) mapped to their HTTP status by
   `AllExceptionsFilter`, which also maps **Prisma** codes (`P2002` unique
   violation → 409, `P2025` not-found → 404) in the same place.
+  Nest's own router 404 for an unmapped route (`Cannot GET /api/v1/x`) is rewritten to `Not found` there
+  too: its text echoes the method and path, and the guarded staff routes answer `Not found`, so keeping it
+  would let a caller tell the two apart (`docs/TECH_DEBT.md` #459). A 404 message written on purpose survives.
 - **The wire `code` is the error _class_; the specific condition goes in
   `details.reason`** — see [`API.md`](API.md). A new branchable error adds a
   `reason`, not a new top-level code.

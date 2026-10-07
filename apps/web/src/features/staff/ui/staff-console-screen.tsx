@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Alert } from '@/components/ui/alert';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import {
   PageContainer,
   PageGrid,
   PageGridItem,
-  PageHeader,
   SectionGroup,
   StatusMuteProvider,
 } from '@/components/ui/page';
@@ -62,14 +62,11 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
  */
 export function StaffConsoleScreen(): React.ReactElement {
   const identity = useStaffIdentity();
-  // Both landable states name themselves. `/staff` is reached only by typing the address — there is
-  // deliberately no link to it — so the title is the first thing a screen reader announces on
-  // arrival, and this was the one sibling of the authenticated shell that skipped the hook every
-  // other public route calls (WCAG 2.4.2).
-  // While identity is pending the title is left as the document's own, `SchedulePoint`: "Not found"
-  // there was a claim made before anything had been asked, and "Staff console" would be the tell
-  // ADR-0086 forbids. Only the settled answers name themselves.
-  useDocumentTitle(identity.isPending ? null : identity.data ? 'Staff console' : 'Not found');
+  // The console names itself only once the server has said it is one. Pending and not-found both
+  // leave the title alone: the not-found branch renders `NotFoundScreen`, which sets its own, so a
+  // non-staff `/staff` has the title of any unknown address (ADR-0086, #459) — and "Staff console"
+  // while pending would be the tell the uniform 404 forbids.
+  useDocumentTitle(identity.data ? 'Staff console' : null);
 
   if (identity.isPending) {
     return (
@@ -81,27 +78,11 @@ export function StaffConsoleScreen(): React.ReactElement {
 
   // `null` is the ordinary answer for almost every caller, and it is deliberately NOT an error
   // state: the API answers a non-staff caller with the same 404 it gives a route that does not
-  // exist, so the honest thing to show is the same thing — not "access denied", which would confirm
-  // the surface exists and is worth attacking.
+  // exist, so the honest thing to show is the same thing — the one `NotFoundScreen` the router
+  // renders for any unknown address — not "access denied", which would confirm the surface exists
+  // and is worth attacking. A 5xx or a network failure lands here too, on purpose.
   if (identity.isError || identity.data === null) {
-    return (
-      <main>
-        <PageContainer width="narrow">
-          <PageHeader
-            title="Not found"
-            description={
-              <>
-                There is nothing at this address.{' '}
-                <a className="underline" href="/">
-                  Go to SchedulePoint
-                </a>
-                .
-              </>
-            }
-          />
-        </PageContainer>
-      </main>
-    );
+    return <NotFoundScreen />;
   }
 
   return (
