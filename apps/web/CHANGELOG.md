@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.177.0
+
+### Minor Changes
+
+- [#868](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/868) [`6e68024`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6e68024c630898ace8ab3bcdb134e79f3636307b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every address that is not a page now shows one titled "Page not found" screen with a way on: Sign in when signed out, Go to the home page when signed in. A signed-in mistype under an organisation leaves the app shell, and a signed-out mistyped deep link shows this page instead of redirecting to sign in. A non-staff member's `/staff` is now identical to any other unknown address.
+
 ## 0.176.3
 
 ### Patch Changes

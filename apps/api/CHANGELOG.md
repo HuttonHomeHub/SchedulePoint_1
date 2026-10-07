@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.88.1
+
+### Patch Changes
+
+- [#868](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/868) [`6e68024`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6e68024c630898ace8ab3bcdb134e79f3636307b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A request to a route that does not exist now answers `{"error":{"code":"NOT_FOUND","message":"Not found"}}` instead of echoing the method and path, so it matches what a non-staff caller gets from the staff routes.
+
 ## 0.88.0
 
 ### Minor Changes
