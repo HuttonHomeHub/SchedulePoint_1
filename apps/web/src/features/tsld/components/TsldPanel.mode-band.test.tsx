@@ -272,6 +272,8 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     expect(draw).toHaveAttribute('aria-disabled', 'true');
     const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
     expect(reason).toHaveTextContent('Start editing this plan to draw activities.');
+    // Visible to a sighted pointer user too (#462): not hidden from sight, and not inside anything that is.
+    expect(reason?.closest('.sr-only')).toBeNull();
     fireEvent.click(draw);
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
