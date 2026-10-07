@@ -1,7 +1,7 @@
 # Implementation Plan: A member's mistype under their own organisation stays in the shell
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting spec approval (approved in principle by the product owner 2026-10-07).
+- **Status:** Approved — by the product owner, 2026-10-07, with the spec (Q1: sign-in page for signed-out visitors).
 - **Owner:** Claude Code (builder agent), for James Ewbank
 
 ## Breakdown

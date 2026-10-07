@@ -1,7 +1,7 @@
 # Feature Spec: A member's mistype under their own organisation stays in the shell
 
-- **Status:** Draft — awaiting spec approval.
-- **Decision:** Approved in principle by the product owner 2026-10-07 ('Do #462 and #463 as well'), pending spec approval.
+- **Status:** Approved — by the product owner, 2026-10-07 ("Approved, go with the sign-in page for signed-out visitors"), after all four reviewers returned AGREE on the second pass.
+- **Decision:** Approved in principle by the product owner 2026-10-07 ('Do #462 and #463 as well'); spec approved the same day with Q1 answered (a): signed-out visitors get the sign-in page.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-07 (revised the same day after four reviews — §7)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #463 (raised by estate polish M3, `docs/specs/estate-polish-oct/`)
