@@ -232,7 +232,7 @@ export function GanttPrintSurface({
                         className={tick.major ? 'gantt-print-tick-major' : 'gantt-print-tick-day'}
                         style={{ left: tick.x }}
                       >
-                        {tick.major ? (
+                        {tick.label !== '' ? (
                           <span className="gantt-print-tick-label">{tick.label}</span>
                         ) : null}
                       </span>

@@ -6600,6 +6600,25 @@ measures and wrong about what it measured. Part C's own discriminator — provin
 routing branch was the one under test — passed, and the scene it ran on was still wrong. **A control
 that proves the right code ran says nothing about whether it ran on the right data.**
 
+### 465. The Gantt's date header labels every month at any zoom, so a fitted long plan overprints into one string
+
+**Status:** open — **the fix is on branch `fix/gantt-ruler-label-overlap` and stays open until it lands** ·
+**Verified:** 2026-10-07 (`apps/web/src/features/gantt/layout/ruler-ticks.ts:32-47` read; the product
+owner's screenshot, `web` 0.177.4, a 1912×948 window with a ~19-month plan zoomed to fit) ·
+**Raised:** 2026-10-07 · **Size:** S · **Owner:** web
+
+At roughly 1.1 px/day the header reads "Feb 2026 2026 2026 2026…": the month names print on top of each
+other. `buildRulerTicks` emits a **labelled** major tick at every 1st of the month (`MONTH_FORMAT`, "Feb
+2026") and nothing thins the labels; the only px/day gate in the file is the day ticks'
+`DAY_TICK_MIN_PX`. `GanttRuler.tsx` renders each label in a `whitespace-nowrap` span, and the printed
+programme (`GanttPrintSurface.tsx`) uses the same builder, so a long plan fitted to a page has the same
+defect on paper. At 1.1 px/day a month is ~33 px and the widest label ("Sept 2027") needs ~50 px.
+
+**Remedy.** Keep a line at every month boundary and label only every N months, N the smallest of 1, 2,
+3, 6, 12 whose span clears a named minimum label pitch; beyond a year, every k-th January. Labelled
+months are calendar-aligned, so labels do not shift as the chart scrolls. The TSLD's own ruler is not
+affected: it drops its month row below `MONTH_ROW_MIN_PX_PER_DAY` and its labels are three letters.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
