@@ -230,6 +230,13 @@ function ConsoleBody({
             }, 0);
           }),
       )
+      // A read that rejects never reaches the announcing effect, which is the only thing that
+      // unmutes: without this the boxes would stay silent for the rest of the session. Not in
+      // `.finally`, which would also unmute on success before the page has spoken.
+      .catch((error: unknown) => {
+        setMuted(false);
+        console.error('Could not refresh the staff console reads', error);
+      })
       .finally(() => {
         setRefreshing(false);
       });
