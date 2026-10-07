@@ -102,8 +102,9 @@ confirm them on the real Surface.
 
 ## Extra check for the table hold (about 2 minutes per posture)
 
-This version stops the table's words from being highlighted after you touch the screen, so that a
-hold can reach SchedulePoint's menu (#464). Do it once with a finger and once with the stylus, in
+This version stops the table's words and the blank space around them from being highlighted after
+you touch the screen, so that a hold can reach SchedulePoint's menu (#464). 12b is the deciding check
+for the blank-space extension. Do it once with a finger and once with the stylus, in
 each posture.
 
 For each run, first note the posture and the input, then do 12a and 12b.

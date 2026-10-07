@@ -554,10 +554,12 @@ describe('idle cell text gives way to a long-press after a finger or stylus (#46
     expect(surface()).toHaveAttribute('data-last-input', 'touch');
   });
 
-  it('puts the variant on the idle text spans and the grid root group, and never on the input', () => {
+  it('puts the variant on the idle table half and the grid root group, and never on the input', () => {
     const view = render(<GanttPanel activities={[task()]} editing={editingBundle()} />);
     expect(surface()).toHaveClass('group/grid');
-    expect(nameSpan()).toHaveClass(VARIANT);
+    // Held across the re-render: the name span is replaced by the field once the cell opens.
+    const tableHalf = nameSpan().closest('[role="gridcell"]')!.parentElement!;
+    expect(tableHalf).toHaveClass(VARIANT);
 
     // A touch press, then the double-tap that opens the cell: the host answers `begin` by passing
     // the open state back down.
@@ -582,6 +584,42 @@ describe('idle cell text gives way to a long-press after a finger or stylus (#46
     );
     const input = screen.getByRole('textbox', { name: 'Activity, Excavate' });
     expect(input.closest(`[class~="${VARIANT}"]`)).toBeNull();
+    expect(tableHalf).not.toHaveClass(VARIANT);
+  });
+
+  it('keeps the variant on a row whose neighbour has the open cell', () => {
+    render(
+      <GanttPanel
+        activities={[task(), task({ id: 'a2', name: 'Backfill' })]}
+        editing={{
+          ...editingBundle(),
+          state: {
+            status: 'editing',
+            target: { activityId: 'a1', key: 'name' },
+            text: 'Excavate',
+            seed: 'Excavate',
+          },
+        }}
+      />,
+    );
+    const other = screen.getByText('Backfill').closest('[role="gridcell"]')!.parentElement!;
+    expect(other).toHaveClass(VARIANT);
+  });
+
+  it('opens the menu on a contextmenu from the empty area of an idle cell, cancelling the default', () => {
+    render(
+      <GanttPanel
+        activities={[task()]}
+        drag={dragBundle()}
+        rowMenuContextFor={rowContext}
+        rowStructure={rowStructure}
+        onSelectActivity={() => {}}
+      />,
+    );
+    const cell = nameSpan().closest('[role="gridcell"]')!;
+    fireEvent.pointerDown(cell, { pointerType: 'touch', button: 0, clientX: 20 });
+    expect(fireEvent.contextMenu(cell, { clientX: 20, clientY: 10 })).toBe(false);
+    expect(screen.getByRole('menu', { name: 'Actions for Excavate' })).toBeInTheDocument();
   });
 
   it('opens the menu on a contextmenu from a table-half span, cancelling the default', () => {

@@ -59,7 +59,12 @@ import {
   startEdgeAnnouncement,
   type GanttBarDrag,
 } from '../model/bar-drag';
-import { GANTT_EDITABLE_COLUMNS, isCellOpen, type GanttGridEditing } from '../model/cell-edit';
+import {
+  GANTT_EDITABLE_COLUMNS,
+  isCellOpen,
+  openCell,
+  type GanttGridEditing,
+} from '../model/cell-edit';
 import {
   DEFAULT_HIDDEN_COLUMNS,
   MAX_COLLAPSED_IN_URL,
@@ -185,14 +190,18 @@ const DISCLOSURE_SLOT_CLASS =
 const NAME_INDENT_PX = 14;
 
 /**
- * **Cell text gives way to a long-press after a finger or stylus** (`docs/TECH_DEBT.md` #464).
+ * **The table half gives way to a long-press after a finger or stylus** (`docs/TECH_DEBT.md` #464).
  *
- * A hold on selectable text is a text-selection gesture, and only the table half of a row has any
- * text to select. `data-last-input` is written once, at the grid root, by the scroll surface's
- * `pointerdown` capture — keyed on the input event rather than `pointer-coarse:`, because the
- * Surface reports `pointer: fine` with the cover attached (ADR-0118 D7). It is a DOM attribute
- * rather than state so a press does not re-render every virtualised row. Only IDLE cell text
- * carries the class: an open cell renders an `<input>`, so the field can never match.
+ * What is under the finger decides whether a hold reaches the row's `contextmenu`: selectable
+ * content makes it a selection gesture and the browser's own menu wins. Putting the class on the
+ * words alone fixed a hold on the words (device check 12a) and not a hold on blank space in a cell
+ * (12b, 2026-10-07 — the gridcell div and the `sr-only` spans were still selectable), so it sits on
+ * the whole sticky table-half container of a row instead. `data-last-input` is written once, at the
+ * grid root, by the scroll surface's `pointerdown` capture — keyed on the input event rather than
+ * `pointer-coarse:`, because the Surface reports `pointer: fine` with the cover attached
+ * (ADR-0118 D7). It is a DOM attribute rather than state so a press does not re-render every
+ * virtualised row. A row with an open cell leaves the class off the container altogether, so an
+ * open cell's `<input>` is never inside an element carrying it.
  */
 const SELECT_NONE_AFTER_TOUCH = 'group-data-[last-input=touch]/grid:select-none';
 
@@ -1515,7 +1524,10 @@ function GanttBucketRowView({
       style={{ top, height: GANTT_ROW_HEIGHT, width: gridWidth + chartPx }}
     >
       <div
-        className="border-border bg-background sticky left-0 z-10 flex h-full shrink-0 items-center border-r"
+        className={cn(
+          'border-border bg-background sticky left-0 z-10 flex h-full shrink-0 items-center border-r',
+          SELECT_NONE_AFTER_TOUCH,
+        )}
         style={{ width: gridWidth }}
       >
         {/* One empty cell per column ahead of the name, so the arrow and label sit where the data
@@ -1542,7 +1554,7 @@ function GanttBucketRowView({
               <ChevronRight className="size-3" />
             )}
           </span>
-          <span className={SELECT_NONE_AFTER_TOUCH}>{label}</span>
+          <span>{label}</span>
           {/* The bucket fades with everything else off the path, so it needs the same marker the
               activity rows carry. Without it a screen-reader user gets no sign that this row
               receded while every sighted user watches it dim (WCAG 1.4.1) — the a11y gate's
@@ -1695,6 +1707,8 @@ function GanttRowView({
   // looked up a second way — one answer to "what does this follow?", which is the rule
   // `bar-dates.ts` and `routeOrthogonal` both exist to enforce.
   const predecessorNames = predecessorsById.get(activity.id);
+  const rowHasOpenCell =
+    editing !== undefined && openCell(editing.state)?.activityId === activity.id;
   // A THUNK, not a built object. `buildSelectionBarContext` scans the whole plan, and this runs per
   // mounted row — measured at 40 calls per keystroke on a 2,000-activity plan (M6 performance gate).
   // The menu builds it when it opens, which removes the cost from the render path rather than
@@ -2003,6 +2017,7 @@ function GanttRowView({
         className={cn(
           'border-border sticky left-0 z-10 flex h-full shrink-0 items-center border-r',
           isSelected ? 'bg-accent' : 'bg-background',
+          !rowHasOpenCell && SELECT_NONE_AFTER_TOUCH,
         )}
         style={{ width: gridWidth }}
       >
@@ -2092,10 +2107,7 @@ function GanttRowView({
                 {...(lead === null ? {} : { lead })}
               >
                 <span
-                  className={cn(
-                    SELECT_NONE_AFTER_TOUCH,
-                    activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold',
-                  )}
+                  className={cn(activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold')}
                 >
                   {text}
                 </span>
@@ -2119,10 +2131,7 @@ function GanttRowView({
             >
               {lead}
               <span
-                className={cn(
-                  SELECT_NONE_AFTER_TOUCH,
-                  activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold',
-                )}
+                className={cn(activity.type === 'WBS_SUMMARY' && isNameCell && 'font-semibold')}
               >
                 {text}
               </span>

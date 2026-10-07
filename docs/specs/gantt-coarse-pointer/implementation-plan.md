@@ -579,6 +579,11 @@ timer of our own would also race the browser's selection rather than stop it.
   4. If they show the event never arrives, a `useLongPress` on the tooltip precedent returns to the
      product owner as a **new task**, not a silent change. It would be a `components/ui/` public
      contract (ADR-0105) and a component-reviewer item.
+- **Device outcome (2026-10-07, web 0.177.4): partial pass.** 12a (words) passed, 12b (blank space) failed
+  with the browser's menu. Fallback step 1 (revert) was **not** taken: 12a passing proves the cause is
+  selectable content under the finger. The follow-up extends the class from the cell text spans to the
+  row's whole table-half container (idle rows only), covering blank space and the `sr-only` spans; see
+  `device-results.md`.
 - **ADR-0111:** no key or focus behaviour changes, so no pre-release pass is owed.
   **ADR-0105:** no new public contract. **Changeset:** `@repo/web` **patch** ("a press and hold on the
   Gantt's table opens the row's actions, as on the chart").
