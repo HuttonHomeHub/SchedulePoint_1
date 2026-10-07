@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.177.5
+
+### Patch Changes
+
+- [#884](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/884) [`34ca9e0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/34ca9e011d41d7428518f93ad10598d778be203b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A press and hold on a blank part of the Gantt's table now opens the row's actions too.
+
+- [#885](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/885) [`0f0e1bb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0f0e1bbb17b336505a7afd0ee970479f55b2d238) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt's date header no longer overprints month names when zoomed out; it labels every second month, quarter or year as space allows.
+
 ## 0.177.4
 
 ### Patch Changes
