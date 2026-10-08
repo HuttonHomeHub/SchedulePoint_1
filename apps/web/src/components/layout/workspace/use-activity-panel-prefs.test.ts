@@ -88,4 +88,16 @@ describe('useActivityPanelPrefs', () => {
     const { result } = renderHook(() => useActivityPanelPrefs());
     expect(result.current.size).toBe(PANEL_MIN_OPEN);
   });
+
+  it('rewrites a stored 140 as the clamped value (the hook persists its state on mount)', () => {
+    localStorage.setItem(
+      'schedulepoint-activity-panel',
+      JSON.stringify({ collapsed: false, size: 140 }),
+    );
+    renderHook(() => useActivityPanelPrefs());
+    const stored = JSON.parse(localStorage.getItem('schedulepoint-activity-panel') ?? '{}') as {
+      size?: number;
+    };
+    expect(stored.size).toBe(PANEL_MIN_OPEN);
+  });
 });
