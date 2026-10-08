@@ -335,6 +335,23 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await expect(freshPage.getByRole('dialog', { name: NOTICE_HEADING })).toBeVisible();
   await fresh.close();
 
+  // ── 4b. "Not now" is Escape for a finger: it sits after Continue, before Sign out, and is
+  // visit-only too.
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(planUrl);
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(proceed).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Not now' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Sign out' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Not now' }).click();
+  await expect(dialog).toBeHidden();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), VIEWPORT_NOTICE_ACK_KEY),
+  ).toBeNull();
+
   // ── 5. Continue anyway closes it, puts focus somewhere real, and a reload does not bring it back.
   // Escape was this tab's visit-only answer, so a new visit is a tab with no session storage.
   await page.evaluate(() => sessionStorage.clear());
@@ -387,9 +404,9 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await page.goto(planUrl);
   await ensurePen(page);
   await page.getByRole('radio', { name: 'Activities' }).click();
-  // By keyboard: at 320 px the row's `⋯` is under the pane's own bar for a pointer (recorded in the
-  // hand-off as a finding below the designed floor, TECH_DEBT-worthy but not a reflow failure —
-  // nothing scrolls sideways and the control is keyboard-reachable).
+  // By keyboard: at 320 px the row's `⋯` is under the pane's own bar for a pointer (a finding
+  // below the designed floor, not a reflow failure — nothing scrolls sideways and the control is
+  // keyboard-reachable; docs/TECH_DEBT.md #466).
   await page.getByRole('button', { name: 'Actions for Dig footings' }).focus();
   await page.keyboard.press('Enter');
   await page.getByRole('menuitem', { name: 'Edit' }).focus();
