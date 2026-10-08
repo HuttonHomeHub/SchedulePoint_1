@@ -8,7 +8,7 @@
 - **Roadmap link:** ADR-0179 follow-ups ("Next in line")
 - **Related ADR(s):** ADR-0143 (`PageGrid`, span by demand), ADR-0146 D1 (one page measure),
   ADR-0179 D1 (1024 × 600 floor, Explorer at default width), ADR-0105 (why this is a spec).
-  **A new short ADR is required** (§4.6): it changes the split rule of a shared primitive.
+  **A new short ADR is required — ADR-0182** (§4.6): it changes the split rule of a shared primitive.
 
 > **The brief's remedy does not fix the reported width, and this spec says so first.** "Two columns
 > only from `xl`" means `@media (min-width: 80rem)` — **1280 px inclusive**
@@ -72,9 +72,19 @@ omits sections per role, `OverviewScreen.tsx:259`, `:285`). Org Admins also use 
 | 1440                 | two of ~545                       | two of ~545 — **unchanged** (under the default threshold; see CQ-2)                                          | unchanged                                                                   | unchanged           |
 | **1912** (both of the product owner's screens, landscape) | two of 732 | **unchanged**, pixel for pixel                                                                    | unchanged                                                                   | unchanged           |
 
+**One threshold for every org screen.** With the Explorer at 276, an org screen's grid is window −
+325, so the landing **and** Members are one column at windows **up to 1348** and two from **1349**
+(a 1024 px grid). Every figure in this spec uses that pair.
+
 The staff console has no Explorer (`staff-console-screen.tsx:49-51`), so its grid is 277 px wider
-than an org screen's at the same window (ADR-0146:40-41) and it splits from a ~1072 px window. Its
-only change is in the 1024–1071 band.
+than an org screen's at the same window (ADR-0146:40-41) and it splits from a 1072 px window. Its
+only change is in the 1024–1071 band — **derived, not measured** (R5).
+
+**Browser zoom counts as width.** At ≥ 150 % zoom the 1912 monitor is ~1275 CSS px or less, so the
+landing there is one column; at 125 % (~1530) it stays two columns of ~590. The ADR states this.
+
+**The reflow is instant.** There is no transition: crossing the threshold (resize, Explorer fold,
+zoom) re-lays the grid in the same frame, as `md:` does today.
 
 ### Success criteria (falsifiable)
 
@@ -84,23 +94,35 @@ only change is in the 1024–1071 band.
   1 px). Members and `/staff` tracks unchanged at 1912.
 - **SC-3** At 1280 × 800 with the Explorer folded: two columns (tracks ≥ 500). At 1440 × 900 with the
   Explorer at 420: one column. (This is what a viewport breakpoint cannot do, so it is the test that
-  the chosen mechanism is the one built.)
-- **SC-4** No document overflow and no clipped section at 1024 × 600 on the landing and Members.
-- **SC-5** Photographs at 1024, 1280 and 1440 show no two-line plan name caused by width in a paired
-  column (product-owner judgement; this is the readability half no number captures).
+  the chosen mechanism is the one built.) In **both** layouts the DOM order of the section headings
+  and the Tab order across them are the same sequence, and after the grid reflows on an Explorer
+  fold, **focus is still on the control that caused it** (the fold button or splitter).
+- **SC-4** No horizontal document overflow and no clipped section at 1024 × 600 on the landing and
+  Members, **and at 1280 × 800 with the root font size at 200 %** (WCAG 1.4.4; the threshold is
+  rem-based, so this is the one-column case at a 1280 grid).
+- **SC-5** axe runs in **both** states (one column at 1280 × 800, two at 1600 × 1000) with
+  `scrollable-region-focusable` and `region` named in the run, and reports nothing new.
+- **SC-6 — the decision rule for CQ-2.** At the **narrowest paired width** the chosen threshold
+  allows (a 1024 px grid for `@5xl`: windows 1349 and 1358 with the Explorer at 276), M0's
+  photographs show **no plan name wrapping to a second line and no `project · client` subtitle
+  truncated mid-word** on the landing, and no wrapped cell in Members' paired sections. If any does,
+  the threshold moves to `@6xl` and SC-6 is re-taken at its narrowest pair (windows 1477/1486).
 
 ### Open questions
 
-- **CQ-1 (critical)** — change `PageGrid`'s rule for **all three consumers** (recommended), or add an
-  opt-in prop so only the landing changes? See §4.5.
-- **CQ-2 (critical, but answerable from M0's photographs)** — threshold: grid width **≥ 64rem**
-  (columns ≥ 500 px; recommended) or ≥ 72rem (columns ≥ 564)?
+- **CQ-1 (critical, product owner)** — change `PageGrid`'s rule for **all three consumers**, or add
+  an opt-in prop so only the landing changes? **Recommended: change the default** (§4.5); the
+  component, UX and accessibility reviewers all agreed on 2026-10-08. A reviewer's agreement is not
+  approval, so it stays a question until the product owner answers it.
+- **CQ-2 (critical, BLOCKED on M0)** — threshold: grid width **≥ 64rem** (`@5xl`, columns ≥ 500 px;
+  recommended) or ≥ 72rem (`@6xl`, columns ≥ 564)? Not decided by preference: **SC-6** decides it
+  from M0's photographs, and M1 does not start until it has.
 - Defaults for everything else: no flag (ADR-0088 D1); rem-based threshold, so it scales with the
   reader's font size; the device checklist is not changed (§3.3).
 
 ## 2. Functional requirements
 
-> **US-1** — As any organisation member on a window between 1024 and ~1350 px wide, I want the
+> **US-1** — As any organisation member on a window between 1024 and 1348 px wide, I want the
 > landing in one column, so that plan names and their subtitles are readable.
 >
 > - **Given** the Explorer at 276 and a 1280 window **when** I open the landing **then** the four
@@ -130,7 +152,12 @@ only change is in the 1024–1071 band.
 - **Single-column landing on a short window**: the M9 height cap is off below the split (as it is
   below `md` today, `OverviewScreen.tsx:229-231`), so `<main>` scrolls. Each `fill` body keeps its
   `tabIndex={0}` (`section-card.tsx:263`) although it no longer scrolls — an existing state, now
-  reachable in the designed range; for the accessibility reviewer (Risk R4).
+  reachable in the designed range. Not an AA failure (it is operable and inside a named region),
+  so it is **not fixed here**; it is filed as its own register row (plan M2-T2, Risk R4).
+- **An overlay inside a grid section.** The frame is a containing block for `position: fixed` and
+  `absolute` descendants (R7). **Requirement:** nothing inside a `PageGrid` renders a non-portalled
+  `fixed`/`absolute` overlay. `Menu` and `Tooltip` portal to `document.body` with `position: fixed`
+  (`menu.tsx:244-253`, `tooltip.tsx:389-397`) and are unaffected.
 - **Empty organisation** branch (`OverviewScreen.tsx:197-211`) does not use `PageGrid` — unaffected.
 
 ### Permissions, validation, errors
@@ -141,10 +168,10 @@ None. Pure layout; no request, no data, no role logic changes.
 
 | Area           | Impact  | Notes                                                                                                                                                    |
 | -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **low** | `page-grid.tsx` (container frame + split variant + `col-span-full`); `OverviewScreen.tsx:233` row-template variant; docblocks.                          |
+| Frontend       | **low** | `page-grid.tsx` (container frame, split variant, `rows` prop, `col-span-full`); `OverviewScreen.tsx:213-234` uses the prop; docblocks.                 |
 | Backend / DB / API | none | —                                                                                                                                                        |
 | Security       | none    | —                                                                                                                                                        |
-| Performance    | none    | One extra `div` per grid; `container-type: inline-size` adds inline-size containment only. No JS.                                                        |
+| Performance    | none    | One extra `div` per grid. `container-type: inline-size` applies **layout, style and inline-size containment** (CSS Containment 3) — see R7 for what layout containment means for overlays. No JS. |
 | Infrastructure | none    | No Playwright config or CI step added.                                                                                                                   |
 | Testing        | low     | Unit structural tests; one journey assertion added to an existing suite; measurement harness re-run.                                                     |
 
@@ -172,7 +199,10 @@ and m0's measured spine). A viewport query cannot see it.
    `md:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` exists "only from `md`, where the grid is two
    columns" (`:229-231`). If the split moves and this does not, a single-column grid gets a two-row
    template, the second box is squeezed to its 220 px floor and the bottom two get implicit rows.
-   Both must use one threshold, and a unit test reads both files to hold them together.
+   **So the primitive owns it**: `PageGrid` gains `rows?: 'auto' | 'fit-then-fill'`, and
+   `'fit-then-fill'` emits `@5xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` in the same file and the
+   same expression as `@5xl:grid-cols-2`. The threshold is written once; no cross-file test is
+   needed to hold two copies together, because there is only one copy.
 2. **`PageGridItem`'s `md:col-span-2`** (`page-grid.tsx:74`) would, in a one-column grid between
    768 px and the new split, create an implicit second column. It becomes `col-span-full`
    (`grid-column: 1 / -1`), which spans every explicit column in either mode and needs no breakpoint.
@@ -182,13 +212,22 @@ and m0's measured spine). A viewport query cannot see it.
 
 - **Trigger crossed: a component's public contract.** `PageGrid` is a shared primitive
   (`components/ui/page/index.ts:32`). Under the recommended option its **behaviour** changes for all
-  three consumers and its props gain one optional `frameClassName` (§4.4). That is why #333 could not
-  be closed as a defect fix, and why this spec exists.
+  three consumers, `className` **moves from the grid to the outer frame** (the `StatGrid` /
+  `FieldGridContainer` convention, `stat-grid.tsx:94`, `form-layout.tsx:206`), and it gains one
+  optional closed prop, `rows` (§4.4). That is why #333 could not be closed as a defect fix, and why
+  this spec exists. The `className` move is safe at today's call sites: Members passes `mt-6`
+  (spacing, correct on the frame), staff passes nothing, and the landing's only grid-specific class
+  is the row template, which becomes the `rows` prop.
 - **Not crossed:** no user-facing entry point is added (the landing exists), no Playwright config or
   CI step (one assertion joins `e2e-overview/overview.spec.ts`), no schema change.
 - **Shared gate touched, not changed:** `container-query.structural.test.ts:41-44` already recognises
   `@5xl:` and forbids it beside `@container` on one element — the design puts them on different
   elements, as `stat-grid.tsx:80-94` does. `page-grid.structural.test.ts:53` still finds `grid-cols-1`.
+- **Docs that state the `md` split — grepped, none found.** `grep -i "PageGrid|page grid|two.column"`
+  over `COMPONENT_LIBRARY.md`, `DESIGN_SYSTEM.md`, `UX_STANDARDS.md` and `FRONTEND_ARCHITECTURE.md`
+  returns only `DESIGN_SYSTEM.md:1167` (`FieldGrid`) and `FRONTEND_ARCHITECTURE.md:378` (the shell
+  grid) — neither is `PageGrid`. The builder re-runs that grep unconditionally at M1, since a doc
+  may gain a mention before then. The rule's home is the rewritten `page-grid.tsx:49-50` docblock.
 - **Device checklist** (`docs/specs/gantt-coarse-pointer/device-checklist.md`): **not affected.** Its
   scope is the Gantt under finger and stylus (`:1-19`); no step opens the landing, Members or
   `/staff`. Nothing to update. The upright-Surface effect (one column at ~1272) goes in the hand-off
@@ -208,13 +247,13 @@ flowchart TB
     EX["Project Explorer<br/>34 / 200–420 px"]
     subgraph MAIN["main (scroll container)"]
       PC["PageContainer p-6, max 1536"]
-      PC --> FR["PageGrid frame<br/>@container (NEW)"]
-      FR --> GR["grid: grid-cols-1<br/>@5xl:grid-cols-2 (was md:)"]
+      PC --> FR["PageGrid frame (NEW)<br/>@container flex min-h-0 flex-1 flex-col<br/>+ caller className"]
+      FR --> GR["grid (no public override)<br/>min-h-0 flex-1 grid-cols-1 @5xl:grid-cols-2<br/>rows='fit-then-fill' → @5xl:grid-rows-[…]"]
       GR --> I1["PageGridItem narrow"]
       GR --> I2["PageGridItem wide → col-span-full"]
     end
   end
-  OV["OverviewScreen"] -. "rows: @5xl:grid-rows-[…] (was md:)" .-> GR
+  OV["OverviewScreen"] -. "rows='fit-then-fill', className='min-h-0 flex-1'" .-> FR
   EX -. "width changes the frame,<br/>the frame decides the split" .-> FR
 ```
 
@@ -237,20 +276,32 @@ flowchart TD
 
 `components/ui/page/page-grid.tsx`:
 
-- `PageGrid` renders **a frame `div` carrying `@container`** (plus `flex min-h-0 flex-col`) around
-  the existing grid `div`. The grid becomes `grid min-h-0 flex-1 grid-cols-1 gap-6 @5xl:grid-cols-2`.
-  `className` keeps its meaning (classes for the **grid**); a new optional **`frameClassName`**
-  places the frame in its parent. The frame is a block or stretched flex child at all three call
-  sites, so it takes its width from layout — not the auto-width flex-item case that collapsed
-  `plan-facts.tsx:109-114`.
+- `PageGrid` renders **a frame `div`, always `@container flex min-h-0 flex-1 flex-col`**, with the
+  caller's `className` merged onto it — the `StatGrid`/`FieldGridContainer` convention. Inside it,
+  the grid is `grid min-h-0 flex-1 grid-cols-1 gap-6 @5xl:grid-cols-2`, with **no public override**.
+  No `frameClassName` prop.
+- New prop **`rows?: 'auto' | 'fit-then-fill'`** (default `'auto'`): `'fit-then-fill'` adds
+  `@5xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` to the grid — the top row takes what it needs,
+  the bottom row takes the rest, and only where the grid is two columns. Named for what it does to
+  the rows, not for the landing; it is the only caller today.
 - `PageGridItem`: `md:col-span-2` → `col-span-full`.
-- Docblock: the split is "the grid's own width ≥ 64rem, columns ≥ 500 px", replacing `:49-50`.
+- Docblock `:49-50` rewritten: "one column until **this grid's own width** reaches 64rem, so a column
+  is never narrower than 500 px whatever the window, the Explorer or the font size; `md` was a
+  viewport proxy for that rule and missed it by 28 px at the 1024 floor." The frame adds **no
+  landmark and no role** (a plain `div`, like `PageContainer`, `page-container.tsx:45-51`).
 
-`features/overview/OverviewScreen.tsx`: `frameClassName="min-h-0 flex-1"`; the row template becomes
-`@5xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]`; the `:229-231` comment is corrected.
-`members.tsx` and `staff-console-screen.tsx` need **no edit** (their `className`/none still lands on
-the grid). The stale `members.tsx:15-18` docblock ("`PageContainer`'s default is `max-w-6xl`") is
-noted for the builder; it is unrelated and is not changed here.
+**The frame gets its width from layout in all three parents** (the `plan-facts.tsx:109-114`
+collapse needs an auto-width flex item, and none of these is one):
+
+| Consumer | Frame's parent | Parent layout | Frame width |
+| -------- | -------------- | ------------- | ----------- |
+| Landing  | `OverviewScreen.tsx:196` `mt-6 flex min-h-0 flex-1 flex-col` | column flex, default `align-items: stretch` | stretched to the parent; `flex-1` makes it take the remaining height, so the M9 cap still binds (R1 closed by construction) |
+| Members  | `PageContainer` (`members.tsx:32`; `page-container.tsx:62`, block) | block flow | fills the content box; `flex-1`/`min-h-0` inert |
+| Staff    | `SectionGroup`'s `div.space-y-6` (`section-group.tsx:73`) | block flow | fills; `flex-1`/`min-h-0` inert |
+
+`features/overview/OverviewScreen.tsx`: `<PageGrid rows="fit-then-fill" className="min-h-0 flex-1">`;
+the `md:grid-rows-[…]` class and the `:229-231` comment go. `members.tsx` and
+`staff-console-screen.tsx` need **no edit**.
 
 ### 4.5 Approach and alternatives (CQ-1)
 
@@ -260,7 +311,7 @@ noted for the builder; it is unrelated and is not changed here.
 | B. Higher viewport split (`wide:` 1600, or a new 81–85rem) | custom media query | Yes | No; a 1440 window with Explorer folded (1358 grid) goes to one column of 1358 px | All change | Rejected: a single column up to 1274 px wide at 1599 brings back the ~1104 px rows ADR-0098 narrowed (ADR-0146:18) |
 | C. Landing-only class override | `className="md:grid-cols-1 @5xl:grid-cols-2"` on the landing | Yes | Yes, only if a container is declared by hand | None | Rejected: one-off styling (CLAUDE.md §12), fights the primitive's own rule through `twMerge`, and leaves `md:col-span-2` disagreeing |
 | D. Opt-in prop (`split="md" \| "measure"`) | default unchanged | Yes, landing only | Yes | **Unchanged** | Acceptable fallback if CQ-1 is "landing only" |
-| **E. Change the default to a container split (recommended)** | §4.4 | **Yes** | **Yes** | Members improves at 1024–1347; staff changes only at 1024–1071 | **Recommended** |
+| **E. Change the default to a container split (recommended)** | §4.4 | **Yes** | **Yes** | Members one column at windows ≤ 1348; staff changes only at 1024–1071 | **Recommended** |
 
 **Why E over D.** The primitive's docblock states a column-width rule (`page-grid.tsx:49-50`), and E
 implements that rule rather than a proxy for it. The second consumer has measured evidence of the
@@ -279,20 +330,27 @@ so that is derived, not measured).
 | `@6xl` 72rem        |            564 |                 1151 | ~1477                                           |
 
 `@5xl` keeps the widest single column between ADR-0098's accepted 846 and the 1104 it rejected;
-`@6xl` would put 1440 laptops into one 1115 px column. M0's photographs at 1358 and 1440 settle
-whether 500–545 px pairs read well; if they do not, `@6xl` is the fallback.
+`@6xl` would put 1440 laptops into one 1115 px column. **SC-6 decides between them**, from M0's
+photographs at 1349 and 1358 (the narrowest pairs `@5xl` allows) and 1440; `@6xl` is the fallback if
+SC-6 fails.
 
 ### 4.6 ADR
 
-**Required, short** — "A page grid splits on the width it has". Outline:
+**Required, short — ADR-0182** — "A page grid splits on the width it has" (number reserved by the
+coordinator; 0180 and 0181 are other in-flight specs). Outline:
 
 - **Context:** `PageGrid` split by viewport (`md`) while ADR-0179 put a 34–420 px Explorer beside every
   org screen; columns of 338 px at the floor, under the primitive's own 366 px defect line.
 - **Decision:** the split is a container query on the grid's own frame at 64rem; `wide` spans
-  `col-span-full`; a consumer that keys anything else to the split uses the same variant, held by a test.
+  `col-span-full`; anything else keyed to the split (today the `rows` template) is emitted **by the
+  primitive**, so the threshold is written once. `className` lands on the frame. The frame adds no
+  landmark and no role.
 - **Alternatives:** A–D above.
-- **Consequences:** three consumers change below ~1350 px; `/staff` in 1024–1071 only; the landing's
-  height cap is off below the split; amends ADR-0143 D3's mechanism, not its span-by-demand rule.
+- **Consequences:** org screens are one column at windows ≤ 1348 (Explorer 276); `/staff` changes in
+  1024–1071 only; browser zoom ≥ 150 % on a 1912 monitor gives one column; the landing's height cap
+  is off below the split; the frame's layout containment makes it the containing block for any
+  non-portalled `fixed`/`absolute` descendant (R7); amends ADR-0143 D3's mechanism, not its
+  span-by-demand rule.
 
 No flag (ADR-0088 D1): the rollback is the commit.
 
@@ -305,5 +363,10 @@ None.
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs updated by the change: `docs/TECH_DEBT.md` #333 (closed), `docs/specs/minimum-viewport/implementation-plan.md:358`
   (marked taken), `docs/specs/organisation-landing-portfolio/m6-two-column.md` §4 (a forward note),
-  `docs/COMPONENT_LIBRARY.md` / `DESIGN_SYSTEM.md` if either states the `md` split, CLAUDE.md §16
-  (one line for the new ADR).
+  CLAUDE.md §16 (one line for the new ADR). `COMPONENT_LIBRARY.md` / `DESIGN_SYSTEM.md`: grepped,
+  no `PageGrid` mention today (§3.3); re-grepped at M1.
+- **Stale statements found while writing this, filed as register follow-ups, not fixed here:**
+  `routes/members.tsx:15-18` says `PageContainer`'s default is `max-w-6xl` (it is
+  `max-w-screen-2xl`, `page-container.tsx:38`); `docs/HANDOFF.md:38` no longer carries the
+  1912 × 1114 reading that ADR-0179:53 cites it for (the figure survives at
+  `minimum-viewport/feature-spec.md:410`).
