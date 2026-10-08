@@ -353,9 +353,13 @@ sequenceDiagram
 
 ## Responsive strategy
 
-- **Mobile-first.** Base styles target small screens; enhance upward with
-  Tailwind breakpoints (`sm 40rem`, `md 48rem`, `lg 64rem`, `xl 80rem`,
-  `2xl 96rem`).
+- **Designed from a laptop or 11-inch tablet up (ADR-0179).** The design floor is
+  1024 × 600, which is Tailwind `lg` (64rem), the shell's one structural switch. Keep
+  the min-width cascade (`sm 40rem`, `md 48rem`, `lg 64rem`, `xl 80rem`, `2xl 96rem`);
+  base styles are the narrow reflow case, and below the floor content must still reflow
+  to 320 px without being designed. The floor's query lives in one constant
+  (`DESIGNED_MIN_WIDTH_QUERY`, to be added in `lib/breakpoints.ts` by ADR-0179 M3; until then
+  `LG_QUERY` in `app-shell.tsx`).
 - **Fluid by default:** relative units, flex/grid, `max-width` containers;
   avoid fixed pixel widths.
 - **Adaptive navigation:** the primary navigator collapses to a drawer/sheet below

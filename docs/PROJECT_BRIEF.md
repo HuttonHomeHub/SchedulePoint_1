@@ -27,7 +27,7 @@ SchedulePoint is a browser-based construction scheduling application built aroun
 - Not a general task tracker or PM board (no Trello/Asana boards, no ticketing).
 - Not an ERP or cost-control system (no invoicing; no earned-value beyond schedule variance).
 - Not a document-management system (notes attach to entities, but no drawings / RFI / submittals workflow).
-- Not a mobile-first field app in v1 (desktop / tablet planning is the target; read-only mobile is future scope).
+- Not a mobile-first field app in v1 (desktop / tablet planning is the target; a phone is not a supported device, and read-only mobile is future scope). The layout is designed from 1024 × 600 up (ADR-0179).
 - Not attempting to replicate the full P6 feature surface (activity codes matrices, WBS coding structures, global change, full XER round-trip) in v1.
 
 ## 4. Target Users
@@ -227,7 +227,7 @@ Stack is inherited from the base — do not re-declare it here. App-specific req
 
 - **Environments:** dev (local), staging (single instance), production (single instance in v1, horizontally scalable design).
 - **Hosting target:** to be decided in a deployment ADR — likely a managed platform (Fly, Render, or a small Kubernetes cluster) with managed Postgres. Not committed here.
-- **Supported browsers:** latest 2 versions of Chrome, Edge, Firefox, Safari on desktop; latest 1 version of Safari / Chrome on iPad-class tablets. No IE / legacy support.
+- **Supported browsers:** latest 2 versions of Chrome, Edge, Firefox, Safari on desktop; latest 1 version of Safari / Chrome on 11-inch-class tablets held sideways (1024 × 600 and up, ADR-0179). No IE / legacy support.
 - **Backups:** daily Postgres snapshot with 30-day retention; per-org export on demand.
 - **Upgrade strategy:** rolling deploys, backwards-compatible migrations only, feature-flagged rollout for schema-affecting features.
 
@@ -281,7 +281,7 @@ Deliberately postponed — become backlog items when a real signal picks them up
 ## 21. Assumptions
 
 - Design partners will be construction planners already familiar with Netpoint or P6 — we are not teaching CPM from scratch in v1.
-- Screen size ≥ 13" laptop or larger is the target working environment.
+- Screen size ≥ 13" laptop or larger is the target working environment; the design floor is 1024 × 600 (a laptop or an 11-inch tablet held sideways, ADR-0179).
 - English-language only for v1.
 - Postgres is the production database; SQLite is dev-only.
 - A single-editor-per-plan lock is acceptable for design partners (validated later; graduates to real-time collab if it proves painful).

@@ -4,6 +4,8 @@
   `CLAUDE.md` §16 entry and the banner count bump (76 → 77), because `pnpm check:counts` re-derives
   the ADR count from `docs/adr/` and the file arriving alone turns CI red.
 - **Date:** 2026-08-06
+- **Noted by:** ADR-0179 (2026-10-08) — the `auth` scope gains a signed-in consumer (the "designed for
+  larger screens" page, via `BrandCard`); same scope, same tokens, so §1's bar is unaffected.
 - **Deciders:** Product owner (the brand panel's theme behaviour, the motif over a photograph, the
   defect scope, no "Remember me", the tagline, and CQ-1/CQ-2/CQ-3; then, at M7, the floating card,
   the photograph's return, the fixed card height and the one-theme login); feature-analyst; prior

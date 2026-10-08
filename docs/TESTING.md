@@ -234,6 +234,17 @@ byte-identity, point for point) and `paint.routing-budget.test.ts` on what the
 flag-on does not, and that the extra work is bounded. The routing is exercised
 end to end by every existing canvas journey, since it is now default-on.
 
+### Viewports we test (ADR-0179)
+
+The layout is **designed from 1024 × 600 up** (a laptop or an 11-inch tablet held sideways), so
+the designed-layout sweeps — the plan command surface, page composition, the workspace chrome —
+run at the floor and above it, with the Explorer at its default width. **Below 1024 only the
+reflow obligation is tested** (WCAG 1.4.10 and 1.4.4): lists, forms, dialogs, menus, the Explorer
+sheet, public screens and the guest view must not scroll in two directions at 320 px, and a
+zoom-band window (about 640 × 480, a 1280 window at 200 %) exercises the narrow branches. A
+phone-shaped viewport (390 × 844, a phone device profile) is not a test target, and a test that
+asserts a designed layout below the floor is the wrong test.
+
 ### Measuring the canvas in a real browser
 
 `apps/web/scripts/measure-link-routing.mjs` paints the real `paintScene` against

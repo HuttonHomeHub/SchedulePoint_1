@@ -11,7 +11,8 @@
 1. **Clarity over cleverness.** Data must be unambiguous and scannable.
 2. **Consistency.** One way to do a thing; reuse primitives, never reinvent.
 3. **Accessible by default** — WCAG 2.2 AA is a merge requirement.
-4. **Mobile-first & responsive.** Design for small screens, enhance upward.
+4. **Designed from a laptop up, reflowing below.** Designed from 1024 × 600 (ADR-0179); the
+   Tailwind min-width cascade stays, and content still reflows to 320 px below the floor.
 5. **One theme, driven by tokens.** ADR-0097 withdrew light, dark and system: the product's
    only theme is declared at `:root`, no class is stamped on `<html>`, and there is no picker. The
    mechanism that would carry a future variant is kept live rather than deleted, so "never branch
@@ -200,8 +201,10 @@ Prefer `border` + low elevation on light surfaces; avoid stacking heavy shadows.
 
 ### Breakpoints
 
-Mobile-first Tailwind defaults: `sm 40rem` · `md 48rem` · `lg 64rem` ·
-`xl 80rem` · `2xl 96rem`. Primary layout shift (sidebar ⇄ drawer) at `lg`.
+Tailwind's min-width defaults: `sm 40rem` · `md 48rem` · `lg 64rem` ·
+`xl 80rem` · `2xl 96rem`. Primary layout shift (sidebar ⇄ drawer) at `lg`, which is also
+the design floor's width (1024 px, ADR-0179): the layout is designed at `lg` and up, and
+below it content must still reflow without being designed.
 
 #### A command surface wraps (ADR-0109)
 
@@ -246,7 +249,8 @@ So, for any command surface:
 
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the
-trade, made deliberately — all commands visible when there is room.
+trade, made deliberately — all commands visible when there is room. The cost is measured
+and budgeted from the 1024 × 600 floor up, not defended down to a phone width.
 
 `tier` survives as **priority within a group**, and it is still not `showLabel`. They were one
 property once, which meant a static per-item flag decided a question about render-time width
@@ -901,7 +905,7 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   that is neither good nor bad — "Checking", "Could not be read" — which the three
   fills would read as a success or an alarm (ADR-0178).
 - **Breadcrumbs** — for depth ≥ 2; last item is current page (`aria-current`);
-  collapse middle items on small screens.
+  collapse middle items in narrow windows.
 - **Tabs** — `components/ui/tabs.tsx`. Hand-rolled on the APG `tablist` in the
   lineage of `Menu` and `Combobox`: roving `tabindex`, Arrow/Home/End,
   `aria-selected`, automatic activation (every panel's data is already in

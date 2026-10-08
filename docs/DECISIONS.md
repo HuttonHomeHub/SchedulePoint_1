@@ -10,6 +10,18 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-08 — The layout is designed from 1024 × 600 up; the phone is not a design target
+
+**What was decided.** The standing responsive rules stop saying "mobile-first" and say "designed from a laptop or
+11-inch tablet up (1024 × 600), content still reflows below" (ADR-0179, spec
+[`specs/minimum-viewport/`](specs/minimum-viewport/feature-spec.md)). Height floor 600; a "Continue anyway" way
+through the below-1024 notice, remembered per device; the signed-in app only; upright tablets see the notice; 1024 kept.
+**Why.** The same instruction was given three times and each time adopted inside one epic, so the next epic read the
+rules and designed small-screen first again. **Consequence.** The reflow obligation (WCAG 1.4.10, 1.4.4) stays; the
+phone-width designed-layout gates are retired in M2.
+
+---
+
 ## 2026-10-06 — A staff probe may load member-surface code to measure delivery, never member data
 
 **What was decided.** The staff console's plan-loading probe (`docs/TECH_DEBT.md` #433) loads the plan screen's

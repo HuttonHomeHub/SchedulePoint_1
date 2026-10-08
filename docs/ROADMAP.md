@@ -745,8 +745,8 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
-- **A minimum screen size — designed for a laptop or 11-inch tablet and up.** **Proposed, awaiting
-  approval** ([ADR-0179](adr/0179-the-layout-is-designed-from-a-laptop-up.md); spec and plan at
+- **A minimum screen size — designed for a laptop or 11-inch tablet and up.** **Approved 2026-10-08; M0 (floor
+  readings) and M1 (rules, ADR-0179 Accepted) landed, M2 next** ([ADR-0179](adr/0179-the-layout-is-designed-from-a-laptop-up.md); spec and plan at
   [`docs/specs/minimum-viewport/`](specs/minimum-viewport/)). The product owner, 2026-10-08: phones
   are not required and the mobile-first rules are hamstringing the layout. The layout is designed
   from **1024 × 600** up; below 1024 wide the signed-in app shows an on-brand "designed for larger

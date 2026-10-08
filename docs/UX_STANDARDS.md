@@ -15,8 +15,9 @@
    visual order (title → key data → secondary detail → actions).
 3. **Forgiving.** Prevent errors first (constraints, sensible defaults,
    confirmation for destructive acts); make recovery easy (undo where possible).
-4. **Responsive & fast-feeling.** Works and feels good from 320px to widescreen;
-   perceived performance is a feature.
+4. **Designed for a laptop up, fast-feeling.** Designed from 1024 × 600 (a laptop or
+   an 11-inch tablet held sideways) to widescreen; below 1024 the content still
+   reflows to 320px (ADR-0179). Perceived performance is a feature.
 5. **Accessible to everyone.** Keyboard and screen-reader users are first-class,
    not an afterthought.
 6. **Trustworthy with data.** Numbers, amounts, and dates are precise,
@@ -316,7 +317,7 @@ entry stops being needed.
   focused, no alert, a link to the organisation overview). Any other failure to load one — a dropped
   connection, a 5xx — says nothing about the entity, so it stays a `role="alert"` in destructive ink.
 - **A long single page with several groups gets an "On this page" list, and it is not sticky**
-  (ADR-0178). A sticky list covers a tenth or more of a phone viewport and can hide the focused
+  (ADR-0178). A sticky list covers a tenth or more of a short or zoomed viewport and can hide the focused
   target (WCAG 2.4.11). Each group is a `SectionGroup` with a "Back to top" link.
 - **A condition says what is wrong in plain words and puts the remedy behind "How to fix"**
   (`ConditionStrip`). Environment-variable names and log keys appear only inside the disclosure,
@@ -326,8 +327,12 @@ entry stops being needed.
 
 ## Responsive behaviour
 
-- **Mobile-first.** Design the small-screen experience first; it is not a
-  degraded desktop.
+- **Designed from a laptop or 11-inch tablet up (ADR-0179).** The layout is designed
+  and gated from 1024 × 600; Tailwind's min-width cascade stays, so `md:`/`lg:`
+  remain legal. Below 1024 the content must still reflow (lists, forms, dialogs,
+  menus; WCAG 1.4.10) but need not look designed, and where the two disagree the
+  designed layout wins. The diagram, the Gantt, data tables and the command band
+  may scroll in both directions there. A phone is not a supported device.
 - The Project Explorer folds to a 34 px **spine** — never to nothing, because a
   panel that vanishes leaves a reader with no way back — and becomes an
   off-canvas `Sheet` below `lg` (64rem). Its spine keeps the organisation's
@@ -335,7 +340,7 @@ entry stops being needed.
   take the product's secondary navigation with it. The plan workspace swaps
   from split panes to a single-pane toggle below `md` (48rem);
   tables scroll horizontally within a bordered container; dialogs become
-  full-height sheets on small screens where appropriate.
+  full-height sheets in narrow or zoomed windows where appropriate.
 - **Target size (ADR-0118).** WCAG 2.2 §2.5.8 (**24 px**, level AA) is the floor
   everywhere and is gated by `e2e-workspace-fit`. Under **`pointer: coarse`** the
   house rule is **≥ 44 px** — which is §2.5.5 _Enhanced_, level **AAA**, so it is
@@ -354,9 +359,10 @@ entry stops being needed.
   added the first entry, which is the drift class that ADR exists to close, in the
   standards doc that states the rule.
   Hover-only affordances always have a non-hover equivalent.
-- **The canvas is not exempt.** The TSLD surface must stay usable at every
-  breakpoint the shell supports, and every canvas affordance needs a keyboard
-  and screen-reader equivalent in the parallel DOM layer (ADR-0026).
+- **The canvas is not exempt.** The TSLD surface is designed at and above the
+  1024 × 600 floor; below it the diagram may scroll in both directions (a
+  two-dimensional surface under 1.4.10), and every canvas affordance keeps its
+  keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
 ### Give-way order in a fixed-height chrome row (ADR-0110)
 

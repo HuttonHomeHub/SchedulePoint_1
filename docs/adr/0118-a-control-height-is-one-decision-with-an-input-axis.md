@@ -3,6 +3,9 @@
 - **Status:** Accepted (M0–M4 landed 2026-08-29)
 - **Amended by:** ADR-0177 (2026-10-06) — D1's exception list gains the Gantt's entries, each with its
   equivalent (written at that ADR's D4).
+- **Amended by:** ADR-0179 (2026-10-08) — M4's 390 × 844 coarse width is retired; below 1024 the 24 px
+  target floor rests on the narrow-shell journey's axe `target-size` check. The ≥ 44 px coarse rule
+  at and above the floor stands.
 - **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)

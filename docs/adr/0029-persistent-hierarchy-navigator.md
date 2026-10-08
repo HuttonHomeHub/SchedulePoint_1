@@ -1,6 +1,7 @@
 # ADR-0029: Persistent app-shell & hierarchy navigator — evolve `_authed` into a mounted-once shell, URL-derived selection, hand-rolled ARIA tree & virtualization
 
-- **Status:** Proposed
+- **Status:** Proposed; "Mobile-first … non-negotiable" (§1) is amended by ADR-0179 (2026-10-08) —
+  mobile-first is withdrawn, "no one-off styling" stands
 - **Date:** 2026-07-12
 - **Deciders:** James Ewbank (with Claude Code — ui-architect)
 - **Related:** ADR-0004 (frontend state — server/URL/local split), ADR-0005
