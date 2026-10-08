@@ -225,7 +225,9 @@ test('a signed-in member changes their password from /account', async ({ browser
 
   await first.getByLabel('Current password').fill(PASSWORD);
   await first.getByRole('button', { name: 'Change password' }).click();
-  await expect(first.getByRole('status')).toContainText('Password changed');
+  await expect(first.getByRole('status').filter({ hasText: 'Password changed' })).toContainText(
+    'Password changed',
+  );
 
   // The other session is gone; this one survives.
   await second.goto('/');
