@@ -148,6 +148,32 @@ describe('AccountChip', () => {
     expect(h.signOutMutate).not.toHaveBeenCalled();
   });
 
+  it('keeps focus on sign out when the mutation starts, so the reader does not land on <body>', () => {
+    // WCAG 2.4.3: a native `disabled` control blurs to `<body>` the moment it disables. The
+    // menu item shades with `aria-disabled` instead, so the same node stays focused as the
+    // pending state flips on.
+    const tree = () => (
+      <ThemeProvider>
+        <HelpActionProvider>
+          <AccountChip />
+        </HelpActionProvider>
+      </ThemeProvider>
+    );
+    const view = render(tree());
+    fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
+    const item = screen.getByRole('menuitem', { name: 'Sign out' });
+    item.focus();
+    expect(item).toHaveFocus();
+
+    h.isPending = true;
+    view.rerender(tree());
+
+    const pending = screen.getByRole('menuitem', { name: 'Signing out…' });
+    expect(pending).toBe(item);
+    expect(pending).not.toBeDisabled();
+    expect(pending).toHaveFocus();
+  });
+
   it('offers the staff console only to staff, from runtime evidence', async () => {
     // The gate is a `GET /staff/me` that answered 200 — never a `VITE_` constant, because
     // staff-ness is a server fact the bundle cannot see (ADR-0074's rule, ADR-0086's case).
