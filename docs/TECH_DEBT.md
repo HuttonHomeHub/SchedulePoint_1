@@ -11912,3 +11912,14 @@ minimum-viewport M4's vertical-budget work.
 
 A native disabled control blurs to `<body>` the moment it disables (WCAG 2.4.3). **Next:** move it to
 `aria-disabled` + a click guard, as `AcceptInvitationCard.tsx` does.
+
+### 468. At 1024 × 600 the expanded activities panel shows no rows
+
+**Status:** open · **Verified:** 2026-10-08 (`docs/specs/minimum-viewport/m4-measurement.md`; the diagram's `min-h-[240px]` at `TsldPanel.tsx:3279`, `PANEL_MIN_OPEN` 140 and the measured 227 px of chrome and 51 px of foot)
+**Raised:** 2026-10-08 · **Size:** S · **Owner:** web
+
+The diagram's 240 px minimum, the panel's 140 px minimum, 227 px of chrome and a 51 px foot come to 658 px, so
+in a 600 px window the panel is clipped to its bar and column headings (about 82 px). Collapsing it restores the
+diagram. **Next:** a short spec: when the panel is expanded under about 660 px of height, the diagram's minimum
+gives way (about 160 px) and collapsing restores it. It trades diagram height for table height, which is why it
+is a design decision and not part of M4's fit work.

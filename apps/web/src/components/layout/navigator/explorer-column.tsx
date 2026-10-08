@@ -5,7 +5,6 @@ import { NavigatorRail } from './navigator-rail';
 import { OrgDestinationsCollapsed } from './org-destinations';
 
 import {
-  EXPLORER_MAX_WIDTH,
   EXPLORER_MIN_WIDTH,
   type ExplorerPrefs,
 } from '@/components/layout/navigator/use-explorer-prefs';
@@ -137,7 +136,7 @@ export function ExplorerColumn({
           orientation="vertical"
           size={prefs.size}
           min={EXPLORER_MIN_WIDTH}
-          max={EXPLORER_MAX_WIDTH}
+          max={prefs.limit}
           label="Resize Project Explorer"
           onResize={prefs.setSize}
           pointerToSize={(event) => {

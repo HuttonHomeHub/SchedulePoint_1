@@ -1134,9 +1134,17 @@ function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
  * the one control a planner most often arrives wanting to use, and the measurement says the floor is
  * enough. Kept as one constant because two call sites render this field — the live one and the
  * flag-off stub — and a width that differed between them would show up only with the flag off.
+ *
+ * **168 px below 1600, 240 above** (ADR-0179, `docs/specs/minimum-viewport/m4-measurement.md`). The
+ * 240 was chosen with nothing to say what the deck had to fit, and the two LOOK groups sum to 1326
+ * px with it: wider than the 1264 px a 1280 window gives the row, so LOOK wrapped to a second line
+ * (44 px of diagram) for the sake of 72 px of empty text field. At 168 the row is 1254 and fits
+ * 1280 with 10 px to spare; a coarse pointer's 44 px controls need the same saving at 1440. The
+ * placeholder is the only thing that loses room, and the accessible name does not. Wider windows
+ * keep 240, so the product owner's own displays (1646 and 1912) are unchanged.
  */
 function searchFieldWidth(layout: ToolbarLayoutMode): string {
-  return triggersAreCompact(layout) ? 'w-36' : 'w-[min(15rem,32vw)] min-w-36';
+  return triggersAreCompact(layout) ? 'w-36' : 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
 }
 
 /**
@@ -1220,7 +1228,7 @@ function SearchFieldControl({
         {...itemProps}
         type="search"
         disabled
-        placeholder="Search or filter activities…"
+        placeholder="Search or filter…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
         // `pointer-coarse:h-9` — 36 px, the coarse-pointer floor. The field is `h-8` at 32, which
@@ -1357,7 +1365,7 @@ function LiveSearchControl({
               },
             }
           : {})}
-        placeholder="Search or filter activities…"
+        placeholder="Search or filter…"
         aria-label="Search or filter activities"
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}

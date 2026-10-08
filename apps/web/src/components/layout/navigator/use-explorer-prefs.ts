@@ -1,3 +1,6 @@
+import { useSyncExternalStore } from 'react';
+
+import { SPLITTER_WIDTH } from '@/components/ui/panel-resizer';
 import {
   useResizablePanelPrefs,
   type UseResizablePanelPrefs,
@@ -24,13 +27,41 @@ export const EXPLORER_MIN_WIDTH = 200;
 export const EXPLORER_MAX_WIDTH = 420;
 export const EXPLORER_DEFAULT_WIDTH = 276;
 
+/**
+ * **The stage never drops below 720 px** (ADR-0179, `docs/specs/minimum-viewport/m0-measurement.md`
+ * §1). The 420 maximum was set when the stage had no floor: at the 1024 design floor it left 603 px,
+ * and with a dock open the diagram was 262 px wide. At the 276 default the stage is 748, which is
+ * the width the Gantt's 584 px pinned grid (#437) and a 400 px dock were both judged at, so the
+ * floor sits just under it: a planner can still widen the Explorer by 27 px at 1024, and at
+ * 1141 px and up the 420 maximum is reached unchanged.
+ */
+export const STAGE_MIN_WIDTH = 720;
+
+/** The Explorer's widest allowed width in a window this wide. Pure, so the bound is testable. */
+export function explorerCeiling(viewportWidth: number): number {
+  return Math.max(
+    EXPLORER_MIN_WIDTH,
+    Math.min(EXPLORER_MAX_WIDTH, viewportWidth - STAGE_MIN_WIDTH - SPLITTER_WIDTH),
+  );
+}
+
+function subscribeToResize(onChange: () => void): () => void {
+  window.addEventListener('resize', onChange);
+  return () => window.removeEventListener('resize', onChange);
+}
+
+const readViewportWidth = (): number => window.innerWidth;
+
 export type ExplorerPrefs = UseResizablePanelPrefs;
 
 export function useExplorerPrefs(): ExplorerPrefs {
+  const viewportWidth = useSyncExternalStore(subscribeToResize, readViewportWidth);
   return useResizablePanelPrefs({
     storageKey: STORAGE_KEY,
     min: EXPLORER_MIN_WIDTH,
     max: EXPLORER_MAX_WIDTH,
     defaultSize: EXPLORER_DEFAULT_WIDTH,
+    // Clamps the width in use, never the stored preference (see `ceiling`).
+    ceiling: explorerCeiling(viewportWidth),
   });
 }

@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
  */
 export const KEY_STEP = 16;
 
+/** The divider's thickness in px (`w-px` / `h-px` below), for a caller that budgets the space beside it. */
+export const SPLITTER_WIDTH = 1;
+
 export interface PanelResizerProps {
   /**
    * `vertical` = a vertical divider dragged horizontally to set a **width** (e.g. the Project
