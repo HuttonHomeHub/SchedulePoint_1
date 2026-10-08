@@ -274,7 +274,10 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     await ensurePen(page);
     await seedSixty(page, orgSlug);
     await ensurePen(page);
-    await page.setViewportSize({ width: 640, height: 480 });
+    // Tall on purpose: this asserts the single pane's scroll ownership, not the height budget. At
+    // 640 x 480 the chrome leaves the pane no height at all (m0-measurement.md §4), which is the
+    // cost of height never triggering the notice and has its own row in M4.
+    await page.setViewportSize({ width: 640, height: 844 });
 
     // Below `md` there is no separate expand/collapse — the view toggle IS the show/hide mechanism
     // (`plan-workspace-toolbar.tsx`: both panes are always mounted, switched with `hidden`/`block`).
