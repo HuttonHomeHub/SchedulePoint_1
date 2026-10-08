@@ -30,6 +30,10 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        // 1280 × 800, not Playwright's 1280 × 720: at 720 the workspace body (573) is under the
+        // short-body line (599), so Expand would hide the diagram these journeys then drive
+        // (ADR-0180; docs/specs/short-screen-vertical-budget/m0-measurement.md §3).
+        viewport: { width: 1280, height: 800 },
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
           ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
           : {}),

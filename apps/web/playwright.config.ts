@@ -21,6 +21,10 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        // 1280 × 800, not Playwright's 1280 × 720: at 720 the workspace body (573) is under the
+        // short-body line (599), so Expand would hide the diagram these journeys then drive
+        // (ADR-0180; docs/specs/short-screen-vertical-budget/m0-measurement.md §3).
+        viewport: { width: 1280, height: 800 },
         // Allow pointing at a pre-installed Chromium (e.g. a managed CI/dev image
         // whose browser build differs from Playwright's default). Unset → default.
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
@@ -28,8 +32,14 @@ export default defineConfig({
           : {}),
       },
     },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'], viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } },
+    },
   ],
   // The API and web dev servers are started automatically for local runs (the
   // journey exercises the full stack: browser → web → /api proxy → API →
