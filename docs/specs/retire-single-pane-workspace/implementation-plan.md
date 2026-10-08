@@ -1,6 +1,6 @@
 # Implementation Plan: Retire the below-`md` single-pane plan workspace
 
-- **Status:** Draft — awaiting product-owner approval (ADR-0131). Not approved. Revised 2026-10-08
+- **Status:** Approved 2026-10-08 by the product owner ("approve with your recommendations"). Builds after short-screen M-A (ADR-0180) has merged.
   after the accessibility, UX and component reviews ("agree with changes").
 - **Spec:** [`feature-spec.md`](feature-spec.md)
 - **Date:** 2026-10-08
@@ -25,8 +25,8 @@ These are why this needed a spec and not a register row:
 
 Used by M0 and the M1 journey. All readings are taken after Continue anyway.
 
-| Viewport  | Why it is in the matrix                                                    |
-| --------- | -------------------------------------------------------------------------- |
+| Viewport   | Why it is in the matrix                                                   |
+| ---------- | ------------------------------------------------------------------------- |
 | 767 × 1024 | Just under the old breakpoint                                             |
 | 700 × 900  | `dock.spec.ts` and the narrow-shell banner                                |
 | 640 × 844  | `activities-panel-scroll.spec.ts`                                         |
@@ -290,7 +290,7 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 - **short-screen M-A (ADR-0180) → M0 → M1.** M0's short-height readings assume the swap exists. M0
   changes nothing shipped.
 - **When M1 lands, the short-screen journey's case 7** (`short-screen-vertical-budget/
-  implementation-plan.md:79-80`) is re-run and rewritten in the same PR. It asserts that the
+implementation-plan.md:79-80`) is re-run and rewritten in the same PR. It asserts that the
   single-pane layout is unchanged at 640 × 480 and 320 × 256 and that A1 is inert below `md`; both go
   false by design. Its cases 3 and 4 (commands while hidden, dock exclusivity) are added at 640.
 - **Line references drift once short-screen lands.** That spec cites the narrow branch at
@@ -330,12 +330,12 @@ The Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md).
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                    | L / I      | Mitigation                                                            |
-| ----------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------- |
-| ADR-0180 slips, or changes its swap                                     | med / high | This plan does not start M1 until it lands; M0's short-height readings are re-taken against whatever shipped |
-| ADR-0180's swap was never tested below 768 (its edge case said "unchanged") | med / med | This plan's journeys at 640 × 300/360/480 are its first check there |
-| `inert` interacts badly with an armed canvas tool                       | low / med  | The statement lives in the foot row; Escape is checked by the component reviewer |
-| A dock's content does not reflow at about 300 px                       | med / med  | M0-T2; a container-query stack in M1-T3                               |
-| The revisions defect is not real (read, not run)                        | low / low  | M0-T1                                                                 |
-| #466 moves rather than closes                                           | med / low  | Re-read at 320 in M0-T2                                               |
-| Short-height crowding by the wrapped band (pre-existing, both layouts)  | — / med    | Recorded in the ADR so it is not read as fixed                         |
+| Risk                                                                        | L / I      | Mitigation                                                                                                   |
+| --------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
+| ADR-0180 slips, or changes its swap                                         | med / high | This plan does not start M1 until it lands; M0's short-height readings are re-taken against whatever shipped |
+| ADR-0180's swap was never tested below 768 (its edge case said "unchanged") | med / med  | This plan's journeys at 640 × 300/360/480 are its first check there                                          |
+| `inert` interacts badly with an armed canvas tool                           | low / med  | The statement lives in the foot row; Escape is checked by the component reviewer                             |
+| A dock's content does not reflow at about 300 px                            | med / med  | M0-T2; a container-query stack in M1-T3                                                                      |
+| The revisions defect is not real (read, not run)                            | low / low  | M0-T1                                                                                                        |
+| #466 moves rather than closes                                               | med / low  | Re-read at 320 in M0-T2                                                                                      |
+| Short-height crowding by the wrapped band (pre-existing, both layouts)      | — / med    | Recorded in the ADR so it is not read as fixed                                                               |

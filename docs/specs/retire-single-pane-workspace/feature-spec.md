@@ -1,6 +1,6 @@
 # Feature Spec: Retire the below-`md` single-pane plan workspace
 
-- **Status:** Draft — awaiting product-owner approval (ADR-0131). Not approved; nothing is built.
+- **Status:** Approved 2026-10-08 by the product owner ("approve with your recommendations"). Builds after short-screen M-A (ADR-0180) has merged.
   Revised 2026-10-08 after the accessibility, UX and component reviews ("agree with changes"):
   five blocking and three suggested findings folded in. The citations they added are as reviewers
   reported them, spot-checked here where marked "read".
@@ -54,6 +54,7 @@ the table scroll inside themselves, which they already do.
 
 **Size:** small to medium. Two milestones: a measurement and accessibility sign-off, then one pull
 request. That pull request:
+
 - deletes the branch;
 - caps the docks' width;
 - makes a squeezed diagram unreachable to the keyboard;
@@ -64,6 +65,7 @@ No API, database, engine or pen change, and no feature flag.
 
 **Short windows are handled by another spec, which lands first.** A 1280 × 720 laptop at 200 % zoom
 is about 640 × 300–360.
+
 - Today a zoomed user there gets the activities table as a whole pane.
 - In the normal layout the table would share the height with the diagram and be crowded out. This
   is the open `docs/TECH_DEBT.md` #468.
@@ -101,8 +103,7 @@ Verified against the code on 2026-10-08:
 ### Users
 
 Planners, Contributors, Viewers and Org Admins who open a plan in a window under 768 px wide after
-**Continue anyway**. In practice these are zoom users: 1280 at 200 % is 640, and 1366 at 200 % is
-683. External Guests are **not affected**: `/share` does not mount `ToolbarPlanWorkspace` (its only
+**Continue anyway**. In practice these are zoom users: 1280 at 200 % is 640, and 1366 at 200 % is 683. External Guests are **not affected**: `/share` does not mount `ToolbarPlanWorkspace` (its only
 consumer is `plan-workspace.tsx:34`, reached from `routes/plan-detail.tsx`).
 
 ### Primary use cases
@@ -310,18 +311,18 @@ control and the panel's resizer, which have a keyboard path (`PanelResizer`).
 
 ### Edge cases
 
-| Case                                                       | Behaviour                                                                                                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Crossing 768 with a dock open                              | **No re-layout at all.** Today the dock jumps from beside the diagram to replacing it.                                                                        |
-| Crossing 768 on the Activities pane                        | No longer possible. Today the table pane disappears on widening (`pane` state is lost into a collapsed panel).                                                |
-| Gantt view below 768                                       | Unchanged: the Gantt is `surface`. It gains the foot-row outlet, which gantt-editing's spec (`feature-spec.md:510`) recorded as missing below `md`.           |
-| 320 × 256 (the reflow floor's horizontal-content height)   | The wrapped command band takes most of the height **in both layouts**. That is pre-existing and not caused or fixed here (§3, WCAG). The ADR records it.      |
-| 640 × 300–360 (1280 × 720 at 200 %)                         | Collapsed: the canvas row is `inert` if squeezed below the ruler band (AC-2.4); Expand and Recalculate stay reachable. Expanded: ADR-0180's A1 swap. |
-| A dock width saved at 1440, rendered at 640                 | The cap applies at render only. Back at 1440 the saved width returns unchanged (AC-2.2).                                                                       |
-| Narrow window, dock open, then Expand on a short body       | The short-screen rule: the dock closes (`aria-pressed=false`) and the panel takes the body. Opening a dock while swapped collapses the panel first (AC-2.4). |
-| Narrow window, dock has taken the row, then Fit or a tool   | `withDiagram` closes the dock first, then runs the command on the next frame (AC-2.4).                                                                         |
-| #466 (row `⋯` under a bar at 320)                          | The bar it is under is part of the narrow pane. M0 re-reads it in the new layout; it may close, or move.                                                      |
-| Notes reveal (`plan-workspace-toolbar.tsx:247`)            | Its guard stays. The section is mounted in both layouts already.                                                                                              |
+| Case                                                      | Behaviour                                                                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Crossing 768 with a dock open                             | **No re-layout at all.** Today the dock jumps from beside the diagram to replacing it.                                                                       |
+| Crossing 768 on the Activities pane                       | No longer possible. Today the table pane disappears on widening (`pane` state is lost into a collapsed panel).                                               |
+| Gantt view below 768                                      | Unchanged: the Gantt is `surface`. It gains the foot-row outlet, which gantt-editing's spec (`feature-spec.md:510`) recorded as missing below `md`.          |
+| 320 × 256 (the reflow floor's horizontal-content height)  | The wrapped command band takes most of the height **in both layouts**. That is pre-existing and not caused or fixed here (§3, WCAG). The ADR records it.     |
+| 640 × 300–360 (1280 × 720 at 200 %)                       | Collapsed: the canvas row is `inert` if squeezed below the ruler band (AC-2.4); Expand and Recalculate stay reachable. Expanded: ADR-0180's A1 swap.         |
+| A dock width saved at 1440, rendered at 640               | The cap applies at render only. Back at 1440 the saved width returns unchanged (AC-2.2).                                                                     |
+| Narrow window, dock open, then Expand on a short body     | The short-screen rule: the dock closes (`aria-pressed=false`) and the panel takes the body. Opening a dock while swapped collapses the panel first (AC-2.4). |
+| Narrow window, dock has taken the row, then Fit or a tool | `withDiagram` closes the dock first, then runs the command on the next frame (AC-2.4).                                                                       |
+| #466 (row `⋯` under a bar at 320)                         | The bar it is under is part of the narrow pane. M0 re-reads it in the new layout; it may close, or move.                                                     |
+| Notes reveal (`plan-workspace-toolbar.tsx:247`)           | Its guard stays. The section is mounted in both layouts already.                                                                                             |
 
 ### Permissions
 
@@ -340,35 +341,35 @@ None new. A dock whose content fails to load keeps its existing error state, now
 
 **Every site of the single-pane mode** (read 2026-10-08):
 
-| Site                                               | What it is                                                                                                       |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `plan-workspace-toolbar.tsx:155-156`               | `MD_QUERY = '(min-width: 48rem)'` and its docblock                                                               |
-| `plan-workspace-toolbar.tsx:666-671`               | `isWide`, `pane` state, and the "on a phone" comment                                                             |
-| `plan-workspace-toolbar.tsx:2347`                  | The branch                                                                                                       |
-| `plan-workspace-toolbar.tsx:2509-2531`             | Narrow: Health / Float paths / Notes each take the whole body (**no revisions case**)                            |
-| `plan-workspace-toolbar.tsx:2532-2558`             | Narrow: the view switch, the `hidden`-toggled diagram pane, the activities pane with `hostsPlanSlots={false}`    |
-| `plan-workspace-toolbar.tsx:37`, `:247`, `:1084-1085`, `:1715`, `:2364` | Import and comments referring to the narrow pane                                         |
-| `workspace-view-toggle.tsx` (whole file)            | The `radiogroup` (`SegmentedControl`, label "Workspace view")                                                    |
-| `activity-bottom-panel.tsx:199`, `:203-229`, `:416-426`, `:494-495`, `:511-524` | `hostsPlanSlots` on three components; `onCollapse` "omitted on the mobile single-pane view" |
-| `data-table.tsx:604-608`                           | `md:min-h-32` exists **only** because of the single pane, so the prefix is dropped (AC-3.4). This corrects payoff #14's "a reflow fallback that stays" |
-| Comments, docblocks and copies elsewhere, as reviewers reported them | `plan-status-bar.tsx:11`, `:34-38`; `plan-facts.tsx:19`; `TsldLegendPanel.tsx:32`; `TsldCanvas.tsx:1777`, `:2019` (the code and `TsldCanvas.hidden-pane.test.tsx:9` stay because a hidden canvas is still possible — reworded only); `activity-bottom-panel.tsx:227-228` (`onCollapse` stays optional — reworded), `:360`, `:474-493`; `segmented-control.tsx:28` (the docblock example) |
+| Site                                                                            | What it is                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan-workspace-toolbar.tsx:155-156`                                            | `MD_QUERY = '(min-width: 48rem)'` and its docblock                                                                                                                                                                                                                                                                                                                                       |
+| `plan-workspace-toolbar.tsx:666-671`                                            | `isWide`, `pane` state, and the "on a phone" comment                                                                                                                                                                                                                                                                                                                                     |
+| `plan-workspace-toolbar.tsx:2347`                                               | The branch                                                                                                                                                                                                                                                                                                                                                                               |
+| `plan-workspace-toolbar.tsx:2509-2531`                                          | Narrow: Health / Float paths / Notes each take the whole body (**no revisions case**)                                                                                                                                                                                                                                                                                                    |
+| `plan-workspace-toolbar.tsx:2532-2558`                                          | Narrow: the view switch, the `hidden`-toggled diagram pane, the activities pane with `hostsPlanSlots={false}`                                                                                                                                                                                                                                                                            |
+| `plan-workspace-toolbar.tsx:37`, `:247`, `:1084-1085`, `:1715`, `:2364`         | Import and comments referring to the narrow pane                                                                                                                                                                                                                                                                                                                                         |
+| `workspace-view-toggle.tsx` (whole file)                                        | The `radiogroup` (`SegmentedControl`, label "Workspace view")                                                                                                                                                                                                                                                                                                                            |
+| `activity-bottom-panel.tsx:199`, `:203-229`, `:416-426`, `:494-495`, `:511-524` | `hostsPlanSlots` on three components; `onCollapse` "omitted on the mobile single-pane view"                                                                                                                                                                                                                                                                                              |
+| `data-table.tsx:604-608`                                                        | `md:min-h-32` exists **only** because of the single pane, so the prefix is dropped (AC-3.4). This corrects payoff #14's "a reflow fallback that stays"                                                                                                                                                                                                                                   |
+| Comments, docblocks and copies elsewhere, as reviewers reported them            | `plan-status-bar.tsx:11`, `:34-38`; `plan-facts.tsx:19`; `TsldLegendPanel.tsx:32`; `TsldCanvas.tsx:1777`, `:2019` (the code and `TsldCanvas.hidden-pane.test.tsx:9` stay because a hidden canvas is still possible — reworded only); `activity-bottom-panel.tsx:227-228` (`onCollapse` stays optional — reworded), `:360`, `:474-493`; `segmented-control.tsx:28` (the docblock example) |
 
 **Tests that depend on it:**
 
-| Test                                                         | Dependency                                                             | Change                                                                       |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `e2e-narrow-shell/narrow-shell.spec.ts:196-215` (FR-4)       | Facts in the "shell fallback" below `md`                               | Assertion holds (facts visible); comment rewritten. Facts are now in the foot row |
-| `e2e-narrow-shell/narrow-shell.spec.ts:406`                  | `getByRole('radio', { name: 'Activities' })`                           | Replace with **Expand activities panel**                                     |
-| `e2e-workspace-chrome/activities-panel-scroll.spec.ts:271-306` | Radio, and "no separate expand/collapse below `md`" (`:285-286`)      | Replace with Expand; re-title the test                                       |
-| `e2e-workspace-chrome/dock.spec.ts:223-245`                  | Docblock about the hidden pane; assertion at 700 × 900                 | Assertion stays; docblock rewritten                                          |
-| `canvas-dock.test.tsx:127-156`                               | `hostsPlanSlots={false}` renders no outlet                             | **Deleted**. It is vacuous without the prop, and the fallback-in-place path is already covered at `:22-35` and `:95-124` |
-| `activity-bottom-panel.test.tsx:13-21`, `:48-58`             | Gating both outlets on `hostsPlanSlots`                                | **Rewritten**, not deleted: "renders BOTH outlets, always", with the docblock to match |
-| `plan-workspace-toolbar.test.tsx:395-399`                    | Finds the foot row loosely                                             | Tightened to `[data-activities-bar]`                                         |
-| `plan-facts-host.test.tsx:14`, `plan-notes-reveal.test.tsx:10`, `TsldCanvas.hidden-pane.test.tsx:9` | Docblocks citing the narrow pane            | Reworded                                                                     |
-| `e2e-workspace-fit/command-surface.spec.ts:836`              | A comment citing `hostsPlanSlots`                                      | Reworded                                                                     |
-| `scripts/measure-activities-panel.mjs:693`                   | Limb N1 measures the hidden-pane mount                                 | The limb is retired or re-described, and the change says which                |
-| `measure-toolbar/m0-bands.spec.ts:46-52`, `:162-163`         | Measurement harness probing below the single-pane breakpoint           | Comment only; harness, not a gate                                            |
-| `playwright.float-paths.config.ts:42`, `e2e-toolbar/toolbar.spec.ts:23` | Comments saying the narrow toggle is covered elsewhere      | Comment only                                                                 |
+| Test                                                                                                | Dependency                                                       | Change                                                                                                                   |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `e2e-narrow-shell/narrow-shell.spec.ts:196-215` (FR-4)                                              | Facts in the "shell fallback" below `md`                         | Assertion holds (facts visible); comment rewritten. Facts are now in the foot row                                        |
+| `e2e-narrow-shell/narrow-shell.spec.ts:406`                                                         | `getByRole('radio', { name: 'Activities' })`                     | Replace with **Expand activities panel**                                                                                 |
+| `e2e-workspace-chrome/activities-panel-scroll.spec.ts:271-306`                                      | Radio, and "no separate expand/collapse below `md`" (`:285-286`) | Replace with Expand; re-title the test                                                                                   |
+| `e2e-workspace-chrome/dock.spec.ts:223-245`                                                         | Docblock about the hidden pane; assertion at 700 × 900           | Assertion stays; docblock rewritten                                                                                      |
+| `canvas-dock.test.tsx:127-156`                                                                      | `hostsPlanSlots={false}` renders no outlet                       | **Deleted**. It is vacuous without the prop, and the fallback-in-place path is already covered at `:22-35` and `:95-124` |
+| `activity-bottom-panel.test.tsx:13-21`, `:48-58`                                                    | Gating both outlets on `hostsPlanSlots`                          | **Rewritten**, not deleted: "renders BOTH outlets, always", with the docblock to match                                   |
+| `plan-workspace-toolbar.test.tsx:395-399`                                                           | Finds the foot row loosely                                       | Tightened to `[data-activities-bar]`                                                                                     |
+| `plan-facts-host.test.tsx:14`, `plan-notes-reveal.test.tsx:10`, `TsldCanvas.hidden-pane.test.tsx:9` | Docblocks citing the narrow pane                                 | Reworded                                                                                                                 |
+| `e2e-workspace-fit/command-surface.spec.ts:836`                                                     | A comment citing `hostsPlanSlots`                                | Reworded                                                                                                                 |
+| `scripts/measure-activities-panel.mjs:693`                                                          | Limb N1 measures the hidden-pane mount                           | The limb is retired or re-described, and the change says which                                                           |
+| `measure-toolbar/m0-bands.spec.ts:46-52`, `:162-163`                                                | Measurement harness probing below the single-pane breakpoint     | Comment only; harness, not a gate                                                                                        |
+| `playwright.float-paths.config.ts:42`, `e2e-toolbar/toolbar.spec.ts:23`                             | Comments saying the narrow toggle is covered elsewhere           | Comment only                                                                                                             |
 
 `e2e-share/share.spec.ts:165` (320 px guest) does not mount this workspace, and no unit test stubs
 `matchMedia` narrow for the workspace (grep of `*.test.tsx`, 2026-10-08).
