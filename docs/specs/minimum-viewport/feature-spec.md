@@ -807,14 +807,21 @@ works".
 - Continue anyway is the first tab stop in DOM order, because the tips contain no links. Sign out
   comes after it.
 - On Continue, Escape or widening, native dialog focus restoration returns focus to the
-  `activeElement` recorded at open, if it is still connected. Otherwise focus goes to
+  `activeElement` recorded at open. After `close()`, if `document.activeElement` is not that element
+  (gone, or connected but unfocusable — e.g. a tree item inside the closed Explorer `Sheet`, which
+  stays mounted, `app-shell.tsx:231-235`), focus goes to
   `<main id="main" tabIndex={-1}>` (`app-shell.tsx:198-203`). The shell has no heading of its own to
   fall back to.
 
 **Banner (live crossing only):**
 
-- a slim, non-modal strip at the top of the shell, rendered in a polite live region, which never takes
-  focus;
+- a slim, non-modal strip rendered _inside_ the shell's grid as an `auto` row after the skip link —
+  never a sibling before `<AppShell/>`, because the shell is `h-dvh … overflow-hidden`
+  (`app-shell.tsx:134`) and the skip link must stay first (`app-shell.tsx:135-141`, WCAG 2.4.1); it
+  never takes focus;
+- its polite live region is mounted empty at all times and only its text changes;
+- at 320 × 256 its two buttons stay reachable and do not obscure the focused element (SC 2.4.11) —
+  asserted in the narrow-shell journey;
 - text: "This window is narrower than SchedulePoint is designed for";
 - buttons: **Continue anyway** (persistent) and **Dismiss** (visit-only);
 - it waits 300 ms below the floor before showing, never shows while a pointer button is down, and

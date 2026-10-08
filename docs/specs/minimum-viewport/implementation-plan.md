@@ -273,7 +273,9 @@ are **"Continue anyway"** (page and banner) and **"Dismiss"** (banner).
 - **Description:** unit tests for:
   - `matchMedia` absent → treated as wide, so nothing shows;
   - storage throws → falls back without error;
-  - focus returns to the recorded element, or to `#main` when that element is gone;
+  - focus returns to the recorded element, or to `#main` when `document.activeElement` is not it after
+    `close()` — including the case of an element connected but inside the closed Explorer `Sheet`;
+  - the banner renders inside the shell grid after the skip link, its live region present while empty;
   - Escape is visit-only and the button is persistent;
   - the notice never mounts on `/sign-in`, `/share` or `/staff`;
   - pathname changes trigger it and search-param changes do not;

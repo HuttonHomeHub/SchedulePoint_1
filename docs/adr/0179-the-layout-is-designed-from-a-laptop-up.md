@@ -106,6 +106,12 @@ What is freed is design effort and gates, not the reflow obligation.
   - It hides at once on widening. There is no hysteresis band.
   - The full page follows at the next navigation if the window is still narrow and nothing has been
     chosen.
+  - **Placement.** The banner renders _inside_ the shell's grid, as an `auto` row after the skip link,
+    never as a sibling before `<AppShell/>`: the shell is `h-dvh … overflow-hidden`
+    (`app-shell.tsx:134`), so a sibling would make the document scroll and push the status row
+    off-screen, and the skip link must stay the first focusable element (`app-shell.tsx:135-141`,
+    WCAG 2.4.1). Its polite live region is mounted empty at all times and only its text changes, so
+    the announcement is not lost to a region created with its content.
 - **Only width triggers.** On-screen keyboards and pinch-zoom therefore never do.
 - **Scope.** The notice is mounted only in the signed-in layout, so the public screens, `/share` and
   `/staff` never show it (pending CQ-3).
@@ -127,8 +133,10 @@ What is freed is design effort and gates, not the reflow obligation.
 **D6 — Focus.**
 
 - The `h1` is focused on open.
-- On close, native dialog restoration returns focus to the element that was recorded at open, if it
-  is still connected. Otherwise focus goes to `<main id="main" tabIndex={-1}>` (`app-shell.tsx:198-203`).
+- On close, native dialog restoration returns focus to the element that was recorded at open. After
+  `close()`, if `document.activeElement` is not that element (it is gone, or connected but
+  unfocusable, e.g. a tree item inside the closed Explorer `Sheet`, which stays mounted —
+  `app-shell.tsx:231-235`; the no-op ADR-0108 recorded), focus goes to `<main id="main" tabIndex={-1}>` (`app-shell.tsx:198-203`).
   The shell has no heading to fall back to.
 - Continue anyway is the first tab stop, because the tips hold no focusable controls. Sign out comes
   after it.
