@@ -73,7 +73,10 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
     (spec AC-3.2).
 - With ADR-0180's swap in place, at 640 × 300, 640 × 360 and 640 × 480 with the panel expanded:
   - the visible row count;
-  - with a dock open as well, confirm the dock hides with the diagram and returns on Collapse.
+  - with a dock open as well, confirm the short-screen rule: Expand closes the dock and its toggle is
+    `aria-pressed=false`; opening a dock while swapped collapses the panel first;
+  - with a dock having taken the row at 640, press Fit: `withDiagram` closes the dock and the stage is
+    no longer `inert`.
 - Re-read #466 at 320 in the patched layout.
 - Write everything to `docs/specs/retire-single-pane-workspace/m0-measurement.md`.
 - Complexity: S.
@@ -118,34 +121,54 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 **M1-T3 — The dock cap (spec AC-2.2).**
 
 - Add a pure helper:
-  `dockBounds({ stored, min, bodyWidth }) → { width, cap, min }`.
-  - `bodyWidth === 0` means the body has not been measured yet. The helper applies no cap.
+  `dockBounds({ stored, min, bodyWidth }) → { width, cap, min, squeezed }`.
+  - `bodyWidth === 0` means the body has not been measured yet. The helper applies no cap and sets
+    `squeezed` to false.
   - Otherwise `cap = bodyWidth − SPLITTER_WIDTH` (`panel-resizer.tsx:14`).
-  - `width = min(stored, max(min, bodyWidth − CANVAS_MIN_WIDTH), cap)`.
+  - `squeezed = bodyWidth − min − SPLITTER_WIDTH < CANVAS_MIN_WIDTH` (spec AC-2.4).
+  - `width = squeezed ? cap : min(stored, max(min, bodyWidth − CANVAS_MIN_WIDTH), cap)`. A squeezed
+    dock takes the whole row, so no strip of `inert` stage is left beside it.
   - The returned `min` is `min(min, cap)`.
 - Use the helper's results in three places:
   - the rendered width;
   - `PanelResizer`'s `min` and `max` (`:2382`, `:2414`, `:2438`, `:2462`);
   - the four `on*Resize` handlers (`:727`, `:747`, `:766`, `:786`).
-- If `min ≥ cap`, the resizer is not rendered.
+- If `min ≥ cap`, the resizer is not rendered: the dock fills the row, so there is nothing to resize.
+  Wherever a resizer is rendered, its handle is at least 24 px and it is keyboard-resizable.
 - Add `max-w-full` on the four `PanelSurface` docks, as the visual bound for the first paint.
 - **Render clamp only.** Persisted widths are never overwritten.
 - Unit tests:
   - body widths 0, 320, 640, 768 and 1024;
   - `aria-valuemin ≤ aria-valuemax` in every case;
-  - a stored 420 renders capped at 320 and is still 420 in storage.
+  - a stored 420 renders at the 319 px cap at a 320 body, and is still 420 in storage;
+  - **640 with the revisions dock** (min 380): `640 − 380 − 1 = 259 < 360`, so `squeezed` is true
+    and `width` is 639 — no 259 px dead strip;
+  - 640 with the notes dock (min 280): `359 < 360`, so it is squeezed too. That reading is recorded
+    so it does not surprise anyone.
 - Complexity: S.
 
 **M1-T4 — `inert` for squeezed regions (spec AC-2.4).**
 
-- **Width:** when `bodyWidth − dockMin − SPLITTER_WIDTH < CANVAS_MIN_WIDTH`, the dock takes the row
-  and the stage column gets `inert`.
+- **Width:** when `dockBounds` returns `squeezed`, the dock's width is the cap (it takes the row) and
+  the stage column gets `inert`.
 - **Height, collapsed panel only:** below the ruler band's measured height (a constant with its M0
   reading in the docblock, per ADR-0151), the canvas row gets `inert`. With the panel expanded on a
   short body, ADR-0180's swap already hides the row.
-- **Composition with ADR-0180's A1:** the width rule acts within the canvas row and A1 hides the whole
-  row, so they never fight. A unit case covers this: narrow, dock open, panel expanded, short body
-  gives the row hidden; after Collapse, the dock takes the row and the stage is inert.
+- **Composition with ADR-0180's A1:** the short-screen spec owns the dock/panel rule on a short body:
+  they are mutually exclusive and the later request wins. A dock is never hidden behind the swap.
+  Unit cases at a narrow, short body:
+  - with a squeezed dock open, Expand closes the dock (`aria-pressed=false`) and the panel takes the
+    body;
+  - with the swap active, opening a dock collapses the panel; the dock then takes the row and the stage
+    is `inert`.
+- **`withDiagram` covers the width case.** Extend the short-screen wrapper's condition to
+  `swapActive || squeezed`. In the width case its first step closes the open dock through its
+  existing close path, then runs `fn` on the next frame.
+  - The canvas window `keydown` early return also applies while the stage is `inert`.
+  - Tests:
+    - unit: Fit with a squeezed dock closes the dock, then fits;
+    - the short-screen structural test is reused, with the extended condition;
+    - journey: at 640, open Health and press Fit; the dock is closed and the stage is not `inert`.
 - Unit tests:
   - a ResizeObserver stub reporting 0 × 0 then real sizes. At 0 the helper treats the body as
     unmeasured, so nothing is inert by mistake on the first render. Once measured and squeezed, the
@@ -158,8 +181,9 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 **M1-T5 — Short heights: ADR-0180 at every width (spec AC-3.2). No new panel-height rule.**
 
-- **Withdrawn from the first revision:** the yielding minimum, `CANVAS_YIELD_MIN`, the dock/panel
-  mutual exclusion and any `TsldPanel.tsx` change. The short-screen spec owns the panel heights and
+- **Withdrawn from the first revision:** the yielding minimum, `CANVAS_YIELD_MIN`, this plan's own
+  copy of a dock/panel exclusion rule (the short-screen spec's rule is used instead, M1-T4) and any
+  `TsldPanel.tsx` change. The short-screen spec owns the panel heights and
   measured the 160 px yield at 0 rows.
 - What is left here:
   - check that ADR-0180's `shortBody` swap and its comment survive the branch deletion. The mechanism
@@ -174,6 +198,10 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 - The plan facts wrap to a second line below a container width. They currently do not shrink:
   `plan-facts.tsx:107`, `:140` (`shrink-0`) and `:253` (`whitespace-nowrap`).
+- The foot row must be allowed to grow:
+  - it takes `flex-wrap`;
+  - it keeps `min-h-9` as a floor only (`activity-bottom-panel.tsx:472`), never a fixed height;
+  - it stays `shrink-0`, so the body gives up the height for the second line rather than clipping it.
 - Expand and Recalculate stay `shrink-0`, in ADR-0110's give-way order.
 - Expand keeps its tooltip and the name "Expand activities panel" verbatim (ADR-0117).
 - Tests:
@@ -261,6 +289,14 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 - **short-screen M-A (ADR-0180) → M0 → M1.** M0's short-height readings assume the swap exists. M0
   changes nothing shipped.
+- **When M1 lands, the short-screen journey's case 7** (`short-screen-vertical-budget/
+  implementation-plan.md:79-80`) is re-run and rewritten in the same PR. It asserts that the
+  single-pane layout is unchanged at 640 × 480 and 320 × 256 and that A1 is inert below `md`; both go
+  false by design. Its cases 3 and 4 (commands while hidden, dock exclusivity) are added at 640.
+- **Line references drift once short-screen lands.** That spec cites the narrow branch at
+  `plan-workspace-toolbar.tsx:2533-2534`, and this one cites `:2347` and `:2509-2558`. Re-read every
+  `plan-workspace-toolbar.tsx` line reference in this plan against the tree after M-A merges, before
+  M1 starts.
 - **M1 is one PR and is releasable:** it removes a layout and adds no new one. Inside it,
   M1-T3 to M1-T7 land before T1 deletes the branch, so no commit has the narrow width without the
   cap, `inert` or the foot-row fit.

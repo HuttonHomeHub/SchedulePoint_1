@@ -172,7 +172,10 @@ See §6. Only two are critical.
     - every `on*Resize` handler (`:727`, `:747`, `:766`, `:786`).
   - The cap is `bodyWidth − SPLITTER_WIDTH` (`panel-resizer.tsx:14`, read: `1`).
   - When the cap is below a dock's minimum, the `min` passed to the resizer is lowered to the cap, so
-    `aria-valuemin ≤ aria-valuemax`. If they meet, the resizer is not rendered.
+    `aria-valuemin ≤ aria-valuemax`. When `min ≥ cap`, the resizer is not rendered.
+  - **When the squeeze rule fires** (AC-2.4: the stage would be under `CANVAS_MIN_WIDTH`), the dock's
+    width is the cap, so the dock takes the whole row. Without this, the 380 px revisions dock at 640
+    would leave a 259 px strip of `inert` stage beside it, which does nothing.
   - **The cap cannot live in `useResizablePanelPrefs`.** That hook clamps the value it reads back to
     at least `min` (`use-resizable-panel-prefs.ts:129`, read), so a ceiling there could never go
     below the minimum.
@@ -184,8 +187,9 @@ See §6. Only two are critical.
   - **This is a render clamp only.** The stored width is never overwritten, so a width saved at 1440
     is still there at 1440 after a visit at 640. This is the same rule the hook's own docblock states
     for its read-back (`:122-125`).
-  - The resizer handle stays at least 24 px and stays keyboard-resizable at 320 (WCAG 2.5.8 and
-    2.1.1).
+  - Wherever a resizer is rendered, its handle is at least 24 px and it is keyboard-resizable (WCAG
+    2.5.8 and 2.1.1). At 320 there is normally no resizer, because `min ≥ cap` and the dock fills the
+    row, so there is nothing to resize.
 - AC-2.3 — **dock content reflows.** A dock's content reflows at whatever width it is given, down to
   `320 − SPLITTER_WIDTH`, with no sideways scroll inside the dock.
   - The reflow comes from container queries or stacking utilities, never a media query.
@@ -207,14 +211,34 @@ See §6. Only two are critical.
       same way, because at that height no bar can be shown and nothing in it is usable.
     - M0 measures the ruler band's height. It becomes a constant whose docblock cites that reading
       (ADR-0151).
-  - **Reconciled with short-screen A1.** The two rules act on different axes, both inside the canvas
-    row (`plan-workspace-toolbar.tsx:2361-2481`), and they compose:
-    - this rule (width) decides **within** the row whether the dock takes it;
-    - A1 (height, panel expanded) hides **the whole row**, the dock included. Collapsing restores the
-      row as it was: the dock still takes it if the window is still narrow.
-    - This replaces the "opening one collapses the other" rule in the first revision of this spec.
-      A1's own edge case already covers a dock that is open while the screen is short
-      (short-screen spec §2, "Edge cases").
+  - **Reconciled with short-screen A1.** The short-screen spec owns the height rule ("Right dock and
+    Expand (A1)"):
+    - on a short body, a dock and an expanded panel are **mutually exclusive, and the later request
+      wins**;
+    - Expand with a dock open closes the dock first, and its toggle goes to `aria-pressed=false`;
+    - opening a dock while the swap is active collapses the panel first.
+    - **A dock is therefore never hidden behind the swap.** This spec's width rule only decides, while
+      a dock is open and the panel is not swapped, whether the dock takes the canvas row.
+    - The two rules compose without overlap. An earlier revision of this spec said A1 hides the dock
+      with the diagram and Collapse brings it back. That was wrong, and it is withdrawn.
+  - **Commands while the stage is `inert`** (the width case). The short-screen spec's `withDiagram(fn)`
+    wraps every canvas-directed `ctx` callback: viewport moves (Zoom, Fit, View ▾ presets, Go to
+    date, zoom-to-selection, Next conflict, the find cursor step) and tool arming. Without more, those
+    would act on a diagram nobody can see or reach. **This spec extends that wrapper's condition:**
+    - `withDiagram` runs its "make the diagram reachable first" step when the swap is active **or** a
+      dock has taken the row (`dockBounds(...).squeezed`);
+    - in the width case that step **closes the open dock** through its existing close path (toggle to
+      `aria-pressed=false`), then runs `fn` on the next animation frame;
+    - the classes are the short-screen spec's, unchanged: viewport moves and tool arming make the
+      diagram reachable first; display marks and plan, data or output commands are unaffected; dock
+      openers just replace the open dock (`closeOtherDocks`);
+    - the canvas's window `keydown` early return, added by the short-screen spec for a hidden canvas
+      (`TsldCanvas.tsx:2119`), applies while the stage is `inert` too, so canvas shortcuts do nothing
+      while it cannot be reached;
+    - **tests:** a unit case (Fit with a squeezed dock open closes the dock, then fits after a frame);
+      the short-screen structural test is reused, with the condition extended rather than duplicated;
+      and a journey at 640 (open Health, press Fit: the dock is closed, its toggle is not pressed, and
+      the stage is not `inert`).
   - Closing the dock, or regaining the height, removes `inert` and leaves focus where the
     focus-return rule for that dock already sends it.
 - AC-2.5 — **keyboard at 320.** For each dock at 320:
@@ -229,11 +253,15 @@ See §6. Only two are critical.
   `activities-panel-scroll.spec.ts:271-306` asserts today via the radio.
 - AC-3.2 — **short heights follow ADR-0180, at every width.** This spec adds **no panel-height rule**.
   - The short-screen spec owns them all: `PANEL_MIN_OPEN`, the `shortBody` swap (option A1) and the
-    `DOCK_MIN_HEIGHT` docblock. Under A1, an expanded panel on a short body takes the workspace, and
-    the diagram row (an open dock included) is hidden while still mounted, until Collapse.
-  - Today that rule lives only in the wide branch. The short-screen spec's edge case says "Below
-    `md` (single-pane): unchanged". **Retirement makes the wide branch unconditional, so A1 then
-    applies at every width.** No code is needed for that here; journeys check it (success criteria).
+    `DOCK_MIN_HEIGHT` docblock. Under A1:
+    - an expanded panel on a short body takes the workspace;
+    - the diagram row is hidden while still mounted, until Collapse;
+    - a dock and an expanded panel are mutually exclusive (AC-2.4).
+  - Today that rule lives only in the wide branch. The short-screen spec's edge case for 640 and 320
+    says the single-pane branch is used "until ADR-0181 retires it, so A1 is inert there … After
+    ADR-0181, A1 applies there, and that spec re-runs these cases".
+  - **Retirement makes the wide branch unconditional, so A1 then applies at every width.** No code is
+    needed for that here; the journeys check it (success criteria).
   - **Collapsed panel** (the one height rule here, and it is about the foot row, not the panel):
     - the foot row is `shrink-0` and must never be clipped;
     - if the window cannot hold the chrome plus the foot row, `<main>` (`app-shell.tsx:213`,
@@ -242,7 +270,8 @@ See §6. Only two are critical.
       minimum height on the workspace body equal to the foot row. That is agreed with the
       short-screen spec before M1, because it touches the same body.
   - **Withdrawn from the first revision:** the yielding diagram minimum (`CANVAS_YIELD_MIN` = 160),
-    the dock/panel mutual exclusion and the claim that `TsldPanel.tsx:3279`'s `min-h-[240px]` pushes
+    this spec's own copy of a dock/panel exclusion rule (the short-screen spec owns that rule now —
+    AC-2.4) and the claim that `TsldPanel.tsx:3279`'s `min-h-[240px]` pushes
     the panel.
     - The short-screen spec measured the 160 px yield at 0 rows.
     - The `min-h-[240px]` class is clipped inside an `overflow-hidden`, `min-h-0` row; it does not
@@ -257,14 +286,16 @@ See §6. Only two are critical.
     - Expand and Recalculate keep `shrink-0` and stay on screen.
     - The facts give way: they wrap onto a second line of the foot row below a container width. They
       **relocate; they never disappear**.
+    - So the foot row must grow. It takes `flex-wrap`, and its `min-h-9` stays a floor, never a
+      fixed height.
   - The Expand control keeps its tooltip and the accessible name **"Expand activities panel"**
     verbatim (ADR-0117).
 - AC-3.4 — **`DataTable`'s contained floor applies at every width.**
   - `data-table.tsx:604-608` (read) gives `contained` regions `md:min-h-32` only. The comment says
     this is because "the single-pane narrow layout gives the whole panel body ~89px at 390". That
     cause is gone, so the `md:` prefix goes, and the region keeps its three-row floor below 768 too.
-  - **How it meets ADR-0180's rules:** the short-screen spec re-derives `PANEL_MIN_OPEN` (about
-    185) as the panel's fixed parts plus rows, and A1 hands the panel the whole body when that is not
+  - **How it meets ADR-0180's rules:** the short-screen spec re-derives `PANEL_MIN_OPEN` as the
+    panel's fixed parts plus one row (see that spec for the figure; this one does not restate it), and A1 hands the panel the whole body when that is not
     available. The 128 px floor sits inside either. It decides only whether the panel body or the
     table region scrolls; it never competes with the diagram. The short-screen spec's
     `PANEL_USEFUL_MIN` cites `data-table.tsx:600` for "about three rows", which is this same floor, so
@@ -287,7 +318,8 @@ control and the panel's resizer, which have a keyboard path (`PanelResizer`).
 | 320 × 256 (the reflow floor's horizontal-content height)   | The wrapped command band takes most of the height **in both layouts**. That is pre-existing and not caused or fixed here (§3, WCAG). The ADR records it.      |
 | 640 × 300–360 (1280 × 720 at 200 %)                         | Collapsed: the canvas row is `inert` if squeezed below the ruler band (AC-2.4); Expand and Recalculate stay reachable. Expanded: ADR-0180's A1 swap. |
 | A dock width saved at 1440, rendered at 640                 | The cap applies at render only. Back at 1440 the saved width returns unchanged (AC-2.2).                                                                       |
-| Narrow window, dock open, panel expanded on a short body    | A1 hides the whole canvas row, the dock included. Collapse brings it back, and the dock still takes the row if the window is still narrow (AC-2.4).            |
+| Narrow window, dock open, then Expand on a short body       | The short-screen rule: the dock closes (`aria-pressed=false`) and the panel takes the body. Opening a dock while swapped collapses the panel first (AC-2.4). |
+| Narrow window, dock has taken the row, then Fit or a tool   | `withDiagram` closes the dock first, then runs the command on the next frame (AC-2.4).                                                                         |
 | #466 (row `⋯` under a bar at 320)                          | The bar it is under is part of the narrow pane. M0 re-reads it in the new layout; it may close, or move.                                                      |
 | Notes reveal (`plan-workspace-toolbar.tsx:247`)            | Its guard stays. The section is mounted in both layouts already.                                                                                              |
 
@@ -432,7 +464,7 @@ flowchart TD
   subgraph After
     B2[bodyRef] --> Split2[Canvas row + docks\nfoot row with outlets\nat every width]
     Split2 --> Clamp[dock width ≤ body − splitter\nstage inert if under 360]
-    Split2 --> Short[ADR-0180 shortBody swap\nexpanded panel takes body\ncanvas row + dock hidden]
+    Split2 --> Short[ADR-0180 shortBody swap\nexpanded panel takes body\ndiagram hidden, open dock closed first]
   end
 ```
 
