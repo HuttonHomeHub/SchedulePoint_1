@@ -64,8 +64,8 @@ is a clean outcome.
    - focus the canvas listbox option;
    - Expand, then Collapse;
    - assert `originX`, `originY` and `pxPerDay`, the selection and the active option are unchanged;
-   - assert the active option still has `tabindex="0"` and the listbox's `aria-activedescendant`
-     is unchanged.
+   - assert the canvas listbox (not the option) still has `tabindex="0"` and an unchanged
+     `aria-activedescendant`.
 3. **Commands while hidden:**
    - press Fit, which collapses the panel and fits;
    - arm a tool, then Expand: the tool is disarmed and the note says so;
@@ -88,8 +88,8 @@ is a clean outcome.
 > **Risks:**
 >
 > 1. **Default-viewport suites will swap — high likelihood.** Playwright's default is 1280 × 720.
->    By M0's arithmetic the body there is ≈ 533 px, under the ≈ 539 px threshold
->    (`240 + PANEL_USEFUL_MIN`). So every suite that presses Expand at the default viewport and then
+>    M0 measured the body there at 573 px, under the 599 px threshold
+>    (`240 + PANEL_USEFUL_MIN` = 240 + 359). So every suite that presses Expand at the default viewport and then
 >    uses the canvas would collapse the panel or find the canvas hidden. 18 e2e files press Expand
 >    (`grep "Expand activities panel" apps/web/e2e*`).
 >    - **The fix,** in the same commit, is to derive the list (grep plus each config's `viewport`)
