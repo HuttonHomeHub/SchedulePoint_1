@@ -115,6 +115,26 @@ beforeEach(() => {
 });
 
 describe('AppShell', () => {
+  /**
+   * **The banner's seat is a row INSIDE the grid, after the skip link** (ADR-0179). A sibling before
+   * `<AppShell/>` would be pushed off the bottom of an `h-dvh overflow-hidden` shell, and anything
+   * before the skip link would take its place as the first focusable thing (WCAG 2.4.1).
+   */
+  it('seats a banner in the grid after the skip link and before the command band', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AppShell banner={<p>banner seat</p>} />
+      </QueryClientProvider>,
+    );
+    const grid = screen.getByRole('link', { name: 'Skip to main content' }).parentElement!;
+    const children = [...grid.children];
+    const seat = screen.getByText('banner seat').parentElement!;
+    expect(children[0]).toBe(screen.getByRole('link', { name: 'Skip to main content' }));
+    expect(children[1]).toBe(seat);
+    expect(seat).toHaveClass('row-start-1');
+    expect(screen.getByRole('main')).toHaveClass('row-start-3');
+  });
+
   it('mounts the workspace outlet and the pinned Project Explorer rail', () => {
     renderShell();
     expect(screen.getByTestId('workspace')).toBeInTheDocument();

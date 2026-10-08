@@ -109,3 +109,34 @@ describe('the canvas Escape listener ignores keys typed into a text control', ()
     expect(mode()).toBe('select');
   });
 });
+
+describe('the canvas Escape listener yields to an Escape something else already answered', () => {
+  // The keydown bubbles through the DOM past a top-layer modal, so without this the viewport
+  // notice (or any dialog) that took Escape also made the planner lose their armed tool.
+  it('leaves an armed tool armed while a native modal is open', () => {
+    render(<Harness />);
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    document.body.append(dialog);
+    try {
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(mode()).toBe('link');
+    } finally {
+      dialog.remove();
+    }
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(mode()).toBe('select');
+  });
+
+  it('leaves an armed tool armed when an earlier handler already prevented the default', () => {
+    render(<Harness />);
+    const answer = (event: KeyboardEvent): void => event.preventDefault();
+    document.addEventListener('keydown', answer);
+    try {
+      fireEvent.keyDown(document.body, { key: 'Escape', bubbles: true });
+      expect(mode()).toBe('link');
+    } finally {
+      document.removeEventListener('keydown', answer);
+    }
+  });
+});
