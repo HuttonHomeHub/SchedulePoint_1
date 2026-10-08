@@ -6,6 +6,8 @@ import { BANNER_DEBOUNCE_MS } from './use-viewport-notice';
 import { ViewportBanner, ViewportNotice } from './viewport-notice';
 import { resetNoticeMemoryForTests, VIEWPORT_NOTICE_ACK_KEY } from './viewport-notice-ack';
 
+import { storageEvent } from '@/test/storage-event';
+
 /**
  * The viewport notice (ADR-0179, `docs/specs/minimum-viewport` §2.2–2.6, §4.6).
  *
@@ -276,7 +278,7 @@ describe('what each answer remembers', () => {
     expect(pageDialog().open).toBe(true);
     act(() => {
       localStorage.setItem(VIEWPORT_NOTICE_ACK_KEY, '1');
-      window.dispatchEvent(new StorageEvent('storage', { key: VIEWPORT_NOTICE_ACK_KEY }));
+      window.dispatchEvent(storageEvent(VIEWPORT_NOTICE_ACK_KEY));
     });
     expect(pageDialog().open).toBe(false);
   });
@@ -466,16 +468,16 @@ describe('the banner: a live narrowing', () => {
 
 describe('where the notice lives', () => {
   it('is mounted by the signed-in layout alone, so /sign-in, /share and /staff can never show it', async () => {
-    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { readFileSync, readdirSync } = await import('node:fs');
     const { join, resolve } = await import('node:path');
     const src = resolve(__dirname, '../../..');
 
     const importers: string[] = [];
     const walk = (dir: string): void => {
-      for (const name of readdirSync(dir)) {
-        const path = join(dir, name);
-        if (statSync(path).isDirectory()) walk(path);
-        else if (/\.tsx?$/.test(name) && !/\.test\./.test(name)) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (entry.isFile() && /\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) {
           if (/viewport-notice\/viewport-notice['"]/.test(readFileSync(path, 'utf8'))) {
             importers.push(path.slice(src.length + 1));
           }

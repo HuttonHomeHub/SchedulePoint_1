@@ -9,6 +9,8 @@ import {
   VIEWPORT_NOTICE_ACK_KEY,
 } from './viewport-notice-ack';
 
+import { storageEvent } from '@/test/storage-event';
+
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
@@ -84,13 +86,13 @@ describe('the acknowledgement store', () => {
     acknowledgeNotice();
     expect(listener).toHaveBeenCalledTimes(1);
 
-    window.dispatchEvent(new StorageEvent('storage', { key: VIEWPORT_NOTICE_ACK_KEY }));
+    window.dispatchEvent(storageEvent(VIEWPORT_NOTICE_ACK_KEY));
     expect(listener).toHaveBeenCalledTimes(2);
-    window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated' }));
+    window.dispatchEvent(storageEvent('unrelated'));
     expect(listener).toHaveBeenCalledTimes(2);
 
     unsubscribe();
-    window.dispatchEvent(new StorageEvent('storage', { key: VIEWPORT_NOTICE_ACK_KEY }));
+    window.dispatchEvent(storageEvent(VIEWPORT_NOTICE_ACK_KEY));
     dismissNoticeForVisit();
     expect(listener).toHaveBeenCalledTimes(2);
   });

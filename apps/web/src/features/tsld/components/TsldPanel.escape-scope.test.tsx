@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 
 vi.mock('@/config/env', async (importOriginal) => ({
@@ -54,6 +55,18 @@ const B = makeActivity({
 });
 const NO_DEPS: DependencySummary[] = [];
 
+function TooltipTrigger(): React.ReactElement {
+  const { triggerProps, tooltip } = useTooltip({ content: 'Link', purpose: 'name-echo' });
+  return (
+    <>
+      <button {...triggerProps} type="button" aria-label="Link" data-testid="tip-trigger">
+        L
+      </button>
+      {tooltip}
+    </>
+  );
+}
+
 function Harness(): React.ReactElement {
   const canvasUi = useTsldCanvasUiState();
   useEffect(() => {
@@ -66,6 +79,7 @@ function Harness(): React.ReactElement {
       {/* Stand-ins for the real toolbar controls: this suite is about WHERE the key was typed, and
           mounting the whole portalled toolbar would make it about the toolbar instead. */}
       <input data-testid="text-field" type="search" aria-label="Search or filter activities" />
+      <TooltipTrigger />
       <button data-testid="plain-button" type="button">
         Not a text field
       </button>
@@ -128,15 +142,15 @@ describe('the canvas Escape listener yields to an Escape something else already 
     expect(mode()).toBe('select');
   });
 
-  it('leaves an armed tool armed when an earlier handler already prevented the default', () => {
+  it('still disarms on an Escape an open tooltip also closed (it prevents default, never stops it)', () => {
+    // The tooltip contract (`tooltip.tsx`): `preventDefault()` without `stopPropagation`, so one
+    // Escape closes the ambient tooltip AND reaches the canvas rung. A guard on `defaultPrevented`
+    // here would make the planner press twice with the pointer resting on a toolbar glyph.
     render(<Harness />);
-    const answer = (event: KeyboardEvent): void => event.preventDefault();
-    document.addEventListener('keydown', answer);
-    try {
-      fireEvent.keyDown(document.body, { key: 'Escape', bubbles: true });
-      expect(mode()).toBe('link');
-    } finally {
-      document.removeEventListener('keydown', answer);
-    }
+    fireEvent.focus(screen.getByTestId('tip-trigger'));
+    expect(document.querySelector('[data-tooltip]')).not.toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape', bubbles: true });
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+    expect(mode()).toBe('select');
   });
 });

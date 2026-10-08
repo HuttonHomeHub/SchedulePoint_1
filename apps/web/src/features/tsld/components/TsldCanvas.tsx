@@ -2050,10 +2050,11 @@ export function TsldCanvas({
     // back to Select (unless a create popover is open — that owns its own Esc).
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
-      // An Escape something else already answered — a native modal open above the canvas (the
-      // viewport notice, a dialog) or a handler that called `preventDefault` — is not ours to take
-      // as "leave the tool". The keydown bubbles through the DOM past a top-layer modal.
-      if (e.defaultPrevented || aNativeModalIsOpen()) return;
+      // An Escape a native modal open above the canvas (the viewport notice, a dialog) already
+      // answered is not ours to take as "leave the tool": the keydown bubbles through the DOM past
+      // a top-layer modal. Deliberately NOT `e.defaultPrevented` — an open tooltip prevents default
+      // on purpose without stopping propagation, so one Escape closes it AND reaches this rung.
+      if (aNativeModalIsOpen()) return;
       // **An Escape typed into a text field belongs to that field**
       // (`docs/specs/canvas-search-navigation/` §4.5, M1-T4). This listener is on `window`, so
       // before the search field existed it fired wherever focus was — and with a tool armed, a
