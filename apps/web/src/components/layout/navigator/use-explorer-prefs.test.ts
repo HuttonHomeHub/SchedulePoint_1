@@ -11,12 +11,12 @@ import {
 describe('explorerCeiling', () => {
   it('leaves the stage its floor at the 1024 design floor, with room over the default', () => {
     const ceiling = explorerCeiling(1024);
-    expect(1024 - ceiling).toBeGreaterThanOrEqual(STAGE_MIN_WIDTH);
+    expect(1024 - ceiling - 1).toBeGreaterThanOrEqual(STAGE_MIN_WIDTH);
     expect(ceiling).toBeGreaterThanOrEqual(EXPLORER_DEFAULT_WIDTH);
   });
 
-  it('reaches the stored maximum from 1140 px up and never exceeds it', () => {
-    expect(explorerCeiling(1140)).toBe(EXPLORER_MAX_WIDTH);
+  it('reaches the stored maximum from 1141 px up and never exceeds it', () => {
+    expect(explorerCeiling(1141)).toBe(EXPLORER_MAX_WIDTH);
     expect(explorerCeiling(1920)).toBe(EXPLORER_MAX_WIDTH);
   });
 

@@ -31,16 +31,19 @@ export const EXPLORER_DEFAULT_WIDTH = 276;
  * §1). The 420 maximum was set when the stage had no floor: at the 1024 design floor it left 603 px,
  * and with a dock open the diagram was 262 px wide. At the 276 default the stage is 748, which is
  * the width the Gantt's 584 px pinned grid (#437) and a 400 px dock were both judged at, so the
- * floor sits just under it: a planner can still widen the Explorer by 28 px at 1024, and at
- * 1140 px and up the 420 maximum is reached unchanged.
+ * floor sits just under it: a planner can still widen the Explorer by 27 px at 1024, and at
+ * 1141 px and up the 420 maximum is reached unchanged.
  */
 export const STAGE_MIN_WIDTH = 720;
+
+/** The splitter beside the panel is `w-px` (`panel-resizer.tsx`) and comes out of the stage too. */
+const SPLITTER_WIDTH = 1;
 
 /** The Explorer's widest allowed width in a window this wide. Pure, so the bound is testable. */
 export function explorerCeiling(viewportWidth: number): number {
   return Math.max(
     EXPLORER_MIN_WIDTH,
-    Math.min(EXPLORER_MAX_WIDTH, viewportWidth - STAGE_MIN_WIDTH),
+    Math.min(EXPLORER_MAX_WIDTH, viewportWidth - STAGE_MIN_WIDTH - SPLITTER_WIDTH),
   );
 }
 

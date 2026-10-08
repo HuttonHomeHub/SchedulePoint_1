@@ -1228,7 +1228,7 @@ function SearchFieldControl({
         {...itemProps}
         type="search"
         disabled
-        placeholder="Search or filter activities…"
+        placeholder="Search or filter…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
         // `pointer-coarse:h-9` — 36 px, the coarse-pointer floor. The field is `h-8` at 32, which
@@ -1365,7 +1365,7 @@ function LiveSearchControl({
               },
             }
           : {})}
-        placeholder="Search or filter activities…"
+        placeholder="Search or filter…"
         aria-label="Search or filter activities"
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}

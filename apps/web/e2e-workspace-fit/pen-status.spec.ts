@@ -233,7 +233,7 @@ test.describe('the merged header row', () => {
       return tallest > 0 ? Math.round(row.getBoundingClientRect().height / tallest) : 0;
     });
 
-  test('is one line at 1646 and two below it, with the plan name readable at every width', async () => {
+  test('is one line from 1024 up, with the plan name readable at every width', async () => {
     // **1280 is here on the accessibility review's recommendation, and the reason is this epic's
     // own record.** `falsification.md` warns that a 37 px placeholder plan name once hid a real
     // overflow, and that a real project crumb makes the identity block larger than the figure the
@@ -252,6 +252,11 @@ test.describe('the merged header row', () => {
     // widths): one line down to a **1120 px** container and two at **1068**, so the boundary sits
     // between them. 1024's container is 992 px, comfortably short.
     //
+    // **1024 became ONE line at minimum-viewport M4, by a cap rather than by a saving.** The row's
+    // content did not shrink; its first section (brand and plan identity) is now at most half the
+    // row, so the plan name truncates (its `title` carries the whole) before the row would wrap.
+    // 48 px of diagram at the floor, for a name that was never going to be read in full at 992 px.
+    //
     // The falsifying width is replaced rather than dropped, for the reason the paragraph above
     // gives: a sweep of widths where the row always fits would only ever prove the row fits, which
     // is half a claim. 1280 stays in the sweep at its new expectation — it is here on the
@@ -261,7 +266,7 @@ test.describe('the merged header row', () => {
       [1646, 1],
       [1440, 1],
       [1280, 1],
-      [1024, 2],
+      [1024, 1],
     ] as const) {
       await page.setViewportSize({ width, height: 1000 });
       await page.waitForTimeout(400);
