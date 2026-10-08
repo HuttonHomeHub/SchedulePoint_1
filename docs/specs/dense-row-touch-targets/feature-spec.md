@@ -1,6 +1,6 @@
 # Feature Spec: Dense-row touch targets (`docs/TECH_DEBT.md` #215)
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: CQ-1 the Gantt stays 28 px; CQ-2 the activities table's menu button grows to 44 px on touch; CQ-3 `pointer` (not `any-pointer`) stays the gate, the cover-attached finger gap is recorded.
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
 - **Date:** 2026-10-08. Revised the same day after the UX, component and accessibility reviews
   (all "agree with changes"; their blocking findings are folded in below).
@@ -25,12 +25,12 @@ level AAA). Every exception below is an exception to the **house rule**, never t
 **Recount (2026-10-08, against the tree, not the row).** `size="icon-sm"` appears at exactly five
 call sites:
 
-| Call site                                           | What it renders on                                                                                                                                       | Row height, and who sets it                                                                                                                                                         |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HierarchyTree.tsx:607`                             | Project Explorer tree                                                                                                                                    | **28, a JS constant** (`:28`), fed to `estimateSize` (`:227`) and the row style (`:59`)                                                                                             |
-| `GanttRowMenu.tsx:162`                              | Gantt rows                                                                                                                                               | **28, a JS constant** (`GanttPanel.tsx:113`), fed to `estimateSize` (`:670`) and the row style (`:1524`, `:2014`)                                                                   |
-| `explorer-column.tsx:81`                            | Collapsed Explorer spine                                                                                                                                 | **width** 34, a JS constant (`:24`). Its only other use is `:76` (searched across `apps/web`).                                                                                      |
-| `ActivitiesTable.tsx:245`                           | Activities table                                                                                                                                         | **Content-sized and measured.** `data-table-windowed-body.tsx:190-193` measures every row. A row with a `⋯` is 45 px (28 + `py-2` + 1 px rule). It is 45 under both pointers.       |
+| Call site                                           | What it renders on                                                                                                                                            | Row height, and who sets it                                                                                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HierarchyTree.tsx:607`                             | Project Explorer tree                                                                                                                                         | **28, a JS constant** (`:28`), fed to `estimateSize` (`:227`) and the row style (`:59`)                                                                                                   |
+| `GanttRowMenu.tsx:162`                              | Gantt rows                                                                                                                                                    | **28, a JS constant** (`GanttPanel.tsx:113`), fed to `estimateSize` (`:670`) and the row style (`:1524`, `:2014`)                                                                         |
+| `explorer-column.tsx:81`                            | Collapsed Explorer spine                                                                                                                                      | **width** 34, a JS constant (`:24`). Its only other use is `:76` (searched across `apps/web`).                                                                                            |
+| `ActivitiesTable.tsx:245`                           | Activities table                                                                                                                                              | **Content-sized and measured.** `data-table-windowed-body.tsx:190-193` measures every row. A row with a `⋯` is 45 px (28 + `py-2` + 1 px rule). It is 45 under both pointers.             |
 | `row-actions-menu.tsx:86` (shared `RowActionsMenu`) | **Six tables:** Clients, Projects, Plans, Resources, organisation Calendars (via `CalendarRowMenu`) and project calendars (`ProjectCalendarsSection.tsx:201`) | **Content-sized.** Each `⋯` sits beside a `size="sm"` primary button. Under a coarse pointer `--control-h-sm` is 44 (`globals.css:1184`), so these rows are already about 61 px on touch. |
 
 Four claims in the existing record are wrong:
@@ -104,6 +104,7 @@ no change.
   - is swept, not exempted.
 
   The Surface's own 1912 × 1104 is proven on the device sheet, not by the sweep.
+
 - The tree keeps its scroll position and focus when the pointer changes (cover folded or unfolded),
   in both directions. The device sheet confirms this.
 - ADR-0118 D1's coarse exception list keeps `icon-sm` for one consumer only, the Gantt's `⋯`.
@@ -192,15 +193,15 @@ There is nothing here to check permissions against. This is presentation only:
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes                                                                                                                                                       |
-| -------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | med    | `Button` gains a size variant; `RowActionsMenu`, `ActivitiesTable`, `HierarchyTree` and `explorer-column` change; one small hook                             |
-| Backend / API  | none   | —                                                                                                                                                           |
-| Database       | none   | No schema, so database-architect is not engaged. Stated so the omission is not read as a skip.                                                              |
-| Security       | none   | No new input or endpoint                                                                                                                                    |
-| Performance    | low    | The tree renders fewer rows on coarse, and one `matchMedia` listener is added. The Gantt is untouched.                                                      |
-| Infrastructure | low    | The `command-surface.spec.ts` coarse projection gains surfaces and loses an exemption                                                                       |
-| Testing        | med    | The virtualisation maths, a containment assertion, the coarse sweep and a device sheet                                                                      |
+| Area           | Impact | Notes                                                                                                                                                          |
+| -------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | med    | `Button` gains a size variant; `RowActionsMenu`, `ActivitiesTable`, `HierarchyTree` and `explorer-column` change; one small hook                               |
+| Backend / API  | none   | —                                                                                                                                                              |
+| Database       | none   | No schema, so database-architect is not engaged. Stated so the omission is not read as a skip.                                                                 |
+| Security       | none   | No new input or endpoint                                                                                                                                       |
+| Performance    | low    | The tree renders fewer rows on coarse, and one `matchMedia` listener is added. The Gantt is untouched.                                                         |
+| Infrastructure | low    | The `command-surface.spec.ts` coarse projection gains surfaces and loses an exemption                                                                          |
+| Testing        | med    | The virtualisation maths, a containment assertion, the coarse sweep and a device sheet                                                                         |
 | Engine         | none   | `computeSchedule` is not imported. No scheduling input changes, so the recalc parity gate holds trivially: it stays byte-identical because nothing reaches it. |
 
 **ADR-0105 triggers crossed**, so this spec is mandatory whatever the size:
@@ -253,13 +254,13 @@ So in a 28 px row the honest choices are to **grow the row** or to **keep a name
 "small button, big hit area" works only where the row is already ≥ 44 px. That is true of every
 table here and of neither fixed-row surface.
 
-| Surface                     | Decision                                                            | Why                                                                                                                         |
-| --------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Six `RowActionsMenu` tables | `⋯` grows to 44 on coarse                                            | The row is already 61 px on touch, so this costs 0 rows                                                                     |
-| Activities table            | `⋯` grows to 44 on coarse (CQ-2 offers a free hit box instead)       | One mechanism, and the sweep measures exactly what you see                                                                  |
-| Explorer tree               | Rows grow to 44 on coarse, and the `⋯` grows with them              | Not density-critical. The row is the navigation target. Long-press covers only the menu.                                   |
-| Explorer spine              | Width follows its content on coarse (CSS only)                      | Not virtualised, so no JS is needed                                                                                         |
-| Gantt                       | **Unchanged**; ADR-0177 D4's exceptions stand (CQ-1)                | Density-critical, with device evidence. Its row geometry also carries the bar, cells, ruler and links.                     |
+| Surface                     | Decision                                                       | Why                                                                                                    |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Six `RowActionsMenu` tables | `⋯` grows to 44 on coarse                                      | The row is already 61 px on touch, so this costs 0 rows                                                |
+| Activities table            | `⋯` grows to 44 on coarse (CQ-2 offers a free hit box instead) | One mechanism, and the sweep measures exactly what you see                                             |
+| Explorer tree               | Rows grow to 44 on coarse, and the `⋯` grows with them         | Not density-critical. The row is the navigation target. Long-press covers only the menu.               |
+| Explorer spine              | Width follows its content on coarse (CSS only)                 | Not virtualised, so no JS is needed                                                                    |
+| Gantt                       | **Unchanged**; ADR-0177 D4's exceptions stand (CQ-1)           | Density-critical, with device evidence. Its row geometry also carries the bar, cells, ruler and links. |
 
 ### 4.3 Rows visible per screen
 
@@ -267,13 +268,13 @@ table here and of neither fixed-row surface.
 below with a reading (ADR-0113). The percentages do not depend on the panel's height: going from
 28 to 44 shows **36 %** fewer rows (1 − 28/44), and going from 45 to 61 shows **26 %** fewer.
 
-| Surface (coarse)               | 1912 × 1104 (Surface, tablet)          | 1024 × 600 (floor)                                                        |
-| ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------- |
-| List tables (`RowActionsMenu`) | no change (rows already ~61)           | no change                                                                 |
+| Surface (coarse)               | 1912 × 1104 (Surface, tablet)                  | 1024 × 600 (floor)                                                                |
+| ------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| List tables (`RowActionsMenu`) | no change (rows already ~61)                   | no change                                                                         |
 | Activities table (45 → 61)     | **26 %** fewer; e.g. 6 → 4 per 300 px of panel | **0 → 0**: the panel shows no rows at the floor today (`m4-measurement.md:75-78`) |
-| Explorer tree (28 → 44)        | 36 % fewer; e.g. H ≈ 549¹ gives 19 → 12 | **0 → 0** without scrolling; the column scrolls 16 px more per row        |
-| Gantt _if grown_ (28 → 44)     | 36 % fewer; count owed to M0²          | 36 % fewer; count owed to M0                                              |
-| Any surface, **fine pointer**  | **no change**                          | **no change**                                                             |
+| Explorer tree (28 → 44)        | 36 % fewer; e.g. H ≈ 549¹ gives 19 → 12        | **0 → 0** without scrolling; the column scrolls 16 px more per row                |
+| Gantt _if grown_ (28 → 44)     | 36 % fewer; count owed to M0²                  | 36 % fewer; count owed to M0                                                      |
+| Any surface, **fine pointer**  | **no change**                                  | **no change**                                                                     |
 
 ¹ How the tree height was worked out:
 
@@ -317,11 +318,11 @@ sequenceDiagram
   does nothing to rows it has already measured. That includes the rows `rangeExtractor` pins.
 - **Both directions** are tested. Worked example with 50 rows:
 
-  | Change | Before | Anchor | After |
-  | --- | --- | --- | --- |
-  | fine → coarse | offset 300 at 28 px | k = 10, d = 20 | 440 + 31.43 = **471.43** |
-  | coarse → fine | offset 471.43 at 44 px | k = 10, d = 31.43 | 280 + 20 = **300** |
-  | coarse → fine, end of list (600 px scroller) | offset 1600 | k = 36, d = 16 | request **1018.18**; the browser limits it to **800** (= 1400 − 600) |
+  | Change                                       | Before                 | Anchor            | After                                                                |
+  | -------------------------------------------- | ---------------------- | ----------------- | -------------------------------------------------------------------- |
+  | fine → coarse                                | offset 300 at 28 px    | k = 10, d = 20    | 440 + 31.43 = **471.43**                                             |
+  | coarse → fine                                | offset 471.43 at 44 px | k = 10, d = 31.43 | 280 + 20 = **300**                                                   |
+  | coarse → fine, end of list (600 px scroller) | offset 1600            | k = 36, d = 16    | request **1018.18**; the browser limits it to **800** (= 1400 − 600) |
 
 ### 4.5 Architecture
 
@@ -427,6 +428,7 @@ flowchart TD
 
   It is offered as CQ-2's free option. It is not the default, because it is a per-site
   negative-margin construction that sits at the scroller's edge.
+
 - **Fix the activities checkbox to 44 now.** That is cheap in a 61 px row, but it is a second
   control and outside #215. It is filed as its own row, and the sweep names it as an exemption
   instead.
@@ -461,10 +463,8 @@ flowchart TD
     at `button.tsx:59`/`:71`, `toolbar-styles.ts:154`/`:163` and `GanttColumnEdge.tsx:25` are
     stripped, so they do not trip it.
   - **`treeRowHeight(true)`** equals `--control-h` (rem × 16) in the coarse block.
-  - **A call-site count test over `src/**`, comments stripped.** `'icon-sm'` is defined in
-    `button.tsx` and used exactly once (`GanttRowMenu.tsx`). This is needed because the existing
-    `button.tsx::size-7` exception needle would stay green even if `icon-sm` were deleted:
-    `icon-row`'s string also contains `size-7`.
+  - **A call-site count test over `src/**`, comments stripped.** `'icon-sm'`is defined in`button.tsx` and used exactly once (`GanttRowMenu.tsx`). This is needed because the existing
+`button.tsx::size-7`exception needle would stay green even if`icon-sm`were deleted:`icon-row`'s string also contains `size-7`.
 - **e2e (`e2e-workspace-fit` coarse projection, at 1646 × 1097 and 1024 × 600):**
   - **Activities table surface.** It sweeps the table but exempts its row checkboxes by a named
     marker (`[data-coarse-exempt="row-select"]`), in the same pattern as `ganttExempt`. The marker's

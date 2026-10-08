@@ -1,7 +1,7 @@
 # Implementation Plan: Dense-row touch targets (`docs/TECH_DEBT.md` #215)
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: CQ-1 the Gantt stays 28 px; CQ-2 the activities table's menu button grows to 44 px on touch; CQ-3 `pointer` (not `any-pointer`) stays the gate, the cover-attached finger gap is recorded.
 - **Owner:** builder agent (Sonnet), with the gate-pass reviewers named per milestone
 
 ## Breakdown
@@ -41,6 +41,7 @@ exception with device evidence (ADR-0183 D1). The mouse geometry does not change
   - the stage, canvas and Gantt widths with the Explorer collapsed, as the baseline for M3.
 
   Take screenshots of the tree at the 200 px minimum width (long names, the 16 px indent and icons).
+
 - **Device pre-reading, about 3 minutes, optional but recommended.** On the Surface in tablet
   posture: tap a tree row ×10 and a tree `⋯` ×10, at today's 28 px. This gives the tree's 36 % cost
   the same kind of evidence the Gantt's exception rests on.
@@ -61,6 +62,7 @@ exception with device evidence (ADR-0183 D1). The mouse geometry does not change
 **Outcome:** on touch, the `⋯` on Clients, Projects, Plans, Resources, both Calendars tables and
 the activities table is 44 px. Mouse is unchanged.
 **Entry point:**
+
 - Clients page: "Actions for <client> in Clients";
 - the plan's activities table: "Actions for <activity>".
 
@@ -73,6 +75,7 @@ the activities table is 44 px. Mouse is unchanged.
 > **Complexity:** S
 > **Dependencies:** M0 (P1 and P2), and CQ-2 answered.
 > **Risks:**
+>
 > - rows grow in the activities table on coarse, which CQ-2 expects;
 > - a misspelt class could change mouse geometry → the fine-pointer equality check against M0's
 >   baseline catches it.
@@ -94,9 +97,8 @@ the activities table is 44 px. Mouse is unchanged.
 4. **`control-height.structural.test.ts`:**
    - Correct the stale "five of its six" at `:59`, and make the `icon-sm` exception reason name one
      consumer (`GanttRowMenu`).
-   - **Add a call-site test over `src/**`, comments stripped.** `'icon-sm'` is defined in
-     `button.tsx`, and `size="icon-sm"` appears exactly once, in `GanttRowMenu.tsx`. This is needed
-     because the `size-7` needle alone stays green if `icon-sm` is deleted.
+   - **Add a call-site test over `src/**`, comments stripped.** `'icon-sm'`is defined in`button.tsx`, and `size="icon-sm"`appears exactly once, in`GanttRowMenu.tsx`. This is needed
+because the `size-7`needle alone stays green if`icon-sm` is deleted.
    - Plant it red with a dummy call site, then remove the dummy.
 5. **`command-surface.spec.ts`:**
    - **Activities table surface.** Add it to `COARSE_SURFACES` with an `atLeast` positive. Exempt
@@ -131,6 +133,7 @@ rows and `⋯`, and runs the containment assertion on it.
 > **Complexity:** M
 > **Dependencies:** M1 (`icon-row`), M0 (P3).
 > **Risks:**
+>
 > - **The browser limits `scrollTop` before effects run** when going coarse → fine. → The anchor is
 >   captured continuously in a ref, and the restore runs in a `useLayoutEffect`.
 > - **The virtualizer keeps its cached 28 px sizes.** → `measure()`, tested with the real
@@ -298,15 +301,15 @@ The Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md), plus:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                     | Likelihood | Impact | Mitigation                                                                        |
-| --------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------- |
-| The spec's worked-out row counts are off                              | med        | low    | M0 replaces them before any code; no decision hinges on ±3 rows                   |
-| The browser limits scroll before the restore runs (coarse → fine)     | high       | med    | Continuous anchor ref, `useLayoutEffect`, both-direction arithmetic tests        |
-| The virtualizer keeps cached 28 px sizes, including pinned rows       | med        | med    | `measure()`, tested with the real virtualizer                                    |
-| Focus is lost on a fold                                               | low        | high   | Real-virtualizer focus test, ADR-0111 review, device step                         |
-| No journey can flip the pointer                                       | certain    | med    | Unit tests plus the device sheet; no journey claims it                            |
-| A finger with the cover attached stays at 28 px                       | high       | low    | Known gap in ADR-0183 (CQ-3)                                                      |
-| The new structural gates trip on comments                             | med        | low    | Comments stripped; only arguments to `matchMedia`/`useMediaQuery` are matched     |
-| The containment assertion over-reports                                | low        | med    | Scoped to `[aria-haspopup="menu"]` inside a row; border box only                  |
-| The fine spine overflow (P4) is real                                  | med        | low    | Measured at M0, fixed at M3, recorded as a defect                                 |
-| Activities-table density on the Surface drops 26 %                    | high       | low    | CQ-2's free hit box                                                               |
+| Risk / assumption                                                 | Likelihood | Impact | Mitigation                                                                    |
+| ----------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------- |
+| The spec's worked-out row counts are off                          | med        | low    | M0 replaces them before any code; no decision hinges on ±3 rows               |
+| The browser limits scroll before the restore runs (coarse → fine) | high       | med    | Continuous anchor ref, `useLayoutEffect`, both-direction arithmetic tests     |
+| The virtualizer keeps cached 28 px sizes, including pinned rows   | med        | med    | `measure()`, tested with the real virtualizer                                 |
+| Focus is lost on a fold                                           | low        | high   | Real-virtualizer focus test, ADR-0111 review, device step                     |
+| No journey can flip the pointer                                   | certain    | med    | Unit tests plus the device sheet; no journey claims it                        |
+| A finger with the cover attached stays at 28 px                   | high       | low    | Known gap in ADR-0183 (CQ-3)                                                  |
+| The new structural gates trip on comments                         | med        | low    | Comments stripped; only arguments to `matchMedia`/`useMediaQuery` are matched |
+| The containment assertion over-reports                            | low        | med    | Scoped to `[aria-haspopup="menu"]` inside a row; border box only              |
+| The fine spine overflow (P4) is real                              | med        | low    | Measured at M0, fixed at M3, recorded as a defect                             |
+| Activities-table density on the Surface drops 26 %                | high       | low    | CQ-2's free hit box                                                           |
