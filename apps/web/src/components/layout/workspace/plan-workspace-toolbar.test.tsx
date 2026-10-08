@@ -645,9 +645,12 @@ describe('the short-body swap', () => {
   const resizer = () => screen.queryByRole('separator', { name: 'Resize activities panel' });
   /** The frames `withDiagram` waits for, held so a test can look at the state before the command. */
   let frames: FrameRequestCallback[] = [];
+  let frameIds: number[] = [];
+  let nextFrameId = 0;
   const nextFrame = () => {
     const due = frames;
     frames = [];
+    frameIds = [];
     act(() => {
       for (const callback of due) callback(0);
     });
@@ -659,9 +662,18 @@ describe('the short-body swap', () => {
     bodyHeight = 0;
     observed.length = 0;
     frames = [];
+    frameIds = [];
+    nextFrameId = 0;
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
       frames.push(callback);
-      return frames.length;
+      frameIds.push(++nextFrameId);
+      return nextFrameId;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number): void => {
+      const at = frameIds.indexOf(id);
+      if (at < 0) return;
+      frames.splice(at, 1);
+      frameIds.splice(at, 1);
     });
     localStorage.clear();
     vi.stubGlobal(
@@ -874,6 +886,63 @@ describe('the short-body swap', () => {
       );
     });
 
+    it('leaves focus on the toolbar control when a dock forces the panel closed', () => {
+      renderScreen();
+      resizeBody(800);
+      fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+      expand();
+      expect(
+        screen.getByRole('separator', { name: 'Resize health check panel' }),
+      ).toBeInTheDocument();
+      const analysis = screen.getByRole('button', { name: 'Analysis' });
+      analysis.focus();
+
+      // The body shrinks past the line with both open: the later request, the dock, wins.
+      resizeBody(365);
+      expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+      expect(document.activeElement).toBe(analysis);
+    });
+
+    it('hands focus to the collapsed bar when a wrapped command runs from inside the panel', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      const collapse = screen.getByRole('button', { name: 'Collapse activities panel' });
+      collapse.focus();
+      expect(document.activeElement).toBe(collapse);
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Expand activities panel' }),
+      );
+    });
+
+    it('drops the pending command when the workspace unmounts before the frame', () => {
+      const { unmount } = renderScreen();
+      resizeBody(365);
+      expand();
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(frames).toHaveLength(1);
+      unmount();
+      expect(frames).toHaveLength(0);
+    });
+
+    it('does not collapse the panel on the Find field’s first Escape, only on the second', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      const find = screen.getByRole('searchbox', { name: 'Search or filter activities' });
+      fireEvent.change(find, { target: { value: 'pile' } });
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+
+      fireEvent.keyDown(find, { key: 'Escape' });
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(frames).toHaveLength(0);
+
+      fireEvent.keyDown(find, { key: 'Escape' });
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    });
+
     it('collapses first, then arms, a drawing tool', () => {
       renderScreen();
       resizeBody(365);
@@ -908,6 +977,16 @@ describe('the short-body swap', () => {
       expand();
       expect(screen.getByText(NOTE)).toBeInTheDocument();
       expect(screen.queryByText(/Drawing tool put away/)).not.toBeInTheDocument();
+    });
+
+    it('names the Gantt, not the diagram, when the Gantt is the view the swap hid', () => {
+      h.search = { view: 'gantt' };
+      renderScreen();
+      resizeBody(365);
+      expand();
+      expect(screen.getByTestId('gantt-panel').closest('[hidden]')).not.toBeNull();
+      expect(screen.getByText('Gantt hidden. Collapse to return.')).toBeInTheDocument();
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
     });
 
     it('does not disarm a tool when the body is not short', () => {

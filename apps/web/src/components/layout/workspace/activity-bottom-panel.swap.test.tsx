@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ActivityBottomPanel,
   DIAGRAM_HIDDEN_NOTE,
+  GANTT_HIDDEN_NOTE,
   TOOL_PUT_AWAY_NOTE,
   useActivityPanelModel,
 } from './activity-bottom-panel';
@@ -75,5 +76,37 @@ describe('ActivityBottomPanel while the diagram is hidden', () => {
 
   it('keeps the note text as one constant string', () => {
     expect(DIAGRAM_HIDDEN_NOTE).toBe('Diagram hidden. Collapse to return.');
+    expect(GANTT_HIDDEN_NOTE).toBe('Gantt hidden. Collapse to return.');
+  });
+
+  it('names the Gantt when that is the view the swap hid', () => {
+    render(
+      <ActivityBottomPanel
+        model={panelModel()}
+        onCollapse={NOOP}
+        diagramHidden
+        hiddenView="gantt"
+      />,
+    );
+    expect(screen.getByText(GANTT_HIDDEN_NOTE)).toBeInTheDocument();
+    expect(screen.queryByText(DIAGRAM_HIDDEN_NOTE)).not.toBeInTheDocument();
+  });
+
+  it('describes Collapse by the note while the diagram is hidden, and not otherwise', () => {
+    const { rerender } = render(
+      <ActivityBottomPanel model={panelModel()} onCollapse={NOOP} diagramHidden toolDisarmed />,
+    );
+    const collapse = screen.getByRole('button', { name: 'Collapse activities panel' });
+    const note = screen.getByText(`${DIAGRAM_HIDDEN_NOTE} ${TOOL_PUT_AWAY_NOTE}`);
+    expect(note.id).not.toBe('');
+    expect(collapse).toHaveAttribute('aria-describedby', note.id);
+    // Described, not announced: the note is not a live region.
+    expect(note).not.toHaveAttribute('aria-live');
+    expect(note.closest('[role="status"], [role="alert"]')).toBeNull();
+
+    rerender(<ActivityBottomPanel model={panelModel()} onCollapse={NOOP} />);
+    expect(screen.getByRole('button', { name: 'Collapse activities panel' })).not.toHaveAttribute(
+      'aria-describedby',
+    );
   });
 });

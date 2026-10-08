@@ -11906,3 +11906,16 @@ Below the designed floor (ADR-0179), so not a reflow failure: nothing scrolls si
 keyboard-reachable. But a touch user at 320 px cannot press the `⋯` (WCAG 2.5.x target access). **Next:** confirm the
 long-press path opens the row menu at 320, then fix the overlap (the pane bar's z-index or inset) in
 minimum-viewport M4's vertical-budget work.
+
+### 469. `plan-workspace-toolbar.tsx`'s short-body swap state could move into a `useShortBodySwap` hook
+
+**Status:** open · **Verified:** 2026-10-08 (`wc -l apps/web/src/components/layout/workspace/plan-workspace-toolbar.tsx`: 2626 lines on `main` at `73a28c76`, 2736 at `bee3b771`; raised by the component review of ADR-0180)
+**Raised:** 2026-10-08 · **Size:** S · **Owner:** web
+
+The swap added about 110 lines of inline state to a file that is already the workspace's largest: `wasShort` / `short` /
+`swapped` (the hysteresis memory and the derived flag), `toolPutAway`, `collapseQuietly`, `withDiagram`, `expandPanel`,
+and the focus tracking (`focusInHiddenRef`, `collapseButtonRef`, `trackFocusIn` / `trackFocusOut` and their layout
+effect). They share one input (`bodyHeight`) and one output (`swapped` plus four callbacks), so they extract cleanly.
+**Next:** move them into a `useShortBodySwap` hook beside `use-activity-panel-prefs.ts`, behaviour unchanged, with the
+existing `the short-body swap` cases in `plan-workspace-toolbar.test.tsx` as the proof. **Trigger:** the next change that
+touches the swap, or the file passing 2,800 lines.

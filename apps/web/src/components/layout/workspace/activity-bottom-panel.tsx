@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -184,6 +185,8 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
  * One string: ux-reviewer signs the copy off, and the journey asserts it by this text.
  */
 export const DIAGRAM_HIDDEN_NOTE = 'Diagram hidden. Collapse to return.';
+/** The same note when the view the swap hid is the Gantt, so the sentence names what is gone. */
+export const GANTT_HIDDEN_NOTE = 'Gantt hidden. Collapse to return.';
 /** Appended to {@link DIAGRAM_HIDDEN_NOTE} when the swap put an armed drawing tool away. */
 export const TOOL_PUT_AWAY_NOTE = 'Drawing tool put away.';
 
@@ -214,6 +217,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   focusCollapseOnMount = false,
   hostsPlanSlots = true,
   diagramHidden = false,
+  hiddenView = 'diagram',
   toolDisarmed = false,
   collapseRef: collapseRefProp,
 }: {
@@ -255,6 +259,8 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
    * re-mounted, so the plan's slot outlets mount once.
    */
   diagramHidden?: boolean;
+  /** Which projection the swap hid, so the note names it. Read only while `diagramHidden`. */
+  hiddenView?: 'diagram' | 'gantt';
   /** The swap put an armed drawing tool away; adds {@link TOOL_PUT_AWAY_NOTE} to the note. */
   toolDisarmed?: boolean;
   /**
@@ -265,6 +271,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
 }): React.ReactElement {
   const ownCollapseRef = useRef<HTMLButtonElement>(null);
   const collapseRef = collapseRefProp ?? ownCollapseRef;
+  const hiddenNoteId = useId();
   useEffect(() => {
     if (focusCollapseOnMount) collapseRef.current?.focus();
   }, [focusCollapseOnMount, collapseRef]);
@@ -299,9 +306,10 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
         </div>
         {diagramHidden ? (
           // Plain text, never truncated: it wraps so a narrow panel reflows rather than clips, and
-          // is not a live region because focus is already moving to Collapse (the next text read).
-          <p className="text-muted-foreground min-w-0 text-sm whitespace-normal">
-            {DIAGRAM_HIDDEN_NOTE}
+          // is not a live region because focus is already moving to Collapse, which describes itself
+          // by this note, so the text is read once, with the control it explains.
+          <p id={hiddenNoteId} className="text-muted-foreground min-w-0 text-sm whitespace-normal">
+            {hiddenView === 'gantt' ? GANTT_HIDDEN_NOTE : DIAGRAM_HIDDEN_NOTE}
             {toolDisarmed ? ` ${TOOL_PUT_AWAY_NOTE}` : ''}
           </p>
         ) : null}
@@ -407,6 +415,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
                   variant="ghost"
                   size="icon"
                   aria-label="Collapse activities panel"
+                  {...(diagramHidden ? { 'aria-describedby': hiddenNoteId } : {})}
                   onClick={onCollapse}
                 >
                   <PanelBottomClose aria-hidden="true" className="size-4" />

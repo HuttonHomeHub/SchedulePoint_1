@@ -66,16 +66,36 @@ early on a 0 × 0 rect so a hidden surface keeps its bitmaps (no reallocation), 
 - Unaffected: display-mark toggles, and plan / data / output commands.
 - Typing in Find does not collapse; stepping its cursor does.
 - Canvas-owned keyboard shortcuts do nothing while hidden, and entering the swap disarms an armed
-  tool, which the panel's note says.
+  tool, which the panel's note says. The disarm is made in the workspace through
+  `canvasUi.setMode('select')`, not through `TsldPanel`'s `exitAddMode`: the mode is the workspace's
+  own state, and the panel's mode effects announce the change and release a pending LOE pick as they
+  do for any other disarm. The announcement names the tool ("Add tool closed") and the note says
+  "Drawing tool put away."; both are kept, because the first is a live region that fires once and
+  the second is read with Collapse, and neither is the other's text.
+- The pending frame of a deferred command is cancelled when the workspace unmounts. The collapse is
+  quiet (focus stays on the toolbar control that was pressed) unless focus is inside the panel, where
+  the collapsed bar takes it so it is never left on `<body>`; a dock that forces the panel closed
+  uses the same quiet collapse.
 - A structural test lists the canvas-directed callbacks, so a new one must choose a class.
 
 **D5 — A right dock and an expanded panel are mutually exclusive on a short body, and the later
 request wins.** Expand closes the dock (its toggle goes unpressed); opening a dock collapses the
-panel. A toggle never claims a dock nobody can see.
+panel. A toggle never claims a dock nobody can see. Expand closes an open dock whenever
+`isShortBody(bodyHeight, DOCK_MIN_HEIGHT)` holds, **even if no swap follows**: on a body between
+`DOCK_MIN_HEIGHT` + 240 and 599 the panel opens beside the diagram, the dock is gone, and nothing
+announces that except the toggle's `aria-pressed` going false.
 
 **D6 — Focus.** Entering the swap while focus is inside the hidden canvas row, dock or resizer moves
 focus to the panel's Collapse button in a layout effect, so it is never `<body>`. Leaving the swap
 moves nothing.
+
+The panel's note describes the control it explains: while the diagram is hidden, Collapse carries
+`aria-describedby` pointing at the note, and the note is not a live region, so focus arriving on
+Collapse reads it once.
+
+**The Gantt is hidden by the swap too.** The Gantt is the workspace `surface` inside the same hidden
+row, so the swap hides whichever projection is showing. The note names it: `GANTT_HIDDEN_NOTE`
+("Gantt hidden. Collapse to return.") for the Gantt, `DIAGRAM_HIDDEN_NOTE` for the diagram.
 
 **D7 — The panel's minimum is derived and stored sizes are clamped.** A stored 140 reads back as
 `PANEL_MIN_OPEN`, and, because the preference hook's mount effect writes its state out, the stored

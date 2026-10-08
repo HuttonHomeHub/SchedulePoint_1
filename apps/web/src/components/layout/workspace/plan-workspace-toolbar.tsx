@@ -636,12 +636,25 @@ export function ToolbarPlanWorkspace({
 
   // **Collapse-first for a command that acts on the diagram** (A1, spec §2 "Commands while the
   // diagram is hidden"). Quiet — `interacted` is cleared — so the collapsed bar does not take focus
-  // from the toolbar control the planner just pressed. The next animation frame is what lets the
-  // un-hidden canvas lay out before the command reads its size; `measure()` ignores the 0 x 0
+  // from the toolbar control the planner just pressed. The exception is focus INSIDE the panel (a
+  // wrapped command reached from the table's own keys): that control is about to unmount, so the
+  // collapsed bar takes it rather than leaving it on <body>. The next animation frame is what lets
+  // the un-hidden canvas lay out before the command reads its size; `measure()` ignores the 0 x 0
   // rectangle in between, so the viewport it measured last is still the one the command acts on.
+  const panelBoxRef = useRef<HTMLDivElement>(null);
   const collapseQuietly = useCallback(() => {
-    setInteracted(false);
+    setInteracted(panelBoxRef.current?.contains(document.activeElement) ?? false);
     setCollapsed(true);
+  }, []);
+  // Frames still owed to a command; cancelled on unmount so a command never runs on a torn-down
+  // workspace.
+  const pendingFramesRef = useRef(new Set<number>());
+  useEffect(() => {
+    const pending = pendingFramesRef.current;
+    return () => {
+      for (const id of pending) cancelAnimationFrame(id);
+      pending.clear();
+    };
   }, []);
   const withDiagram = useCallback(
     <A extends unknown[]>(command: (...args: A) => void, when?: (...args: A) => boolean) =>
@@ -651,7 +664,12 @@ export function ToolbarPlanWorkspace({
           return;
         }
         collapseQuietly();
-        requestAnimationFrame(() => command(...args));
+        const pending = pendingFramesRef.current;
+        const id = requestAnimationFrame(() => {
+          pending.delete(id);
+          command(...args);
+        });
+        pending.add(id);
       },
     [swapped, collapseQuietly],
   );
@@ -873,7 +891,7 @@ export function ToolbarPlanWorkspace({
   // The other half of "the later request wins": a dock that opens (or survives a live resize) while
   // the diagram is hidden collapses the panel in the same render pass, so the dock is never invisible
   // for a frame. Adjusted during render like `wasShort`, for the same reason.
-  if (swapped && anyRightDockActive) collapse();
+  if (swapped && anyRightDockActive) collapseQuietly();
 
   // Focus the swap would strand: inside the diagram row (its docks included) or on the panel's
   // resizer, which is unmounted rather than hidden and so fires no blur of its own. A press of
@@ -2601,6 +2619,7 @@ export function ToolbarPlanWorkspace({
                     {/* The same box in both states, re-styled and never re-mounted, so the plan's
                       facts and dock outlets (inside the panel's foot row) mount exactly once. */}
                     <div
+                      ref={panelBoxRef}
                       style={swapped ? undefined : { height: panelHeight }}
                       className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
                     >
@@ -2609,6 +2628,7 @@ export function ToolbarPlanWorkspace({
                         onCollapse={collapse}
                         focusCollapseOnMount={interacted}
                         diagramHidden={swapped}
+                        hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
                         toolDisarmed={toolPutAway}
                         collapseRef={collapseButtonRef}
                       />
