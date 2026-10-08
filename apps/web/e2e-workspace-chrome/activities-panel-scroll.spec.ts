@@ -265,39 +265,45 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     for (const widths of seen) expect(widths).toEqual(before);
   });
 
-  test('scrolls as one region at 640px, the narrow single-pane layout too', async ({ page }) => {
-    // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
-    // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
-    const orgSlug = await onboard(page, STAMP + 1);
-    await createHierarchy(page);
-    await newPlan(page, 'Panel scale narrow');
-    await ensurePen(page);
-    await seedSixty(page, orgSlug);
-    await ensurePen(page);
-    // Tall on purpose: this asserts the single pane's scroll ownership, not the height budget. At
-    // 640 x 480 the chrome leaves the pane no height at all (m0-measurement.md §4), which is the
-    // cost of height never triggering the notice and has its own row in M4.
-    await page.setViewportSize({ width: 640, height: 844 });
+  test.describe('below the floor, after Continue anyway', () => {
+    test.use({ acknowledgeViewportNotice: true });
 
-    // Below `md` there is no separate expand/collapse — the view toggle IS the show/hide mechanism
-    // (`plan-workspace-toolbar.tsx`: both panes are always mounted, switched with `hidden`/`block`).
-    await page.getByRole('radio', { name: 'Activities' }).click();
-    const region = activitiesRegion(page);
-    await expect(region).toBeVisible();
+    test('scrolls as one region at 640px, the narrow single-pane layout too', async ({ page }) => {
+      // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
+      // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
+      const orgSlug = await onboard(page, STAMP + 1);
+      await createHierarchy(page);
+      await newPlan(page, 'Panel scale narrow');
+      await ensurePen(page);
+      await seedSixty(page, orgSlug);
+      await ensurePen(page);
+      // Tall on purpose: this asserts the single pane's scroll ownership, not the height budget. At
+      // 640 x 480 the chrome leaves the pane no height at all (m0-measurement.md §4), which is the
+      // cost of height never triggering the notice and has its own row in M4.
+      await page.setViewportSize({ width: 640, height: 844 });
 
-    const body = await panelBody(page).evaluate((el) => ({
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-    }));
-    const regionMetrics = await region.evaluate((el) => ({
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-    }));
-    expect(body.scrollHeight, 'panel body at 640px does not itself scroll').toBe(body.clientHeight);
-    expect(
-      regionMetrics.scrollHeight,
-      'the region at 640px is the one that overflows, not its pane',
-    ).toBeGreaterThan(regionMetrics.clientHeight);
+      // Below `md` there is no separate expand/collapse — the view toggle IS the show/hide mechanism
+      // (`plan-workspace-toolbar.tsx`: both panes are always mounted, switched with `hidden`/`block`).
+      await page.getByRole('radio', { name: 'Activities' }).click();
+      const region = activitiesRegion(page);
+      await expect(region).toBeVisible();
+
+      const body = await panelBody(page).evaluate((el) => ({
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      }));
+      const regionMetrics = await region.evaluate((el) => ({
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      }));
+      expect(body.scrollHeight, 'panel body at 640px does not itself scroll').toBe(
+        body.clientHeight,
+      );
+      expect(
+        regionMetrics.scrollHeight,
+        'the region at 640px is the one that overflows, not its pane',
+      ).toBeGreaterThan(regionMetrics.clientHeight);
+    });
   });
 
   test('a selection keeps rows on screen at the default panel height', async ({ page }) => {

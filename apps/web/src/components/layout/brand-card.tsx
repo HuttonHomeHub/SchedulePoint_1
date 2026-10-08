@@ -46,7 +46,11 @@ export function BrandCard({
         tone="auth"
         as={as}
         className={cn(
-          'bg-background grid w-full max-w-[900px] overflow-hidden rounded-lg shadow-xl',
+          'bg-background grid w-full max-w-[900px] rounded-lg shadow-xl',
+          // `overflow-clip`, not `overflow-hidden`, for the content-sized card: `hidden` makes the
+          // card a scroll container, and a sticky footer then sticks to a box that never scrolls
+          // instead of to the dialog that does.
+          fixed ? 'overflow-hidden' : 'overflow-clip',
           fixed ? 'md:h-[40rem] md:grid-cols-2' : 'md:[@media(min-height:36rem)]:grid-cols-2',
           className,
         )}

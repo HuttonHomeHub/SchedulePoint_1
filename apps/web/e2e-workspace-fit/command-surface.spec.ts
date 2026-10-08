@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page } from '@playwright/test';
 
 import { ganttRow } from '../e2e-gantt/support';
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,
@@ -1141,6 +1141,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       viewport: { width: 1646, height: 1097 },
       hasTouch: true,
     });
+    // The upright-tablet check below narrows this page to 834: a reader who got there pressed
+    // Continue anyway first. (A `beforeAll` context is outside the fixture's reach.)
+    await acknowledgeViewportNotice(context);
     page = await context.newPage();
     const orgSlug = await onboard(page, Date.now() + 7);
     await createHierarchy(page);
