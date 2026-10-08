@@ -572,6 +572,90 @@ export function ToolbarPlanWorkspace({
   // the toolbar context and to the foot row's cluster through the status portal.
   const penLock = usePenLockView(model.pen, model.currentUserId ?? undefined);
 
+  // Below `md` the vertical split can't give the canvas and the table useful height at once, so
+  // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
+  // squeezing the canvas to its minimum on a phone. Both stay mounted (toggled with `hidden`) so
+  // switching preserves the canvas viewport and the table scroll.
+  const isWide = useMediaQuery(MD_QUERY, true);
+  const [pane, setPane] = useState<WorkspacePane>('diagram');
+
+  // Activities panel: collapsed by default on this surface (drag up / Expand to reveal). Collapse
+  // is session-local here; the resizer still persists the height via the shared prefs.
+  const panel = useActivityPanelPrefs();
+  const [collapsed, setCollapsed] = useState(true);
+  const [interacted, setInteracted] = useState(false);
+  const collapse = useCallback(() => {
+    setInteracted(true);
+    setCollapsed(true);
+  }, []);
+  const expand = useCallback(() => {
+    setInteracted(true);
+    setCollapsed(false);
+  }, []);
+
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
+  const [bodyWidth, setBodyWidth] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const rect = el.getBoundingClientRect();
+      setBodyHeight(rect.height);
+      setBodyWidth(rect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180). When the body
+  // cannot give the panel three rows beside the diagram's minimum, an expanded panel takes the whole
+  // body and the diagram row is hidden — `display: none`, still mounted, so the canvas keeps its
+  // viewport and selection. `wasShort` is the hysteresis memory; it is adjusted during render (the
+  // documented derived-state pattern) because the swap must not lag the measurement by a frame.
+  // It uses the canvas reserve alone: an open dock and an expanded panel never coexist on a body
+  // this short (`expandPanel` closes the dock, the effect below collapses the panel).
+  const [wasShort, setWasShort] = useState(false);
+  const short = isShortBody(bodyHeight, CANVAS_MIN_HEIGHT, wasShort);
+  if (short !== wasShort) setWasShort(short);
+  const swapped = isWide && !collapsed && short;
+
+  // Entering the swap puts an armed drawing tool away: a tool armed while the diagram is hidden has
+  // no target, and Escape in the table must never have a tool to reach. `canvasUi` is this
+  // component's own state, and `setMode('select')` is the same disarm `TsldPanel`'s `exitAddMode`
+  // makes and a plan switch already makes (`useTsldCanvasUiState`), so the panel's mode effects
+  // announce it and release the LOE pick as they do for any other disarm. The flag is the panel
+  // note's "Drawing tool put away." for this opening; it clears when the swap ends.
+  const [toolPutAway, setToolPutAway] = useState(false);
+  if (swapped && !toolPutAway && canvasUi.mode !== 'select') {
+    setToolPutAway(true);
+    canvasUi.setMode('select');
+  } else if (!swapped && toolPutAway) {
+    setToolPutAway(false);
+  }
+
+  // **Collapse-first for a command that acts on the diagram** (A1, spec §2 "Commands while the
+  // diagram is hidden"). Quiet — `interacted` is cleared — so the collapsed bar does not take focus
+  // from the toolbar control the planner just pressed. The next animation frame is what lets the
+  // un-hidden canvas lay out before the command reads its size; `measure()` ignores the 0 x 0
+  // rectangle in between, so the viewport it measured last is still the one the command acts on.
+  const collapseQuietly = useCallback(() => {
+    setInteracted(false);
+    setCollapsed(true);
+  }, []);
+  const withDiagram = useCallback(
+    <A extends unknown[]>(command: (...args: A) => void, when?: (...args: A) => boolean) =>
+      (...args: A): void => {
+        if (!swapped || (when !== undefined && !when(...args))) {
+          command(...args);
+          return;
+        }
+        collapseQuietly();
+        requestAnimationFrame(() => command(...args));
+      },
+    [swapped, collapseQuietly],
+  );
+
   const ctx = useTsldToolbarContext({
     model,
     penLock,
@@ -599,6 +683,7 @@ export function ToolbarPlanWorkspace({
     setPlanView,
     barDateSource,
     hoursPerDayFor,
+    withDiagram,
     // Only in the Gantt: the diagram has no columns to choose, so the group is ABSENT there rather
     // than shaded (ADR-0082's omit branch — a thing the projection cannot do, not a permission).
     ganttColumns:
@@ -664,41 +749,6 @@ export function ToolbarPlanWorkspace({
     // the plan the dialog is asking about.
     model.duplicateBandId !== null;
 
-  // Below `md` the vertical split can't give the canvas and the table useful height at once, so
-  // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
-  // squeezing the canvas to its minimum on a phone. Both stay mounted (toggled with `hidden`) so
-  // switching preserves the canvas viewport and the table scroll.
-  const isWide = useMediaQuery(MD_QUERY, true);
-  const [pane, setPane] = useState<WorkspacePane>('diagram');
-
-  // Activities panel: collapsed by default on this surface (drag up / Expand to reveal). Collapse
-  // is session-local here; the resizer still persists the height via the shared prefs.
-  const panel = useActivityPanelPrefs();
-  const [collapsed, setCollapsed] = useState(true);
-  const [interacted, setInteracted] = useState(false);
-  const collapse = useCallback(() => {
-    setInteracted(true);
-    setCollapsed(true);
-  }, []);
-  const expand = useCallback(() => {
-    setInteracted(true);
-    setCollapsed(false);
-  }, []);
-
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const [bodyHeight, setBodyHeight] = useState(0);
-  const [bodyWidth, setBodyWidth] = useState(0);
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      const rect = el.getBoundingClientRect();
-      setBodyHeight(rect.height);
-      setBodyWidth(rect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const pointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
       (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
@@ -811,18 +861,6 @@ export function ToolbarPlanWorkspace({
     (next: number) => panel.setSize(Math.min(next, effectiveMax)),
     [panel, effectiveMax],
   );
-
-  // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180). When the body
-  // cannot give the panel three rows beside the diagram's minimum, an expanded panel takes the whole
-  // body and the diagram row is hidden — `display: none`, still mounted, so the canvas keeps its
-  // viewport and selection. `wasShort` is the hysteresis memory; it is adjusted during render (the
-  // documented derived-state pattern) because the swap must not lag the measurement by a frame.
-  // It uses the canvas reserve alone: an open dock and an expanded panel never coexist on a body
-  // this short (`expandPanel` closes the dock, the effect below collapses the panel).
-  const [wasShort, setWasShort] = useState(false);
-  const short = isShortBody(bodyHeight, CANVAS_MIN_HEIGHT, wasShort);
-  if (short !== wasShort) setWasShort(short);
-  const swapped = isWide && !collapsed && short;
 
   // Expand with a dock open: on a body too short for both, the dock closes first so its toolbar
   // toggle never claims a dock nobody can see. Not short: both stay, exactly as before the swap.
@@ -2571,6 +2609,7 @@ export function ToolbarPlanWorkspace({
                         onCollapse={collapse}
                         focusCollapseOnMount={interacted}
                         diagramHidden={swapped}
+                        toolDisarmed={toolPutAway}
                         collapseRef={collapseButtonRef}
                       />
                     </div>

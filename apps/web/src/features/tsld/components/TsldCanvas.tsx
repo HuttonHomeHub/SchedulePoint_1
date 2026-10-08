@@ -1579,6 +1579,11 @@ export function TsldCanvas({
 
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
+      // A hidden container (the short-body swap sets `display: none` on the canvas row) measures
+      // 0 x 0. Applying it would clamp to 1 x 1, reallocate every backing store, and publish a
+      // 1 px width to `setMinimapRoom`, all for a size nobody can see — then reallocate again on
+      // return. The last real size, which the viewport math reads from `sizeRef`, stands instead.
+      if (rect.width === 0 && rect.height === 0) return;
       // The canvas sits below the ruler band, so its drawable height is the container minus the ruler —
       // and, when the resource strip is active (Stage E, ADR-0049), minus the strip band at the bottom,
       // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
@@ -2050,6 +2055,10 @@ export function TsldCanvas({
     // back to Select (unless a create popover is open — that owns its own Esc).
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
+      // A canvas nobody can see answers no shortcut: with the short-body swap the activities table
+      // owns the screen, and an Escape that closes its row menu or cancels its cell edit must not
+      // also reach a tool or the ladder here. The same flag that pauses painting while hidden.
+      if (!visibleRef.current) return;
       // An Escape a native modal open above the canvas (the viewport notice, a dialog) already
       // answered is not ours to take as "leave the tool": the keydown bubbles through the DOM past
       // a top-layer modal. Deliberately NOT `e.defaultPrevented` — an open tooltip prevents default
