@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,
@@ -205,6 +205,9 @@ test.describe('the merged header row', () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
+    // The reflow test below narrows this page past the floor, so it is a reader who pressed
+    // Continue anyway (a page a `beforeAll` opens is outside the fixture's reach).
+    await acknowledgeViewportNotice(page);
     const orgSlug = await onboard(page, Date.now());
     await createHierarchy(page);
     // A long-but-plausible construction plan name. A short one is how three prior costings of this
@@ -342,6 +345,43 @@ test.describe('the merged header row', () => {
    * states are what this pins, and the wrapped behaviour is written down here rather than left for
    * someone to rediscover.
    */
+  /**
+   * **The half-row cap on the identity section is `lg` and up only** (M4; accessibility review B1).
+   * Below `lg` that section also holds the drawer trigger, and a cap there could leave the plan name
+   * and the Edit control no room at all. WCAG 1.4.10: at 390 and 320 the plan identity keeps a
+   * non-zero width, sits clear of the account chip, and the document does not scroll sideways.
+   */
+  test('below the floor the plan identity keeps room and the page does not scroll sideways', async () => {
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.waitForTimeout(400);
+      const reading = await page.evaluate(() => {
+        const identity = document.querySelector('[data-plan-identity]');
+        const chip = [...(document.querySelector('header')?.querySelectorAll('button') ?? [])].at(
+          -1,
+        );
+        const id = identity?.getBoundingClientRect();
+        const ch = chip?.getBoundingClientRect();
+        return {
+          identityWidth: id?.width ?? 0,
+          overlapsChip:
+            id && ch && id.height > 0
+              ? id.right > ch.left + 1 && id.bottom > ch.top + 1 && id.top < ch.bottom - 1
+              : false,
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+        };
+      });
+      expect(reading.identityWidth, `plan identity width at ${width}`).toBeGreaterThan(0);
+      expect(reading.overlapsChip, `plan identity overlaps the account chip at ${width}`).toBe(
+        false,
+      );
+      expect(reading.scrollWidth, `sideways scroll at ${width}`).toBeLessThanOrEqual(
+        reading.innerWidth,
+      );
+    }
+  });
+
   test('keeps the account chip as the row trailing control while the row is one line', async () => {
     for (const width of [1920, 1646]) {
       await page.setViewportSize({ width, height: 1000 });

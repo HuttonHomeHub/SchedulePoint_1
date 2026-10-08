@@ -1144,7 +1144,7 @@ function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
  * keep 240, so the product owner's own displays (1646 and 1912) are unchanged.
  */
 function searchFieldWidth(layout: ToolbarLayoutMode): string {
-  return triggersAreCompact(layout) ? 'w-36' : 'w-42 max-sm:w-36 min-[100rem]:w-[min(15rem,32vw)]';
+  return triggersAreCompact(layout) ? 'w-36' : 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
 }
 
 /**

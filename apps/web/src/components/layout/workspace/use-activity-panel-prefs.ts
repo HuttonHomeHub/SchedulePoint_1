@@ -34,7 +34,7 @@ export const CANVAS_MIN_HEIGHT = 240;
  * **This guards the panel's clamp and nothing else, and at the 1024 × 600 floor it is not met**:
  * the dock is 314 px tall there (`docs/specs/minimum-viewport/m4-measurement.md`), and the
  * activities panel cannot be opened to a usable height at all, because the diagram's own 240 px
- * minimum plus the panel's 140 px minimum plus 227 px of chrome and 51 px of foot is 658 px.
+ * minimum plus the panel's 140 px minimum plus 227 px of chrome and 51 px of foot is 658 px (`docs/TECH_DEBT.md` #468).
  */
 export const DOCK_MIN_HEIGHT = 360;
 

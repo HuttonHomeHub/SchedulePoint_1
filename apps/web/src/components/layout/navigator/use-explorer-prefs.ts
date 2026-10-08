@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
+import { SPLITTER_WIDTH } from '@/components/ui/panel-resizer';
 import {
   useResizablePanelPrefs,
   type UseResizablePanelPrefs,
@@ -35,9 +36,6 @@ export const EXPLORER_DEFAULT_WIDTH = 276;
  * 1141 px and up the 420 maximum is reached unchanged.
  */
 export const STAGE_MIN_WIDTH = 720;
-
-/** The splitter beside the panel is `w-px` (`panel-resizer.tsx`) and comes out of the stage too. */
-const SPLITTER_WIDTH = 1;
 
 /** The Explorer's widest allowed width in a window this wide. Pure, so the bound is testable. */
 export function explorerCeiling(viewportWidth: number): number {

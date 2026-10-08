@@ -125,11 +125,16 @@ function HeaderContents({
 
   return (
     <div className="flex w-full flex-wrap items-center justify-between gap-3">
-      {/* **Section 1 — the brand and the plan's identity, as one group.** They belong together:
+      {/* **Section 1 — the brand and the plan's identity, as one group, capped at half the row from
+          `lg`** (ADR-0179, minimum-viewport M4). The cap is what keeps the row one line at 1024: the
+          content did not shrink, so without it the organisation switcher wrapped to a second row
+          (48 px of diagram). The plan name truncates instead, and its `title` carries the whole.
+          Below `lg` the section also holds the drawer trigger and a phone's width has no room to
+          give away, so there it is uncapped. They belong together:
           `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
           of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
           `shrink` because this is the section that gives way — it is text with a `title`. */}
-      <div className="flex max-w-1/2 min-w-0 shrink items-center gap-3">
+      <div className="flex min-w-0 shrink items-center gap-3 lg:max-w-1/2">
         <div className="flex shrink-0 items-center gap-2">
           {shell && orgSlug ? (
             <Button
