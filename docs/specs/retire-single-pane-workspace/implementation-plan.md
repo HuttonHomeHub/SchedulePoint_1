@@ -1,6 +1,7 @@
 # Implementation Plan: Retire the below-`md` single-pane plan workspace
 
-- **Status:** Draft — awaiting product-owner approval (ADR-0131). Not approved.
+- **Status:** Draft — awaiting product-owner approval (ADR-0131). Not approved. Revised 2026-10-08
+  after the accessibility, UX and component reviews ("agree with changes").
 - **Spec:** [`feature-spec.md`](feature-spec.md)
 - **Date:** 2026-10-08
 - **Flag:** none (ADR-0088 D1). **Entry point:** the plan route below 768 px after Continue anyway.
@@ -17,6 +18,20 @@ These are why this needed a spec and not a register row:
   `dock`. No config or CI step changes.
 - **There is no schema change**, so no database-architect run is needed.
 
+## The viewport matrix
+
+Used by M0 and the M1 journey. All readings are taken after Continue anyway.
+
+| Viewport  | Why it is in the matrix                                                    |
+| --------- | -------------------------------------------------------------------------- |
+| 767 × 1024 | Just under the old breakpoint                                             |
+| 700 × 900  | `dock.spec.ts` and the narrow-shell banner                                |
+| 640 × 844  | `activities-panel-scroll.spec.ts`                                         |
+| 640 × 480  | 1280 × 960 at 200 %                                                       |
+| 640 × 360  | 1280 × 720 at 200 %, with a slim browser frame                            |
+| 640 × 300  | 1280 × 720 at 200 % in a normal browser frame (the reviewers' worst case) |
+| 320 × 720  | The 1.4.10 width                                                          |
+
 ## Breakdown
 
 ### Epic: one plan-workspace layout at every width
@@ -25,144 +40,245 @@ These are why this needed a spec and not a register row:
 
 ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
-**Task M0-T1 — Confirm the revisions defect in a browser.**
+**M0-T1 — Confirm the revisions defect in a browser.**
 
 - Steps:
   1. Open a plan at 700 × 900 after Continue.
   2. Choose Analysis → Compare revisions.
   3. Record what renders.
-- Expected: no panel (spec §0, item 2).
-- If a panel does render, strike that claim from the spec before M1.
-- Complexity XS · Risk: the claim is wrong. That is cheap to learn here.
+- If a panel does render, strike the claim from the spec before M1.
+- Complexity: XS.
 
-**Task M0-T2 — Readings, throwaway harness, not committed.**
+**M0-T2 — Readings, with a throwaway harness that is not committed.**
 
-- At 700 × 900, 640 × 844, 640 × 480, 320 × 720 and 767 × 1024, record for today's layout and for a
-  local patch with the branch removed:
-  - canvas height;
+- Take each reading at every row of the matrix, for today's layout and for a local patch with the
+  branch removed:
+  - canvas-row height and stage width;
   - foot-row height;
-  - the expanded panel's visible row count;
-  - each dock's width and whether its content scrolls sideways;
-  - the document's `scrollWidth − clientWidth`.
+  - the foot row's `scrollWidth − clientWidth`;
+  - the rectangle of **Expand activities panel**, of **Recalculate**, and whether each is
+    `elementFromPoint`-reachable;
+  - the expanded panel's visible row count, and the `DataTable` region height with and without the
+    `md:` prefix (AC-3.4);
+  - each dock's width, and whether its content scrolls sideways. This covers Revisions, which should
+    stack below its `@sm` container (`RevisionComparePanel.tsx:361`), and Health and Float paths at
+    about 300 px;
+  - the document's `scrollWidth − clientWidth`;
+  - the height of the ruler band plus one 60 px row of bars, to settle `CANVAS_YIELD_MIN` (spec
+    AC-3.2, "Why 160").
+- One extra reading at 640 × 480: a dock opened with the panel expanded, showing what the body gives
+  each.
 - Re-read #466 at 320 in the patched layout.
-- Write the results to `docs/specs/retire-single-pane-workspace/m0-measurement.md`.
-- Complexity S · Dependencies: none.
-- Risk: the revisions dock's pickers do not reflow below 380 (`REVISION_PANEL_MIN_WIDTH`). If so, M1
-  adds a stack rule for them.
+- Write everything to `docs/specs/retire-single-pane-workspace/m0-measurement.md`.
+- Complexity: S.
 
-**Task M0-T3 — Accessibility-reviewer agreement.**
+**M0-T3 — Accessibility-reviewer confirmation.**
 
-- Put spec §3 "WCAG 1.4.10" and the M0-T2 readings to accessibility-reviewer. Ask Q2's restated
-  question.
-- Record the answer in the spec and the ADR draft.
+- Steps:
+  - confirm the W3C 1.4.10 quotations in spec §3 against the page;
+  - review the M0-T2 readings;
+  - record the answer in the spec and the ADR draft.
 - **M1 does not merge without it.**
-- Complexity XS.
+- Complexity: XS.
 
 ### Milestone M1 — Retire the layout (one PR, releasable)
 
-**Task M1-T1 — Delete the branch.**
+**M1-T1 — Delete the branch.**
 
-- Steps:
-  1. Remove `MD_QUERY` (`plan-workspace-toolbar.tsx:155-156`), `isWide` and `pane` (`:666-671`), and
-     `:2509-2558`. The `:2360-2508` stack becomes unconditional.
-  2. Delete `workspace-view-toggle.tsx` and its import (`:37`).
-  3. Update the comments at `:247`, `:1084-1085`, `:1715` and `:2364`.
-- Complexity S.
+- Remove:
+  - `MD_QUERY` (`plan-workspace-toolbar.tsx:156`);
+  - `isWide` and `pane` (`:666-671`);
+  - the narrow branch (`:2509-2558`).
+- The `:2360-2508` stack becomes unconditional.
+- Delete `workspace-view-toggle.tsx` and its import (`:37`).
+- Reword the comments at `:247`, `:1084-1085`, `:1715` and `:2364`.
+- Complexity: S.
 
-**Task M1-T2 — Remove `hostsPlanSlots`.**
+**M1-T2 — Remove `hostsPlanSlots`.**
 
-- Steps: remove the prop from `ActivityBottomPanel`, `PlanActivitiesFootRow` and
-  `ActivityPanelCollapsedBar` (`activity-bottom-panel.tsx:199-229`, `:414-427`, `:494-495`,
-  `:511-524`).
+- Remove it from `ActivityBottomPanel`, `PlanActivitiesFootRow` and `ActivityPanelCollapsedBar`
+  (`activity-bottom-panel.tsx:199-229`, `:360`, `:414-427`, `:474-495`, `:511-524`).
+- `onCollapse` stays optional for its other callers; the docblock at `:227-228` is reworded.
 - Tests:
-  - delete `canvas-dock.test.tsx:128-142` and `activity-bottom-panel.test.tsx:48-53`;
-  - keep a `CanvasDock` in-place-fallback case if one exists elsewhere, and add one if not, because
-    the fallback is still the registry's contract (UX_STANDARDS "Two hosts, one mechanism").
-- Complexity S · Risk: component-reviewer must confirm no other caller passes the prop. Grep on
-  2026-10-08 found only `plan-workspace-toolbar.tsx:2556`.
+  - delete `canvas-dock.test.tsx:127-156`. It is vacuous without the prop, and the fallback is
+    already covered at `:22-35` and `:95-124`;
+  - **rewrite** `activity-bottom-panel.test.tsx:48-58` as "renders BOTH outlets, always", with its
+    `:13-21` docblock to match;
+  - tighten `plan-workspace-toolbar.test.tsx:395-399` to `[data-activities-bar]`.
+- Complexity: S.
+- Risk: another caller passes the prop. A grep on 2026-10-08 found only
+  `plan-workspace-toolbar.tsx:2556`.
 
-**Task M1-T3 — Bound each dock by the body (AC-2.2).**
+**M1-T3 — The dock cap (spec AC-2.2).**
 
-- Steps: one pure helper,
-  `dockWidth(stored, min, bodyWidth) = min(stored, max(min, bodyWidth − CANVAS_MIN_WIDTH), bodyWidth − SPLITTER)`,
-  used by the four clamps (`:715-719`, `:736-740`, `:755-759`, `:775-779`).
-- If M0 shows the revisions pickers do not reflow, add a container-query stack inside the revisions
-  panel.
-- Complexity S · Tests: unit tests for the helper at 320, 640, 768 and 1024 body widths.
+- Add a pure helper:
+  `dockBounds({ stored, min, bodyWidth }) → { width, cap, min }`.
+  - `bodyWidth === 0` means the body has not been measured yet. The helper applies no cap.
+  - Otherwise `cap = bodyWidth − SPLITTER_WIDTH` (`panel-resizer.tsx:14`).
+  - `width = min(stored, max(min, bodyWidth − CANVAS_MIN_WIDTH), cap)`.
+  - The returned `min` is `min(min, cap)`.
+- Use the helper's results in three places:
+  - the rendered width;
+  - `PanelResizer`'s `min` and `max` (`:2382`, `:2414`, `:2438`, `:2462`);
+  - the four `on*Resize` handlers (`:727`, `:747`, `:766`, `:786`).
+- If `min ≥ cap`, the resizer is not rendered.
+- Add `max-w-full` on the four `PanelSurface` docks, as the visual bound for the first paint.
+- **Render clamp only.** Persisted widths are never overwritten.
+- Unit tests:
+  - body widths 0, 320, 640, 768 and 1024;
+  - `aria-valuemin ≤ aria-valuemax` in every case;
+  - a stored 420 renders capped at 320 and is still 420 in storage.
+- Complexity: S.
 
-**Task M1-T4 — #468, subject to Q1.**
+**M1-T4 — `inert` for squeezed regions (spec AC-2.4).**
 
-- Steps: in the clamp at `:801-808`, when the panel is expanded and
-  `bodyHeight < CANVAS_MIN_HEIGHT + PANEL_MIN_OPEN`, let the canvas row's minimum yield. The panel's
-  maximum becomes `bodyHeight − a small floor`, with the floor stated and justified in the constant's
-  docblock (ADR-0151).
-- Collapsing restores the diagram.
-- Complexity S–M · Risk: the canvas's own `min-h-[240px]` (`TsldPanel.tsx:3279`) also has to yield.
-  Two minimums in two files is the class ADR-0110 records, so both change together.
-- Tests: a unit test on the clamp; the journey reading at 640 × 480.
+- **Width:** when `bodyWidth − dockMin − SPLITTER_WIDTH < CANVAS_MIN_WIDTH`, the dock takes the row
+  and the stage column gets `inert`.
+- **Height:** below `CANVAS_YIELD_MIN`, the canvas row gets `inert`.
+- Unit tests:
+  - a ResizeObserver stub reporting 0 × 0 then real sizes. At 0 the helper treats the body as
+    unmeasured, so nothing is inert by mistake on the first render. Once measured and squeezed, the
+    region is inert;
+  - removing `inert` restores tabbability.
+- Complexity: S–M.
+- Risk: `inert` on the stage while a canvas tool is armed. The armed-tool statement docks into the
+  foot row, which is not inert. The component reviewer checks the Escape path (`TsldCanvas.tsx`
+  window listener).
 
-**Task M1-T5 — Journeys (the gate).**
+**M1-T5 — The yield rule (spec AC-3.2; depends on Q1).**
+
+- Add `CANVAS_YIELD_MIN` (160, or the M0 reading) to `use-activity-panel-prefs.ts`, with its
+  justification in the docblock (ADR-0151).
+- Panel clamp (`:799-808`):
+  - with no dock open, reserve `CANVAS_YIELD_MIN` when `bodyHeight < CANVAS_MIN_HEIGHT + PANEL_MIN_OPEN`;
+  - below `CANVAS_YIELD_MIN + PANEL_MIN_OPEN`, the canvas row goes to 0 and is inert.
+- Collapsed panel:
+  - the body keeps a minimum height equal to the foot row, so `<main>` scrolls vertically rather
+    than clipping.
+- Dock open with an expanded panel:
+  - when `bodyHeight < DOCK_MIN_HEIGHT + PANEL_MIN_OPEN`, opening a dock collapses the panel;
+  - expanding the panel closes the dock, using its existing close-and-focus path;
+  - focus goes to the one just opened.
+- **Change `TsldPanel.tsx:3279` and `:2906` together.**
+- Unit tests:
+  - the clamp at bodies of 600, 380, 300, 200 and 0, with and without a dock;
+  - the mutual exclusion at a 480 body.
+- Complexity: M.
+
+**M1-T6 — Foot row at 320 (spec AC-3.3).**
+
+- The plan facts wrap to a second line below a container width. They currently do not shrink:
+  `plan-facts.tsx:107`, `:140` (`shrink-0`) and `:253` (`whitespace-nowrap`).
+- Expand and Recalculate stay `shrink-0`, in ADR-0110's give-way order.
+- Expand keeps its tooltip and the name "Expand activities panel" verbatim (ADR-0117).
+- Tests:
+  - a unit test of the wrap class;
+  - a journey assertion that the foot row's `scrollWidth − clientWidth ≤ 0` at 320 and 640.
+- Complexity: S.
+
+**M1-T7 — `DataTable`'s contained floor (spec AC-3.4).**
+
+- `data-table.tsx:608`: `md:min-h-32` becomes `min-h-32`, and the comment at `:604-605` is rewritten.
+- The journey asserts the region is at least 128 px with the panel open at 640 × 844.
+- Complexity: XS.
+
+**M1-T8 — Journeys (the gate).**
 
 - `narrow-shell.spec.ts`:
   - `:406` becomes **Expand activities panel**;
-  - FR-4's comment (`:196-215`) states that the facts are in the foot row;
-  - add one block at 700 × 900, 640 × 844 and 320 × 720 that:
-    - opens each of the four docks and asserts it is visible;
-    - asserts the Expand control is `pointerReachable`;
-    - asserts no sideways document scroll;
-    - runs axe with `target-size`.
-  - The revisions assertion is **verified red** against today's code first (ADR-0110).
-- `activities-panel-scroll.spec.ts:271-306`: use Expand and re-title.
-- `dock.spec.ts:223-245`: rewrite the docblock. The assertion stays.
+  - FR-4's comment (`:196-215`) is reworded: the facts are in the foot row.
+- A new block covering every matrix row from 700 × 900 down to 320 × 720 asserts:
+  - each of the four docks opens and is visible;
+  - Expand and Recalculate are `pointerReachable`;
+  - neither the document nor the foot row scrolls sideways;
+  - axe with `target-size`, including **a dock open at 320**.
+- Keyboard checks for each dock at 320:
+  - Tab order runs through the dock;
+  - **Tab from the dock never lands on a zero-size element**;
+  - Escape and Close behave as at 1024;
+  - focus returns on Close;
+  - focus stays on Expand / Collapse.
+- **Verified red first** (ADR-0110):
+  - against today's code, the revisions assertion fails;
+  - with the cap in place but the `inert` rule removed, the zero-size Tab assertion fails.
+- Other suites:
+  - `activities-panel-scroll.spec.ts:271-306` uses Expand and is re-titled;
+  - `dock.spec.ts:223-245` keeps its assertion, with the docblock rewritten.
 - Comment-only updates:
   - `m0-bands.spec.ts:46-52`;
   - `playwright.float-paths.config.ts:42`;
   - `e2e-toolbar/toolbar.spec.ts:23`;
-  - `data-table.tsx:604`.
+  - `e2e-workspace-fit/command-surface.spec.ts:836`;
+  - `plan-facts-host.test.tsx:14`;
+  - `plan-notes-reveal.test.tsx:10`;
+  - `TsldCanvas.hidden-pane.test.tsx:9`.
 - Run `scripts/e2e-local.sh web:narrow-shell` and `web:workspace-chrome` before pushing (§19.8).
-- Complexity S–M.
+- Complexity: M.
 
-**Task M1-T6 — Docs in lock-step.**
+**M1-T9 — Comment and docblock sweep.**
 
-- A new ADR: "The plan workspace has one layout at every width". It:
+- Reword these, as the reviewers reported them:
+  - `plan-status-bar.tsx:11`, `:34-38`;
+  - `plan-facts.tsx:19`;
+  - `TsldLegendPanel.tsx:32`;
+  - `TsldCanvas.tsx:1777`, `:2019` (the code stays; a hidden canvas is still possible);
+  - `segmented-control.tsx:28` (the docblock example);
+  - `scripts/measure-activities-panel.mjs:693` (limb N1, retired or re-described).
+- Then run the grep from success criterion 1 (spec §1) and list each remaining hit in the PR.
+- Complexity: S.
+
+**M1-T10 — Docs in lock-step.**
+
+- **The new ADR**, "The plan workspace has one layout at every width". It:
   - records the 1.4.10 reading and the reviewer's answer;
+  - states that the table wins at short heights, with `CANVAS_YIELD_MIN`'s justification;
+  - records short-height crowding by the command band as pre-existing;
+  - states that `CanvasDock`'s fallback in place remains the contract for hosts without an outlet
+    (`TsldPanel.tsx:2990`), though no production workspace path exercises it;
   - supersedes the responsive rule in ADR-0030 (`:87`) and ADR-0031 (`:244`);
   - adds one line to CLAUDE.md §16.
-- Notes on:
-  - ADR-0030;
-  - ADR-0179's Consequences (`:221-223`).
-- Text updates:
-  - `UX_STANDARDS.md:340-343` (delete the single-pane sentence);
-  - `UX_STANDARDS.md:374-379` (the activities row is now always mounted);
-  - `m0-measurement.md` payoff #10, marked done;
-  - `TECH_DEBT.md` #466 and #468, closed or re-scoped from the M0 readings.
+- Notes on ADR-0030, and on ADR-0179's Consequences (`:221-223`).
+- `UX_STANDARDS.md`:
+  - delete the single-pane sentence at `:340-343`;
+  - **rewrite** the "fact relocates" bullet at `:374-379`;
+  - add a closing note to "Two hosts, one mechanism".
+- `TECH_DEBT.md`:
+  - closing notes at `:5590` and `:5657-5662`;
+  - #466 and #468 closed, or re-scoped from the M0 readings.
+- `m0-measurement.md`: payoff #10 marked done, and #14 corrected (not a reflow rule that stays).
 - **`docs/specs/gantt-coarse-pointer/device-checklist.md` does not change** (spec §5).
 - Changeset: `@repo/web` minor.
-- Complexity S.
+- Complexity: S.
 
 ## Sequencing & slices
 
-M0 → M1. M0 changes nothing shipped. M1 is one PR and is releasable: it removes a layout and adds no
-new one.
+- **M0 → M1.** M0 changes nothing shipped.
+- **M1 is one PR and is releasable:** it removes a layout and adds no new one. Inside it,
+  M1-T3 to M1-T7 land before T1 deletes the branch, so no commit has the narrow width without the
+  cap, `inert` or the yield rule.
 
 ## Testing summary
 
-- **Unit:** the dock-width helper; the panel clamp (Q1); the `CanvasDock` fallback.
-- **Journeys:** narrow-shell (extended), workspace-chrome (`activities-panel-scroll` and `dock`).
-- **Unchanged at 1024 and up:** the `e2e-workspace-fit` command-surface sweep must stay green. It
-  never enters the branch.
-- **Not run by this analysis:** no Playwright or DB-backed test was run to write this plan.
+- **Unit tests:**
+  - `dockBounds`, covering ARIA bounds and the stored value;
+  - `inert` with a ResizeObserver reporting 0 px;
+  - the yield and mutual-exclusion clamp;
+  - the foot-row wrap;
+  - "renders BOTH outlets, always".
+- **Journeys:**
+  - narrow-shell, extended over the matrix, with keyboard checks and axe with a dock open at 320;
+  - workspace-chrome (`activities-panel-scroll` and `dock`).
+- **Unchanged at 1024 and up:** the `e2e-workspace-fit` sweep, plus a 1024 × 600 reading to confirm
+  that #468 is fixed and nothing else moved.
+- **Nothing was run** to write this plan.
 
 ## Reviews during build
 
-- **accessibility-reviewer:** M0-T3, and the built surface before merge.
-- **component-reviewer:** the `hostsPlanSlots` removal.
-- **ux-reviewer:** the 640 / 320 readings.
-- **performance-reviewer:** optional. Narrow opening no longer mounts the hidden table, but no claim
-  is made without a reading.
-- **No ADR-0111 review is needed.** No shared primitive's keyboard contract changes, and
-  `SegmentedControl` keeps its other callers. Whether it has any is checked in M1-T1; if it has none,
-  it is still a primitive and stays.
+- **accessibility-reviewer:** M0-T3, and the built surface before merge (`inert`, focus, axe at 320).
+- **component-reviewer:** the prop removal, `dockBounds`, and the `inert` and Escape interaction.
+- **ux-reviewer:** the yield rule and the dock/panel mutual exclusion at short heights.
+- **performance-reviewer:** optional.
+- **No ADR-0111 review is needed:** no shared primitive's keyboard contract changes.
 
 ## Definition of Done (per task)
 
@@ -170,11 +286,13 @@ The Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md).
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                                       | L / I   | Mitigation                                                 |
-| ------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------- |
-| The accessibility reviewer does not agree                                                  | low / high | Fallback: keep the branch and add the revisions case (spec §4.6) |
-| The revisions panel does not reflow below 380                                              | med / med | M0-T2 reads it; M1-T3 adds a stack rule                    |
-| The table regresses at short narrow heights if Q1 is "no"                                  | high / med | Q1's recommendation; or state the regression in the changeset |
-| The revisions defect is not real (read, not run)                                           | low / low | M0-T1                                                      |
-| #466 moves rather than closes                                                              | med / low | M0-T2 re-reads it at 320                                   |
-| Short-height crowding by the wrapped band (pre-existing, both layouts)                     | — / med | Out of scope; recorded in the ADR so it is not read as fixed |
+| Risk                                                                    | L / I      | Mitigation                                                            |
+| ----------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------- |
+| Q1 answered "no"                                                        | low / high | The reviewers made it blocking; the alternative is a stated regression |
+| `CANVAS_YIELD_MIN` 160 too small to read                                | med / low  | M0 reading; the constant takes the measured figure                    |
+| The dock/panel mutual exclusion surprises a planner                     | med / low  | Only below a 500 px body; focus moves to what was opened; UX review    |
+| `inert` interacts badly with an armed canvas tool                       | low / med  | The statement lives in the foot row; Escape is checked by the component reviewer |
+| A dock's content does not reflow at about 300 px                       | med / med  | M0-T2; a container-query stack in M1-T3                               |
+| The revisions defect is not real (read, not run)                        | low / low  | M0-T1                                                                 |
+| #466 moves rather than closes                                           | med / low  | Re-read at 320 in M0-T2                                               |
+| Short-height crowding by the wrapped band (pre-existing, both layouts)  | — / med    | Recorded in the ADR so it is not read as fixed                         |
