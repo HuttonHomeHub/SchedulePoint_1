@@ -1,6 +1,14 @@
 import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type RefObject,
+} from 'react';
 
 import { CanvasDockOutlet } from './canvas-dock';
 import { PlanFactsOutlet } from './plan-facts-host';
@@ -172,6 +180,14 @@ export function useActivityPanelModel(model: PlanWorkspaceModel): ActivityPanelM
 }
 
 /**
+ * What the panel header says while the diagram is hidden behind it (short-screen swap, ADR-0180).
+ * One string: ux-reviewer signs the copy off, and the journey asserts it by this text.
+ */
+export const DIAGRAM_HIDDEN_NOTE = 'Diagram hidden. Collapse to return.';
+/** Appended to {@link DIAGRAM_HIDDEN_NOTE} when the swap put an armed drawing tool away. */
+export const TOOL_PUT_AWAY_NOTE = 'Drawing tool put away.';
+
+/**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
  * (ADR-0030). It fills the height its container gives it and scrolls internally, so the
  * canvas above keeps the rest. The workspace owns the drag-resizer (the shared
@@ -197,6 +213,9 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   onCollapse,
   focusCollapseOnMount = false,
   hostsPlanSlots = true,
+  diagramHidden = false,
+  toolDisarmed = false,
+  collapseRef: collapseRefProp,
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
@@ -230,11 +249,25 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   /** After a user *expand*, the panel remounts — move focus onto the collapse control so a
    * keyboard/AT user isn't dropped to `<body>` (mirrors the rail's toggle focus). */
   focusCollapseOnMount?: boolean;
+  /**
+   * The workspace has hidden the diagram and given this panel the whole body (short-screen swap).
+   * Shows {@link DIAGRAM_HIDDEN_NOTE} beside the heading. The panel is re-styled by its host, never
+   * re-mounted, so the plan's slot outlets mount once.
+   */
+  diagramHidden?: boolean;
+  /** The swap put an armed drawing tool away; adds {@link TOOL_PUT_AWAY_NOTE} to the note. */
+  toolDisarmed?: boolean;
+  /**
+   * The host's handle on the Collapse button, so it can move focus there when the swap hides the
+   * control focus was on (a live resize: `focusCollapseOnMount` only runs on mount).
+   */
+  collapseRef?: RefObject<HTMLButtonElement | null>;
 }): React.ReactElement {
-  const collapseRef = useRef<HTMLButtonElement>(null);
+  const ownCollapseRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = collapseRefProp ?? ownCollapseRef;
   useEffect(() => {
     if (focusCollapseOnMount) collapseRef.current?.focus();
-  }, [focusCollapseOnMount]);
+  }, [focusCollapseOnMount, collapseRef]);
   // Stable, so the table's `columns` (memoised over these) do not change on a workspace render.
   const { setEditorIntent, onDuplicateActivity } = model;
   const onOpenEditor = useCallback(
@@ -264,6 +297,14 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
             <BaselineVarianceSummary summary={model.varianceSummary} />
           ) : null}
         </div>
+        {diagramHidden ? (
+          // Plain text, never truncated: it wraps so a narrow panel reflows rather than clips, and
+          // is not a live region because focus is already moving to Collapse (the next text read).
+          <p className="text-muted-foreground min-w-0 text-sm whitespace-normal">
+            {DIAGRAM_HIDDEN_NOTE}
+            {toolDisarmed ? ` ${TOOL_PUT_AWAY_NOTE}` : ''}
+          </p>
+        ) : null}
         {/* **The dock is NOT here any more** (foot-row epic M4). It lived in this header until
             2026-08-26, which is precisely what made the foot juggle: expanding the panel moved
             every transient strip — and the object-action bar with them — from the bottom of the

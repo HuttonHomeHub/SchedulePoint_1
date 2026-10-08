@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
 import { SquarePen } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ActivityBottomPanel,
@@ -23,6 +23,7 @@ import {
   DOCK_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
   PANEL_MIN_OPEN,
+  isShortBody,
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
 import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
@@ -810,6 +811,48 @@ export function ToolbarPlanWorkspace({
     (next: number) => panel.setSize(Math.min(next, effectiveMax)),
     [panel, effectiveMax],
   );
+
+  // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180). When the body
+  // cannot give the panel three rows beside the diagram's minimum, an expanded panel takes the whole
+  // body and the diagram row is hidden — `display: none`, still mounted, so the canvas keeps its
+  // viewport and selection. `wasShort` is the hysteresis memory; it is adjusted during render (the
+  // documented derived-state pattern) because the swap must not lag the measurement by a frame.
+  // It uses the canvas reserve alone: an open dock and an expanded panel never coexist on a body
+  // this short (`expandPanel` closes the dock, the effect below collapses the panel).
+  const [wasShort, setWasShort] = useState(false);
+  const short = isShortBody(bodyHeight, CANVAS_MIN_HEIGHT, wasShort);
+  if (short !== wasShort) setWasShort(short);
+  const swapped = isWide && !collapsed && short;
+
+  // Expand with a dock open: on a body too short for both, the dock closes first so its toolbar
+  // toggle never claims a dock nobody can see. Not short: both stay, exactly as before the swap.
+  const expandPanel = useCallback(() => {
+    if (anyRightDockActive && isShortBody(bodyHeight, DOCK_MIN_HEIGHT, false)) {
+      for (const closeDock of Object.values(closeDockOf)) closeDock();
+    }
+    expand();
+  }, [anyRightDockActive, bodyHeight, closeDockOf, expand]);
+  // The other half of "the later request wins": a dock that opens (or survives a live resize) while
+  // the diagram is hidden collapses the panel in the same render pass, so the dock is never invisible
+  // for a frame. Adjusted during render like `wasShort`, for the same reason.
+  if (swapped && anyRightDockActive) collapse();
+
+  // Focus the swap would strand: inside the diagram row (its docks included) or on the panel's
+  // resizer, which is unmounted rather than hidden and so fires no blur of its own. A press of
+  // Expand is covered by `focusCollapseOnMount`; a live resize across the threshold is not.
+  const focusInHiddenRef = useRef(false);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+  const trackFocusIn = useCallback(() => {
+    focusInHiddenRef.current = true;
+  }, []);
+  const trackFocusOut = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) focusInHiddenRef.current = false;
+  }, []);
+  useLayoutEffect(() => {
+    if (!swapped || !focusInHiddenRef.current) return;
+    focusInHiddenRef.current = false;
+    collapseButtonRef.current?.focus();
+  }, [swapped]);
   // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
   // schedule namespace, so the recalculation's existing invalidation sweeps it.
   const health = useScheduleHealth(model.orgSlug, model.planId, healthDockActive);
@@ -2343,7 +2386,11 @@ export function ToolbarPlanWorkspace({
           {/* **No inset** (workspace visual polish, 2026-08-28): the `px-3 pb-3` that floated the
             stage as a card on the gradient is removed with the card itself — the fully-flush
             steer. The workspace body IS the window's inner wall now, deliberately. */}
-          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            ref={bodyRef}
+            data-testid="workspace-body"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
             {isWide ? (
               // Wide: a vertical stack — the canvas row (canvas beside any open right dock) above
               // the full-width activities foot. **A dock pushes the CANVAS only** (workspace
@@ -2358,7 +2405,14 @@ export function ToolbarPlanWorkspace({
               // the foot spans its full 1369 px instead of narrowing to 944. (The M0 table's 1345
               // was the pre-full-bleed width — M1 removed the 12 px frame before this landed.)
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div
+                  // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
+                  // already removes it from the tree), and the canvas keeps its viewport.
+                  hidden={swapped}
+                  onFocus={trackFocusIn}
+                  onBlur={trackFocusOut}
+                  className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
+                >
                   {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
                   {/* No padding — see the single-pane branch below for why. */}
@@ -2483,24 +2537,41 @@ export function ToolbarPlanWorkspace({
                 {/* The full-width foot: below the canvas row, outside any dock's column — see the
                   branch comment above (item 8). */}
                 {collapsed ? (
-                  <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+                  <ActivityPanelCollapsedBar
+                    onExpand={expandPanel}
+                    focusExpandOnMount={interacted}
+                  />
                 ) : (
                   <>
-                    <PanelResizer
-                      orientation="horizontal"
-                      size={panelHeight}
-                      min={PANEL_MIN_OPEN}
-                      max={effectiveMax}
-                      label="Resize activities panel"
-                      onResize={onResize}
-                      pointerToSize={pointerToSize}
-                      className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                    />
-                    <div style={{ height: panelHeight }} className="shrink-0">
+                    {/* Withheld while swapped: the panel owns the body, so there is no edge to drag.
+                      `contents` keeps the wrapper out of the flex layout; it is only here to hear
+                      the focus the unmount would strand. */}
+                    {swapped ? null : (
+                      <div className="contents" onFocus={trackFocusIn} onBlur={trackFocusOut}>
+                        <PanelResizer
+                          orientation="horizontal"
+                          size={panelHeight}
+                          min={PANEL_MIN_OPEN}
+                          max={effectiveMax}
+                          label="Resize activities panel"
+                          onResize={onResize}
+                          pointerToSize={pointerToSize}
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      </div>
+                    )}
+                    {/* The same box in both states, re-styled and never re-mounted, so the plan's
+                      facts and dock outlets (inside the panel's foot row) mount exactly once. */}
+                    <div
+                      style={swapped ? undefined : { height: panelHeight }}
+                      className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
+                    >
                       <ActivityBottomPanel
                         model={activityPanelModel}
                         onCollapse={collapse}
                         focusCollapseOnMount={interacted}
+                        diagramHidden={swapped}
+                        collapseRef={collapseButtonRef}
                       />
                     </div>
                   </>

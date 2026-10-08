@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
@@ -615,5 +615,207 @@ describe('the Late-start overlay announcement (#417)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('announcer')).toHaveTextContent('Placed dates shown.'),
     );
+  });
+});
+
+/**
+ * **The short-body swap** (`docs/specs/short-screen-vertical-budget`, M-A2). jsdom has no layout, so
+ * the workspace body's height is stubbed through the ResizeObserver the host already reads
+ * (`bodyHeight`); everything else is the real host, panel and toolbar.
+ */
+describe('the short-body swap', () => {
+  const NOTE = 'Diagram hidden. Collapse to return.';
+  const PANEL_KEY = 'schedulepoint-activity-panel';
+  let bodyHeight = 0;
+  const observed: { callback: ResizeObserverCallback; element: Element }[] = [];
+
+  const bodyEl = () => screen.getByTestId('workspace-body');
+  /** Move the stubbed body to `height` and let every observer of it hear. */
+  function resizeBody(height: number) {
+    bodyHeight = height;
+    act(() => {
+      for (const { callback, element } of observed) {
+        if (element === bodyEl()) callback([], {} as ResizeObserver);
+      }
+    });
+  }
+  const expand = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
+  const canvasRow = () => screen.getByTestId('tsld-panel').closest('[hidden]');
+  const resizer = () => screen.queryByRole('separator', { name: 'Resize activities panel' });
+
+  beforeEach(() => {
+    bodyHeight = 0;
+    observed.length = 0;
+    localStorage.clear();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe(element: Element) {
+          observed.push({ callback: this.callback, element });
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const real = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset['testid'] === 'workspace-body'
+        ? ({ height: bodyHeight, width: 1000 } as DOMRect)
+        : real.call(this);
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('starts collapsed on a short body, so a hidden diagram can never be restored on load', () => {
+    renderScreen();
+    resizeBody(365);
+    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+    expect(canvasRow()).toBeNull();
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+
+  it('hides the diagram row on expand without unmounting it, and brings it back on collapse', () => {
+    renderScreen();
+    resizeBody(365);
+    const canvas = screen.getByTestId('tsld-panel');
+    expand();
+
+    const row = canvasRow();
+    expect(row).not.toBeNull();
+    // `display: none` already leaves the tree; the attributes would double-hide and lose the node
+    // from the roving walk's reach on the way back.
+    expect(row).not.toHaveAttribute('aria-hidden');
+    expect(row).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('tsld-panel')).toBe(canvas);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+    expect(resizer()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    expect(canvasRow()).toBeNull();
+    expect(screen.getByTestId('tsld-panel')).toBe(canvas);
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+
+  it('keeps today’s DOM when the body is not short, with aria-valuemin at PANEL_MIN_OPEN', async () => {
+    const { PANEL_MIN_OPEN } = await import('./use-activity-panel-prefs');
+    renderScreen();
+    resizeBody(800);
+    expand();
+    expect(canvasRow()).toBeNull();
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(resizer()).toHaveAttribute('aria-valuemin', String(PANEL_MIN_OPEN));
+  });
+
+  it('is not short for an unmeasured body (jsdom, first paint)', () => {
+    renderScreen();
+    expand();
+    expect(canvasRow()).toBeNull();
+    expect(resizer()).not.toBeNull();
+  });
+
+  it('holds the swap through the 24 px hysteresis band and releases beyond it', () => {
+    renderScreen();
+    resizeBody(590);
+    expand();
+    expect(canvasRow()).not.toBeNull();
+    resizeBody(610);
+    expect(canvasRow()).not.toBeNull();
+    resizeBody(624);
+    expect(canvasRow()).toBeNull();
+  });
+
+  it('never writes the panel’s stored size', () => {
+    localStorage.setItem(PANEL_KEY, JSON.stringify({ collapsed: false, size: 300 }));
+    renderScreen();
+    resizeBody(365);
+    expand();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    expect(JSON.parse(localStorage.getItem(PANEL_KEY) ?? '{}')).toMatchObject({ size: 300 });
+  });
+
+  it('mounts the plan’s slot outlets once while swapped', () => {
+    renderScreen();
+    resizeBody(365);
+    expect(document.querySelectorAll('[data-activities-bar]')).toHaveLength(1);
+    expand();
+    expect(document.querySelectorAll('[data-activities-bar]')).toHaveLength(1);
+  });
+
+  it('moves focus to Collapse when a live resize hides the control focus was on', () => {
+    renderScreen();
+    resizeBody(800);
+    expand();
+    const handle = resizer();
+    expect(handle).not.toBeNull();
+    handle?.focus();
+    expect(document.activeElement).toBe(handle);
+
+    resizeBody(365);
+    expect(resizer()).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Collapse activities panel' }),
+    );
+
+    // And from inside the diagram row, which `display: none` is about to hide.
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    resizeBody(800);
+    expand();
+    const canvas = screen.getByTestId('tsld-panel');
+    canvas.tabIndex = 0;
+    canvas.focus();
+    expect(document.activeElement).toBe(canvas);
+    resizeBody(365);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Collapse activities panel' }),
+    );
+  });
+
+  it('closes an open dock on Expand when the body is too short for both', () => {
+    renderScreen();
+    resizeBody(365);
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
+
+    expand();
+    expect(screen.queryByRole('separator', { name: 'Resize health check panel' })).toBeNull();
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it('keeps a dock open on Expand when the body has room for both', () => {
+    renderScreen();
+    resizeBody(800);
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expand();
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
+    expect(resizer()).not.toBeNull();
+  });
+
+  it('collapses the swapped panel when a dock is opened', () => {
+    renderScreen();
+    resizeBody(365);
+    expand();
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
   });
 });
