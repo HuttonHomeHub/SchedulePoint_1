@@ -9,20 +9,18 @@ import { expect, type Locator, type Page } from '@playwright/test';
  */
 
 /**
- * The six viewports, and why each one is in the list.
+ * The five viewports, and why each one is in the list.
  *
  * `320 × 568` is the WCAG 1.4.10 reflow floor and the size that caught the guest view
- * (`docs/TECH_DEBT.md` #98). `640 × 360` is a phone held **sideways** — the case that breaks a
+ * (`docs/TECH_DEBT.md` #98). `640 × 360` is a 1280 × 720 window at 200 % zoom (ADR-0179: below the floor is the zoom band, not a phone) — the case that breaks a
  * vertically-centred `min-h-dvh` card, because the content is taller than the viewport and the
  * centring pushes its top edge above zero where it cannot be scrolled to. `768 × 1024` is the `md`
  * boundary itself (Tailwind v4's `md` is 48rem = 768px), so it is the first width at which the
- * brand panel becomes a column rather than a band. The other three are ordinary phone, tablet
- * landscape and laptop.
+ * brand panel becomes a column rather than a band. The other two are tablet landscape and laptop.
  */
 export const VIEWPORTS = [
   { name: '320×568 (reflow floor)', width: 320, height: 568 },
-  { name: '640×360 (phone landscape)', width: 640, height: 360 },
-  { name: '375×812 (phone)', width: 375, height: 812 },
+  { name: '640×360 (1280×720 at 200%)', width: 640, height: 360 },
   { name: '768×1024 (md boundary)', width: 768, height: 1024 },
   { name: '1024×768 (tablet landscape)', width: 1024, height: 768 },
   { name: '1440×900 (laptop)', width: 1440, height: 900 },

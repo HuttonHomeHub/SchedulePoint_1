@@ -262,8 +262,8 @@ async function inOrganisationNotFound(
   ).toBe(1);
 
   // Two widths: no horizontal overflow, axe clean once focus has settled.
-  for (const width of [1368, 390]) {
-    await member.setViewportSize({ width, height: width === 390 ? 844 : 912 });
+  for (const width of [1368, 320]) {
+    await member.setViewportSize({ width, height: width === 320 ? 568 : 912 });
     await member.goto(`/orgs/${slug}/nope`);
     await expect(heading, `${width}: focus settled`).toBeFocused();
     const overflow = await member.evaluate(() => ({

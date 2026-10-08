@@ -52,7 +52,14 @@ export default defineConfig({
     {
       name: 'chromium-coarse',
       grep: /@both-pointers/,
-      use: { ...devices['Pixel 7'], ...chromium },
+      // A sideways 11-inch touch tablet (coarse pointer, at the floor and above): ADR-0179 retired
+      // the phone this project used to model.
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1180, height: 820 },
+        hasTouch: true,
+        ...chromium,
+      },
     },
   ],
   ...(process.env.PLAYWRIGHT_SKIP_WEBSERVER

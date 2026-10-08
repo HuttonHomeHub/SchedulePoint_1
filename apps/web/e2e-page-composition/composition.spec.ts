@@ -732,60 +732,6 @@ test('no column header stands over an empty column', async ({ page }) => {
 });
 
 /**
- * M8 — the two questions the unit tier structurally cannot answer about `PageHeader`'s `aside`.
- *
- * The slot shipped with `basis-full md:basis-auto` on the aside itself. A `basis-full` item on a
- * wrapping flex line does not merely take a line — it consumes the line, so **everything after it
- * is pushed onto another one**: below `md` the screen's primary action landed on a third row at
- * `justify-between`'s flex-start, left-aligned and disconnected from the title. Both of the slot's
- * real consumers pass `aside` and `actions` together, so that was not an edge case; it was the only
- * shape in use. Found by the M8 component review, reproduced in Chromium at 375px.
- *
- * Nothing could have caught it here: `page-archetypes.test.tsx` had no `aside` case at all (the
- * plan's M5-T1 promised "unit at two widths" and none was written), and jsdom would not have
- * answered it if it had. The unit cases added at M8 pin the composition; these pin the layout.
- */
-test('the subject facts and the primary action share one line below md', async ({ page }) => {
-  await page.goto(`/orgs/${orgSlug}/clients`);
-  await page.getByRole('link', { name: 'Harbourside Estates' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Harbourside Estates' })).toBeVisible();
-
-  const action = page.getByRole('button', { name: /new project/i });
-  const facts = page.getByText(/\d+ projects?$/);
-  await expect(action).toBeVisible();
-  await expect(facts).toBeVisible();
-
-  await page.setViewportSize({ width: 375, height: 900 });
-  const narrow = { action: await action.boundingBox(), facts: await facts.boundingBox() };
-  if (!narrow.action || !narrow.facts)
-    throw new Error('nothing measured — the assertion below would be vacuous');
-
-  // Same line: the two boxes overlap vertically. Verified red against the two-sibling version,
-  // where the action sat 32px below the facts on a line of its own.
-  const sameLine =
-    narrow.action.y < narrow.facts.y + narrow.facts.height &&
-    narrow.facts.y < narrow.action.y + narrow.action.height;
-  expect(sameLine, 'the action shares the aside’s line rather than taking a third one').toBe(true);
-
-  // And it closes that line rather than opening it. `x` alone would pass against both layouts when
-  // the line holds one item, which is why this asserts the ORDER of two measured boxes.
-  expect(
-    narrow.action.x,
-    'the action sits at the trailing end, the facts at the leading one',
-  ).toBeGreaterThan(narrow.facts.x);
-
-  // Above `md` nothing about the pair changes — the wrapper shrink-wraps and the row is one line.
-  await page.setViewportSize({ width: 1646, height: 1000 });
-  const wide = { action: await action.boundingBox(), facts: await facts.boundingBox() };
-  if (!wide.action || !wide.facts) throw new Error('nothing measured at 1646');
-  const h1 = await page.getByRole('heading', { level: 1 }).boundingBox();
-  if (!h1) throw new Error('no h1 measured');
-  expect(wide.action.y, 'the action is on the title’s own line at 1646').toBeLessThan(
-    h1.y + h1.height,
-  );
-});
-
-/**
  * M8 — the `fit` column's whole justification, asserted rather than measured once by hand.
  *
  * `fit` is `md:w-px md:whitespace-nowrap`, and the `md:` prefix is not stylistic: M0 measured a

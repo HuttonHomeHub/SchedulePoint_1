@@ -119,7 +119,15 @@ export function NavigatorRail({
     // scope inside an identical one rebinds every name to the value it already has — which
     // `Surface` throws on, correctly (ADR-0097). The container owns the scope: the drawer at `lg`+,
     // and the `Sheet` below it.
-    <nav aria-label="Project Explorer" className="border-border flex h-full min-h-0 flex-col">
+    // `overflow-y-auto` and the tree's `min-h-32` are the floor's fix (ADR-0179). The header, the
+    // destinations (219 px fine, 291 coarse) and the footer hold their height, so in a 600 px window
+    // they left the tree 0 to 81 px and pushed the footer past the shell's `overflow-hidden`, where
+    // nothing could reach it. The tree keeps four rows and the column scrolls as a whole when the
+    // sum is still too tall; at 948 px and up everything fits and neither rule does anything.
+    <nav
+      aria-label="Project Explorer"
+      className="border-border flex h-full min-h-0 flex-col overflow-y-auto"
+    >
       {/* **The title belongs to the container, not to this component** — and only below `lg`.
           The context drawer names itself from its active subject, so a `SheetHeader` here put
           "Project Explorer" on screen twice, one line under the other. The `Sheet` below `lg`
@@ -169,7 +177,7 @@ export function NavigatorRail({
           ) : null}
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-32 flex-1 overflow-y-auto">
         <HierarchyTree orgSlug={orgSlug} expansion={expansion} onNavigate={onNavigate} />
       </div>
       {/* **The destinations, at every width** (workspace redesign M3-T2). They are the
