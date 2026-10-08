@@ -1,7 +1,7 @@
 # Implementation Plan: A minimum screen size — designed for a laptop or 11-inch tablet and up
 
 - **Feature spec:** [feature-spec.md](feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-08, with the spec (all four recommendations).
 - **Owner:** web
 
 ## Breakdown

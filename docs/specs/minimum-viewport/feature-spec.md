@@ -1,6 +1,7 @@
 # Feature Spec: A minimum screen size — designed for a laptop or 11-inch tablet and up
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-10-08 ("approve, go with all four recommendations"), after all four reviewers (accessibility, UX, component, ui-architect) agreed on the second pass.
+- **Decision:** CQ-1 height floor 600; CQ-2 Continue anyway, remembered per device; CQ-3 signed-in app only; CQ-4 upright tablets see the page with the rotate tip first; CQ-5 keep 1024 ("keep 1024, half-screen is fine with continue").
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner); revised after the
   accessibility, UX, component and ui-architect reviews of 2026-10-08
 - **Date:** 2026-10-08
