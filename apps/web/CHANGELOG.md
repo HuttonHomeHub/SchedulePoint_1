@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.178.0
+
+### Minor Changes
+
+- [#893](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/893) [`af5f41c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af5f41cd971845015df95881b6f8d66f462b013d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - SchedulePoint now says plainly that it is designed for screens at least 1024 pixels wide. If you open the app, or move to another page, in a narrower window, you see a "designed for larger screens" page with tips (zoom out, widen the window, turn a tablet sideways) and who you are signed in as. If your window gets narrower while you are working, a slim strip appears at the top instead, and nothing you are typing is interrupted. Pressing "Continue anyway" once is what makes a half-screen window quiet on that device: the page and the strip never come back there. Escape or "Dismiss" only hides them for this visit.
+
+### Patch Changes
+
+- [#891](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/891) [`e281fab`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e281fab84e041bbd5fc6d9d327baad34e13bbca1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a short window (about 600 px tall) the Project Explorer now keeps room for its tree and scrolls as a whole, so "Recently deleted" and the version line can always be reached. The activities panel scrolls too when a selection's actions need more room than the panel has, instead of drawing them below the window.
+
 ## 0.177.5
 
 ### Patch Changes
