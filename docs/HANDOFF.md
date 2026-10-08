@@ -3,13 +3,14 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-07 (evening), after the **#462 / #463** batch and its follow-ons the same day:
-the matching not-found screens, the Surface test sheet answered, and **Gantt M2 + #464** (product
-owner: "go ahead with Gantt M2 and #464", then "C and accept").
+**Written:** 2026-10-08, after the **#462 / #463** batch and its follow-ons: the matching not-found
+screens, the Surface test sheet answered, **Gantt M2 + #464** (product owner: "go ahead with Gantt M2
+and #464", then "C and accept"), the #464 follow-up for blank space (**#464 closed** on the device),
+and **#465** (the Gantt's date header overprinting).
 
 ## Where things stand
 
-- `main` holds everything below. Latest releases: **web 0.177.4, api 0.88.1** (check the tags).
+- `main` holds everything below. Latest releases: **web 0.177.5, api 0.88.1** (check the tags).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer**
   (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
 - The previous hand-off was accurate when checked (main ended with #870; web 0.177.0, api 0.88.1;
@@ -27,16 +28,17 @@ owner: "go ahead with Gantt M2 and #464", then "C and accept").
 | #878 | A missing plan, project or client shows a calm "<Entity> not found" like the in-shell page (404 only); any other load error says "couldn't load" with **Try again**. `routes/entity-not-found.tsx`.                                                                                                                                                                                                                                                                                                                                            | web 0.177.3 |
 | #879 | Gantt M2 re-scoped by the device: M2-T1/T3 dropped; M2-T2 24 × 24 arrow, option C; M2-T5 for #464. Four reviewers agreed twice.                                                                                                                                                                                                                                                                                                                                                                                                                | none        |
 | #881 | **Gantt M2 shipped**: the summary arrow is a 24 × 24 target beside the name, with the indent, in the Activity column (bucket rows aligned with Code shown or hidden; `GanttCell` gains a Gantt-local `lead` so nothing moves while editing); a `data-last-input` attribute makes idle cell text `select-none` after a touch/stylus press (#464); coarse gate covers the Gantt grid with four exemption kinds; **ADR-0177 Accepted**.                                                                                                           | web 0.177.4 |
+| #884 | **#464 closed**: the touch `select-none` variant moved from the cell text spans to each row's whole table half (off on a row with an open cell), so a hold on blank space inside a row reaches the row menu. Device 12b passed on 0.177.5 in all three runs.                                                                                                                                                                                                                                                                                   | web 0.177.5 |
+| #885 | **#465** (new row): the Gantt's month labels thin to every 2nd month, quarter, year or k-th January as space requires (`MONTH_LABEL_MIN_PITCH_PX` 64, calendar-aligned); a line stays at every month. Print uses the same builder.                                                                                                                                                                                                                                                                                                             | web 0.177.5 |
 
 ## Waiting on the product owner
 
-- **Re-check two items on the Surface** (`docs/specs/gantt-coarse-pointer/device-checklist.md`):
-  **item 6** (the arrow's new place) and **new item 12** (press and hold on the words, and on an empty
-  part, of the table half). Item 12 decides **#464**: it stays open until it passes; if the browser's
-  menu still appears, the plan's fallback is to revert M2-T5 and bring a `useLongPress` back as a new
-  task. The sheet stays the record of what is tested: a change to anything it tests updates it in the
-  same PR. The Surface runs at **1912 × 1114 CSS px (DPR 1.5)**; the monitor at **1912 × 948
-  (DPR 1, mouse only)**.
+- **Confirm #465 on the monitor**: the plan from the 2026-10-07 screenshot, zoomed to fit, should
+  show readable month labels. #465 closes on that answer.
+- The Surface sheet (`docs/specs/gantt-coarse-pointer/device-checklist.md`) stays the record of what
+  is tested: a change to anything it tests updates it in the same PR. Items 6 and 12 have passed. The
+  Surface runs at **1912 × 1114 CSS px (DPR 1.5)**; the monitor at **1912 × 948 (DPR 1, mouse
+  only)**.
 - **The history count on or after 1 November** (ADR-0174 / #443): staff console → Tools →
   **Run diagnostics** → **Copy results**. Record it in #443 and the activity-history plan's M3-T2.
 - **Gantt hands-on readings** are still owed (unchanged).
@@ -52,7 +54,7 @@ owner: "go ahead with Gantt M2 and #464", then "C and accept").
 
 ## Open rows unchanged this batch
 
-**#464** (until item 12), **#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
+**#465** (until confirmed), **#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
 **#419**, **#405**. `wip/history-numerator-preaggregate`
 (`64ff45d4`) is still the first remedy to measure when the 250,000 trigger fires.
 
@@ -79,6 +81,12 @@ owner: "go ahead with Gantt M2 and #464", then "C and accept").
 - **GitHub can refuse a job re-run with a 500** (both the MCP tool and `gh api …/rerun-failed-jobs`).
   A CI job that dies before any test body (e.g. a 30-minute `apt` install on a slow mirror) then needs
   a genuine new commit to re-run; never an empty one.
+- **On 2026-10-07 evening the `Install Playwright browsers` step stalled for ~30 minutes** on web
+  shard 2 (both #884 and #885), hitting the job timeout before any test ran; it recovered within the
+  hour (2.7 minutes). Read the job's step timings (`list_workflow_jobs`) before calling a timeout a
+  test problem.
+- **PR notifications can go missing**: #885's green CI produced no wake. When a run should have
+  finished, read `get_check_runs` rather than waiting.
 - **`gh api …/jobs/<id>/logs` redirects to a blob host the proxy blocks**; use the GitHub MCP
   `get_job_logs` with `return_content` instead.
 - **A change to `/orgs/*` routing or a shared layout primitive** warrants the base `web` journey plus

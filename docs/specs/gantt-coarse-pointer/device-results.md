@@ -82,3 +82,14 @@ Note from the product owner, verbatim: "looks to work menus appears when i relea
 table-half container, still `user-select: auto`, plus selectable `sr-only` spans (the off-float-path
 marker, the cell's reason span) that a span-level class misses. The follow-up moves the variant to the
 whole table-half container of a row, except a row with an open cell.
+
+## Re-check, 2026-10-08 (web 0.177.5)
+
+Item 12b re-run on the Surface after #884 moved the variant to the row's whole table half.
+
+| Item | Test                                                                      | Result                                                        |
+| ---- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 12b  | Hold on blank space inside a row (cover/finger, tablet/finger, stylus)    | **PASS**: SchedulePoint's menu, in all three runs.            |
+| —    | Hold on the empty area below the last row (product owner's first attempt) | The browser's menu. **Expected:** no row is under the finger. |
+
+**#464 is closed** (`docs/TECH_DEBT.md`, closed numbers).
