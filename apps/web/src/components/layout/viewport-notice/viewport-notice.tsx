@@ -12,7 +12,7 @@ import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useNativeModal } from '@/components/ui/use-native-modal';
 import { useSession, useSignOut } from '@/features/auth';
 import { useOrganizations } from '@/features/organizations';
-import { DESIGNED_MIN_WIDTH_PX } from '@/lib/breakpoints';
+import { designedMinWidthPx } from '@/lib/breakpoints';
 
 const NoticeContext = createContext<ViewportNoticeState | null>(null);
 
@@ -62,6 +62,7 @@ function useNotice(): ViewportNoticeState {
  */
 export function ViewportBanner(): React.ReactElement {
   const { bannerVisible, continueAnyway, dismissForVisit } = useNotice();
+  const rememberId = useId();
   return (
     <div className="print:hidden">
       <div role="status" aria-live="polite" className="sr-only">
@@ -77,9 +78,19 @@ export function ViewportBanner(): React.ReactElement {
           data-testid="viewport-banner"
         >
           <div className="flex shrink-0 gap-2">
-            <Button size="sm" variant="outline" onClick={continueAnyway}>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-describedby={rememberId}
+              onClick={continueAnyway}
+            >
               Continue anyway
             </Button>
+            {/* The page says this under its button; the strip has no room for the sentence, so a
+                screen-reader user gets it as the button's description instead. */}
+            <span id={rememberId} className="sr-only">
+              We won&apos;t show this again on this device.
+            </span>
             <Button size="sm" variant="ghost" onClick={dismissForVisit}>
               Dismiss
             </Button>
@@ -155,6 +166,7 @@ function LargerScreensPage(): React.ReactElement {
           leadId={leadId}
           headingRef={headingRef}
           onContinue={continueAnyway}
+          onNotNow={dismissForVisit}
         />
       ) : null}
     </dialog>
@@ -176,20 +188,25 @@ function PageContent({
   leadId,
   headingRef,
   onContinue,
+  onNotNow,
 }: {
   headingId: string;
   leadId: string;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   onContinue: () => void;
+  onNotNow: () => void;
 }): React.ReactElement {
   const width = useWindowWidth();
   const coarse = useMediaQuery('(pointer: coarse)', false);
+  // Read where the width is read, so the stated floor and "Your window is N pixels wide" are in the
+  // same units even when the browser's font size is raised (the floor is 64rem, not 1024px).
+  const floor = designedMinWidthPx();
 
   const tips = [
     'Zoom out — press Ctrl and minus, or Ctrl and 0 to reset (⌘ on a Mac)',
     'Make the browser window wider',
   ];
-  if (coarse) tips.unshift('Turn your tablet sideways');
+  if (coarse) tips.unshift('Turn your device sideways');
 
   return (
     <BrandCard
@@ -201,7 +218,7 @@ function PageContent({
       className="forced-colors:border forced-colors:border-[CanvasText] forced-colors:bg-[Canvas]"
       columnClassName="gap-3 p-4 md:p-6"
     >
-      <DevicesPictogram className="text-primary hidden h-14 w-auto self-start [@media(min-height:36rem)]:block" />
+      <DevicesPictogram className="text-primary tall:block hidden h-14 w-auto self-start" />
       <h1
         id={headingId}
         ref={headingRef}
@@ -211,8 +228,8 @@ function PageContent({
         SchedulePoint is designed for larger screens
       </h1>
       <p id={leadId} className="text-muted-foreground text-sm">
-        It&apos;s designed for screens at least {DESIGNED_MIN_WIDTH_PX} pixels wide. Your window is{' '}
-        {width} pixels wide.
+        It&apos;s designed for screens at least {floor} pixels wide. Your window is {width} pixels
+        wide.
       </p>
       {/* A list with no focusable controls, on purpose: it keeps "Continue anyway" the first tab
           stop, which is the one thing a keyboard reader came here to find. */}
@@ -227,9 +244,16 @@ function PageContent({
       {/* Pinned to the dialog's bottom edge so the button stays on screen in a short window while
           the explanation above it scrolls. Opaque, so text never shows through it. */}
       <div className="bg-background sticky bottom-0 flex flex-col items-start gap-1 py-2">
-        <Button variant="outline" onClick={onContinue}>
-          Continue anyway
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={onContinue}>
+            Continue anyway
+          </Button>
+          {/* Touch has no Escape. It does what Escape does — dismisses for this visit and writes
+              nothing — and sits after Continue so that stays the first tab stop. */}
+          <Button variant="ghost" onClick={onNotNow}>
+            Not now
+          </Button>
+        </div>
         <p className="text-muted-foreground text-xs">
           We won&apos;t show this again on this device.
         </p>
@@ -250,6 +274,7 @@ function SignedInLine(): React.ReactElement | null {
   const params = useParams({ strict: false });
   const signOut = useSignOut();
   const navigate = useNavigate();
+  const [failed, setFailed] = useState(false);
 
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
   const organisation = organisations?.find((org) => org.slug === orgSlug)?.name;
@@ -261,13 +286,22 @@ function SignedInLine(): React.ReactElement | null {
       <p className="text-muted-foreground min-w-0">
         Signed in as {who}
         {organisation ? ` · ${organisation}` : ''}
+        {/* Mounted empty and written to, so the failure is announced politely. */}
+        <span role="status" aria-live="polite">
+          {failed ? ' Couldn\u2019t sign out. Try again.' : ''}
+        </span>
       </p>
       <Button
         size="sm"
         variant="ghost"
-        disabled={signOut.isPending}
+        // `aria-disabled`, not `disabled`: a native disabled control blurs to `<body>`, which inside
+        // a modal dialog leaves a keyboard reader nowhere (the AcceptInvitationCard pattern).
+        aria-disabled={signOut.isPending}
         onClick={() => {
+          if (signOut.isPending) return;
+          setFailed(false);
           signOut.mutate(undefined, {
+            onError: () => setFailed(true),
             onSuccess: () => {
               // As the account menu does: `signedOut` carries the confirmation across, so signing
               // out from here does not look like an expired session.

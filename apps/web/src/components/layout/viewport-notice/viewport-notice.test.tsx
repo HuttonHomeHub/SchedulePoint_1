@@ -28,9 +28,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 
 const signOut = vi.fn();
+let signOutPending = false;
 vi.mock('@/features/auth', () => ({
   useSession: () => ({ data: { user: { name: 'Ada Lovelace', email: 'ada@example.test' } } }),
-  useSignOut: () => ({ mutate: signOut, isPending: false }),
+  useSignOut: () => ({ mutate: signOut, isPending: signOutPending }),
 }));
 vi.mock('@/features/organizations', () => ({
   useOrganizations: () => ({ data: [{ slug: 'acme', name: 'Acme Construction' }] }),
@@ -39,11 +40,13 @@ vi.mock('@/features/organizations', () => ({
 // ── A matchMedia that answers the two queries the notice asks, and tells its listeners.
 let windowWidth = 1280;
 let coarsePointer = false;
+// The root font size in px: the floor is `64rem`, so it moves with it (spec §2.2).
+let remPx = 16;
 const mediaListeners = new Set<() => void>();
 const realMatchMedia = window.matchMedia;
 
 function evaluate(query: string): boolean {
-  if (query.includes('min-width: 64rem')) return windowWidth >= 1024;
+  if (query.includes('min-width: 64rem')) return windowWidth >= 64 * remPx;
   if (query.includes('pointer: coarse')) return coarsePointer;
   return false;
 }
@@ -104,6 +107,7 @@ beforeEach(() => {
   pathname = '/orgs/acme';
   windowWidth = 1280;
   coarsePointer = false;
+  remPx = 16;
   mediaListeners.clear();
   signOut.mockClear();
   installMatchMedia();
@@ -172,13 +176,13 @@ describe('the full page: when it opens', () => {
     expect(pageDialog().open).toBe(false);
   });
 
-  it('puts "Turn your tablet sideways" first on a coarse pointer only', () => {
+  it('puts "Turn your device sideways" first on a coarse pointer only', () => {
     windowWidth = 900;
     coarsePointer = true;
     const { unmount } = render(<Tree />);
     const coarse = within(pageDialog()).getAllByRole('listitem');
     expect(coarse.map((item) => item.textContent)).toEqual([
-      'Turn your tablet sideways',
+      'Turn your device sideways',
       'Zoom out — press Ctrl and minus, or Ctrl and 0 to reset (⌘ on a Mac)',
       'Make the browser window wider',
     ]);
@@ -196,6 +200,48 @@ describe('the full page: when it opens', () => {
     ]);
   });
 
+  it('states the floor in this reader’s pixels when the browser font size is raised', () => {
+    // The page is open because the query (64rem = 1280px here) is unmet; the window is 1100 wide.
+    windowWidth = 1100;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1100 });
+    remPx = 20;
+    document.documentElement.style.fontSize = '20px';
+    try {
+      render(<Tree />);
+      expect(
+        within(pageDialog()).getByText(/at least 1280 pixels wide\. Your window is\s+1100 pixels/),
+      ).toBeInTheDocument();
+    } finally {
+      document.documentElement.style.fontSize = '';
+    }
+  });
+
+  it('keeps Sign out focusable while signing out, and says when it failed', () => {
+    windowWidth = 900;
+    signOutPending = true;
+    try {
+      render(<Tree />);
+      const button = within(pageDialog()).getByRole('button', { name: 'Signing out…' });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).not.toBeDisabled();
+      fireEvent.click(button);
+      expect(signOut).not.toHaveBeenCalled();
+    } finally {
+      signOutPending = false;
+    }
+  });
+
+  it('shows a polite inline message when signing out fails', () => {
+    windowWidth = 900;
+    signOut.mockImplementationOnce((_vars: unknown, options: { onError: () => void }) =>
+      options.onError(),
+    );
+    render(<Tree />);
+    fireEvent.click(within(pageDialog()).getByRole('button', { name: 'Sign out' }));
+    const message = within(pageDialog()).getByText(/Couldn.t sign out\. Try again\./);
+    expect(message).toHaveAttribute('aria-live', 'polite');
+  });
+
   it('keeps Continue anyway the first tab stop, with Sign out after it and no control in the tips', () => {
     windowWidth = 900;
     render(<Tree />);
@@ -204,7 +250,7 @@ describe('the full page: when it opens', () => {
       within(dialog)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Continue anyway', 'Sign out']);
+    ).toEqual(['Continue anyway', 'Not now', 'Sign out']);
     expect(within(dialog).queryAllByRole('link')).toHaveLength(0);
     expect(within(within(dialog).getByRole('list')).queryAllByRole('button')).toHaveLength(0);
   });
@@ -247,6 +293,24 @@ describe('what each answer remembers', () => {
     view.unmount();
 
     // A new visit (a fresh tab: no session storage, no module memory) meets it again.
+    sessionStorage.clear();
+    resetNoticeMemoryForTests();
+    render(<Tree />);
+    expect(pageDialog().open).toBe(true);
+  });
+
+  it('Not now does what Escape does: dismisses for the visit and writes nothing', () => {
+    windowWidth = 900;
+    const view = render(<Tree />);
+    fireEvent.click(within(pageDialog()).getByRole('button', { name: 'Not now' }));
+    expect(pageDialog().open).toBe(false);
+    expect(localStorage.length).toBe(0);
+
+    pathname = '/orgs/acme/clients';
+    view.rerender(<Tree />);
+    expect(pageDialog().open).toBe(false);
+    view.unmount();
+
     sessionStorage.clear();
     resetNoticeMemoryForTests();
     render(<Tree />);
@@ -430,6 +494,14 @@ describe('the banner: a live narrowing', () => {
       fireEvent.pointerUp(window);
     });
     expect(screen.getByTestId('viewport-banner')).toBeInTheDocument();
+  });
+
+  it('describes the banner’s Continue anyway as not showing again on this device', () => {
+    render(<Tree />);
+    resizeTo(700);
+    act(() => void vi.advanceTimersByTime(BANNER_DEBOUNCE_MS));
+    const button = screen.getByRole('button', { name: 'Continue anyway' });
+    expect(button).toHaveAccessibleDescription("We won't show this again on this device.");
   });
 
   it('Continue anyway on the banner is persistent; Dismiss is for the visit only', () => {

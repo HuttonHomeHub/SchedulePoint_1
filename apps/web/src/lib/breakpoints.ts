@@ -14,7 +14,19 @@
 export const DESIGNED_MIN_WIDTH_QUERY = '(min-width: 64rem)';
 
 /**
- * The same floor in pixels at the default 16 px font — for copy only ("at least 1024 pixels
- * wide"). Never compare a width against it: use {@link DESIGNED_MIN_WIDTH_QUERY}, which scales.
+ * The same floor in pixels at the default 16 px font. It is the reference the floor is derived
+ * from and the figure `breakpoints.test.ts` pins; copy states {@link designedMinWidthPx}, which
+ * follows the reader's root font size. Never compare a width against either: use
+ * {@link DESIGNED_MIN_WIDTH_QUERY}, which scales on its own.
  */
 export const DESIGNED_MIN_WIDTH_PX = 1024;
+
+/**
+ * The floor in the pixels this reader's `64rem` actually is — for copy only ("at least N pixels
+ * wide"). With a raised browser font size the query is met at a wider window than 1024, and copy
+ * that said 1024 beside "Your window is 1100 pixels wide" would contradict the page it sits on.
+ */
+export function designedMinWidthPx(): number {
+  const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Math.round(64 * (Number.isFinite(root) && root > 0 ? root : 16));
+}

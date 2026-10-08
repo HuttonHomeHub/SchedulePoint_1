@@ -24,6 +24,12 @@
    route happens to pull in. */
 @import './print-document.css';
 
+/* `tall`: a window at least 36rem high. The brand surfaces drop their decoration below it so a
+   short window (a landscape phone, a squeezed devtools) keeps the form on screen; `md:tall:` reads
+   as "wide enough AND tall enough" where the arbitrary `[@media(min-height:36rem)]` was a string to
+   copy by hand. */
+@custom-variant tall (@media (min-height: 36rem));
+
 /* ------------------------------------------------------------------------- */
 /* The typeface (ADR-0097)                                                    */
 /*                                                                            */

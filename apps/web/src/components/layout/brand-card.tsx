@@ -51,7 +51,7 @@ export function BrandCard({
           // card a scroll container, and a sticky footer then sticks to a box that never scrolls
           // instead of to the dialog that does.
           fixed ? 'overflow-hidden' : 'overflow-clip',
-          fixed ? 'md:h-[40rem] md:grid-cols-2' : 'md:[@media(min-height:36rem)]:grid-cols-2',
+          fixed ? 'md:h-[40rem] md:grid-cols-2' : 'md:tall:grid-cols-2',
           className,
         )}
         {...rest}

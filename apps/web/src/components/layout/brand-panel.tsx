@@ -35,11 +35,11 @@ const SPLIT_CLASSES = {
     tagline: 'md:block',
   },
   'md-tall': {
-    root: 'p-3 md:[@media(min-height:36rem)]:p-8',
-    seam: 'md:[@media(min-height:36rem)]:block',
-    mark: 'text-lg md:[@media(min-height:36rem)]:flex-col md:[@media(min-height:36rem)]:gap-3 md:[@media(min-height:36rem)]:text-4xl',
-    motif: 'md:[@media(min-height:36rem)]:block',
-    tagline: 'md:[@media(min-height:36rem)]:block',
+    root: 'p-3 md:tall:p-8',
+    seam: 'md:tall:block',
+    mark: 'text-lg md:tall:flex-col md:tall:gap-3 md:tall:text-4xl',
+    motif: 'md:tall:block',
+    tagline: 'md:tall:block',
   },
 } as const;
 
