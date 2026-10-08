@@ -203,3 +203,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0177](0177-a-finger-drags-what-it-has-selected.md)                                             | A finger drags what it has selected                                                        | Proposed           |
 | [0178](0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)                              | A console is grouped by what the reader came to do                                         | Accepted           |
 | [0179](0179-the-layout-is-designed-from-a-laptop-up.md)                                         | The layout is designed from a laptop up, and says so below it                              | Accepted           |
+| [0180](0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)                               | The panel takes the body when it cannot show rows                                          | Accepted           |
