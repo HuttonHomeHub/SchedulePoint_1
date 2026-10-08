@@ -889,9 +889,12 @@ export function ToolbarPlanWorkspace({
     expand();
   }, [anyRightDockActive, bodyHeight, closeDockOf, expand]);
   // The other half of "the later request wins": a dock that opens (or survives a live resize) while
-  // the diagram is hidden collapses the panel in the same render pass, so the dock is never invisible
-  // for a frame. Adjusted during render like `wasShort`, for the same reason.
-  if (swapped && anyRightDockActive) collapseQuietly();
+  // the diagram is hidden collapses the panel. A layout effect, not a render-time adjustment like
+  // `wasShort`, because the quiet collapse reads where focus is (a ref and the DOM); it still runs
+  // before paint, so the dock is never invisible for a frame.
+  useLayoutEffect(() => {
+    if (swapped && anyRightDockActive) collapseQuietly();
+  }, [swapped, anyRightDockActive, collapseQuietly]);
 
   // Focus the swap would strand: inside the diagram row (its docks included) or on the panel's
   // resizer, which is unmounted rather than hidden and so fires no blur of its own. A press of
