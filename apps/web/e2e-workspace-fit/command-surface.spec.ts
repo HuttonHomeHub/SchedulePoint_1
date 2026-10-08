@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page } from '@playwright/test';
+import { type BrowserContext, type Page } from '@playwright/test';
 
 import { ganttRow } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
@@ -44,6 +44,50 @@ const WIDTHS = [
   // The design floor (ADR-0179), with the Explorer at its default width.
   { width: 1024, height: 600 },
 ];
+
+/**
+ * **The Project Explorer is usable at the floor, on either pointer** (ADR-0179; found by M0).
+ *
+ * The sweeps cannot see this defect, which is why it is asked separately. They skip a control that
+ * sits below a scroller's fold, so a column that CAN scroll reads as clean even when its tree has
+ * been squeezed to nothing. At 1024 × 600 the shell's fixed blocks (the header, the organisation's
+ * destinations, the footer) left the tree 0 px on a coarse pointer and 81 on a fine one. So two
+ * things are asked: the tree keeps room for four 28 px rows, and the last destination can be
+ * scrolled to and pressed.
+ *
+ * **Verified red** against the tree before the fix: the tree measured 0 px (coarse) and 81 px
+ * (fine) at this cell.
+ */
+async function assertExplorerUsableAtFloor(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await page.waitForTimeout(500);
+  const nav = page.getByRole('navigation', { name: 'Project Explorer' });
+  await expect(nav).toBeVisible();
+  const treeHeight = await nav.getByRole('tree').evaluate((el) => {
+    let scroller: Element | null = el;
+    while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY))
+      scroller = scroller.parentElement;
+    return (scroller ?? el).getBoundingClientRect().height;
+  });
+  expect(
+    treeHeight,
+    'the Explorer tree has room for four rows at the floor',
+  ).toBeGreaterThanOrEqual(112);
+  const last = page.getByRole('navigation', { name: 'Organisation' }).getByRole('link').last();
+  await last.scrollIntoViewIfNeeded();
+  const reading = await last.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+      hit: hit === el || el.contains(hit),
+      inside: r.top >= 0 && r.bottom <= window.innerHeight,
+    };
+  });
+  expect(reading, 'the last destination can be scrolled to and pressed at the floor').toEqual({
+    hit: true,
+    inside: true,
+  });
+}
 
 /** WCAG 2.2 §2.5.8's floor, in CSS px. */
 const MIN_TARGET = 24;
@@ -414,7 +458,14 @@ test.describe('The plan command surface', () => {
       1646: { max: 2 },
       1440: { max: 3 },
       1280: { max: 3 },
+      // The floor, measured at M0 (`docs/specs/minimum-viewport/m0-measurement.md` §1): four lines,
+      // each declared row wrapping once. This is today's reading, not a design; M4 owns bringing it
+      // down, and lowering this entry is how M4 proves it did.
+      1024: { max: 4 },
     };
+    // The DO row is one line at every width the epic is judged on. The floor is the exception M4
+    // owns (see above), so it is named here rather than passed by loosening the others.
+    const DO_ROW_MAX_LINES = (width: number): number => (width <= 1024 ? 2 : 1);
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(400);
@@ -483,7 +534,7 @@ test.describe('The plan command surface', () => {
       expect(
         reading.do.lines,
         `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,
-      ).toBe(1);
+      ).toBeLessThanOrEqual(DO_ROW_MAX_LINES(viewport.width));
 
       // **Membership, and it is the assertion that carries M4's argument.** Line counts alone pass
       // against a build where a command has moved rows — which is exactly what flex wrapping did
@@ -920,6 +971,10 @@ test.describe('The plan command surface', () => {
 
     await sweepObjectBar('Gantt, panel collapsed');
   });
+
+  test('the Project Explorer is usable at the floor', async () => {
+    await assertExplorerUsableAtFloor(page);
+  });
 });
 
 /**
@@ -977,6 +1032,12 @@ interface CoarseSurface {
   minWidth?: number;
   /** The plan view this surface is only drawn in. */
   view?: 'gantt';
+  /**
+   * A scroller that is swept at its top and again at its bottom. The sweep skips a control below a
+   * scroller's fold, so at the floor — where the Explorer column scrolls as a whole — one position
+   * sees only part of the column and the positive would count a viewport, not the surface.
+   */
+  scrollEnds?: string;
 }
 
 const COARSE_SURFACES: readonly CoarseSurface[] = [
@@ -989,7 +1050,13 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
   // 6, not 8: the tree became a named exception above, so the swept set is the six organisation
   // destinations plus the rail's two controls. The floor still proves the destinations are there,
   // which is the class M3 fixed and the reason this surface is swept at all.
-  { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 6, minWidth: 1024 },
+  {
+    name: 'Project Explorer',
+    root: '[data-panel-border]',
+    atLeast: 6,
+    minWidth: 1024,
+    scrollEnds: 'nav[aria-label="Project Explorer"]',
+  },
   // Switched to in the test, not here. `minWidth` is the floor (1024): the pinned grid block is
   // 584 px, so below it the grid overflows its scroller and its controls sit outside the viewport,
   // where a reachability assertion would fail for a layout reason that is out of scope (#438,
@@ -1066,12 +1133,15 @@ const UPRIGHT_TABLET = { width: 834, height: 1112 };
 
 test.describe('The plan command surface, under a coarse pointer', () => {
   let page: Page;
+  let context: BrowserContext;
 
   test.beforeAll(async ({ browser }) => {
-    page = await browser.newPage({
+    // A context, not `browser.newPage()`: axe refuses a page that has no context of its own.
+    context = await browser.newContext({
       viewport: { width: 1646, height: 1097 },
       hasTouch: true,
     });
+    page = await context.newPage();
     const orgSlug = await onboard(page, Date.now() + 7);
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Touch');
@@ -1087,7 +1157,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   });
 
   test.afterAll(async () => {
-    await page.close();
+    await context.close();
   });
 
   async function showView(view: 'gantt' | 'tsld'): Promise<void> {
@@ -1167,7 +1237,17 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         // The Gantt grid exists only in its own view; every other surface is swept in the diagram.
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
         const exempt = surface.view === 'gantt' ? ganttExempt() : EXEMPT_WITHIN;
-        const targets = await sweep(page, surface.root, exempt, surface.markersOnly === true);
+        let targets = await sweep(page, surface.root, exempt, surface.markersOnly === true);
+        if (surface.scrollEnds !== undefined) {
+          const scroller = page.locator(surface.scrollEnds);
+          await scroller.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+          const atEnd = await sweep(page, surface.root, exempt, false);
+          await scroller.evaluate((el) => el.scrollTo({ top: 0 }));
+          // The same control is seen at both ends when the column fits; count it once.
+          const key = (t: Target): string => `${t.tag}:${t.id}:${t.w}x${t.h}`;
+          const seen = new Set(targets.map(key));
+          targets = [...targets, ...atEnd.filter((t) => !seen.has(key(t)))];
+        }
 
         // The pinned positive, per surface — the sweep passes just as happily against a surface
         // rendering nothing at all (the ADR-0093 shape).
@@ -1233,5 +1313,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
           .analyze()
       ).violations,
     ).toEqual([]);
+  });
+
+  test('the Project Explorer is usable at the floor', async () => {
+    await assertExplorerUsableAtFloor(page);
   });
 });

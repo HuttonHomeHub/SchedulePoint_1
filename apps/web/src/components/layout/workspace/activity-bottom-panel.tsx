@@ -249,7 +249,13 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
       // "Activities", so a bare match would announce two identical landmarks (axe landmark-unique,
       // TECH_DEBT #30h). The visible <h2> stays "Activities".
       aria-label="Activities panel"
-      className="border-border flex h-full min-h-0 flex-col border-t"
+      // `overflow-y-auto` is the floor's fallback (ADR-0179): the header and the foot row hold
+      // their content height and the table body gives way, so in a short window with a selection
+      // (a wrapped object bar is ~156 px) their sum can exceed the panel's clamped height. Without
+      // a scroller that overflow was painted below the window, outside the shell's `overflow-hidden`,
+      // where no pointer or scroll could reach the object actions. It never scrolls when the
+      // content fits, so the designed sizes are unchanged.
+      className="border-border flex h-full min-h-0 flex-col overflow-y-auto border-t"
     >
       <div className="flex flex-wrap items-center gap-2 px-4 py-2">
         <div className="flex shrink-0 flex-wrap items-center gap-3">
