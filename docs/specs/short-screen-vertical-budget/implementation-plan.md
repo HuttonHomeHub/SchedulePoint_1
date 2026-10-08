@@ -10,7 +10,7 @@
 ```mermaid
 flowchart LR
   M0[M0 measure · XS] --> MA[M-A panel rows on a short screen · M]
-  MA --> R[ADR-0181 retire single-pane\n(other spec) lands AFTER M-A]
+  MA --> R[ADR-0181 retire-single-pane-workspace\n(other spec) lands AFTER M-A]
   M0 --> MB[M-B three-line deck · S–M\noptional; only if CQ-B = B1]
 ```
 
@@ -63,7 +63,9 @@ is a clean outcome.
    - select an activity;
    - focus the canvas listbox option;
    - Expand, then Collapse;
-   - assert `originX`, `originY` and `pxPerDay`, the selection and the active option are unchanged.
+   - assert `originX`, `originY` and `pxPerDay`, the selection and the active option are unchanged;
+   - assert the active option still has `tabindex="0"` and the listbox's `aria-activedescendant`
+     is unchanged.
 3. **Commands while hidden:**
    - press Fit, which collapses the panel and fits;
    - arm a tool, then Expand: the tool is disarmed and the note says so;
@@ -174,8 +176,11 @@ is a clean outcome.
   5. Add a `@repo/web` minor changeset.
 - **Testing:** `pnpm prepush`.
 
-**Reviews before merge:** ux-reviewer (copy, classes, dock rule), accessibility-reviewer (focus,
-`hidden`, keydown, round trip) and component-reviewer (props, constants).
+**Required before merge:**
+
+- ux-reviewer signs off the final note copy, the command classes and the dock rule;
+- accessibility-reviewer and component-reviewer re-run on the `keydown` and `measure()` changes
+  (ADR-0111), and review the focus, `hidden` and round-trip behaviour.
 
 ---
 
@@ -207,7 +212,8 @@ is a clean outcome.
 > **Risks:**
 >
 > 1. **ADR-0111:** `useTooltip` gains an option, and two triggers change focus behaviour.
->    accessibility-reviewer and component-reviewer **before** merge.
+>    accessibility-reviewer and component-reviewer re-run **before** merge, and ux-reviewer signs
+>    off the `FileDown` glyph standing for "share". All three are required, not optional.
 > 2. **The 18 px spare:** the gate makes the next DO command a product-owner decision.
 > 3. **ux-reviewer still blocks:** M-B stops and B0 stands.
 > 4. **Tests finding these controls by visible text:** grep for them. Names are unchanged.
@@ -234,7 +240,9 @@ is a clean outcome.
 
 - **Steps:**
   1. In `tooltip.tsx`, add `suppressFocusOpen?: () => boolean`.
-  2. Add the `useCompactTriggerTooltip` helper:
+  2. Add the `useCompactTriggerTooltip` helper in
+     `apps/web/src/components/ui/use-compact-trigger-tooltip.ts`, beside `tooltip.tsx`, so that both
+     consumers depend downward on `components/ui`:
      - unconditional hooks;
      - `disabled: !compact`;
      - `name-echo`;

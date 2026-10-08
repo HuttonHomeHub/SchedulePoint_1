@@ -12,8 +12,11 @@
     "the deck withholds three labels below `xl` on a hover-and-fine-pointer device".
   - Builds on: ADR-0179, ADR-0030, ADR-0092, ADR-0109 D1, ADR-0117, ADR-0111, ADR-0082, ADR-0083,
     ADR-0031, ADR-0079, ADR-0135, ADR-0088 D1 and ADR-0105.
-  - Sibling specs: ADR-0181 retires the below-`md` single-pane workspace and **lands after M-A**;
-    ADR-0182 covers landing; ADR-0183 covers dense rows.
+  - Sibling specs:
+    - ADR-0181, `docs/specs/retire-single-pane-workspace/`, retires the below-`md` single-pane
+      workspace and **lands after M-A**;
+    - ADR-0182, `docs/specs/landing-two-columns/`;
+    - ADR-0183, `docs/specs/dense-row-touch-targets/`.
 - **Ownership:** this spec owns #468 and **every workspace height rule**: the panel minimum, the swap
   threshold, and the reserves.
 
@@ -100,8 +103,11 @@ under `features/share` (checked with grep).
   `PANEL_MIN_OPEN`.
 - **SC-A3:** at 1280 × 800, 1912 × 948 and 1912 × 1114, the expanded layout is unchanged: canvas and
   panel heights are equal before and after (Playwright).
-- **SC-A4:** Expand → Collapse preserves the canvas viewport (`originX`, `originY`, `pxPerDay`), the
-  selection, and the canvas listbox's active option (ADR-0026 D7).
+- **SC-A4:** Expand → Collapse preserves:
+  - the canvas viewport (`originX`, `originY`, `pxPerDay`);
+  - the selection;
+  - the canvas listbox's active option (ADR-0026 D7): the same option keeps `tabindex="0"`, and the
+    listbox's `aria-activedescendant` is unchanged.
 - **SC-A5:** no focus is ever dropped to `<body>` by the swap, on a press or on a live resize.
 - **SC-B1:** at 1024 × 600 on a hover-and-fine-pointer device, the deck is ≤ 3 lines, the DO row is
   1 line, and the DO row's spare width is ≥ 0 and recorded. At `xl` and above, or on any device
@@ -186,8 +192,11 @@ under `features/share` (checked with grep).
 The rule is applied at the **context** the toolbar and shortcuts call, not per button. The workspace
 wraps each canvas-directed `ctx` callback in `withDiagram(fn)`: if the swap is active, collapse the
 panel, then run `fn` on the next animation frame; otherwise run `fn` at once. Because the wrapper is
-on the context, `render` items (View ▾, Go to date, Find) and keyboard shortcuts are covered as well
-as plain buttons.
+on the context, `render` items (View ▾, Go to date, Find) are covered as well as plain buttons.
+
+**Canvas-owned keyboard shortcuts do nothing while the diagram is hidden.** These are the ones
+handled by `TsldCanvas`'s window `keydown`. They are not wrapped and do not collapse the panel; see
+"The canvas's window `keydown`" below. Only the toolbar's `ctx` callbacks collapse first.
 
 | Class                                              | Examples                                                                                                    | While the swap is active                                                                                                          |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -462,12 +471,15 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-  A[Short screen, panel collapsed] --> B[Expand]
-  B --> D{Dock open?} -- yes --> E[Close dock; toggle unpressed]
+  A[Panel collapsed] --> B[Expand]
+  B --> S{"Short body?\nisShortBody(bodyHeight, reserve)"}
+  S -- no --> G[Split as today\ndock stays open if open]
+  S -- yes --> D{Dock open?}
+  D -- yes --> E[Close dock; toggle unpressed]
   D -- no --> F
-  E --> F{Short body?}
-  F -- no --> G[Split as today]
-  F -- yes --> H[Panel fills workspace;\nnote: Diagram hidden. Collapse to return.]
+  E --> F[Re-check with CANVAS_MIN_HEIGHT reserve]
+  F -- not short --> G
+  F -- short --> H[Panel fills workspace;\nnote: Diagram hidden. Collapse to return.]
   H --> I[Table work]
   H --> J[Diagram command] --> K[Collapse, then run]
   H --> L[Collapse] --> M[Diagram back, same view]
@@ -540,8 +552,11 @@ None.
   - a new option `suppressFocusOpen?: () => boolean`, checked in `onFocus` (`:368-372`);
   - this is a shared primitive change, so ADR-0111 applies, and it is noted as an ADR-0117
     amendment in ADR-0180.
-- A shared helper `useCompactTriggerTooltip({ label, compact, expanded, disabledReason })`, used by
-  `ToolbarPopover` and `ExportMenuControl`:
+- A shared helper `useCompactTriggerTooltip({ label, compact, expanded, disabledReason })` in
+  **`apps/web/src/components/ui/use-compact-trigger-tooltip.ts`**, beside `tooltip.tsx`. Its
+  consumers are `ToolbarPopover` (`components/ui/toolbar/`) and `ExportMenuControl`
+  (`features/tsld/toolbar/tsld-toolbar-items.tsx:1637`), so dependencies point down from feature to
+  ui, never sideways. The helper:
   - hooks unconditional;
   - `disabled: !compact`, like `ToolbarButton` (`ToolbarButton.tsx:131-135`);
   - `purpose: 'name-echo'`;
@@ -603,6 +618,17 @@ If CQ-B is B0, ADR-0180 covers A only.
   - the focus and keyboard behaviour of two triggers (ADR-0111: accessibility-reviewer and
     component-reviewer before merge).
 - **Neither:** no schema, no Playwright config, no CI step.
+
+**Required sign-offs before merge (not optional):**
+
+- **M-A:**
+  - ux-reviewer signs off the final note copy;
+  - accessibility-reviewer and component-reviewer re-run on the `TsldCanvas` `keydown` and
+    `measure()` changes (ADR-0111).
+- **M-B:**
+  - ux-reviewer signs off the `FileDown` glyph standing for "share";
+  - accessibility-reviewer and component-reviewer re-run on the `useTooltip` `suppressFocusOpen`
+    option and the two triggers (ADR-0111).
 
 ### Device checklist
 
