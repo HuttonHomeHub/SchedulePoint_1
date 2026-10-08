@@ -5,7 +5,6 @@ import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BookOpen,
-  CalendarDays,
   ChartArea,
   ChartGantt,
   Check,
@@ -32,6 +31,7 @@ import {
   Rows3,
   Scale,
   Search,
+  Settings,
   Share2,
   SlidersHorizontal,
   Spline,
@@ -3152,7 +3152,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // label on the strip cost the DO row its single line at 1280 (`command-surface.spec.ts` LINES),
       // and a band rule here could not have helped, because the deck is fixed at `comfortable`. The
       // accessible name and tooltip still carry the words (ADR-0117). `Scale` (balance) and not
-      // `CalendarCheck`, which read as the `calendar` item's `CalendarDays` once the word was gone.
+      // `CalendarCheck`, which read as a calendar glyph once the word was gone.
       showLabel: 'never',
       penGated: true,
       disabledReason: (ctx) =>
@@ -3325,7 +3325,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 3,
       label: 'Settings…',
       description: 'Schedule settings',
-      icon: <CalendarDays className="size-4" />,
+      // The gear, not a calendar: the dialog stopped being only the calendar long ago, and
+      // `SlidersHorizontal` (View ▾) is already the deck's slider glyph. `Settings2` would read as a
+      // second one.
+      icon: <Settings className="size-4" />,
       onActivate: (ctx) => ctx.openCalendar(),
     },
     // Plan details + Edit plan are no longer toolbar buttons (ADR-0031 amendment): the key facts
