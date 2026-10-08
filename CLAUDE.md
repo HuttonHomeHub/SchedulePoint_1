@@ -324,7 +324,7 @@ documents (keep them authoritative):
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
 styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
-(ADR-0055). **Mobile-first, and no one-off component styling — ever.** The product has
+(ADR-0055). **Designed from a laptop or 11-inch tablet up (1024 × 600, ADR-0179), content still reflows below, and no one-off component styling — ever.** The product has
 **one theme**, declared at `:root` (ADR-0097) — light, dark and system were withdrawn,
 and the mechanism that would carry a future dark variant is kept live rather than
 deleted, so "never branch on theme in JS" still holds and still matters. The
@@ -363,6 +363,7 @@ boundary (ADR-0057). **Security is on by default.**
 
 - Target **WCAG 2.2 AA**. This is a merge requirement, not a nicety.
 - Semantic HTML first; ARIA only to fill genuine gaps.
+- Reflow (1.4.10) and resize text (1.4.4) still hold below the 1024 px design floor (ADR-0179).
 - Full keyboard operability, visible focus, and correct focus management.
 - Colour contrast ≥ 4.5:1 (text). Never encode meaning in colour alone.
 - `eslint-plugin-jsx-a11y` runs in CI; Playwright journeys include a11y checks.
@@ -385,7 +386,7 @@ See [`SECURITY.md`](SECURITY.md). Baseline:
 
 Directional targets (revisit with real data — see `docs/TECH_DEBT.md`):
 
-- **Web:** Largest Contentful Paint < 2.5s on a mid-tier mobile over 4G; keep the
+- **Web:** Largest Contentful Paint < 2.5s on a mid-tier 11-inch tablet over 4G; keep the
   initial JS bundle lean (code-split by route); Core Web Vitals in the "good"
   band.
 - **API:** p95 latency < 200ms for typical reads under expected load; paginate
@@ -428,7 +429,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0026** _(Accepted)_ — TSLD canvas — Canvas 2D rendering, coordinate/viewport model, interaction & accessibility architecture → [`0026-tsld-canvas-rendering-and-architecture.md`](docs/adr/0026-tsld-canvas-rendering-and-architecture.md)
 - **ADR-0027** _(Accepted)_ — Per-package release tagging & per-image versions → [`0027-per-package-release-tagging.md`](docs/adr/0027-per-package-release-tagging.md)
 - **ADR-0028** _(Accepted)_ — Single-editor plan edit-lock (advisory lease + peer hand-off + write gate) → [`0028-plan-edit-lock.md`](docs/adr/0028-plan-edit-lock.md)
-- **ADR-0029** _(Proposed)_ — Persistent app-shell & hierarchy navigator — evolve `_authed` into a mounted-once shell, URL-derived selection, hand-rolled ARIA tree & virtualization → [`0029-persistent-hierarchy-navigator.md`](docs/adr/0029-persistent-hierarchy-navigator.md)
+- **ADR-0029** _(Proposed; "mobile-first" amended by ADR-0179)_ — Persistent app-shell & hierarchy navigator — evolve `_authed` into a mounted-once shell, URL-derived selection, hand-rolled ARIA tree & virtualization → [`0029-persistent-hierarchy-navigator.md`](docs/adr/0029-persistent-hierarchy-navigator.md)
 - **ADR-0030** _(Proposed)_ — Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel → [`0030-canvas-first-plan-workspace.md`](docs/adr/0030-canvas-first-plan-workspace.md)
 - **ADR-0031** _(Proposed)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
@@ -514,7 +515,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0115** _(Accepted)_ — A bound governs what it encloses, and the wrap was measured from one state → [`0115-a-bound-governs-what-it-encloses.md`](docs/adr/0115-a-bound-governs-what-it-encloses.md)
 - **ADR-0116** _(Accepted)_ — A health finding is not a conflict, and a report never omits a check → [`0116-a-health-finding-is-not-a-conflict.md`](docs/adr/0116-a-health-finding-is-not-a-conflict.md)
 - **ADR-0117** _(Accepted)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
-- **ADR-0118** _(Accepted; amended by ADR-0177)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
+- **ADR-0118** _(Accepted; amended by ADR-0177 and ADR-0179)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
 - **ADR-0120** _(Accepted)_ — A documented obligation with no computed observer → [`0120-a-documented-obligation-with-no-computed-observer.md`](docs/adr/0120-a-documented-obligation-with-no-computed-observer.md)
 - **ADR-0121** _(Accepted)_ — One stack derivation, two renderers, and a cap set by height rather than cost → [`0121-one-derivation-two-renderers-and-a-cap-set-by-height.md`](docs/adr/0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)
 - **ADR-0119** _(Accepted)_ — A group of buttons says which of them are alternatives → [`0119-a-group-of-buttons-says-which-of-them-are-alternatives.md`](docs/adr/0119-a-group-of-buttons-says-which-of-them-are-alternatives.md)
@@ -578,7 +579,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0176** _(Accepted)_ — Undo checks before it writes, and sets aside what it cannot apply → [`0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md`](docs/adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)
 - **ADR-0177** _(Accepted)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
-- **ADR-0179** _(Proposed; would amend ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
+- **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

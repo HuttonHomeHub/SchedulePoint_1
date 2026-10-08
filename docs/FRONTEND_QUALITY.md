@@ -62,7 +62,7 @@ is how a 1.26:1 field outline survived in every theme.
 Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 - **Core Web Vitals in "good":** LCP < 2.5s, INP < 200ms, CLS < 0.1 on a
-  mid-tier mobile over 4G.
+  mid-tier 11-inch tablet over 4G.
 - **No layout shift** from async content — reserve space with skeletons.
 - **Interaction feedback < 100ms.**
 - Measure before optimising; no un-measured performance claims. Route-level

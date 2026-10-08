@@ -7,7 +7,7 @@
 - **Date:** 2026-10-08
 - **Tracking issue / epic:** none yet
 - **Roadmap link:** `docs/ROADMAP.md` — Next, "A minimum screen size"
-- **Related ADR(s):** ADR-0179 (Proposed, drafted with this spec). Amends ADR-0029 and ADR-0118;
+- **Related ADR(s):** ADR-0179 (Accepted, drafted with this spec). Amends ADR-0029 and ADR-0118;
   notes ADR-0030 and ADR-0077. Builds on ADR-0088 D1 (no flag) and ADR-0105.
 
 ## 0. Summary in plain English

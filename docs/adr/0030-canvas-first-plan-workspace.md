@@ -2,6 +2,8 @@
 
 - **Status:** Proposed
 - **Date:** 2026-07-13
+- **Noted by:** ADR-0179 (2026-10-08) — the below-`md` single-pane toggle stays as a reflow fallback; its
+  reason is now zoom, not a phone (the "a phone can't usefully split" line below is history).
 - **Deciders:** James Ewbank (with Claude Code — feature-analyst / ui-architect)
 - **Related:** ADR-0029 (persistent app-shell & hierarchy navigator — this refines
   its "single workspace region"), ADR-0026 (TSLD canvas rendering & architecture —

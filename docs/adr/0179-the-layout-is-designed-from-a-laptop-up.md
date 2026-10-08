@@ -1,10 +1,11 @@
 # ADR-0179: The layout is designed from a laptop up, and says so below it
 
-- **Status:** Proposed — 2026-10-08. Drafted with the `minimum-viewport` feature spec, which is
-  awaiting the product owner's approval. The spec is deliberately **not linked by path** until it is
-  Approved, because `check:spec-status` S3 refuses a Draft spec that an ADR cites (ADR-0131 D1). The
-  link is added at M1, when this ADR is Accepted. Revised the same day after the accessibility, UX,
-  component and ui-architect reviews.
+- **Status:** Accepted — 2026-10-08, with the `minimum-viewport` feature spec, which the product owner
+  approved the same day ("approve, go with all four recommendations"). Revised the same day after the
+  accessibility, UX, component and ui-architect reviews. Rules and register landed at M1.
+- **Spec:** [`docs/specs/minimum-viewport/feature-spec.md`](../specs/minimum-viewport/feature-spec.md)
+  · **Plan:** [`implementation-plan.md`](../specs/minimum-viewport/implementation-plan.md) · **Floor
+  readings:** [`m0-measurement.md`](../specs/minimum-viewport/m0-measurement.md)
 - **Date:** 2026-10-08
 - **Deciders:** James Ewbank (product owner) and Claude Code. On 2026-10-08 James:
   - chose the floor "tablet landscape, about 1024 × 640";
