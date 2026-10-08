@@ -170,8 +170,8 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
 
   // WCAG 1.4.10 Reflow: no horizontal scroll at 320 px. Measured, not reasoned — a 4 px tolerance
   // absorbs sub-pixel layout rounding without admitting a 116 px overflow, which is what this
-  // caught. Asserted at 320 and 360, because 320 is the criterion's own floor and 360 is the
-  // commonest real phone width, and a fix that only satisfies the narrower one is a coincidence.
+  // caught. Asserted at 320 and 360, because 320 is the criterion's own floor and 360 is a
+  // 1440 window at 400 % zoom, and a fix that only satisfies the narrower one is a coincidence.
   for (const width of [320, 360]) {
     await guestPage.setViewportSize({ width, height: 720 });
     const scrollWidth = await guestPage.evaluate(() => document.documentElement.scrollWidth);

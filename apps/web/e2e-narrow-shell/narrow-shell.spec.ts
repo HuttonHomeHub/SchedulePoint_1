@@ -6,14 +6,15 @@ import { expect, test } from '../e2e-support/test';
 /**
  * **The narrow shell** (`docs/specs/narrow-shell-journey/`, closes `docs/TECH_DEBT.md` #172).
  *
- * The first authenticated journey ever to run below `lg` (1024 px). Its subjects are the branches
+ * The first authenticated journey ever to run below `lg` (1024 px). It runs at 640 × 480 — a 1280
+ * window at 200 % zoom — because below the 1024 floor is the zoom band, not a phone (ADR-0179). Its subjects are the branches
  * no browser had opened: the off-canvas `Sheet` that IS the Project Explorer on a narrow screen,
  * the header hamburger that opens it, the `matchMedia` transition effect that closes it on
  * crossing `lg`, and the below-`md` workspace fallback that ADR-0114 M7's gate pass found broken
  * — by a specialist review, because this suite did not exist to find it.
  *
  * **Seeding happens at a WIDE viewport, deliberately.** The subject is the narrow SHELL, not
- * every creation dialog at 390 px; seeding through the proven wide path keeps a dialog-layout
+ * every creation dialog at 640 px; seeding through the proven wide path keeps a dialog-layout
  * failure from reading as a shell failure. The viewport then narrows and stays narrow for the
  * assertions.
  *
@@ -87,7 +88,7 @@ test('the narrow shell: sheet navigation, header reachability, breakpoint crossi
   // Back to the organisation landing, then narrow. The shell's pinned rail should give way to
   // the hamburger.
   await page.goto(`/orgs/${orgSlug}`);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 640, height: 480 });
 
   // ── FR-2: the below-`lg` header's controls exist and are pointer-reachable.
   const hamburger = page.getByRole('button', { name: 'Show Project Explorer' });
@@ -148,7 +149,7 @@ test('the narrow shell: sheet navigation, header reachability, breakpoint crossi
   await page.setViewportSize({ width: 1200, height: 900 });
   await expect(page.getByRole('dialog', { name: 'Project Explorer' })).not.toBeVisible();
   await expect(page.getByRole('button', { name: 'Show Project Explorer' })).not.toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 640, height: 480 });
   await expect(page.getByRole('button', { name: 'Show Project Explorer' })).toBeVisible();
 
   // ── FR-5: the narrow shell with the sheet open is accessible. ONE `options()` carrying BOTH
@@ -156,7 +157,7 @@ test('the narrow shell: sheet navigation, header reachability, breakpoint crossi
   // shipped the superseded `.withTags(['wcag2a','wcag2aa'])` in the same diff (caught by the
   // phase gate: the "one correct pattern applied to a control and not its neighbour" class,
   // committed by the neighbour's own author). `target-size` is opted in because axe ships it
-  // disabled and tags it wcag22aa — and a 390 px phone journey is exactly where WCAG 2.5.8 bites.
+  // disabled and tags it wcag22aa — and below the floor, after a Continue, this check is where WCAG 2.5.8 is held (ADR-0179).
   await page.getByRole('button', { name: 'Show Project Explorer' }).click();
   await expect(page.getByRole('dialog', { name: 'Project Explorer' })).toBeVisible();
   expect(

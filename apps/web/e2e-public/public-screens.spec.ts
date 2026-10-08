@@ -100,7 +100,7 @@ test.describe('the states carrying an unbounded server-supplied string', () => {
 
     // State: signed in as somebody else. The org name is in the description here, not the heading,
     // but the card is the tallest of the three and 320px is where it clips if it is going to.
-    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[4]]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: 'Wrong account' })).toBeVisible();
@@ -112,7 +112,7 @@ test.describe('the states carrying an unbounded server-supplied string', () => {
 
     // State: signed out. `Join <100 characters>` is the heading.
     await page.context().clearCookies();
-    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[4]]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: `Join ${LONG_ORG}` })).toBeVisible();
@@ -134,7 +134,7 @@ test.describe('the states carrying an unbounded server-supplied string', () => {
       timeout: 15_000,
     });
 
-    for (const viewport of [VIEWPORTS[0], VIEWPORTS[5]]) {
+    for (const viewport of [VIEWPORTS[0], VIEWPORTS[4]]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: `Join ${LONG_ORG}` })).toBeVisible();

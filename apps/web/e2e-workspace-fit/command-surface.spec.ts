@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { ganttRow } from '../e2e-gantt/support';
@@ -40,6 +41,8 @@ const WIDTHS = [
   { width: 1646, height: 1097 },
   { width: 1440, height: 960 },
   { width: 1280, height: 800 },
+  // The design floor (ADR-0179), with the Explorer at its default width.
+  { width: 1024, height: 600 },
 ];
 
 /** WCAG 2.2 §2.5.8's floor, in CSS px. */
@@ -987,9 +990,10 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
   // destinations plus the rail's two controls. The floor still proves the destinations are there,
   // which is the class M3 fixed and the reason this surface is swept at all.
   { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 6, minWidth: 1024 },
-  // Switched to in the test, not here. `minWidth` is 834 because of #438: the pinned grid block is
-  // 584 px, so at 390 the grid overflows its scroller and its controls sit outside the viewport,
-  // where a reachability assertion would fail for a layout reason that has its own row.
+  // Switched to in the test, not here. `minWidth` is the floor (1024): the pinned grid block is
+  // 584 px, so below it the grid overflows its scroller and its controls sit outside the viewport,
+  // where a reachability assertion would fail for a layout reason that is out of scope (#438,
+  // closed by ADR-0179).
   // Every control in the grid is one of D4's four named kinds, so the swept set is EMPTY by design
   // and the positive is the marker counts (`assertGanttExemptionsPresent`): a grid that rendered
   // nothing has no markers, and a control that lost its marker is swept and fails the house rule.
@@ -998,7 +1002,7 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     root: '[role="treegrid"]',
     atLeast: 0,
     markersOnly: true,
-    minWidth: 834,
+    minWidth: 1024,
     view: 'gantt',
   },
 ];
@@ -1039,24 +1043,26 @@ const ganttExempt = (kinds: readonly string[] = GANTT_EXEMPT_KINDS): string =>
   kinds.map((kind) => `[role="treegrid"] [data-gantt-coarse-exempt="${kind}"]`).join(',');
 
 /**
- * **390 is in the list, and it is the width this epic's own repair was made at** (ADR-0118 M4).
+ * **The coarse list is the two designed extremes** (ADR-0179): the Surface at 1646 × 1097, and the
+ * floor itself at 1024 × 600, where the Explorer is pinned at its default width and a finger has
+ * the least room.
  *
- * M3 fixed two plan-header controls that laid out entirely outside a 390 px viewport, and shipped
- * that fix with its narrowest gate at 834 — while `playwright.narrow-shell.config.ts` and
- * `.github/workflows/ci.yml` both said the coarse axis was "gated by the coarse projection in
- * `e2e-workspace-fit`". Three of the five gate-pass reviews raised it independently: the one
- * viewport where the defect lived had no coarse cover, under a comment saying it had. That is
- * `docs/TECH_DEBT.md` #214's exact shape inside the epic that filed #214.
+ * **390 × 844 left this list because the product stopped being designed for a phone.** It was the
+ * width ADR-0118 M4 repaired two plan-header controls at, and it stayed here for as long as the
+ * layout owed a phone anything. Below 1024 the signed-in app now shows a "designed for larger
+ * screens" page, and the obligation that remains is WCAG 1.4.10 reflow, which the narrow-shell
+ * journey holds at 640 × 480 and 320 × 256 with axe's `target-size` on. The reflow check kept here
+ * is `UPRIGHT_TABLET`, below: a tablet held upright, after Continue.
  *
- * The Explorer is skipped below `lg` by its own `minWidth`, so 390 sweeps the deck and the header
- * — which is where the repair is.
+ * The Explorer is skipped below `lg` by its own `minWidth`.
  */
 const COARSE_WIDTHS = [
   { width: 1646, height: 1097 },
-  { width: 1024, height: 768 },
-  { width: 834, height: 1112 },
-  { width: 390, height: 844 },
+  { width: 1024, height: 600 },
 ];
+
+/** An 11-inch tablet held upright: below the floor, so axe and overflow are asked, not the sweep. */
+const UPRIGHT_TABLET = { width: 834, height: 1112 };
 
 test.describe('The plan command surface, under a coarse pointer', () => {
   let page: Page;
@@ -1195,5 +1201,37 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         if (surface.view === 'gantt') await assertGanttExemptionsPresent(viewport.width);
       }
     }
+  });
+
+  /**
+   * **An upright 11-inch tablet is below the floor, so it is asked the reflow question and no
+   * more** (ADR-0179): the document does not scroll sideways, and axe is clean with `target-size`
+   * on — which it ships disabled and tags `wcag22aa`, so it is opted in by rule and by tag. The
+   * 44 px house rule and pointer-reachability are designed-range obligations and are not asserted.
+   */
+  test('an upright tablet reflows: no sideways document scroll, axe clean', async () => {
+    await page.setViewportSize(UPRIGHT_TABLET);
+    await showView('tsld');
+    await page.waitForTimeout(500);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(
+      overflow,
+      `the document overflows ${String(UPRIGHT_TABLET.width)} px`,
+    ).toBeLessThanOrEqual(0);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .options({
+            runOnly: {
+              type: 'tag',
+              values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'],
+            },
+            rules: { 'target-size': { enabled: true } },
+          })
+          .analyze()
+      ).violations,
+    ).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
  * found the below-`md` workspace losing the plan's facts entirely — by a specialist review,
  * because this suite did not exist to find it.
  *
- * The default viewport is a phone (390 × 844, well under `md`); the breakpoint-crossing test sets
+ * The default viewport is a 1280 × 960 window at 200 % zoom (640 × 480, under `md`; ADR-0179); the breakpoint-crossing test sets
  * its own sizes with `setViewportSize`. **The pointer stays fine** (Playwright's default): the
  * coarse-pointer axis belongs to **ADR-0118**, gated by the coarse projection in
  * `e2e-workspace-fit`, and mixing the two axes in one new suite would blur which failure means
@@ -42,7 +42,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 390, height: 844 },
+        viewport: { width: 640, height: 480 },
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
           ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
           : {}),
