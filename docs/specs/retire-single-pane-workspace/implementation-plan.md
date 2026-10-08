@@ -6,6 +6,9 @@
 - **Date:** 2026-10-08
 - **Flag:** none (ADR-0088 D1). **Entry point:** the plan route below 768 px after Continue anyway.
   **Journey:** `e2e-narrow-shell` (ADR-0081).
+- **Depends on:** [`short-screen-vertical-budget`](../short-screen-vertical-budget/feature-spec.md)
+  M-A (ADR-0180), **which lands first**. It owns #468 and every panel-height rule. This plan adds none.
+  **This plan's ADR is ADR-0181.**
 
 ## ADR-0105 triggers crossed
 
@@ -64,10 +67,13 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
     stack below its `@sm` container (`RevisionComparePanel.tsx:361`), and Health and Float paths at
     about 300 px;
   - the document's `scrollWidth − clientWidth`;
-  - the height of the ruler band plus one 60 px row of bars, to settle `CANVAS_YIELD_MIN` (spec
-    AC-3.2, "Why 160").
-- One extra reading at 640 × 480: a dock opened with the panel expanded, showing what the body gives
-  each.
+  - the height of the time ruler band. This sets the collapsed-state `inert` floor (spec AC-2.4,
+    "Height");
+  - whether `<main>` scrolls, or the foot row is clipped, with the panel collapsed at 640 × 300
+    (spec AC-3.2).
+- With ADR-0180's swap in place, at 640 × 300, 640 × 360 and 640 × 480 with the panel expanded:
+  - the visible row count;
+  - with a dock open as well, confirm the dock hides with the diagram and returns on Collapse.
 - Re-read #466 at 320 in the patched layout.
 - Write everything to `docs/specs/retire-single-pane-workspace/m0-measurement.md`.
 - Complexity: S.
@@ -134,7 +140,12 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 - **Width:** when `bodyWidth − dockMin − SPLITTER_WIDTH < CANVAS_MIN_WIDTH`, the dock takes the row
   and the stage column gets `inert`.
-- **Height:** below `CANVAS_YIELD_MIN`, the canvas row gets `inert`.
+- **Height, collapsed panel only:** below the ruler band's measured height (a constant with its M0
+  reading in the docblock, per ADR-0151), the canvas row gets `inert`. With the panel expanded on a
+  short body, ADR-0180's swap already hides the row.
+- **Composition with ADR-0180's A1:** the width rule acts within the canvas row and A1 hides the whole
+  row, so they never fight. A unit case covers this: narrow, dock open, panel expanded, short body
+  gives the row hidden; after Collapse, the dock takes the row and the stage is inert.
 - Unit tests:
   - a ResizeObserver stub reporting 0 × 0 then real sizes. At 0 the helper treats the body as
     unmeasured, so nothing is inert by mistake on the first render. Once measured and squeezed, the
@@ -145,25 +156,19 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
   foot row, which is not inert. The component reviewer checks the Escape path (`TsldCanvas.tsx`
   window listener).
 
-**M1-T5 — The yield rule (spec AC-3.2; depends on Q1).**
+**M1-T5 — Short heights: ADR-0180 at every width (spec AC-3.2). No new panel-height rule.**
 
-- Add `CANVAS_YIELD_MIN` (160, or the M0 reading) to `use-activity-panel-prefs.ts`, with its
-  justification in the docblock (ADR-0151).
-- Panel clamp (`:799-808`):
-  - with no dock open, reserve `CANVAS_YIELD_MIN` when `bodyHeight < CANVAS_MIN_HEIGHT + PANEL_MIN_OPEN`;
-  - below `CANVAS_YIELD_MIN + PANEL_MIN_OPEN`, the canvas row goes to 0 and is inert.
-- Collapsed panel:
-  - the body keeps a minimum height equal to the foot row, so `<main>` scrolls vertically rather
-    than clipping.
-- Dock open with an expanded panel:
-  - when `bodyHeight < DOCK_MIN_HEIGHT + PANEL_MIN_OPEN`, opening a dock collapses the panel;
-  - expanding the panel closes the dock, using its existing close-and-focus path;
-  - focus goes to the one just opened.
-- **Change `TsldPanel.tsx:3279` and `:2906` together.**
-- Unit tests:
-  - the clamp at bodies of 600, 380, 300, 200 and 0, with and without a dock;
-  - the mutual exclusion at a 480 body.
-- Complexity: M.
+- **Withdrawn from the first revision:** the yielding minimum, `CANVAS_YIELD_MIN`, the dock/panel
+  mutual exclusion and any `TsldPanel.tsx` change. The short-screen spec owns the panel heights and
+  measured the 160 px yield at 0 rows.
+- What is left here:
+  - check that ADR-0180's `shortBody` swap and its comment survive the branch deletion. The mechanism
+    is the wide branch's; the old `:666-669` comment is moved into it;
+  - **only if M0 shows the foot row clipped at 640 × 300 with the panel collapsed:** add a minimum
+    height on the workspace body equal to the foot row, so `<main>` scrolls vertically. Agree it with
+    the short-screen spec's owner first, because it touches the same body.
+- Unit test: none, unless the body minimum is added, in which case one case.
+- Complexity: XS–S.
 
 **M1-T6 — Foot row at 320 (spec AC-3.3).**
 
@@ -191,7 +196,9 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
   - each of the four docks opens and is visible;
   - Expand and Recalculate are `pointerReachable`;
   - neither the document nor the foot row scrolls sideways;
-  - axe with `target-size`, including **a dock open at 320**.
+  - axe with `target-size`, including **a dock open at 320**;
+  - at 640 × 300, 640 × 360 and 640 × 480 with the panel expanded, the table keeps at least one row
+    under ADR-0180's swap. The row count is ADR-0180's to set.
 - Keyboard checks for each dock at 320:
   - Tab order runs through the dock;
   - **Tab from the dock never lands on a zero-size element**;
@@ -229,9 +236,9 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 **M1-T10 — Docs in lock-step.**
 
-- **The new ADR**, "The plan workspace has one layout at every width". It:
+- **ADR-0181**, "The plan workspace has one layout at every width". It:
   - records the 1.4.10 reading and the reviewer's answer;
-  - states that the table wins at short heights, with `CANVAS_YIELD_MIN`'s justification;
+  - states that short heights are ADR-0180's: its swap now applies at every width;
   - records short-height crowding by the command band as pre-existing;
   - states that `CanvasDock`'s fallback in place remains the contract for hosts without an outlet
     (`TsldPanel.tsx:2990`), though no production workspace path exercises it;
@@ -244,7 +251,7 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
   - add a closing note to "Two hosts, one mechanism".
 - `TECH_DEBT.md`:
   - closing notes at `:5590` and `:5657-5662`;
-  - #466 and #468 closed, or re-scoped from the M0 readings.
+  - #466 closed, or re-scoped from the M0 readings. #468 is ADR-0180's, so it is not touched here.
 - `m0-measurement.md`: payoff #10 marked done, and #14 corrected (not a reflow rule that stays).
 - **`docs/specs/gantt-coarse-pointer/device-checklist.md` does not change** (spec §5).
 - Changeset: `@repo/web` minor.
@@ -252,31 +259,32 @@ ADR-0113 and ADR-0142 apply: measure the problem before building the remedy.
 
 ## Sequencing & slices
 
-- **M0 → M1.** M0 changes nothing shipped.
+- **short-screen M-A (ADR-0180) → M0 → M1.** M0's short-height readings assume the swap exists. M0
+  changes nothing shipped.
 - **M1 is one PR and is releasable:** it removes a layout and adds no new one. Inside it,
   M1-T3 to M1-T7 land before T1 deletes the branch, so no commit has the narrow width without the
-  cap, `inert` or the yield rule.
+  cap, `inert` or the foot-row fit.
 
 ## Testing summary
 
 - **Unit tests:**
   - `dockBounds`, covering ARIA bounds and the stored value;
   - `inert` with a ResizeObserver reporting 0 px;
-  - the yield and mutual-exclusion clamp;
+  - the width `inert` rule composed with ADR-0180's swap;
   - the foot-row wrap;
   - "renders BOTH outlets, always".
 - **Journeys:**
   - narrow-shell, extended over the matrix, with keyboard checks and axe with a dock open at 320;
   - workspace-chrome (`activities-panel-scroll` and `dock`).
-- **Unchanged at 1024 and up:** the `e2e-workspace-fit` sweep, plus a 1024 × 600 reading to confirm
-  that #468 is fixed and nothing else moved.
+- **Unchanged at 1024 and up:** the `e2e-workspace-fit` sweep, and ADR-0180's own journeys at
+  1024 × 600.
 - **Nothing was run** to write this plan.
 
 ## Reviews during build
 
 - **accessibility-reviewer:** M0-T3, and the built surface before merge (`inert`, focus, axe at 320).
 - **component-reviewer:** the prop removal, `dockBounds`, and the `inert` and Escape interaction.
-- **ux-reviewer:** the yield rule and the dock/panel mutual exclusion at short heights.
+- **ux-reviewer:** the 640 / 320 readings, and a dock taking the row at narrow widths.
 - **performance-reviewer:** optional.
 - **No ADR-0111 review is needed:** no shared primitive's keyboard contract changes.
 
@@ -288,9 +296,8 @@ The Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md).
 
 | Risk                                                                    | L / I      | Mitigation                                                            |
 | ----------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------- |
-| Q1 answered "no"                                                        | low / high | The reviewers made it blocking; the alternative is a stated regression |
-| `CANVAS_YIELD_MIN` 160 too small to read                                | med / low  | M0 reading; the constant takes the measured figure                    |
-| The dock/panel mutual exclusion surprises a planner                     | med / low  | Only below a 500 px body; focus moves to what was opened; UX review    |
+| ADR-0180 slips, or changes its swap                                     | med / high | This plan does not start M1 until it lands; M0's short-height readings are re-taken against whatever shipped |
+| ADR-0180's swap was never tested below 768 (its edge case said "unchanged") | med / med | This plan's journeys at 640 × 300/360/480 are its first check there |
 | `inert` interacts badly with an armed canvas tool                       | low / med  | The statement lives in the foot row; Escape is checked by the component reviewer |
 | A dock's content does not reflow at about 300 px                       | med / med  | M0-T2; a container-query stack in M1-T3                               |
 | The revisions defect is not real (read, not run)                        | low / low  | M0-T1                                                                 |
