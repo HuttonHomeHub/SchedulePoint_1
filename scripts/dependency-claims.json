@@ -997,6 +997,14 @@
       ]
     },
     {
+      "ref": "theme.css:330",
+      "package": "tailwindcss",
+      "path": "theme.css",
+      "lines": "330",
+      "anchor": "--breakpoint-xl: 80rem;",
+      "citedBy": ["docs/specs/landing-two-columns/feature-spec.md"]
+    },
+    {
       "ref": "preflight.css:202-206",
       "package": "tailwindcss",
       "path": "preflight.css",
