@@ -1,7 +1,7 @@
 # Feature Spec: Short screens — rows in the activities panel, and a three-line deck at 1024
 
-- **Status:** Draft — awaiting approval before implementation.
-- **Decision:** none yet. Part A needs CQ-A and Part B needs CQ-B (§1 "Open questions").
+- **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: Part A as option A1; Part B as B0 (no label drop) with ONE change kept, Settings… gets the gear icon at every width. Only that icon swap is built from Part B; the deck label policy, tooltip work and `deckLabel`/`iconOnly` contracts are NOT built (record them as not built in ADR-0180).
+- **Decision:** see Status.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner). Revised 2026-10-08
   after the UX, accessibility and component reviews, all three "agree with changes" on both parts.
 - **Date:** 2026-10-08
@@ -198,14 +198,14 @@ on the context, `render` items (View ▾, Go to date, Find) are covered as well 
 handled by `TsldCanvas`'s window `keydown`. They are not wrapped and do not collapse the panel; see
 "The canvas's window `keydown`" below. Only the toolbar's `ctx` callbacks collapse first.
 
-| Class                                              | Examples                                                                                                    | While the swap is active                                                                                                          |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **Viewport moves**                                 | Zoom in/out, Fit, View ▾ presets, Go to today / Go to date, zoom-to-selection, Next conflict, Find next/previous (ADR-0079 cursor) | **Collapse first, then run.** These are the commands that would otherwise act invisibly.                                             |
-| **Tool arming**                                    | Add activity / milestone, Link, LOE                                                                         | **Collapse first, then arm.** A tool armed while hidden has no target.                                                             |
-| **Right docks**                                    | Health, Float paths, Comments/Notes, Revisions                                                              | **Collapse the panel first, then open the dock** (see below).                                                                     |
-| **Marks on the diagram**                           | View ▾ display toggles, Legend, Resource strip                                                               | **Unaffected.** The state changes, and the popover's pressed state shows it; the diagram reflects it on return. No collapse.     |
-| **Plan / data / output**                           | Summary, Settings…, Analysis, Share & export, Print, Undo/Redo, object actions in the foot row               | **Unaffected.** Their subject is the plan or the selection, and the table shows the result.                                       |
-| **Shade with a reason** (ADR-0082/0083, shade-don't-hide ADR-0031) | none today                                                                            | Reserved for a future canvas command for which collapse-first is wrong. It is shaded with the reason "Collapse the activities panel to use this", never hidden. |
+| Class                                                              | Examples                                                                                                                           | While the swap is active                                                                                                                                        |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Viewport moves**                                                 | Zoom in/out, Fit, View ▾ presets, Go to today / Go to date, zoom-to-selection, Next conflict, Find next/previous (ADR-0079 cursor) | **Collapse first, then run.** These are the commands that would otherwise act invisibly.                                                                        |
+| **Tool arming**                                                    | Add activity / milestone, Link, LOE                                                                                                | **Collapse first, then arm.** A tool armed while hidden has no target.                                                                                          |
+| **Right docks**                                                    | Health, Float paths, Comments/Notes, Revisions                                                                                     | **Collapse the panel first, then open the dock** (see below).                                                                                                   |
+| **Marks on the diagram**                                           | View ▾ display toggles, Legend, Resource strip                                                                                     | **Unaffected.** The state changes, and the popover's pressed state shows it; the diagram reflects it on return. No collapse.                                    |
+| **Plan / data / output**                                           | Summary, Settings…, Analysis, Share & export, Print, Undo/Redo, object actions in the foot row                                     | **Unaffected.** Their subject is the plan or the selection, and the table shows the result.                                                                     |
+| **Shade with a reason** (ADR-0082/0083, shade-don't-hide ADR-0031) | none today                                                                                                                         | Reserved for a future canvas command for which collapse-first is wrong. It is shaded with the reason "Collapse the activities panel to use this", never hidden. |
 
 A structural test lists every canvas-directed `ctx` callback and fails if one is not wrapped. A new
 canvas-directed callback therefore has to choose a class.
@@ -261,16 +261,16 @@ inside them drops to `<body>`.
 
 ### Edge cases
 
-| Case                                          | Behaviour                                                                                                                                       |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gantt view                                    | The same rule. The stage holds `GanttPanel` (`plan-workspace-toolbar.tsx:1545-1548`); viewport-move commands act on the chart.                  |
-| `bodyHeight` 0 (first paint, jsdom)           | Not short, so jsdom suites are unchanged.                                                                                                        |
-| Live resize back and forth near the threshold | 24 px hysteresis (§3.2). No feedback loop exists, because the body is the swap's container and its height does not depend on the swap.           |
+| Case                                          | Behaviour                                                                                                                                                                                                                                                                  |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gantt view                                    | The same rule. The stage holds `GanttPanel` (`plan-workspace-toolbar.tsx:1545-1548`); viewport-move commands act on the chart.                                                                                                                                             |
+| `bodyHeight` 0 (first paint, jsdom)           | Not short, so jsdom suites are unchanged.                                                                                                                                                                                                                                  |
+| Live resize back and forth near the threshold | 24 px hysteresis (§3.2). No feedback loop exists, because the body is the swap's container and its height does not depend on the swap.                                                                                                                                     |
 | Plan slots                                    | `ActivityBottomPanel` in the wide branch is the only host (`hostsPlanSlots` defaults to true). The swap re-styles it and does not re-mount it, so the facts outlet and the dock outlet mount **once**. A unit test asserts exactly one of each in the DOM during the swap. |
-| 640 and 320 px wide                           | Below `md`, the single-pane branch (`plan-workspace-toolbar.tsx:2533-2534`) is used until ADR-0181 retires it, so A1 is inert there. The journey runs both widths to pin that. After ADR-0181, A1 applies there, and that spec re-runs these cases. |
-| Canvas round trip                             | §3.2 "Round trip".                                                                                                                               |
-| B1 with a shaded control                      | The disabled reason still wins the tooltip, and the `aria-describedby` reason span is kept (`ToolbarPopover.tsx:128-134`, `:160-164`).          |
-| B1: the next DO command                       | §3.3 "Spare and ownership".                                                                                                                      |
+| 640 and 320 px wide                           | Below `md`, the single-pane branch (`plan-workspace-toolbar.tsx:2533-2534`) is used until ADR-0181 retires it, so A1 is inert there. The journey runs both widths to pin that. After ADR-0181, A1 applies there, and that spec re-runs these cases.                        |
+| Canvas round trip                             | §3.2 "Round trip".                                                                                                                                                                                                                                                         |
+| B1 with a shaded control                      | The disabled reason still wins the tooltip, and the `aria-describedby` reason span is kept (`ToolbarPopover.tsx:128-134`, `:160-164`).                                                                                                                                     |
+| B1: the next DO command                       | §3.3 "Spare and ownership".                                                                                                                                                                                                                                                |
 
 ### Permissions / Validation / Errors
 
@@ -279,35 +279,35 @@ request.
 
 ## 3. Technical analysis
 
-| Area          | Impact | Notes                                                                                                                                                       |
-| ------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend      | med    | **A:** `use-activity-panel-prefs.ts`, `plan-workspace-toolbar.tsx`, `activity-bottom-panel.tsx`, `TsldCanvas.tsx` (keydown guard, measure guard). **B:** `toolbar-registry.ts`, `Deck.tsx`, `ToolbarPopover.tsx`, `ExportMenuControl`, `tooltip.tsx` option, `lib/breakpoints.ts` |
-| Backend / DB / API / Security | none | —                                                                                                                                           |
-| Performance   | low    | A reuses the existing ResizeObserver (`plan-workspace-toolbar.tsx:688-700`). B adds one `matchMedia` subscription                                           |
-| Infra         | none   | No new Playwright config or CI step                                                                                                                         |
-| Testing       | med    | Unit, structural, and journeys in `web:workspace-chrome`, `web:workspace-fit`, `web:toolbar` and `web:narrow-shell`                                         |
+| Area                          | Impact | Notes                                                                                                                                                                                                                                                                             |
+| ----------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend                      | med    | **A:** `use-activity-panel-prefs.ts`, `plan-workspace-toolbar.tsx`, `activity-bottom-panel.tsx`, `TsldCanvas.tsx` (keydown guard, measure guard). **B:** `toolbar-registry.ts`, `Deck.tsx`, `ToolbarPopover.tsx`, `ExportMenuControl`, `tooltip.tsx` option, `lib/breakpoints.ts` |
+| Backend / DB / API / Security | none   | —                                                                                                                                                                                                                                                                                 |
+| Performance                   | low    | A reuses the existing ResizeObserver (`plan-workspace-toolbar.tsx:688-700`). B adds one `matchMedia` subscription                                                                                                                                                                 |
+| Infra                         | none   | No new Playwright config or CI step                                                                                                                                                                                                                                               |
+| Testing                       | med    | Unit, structural, and journeys in `web:workspace-chrome`, `web:workspace-fit`, `web:toolbar` and `web:narrow-shell`                                                                                                                                                               |
 
 **Recalc parity:** not engaged. **Pen:** not engaged. **Flag:** none.
 
 ### 3.2 Part A — numbers, checked against the code (CLAUDE.md §19.11)
 
-| #468 says                                   | The code says                                                                                                                                                                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✓ `min-h-[240px]` at `TsldPanel.tsx:3279`   | Present, but its row and stage are `min-h-0 overflow-hidden` (`plan-workspace-toolbar.tsx:2361`, `:2368`), so it clips rather than pushes. The panel is sized by `effectiveMax = min(720, max(140, bodyHeight − 240))` (`:801-808`), using `CANVAS_MIN_HEIGHT` (`use-activity-panel-prefs.ts:23`). |
-| ✓ `PANEL_MIN_OPEN` 140                       | `use-activity-panel-prefs.ts:18`                                                                                                                                                                                                     |
-| ✓ 51 px foot                                 | `activity-bottom-panel.tsx:472`; `FOOT_MAX_PX = 51` (`command-surface.spec.ts:455`)                                                                                                                                                   |
-| ✗ foot added on top of the panel's 140       | When expanded, the foot is **inside** the panel (`activity-bottom-panel.tsx:359`, within the box at `plan-workspace-toolbar.tsx:2499`)                                                                                                |
-| ✗ 227 px chrome                              | Not derivable. M4's 274 px collapsed canvas (`m4-measurement.md:11`) plus the 51 px foot gives a body of ≈ 325 px at 1024 × 600 (fine). M0 re-measures                                                                                |
+| #468 says                                 | The code says                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✓ `min-h-[240px]` at `TsldPanel.tsx:3279` | Present, but its row and stage are `min-h-0 overflow-hidden` (`plan-workspace-toolbar.tsx:2361`, `:2368`), so it clips rather than pushes. The panel is sized by `effectiveMax = min(720, max(140, bodyHeight − 240))` (`:801-808`), using `CANVAS_MIN_HEIGHT` (`use-activity-panel-prefs.ts:23`). |
+| ✓ `PANEL_MIN_OPEN` 140                    | `use-activity-panel-prefs.ts:18`                                                                                                                                                                                                                                                                   |
+| ✓ 51 px foot                              | `activity-bottom-panel.tsx:472`; `FOOT_MAX_PX = 51` (`command-surface.spec.ts:455`)                                                                                                                                                                                                                |
+| ✗ foot added on top of the panel's 140    | When expanded, the foot is **inside** the panel (`activity-bottom-panel.tsx:359`, within the box at `plan-workspace-toolbar.tsx:2499`)                                                                                                                                                             |
+| ✗ 227 px chrome                           | Not derivable. M4's 274 px collapsed canvas (`m4-measurement.md:11`) plus the 51 px foot gives a body of ≈ 325 px at 1024 × 600 (fine). M0 re-measures                                                                                                                                             |
 
 **Named parts** (estimated from classes; M0 measures; constants take the larger, coarse value):
 
-| Constant           | Fine estimate   | Coarse estimate | Source                                                  |
-| ------------------ | --------------- | --------------- | ------------------------------------------------------- |
-| `PANEL_HEADER_PX`  | ≈ 48            | ≈ 60            | `activity-bottom-panel.tsx:260` (`py-2` + Create button) |
-| `PANEL_FOOT_PX`    | 51              | ≈ 55            | `activity-bottom-panel.tsx:472`                          |
-| `PANEL_BODY_PAD_PX` | 16             | 16              | `activity-bottom-panel.tsx:311`                          |
-| `TABLE_HEAD_PX`    | ≈ 32            | ≈ 36            | estimate                                                 |
-| `ROW_PX`           | ≈ 35            | ≈ 44            | `data-table-windowed-body.tsx:65` (37); `data-table.tsx:600` |
+| Constant            | Fine estimate | Coarse estimate | Source                                                       |
+| ------------------- | ------------- | --------------- | ------------------------------------------------------------ |
+| `PANEL_HEADER_PX`   | ≈ 48          | ≈ 60            | `activity-bottom-panel.tsx:260` (`py-2` + Create button)     |
+| `PANEL_FOOT_PX`     | 51            | ≈ 55            | `activity-bottom-panel.tsx:472`                              |
+| `PANEL_BODY_PAD_PX` | 16            | 16              | `activity-bottom-panel.tsx:311`                              |
+| `TABLE_HEAD_PX`     | ≈ 32          | ≈ 36            | estimate                                                     |
+| `ROW_PX`            | ≈ 35          | ≈ 44            | `data-table-windowed-body.tsx:65` (37); `data-table.tsx:600` |
 
 From these:
 
@@ -340,11 +340,11 @@ These are consistent. Every body above the floor gives at least as much.
 
 **Options compared at 1024 × 600:**
 
-| Option                  | Fine           | Coarse     |
-| ----------------------- | -------------- | ---------- |
-| A1                      | ≈ 5 rows       | ≈ 2–3 rows |
-| A2 (diagram ≥ 96)       | ≈ 2            | ≈ 0        |
-| A3 (diagram ≥ 160)      | ≈ 0            | 0          |
+| Option             | Fine     | Coarse     |
+| ------------------ | -------- | ---------- |
+| A1                 | ≈ 5 rows | ≈ 2–3 rows |
+| A2 (diagram ≥ 96)  | ≈ 2      | ≈ 0        |
+| A3 (diagram ≥ 160) | ≈ 0      | 0          |
 
 **What the threshold means in window terms:**
 
@@ -537,7 +537,7 @@ None.
     consumers that ignore it (`PlanPenControl`, `selection-actions`) are unaffected."
 - `lib/breakpoints.ts`: `XL_QUERY`, derived from the Tailwind `xl` token rather than a `79.98rem`
   literal, pinned by a unit test like `DESIGNED_MIN_WIDTH_QUERY`. Also `ICON_DECK_DEVICE_QUERY =
-  '(hover: hover) and (pointer: fine) and not (any-pointer: coarse)'`.
+'(hover: hover) and (pointer: fine) and not (any-pointer: coarse)'`.
   - **What the device query does.** It separates **devices as reported**, not users.
   - **Who it excludes.** A Surface with its cover attached reports `pointer: fine` but also
     `any-pointer: coarse`, so it is excluded. So is a touchscreen laptop.
@@ -580,20 +580,20 @@ None.
 
 **Part A:**
 
-| Option | Rows at 1024 × 600 (fine / coarse) | Verdict                                                     |
-| ------ | ---------------------------------- | ----------------------------------------------------------- |
-| **A1** | ≈ 5 / ≈ 2–3                        | **Recommended**                                             |
-| A2     | ≈ 2 / ≈ 0                          | Fails coarse                                                |
-| A3     | ≈ 0 / 0                            | Does not fix #468                                           |
-| A4: fold the header into the foot (−48 px) | +1 row on any option | Deferred; it restructures the panel for one row |
+| Option                                     | Rows at 1024 × 600 (fine / coarse) | Verdict                                         |
+| ------------------------------------------ | ---------------------------------- | ----------------------------------------------- |
+| **A1**                                     | ≈ 5 / ≈ 2–3                        | **Recommended**                                 |
+| A2                                         | ≈ 2 / ≈ 0                          | Fails coarse                                    |
+| A3                                         | ≈ 0 / 0                            | Does not fix #468                               |
+| A4: fold the header into the foot (−48 px) | +1 row on any option               | Deferred; it restructures the panel for one row |
 
 **Part B:**
 
-| Option | Saves                  | Cost                                                                                                    | Verdict                                         |
-| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **B1** | ≈ 267 px (needs 249)   | Registry field, `iconOnly`, tooltip suppression (ADR-0111), gear icon, 18 px spare, zoom flip           | **Recommended, optional after A**               |
-| B2     | ≈ 360 px (estimate)    | Rebuilds the deleted `⋯`, nested menu, popover in a menu, two homes, ADR-0109 D1 superseded in part      | Not recommended                                 |
-| B0     | 0                      | Diagram 274 px at the floor                                                                             | **A clean outcome**                             |
+| Option | Saves                | Cost                                                                                                | Verdict                           |
+| ------ | -------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **B1** | ≈ 267 px (needs 249) | Registry field, `iconOnly`, tooltip suppression (ADR-0111), gear icon, 18 px spare, zoom flip       | **Recommended, optional after A** |
+| B2     | ≈ 360 px (estimate)  | Rebuilds the deleted `⋯`, nested menu, popover in a menu, two homes, ADR-0109 D1 superseded in part | Not recommended                   |
+| B0     | 0                    | Diagram 274 px at the floor                                                                         | **A clean outcome**               |
 
 **ADR-0180** records:
 

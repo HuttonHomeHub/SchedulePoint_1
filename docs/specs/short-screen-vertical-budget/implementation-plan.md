@@ -1,7 +1,7 @@
 # Implementation Plan: Short screens — rows in the activities panel, and a three-line deck at 1024
 
 - **Feature spec:** [feature-spec.md](feature-spec.md)
-- **Status:** Draft — awaiting approval (CQ-A, CQ-B). Revised after the UX, accessibility and
+- **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: Part A as option A1; Part B as B0 (no label drop) with ONE change kept, Settings… gets the gear icon at every width. Only that icon swap is built from Part B; the deck label policy, tooltip work and `deckLabel`/`iconOnly` contracts are NOT built (record them as not built in ADR-0180).
   component reviews (all "agree with changes").
 - **Owner:** web · **ADR:** 0180
 
@@ -276,13 +276,13 @@ M-A also requires the derived suite list in the PR. Neither milestone touches `a
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                  | L / I       | Mitigation                                                    |
-| --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------- |
-| Default 1280 × 720 suites swap                                        | high/med    | Derived list, set to 1280 × 800 in the same commit; M0-T2 re-ask if large |
-| The canvas viewport does not survive `display: none`                  | med/high    | `measure()` 0 × 0 guard; journey case 2                       |
-| Focus dropped on a live resize                                        | med/high    | Layout effect plus journey case 5                             |
-| A diagram command acts invisibly                                      | low/med     | `withDiagram` plus the structural test                        |
-| The tooltip pops after a menu closes                                  | med/med     | `suppressFocusOpen`; real-browser cases; ADR-0111 review      |
-| The 18 px spare is consumed                                           | high/low    | The gate names the product owner as the decider               |
-| The 1279/1280 flip under zoom surprises the product owner             | med/low     | Stated in CQ-B for acceptance                                 |
-| Nobody on the product owner's own screens benefits                    | certain/low | Stated in spec §0                                             |
+| Risk                                                      | L / I       | Mitigation                                                                |
+| --------------------------------------------------------- | ----------- | ------------------------------------------------------------------------- |
+| Default 1280 × 720 suites swap                            | high/med    | Derived list, set to 1280 × 800 in the same commit; M0-T2 re-ask if large |
+| The canvas viewport does not survive `display: none`      | med/high    | `measure()` 0 × 0 guard; journey case 2                                   |
+| Focus dropped on a live resize                            | med/high    | Layout effect plus journey case 5                                         |
+| A diagram command acts invisibly                          | low/med     | `withDiagram` plus the structural test                                    |
+| The tooltip pops after a menu closes                      | med/med     | `suppressFocusOpen`; real-browser cases; ADR-0111 review                  |
+| The 18 px spare is consumed                               | high/low    | The gate names the product owner as the decider                           |
+| The 1279/1280 flip under zoom surprises the product owner | med/low     | Stated in CQ-B for acceptance                                             |
+| Nobody on the product owner's own screens benefits        | certain/low | Stated in spec §0                                                         |
