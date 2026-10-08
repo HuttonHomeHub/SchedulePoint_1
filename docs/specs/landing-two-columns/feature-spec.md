@@ -1,6 +1,6 @@
 # Feature Spec: The page grid splits on the width it has (#333)
 
-- **Status:** Draft — awaiting approval
+- **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: CQ-1 change the default for all three pages. CQ-2 (the 64rem vs 72rem split) stays decided by the M0 photographs and the SC-6 rule, and M1 does not start before it.
 - **Author(s):** feature-analyst
 - **Date:** 2026-10-08
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #333 (`:10387-10410`); named follow-up in
@@ -39,13 +39,13 @@ produces columns narrower than the 366 px it calls a defect.
 
 ### Problem statement re-verified (CLAUDE.md §19.11, "re-verify the PROBLEM")
 
-| Claim in #333                                 | Re-checked against                                                                                                                            | Still true?                                                                                                                                                                                                                         |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Columns are 464 px at 1280                    | `table-wrap-coverage/m0/README.md:54-58` (later sitting: grid 955, tracks **466 + 466**)                                                       | **Yes**, ±2 px. The m6 figure is section content width on build 0.132; the later figure is the track.                                                                                                                              |
-| Split is `md:` in `PageGrid`                  | `page-grid.tsx:54` `grid grid-cols-1 gap-6 md:grid-cols-2`; `:74` `md:col-span-2`                                                             | Yes.                                                                                                                                                                                                                                |
-| "Its other consumer is the staff console"     | `grep PageGrid apps/web/src`                                                                                                                 | **No — there are three consumers**: `OverviewScreen.tsx:213`, `features/staff/ui/staff-console-screen.tsx:261`, **and `routes/members.tsx:45`**. `table-wrap-coverage/m0/README.md:61-62` already said "all three of its consumers". |
+| Claim in #333                                 | Re-checked against                                                                                                                          | Still true?                                                                                                                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Columns are 464 px at 1280                    | `table-wrap-coverage/m0/README.md:54-58` (later sitting: grid 955, tracks **466 + 466**)                                                    | **Yes**, ±2 px. The m6 figure is section content width on build 0.132; the later figure is the track.                                                                                                                                |
+| Split is `md:` in `PageGrid`                  | `page-grid.tsx:54` `grid grid-cols-1 gap-6 md:grid-cols-2`; `:74` `md:col-span-2`                                                           | Yes.                                                                                                                                                                                                                                 |
+| "Its other consumer is the staff console"     | `grep PageGrid apps/web/src`                                                                                                                | **No — there are three consumers**: `OverviewScreen.tsx:213`, `features/staff/ui/staff-console-screen.tsx:261`, **and `routes/members.tsx:45`**. `table-wrap-coverage/m0/README.md:61-62` already said "all three of its consumers". |
 | "Neither of the product owner's screens"      | Screens are now **1912 × 948** (monitor) and **1912 × 1114** (Surface, landscape) — ADR-0179:53, `minimum-viewport/feature-spec.md:409-410` | Yes, still unaffected (§2). Note #333 cites 1646 for the Surface; that figure is older. ADR-0179 also lists the Surface **upright at ~1272** (`minimum-viewport/feature-spec.md:422`), which **is** in the cramped band.             |
-| "Below `md` the grid collapses to one column" | `page-grid.tsx:54`                                                                                                                            | Yes; and below 1024 is now outside the designed range anyway (ADR-0179 D1).                                                                                                                                                         |
+| "Below `md` the grid collapses to one column" | `page-grid.tsx:54`                                                                                                                          | Yes; and below 1024 is now outside the designed range anyway (ADR-0179 D1).                                                                                                                                                          |
 
 ### Users
 
@@ -64,13 +64,13 @@ omits sections per role, `OverviewScreen.tsx:259`, `:285`). Org Admins also use 
 
 ### Expected outcomes — plain English, Explorer at its default width
 
-| Window               | Landing today                     | Landing after                                                                                                | Members after                                                               | Staff console after |
-| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------- |
-| **1024** (the floor) | two columns of ~338 px — cramped  | **one column, 699 px wide**; the four boxes stack and the main area scrolls                                  | three sections stacked                                                      | **one column**      |
-| **1280**             | two columns of 466 px — cramped   | **one column, 955 px wide**; boxes stack at full height and the main area scrolls instead of each box       | stacked; the invitations table gets 955 px instead of 466                   | unchanged (two)     |
-| 1366 laptop (~1358)  | two of ~505                       | two of ~505 (just over the threshold)                                                                        | unchanged                                                                   | unchanged           |
-| 1440                 | two of ~545                       | two of ~545 — **unchanged** (under the default threshold; see CQ-2)                                          | unchanged                                                                   | unchanged           |
-| **1912** (both of the product owner's screens, landscape) | two of 732 | **unchanged**, pixel for pixel                                                                    | unchanged                                                                   | unchanged           |
+| Window                                                    | Landing today                    | Landing after                                                                                         | Members after                                             | Staff console after |
+| --------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------- |
+| **1024** (the floor)                                      | two columns of ~338 px — cramped | **one column, 699 px wide**; the four boxes stack and the main area scrolls                           | three sections stacked                                    | **one column**      |
+| **1280**                                                  | two columns of 466 px — cramped  | **one column, 955 px wide**; boxes stack at full height and the main area scrolls instead of each box | stacked; the invitations table gets 955 px instead of 466 | unchanged (two)     |
+| 1366 laptop (~1358)                                       | two of ~505                      | two of ~505 (just over the threshold)                                                                 | unchanged                                                 | unchanged           |
+| 1440                                                      | two of ~545                      | two of ~545 — **unchanged** (under the default threshold; see CQ-2)                                   | unchanged                                                 | unchanged           |
+| **1912** (both of the product owner's screens, landscape) | two of 732                       | **unchanged**, pixel for pixel                                                                        | unchanged                                                 | unchanged           |
 
 **One threshold for every org screen.** With the Explorer at 276, an org screen's grid is window −
 325, so the landing **and** Members are one column at windows **up to 1348** and two from **1349**
@@ -166,14 +166,14 @@ None. Pure layout; no request, no data, no role logic changes.
 
 ## 3. Technical analysis
 
-| Area           | Impact  | Notes                                                                                                                                                    |
-| -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **low** | `page-grid.tsx` (container frame, split variant, `rows` prop, `col-span-full`); `OverviewScreen.tsx:213-234` uses the prop; docblocks.                 |
-| Backend / DB / API | none | —                                                                                                                                                        |
-| Security       | none    | —                                                                                                                                                        |
-| Performance    | none    | One extra `div` per grid. `container-type: inline-size` applies **layout, style and inline-size containment** (CSS Containment 3) — see R7 for what layout containment means for overlays. No JS. |
-| Infrastructure | none    | No Playwright config or CI step added.                                                                                                                   |
-| Testing        | low     | Unit structural tests; one journey assertion added to an existing suite; measurement harness re-run.                                                     |
+| Area               | Impact  | Notes                                                                                                                                                                                             |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend           | **low** | `page-grid.tsx` (container frame, split variant, `rows` prop, `col-span-full`); `OverviewScreen.tsx:213-234` uses the prop; docblocks.                                                            |
+| Backend / DB / API | none    | —                                                                                                                                                                                                 |
+| Security           | none    | —                                                                                                                                                                                                 |
+| Performance        | none    | One extra `div` per grid. `container-type: inline-size` applies **layout, style and inline-size containment** (CSS Containment 3) — see R7 for what layout containment means for overlays. No JS. |
+| Infrastructure     | none    | No Playwright config or CI step added.                                                                                                                                                            |
+| Testing            | low     | Unit structural tests; one journey assertion added to an existing suite; measurement harness re-run.                                                                                              |
 
 ### 3.1 The widths, verified
 
@@ -182,13 +182,13 @@ Grid width on an org screen = window − 277 (Explorer 276 + splitter; measured 
 capped at 1488 (`max-w-screen-2xl` less padding, `page-container.tsx:38`; ADR-0146:33). Track =
 (grid − 24) / 2.
 
-| Window | Grid (Explorer 276) | Track today | Grid, Explorer folded (34) | Grid, Explorer 420 | Source          |
-| -----: | ------------------: | ----------: | -------------------------: | -----------------: | --------------- |
-|   1024 |                 699 |         338 |                        942 | ≥ 672 (Explorer clamped by `STAGE_MIN_WIDTH`, `use-explorer-prefs.ts:38-44`) | derived         |
-|   1280 |             **955** |     **466** |                       1198 |                811 | **measured** (`table-wrap-coverage/m0/README.md:56`) |
-|   1440 |                1115 |         546 |                       1358 |                971 | derived (m6 measured 544) |
-|   1646 |            **1321** |     **649** |                       1488 |               1177 | **measured** (`m0/README.md:57`; ADR-0146:40) |
-|   1912 |                1488 |         732 |                       1488 |               1443 | **measured at 1920** (`m0/README.md:58`) |
+| Window | Grid (Explorer 276) | Track today | Grid, Explorer folded (34) |                                                           Grid, Explorer 420 | Source                                               |
+| -----: | ------------------: | ----------: | -------------------------: | ---------------------------------------------------------------------------: | ---------------------------------------------------- |
+|   1024 |                 699 |         338 |                        942 | ≥ 672 (Explorer clamped by `STAGE_MIN_WIDTH`, `use-explorer-prefs.ts:38-44`) | derived                                              |
+|   1280 |             **955** |     **466** |                       1198 |                                                                          811 | **measured** (`table-wrap-coverage/m0/README.md:56`) |
+|   1440 |                1115 |         546 |                       1358 |                                                                          971 | derived (m6 measured 544)                            |
+|   1646 |            **1321** |     **649** |                       1488 |                                                                         1177 | **measured** (`m0/README.md:57`; ADR-0146:40)        |
+|   1912 |                1488 |         732 |                       1488 |                                                                         1443 | **measured at 1920** (`m0/README.md:58`)             |
 
 The Explorer swing at one window is up to **386 px** of grid (folded vs 420; `use-explorer-prefs.ts:27-28`
 and m0's measured spine). A viewport query cannot see it.
@@ -293,11 +293,11 @@ flowchart TD
 **The frame gets its width from layout in all three parents** (the `plan-facts.tsx:109-114`
 collapse needs an auto-width flex item, and none of these is one):
 
-| Consumer | Frame's parent | Parent layout | Frame width |
-| -------- | -------------- | ------------- | ----------- |
-| Landing  | `OverviewScreen.tsx:196` `mt-6 flex min-h-0 flex-1 flex-col` | column flex, default `align-items: stretch` | stretched to the parent; `flex-1` makes it take the remaining height, so the M9 cap still binds (R1 closed by construction) |
-| Members  | `PageContainer` (`members.tsx:32`; `page-container.tsx:62`, block) | block flow | fills the content box; `flex-1`/`min-h-0` inert |
-| Staff    | `SectionGroup`'s `div.space-y-6` (`section-group.tsx:73`) | block flow | fills; `flex-1`/`min-h-0` inert |
+| Consumer | Frame's parent                                                     | Parent layout                               | Frame width                                                                                                                 |
+| -------- | ------------------------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Landing  | `OverviewScreen.tsx:196` `mt-6 flex min-h-0 flex-1 flex-col`       | column flex, default `align-items: stretch` | stretched to the parent; `flex-1` makes it take the remaining height, so the M9 cap still binds (R1 closed by construction) |
+| Members  | `PageContainer` (`members.tsx:32`; `page-container.tsx:62`, block) | block flow                                  | fills the content box; `flex-1`/`min-h-0` inert                                                                             |
+| Staff    | `SectionGroup`'s `div.space-y-6` (`section-group.tsx:73`)          | block flow                                  | fills; `flex-1`/`min-h-0` inert                                                                                             |
 
 `features/overview/OverviewScreen.tsx`: `<PageGrid rows="fit-then-fill" className="min-h-0 flex-1">`;
 the `md:grid-rows-[…]` class and the `:229-231` comment go. `members.tsx` and
@@ -305,13 +305,13 @@ the `md:grid-rows-[…]` class and the `:229-231` comment go. `members.tsx` and
 
 ### 4.5 Approach and alternatives (CQ-1)
 
-| Option | What | Fixes 1280? | Sees the Explorer? | Other consumers | Verdict |
-| ------ | ---- | ----------- | ------------------ | --------------- | ------- |
-| **A. `xl:` viewport split** (the brief) | `md:` → `xl:` | **No** — `xl` is ≥ 1280 inclusive | No | All change at 768–1279 | Rejected: misses its own target |
-| B. Higher viewport split (`wide:` 1600, or a new 81–85rem) | custom media query | Yes | No; a 1440 window with Explorer folded (1358 grid) goes to one column of 1358 px | All change | Rejected: a single column up to 1274 px wide at 1599 brings back the ~1104 px rows ADR-0098 narrowed (ADR-0146:18) |
-| C. Landing-only class override | `className="md:grid-cols-1 @5xl:grid-cols-2"` on the landing | Yes | Yes, only if a container is declared by hand | None | Rejected: one-off styling (CLAUDE.md §12), fights the primitive's own rule through `twMerge`, and leaves `md:col-span-2` disagreeing |
-| D. Opt-in prop (`split="md" \| "measure"`) | default unchanged | Yes, landing only | Yes | **Unchanged** | Acceptable fallback if CQ-1 is "landing only" |
-| **E. Change the default to a container split (recommended)** | §4.4 | **Yes** | **Yes** | Members one column at windows ≤ 1348; staff changes only at 1024–1071 | **Recommended** |
+| Option                                                       | What                                                         | Fixes 1280?                       | Sees the Explorer?                                                               | Other consumers                                                       | Verdict                                                                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **A. `xl:` viewport split** (the brief)                      | `md:` → `xl:`                                                | **No** — `xl` is ≥ 1280 inclusive | No                                                                               | All change at 768–1279                                                | Rejected: misses its own target                                                                                                      |
+| B. Higher viewport split (`wide:` 1600, or a new 81–85rem)   | custom media query                                           | Yes                               | No; a 1440 window with Explorer folded (1358 grid) goes to one column of 1358 px | All change                                                            | Rejected: a single column up to 1274 px wide at 1599 brings back the ~1104 px rows ADR-0098 narrowed (ADR-0146:18)                   |
+| C. Landing-only class override                               | `className="md:grid-cols-1 @5xl:grid-cols-2"` on the landing | Yes                               | Yes, only if a container is declared by hand                                     | None                                                                  | Rejected: one-off styling (CLAUDE.md §12), fights the primitive's own rule through `twMerge`, and leaves `md:col-span-2` disagreeing |
+| D. Opt-in prop (`split="md" \| "measure"`)                   | default unchanged                                            | Yes, landing only                 | Yes                                                                              | **Unchanged**                                                         | Acceptable fallback if CQ-1 is "landing only"                                                                                        |
+| **E. Change the default to a container split (recommended)** | §4.4                                                         | **Yes**                           | **Yes**                                                                          | Members one column at windows ≤ 1348; staff changes only at 1024–1071 | **Recommended**                                                                                                                      |
 
 **Why E over D.** The primitive's docblock states a column-width rule (`page-grid.tsx:49-50`), and E
 implements that rule rather than a proxy for it. The second consumer has measured evidence of the
@@ -323,11 +323,11 @@ so that is derived, not measured).
 
 **Threshold (CQ-2).** Any threshold leaves either narrow pairs or a wide single column:
 
-| Container threshold | Narrowest pair | Widest single column | Window where the landing splits (Explorer 276) |
-| ------------------- | -------------: | -------------------: | ---------------------------------------------: |
+| Container threshold | Narrowest pair | Widest single column |  Window where the landing splits (Explorer 276) |
+| ------------------- | -------------: | -------------------: | ----------------------------------------------: |
 | `@4xl` 56rem        |            436 |                  895 | ~1221 — narrower than the cramped 466; rejected |
-| **`@5xl` 64rem**    |        **500** |             **1023** | **~1349**                                       |
-| `@6xl` 72rem        |            564 |                 1151 | ~1477                                           |
+| **`@5xl` 64rem**    |        **500** |             **1023** |                                       **~1349** |
+| `@6xl` 72rem        |            564 |                 1151 |                                           ~1477 |
 
 `@5xl` keeps the widest single column between ADR-0098's accepted 846 and the 1104 it rejected;
 `@6xl` would put 1440 laptops into one 1115 px column. **SC-6 decides between them**, from M0's
