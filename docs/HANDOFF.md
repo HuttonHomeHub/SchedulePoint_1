@@ -6,7 +6,7 @@ epic boundary; its history is in git.
 **Written:** 2026-10-08, after the **#462 / #463** batch and its follow-ons: the matching not-found
 screens, the Surface test sheet answered, **Gantt M2 + #464** (product owner: "go ahead with Gantt M2
 and #464", then "C and accept"), the #464 follow-up for blank space (**#464 closed** on the device),
-and **#465** (the Gantt's date header overprinting).
+and **#465** (the Gantt's date header overprinting; closed on the product owner's check).
 
 ## Where things stand
 
@@ -29,12 +29,10 @@ and **#465** (the Gantt's date header overprinting).
 | #879 | Gantt M2 re-scoped by the device: M2-T1/T3 dropped; M2-T2 24 × 24 arrow, option C; M2-T5 for #464. Four reviewers agreed twice.                                                                                                                                                                                                                                                                                                                                                                                                                | none        |
 | #881 | **Gantt M2 shipped**: the summary arrow is a 24 × 24 target beside the name, with the indent, in the Activity column (bucket rows aligned with Code shown or hidden; `GanttCell` gains a Gantt-local `lead` so nothing moves while editing); a `data-last-input` attribute makes idle cell text `select-none` after a touch/stylus press (#464); coarse gate covers the Gantt grid with four exemption kinds; **ADR-0177 Accepted**.                                                                                                           | web 0.177.4 |
 | #884 | **#464 closed**: the touch `select-none` variant moved from the cell text spans to each row's whole table half (off on a row with an open cell), so a hold on blank space inside a row reaches the row menu. Device 12b passed on 0.177.5 in all three runs.                                                                                                                                                                                                                                                                                   | web 0.177.5 |
-| #885 | **#465** (new row): the Gantt's month labels thin to every 2nd month, quarter, year or k-th January as space requires (`MONTH_LABEL_MIN_PITCH_PX` 64, calendar-aligned); a line stays at every month. Print uses the same builder.                                                                                                                                                                                                                                                                                                             | web 0.177.5 |
+| #885 | **#465 closed** (confirmed readable on the monitor): the Gantt's month labels thin to every 2nd month, quarter, year or k-th January as space requires (`MONTH_LABEL_MIN_PITCH_PX` 64, calendar-aligned); a line stays at every month. Print uses the same builder.                                                                                                                                                                                                                                                                            | web 0.177.5 |
 
 ## Waiting on the product owner
 
-- **Confirm #465 on the monitor**: the plan from the 2026-10-07 screenshot, zoomed to fit, should
-  show readable month labels. #465 closes on that answer.
 - The Surface sheet (`docs/specs/gantt-coarse-pointer/device-checklist.md`) stays the record of what
   is tested: a change to anything it tests updates it in the same PR. Items 6 and 12 have passed. The
   Surface runs at **1912 × 1114 CSS px (DPR 1.5)**; the monitor at **1912 × 948 (DPR 1, mouse
@@ -54,7 +52,7 @@ and **#465** (the Gantt's date header overprinting).
 
 ## Open rows unchanged this batch
 
-**#465** (until confirmed), **#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
+**#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435** (e2e flake count), **#432**, **#429**,
 **#419**, **#405**. `wip/history-numerator-preaggregate`
 (`64ff45d4`) is still the first remedy to measure when the 250,000 trigger fires.
 
