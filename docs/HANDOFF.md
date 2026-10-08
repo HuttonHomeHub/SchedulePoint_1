@@ -45,7 +45,8 @@ and **#465** (the Gantt's date header overprinting; closed on the product owner'
 
 ## Decisions to put to the product owner (none approved)
 
-1. Anything from `docs/BACKLOG.md` (rewritten by Gantt M2: #464's device check, #438, #439, #215).
+1. Anything from `docs/BACKLOG.md`. The Gantt's remaining residue there is small: **#438** (the Gantt
+   at 390 px), **#439** (the `Grid width` divider's `touch-action`) and **#215** (dense-row height).
 2. Optional follow-ups noted by reviewers, not filed as work: a shared "Go to the organisation
    overview" link component (it is duplicated in `org-not-found.tsx` and `entity-not-found.tsx`);
    name width at WBS depth 4–5 (about 80–95 px of the Activity cell before the text).

@@ -129,8 +129,8 @@ a product idea that has not yet earned a roadmap line:
   a finger drags what it has selected, a press-and-hold anywhere on a row opens its menu, the summary-row arrow is a
   24 × 24 box beside the name, and the grid's targets are gated by `e2e-workspace-fit` (24 px fine, 44 px coarse with
   four named exceptions). A double tap opens a cell's text box on the device, so touch has a quick-edit route and
-  there is no gap to track. What remains is **small and tracked elsewhere**: the device re-check of a hold on the
-  table half (`docs/TECH_DEBT.md` **#464**, checklist item 12), the Gantt at 390 px (**#438**), the `Grid width`
+  there is no gap to track. What remains is **small and tracked elsewhere** (a hold on the table half, #464, passed its device
+  re-check and closed 2026-10-08): the Gantt at 390 px (`docs/TECH_DEBT.md` **#438**), the `Grid width`
   divider's `touch-action` (**#439**), and the dense-row height decision that would let the `⋯` and the arrow grow
   (**#215**). `PROJECT_BRIEF.md` §8's "edit supported" is met; none of the residue is a requirement of the brief.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
