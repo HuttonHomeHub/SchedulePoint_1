@@ -731,29 +731,33 @@ test('no column header stands over an empty column', async ({ page }) => {
   expect(scan.empties, 'these column headers print nothing in any row').toEqual([]);
 });
 
-/**
- * M8 — the `fit` column's whole justification, asserted rather than measured once by hand.
- *
- * `fit` is `md:w-px md:whitespace-nowrap`, and the `md:` prefix is not stylistic: M0 measured a
- * table whose columns are all `fit` rendering **793px inside a 320px container**, because
- * `white-space: nowrap` has no fallback. That is FC-6, WCAG 2.2 §1.4.10, and until now its only
- * evidence was a one-off artefact (`m0/drift-320.json`) rather than a gate — so a future author
- * dropping the prefix would break reflow on the two screens whose content motivates `fit`, and
- * nothing in CI would say so. Raised by the M8 component review.
- */
-test('no list screen overflows a 320px viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 720 });
-  for (const path of ['calendars', 'resources', 'clients', 'recently-deleted']) {
-    await page.goto(`/orgs/${orgSlug}/${path}`);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    // The `fit` columns live in the table, so wait for one before measuring — a skeleton has no
-    // `whitespace-nowrap` cell in it and would report a comfortable zero (the M6 lesson).
-    await expect(page.getByRole('table')).toBeVisible();
-    const over = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(over, `${path} overflows 320px by ${String(over)}px`).toBeLessThanOrEqual(0);
-  }
+test.describe('below the floor, after Continue anyway', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  /**
+   * M8 — the `fit` column's whole justification, asserted rather than measured once by hand.
+   *
+   * `fit` is `md:w-px md:whitespace-nowrap`, and the `md:` prefix is not stylistic: M0 measured a
+   * table whose columns are all `fit` rendering **793px inside a 320px container**, because
+   * `white-space: nowrap` has no fallback. That is FC-6, WCAG 2.2 §1.4.10, and until now its only
+   * evidence was a one-off artefact (`m0/drift-320.json`) rather than a gate — so a future author
+   * dropping the prefix would break reflow on the two screens whose content motivates `fit`, and
+   * nothing in CI would say so. Raised by the M8 component review.
+   */
+  test('no list screen overflows a 320px viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    for (const path of ['calendars', 'resources', 'clients', 'recently-deleted']) {
+      await page.goto(`/orgs/${orgSlug}/${path}`);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      // The `fit` columns live in the table, so wait for one before measuring — a skeleton has no
+      // `whitespace-nowrap` cell in it and would report a comfortable zero (the M6 lesson).
+      await expect(page.getByRole('table')).toBeVisible();
+      const over = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(over, `${path} overflows 320px by ${String(over)}px`).toBeLessThanOrEqual(0);
+    }
+  });
 });
 
 /**

@@ -486,6 +486,17 @@ would have to know where they are, it is not a scope — it is a component with 
 component that needs a scope-coloured container builds one from `bg-background` rather than wrapping
 `Card` — which is what `AuthShell` does. This is a feature: `Card` means the same thing everywhere.
 
+**The brand surface's parts (ADR-0077, ADR-0179).** `BrandCard` (`components/layout/brand-card.tsx`)
+is the navy-and-card composition the public screens and the larger-screens page share: `fit="content"`
+sizes it to its content, otherwise it is the fixed 40rem public card. `BrandPanel`'s `split` says when the
+decorative half appears — `'md'` from the `md` breakpoint (public screens, unchanged) or `'md-tall'`
+only when the window is also `tall`. **`tall`** is a named variant (`@custom-variant tall` in
+`globals.css`, `min-height: 36rem`) — write `md:tall:…`, never the arbitrary media query.
+`ViewportNotice` and `ViewportBanner` (`components/layout/viewport-notice/`) are the signed-in layout's
+"designed for larger screens" page (a native `<dialog>`, never unmounted) and its live-narrowing strip;
+both read the one floor, `DESIGNED_MIN_WIDTH_QUERY` (`lib/breakpoints.ts`, `(min-width: 64rem)`, pinned to
+Tailwind's `lg`). Copy states the floor with `designedMinWidthPx()`, which follows the root font size.
+
 **A field is not a surface.** `--field` / `--field-foreground` /
 `--field-muted-foreground` are their own pair set, because an input inside the navy chrome
 is white: its ink and its placeholder belong to the field's colour system, not the band's.

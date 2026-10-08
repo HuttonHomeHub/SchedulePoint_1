@@ -245,6 +245,13 @@ zoom-band window (about 640 × 480, a 1280 window at 200 %) exercises the narrow
 phone-shaped viewport (390 × 844, a phone device profile) is not a test target, and a test that
 asserts a designed layout below the floor is the wrong test.
 
+**Below 1024 the signed-in app shows the larger-screens page on a load**, so a test that runs
+narrower on purpose opts in to having pressed _Continue anyway_ with
+`test.use({ acknowledgeViewportNotice: true })` (`apps/web/e2e-support/test.ts`), inside the
+`describe` that needs it. It is never on by default and never file-wide: the notice's own journey
+(`e2e-narrow-shell`) must meet the page, and a `beforeAll` page is outside the fixture's reach — call
+`acknowledgeViewportNotice(page)` on it before its first navigation.
+
 ### Measuring the canvas in a real browser
 
 `apps/web/scripts/measure-link-routing.mjs` paints the real `paintScene` against

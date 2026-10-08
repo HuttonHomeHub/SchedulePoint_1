@@ -1,4 +1,12 @@
-import { test as base, expect, type Browser, type BrowserContext } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test';
+
+import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
 /**
  * The journeys' `test`: the stock one plus a guard that fails a test which met an API 429
@@ -48,6 +56,33 @@ import { test as base, expect, type Browser, type BrowserContext } from '@playwr
  * several local workers sharing one IP each tally understates the bucket, and route-fulfilled
  * (mocked) responses are counted too, which overstates it for specs that mock.
  */
+
+/**
+ * ## The viewport notice, and why acknowledging it is opt-in (ADR-0179)
+ *
+ * Below 1024 CSS px the signed-in app shows the "designed for larger screens" page on a load and a
+ * banner on a live narrowing. A test that deliberately runs at a narrower width — to check that a
+ * list reflows at 320, say — is testing the layout *after* the reader has pressed Continue anyway,
+ * so it asks for that: `test.use({ acknowledgeViewportNotice: true })`, inside the `describe` that
+ * needs it. It writes the same storage key the app reads, before any page script runs.
+ *
+ * **Never on by default, and never file-wide for a file whose other tests can see the notice.** The
+ * notice's own journey (`e2e-narrow-shell`) must meet it, and a default that quietly acknowledged
+ * it would let that journey pass against a product that never showed anything. A test at 1024 or
+ * wider needs nothing: the notice cannot appear there.
+ *
+ * A page that a `beforeAll` opens is outside the fixture's reach, as with `allowRateLimited`; call
+ * {@link acknowledgeViewportNotice} on it before its first navigation.
+ */
+export async function acknowledgeViewportNotice(target: Page | BrowserContext): Promise<void> {
+  await target.addInitScript((key: string) => {
+    try {
+      window.localStorage.setItem(key, '1');
+    } catch {
+      // A context with storage blocked is the notice's own test to write, not this helper's.
+    }
+  }, VIEWPORT_NOTICE_ACK_KEY);
+}
 
 /** The window `ThrottlerGuard` counts in (`RATE_LIMIT_TTL`'s default). */
 const THROTTLE_WINDOW_MS = 60_000;
@@ -212,6 +247,10 @@ function track(startedAt: number): {
 }
 
 interface TestFixtures {
+  /** True for the tests that run below 1024 on a signed-in route; see the docblock. */
+  acknowledgeViewportNotice: boolean;
+  /** Auto: applies {@link acknowledgeViewportNotice} to the test's contexts. */
+  viewportNoticeAck: void;
   /** True for the one test that provokes a 429 on purpose; see the docblock. */
   allowRateLimited: boolean;
   /** The 429s this test's contexts have seen so far. Auto-started by `throttleGuard`. */
@@ -225,6 +264,37 @@ interface WorkerFixtures {
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   allowRateLimited: [false, { option: true }],
+
+  acknowledgeViewportNotice: [false, { option: true }],
+
+  viewportNoticeAck: [
+    async ({ context, browser, acknowledgeViewportNotice: acknowledge }, provide) => {
+      if (!acknowledge) {
+        await provide();
+        return;
+      }
+      await acknowledgeViewportNotice(context);
+      // A second actor's context is opened with `browser.newContext()` (see `rateLimits`), so it is
+      // covered the same way, and the browser — shared by the worker's tests — is put back after.
+      const own = Object.getOwnPropertyDescriptor(browser, 'newContext');
+      const open = browser.newContext.bind(browser);
+      browser.newContext = async (...args: Parameters<Browser['newContext']>) => {
+        const created = await open(...args);
+        await acknowledgeViewportNotice(created);
+        return created;
+      };
+      try {
+        await provide();
+      } finally {
+        if (own) {
+          Object.defineProperty(browser, 'newContext', own);
+        } else {
+          delete (browser as { newContext?: unknown }).newContext;
+        }
+      }
+    },
+    { auto: true },
+  ],
 
   // `provide`, not `use`: the react-hooks rule reads a call named `use` as the React hook.
   rateLimits: async ({ context, browser }, provide) => {

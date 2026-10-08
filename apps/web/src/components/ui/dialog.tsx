@@ -1,9 +1,10 @@
 import { X } from 'lucide-react';
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
 import { HeadingLevelContext } from '@/components/ui/page/heading-level';
+import { useNativeModal } from '@/components/ui/use-native-modal';
 import { cn } from '@/lib/utils';
 
 /**
@@ -65,12 +66,7 @@ export function Dialog({
   const titleId = `${baseId}-title`;
   const descriptionId = `${baseId}-description`;
 
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
+  useNativeModal({ ref, open });
 
   // The close/cancel guard is the shared leaf — see `native-dialog-close.ts` for why only the
   // dialog's own close counts (TECH_DEBT #50) and why the guard lives once (TECH_DEBT #197).

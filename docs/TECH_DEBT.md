@@ -11894,3 +11894,21 @@ keep that change to the diagnostics it adds. **Next:** run each press inside one
 `SET LOCAL statement_timeout` (and decide the figure against the measured readings), with a test that a statement
 over the bound surfaces as the existing 500 rather than hanging. **Trigger:** H-1 `examined` ≥ 250,000, or any
 press over ~800 ms reported by the operator, or the next entry whose scan is unbounded by an index.
+
+### 466. At 320 px the activities table row's `⋯` is under the bottom panel's bar, so a pointer cannot reach it
+
+**Status:** open · **Verified:** 2026-10-08 (`apps/web/e2e-narrow-shell/narrow-shell.spec.ts` reaches the row menu with `focus()` + Enter because the pointer path is covered; raised during minimum-viewport M3)
+**Raised:** 2026-10-08 · **Size:** S · **Owner:** web
+
+Below the designed floor (ADR-0179), so not a reflow failure: nothing scrolls sideways and the control is
+keyboard-reachable. But a touch user at 320 px cannot press the `⋯` (WCAG 2.5.x target access). **Next:** confirm the
+long-press path opens the row menu at 320, then fix the overlap (the pane bar's z-index or inset) in
+minimum-viewport M4's vertical-budget work.
+
+### 467. The account chip's Sign out uses native `disabled` while pending, dropping focus to `<body>`
+
+**Status:** open · **Verified:** 2026-10-08 (`apps/web/src/components/layout/account-chip.tsx:173` passes `disabled={signOut.isPending}`; the larger-screens page's Sign out was moved to the `aria-disabled` pattern in the same review)
+**Raised:** 2026-10-08 · **Size:** XS · **Owner:** web
+
+A native disabled control blurs to `<body>` the moment it disables (WCAG 2.4.3). **Next:** move it to
+`aria-disabled` + a click guard, as `AcceptInvitationCard.tsx` does.

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 
 /**
  * The **staff console** journey (ADR-0086, staff-console M3).
@@ -304,6 +304,9 @@ test('a staff member reaches the console; a member cannot tell it exists', async
 
   // ---------------------------------------------------------------- An ordinary member
   const memberContext = await browser.newContext();
+  // The in-shell not-found check below runs at 320 px, which is the reader's view after Continue
+  // anyway (ADR-0179); the same context serves the sections that run at 1368.
+  await acknowledgeViewportNotice(memberContext);
   const member = await memberContext.newPage();
   await signUpOrIn(member, memberEmail, 'Ordinary Member');
   // **Assert the session exists before relying on it.** This journey's docblock claims §1 proves

@@ -353,7 +353,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
   // the region still hears the boundary when the route settles (WCAG 4.1.3), and the SECOND
   // sentence, which is the only actionable thing on the screen — it names where this reader can go
   // instead. `NoticeStrip` truncates by default, and that half is what the default would clip.
-  const refusal = mate.getByRole('status');
+  const refusal = mate.getByRole('status').filter({ hasText: 'Only an Org Admin can read' });
   await expect(refusal).toContainText('Only an Org Admin can read');
   await expect(refusal).toContainText('My activity');
   // No table at all — an empty one would read as "nothing has happened here", which is exactly the

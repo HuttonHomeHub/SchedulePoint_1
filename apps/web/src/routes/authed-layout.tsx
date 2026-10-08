@@ -1,6 +1,10 @@
 import { AppShell } from '@/components/layout/navigator/app-shell';
 import { NavigationGuard } from '@/components/layout/unsaved-work/navigation-guard';
 import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-work-provider';
+import {
+  ViewportBanner,
+  ViewportNotice,
+} from '@/components/layout/viewport-notice/viewport-notice';
 
 /**
  * The authenticated app shell — the persistent app-shell of ADR-0029: a mounted-once top bar, the
@@ -20,6 +24,11 @@ import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-wo
  * because every surface that can hold unsaved work is authenticated — the five public auth forms
  * deliberately do not register, since losing a half-typed sign-in is not work.
  *
+ * **`ViewportNotice`** (ADR-0179) wraps the shell and renders the "designed for larger screens" page
+ * beside it. It lives here, and not at the root, so it can never reach `/sign-in`, `/share` or
+ * `/staff` — which are children of the root route. The shell is never unmounted by it: the page is
+ * a modal over a mounted, inert shell, and the banner is a row inside the shell's own grid.
+ *
  * It re-renders nothing on a registration change: the registry lives in a ref, and the only
  * consumer that paints from it subscribes. The `app-shell` suites passing unchanged through this
  * commit is the before/after oracle for that (ADR-0078's barrel-preserving argument).
@@ -28,7 +37,9 @@ export function AuthedLayout(): React.ReactElement {
   return (
     <UnsavedWorkProvider>
       <NavigationGuard />
-      <AppShell />
+      <ViewportNotice>
+        <AppShell banner={<ViewportBanner />} />
+      </ViewportNotice>
     </UnsavedWorkProvider>
   );
 }

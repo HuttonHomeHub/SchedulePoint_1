@@ -117,6 +117,7 @@ import {
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
 } from '@/config/env';
+import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
@@ -2049,6 +2050,11 @@ export function TsldCanvas({
     // back to Select (unless a create popover is open — that owns its own Esc).
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
+      // An Escape a native modal open above the canvas (the viewport notice, a dialog) already
+      // answered is not ours to take as "leave the tool": the keydown bubbles through the DOM past
+      // a top-layer modal. Deliberately NOT `e.defaultPrevented` — an open tooltip prevents default
+      // on purpose without stopping propagation, so one Escape closes it AND reaches this rung.
+      if (aNativeModalIsOpen()) return;
       // **An Escape typed into a text field belongs to that field**
       // (`docs/specs/canvas-search-navigation/` §4.5, M1-T4). This listener is on `window`, so
       // before the search field existed it fired wherever focus was — and with a tool armed, a
