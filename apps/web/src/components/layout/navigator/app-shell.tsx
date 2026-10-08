@@ -14,9 +14,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
-
-/** `lg` breakpoint (64rem) as a media query — the pinned Explorer column takes over at/above it. */
-const LG_QUERY = '(min-width: 64rem)';
+import { DESIGNED_MIN_WIDTH_QUERY } from '@/lib/breakpoints';
 
 /**
  * The persistent app-shell (ADR-0029): a header row + a docked Project Explorer + a single
@@ -26,20 +24,20 @@ const LG_QUERY = '(min-width: 64rem)';
  * off-canvas `Sheet` opened from the header. **Unconditional** since `VITE_NAV_TREE` retired
  * (2026-08-18): {@link AuthedLayout} is now this component and nothing else.
  *
- * The word "rail" survives here in {@link NavigatorRail} and in `LG_QUERY`'s comment: that
+ * The word "rail" survives here in {@link NavigatorRail} and in the designed-width constant's comment: that
  * component is the Explorer's tree, and it is called a rail because it used to be one. Renaming it
  * is a separate change to a separate file.
  */
-export function AppShell(): React.ReactElement {
+export function AppShell({ banner }: { banner?: React.ReactNode }): React.ReactElement {
   return (
     <AnnouncerProvider>
-      <ShellFrame />
+      <ShellFrame banner={banner} />
     </AnnouncerProvider>
   );
 }
 
 /** Inner frame — inside {@link AnnouncerProvider}, which every screen below it announces through. */
-function ShellFrame(): React.ReactElement {
+function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElement {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const explorer = useExplorerPrefs();
   const params = useParams({ strict: false });
@@ -92,7 +90,7 @@ function ShellFrame(): React.ReactElement {
   // would push the close into a setState-in-effect (TECH_DEBT #30a: intentionally left as-is).
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
-    const mql = window.matchMedia(LG_QUERY);
+    const mql = window.matchMedia(DESIGNED_MIN_WIDTH_QUERY);
     const onChange = (event: MediaQueryListEvent): void => {
       if (event.matches) setDrawerOpen(false);
     };
@@ -119,7 +117,7 @@ function ShellFrame(): React.ReactElement {
                   exercises. An `auto` column with no child is zero wide, so this is provably the
                   same layout — which is exactly why it could sit unused without anyone noticing.
 
-                  Rows 1 and 3 are `auto`, so an unfilled band or status bar is a zero-height row
+                  Rows 1, 2 and 4 are `auto`, so an unfilled banner seat, band or status bar is a zero-height row
                   and every screen that is not a plan keeps the frame it has. That is the
                   content-driven-height argument the chrome band already made, preserved.
 
@@ -131,7 +129,7 @@ function ShellFrame(): React.ReactElement {
                   and rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather
                   than by the substrate choice). The shell is therefore exactly the viewport and
                   `<main>` scrolls, rather than the document scrolling. */}
-              <div className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+              <div className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
                 {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
                     It stays load-bearing after the rail's deletion, with a different traversal to
@@ -151,7 +149,17 @@ function ShellFrame(): React.ReactElement {
                   Skip to main content
                 </a>
 
-                {/* **Row 2, column 1 — the docked Project Explorer** (workspace redesign M3-T1).
+                {/* **Row 1 — the viewport banner's seat** (ADR-0179). An `auto` row, so with no banner
+                    it is zero high and every screen keeps the frame it had; with one, the grid
+                    below it simply starts lower. It sits INSIDE this grid, after the skip link and
+                    never before `<AppShell/>`, for two reasons: the shell is `h-dvh` with
+                    `overflow-hidden`, so a sibling above it would be pushed off the bottom of the
+                    window, and the skip link must remain the first focusable thing in the document
+                    (WCAG 2.4.1). The content is the notice's, handed in as a prop because it owns
+                    the state; this file only owns the seat. */}
+                <div className="col-span-2 col-start-1 row-start-1">{banner}</div>
+
+                {/* **Row 3, column 1 — the docked Project Explorer** (workspace redesign M3-T1).
                     It replaces the 48 px icon rail that spanned all three rows, and the swap is
                     the milestone: the rail's four jobs were the brand, the organisation switcher,
                     the six destinations and the account chip — all of them identity or navigation,
@@ -159,7 +167,7 @@ function ShellFrame(): React.ReactElement {
                     icons. They are back in the band's header row, which now renders at every width
                     rather than below `lg` only.
 
-                    It occupies row 2 ALONE, not all three. The rail spanned every row because it
+                    It occupies row 3 ALONE, not all four. The rail spanned every row because it
                     was chrome; a navigator is content beside content, so the band above it and the
                     status bar below it run the full width and the Explorer sits between them —
                     which is also what lets the band's own geometry argument widen from "columns
@@ -168,12 +176,12 @@ function ShellFrame(): React.ReactElement {
                     Hidden below `lg`, where the `Sheet` at the foot of this file is the Explorer
                     and always has been. */}
                 {explorerAvailable ? (
-                  <div className="col-start-1 row-start-2 hidden min-h-0 shrink-0 lg:flex">
+                  <div className="col-start-1 row-start-3 hidden min-h-0 shrink-0 lg:flex">
                     <ExplorerColumn orgSlug={orgSlug} expansion={expansion} prefs={explorer} />
                   </div>
                 ) : null}
 
-                {/* Row 1, BOTH COLUMNS — the command band. §4a solved by geometry, and now
+                {/* Row 2, BOTH COLUMNS — the command band. §4a solved by geometry, and now
                     trivially: every column that can change width is inside the span, so resizing
                     the Explorer and folding it redistribute width *within* the band and change it
                     by exactly zero. Under the icon rail this had to be `2–3` and rely on column 1
@@ -188,10 +196,10 @@ function ShellFrame(): React.ReactElement {
                   rowsSlotRef={rowsSlotRef}
                   identitySlotRef={identitySlotRef}
                   modeSlotRef={modeSlotRef}
-                  className="col-span-2 col-start-1 row-start-1"
+                  className="col-span-2 col-start-1 row-start-2"
                 />
 
-                {/* Row 2, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
+                {/* Row 3, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
                     shell; `overflow-auto` gives screens taller than the viewport somewhere to go,
                     so the band and the rail stay put while the content moves.
 
@@ -202,12 +210,12 @@ function ShellFrame(): React.ReactElement {
                 <main
                   id="main"
                   tabIndex={-1}
-                  className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
+                  className="col-start-2 row-start-3 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
                 >
                   <Outlet />
                 </main>
 
-                {/* Row 3, all three columns — **the plan status bar** (ADR-0099 D5). It mirrors
+                {/* Row 4, both columns — **the plan status bar** (ADR-0099 D5). It mirrors
                     the command band above: same span, for the same reason and with the same
                     geometry.
 
@@ -218,7 +226,7 @@ function ShellFrame(): React.ReactElement {
                 <ChromeSlot
                   slotRef={statusSlotRef}
                   name="status"
-                  className="border-border col-span-2 col-start-1 row-start-3 border-t"
+                  className="border-border col-span-2 col-start-1 row-start-4 border-t"
                 />
               </div>
 

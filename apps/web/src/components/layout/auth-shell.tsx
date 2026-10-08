@@ -1,8 +1,7 @@
-import { BrandPanel } from './brand-panel';
+import { BrandCard } from './brand-card';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Surface } from '@/components/ui/surface';
 
 /**
  * The **floating card** every public screen is (ADR-0077 M7) — sign-in, sign-up, accept-invite and
@@ -31,6 +30,10 @@ import { Surface } from '@/components/ui/surface';
  *
  * `overflow-y-auto` on the form column rather than the card, so a tall state scrolls its own
  * content and the panel beside it stays put.
+ *
+ * The ground, the card and the panel are {@link BrandCard} since ADR-0179, which gave the signed-in
+ * viewport notice the same surface; this file keeps the `main`, the announcer and the form column's
+ * header.
  */
 export function AuthShell({
   title,
@@ -49,38 +52,22 @@ export function AuthShell({
 
   return (
     <AnnouncerProvider>
-      {/* The ground. Its two stops are a global token pair rather than surface-family members,
-          because a gradient needs two stops and the 17-name surface vocabulary has no word for
-          the second one — the same reason the canvas pair exists (ADR-0055). Naming the tokens
-          in prose here would trip the seam guard, which matches text and not just code. */}
-      <div className="from-ground to-ground-end grid min-h-dvh place-items-center bg-linear-to-br p-4">
-        <Surface
-          tone="auth"
-          as="main"
-          aria-busy={busy}
-          className="bg-background grid w-full max-w-[900px] overflow-hidden rounded-lg shadow-xl md:h-[40rem] md:grid-cols-2"
-        >
-          <BrandPanel />
-          <div className="flex flex-col justify-center overflow-y-auto p-2 md:p-4">
-            {hasHeader ? (
-              <CardHeader className="text-center">
-                <CardTitle>{title}</CardTitle>
-                {description === undefined ? null : (
-                  <CardDescription>{description}</CardDescription>
-                )}
-              </CardHeader>
-            ) : null}
-            {/* Without a header the children ARE the card — they bring their own CardHeader — so
-                wrapping them in CardContent would double the padding. That is the shape the
-                accept-invite flow uses and the reason this branch exists. */}
-            {hasHeader ? (
-              <CardContent className="flex flex-col gap-6">{children}</CardContent>
-            ) : (
-              children
-            )}
-          </div>
-        </Surface>
-      </div>
+      <BrandCard aria-busy={busy}>
+        {hasHeader ? (
+          <CardHeader className="text-center">
+            <CardTitle>{title}</CardTitle>
+            {description === undefined ? null : <CardDescription>{description}</CardDescription>}
+          </CardHeader>
+        ) : null}
+        {/* Without a header the children ARE the card — they bring their own CardHeader — so
+            wrapping them in CardContent would double the padding. That is the shape the
+            accept-invite flow uses and the reason this branch exists. */}
+        {hasHeader ? (
+          <CardContent className="flex flex-col gap-6">{children}</CardContent>
+        ) : (
+          children
+        )}
+      </BrandCard>
     </AnnouncerProvider>
   );
 }

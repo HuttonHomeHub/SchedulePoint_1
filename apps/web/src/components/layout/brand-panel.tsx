@@ -2,6 +2,7 @@ import { BrandMark } from './brand-mark';
 import { TsldMotif } from './tsld-motif';
 
 import { Surface } from '@/components/ui/surface';
+import { cn } from '@/lib/utils';
 
 /**
  * The tagline, in one place because it is the same sentence on all six public screens and on the
@@ -22,6 +23,27 @@ export const BRAND_TAGLINE = 'A future reimagined by intelligent visual planning
 const PANEL_IMAGE = '/brand/auth-panel.avif';
 
 /**
+ * The class sets behind {@link BrandPanel}'s `split`. **Written out in full rather than built from a
+ * prefix**, because Tailwind finds a class by scanning for the literal string.
+ */
+const SPLIT_CLASSES = {
+  md: {
+    root: 'p-6 md:p-8',
+    seam: 'md:block',
+    mark: 'text-lg md:flex-col md:gap-3 md:text-4xl',
+    motif: 'md:block',
+    tagline: 'md:block',
+  },
+  'md-tall': {
+    root: 'p-3 md:[@media(min-height:36rem)]:p-8',
+    seam: 'md:[@media(min-height:36rem)]:block',
+    mark: 'text-lg md:[@media(min-height:36rem)]:flex-col md:[@media(min-height:36rem)]:gap-3 md:[@media(min-height:36rem)]:text-4xl',
+    motif: 'md:[@media(min-height:36rem)]:block',
+    tagline: 'md:[@media(min-height:36rem)]:block',
+  },
+} as const;
+
+/**
  * The public screens' brand panel (ADR-0077 §2, photograph restored in M7).
  *
  * **Three layers, and the order is the whole design.** A photograph, a navy wash over it at
@@ -38,13 +60,28 @@ const PANEL_IMAGE = '/brand/auth-panel.avif';
  * screens. The product name is already in `<title>` and the heading beside this panel says what
  * the screen is for, so a screen-reader user loses nothing and skips three redundant stops.
  */
-export function BrandPanel(): React.ReactElement {
+export function BrandPanel({
+  split = 'md',
+}: {
+  /**
+   * Where the panel stops being a slim band above the card and becomes the leading half of it.
+   * `'md'` is every public screen, unchanged. `'md-tall'` is the viewport notice (ADR-0179), which
+   * is shown to windows that are narrow *by definition* and so often short too: it needs `md` wide
+   * **and** 36rem tall before it spends a column on decoration, or the heading and the button it
+   * exists to show are pushed below the fold at 911 x 424.
+   */
+  split?: 'md' | 'md-tall';
+}): React.ReactElement {
+  const c = SPLIT_CLASSES[split];
   return (
     <Surface
       tone="brand"
       as="aside"
       aria-hidden="true"
-      className="text-foreground relative flex flex-col items-center justify-center gap-5 overflow-hidden p-6 md:p-8"
+      className={cn(
+        'text-foreground relative flex flex-col items-center justify-center gap-5 overflow-hidden',
+        c.root,
+      )}
     >
       {/* Layer 1 — the photograph. A background image rather than an `<img>` because it is
           decoration with no accessible name to give; `bg-cover bg-center` is the old app's
@@ -59,7 +96,7 @@ export function BrandPanel(): React.ReactElement {
       {/* Layer 3 — the amber seam at the join. 3px, centred on the panel's right edge over the
           middle half of its height, exactly as `.auth-image::after` drew it. Hidden below `md`,
           where the panel is a band above the card and there is no vertical join to mark. */}
-      <div className="bg-primary absolute top-1/4 right-0 hidden h-1/2 w-[3px] md:block" />
+      <div className={cn('bg-primary absolute top-1/4 right-0 hidden h-1/2 w-[3px]', c.seam)} />
 
       <div className="relative flex flex-col items-center gap-3 text-center">
         {/* Two shapes, one element. At `md` and up this is the old app's large centred lockup —
@@ -69,12 +106,14 @@ export function BrandPanel(): React.ReactElement {
             `text-lg` is 76px. Responsive utilities rather than two elements, because two copies
             behind `hidden`/`md:hidden` both land in jsdom's accessibility tree and silently make
             every `getByText` on a public screen ambiguous — see the lockup count above. */}
-        <BrandMark className="text-lg md:flex-col md:gap-3 md:text-4xl" />
+        <BrandMark className={c.mark} />
         {/* The motif keeps its place beneath the wordmark: the photograph says "construction", the
             diagram says "and this is what we do with it". Below `md` the panel is a slim band, and
             a five-bar diagram at that size is a smudge. */}
-        <TsldMotif className="mt-2 hidden w-full max-w-xs md:block" />
-        <p className="text-muted-foreground hidden max-w-xs text-sm leading-relaxed md:block">
+        <TsldMotif className={cn('mt-2 hidden w-full max-w-xs', c.motif)} />
+        <p
+          className={cn('text-muted-foreground hidden max-w-xs text-sm leading-relaxed', c.tagline)}
+        >
           {BRAND_TAGLINE}
         </p>
       </div>

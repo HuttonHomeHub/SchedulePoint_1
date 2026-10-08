@@ -59,7 +59,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 /**
  * **The viewport, mocked — and it has to be** (`docs/TECH_DEBT.md` #168).
  *
- * jsdom implements no `matchMedia`, so `useMediaQuery(LG_QUERY, true)` takes its `true` fallback and
+ * jsdom implements no `matchMedia`, so `useMediaQuery(DESIGNED_MIN_WIDTH_QUERY, true)` takes its `true` fallback and
  * every test in this file has always run as a desktop. A #168 case written without this mock would
  * exercise the branch that was never broken, pass, and prove nothing — which is the same shape as
  * the `useParams: () => ({})` default that let #165a hide in this very suite.
