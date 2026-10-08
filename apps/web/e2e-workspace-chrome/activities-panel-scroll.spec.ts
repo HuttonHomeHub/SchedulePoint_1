@@ -410,11 +410,8 @@ const diagramListbox = (page: Page): Locator =>
   page.getByRole('listbox', { name: 'Activities in the diagram' });
 const canvasEl = (page: Page): Locator =>
   page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
-const addActivity = (page: Page): Locator =>
-  page.getByRole('toolbar', { name: 'Plan commands' }).getByRole('button', {
-    name: 'Add activity',
-    exact: true,
-  });
+// The split button's primary region: named "Add" idle and "Adding Task" armed, so by registry id.
+const addActivity = (page: Page): Locator => page.locator('[data-toolbar-item="add-activity"]');
 
 /** A twelve-activity plan, built at the config's tall viewport and then brought to `size`. */
 async function shortPlan(
@@ -585,11 +582,11 @@ for (const cell of [
       test.setTimeout(240_000);
       await shortPlan(page, STAMP + cell.offset + 3, SIZE);
 
-      // Zoom in so Fit has something to undo, then Expand and press Fit.
+      // Zoom OUT (a small plan already sits at the maximum zoom, which Fit returns to) so Fit has something to undo, then Expand and press Fit.
       const box = await canvasEl(page).boundingBox();
       if (!box) throw new Error('the canvas has no box');
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.wheel(0, -600);
+      for (let i = 0; i < 4; i += 1) await page.mouse.wheel(0, 300);
       const zoomed = await settledView(page);
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
@@ -759,11 +756,22 @@ test.describe('the short-body swap, one pointer', () => {
         await page.setViewportSize(size);
         await expect(page.getByRole('radio', { name: 'Activities' })).toBeVisible();
         await expect(expandButton(page)).toHaveCount(0);
-        await page.getByRole('radio', { name: 'Activities' }).click();
-        await expect(activitiesRegion(page)).toBeVisible();
+        // At 640 x 480 the chrome leaves the pane no height (m0-measurement.md §4), so "visible"
+        // would fail for a reason that predates the swap; what A1 must not do is hide a pane
+        // other than by the toggle (display:none, tested with checkVisibility) or print its note.
+        // By CSS: a `display:none` region leaves the accessibility tree, so a role query would not find it.
+        const rawRegion = page.locator('[role="region"][aria-label="Activities"]');
+        const hiddenAttr = (l: Locator) => l.evaluate((el) => !el.checkVisibility());
+        // dispatchEvent, not a pointer click: at 320 x 256 the chrome covers the toggle (the same
+        // no-height cost), and reachability there is not this case's subject.
+        await page.getByRole('radio', { name: 'Activities' }).dispatchEvent('click');
+        expect(await hiddenAttr(rawRegion)).toBe(false);
+        expect(await hiddenAttr(canvasEl(page))).toBe(true);
         await expect(page.getByText(NOTE)).toHaveCount(0);
-        await page.getByRole('radio', { name: 'Diagram' }).click();
-        await expect(canvasEl(page)).toBeVisible();
+        await page.getByRole('radio', { name: 'Diagram' }).dispatchEvent('click');
+        expect(await hiddenAttr(canvasEl(page))).toBe(false);
+        expect(await hiddenAttr(rawRegion)).toBe(true);
+        await expect(page.getByText(NOTE)).toHaveCount(0);
       });
     }
   });
