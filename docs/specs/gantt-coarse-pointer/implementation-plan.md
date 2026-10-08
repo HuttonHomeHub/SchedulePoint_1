@@ -584,6 +584,8 @@ timer of our own would also race the browser's selection rather than stop it.
   selectable content under the finger. The follow-up extends the class from the cell text spans to the
   row's whole table-half container (idle rows only), covering blank space and the `sr-only` spans; see
   `device-results.md`.
+- **Device outcome (2026-10-08, web 0.177.5): pass.** 12b passed in all three runs after #884;
+  #464 is closed.
 - **ADR-0111:** no key or focus behaviour changes, so no pre-release pass is owed.
   **ADR-0105:** no new public contract. **Changeset:** `@repo/web` **patch** ("a press and hold on the
   Gantt's table opens the row's actions, as on the chart").

@@ -115,7 +115,8 @@ For each run, first note the posture and the input, then do 12a and 12b.
         What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
         Was a word highlighted, with little round handles? [ ] yes [ ] no
   - [ ] **12b. Press and hold on an EMPTY part of the table half (the empty space inside a Code
-        cell; if Code is hidden, a blank Duration cell).**
+        cell; if Code is hidden, a blank Duration cell). Stay on an activity's own line: the empty area
+        below the last activity is not a row, so the browser's menu there is expected.**
         What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
 
 ## When you are done
