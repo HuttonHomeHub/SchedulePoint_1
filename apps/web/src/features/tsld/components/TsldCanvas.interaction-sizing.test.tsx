@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
@@ -16,8 +16,9 @@ import { TsldPanel } from './TsldPanel';
  * entirely. Resizing the window — the one thing that does change the container — made it spring to
  * life, which is what made the bug look intermittent rather than total.
  *
- * jsdom reports a zero-sized container, so the applied size here is the 1×1 floor; the assertion
- * that matters is that a size was applied AT ALL rather than the untouched 300×150 default.
+ * jsdom reports a zero-sized container, which `measure()` now ignores (a hidden container is 0×0 —
+ * the short-body swap), so the container is given a real box here; the assertion that matters is
+ * that a size was applied AT ALL rather than the untouched 300×150 default.
  */
 
 const NO_DEPS: DependencySummary[] = [];
@@ -104,7 +105,20 @@ describe('TsldCanvas — the interaction canvas is sized when it mounts mid-sess
    * **sized** — an unsized canvas keeps the HTML default of 300px and every pointer coordinate
    * computed against it is wrong. Asserted in both states rather than only after the flip.
    */
+  afterEach(() => vi.restoreAllMocks());
+
   it('sizes it in both states — read-only (ADR-0080 §3) and after the edit-mode flip', () => {
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 900,
+      height: 700,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 700,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     const props = {
       activities: [activity()],
       dependencies: NO_DEPS,
