@@ -98,7 +98,7 @@ the activities table is 44 px. Mouse is unchanged.
    - Correct the stale "five of its six" at `:59`, and make the `icon-sm` exception reason name one
      consumer (`GanttRowMenu`).
    - **Add a call-site test over `src/**`, comments stripped.** `'icon-sm'`is defined in`button.tsx`, and `size="icon-sm"`appears exactly once, in`GanttRowMenu.tsx`. This is needed
-because the `size-7`needle alone stays green if`icon-sm` is deleted.
+     because the `size-7`needle alone stays green if`icon-sm` is deleted.
    - Plant it red with a dummy call site, then remove the dummy.
 5. **`command-surface.spec.ts`:**
    - **Activities table surface.** Add it to `COARSE_SURFACES` with an `atLeast` positive. Exempt

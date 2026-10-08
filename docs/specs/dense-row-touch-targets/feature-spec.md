@@ -464,7 +464,7 @@ flowchart TD
     stripped, so they do not trip it.
   - **`treeRowHeight(true)`** equals `--control-h` (rem × 16) in the coarse block.
   - **A call-site count test over `src/**`, comments stripped.** `'icon-sm'`is defined in`button.tsx` and used exactly once (`GanttRowMenu.tsx`). This is needed because the existing
-`button.tsx::size-7`exception needle would stay green even if`icon-sm`were deleted:`icon-row`'s string also contains `size-7`.
+    `button.tsx::size-7`exception needle would stay green even if`icon-sm`were deleted:`icon-row`'s string also contains `size-7`.
 - **e2e (`e2e-workspace-fit` coarse projection, at 1646 × 1097 and 1024 × 600):**
   - **Activities table surface.** It sweeps the table but exempts its row checkboxes by a named
     marker (`[data-coarse-exempt="row-select"]`), in the same pattern as `ganttExempt`. The marker's
