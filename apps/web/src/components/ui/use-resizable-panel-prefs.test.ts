@@ -99,4 +99,30 @@ describe('useResizablePanelPrefs', () => {
     rerender({ min: 100 });
     expect(result.current.size, 'the default itself returns once the floor drops').toBe(200);
   });
+
+  describe('ceiling', () => {
+    it('bounds the size in use and leaves the stored preference alone', () => {
+      localStorage.setItem('test-panel', JSON.stringify({ collapsed: false, size: 380 }));
+      const { result, rerender } = renderHook(
+        ({ ceiling }) => useResizablePanelPrefs({ ...OPTS, ceiling }),
+        { initialProps: { ceiling: 300 } },
+      );
+      expect(result.current.size).toBe(300);
+      expect(result.current.limit).toBe(300);
+      // Read at a narrow window, the preference is not rewritten: it must outlive the window.
+      expect(JSON.parse(localStorage.getItem('test-panel')!).size).toBe(380);
+
+      rerender({ ceiling: 400 });
+      expect(result.current.size, 'the planner width returns when room does').toBe(380);
+    });
+
+    it('bounds a set size, and never goes below min', () => {
+      const { result } = renderHook(() => useResizablePanelPrefs({ ...OPTS, ceiling: 250 }));
+      act(() => result.current.setSize(9999));
+      expect(result.current.size).toBe(250);
+
+      const tight = renderHook(() => useResizablePanelPrefs({ ...OPTS, ceiling: 10 }));
+      expect(tight.result.current.limit).toBe(100);
+    });
+  });
 });

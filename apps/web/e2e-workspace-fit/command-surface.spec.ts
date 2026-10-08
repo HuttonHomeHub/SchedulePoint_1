@@ -457,10 +457,13 @@ test.describe('The plan command surface', () => {
       1920: { max: 2 },
       1646: { max: 2 },
       1440: { max: 3 },
-      1280: { max: 3 },
+      // Two since M4: the search field is 168 px below 1600, so LOOK is 1254 px in a 1264 px row
+      // (`docs/specs/minimum-viewport/m4-measurement.md`). It was 3 with the 240 px field.
+      1280: { max: 2 },
       // The floor, measured at M0 (`docs/specs/minimum-viewport/m0-measurement.md` §1): four lines,
-      // each declared row wrapping once. This is today's reading, not a design; M4 owns bringing it
-      // down, and lowering this entry is how M4 proves it did.
+      // each declared row wrapping once. M4 measured that this is arithmetic, not a defect: the four
+      // groups are 733, 513, 627 and 622 px in a 1008 px row, so no two share a line without a
+      // command losing its label (`m4-measurement.md`). The bound stays at the reading.
       1024: { max: 4 },
     };
     // The DO row is one line at every width the epic is judged on. The floor is the exception M4
@@ -530,7 +533,7 @@ test.describe('The plan command surface', () => {
       expect(
         reading.look.lines,
         `the LOOK row wraps to ${reading.look.lines} lines at ${viewport.width}`,
-      ).toBeLessThanOrEqual(viewport.width >= 1440 ? 1 : 2);
+      ).toBeLessThanOrEqual(viewport.width >= 1280 ? 1 : 2);
       expect(
         reading.do.lines,
         `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,

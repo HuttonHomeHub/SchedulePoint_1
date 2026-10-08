@@ -27,11 +27,21 @@ export interface ResizablePanelOptions {
   min: number;
   max: number;
   defaultSize: number;
+  /**
+   * A **viewport-dependent upper limit** tighter than `max`, for a panel that must leave something
+   * else a minimum of room. It bounds the size READ BACK and the sizes a drag or key can set, and it
+   * never touches what is stored: the stored value is the planner's preference, and a window that is
+   * briefly narrow must not shrink it for good (the same argument as the bound-follow case below).
+   * Never taken below `min`.
+   */
+  ceiling?: number;
 }
 
 export interface UseResizablePanelPrefs {
   collapsed: boolean;
   size: number;
+  /** The largest size the panel may take right now: `max`, or the `ceiling` when that is tighter. */
+  limit: number;
   collapse: () => void;
   expand: () => void;
   setSize: (size: number) => void;
@@ -74,7 +84,8 @@ function readPrefs({ storageKey, min, max, defaultSize }: ResizablePanelOptions)
 }
 
 export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResizablePanelPrefs {
-  const { storageKey, min, max, defaultSize } = options;
+  const { storageKey, min, max, defaultSize, ceiling } = options;
+  const limit = Math.max(min, Math.min(max, ceiling ?? max));
   const [prefs, setPrefs] = useState<PanelPrefs>(() => readPrefs(options));
 
   useEffect(() => {
@@ -88,8 +99,8 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
   const collapse = useCallback(() => setPrefs((p) => ({ ...p, collapsed: true })), []);
   const expand = useCallback(() => setPrefs((p) => ({ ...p, collapsed: false })), []);
   const setSize = useCallback(
-    (size: number) => setPrefs((p) => ({ ...p, size: clampSize(size, min, max) })),
-    [min, max],
+    (size: number) => setPrefs((p) => ({ ...p, size: clampSize(size, min, limit) })),
+    [min, limit],
   );
 
   const resetSize = useCallback(
@@ -115,7 +126,8 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
    */
   return {
     collapsed: prefs.collapsed,
-    size: clampSize(prefs.size, min, max),
+    size: clampSize(prefs.size, min, limit),
+    limit,
     collapse,
     expand,
     setSize,

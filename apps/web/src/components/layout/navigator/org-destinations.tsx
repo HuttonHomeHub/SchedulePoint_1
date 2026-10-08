@@ -53,7 +53,7 @@ const DESTINATION_CLASS =
  * is the input device rather than the screen.
  */
 const EXPANDED_CLASS =
-  'gap-2 px-2 py-1.5 pointer-coarse:min-h-(--control-h) [&.active]:font-medium';
+  'gap-2 px-2 py-1.5 pointer-coarse:min-h-(--control-h) [&.active]:font-medium [@media(max-height:44rem)]:py-1';
 const COLLAPSED_CLASS = 'size-9 pointer-coarse:size-(--control-h) justify-center';
 
 interface Destination {

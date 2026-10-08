@@ -129,7 +129,7 @@ function HeaderContents({
           `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
           of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
           `shrink` because this is the section that gives way — it is text with a `title`. */}
-      <div className="flex min-w-0 shrink items-center gap-3">
+      <div className="flex max-w-1/2 min-w-0 shrink items-center gap-3">
         <div className="flex shrink-0 items-center gap-2">
           {shell && orgSlug ? (
             <Button
