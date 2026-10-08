@@ -15,11 +15,11 @@ import {
 } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 
+import { runInPlace, type WithDiagram } from './canvas-directed-commands';
 import { useConflictNavigation } from './commands/use-conflict-navigation';
 import { useDiagramImage } from './commands/use-diagram-image';
 import { useSearchNavigation } from './commands/use-search-navigation';
 import { useViewportCommands } from './commands/use-viewport-commands';
-import { runInPlace, type WithDiagram } from './canvas-directed-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';

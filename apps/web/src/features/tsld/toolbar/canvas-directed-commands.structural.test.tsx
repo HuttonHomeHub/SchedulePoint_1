@@ -3,8 +3,8 @@ import { renderHook } from '@testing-library/react';
 import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { COMMAND_CLASS, type WithDiagram } from './canvas-directed-commands';
+import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
 import type {
