@@ -745,6 +745,14 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
+- **A minimum screen size — designed for a laptop or 11-inch tablet and up.** **Proposed, awaiting
+  approval** ([ADR-0179](adr/0179-the-layout-is-designed-from-a-laptop-up.md); spec and plan at
+  [`docs/specs/minimum-viewport/`](specs/minimum-viewport/)). The product owner, 2026-10-08: phones
+  are not required and the mobile-first rules are hamstringing the layout. The layout is designed
+  from **1024 × 600** up; below 1024 wide the signed-in app shows an on-brand "designed for larger
+  screens" page with a way through, because a zoomed laptop is narrow too and WCAG 2.2 AA still
+  applies. Phone-width workspace gates retire; the floor itself is gated for the first time.
+
 - **Notifications.** **Designed, not built — deferred on a named trigger** ([ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md); spec and plan
   complete at [`docs/specs/notifications/`](specs/notifications/)). The product tells you things only
   while you are looking at the thing it is telling you about: a data-date move, a shared calendar's
