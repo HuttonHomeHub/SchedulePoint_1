@@ -86,7 +86,7 @@ function Harness(): React.ReactElement {
       <button type="button" onClick={() => setEditable((e) => !e)}>
         Toggle edit
       </button>
-      <ActivityBottomPanel model={panelModel} />
+      <ActivityBottomPanel model={panelModel} onCollapse={() => {}} />
     </>
   );
 }

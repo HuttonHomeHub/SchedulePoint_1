@@ -229,9 +229,9 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
-  /** Collapse the panel to its handle. The workspace always passes it; it stays optional so a host
-   * with no collapsed state (a test, a future embed) can leave the control out. */
-  onCollapse?: () => void;
+  /** Collapse the panel to its handle. Required: the below-`md` single pane, which had no collapsed
+   * state and so left the control out, is gone (ADR-0181). */
+  onCollapse: () => void;
   /** After a user *expand*, the panel remounts — move focus onto the collapse control so a
    * keyboard/AT user isn't dropped to `<body>` (mirrors the rail's toggle focus). */
   focusCollapseOnMount?: boolean;
@@ -388,23 +388,19 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
           rather than in the header for the same reason: it is the row's own affordance in both
           states, and a planner should not have to look in two places for it. */}
       <PlanActivitiesFootRow
-        {...(onCollapse
-          ? {
-              toggle: (
-                <Button
-                  ref={collapseRef}
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Collapse activities panel"
-                  className={FOOT_TOGGLE_CLASS}
-                  {...(diagramHidden ? { 'aria-describedby': hiddenNoteId } : {})}
-                  onClick={onCollapse}
-                >
-                  <PanelBottomClose aria-hidden="true" className="size-4" />
-                </Button>
-              ),
-            }
-          : {})}
+        toggle={
+          <Button
+            ref={collapseRef}
+            variant="ghost"
+            size="icon"
+            aria-label="Collapse activities panel"
+            className={FOOT_TOGGLE_CLASS}
+            {...(diagramHidden ? { 'aria-describedby': hiddenNoteId } : {})}
+            onClick={onCollapse}
+          >
+            <PanelBottomClose aria-hidden="true" className="size-4" />
+          </Button>
+        }
       />
     </section>
   );
