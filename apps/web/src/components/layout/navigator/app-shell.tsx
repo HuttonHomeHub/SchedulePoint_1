@@ -137,7 +137,16 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                   `100dvh`: the band and the banner scroll away above a `<main>` that is still
                   exactly the viewport tall, so the Gantt's virtualizer still measures a bounded
                   scroller and the workspace lays out as it does in any window — the reader scrolls
-                  to it. Wide windows never reach this, whatever their height (CQ-3). */}
+                  to it. Wide windows never reach this, whatever their height (CQ-3).
+
+                  **`squat:overflow-y-auto` must beat `overflow-hidden` on the same element, and
+                  it does so only by CSS source order** (equal specificity, the variant emitted
+                  later). Nothing in the class list says so, and a reorder of the stylesheet would
+                  silently stop the shell scrolling; the narrow-shell journey (SC-5, "the band is
+                  held to 40 % or scrolls away") is what guards it.
+
+                  The way back to a band that has scrolled away is the foot strip or keyboard focus;
+                  the wheel over the canvas does not scroll the shell (`docs/TECH_DEBT.md` #477). */}
               <div className="squat:grid-rows-[auto_auto_100dvh_auto] squat:overflow-y-auto relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
                 {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).

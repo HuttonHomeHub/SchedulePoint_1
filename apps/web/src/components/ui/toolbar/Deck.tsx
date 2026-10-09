@@ -37,9 +37,17 @@ import { cn } from '@/lib/utils';
  * width. The whole ladder was a consequence of insisting the surface stay one row tall.
  *
  * So the deck's fit algorithm is **flex line-breaking, and nothing else**. There is no
- * `ResizeObserver` here, no `clientWidth` read, no width constant, and no priority ranking. That is
+ * `ResizeObserver` here, no `matchMedia`, no width constant, and no priority ranking. That is
  * not a simplification of the old approach — it is the removal of a class of defect this repository
  * has recorded five times, in which a row measures its own leftover width and gets it wrong.
+ *
+ * **One layout-overflow read remains, and it is not a width ladder.** Below `lg` the line scrolls
+ * (toolbar-redesign M3), and `deckScrolls` reads `scrollWidth > clientWidth` to decide only whether
+ * keyboard focus should `scrollIntoView` / `preventScroll`. It never drives layout: the scrolling
+ * line, the edge fade and the `squat` vertical scroll-away are CSS alone, and a structural test
+ * pins the read to that one function. The way back from a band `squat` has scrolled away is the
+ * foot strip or keyboard focus (which scrolls the shell to the focused control); the wheel over the
+ * canvas does not scroll the shell, a discoverability gap `docs/TECH_DEBT.md` records.
  *
  * ## What replaces the ladder
  *

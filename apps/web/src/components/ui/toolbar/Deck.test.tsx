@@ -518,6 +518,9 @@ describe('Deck — a focused control is scrolled into the line below lg', () => 
     const fit = screen.getByRole('button', { name: 'Fit' });
     // A press focuses the button without :focus-visible; scrolling it from under the pointer
     // between pointerdown and click is how a tap lands on a neighbour.
+    // **A unit-level approximation:** jsdom has no `:focus-visible`, so this mocks `matches` to
+    // say the press was not keyboard focus. The real browser behaviour (a press does not match
+    // `:focus-visible`, a Tab does) is what the narrow-shell journey drives.
     fireEvent.mouseDown(fit);
     fit.focus();
     scrollIntoView.mockClear();
