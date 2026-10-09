@@ -131,7 +131,8 @@ only, below `--container-roomy`. One resolver and one helper decide every label.
 - 2.5.3 label-in-name;
 - no leading seam;
 - 1280 × 800 and 2560 × 1440 text-only 200 % cells (browser default font size via `Page.setFontSizes`, not CSS)
-  where every control is hit-testable.
+  where every control is hit-testable. The 1280 cell is 40 rem (below `max-lg`), so it is judged against M3's
+  scroll line once M3 lands; the 2560 cell (80 rem) is judged against the two-row wrap.
 
 ##### Task M1-T1: the stale lines first (≈ one PR, docs and comments only)
 
@@ -232,7 +233,8 @@ Gantt row menu "Float paths"; "View" at 1024 × 600.
     **migration of `LensToggle.promotion` to the generalised `PromotableEntry` with `at: 'always'`** (spec §4.11):
     `promotedLensItems`' hard-coded `group: 'lens'` and `atLeast` (`:437`, `:440`) become per-record. Baseline
     overlay keeps `group: 'lens'`;
-  - the View fieldset id `'panels'` and the deck group "Panels" coexist until M4 deletes the fieldset;
+  - the View fieldset id `'panels'` and the deck group "Panels" coexist until M4 deletes the fieldset. A one-line
+    test asserts that `getByRole('group', { name: 'Panels' })` resolves to exactly one element with View ▾ open;
   - one `ml-auto` on Panels and one on Plan.
 - **Complexity:** M
 - **Testing:**
@@ -386,16 +388,28 @@ epic (D-b).
   - `PromotableEntry` and `isPromoted`, generalising `LensToggle.promotion`. `defineToolbar` validates `from` and
     asserts every source menu has an anchor;
   - the structural test that a derived item is never `'roomy'` or `'never'`;
-  - the assertion that the deck at the first stage is ≥ `--container-roomy`;
+  - the assertion that the deck at the first stage is ≥ `--container-roomy`, **per pointer** (a single token,
+    per-pointer stages);
+  - **the focus hand-off target**: `use-focus-handoff.ts` (and its test) gains a target hook, so demotion hands focus
+    to the source trigger rather than the container (E-2). ADR-0111 review before release;
   - SC-19's **render-level** jsdom test (stubbed `matchMedia` and pointer, every source menu opened, bar xor menu),
     green against today;
   - SC-18 (c)'s unit test (`at` equals `computePromotionStages(json)`).
 
 ##### M5-T2 … T6: one menu per PR
 
-In ladder order: Filter (L1, L6; anchor Has constraint), Analysis (P1, P6–P8; anchor Baselines…), Share & export
-(P4, P9; anchor the formats and Print), View (L2–L5; C1 into the corner), and Link and Add (P2, P3, P5, as kind
-presets; anchors Stop linking, Task and Level of effort). Each PR:
+In ladder order:
+
+- Filter: L1 and L6; anchor Has constraint.
+- Analysis: P1 and P6–P8; anchor Baselines….
+- Share & export: P4 (Share…) only; anchor the export formats and Print…; Schedule (CSV) is not promoted.
+- View: L2–L5, and C1 into the corner.
+- Link and Add: P2, P3 and P5 as kind presets. Link promotes Finish-to-start, Start-to-start and Finish-to-finish
+  only; **Start-to-finish is Link's unconditional anchor**, because "Stop linking" renders only while linking. Add's
+  anchor is Task and Level of effort, since "Stop adding" is conditional too.
+
+The structural test gains "anchor present when the tool is unarmed" for Link and Add, and "anchor renders
+regardless of state and flags" for every menu. Each PR:
 
 - declares that menu's promotable entries as `PromotableEntry` records (everything else in the menu stays JSX);
 - renders the derived items: toggles, flat pressed sets named with their set ("Colour by: Total float"), and kind
@@ -425,6 +439,8 @@ The search-field growth at 2560 lands with the View PR.
 - **V3** The shaded-control audit: ADR-0082 shading is kept; the treatment is quieter, with text ≥ 4.5:1 signed off
   by the accessibility-reviewer, and the Author group reads as one locked unit led by the pen.
 - **V4** Share & export as the row's secondary-filled closing action, with Share… promoted beside it.
+- **V4a** (optional, if cheap) Filter ▾ shows an active count or dot when attributes are on, derived from
+  `ctx.filterAttrs`.
 - **V5** The organisation switcher as a ghost button opening a menu (**CQ-4 decided**), to spec §4.12:
   - the visible current name;
   - the name "Active organisation: ‹Name›";
