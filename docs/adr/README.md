@@ -207,3 +207,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0181](0181-the-below-md-single-pane-workspace-is-retired.md)                                   | The below-`md` single-pane workspace is retired                                            | Accepted           |
 | [0182](0182-a-page-grid-splits-on-the-width-it-has.md)                                          | A page grid splits on the width it has                                                     | Accepted           |
 | [0183](0183-a-row-grows-with-the-finger-it-holds.md)                                            | A row grows with the finger it holds, and the Gantt is the named exception                 | Accepted           |
+| [0184](0184-a-rows-subject-wraps-it-never-clips.md)                                             | A row's subject wraps; it never clips                                                      | Accepted           |

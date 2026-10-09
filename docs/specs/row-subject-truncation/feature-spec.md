@@ -1,6 +1,6 @@
 # Feature Spec: A row's subject wraps rather than clips (#472)
 
-- **Status:** Approved 2026-10-09 by the product owner, after the M0-T3 photographs: CQ-1 yes (build the wrap design, readable rows over compact rows), CQ-2 yes (ADR-0184), CQ-3 yes (`ListRow`'s trailing text drops beneath the row's text when the row is very narrow; `ListRow` is in scope). Approved for build: M1 and M2.
+- **Status:** Accepted — shipped (ADR-0184). Approved 2026-10-09 by the product owner, after the M0-T3 photographs: CQ-1 yes (build the wrap design, readable rows over compact rows), CQ-2 yes (ADR-0184), CQ-3 yes (`ListRow`'s trailing text drops beneath the row's text when the row is very narrow; `ListRow` is in scope). Approved for build: M1 and M2.
 - **Author(s):** feature-analyst
 - **Date:** 2026-10-09 (drafted, reviewed by UX / accessibility / component, M0 measured, approved)
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #472; raised by landing-two-columns M0
@@ -537,3 +537,6 @@ a fixed rhythm" (`list-row.tsx:72-79`). ADR-0183 D4 governs touch targets; the n
   the shipped one), and its token became 32 × `W` because a bare empty box has no glyph rect.
 - **2026-10-09, approval.** CQ-1, CQ-2, CQ-3 answered yes by the product owner on the photographs;
   SC-5 rewritten against the measured baselines; SC-9 added; `ListRow` brought into scope.
+- **2026-10-09, M2.** Every criterion passes on the shipped tree (`m2-verdict.md`). One control needed a correction:
+  SC-2's 32 × `W` token at 1280 × 800 is silent on the shipped tree (the 955 px track holds it on a line of its own) and
+  was widened to 120 × `W`; the 320 × 800 control stands as written. ADR-0184 filed.

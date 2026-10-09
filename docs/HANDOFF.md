@@ -52,8 +52,8 @@ and this session built and released all of them, plus two small rows.
 - **#471** — at narrow widths the app header and wrapped command band take 355–603 px of height, so
   the workspace body has no room (below the 1024 floor). Needs its own spec (ADR-0105). The reason the
   tiny-window criteria of the single-pane retirement were withdrawn.
-- **#472** — a list row's `project · client` subtitle is truncated mid-word at every width, 1912
-  included (`RowSubject`, `list-row.tsx`). Own spec: it changes a component contract.
+- **#472** — closed 2026-10-09 by ADR-0184 (`docs/specs/row-subject-truncation/`): a list row's subject
+  wraps and never clips. Kept here only so the number is not mistaken for open work.
 - **#473** — the Explorer's splitter wrapper fails axe `region`; **#474** — `SectionCard fill` body is a
   tab stop whether or not it scrolls (a shared keyboard change: accessibility-reviewer first, §19.13);
   **#475** — two stale statements (one fixed; the `HANDOFF.md:38` citation in ADR-0179 and the
@@ -72,7 +72,7 @@ and this session built and released all of them, plus two small rows.
 ## Suggested next
 
 1. The product owner's answers above (72rem, tap page, Surface step 25).
-2. Whichever of #471 (shell chrome at narrow widths), #472 (subtitle) or #474 (tab stop) he wants first;
+2. Whichever of #471 (shell chrome at narrow widths) or #474 (tab stop) he wants first;
    each needs its own spec. Planning is Opus work; building is Sonnet.
 
 ## Environment notes a new session would otherwise rediscover

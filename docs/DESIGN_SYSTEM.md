@@ -617,7 +617,14 @@ differently from its neighbour, and no way to change the measure once.
 | `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to   |
 | `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                               |
 | `Skeleton`                    | the loading **material** only; each archetype owns its own loading **shape**                                                    |
-| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly                                                          |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)            |
+
+**A list row's subject wraps; it never clips** (ADR-0184, extending ADR-0146 D3/D4). `RowSubject`'s name, Draft
+badge and `project · client` are never `truncate`d, ellipsised, clamped or reordered: one line when they fit,
+otherwise the context moves whole under the name, in whole 20 px steps with no vertical gap. `ListRow`'s trailing
+block drops beneath its primary block when the primary would be under `7rem` (`min-w-28`), which never happens at
+or above the 1024 px floor. A row's height is therefore content, not a constant; `title` is not the remedy for a
+clipped name (it is invisible to keyboard and touch).
 
 **The authoring rule: reach for the archetype, or raise the requirement — never
 invent a one-off.** A hand-rolled frame that happens to match today's archetype

@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1592 web
 > source files with 47 Playwright suites beside the base journey, and
-> 183 ADRs.
+> 184 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -584,6 +584,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0181** _(Accepted; supersedes ADR-0030's and ADR-0031's below-`md` rule)_ — The below-`md` single-pane workspace is retired → [`0181-the-below-md-single-pane-workspace-is-retired.md`](docs/adr/0181-the-below-md-single-pane-workspace-is-retired.md)
 - **ADR-0182** _(Accepted; amends ADR-0143)_ — A page grid splits on the width it has → [`0182-a-page-grid-splits-on-the-width-it-has.md`](docs/adr/0182-a-page-grid-splits-on-the-width-it-has.md)
 - **ADR-0183** _(Accepted; amends ADR-0118)_ — A row grows with the finger it holds, and the Gantt is the named exception → [`0183-a-row-grows-with-the-finger-it-holds.md`](docs/adr/0183-a-row-grows-with-the-finger-it-holds.md)
+- **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A row's subject wraps; it never clips → [`0184-a-rows-subject-wraps-it-never-clips.md`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

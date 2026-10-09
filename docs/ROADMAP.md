@@ -768,6 +768,13 @@ discriminators. Each becomes a spec/plan before build:
   window. The shell chrome that leaves a short narrow window no workspace body is recorded as
   `docs/TECH_DEBT.md` #471 and is not fixed here.
 
+- **A row's subject wraps; it never clips.** **Approved 2026-10-09; built as `row-subject-truncation` M0-M2**
+  ([ADR-0184](adr/0184-a-rows-subject-wraps-it-never-clips.md); spec and plan at
+  [`docs/specs/row-subject-truncation/`](specs/row-subject-truncation/)). On the organisation landing every plan
+  name, Draft badge, project and client is shown in full at every width: a row grows a line when it needs one, the
+  date or "actor · time" sits on the name's line, and on a very narrow screen it drops beneath the row's text.
+  The cost is height in the capped two-column boxes, measured and accepted.
+
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
   [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu

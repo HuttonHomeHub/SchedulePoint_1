@@ -679,8 +679,50 @@ function readBoxes() {
       bodyScrollsX: sc.scrollWidth > sc.clientWidth,
     });
   }
+  // SC-8: no row overlaps the next one in its box, and no two glyph rects of one subject overlap.
+  let overlaps = 0;
+  for (const sec of document.querySelectorAll('section[aria-labelledby]')) {
+    const rows = [...sec.querySelectorAll('[data-row-subject]')].map((x) => x.closest('.border-b'));
+    for (let i = 1; i < rows.length; i += 1) {
+      if (rows[i - 1].getBoundingClientRect().bottom > rows[i].getBoundingClientRect().top + 0.5) {
+        overlaps += 1;
+      }
+    }
+    for (const subj of sec.querySelectorAll('[data-row-subject]')) {
+      const rects = [];
+      const w = document.createTreeWalker(subj, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        if (!(n.textContent ?? '').trim() || n.parentElement?.closest('.sr-only')) continue;
+        const r = document.createRange();
+        r.selectNodeContents(n);
+        for (const rect of r.getClientRects()) rects.push(rect);
+      }
+      // Two glyph rects overlap when they share more than 1 px both ways. Side-by-side runs on one
+      // line share vertical extent but no horizontal one; lines of one subject share neither.
+      for (let i = 0; i < rects.length; i += 1) {
+        for (let j = i + 1; j < rects.length; j += 1) {
+          const dx =
+            Math.min(rects[i].right, rects[j].right) - Math.max(rects[i].left, rects[j].left);
+          const dy =
+            Math.min(rects[i].bottom, rects[j].bottom) - Math.max(rects[i].top, rects[j].top);
+          if (dx > 1 && dy > 2) overlaps += 1;
+        }
+      }
+    }
+  }
+  // "Needs your attention" rows are a ListRow with no RowSubject and no trailing block (SC-3's last
+  // clause), so the subject probe never sees them: read their row heights here.
+  const needsRows = [];
+  for (const sec of document.querySelectorAll('section[aria-labelledby]')) {
+    if (nameOfSection(sec) !== 'Needs your attention') continue;
+    for (const row of sec.querySelectorAll('.border-b')) {
+      needsRows.push(Math.round(row.getBoundingClientRect().height));
+    }
+  }
   const main = document.querySelector('main');
   return {
+    overlaps,
+    needsRows,
     mainScroll: main ? `${String(main.scrollHeight)}/${String(main.clientHeight)}` : 'n/a',
     boxes,
     minNameChars: Number.isFinite(minNameChars) ? Math.round(minNameChars) : null,
@@ -701,9 +743,9 @@ if (process.env.SP_ROW_SUBJECT === '1') {
   p(`## Row-subject matrix (maxima plan: ${maxima ? 'YES' : 'no'})`);
   p();
   p(
-    '| Cell | Rows | Names clipped | Contexts clipped | Old instrument truncated runs | Name shown px / chars (median) | Context shown px / chars (median) | Median row h | Rows >1 line | min name col (chars) | doc overflow-x |',
+    '| Cell | Rows | Names clipped | Contexts clipped | Old instrument truncated runs | Name shown px / chars (median) | Context shown px / chars (median) | Median row h | Rows >1 line | min name col (chars) | doc overflow-x | Trailing clipped | Trailing beneath / of | Trailing off first line | Overlaps |',
   );
-  p('| --- | --: | --: | --: | --: | --- | --- | --: | --: | --: | --: |');
+  p('| --- | --: | --: | --: | --: | --- | --- | --: | --: | --: | --: | --: | --: | --: | --: |');
   const details = [];
   for (const cell of ROW_CELLS) {
     await page.setViewportSize({ width: cell.w, height: cell.h });
@@ -722,13 +764,27 @@ if (process.env.SP_ROW_SUBJECT === '1') {
     const old = await page.evaluate(readSplit, { sel: REGION_SELECTOR });
     const boxes = await page.evaluate(readBoxes);
     const multi = result.subjects.filter((x) => x.lines > 1).length;
+    const withTrailing = result.subjects.filter((x) => x.trailing);
     p(
-      `| ${label} | ${String(sum.rows)} | ${String(sum.namesClipped)} | ${String(sum.contextsClipped)} | ${String(old.truncated.length)} | ${String(sum.medianNameShownPx)} px / ${String(sum.medianNameShownChars)} | ${String(sum.medianContextShownPx)} px / ${String(sum.medianContextShownChars)} | ${String(sum.medianRowHeight)} | ${String(multi)} | ${String(boxes.minNameChars)} | ${String(sum.docOverflowX)} |`,
+      `| ${label} | ${String(sum.rows)} | ${String(sum.namesClipped)} | ${String(sum.contextsClipped)} | ${String(old.truncated.length)} | ${String(sum.medianNameShownPx)} px / ${String(sum.medianNameShownChars)} | ${String(sum.medianContextShownPx)} px / ${String(sum.medianContextShownChars)} | ${String(sum.medianRowHeight)} | ${String(multi)} | ${String(boxes.minNameChars)} | ${String(sum.docOverflowX)} | ${String(sum.trailingClipped)} | ${String(withTrailing.filter((x) => x.trailing.beneath).length)} / ${String(withTrailing.length)} | ${String(withTrailing.filter((x) => !x.trailing.beneath && !x.trailing.centreInFirstLine).length)} | ${String(boxes.overlaps)} |`,
     );
     details.push({ label, result, boxes, old, tracks: old.tracks, gridWidth: old.gridWidth });
     await page.screenshot({
       path: `${shotDir}/landing-${label.replace(' ', '-')}${maxima ? '-maxima' : ''}.png`,
     });
+    if (cell.w === 320 && !cell.inject) {
+      // The 320 photograph above shows ADR-0179's narrow-screen notice (the measurements are taken
+      // beneath it, as in M0). This one dismisses it, so the rows themselves can be looked at.
+      const cont = page.getByRole('button', { name: 'Continue anyway' });
+      if (await cont.isVisible()) {
+        await cont.click();
+        await page.setViewportSize({ width: cell.w, height: 3900 });
+        await page.waitForTimeout(300);
+        await page.screenshot({
+          path: `${shotDir}/landing-320x800-dismissed${maxima ? '-maxima' : ''}.png`,
+        });
+      }
+    }
     if (!cell.inject && (cell.w === 1912 || cell.w === 1646) && cell.h < 1100 && cell.h !== 1114) {
       // The page as a whole: `main` scrolls inside the window, so the fold hides every ordinary row.
       await page.setViewportSize({ width: cell.w, height: 1900 });
@@ -744,6 +800,7 @@ if (process.env.SP_ROW_SUBJECT === '1') {
   p();
   for (const d of details) {
     p(`- **${d.label}** (grid ${String(d.gridWidth)}, tracks ${d.tracks.join(' + ')})`);
+    p(`  - needs-attention row heights: ${d.boxes.needsRows.join(', ') || 'none'}`);
     p(
       `  - main scroll ${d.boxes.mainScroll}; boxes: ${d.boxes.boxes.map((b) => `${b.region}: ${String(b.wholeRows)}/${String(b.rows)} whole, box ${String(b.boxHeight)} px, body ${b.bodyScroll}, min name col ${String(b.minNameChars)} ch${b.bodyScrollsX ? ' SCROLLS-X' : ''}`).join('; ')}`,
     );
@@ -764,6 +821,10 @@ if (process.env.SP_ROW_SUBJECT === '1') {
   // beforehand, and compares THAT subject before and after. (The M1 journey runs the 320 x 800
   // version, where nothing is clipped beforehand.) Silent means the instrument is wrong.
   const controlWidth = Number(process.env.SP_CONTROL_W ?? 1280);
+  // The token must outrun the column it is injected into: a wrapping subject only overflows when a
+  // nowrap run is wider than the track. 32 x W (~400 px) does it at 320; at 1280 the one-column track
+  // is ~955 px, so the shipped tree needs SP_CONTROL_N=120 (M1 builder's note, spec SC-2).
+  const tokenLength = Number(process.env.SP_CONTROL_N ?? 32);
   await page.setViewportSize({ width: controlWidth, height: 800 });
   await page.goto(`${BASE}/orgs/${slug}`);
   await page.reload();
@@ -772,21 +833,24 @@ if (process.env.SP_ROW_SUBJECT === '1') {
   const beforeAll = await page.evaluate(probeRowSubjects);
   const target = beforeAll.subjects.findIndex((x) => x.hasContext && !x.context.clipped);
   if (target < 0) throw new Error('SC-2 control: no unclipped context to inject into');
-  await page.evaluate((i) => {
-    const subj = document.querySelectorAll('[data-row-subject]')[i];
-    const host = subj.lastElementChild;
-    const token = document.createElement('span');
-    token.style.cssText = 'display:inline-block;white-space:nowrap';
-    // Text wider than 300 px (32 x "W" at 14 px is ~400 px): the probe reads glyph rects, so a bare
-    // 300 px box with one letter in it would not overflow anything it can see.
-    token.textContent = 'W'.repeat(32);
-    host.appendChild(token);
-  }, target);
+  await page.evaluate(
+    ({ i, tokenLength }) => {
+      const subj = document.querySelectorAll('[data-row-subject]')[i];
+      const host = subj.lastElementChild;
+      const token = document.createElement('span');
+      token.style.cssText = 'display:inline-block;white-space:nowrap';
+      // Text wider than 300 px (32 x "W" at 14 px is ~400 px): the probe reads glyph rects, so a bare
+      // 300 px box with one letter in it would not overflow anything it can see.
+      token.textContent = 'W'.repeat(tokenLength);
+      host.appendChild(token);
+    },
+    { i: target, tokenLength },
+  );
   const afterAll = await page.evaluate(probeRowSubjects);
   const b4 = beforeAll.subjects[target];
   const af = afterAll.subjects[target];
   p(
-    `### SC-2 positive control (token wider than 300 px injected into one context, ${String(controlWidth)} x 800)`,
+    `### SC-2 positive control (${String(tokenLength)} x W injected into one context, ${String(controlWidth)} x 800)`,
   );
   p();
   p(

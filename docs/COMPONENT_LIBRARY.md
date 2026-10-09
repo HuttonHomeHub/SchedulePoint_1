@@ -630,6 +630,25 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 | a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
 | a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
 
+## Page archetypes: `ListRow` and `RowSubject` — a row's subject wraps, it never clips
+
+`ListRow` (`components/ui/page/list-row.tsx`) is one list row: a `primary` block and an optional `trailing` block.
+`RowSubject` renders the primary's first line: name (the row's one link), an optional `badge`, an optional
+`context` (muted `text-sm`). Both follow ADR-0184:
+
+- **`RowSubject` never truncates.** Nothing in it carries `truncate`, `text-ellipsis`, `whitespace-nowrap`,
+  `overflow-hidden`, `line-clamp-*`, `order-*`, `flex-row-reverse` or `flex-wrap-reverse`. It is one
+  `<p data-row-subject>` that is `flex flex-wrap items-baseline gap-x-2 gap-y-0`: the name group (name, one
+  collapsible space, badge) then the context, which wraps whole beneath the name when the line is full. The
+  context begins with an `sr-only` ", " so a screen reader pauses. The badge may start a line alone.
+- **`ListRow`'s trailing block wraps beneath the primary** when the primary would be under `7rem`
+  (`min-w-28 flex-1` on the primary, `flex-wrap gap-x-4 gap-y-0` on the container). That is behaviour, not a
+  prop. The one additive prop is `align?: 'center' | 'baseline'` (default `'center'`); pass `'baseline'` where the
+  trailing fact should sit on the name's first line when the subject wraps.
+- **Tests:** jsdom lays nothing out, so the unit tests are tripwires on the forbidden utilities and DOM order. The
+  behaviour is judged by `scripts/row-subject-probe.mjs`, which the `e2e-overview` journey also runs.
+- **Do not** add a `title` to a clipped name: wrap it instead. `ListRowSkeleton` is unchanged.
+
 ## Primitives: `EmptyState` and `NoticeStrip` — and where the boundary is
 
 `EmptyState` (`components/ui/page/empty-state.tsx`) says a screen or a section holds nothing.

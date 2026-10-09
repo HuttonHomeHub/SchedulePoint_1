@@ -1,7 +1,7 @@
 # Implementation Plan: A row's subject wraps rather than clips (#472)
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved 2026-10-09 by the product owner (CQ-1, CQ-2, CQ-3 yes, on the M0-T3 photographs). M0 done; M1 and M2 approved for build.
+- **Status:** Accepted — shipped (ADR-0184). Approved 2026-10-09 by the product owner (CQ-1, CQ-2, CQ-3 yes, on the M0-T3 photographs). M0 done; M1 and M2 approved for build.
 - **Owner:** web
 
 ## Breakdown
@@ -184,9 +184,9 @@ Authority` (`support.ts` `createClient` / `createProject` / `createPlan`), opens
 - **Description:**
   1. `docs/adr/0184-a-rows-subject-wraps-it-never-clips.md` from spec §4.8's outline, Status
      **Accepted**, citing `docs/specs/row-subject-truncation/` and `m2-verdict.md`.
-  2. CLAUDE.md §16: one line — `- **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A
-row's subject wraps; it never clips → [\`0184-a-rows-subject-wraps-it-never-clips.md\`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)`
-(`pnpm check:adr-coverage`).
+  2. CLAUDE.md §16: one line, `- **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A row's subject wraps; it never clips`
+     followed by the arrow and the link to `docs/adr/0184-a-rows-subject-wraps-it-never-clips.md`
+     (`pnpm check:adr-coverage`).
   3. **Counts:** run `pnpm check:counts` and correct the CLAUDE.md stage-banner figures it reports
      (the ADR count goes 183 → 184; web source files only if M1 added one) — never edit a number the
      gate did not ask for.
