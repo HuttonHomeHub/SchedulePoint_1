@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.183.1
+
+### Patch Changes
+
+- [#911](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/911) [`2f6c115`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2f6c115282f7cb75b475f5d2683f463ea189c761) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dragging a divider with a finger now follows your finger instead of stopping after a moment. This applies to every draggable divider: the Project Explorer's edge, the Gantt's grid width, the activities panel and the side docks.
+
 ## 0.183.0
 
 ### Minor Changes
