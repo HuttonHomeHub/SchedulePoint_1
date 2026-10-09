@@ -745,12 +745,13 @@ test.describe('the short-body swap, one pointer', () => {
     test.use({ acknowledgeViewportNotice: true });
 
     // The swap applies at every width (ADR-0181; it was inert below `md` while that width had a
-    // layout of its own). 640 x 480 and 320 x 256 are not rows here: the shell's chrome leaves
-    // the workspace no body at those sizes, which no panel rule can repair (ADR-0181, `docs/TECH_DEBT.md`
-    // #471), so the sizes are the ones the body can hold a table in (m0-measurement.md §2).
+    // layout of its own). The sizes are the ones whose body is SHORT: the command band is one
+    // scrolling line below 1024 now (toolbar-redesign M3), so a 900 px window has a 757 px body that
+    // holds the panel beside the diagram and does not swap (`isShortBody`: under 611 px). 740 px
+    // leaves 597 on a mouse and 577 on touch.
     for (const size of [
-      { width: 700, height: 900 },
-      { width: 640, height: 844 },
+      { width: 700, height: 740 },
+      { width: 640, height: 740 },
     ]) {
       test(`case 7: ${String(size.width)} x ${String(size.height)} swaps like the wide layout`, async ({
         page,

@@ -128,8 +128,17 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                   Gantt's virtualizer measured its scroller, found it as tall as its own content,
                   and rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather
                   than by the substrate choice). The shell is therefore exactly the viewport and
-                  `<main>` scrolls, rather than the document scrolling. */}
-              <div className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
+                  `<main>` scrolls, rather than the document scrolling.
+
+                  **Narrow AND short (`squat`, toolbar-redesign M3) is the one place the shell
+                  scrolls.** The band is 135-211 px there and the window 256-416, so holding it left
+                  the body 0-225 px and the foot row (Expand, Recalculate) below the window with
+                  nothing to scroll (#471). The shell itself becomes the scroller and row 3 a full
+                  `100dvh`: the band and the banner scroll away above a `<main>` that is still
+                  exactly the viewport tall, so the Gantt's virtualizer still measures a bounded
+                  scroller and the workspace lays out as it does in any window — the reader scrolls
+                  to it. Wide windows never reach this, whatever their height (CQ-3). */}
+              <div className="squat:grid-rows-[auto_auto_100dvh_auto] squat:overflow-y-auto relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
                 {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
                     It stays load-bearing after the rail's deletion, with a different traversal to

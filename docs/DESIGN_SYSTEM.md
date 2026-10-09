@@ -268,6 +268,23 @@ So, for any command surface:
   lines; the part to get right is the **announcement**, since a stack that tells assistive technology
   it is horizontal is wrong about the only thing `aria-orientation` exists to say.
 
+**The one exception: below `lg` the deck is a single scrolling line** (toolbar-redesign M3, R6/US-6,
+`docs/TECH_DEBT.md` #471). The wrap above is budgeted from the 1024 × 600 floor up; under 64 rem it cost
+355 px (640 wide) to 603 px (320 wide) of the window, so the body had no height and the foot row was
+below the window with nothing to scroll. `max-lg:` therefore puts LOOK then DO on one `flex-nowrap
+overflow-x-auto` line, and **reachability is still structural**, now by three things rather than by
+the wrap: `scroll-px-8` and a focus handler that calls `scrollIntoView({ block: 'nearest', inline:
+'nearest' })` (keyboard focus only, and only where the deck overflows), so a focused control is never
+flush with the edge or under the fade; `max-lg:deck-edge-fade`, a mask whose two widths are driven
+by the scroll position (`animation-timeline: scroll(self inline)`), so a reader sees the line goes on
+even where overlay scrollbars hide; and `usePopoverPanel` / `Menu`'s viewport clamp for an overlay
+opened from a half-scrolled trigger. A short-but-wide window (1280 × 600) keeps its two rows (CQ-3).
+**`squat`** (`@custom-variant squat`, `(width < 64rem) and (height <= 26rem)`, pinned in
+`lib/breakpoints.ts`) is narrow **and** short: the shell itself scrolls and the band scrolls away, so
+a 640 × 360 or 320 × 256 window (or a 1280 × 800 window at text-only 200 %, which is 40 × 25 rem)
+reaches the foot row by scrolling to it. `xs` (26 rem) is the narrower step the app header uses to
+drop its plan identity under the brand.
+
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the
 trade, made deliberately — all commands visible when there is room. The cost is measured

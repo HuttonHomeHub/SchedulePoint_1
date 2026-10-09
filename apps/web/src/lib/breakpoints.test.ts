@@ -4,7 +4,13 @@ import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESIGNED_MIN_WIDTH_PX, DESIGNED_MIN_WIDTH_QUERY, designedMinWidthPx } from './breakpoints';
+import {
+  DESIGNED_MIN_WIDTH_PX,
+  DESIGNED_MIN_WIDTH_QUERY,
+  designedMinWidthPx,
+  SQUAT_MAX_HEIGHT_REM,
+  SQUAT_QUERY,
+} from './breakpoints';
 
 describe('DESIGNED_MIN_WIDTH_QUERY', () => {
   it('is Tailwind’s lg, so the notice, the shell and the utility classes share one floor', () => {
@@ -42,5 +48,24 @@ describe('designedMinWidthPx', () => {
     expect(designedMinWidthPx()).toBe(1280);
     document.documentElement.style.fontSize = '18.4px';
     expect(designedMinWidthPx()).toBe(1178);
+  });
+});
+
+describe('SQUAT_QUERY', () => {
+  const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+
+  it('is declared as the stylesheet’s `squat` variant, word for word', () => {
+    expect(globals).toContain(`@custom-variant squat (@media ${SQUAT_QUERY});`);
+  });
+
+  it('is narrow by exactly the floor’s width and short by its own constant', () => {
+    expect(SQUAT_QUERY).toBe(
+      `${DESIGNED_MIN_WIDTH_QUERY.replace('min-width: 64rem', 'width < 64rem')} and (height <= ${String(SQUAT_MAX_HEIGHT_REM)}rem)`,
+    );
+  });
+
+  it('sits under the default narrow-shell window (640 x 480 is 30 rem) and over a 200 % text window (25 rem)', () => {
+    expect(SQUAT_MAX_HEIGHT_REM).toBeLessThan(30);
+    expect(SQUAT_MAX_HEIGHT_REM).toBeGreaterThanOrEqual(25);
   });
 });

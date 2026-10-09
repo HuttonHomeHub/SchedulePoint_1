@@ -150,6 +150,16 @@ export interface DeckProps<Ctx> {
   className?: string;
 }
 
+/** Whether the deck's line is wider than its box — true only where US-6's scrolling line applies. */
+function deckScrolls(deck: HTMLElement): boolean {
+  return deck.scrollWidth > deck.clientWidth;
+}
+
+/** Focus the keyboard (or a handoff after keyboard use) gave a control, as opposed to a press. */
+function isKeyboardFocus(el: HTMLElement): boolean {
+  return el.matches(':focus-visible');
+}
+
 export function Deck<Ctx>({
   items,
   context,
@@ -159,6 +169,8 @@ export function Deck<Ctx>({
 }: DeckProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  /** True only while `onKeyDown` is moving focus itself — see `onFocus`. */
+  const rovingMove = useRef(false);
 
   const resolved = useMemo(
     () => resolveItems(items, context, authoringEnabled),
@@ -218,10 +230,38 @@ export function Deck<Ctx>({
       const current = nodes.findIndex((n) => n === document.activeElement);
       const next = rovingIndexFor(event.key, current, nodes.length);
       event.preventDefault();
-      nodes[next]?.focus();
+      // **The deck scrolls itself below `lg` (US-6), so the browser's own focus-scroll is replaced by
+      // `onFocus` below** — one path that every keyboard focus takes, whichever key or Tab brought it.
+      // Where the deck does not overflow nothing here changes: `focus()` keeps the scroll it always did.
+      // `rovingMove` marks this focus as the keyboard's even where `:focus-visible` is unavailable.
+      rovingMove.current = true;
+      try {
+        nodes[next]?.focus(deckScrolls(event.currentTarget) ? { preventScroll: true } : undefined);
+      } finally {
+        rovingMove.current = false;
+      }
     },
     [focusables],
   );
+
+  /**
+   * **A control the keyboard focuses is brought inside the scrolling line, clear of the edge fade**
+   * (US-6, ADR-0111). `scroll-padding` on the deck (`max-lg:scroll-px-8`, the fade's width) is what makes
+   * `nearest` stop short of the edge instead of leaving the control flush with it, or under the fade.
+   *
+   * **Keyboard focus only (`:focus-visible`).** A pointer press focuses a button too, and scrolling
+   * the control it is being pressed on out from under the pointer between `pointerdown` and `click`
+   * is how a tap lands on its neighbour. A half-clipped control can be pressed where it is.
+   *
+   * **Scoped to controls that overflow**: at 1024 and wider `deckScrolls` is false and this does
+   * nothing, so the wide layout's focus behaviour is byte-for-byte what it was.
+   */
+  const onFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!deckScrolls(event.currentTarget) || !target.matches('[data-toolbar-focusable]')) return;
+    if (!rovingMove.current && !isKeyboardFocus(target)) return;
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, []);
 
   // The roving stop must always exist and always point at something rendered. Items appear and
   // disappear as predicates change, so an `activeId` naming a gone item would leave the deck with
@@ -267,6 +307,7 @@ export function Deck<Ctx>({
       // by sequential navigation, so the deck still has exactly one Tab stop.
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      onFocus={onFocus}
       {...focusHandoff}
       // **Two declared rows, as plain `<div>`s inside the one `role="toolbar"`.**
       //
@@ -291,6 +332,18 @@ export function Deck<Ctx>({
         // full-width wrapper, so its width is the band's inner width and `contain` changes nothing —
         // `command-surface.spec.ts` asserts the equality at every cell.
         '@container/deck flex flex-col gap-2',
+        // **Below `lg` the deck is ONE line that scrolls sideways** (toolbar-redesign M3, US-6,
+        // #471). Both rows sit side by side on a `flex-nowrap` line, LOOK then DO, and the rows,
+        // groups and sections below stop wrapping and stop shrinking (`max-lg:shrink-0`), so a
+        // control keeps its width and the line runs past the edge instead of folding into five or
+        // eleven stacked lines that took 355-603 px of a 360-720 px window. `scroll-px-8` is the
+        // edge fade's width (`deck-edge-fade`, `globals.css`): a control scrolled into view stops
+        // short of the edge rather than flush with it or under the fade. The inset is the root's
+        // own (`max-lg:px-2`), because the wrapper's gives way at this width so the line runs to the
+        // window's edge, where a half-clipped control tells a reader there is more.
+        // `max-lg:overflow-y-hidden` is not a decision: a scroller on one axis computes the other
+        // to `auto`, and a line exactly its own height must not grow a vertical scrollbar.
+        'max-lg:deck-edge-fade max-lg:scroll-px-8 max-lg:flex-row max-lg:items-start max-lg:gap-4 max-lg:overflow-x-auto max-lg:overflow-y-hidden max-lg:px-2',
         // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
         // This container became focusable only when the handoff gained somewhere to put focus,
         // and until then nothing had ever decided what "the toolbar itself is focused" looks
@@ -303,7 +356,11 @@ export function Deck<Ctx>({
       )}
     >
       {DECK_ROWS.map((row) => (
-        <div key={row} data-deck-row={row} className="flex flex-wrap items-start gap-2">
+        <div
+          key={row}
+          data-deck-row={row}
+          className="flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap"
+        >
           {groups
             .filter((group) => group.row === row)
             .map((group, groupIndex) => {
@@ -336,7 +393,7 @@ export function Deck<Ctx>({
                   // keeps its role and its name; its height is now the control row's. The shared
                   // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
                   className={cn(
-                    'flex items-stretch gap-2',
+                    'flex items-stretch gap-2 max-lg:shrink-0',
                     'trailing' in group && 'ml-auto',
                     // **The group seam, built at M7 having been promised twice and never made.**
                     // `TOOLBAR_INSET_RULE`'s own docblock states as fact that "the group-level seam
@@ -359,6 +416,12 @@ export function Deck<Ctx>({
                     // makes the two readable as a hierarchy rather than as two of the same thing.
                     groupIndex > 0 &&
                       'before:bg-border relative before:absolute before:inset-y-1/5 before:-left-1 before:w-px',
+                    // The seam between the two rows on the scrolling line: below `lg` DO's first group
+                    // follows LOOK's last on the same line, and nothing else would say a row ended.
+                    // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap.
+                    groupIndex === 0 &&
+                      row === 'do' &&
+                      'max-lg:before:bg-border max-lg:relative max-lg:before:absolute max-lg:before:inset-y-1/5 max-lg:before:-left-2 max-lg:before:w-px',
                   )}
                 >
                   {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
@@ -379,12 +442,12 @@ export function Deck<Ctx>({
                 the commands. It was this span, its `pr-2`, its `border-r` and the gaps either
                 side, twice over on a row carrying two cards. The captions cost the row more than
                 the control the previous milestone added to it. */}
-                  <div className="flex flex-wrap items-stretch gap-1">
+                  <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
                     {group.sections.map((section, sectionIndex) => (
                       <div
                         key={section[0]?.item.group ?? sectionIndex}
                         className={cn(
-                          'flex flex-wrap items-stretch gap-1',
+                          'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
                           // The seven-group taxonomy, surviving as an inset hairline between sections
                           // rather than as a caption above them — the ONE seam treatment the three
                           // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.

@@ -2433,7 +2433,7 @@ export function ToolbarPlanWorkspace({
                 wrapper's own inset is the last of the band's height that is not a control.
                 `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
                 COPIES this one rather than judging its own, so the two cannot part company. */}
-            <div className="px-2 py-1">
+            <div className="px-2 py-1 max-lg:px-0">
               <Deck
                 items={rows.strip}
                 context={ctx}

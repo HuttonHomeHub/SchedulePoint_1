@@ -35,6 +35,18 @@
    the 704 px is where the 219 px block stops being needed to fill the column). */
 @custom-variant short (@media (max-height: 44rem));
 
+/* `squat`: NARROW and SHORT — under `lg` (64rem) wide and at most 26rem (416 px) high. The shell's
+   command band scrolls away vertically here instead of holding the window (`app-shell.tsx`), because
+   a header that wraps to 88-156 px plus the deck's scrolling line cannot be held at 40 % of a window
+   this short: 640 x 360 is 144 px of budget and 320 x 256 is 102. Height is in rem so text-only 200 %
+   zoom moves it with the text: a 1280 x 800 window at a 32 px default font size is 40 x 25rem, which
+   is below `lg` and inside this height, and its band was 88 % of the window (fine) and 127 % (coarse)
+   before this variant existed (toolbar-redesign `m0-measurement.md` §8). 26rem and not larger so a
+   640 x 480 window (30rem), where the band is 28-32 % and the journeys sit, keeps the held band.
+   Never applies at `lg` and wider, whatever the height: a short wide window (1280 x 600) keeps its
+   two rows (CQ-3). The query is pinned by `breakpoints.test.ts` beside `SQUAT_MAX_HEIGHT_REM`. */
+@custom-variant squat (@media (width < 64rem) and (height <= 26rem));
+
 /* `wide`: 100rem (1600 px). The deck's search field is 240 px from here and 168 below, so the product
    owner's 1646 and 1912 displays keep the field they were designed with
    (`docs/specs/minimum-viewport/m4-measurement.md`). */
@@ -52,6 +64,66 @@
    arbitrary `@max-[…]` value: the design system has no arbitrary values. */
 @theme {
   --container-roomy: 79rem;
+}
+
+/* The command deck's edge fade below `lg` (`Deck.tsx`, `max-lg:deck-edge-fade`; toolbar-redesign M3,
+   US-6). The deck is one line that scrolls sideways there, and a macOS overlay scrollbar is invisible
+   until a gesture, so the line has to say it goes on. A mask fades 2rem of whichever edge has more
+   behind it: none at the start (the first control is whole at rest), none at the far end, both in
+   between. The widths are driven by the scroll position itself (`animation-timeline: scroll(self
+   inline)`), so there is no scroll listener and no observer. Where a browser lacks scroll-driven
+   animation the registered properties keep their `0px` initial value and no fade paints; the
+   half-clipped control at the edge, which a line this much wider than its box always has, is the cue
+   there. When nothing overflows the animation is inactive and no fade paints, so a deck that fits
+   shows none. The fade is 2rem to match `scroll-px-8`, so a control scrolled into view clears it. */
+@property --deck-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --deck-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes deck-edge-fade {
+  0% {
+    --deck-fade-start: 0px;
+    --deck-fade-end: 2rem;
+  }
+  3% {
+    --deck-fade-start: 2rem;
+  }
+  97% {
+    --deck-fade-end: 2rem;
+  }
+  100% {
+    --deck-fade-start: 2rem;
+    --deck-fade-end: 0px;
+  }
+}
+
+@utility deck-edge-fade {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--deck-fade-start),
+    #000 calc(100% - var(--deck-fade-end)),
+    transparent
+  );
+  animation: deck-edge-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+
+/* `xs`: 26rem (416 px). The width under which the app header's brand and plan identity cannot share a
+   line even with the plan name truncated to nothing, so the identity wraps under the brand
+   (`app-header.tsx`, `max-xs:flex-wrap`): at 320 the brand, the status badge and the "Plan details"
+   toolbar are 316 px against 288 of row, which put Edit plan details off the window. Used as
+   `max-xs:` only. */
+@theme {
+  --breakpoint-xs: 26rem;
 }
 
 /* The two widths a toolbar popover panel may grow to (`usePopoverPanel`'s `panelWidth`): 20 rem for a

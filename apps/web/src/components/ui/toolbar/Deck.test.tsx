@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
@@ -440,5 +440,92 @@ describe('Deck — the label rule', () => {
     fireEvent.keyDown(roomy, { key: 'Escape' });
     expect(document.querySelector('[data-tooltip]')).toBeNull();
     expect(document.activeElement).toBe(roomy);
+  });
+});
+
+/**
+ * **The scrolling line's keyboard contract** (toolbar-redesign M3, US-6, ADR-0111).
+ *
+ * jsdom has no layout, so `scrollWidth` and `clientWidth` are stubbed to say the deck overflows —
+ * the property under test is what the deck DOES about a focused control when it does, not what a
+ * browser lays out (`narrow-shell.spec.ts` asserts the rects). `scrollIntoView` is absent from
+ * jsdom, so a spy stands in for it.
+ */
+describe('Deck — a focused control is scrolled into the line below lg', () => {
+  const scrollIntoView = vi.fn();
+
+  afterEach(() => {
+    scrollIntoView.mockReset();
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+  });
+
+  function renderOverflowing(overflows: boolean): HTMLElement {
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    const deck = screen.getByRole('toolbar', { name: 'Plan commands' });
+    Object.defineProperty(deck, 'scrollWidth', {
+      configurable: true,
+      value: overflows ? 900 : 300,
+    });
+    Object.defineProperty(deck, 'clientWidth', { configurable: true, value: 300 });
+    return deck;
+  }
+
+  it('asks for the nearest edge on both axes when the keyboard moves focus, and not before', () => {
+    renderOverflowing(true);
+    const today = screen.getByRole('button', { name: 'Today' });
+    today.focus();
+    scrollIntoView.mockClear();
+    fireEvent.keyDown(today, { key: 'ArrowRight' });
+    expect(focusedItemId()).toBe('fit');
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('does it for Home and End too, so a lap to either end is brought into view', () => {
+    renderOverflowing(true);
+    const today = screen.getByRole('button', { name: 'Today' });
+    today.focus();
+    scrollIntoView.mockClear();
+    fireEvent.keyDown(today, { key: 'End' });
+    expect(focusedItemId()).toBe('export');
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(focusedItemId()).toBe('today');
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the browser’s own focus-scroll alone when the deck does not overflow', () => {
+    renderOverflowing(false);
+    const today = screen.getByRole('button', { name: 'Today' });
+    today.focus();
+    fireEvent.keyDown(today, { key: 'ArrowRight' });
+    expect(focusedItemId()).toBe('fit');
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser’s focus-scroll off the roving move so there is exactly one scroll', () => {
+    renderOverflowing(true);
+    const today = screen.getByRole('button', { name: 'Today' });
+    const fit = screen.getByRole('button', { name: 'Fit' });
+    const focus = vi.spyOn(fit, 'focus');
+    today.focus();
+    fireEvent.keyDown(today, { key: 'ArrowRight' });
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it('does not move a control a pointer press focused', () => {
+    renderOverflowing(true);
+    const fit = screen.getByRole('button', { name: 'Fit' });
+    // A press focuses the button without :focus-visible; scrolling it from under the pointer
+    // between pointerdown and click is how a tap lands on a neighbour.
+    fireEvent.mouseDown(fit);
+    fit.focus();
+    scrollIntoView.mockClear();
+    vi.spyOn(fit, 'matches').mockImplementation(
+      (selector: string) => selector !== ':focus-visible',
+    );
+    fit.blur();
+    fit.focus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });

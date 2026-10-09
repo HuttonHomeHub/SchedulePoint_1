@@ -133,8 +133,18 @@ function HeaderContents({
           together:
           `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
           of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
-          `shrink` because this is the section that gives way — it is text with a `title`. */}
-      <div className="flex min-w-0 shrink items-center gap-3 lg:max-w-1/2">
+          `shrink` because this is the section that gives way — it is text with a `title`.
+
+          **`max-xs:flex-wrap`, so the identity drops under the brand in a window that narrow**
+          (toolbar-redesign M3, found reading the 320 cells). Truncating the plan name is this
+          section's only way to give, and the brand, the status badge and the two-button "Plan
+          details" toolbar do not shrink: at 320 they alone are 316 px against 288, so Edit plan
+          details was laid out at x = 322 — off the window, and the shell scrolled sideways to
+          reach it. A second line is the cost the one-row header already accepts below its
+          container (`falsification.md`). `xs` is 26 rem (`globals.css`), not `lg`: at 640 the same
+          content truncates the name and fits, and a wrap there cost the band 48 px of the window
+          for nothing. */}
+      <div className="max-xs:flex-wrap flex min-w-0 shrink items-center gap-3 lg:max-w-1/2">
         <div className="flex shrink-0 items-center gap-2">
           {shell && orgSlug ? (
             <Button
