@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { probeRowSubjects, type ProbeResult } from '../scripts/row-subject-probe.mjs';
 
 import {
   addActivity,
@@ -387,6 +388,177 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
   await expect(overviewPage).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+
+  // -------------------------------------------------- 7. No row's subject is ever cut off (#472)
+  //
+  // **Geometry from glyph rectangles, by the same probe the measurement harness runs**
+  // (`scripts/row-subject-probe.mjs`), because "clipped" has one definition: the old instrument
+  // counted a `text-overflow: ellipsis` on a text node's direct parent, which a plan name inside a
+  // router `<a>` never has, so it reported zero clipped names while 16 of 17 were (M0). A unit test
+  // cannot ask: jsdom lays nothing out.
+  const LONG_NAME = 'Berth 4 Deepening — Dredging and Revetment Works, Stage 2B';
+  await acknowledgeViewportNotice(overviewPage);
+  const planId = await overviewPage.evaluate(
+    async ({ org, name }: { org: string; name: string }) => {
+      const call = async (path: string, body: object) => {
+        const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`POST ${path}: ${String(response.status)}`);
+        return ((await response.json()) as { data: { id: string } }).data;
+      };
+      const client = await call('/clients', { name: 'Northern Ports and Harbours Authority' });
+      const project = await call(`/clients/${client.id}/projects`, {
+        name: 'Estuary Crossing Programme — Western Approaches',
+      });
+      return (await call(`/projects/${project.id}/plans`, { name, plannedStart: '2026-02-02' })).id;
+    },
+    { org: orgSlug, name: LONG_NAME },
+  );
+  // Open it once, so "Jump back in" carries it as well as "Recently changed" (the remembered id is
+  // recorded when the plan has LOADED, which is what the pen control signals).
+  await overviewPage.goto(`/orgs/${orgSlug}/plans/${planId}`);
+  await expect(overviewPage.getByRole('button', { name: /^(Start|Stop) editing$/ })).toBeVisible();
+
+  /** Open the landing at a size and read the probe once two readings agree. */
+  const readSubjects = async (width: number, height: number): Promise<ProbeResult> => {
+    await overviewPage.setViewportSize({ width, height });
+    await openOverview(overviewPage, orgSlug);
+    await expect(section(overviewPage, 'Jump back in').getByRole('link').first()).toBeVisible();
+    let previous = '';
+    let reading = await overviewPage.evaluate(probeRowSubjects);
+    await expect
+      .poll(
+        async () => {
+          reading = await overviewPage.evaluate(probeRowSubjects);
+          const signature = JSON.stringify(reading.subjects.map((x) => x.rowHeight));
+          const settled = signature === previous;
+          previous = signature;
+          return settled;
+        },
+        { message: `the landing never settled at ${String(width)} x ${String(height)}` },
+      )
+      .toBe(true);
+    return reading;
+  };
+  const clippedSubjects = (reading: ProbeResult): string[] =>
+    reading.subjects
+      .filter(
+        (x) =>
+          x.name.clipped ||
+          x.context.clipped ||
+          x.name.ellipsis ||
+          x.context.ellipsis ||
+          x.trailing?.clipped,
+      )
+      .map((x) => `${x.region}: ${x.text}`);
+
+  for (const [width, height] of [
+    [1477, 900],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)}`;
+    const reading = await readSubjects(width, height);
+    // The pinned positive case: "nothing is clipped" is also what a page with no subjects reports.
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(
+      reading.subjects.some((x) => x.text.includes(LONG_NAME) && x.hasBadge && x.hasContext),
+      `${at}: the long-named plan is not on the landing with its badge and context`,
+    ).toBe(true);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+
+    // Reading order for the long-named row from where the boxes are, not from the DOM: name, then
+    // badge, then context — on one line left to right, otherwise top to bottom.
+    const order = await overviewPage.evaluate((longName) => {
+      // "Jump back in" renders the same plan with no badge or context, so the row asked about is the
+      // first one that has both.
+      const subject = [...document.querySelectorAll('[data-row-subject]')].find(
+        (el) =>
+          el.textContent?.includes(longName) && (el.firstElementChild?.children.length ?? 0) > 1,
+      );
+      const group = subject?.firstElementChild;
+      const contextBox = subject?.lastElementChild;
+      const link = group?.querySelector('a');
+      const badge = group && group.children.length > 1 ? group.lastElementChild : null;
+      const first = (el: Element | null | undefined) => el?.getClientRects()[0] ?? null;
+      const boxes = [first(link), first(badge), first(contextBox)];
+      return boxes.map((b) => (b ? { top: b.top, left: b.left } : null));
+    }, LONG_NAME);
+    const [nameBox, badgeBox, contextBox] = order;
+    expect(
+      nameBox && badgeBox && contextBox,
+      `${at}: a part of the long row is missing`,
+    ).toBeTruthy();
+    const before = (a: { top: number; left: number }, b: { top: number; left: number }) =>
+      Math.abs(a.top - b.top) < 8 ? a.left < b.left : a.top < b.top;
+    expect(before(nameBox!, badgeBox!), `${at}: the badge reads before the name`).toBe(true);
+    expect(before(badgeBox!, contextBox!), `${at}: the context reads before the badge`).toBe(true);
+  }
+
+  /** SC-2's after-control: a token no layout can fit, injected into one whole context. */
+  const controlSeesAnInjectedToken = async (): Promise<void> => {
+    const base = await overviewPage.evaluate(probeRowSubjects);
+    const target = base.subjects.findIndex((x) => x.hasContext && !x.context.clipped);
+    expect(target, 'no unclipped context to inject into').toBeGreaterThanOrEqual(0);
+    await overviewPage.evaluate((i) => {
+      const host = document.querySelectorAll('[data-row-subject]')[i]?.lastElementChild;
+      const token = document.createElement('span');
+      token.dataset.injected = 'true';
+      token.style.cssText = 'display:inline-block;white-space:nowrap';
+      // Wider than the window itself (a "W" at 14 px is ~12.5 px): a context now wraps under its name,
+      // so a fixed 400 px token (the harness's, on the OLD tree) simply fits at 1280. The probe reads
+      // glyph rects, so an empty box would overflow nothing it can see.
+      token.textContent = 'W'.repeat(Math.ceil((window.innerWidth * 1.5) / 12));
+      host?.appendChild(token);
+    }, target);
+    const injected = await overviewPage.evaluate(probeRowSubjects);
+    await overviewPage.evaluate(() => document.querySelector('[data-injected]')?.remove());
+    expect(
+      injected.subjects[target]?.context.clipped,
+      'the probe is silent about an injected overflow, so its zero counts mean nothing',
+    ).toBe(true);
+  };
+
+  await readSubjects(1280, 800);
+  await controlSeesAnInjectedToken();
+
+  // 320 x 800 is the 1280-at-400 % reflow proxy (WCAG 1.4.10). The "designed for larger screens"
+  // notice sits above the landing; it is measured beneath, as M0 did.
+  const narrow = await readSubjects(320, 800);
+  expect(narrow.found, '320: the probe found no row subject').toBeGreaterThan(0);
+  expect(clippedSubjects(narrow), '320: a name, context or trailing fact is cut off').toEqual([]);
+  await controlSeesAnInjectedToken();
+  const withTrailing = narrow.subjects.filter((x) => x.trailing);
+  expect(withTrailing.length, '320: no row has a trailing fact to measure').toBeGreaterThan(0);
+  for (const x of withTrailing) {
+    // SC-9: the name keeps room — 12 advances of "0" in its own font — and the fact is beneath.
+    expect(
+      x.trailing?.primaryChars,
+      `320: ${x.text} leaves its name too little room`,
+    ).toBeGreaterThanOrEqual(12);
+    expect(x.trailing?.beneath, `320: ${x.text} keeps its trailing fact beside a 320 px name`).toBe(
+      true,
+    );
+  }
+
+  // The floor: at 1024 x 600 nothing drops, because the narrowest track is wider than 7rem plus the
+  // trailing fact.
+  const floor = await readSubjects(1024, 600);
+  const floorTrailing = floor.subjects.filter((x) => x.trailing);
+  expect(floorTrailing.length, '1024: no row has a trailing fact to measure').toBeGreaterThan(0);
+  for (const x of floorTrailing) {
+    expect(
+      x.trailing?.centreInFirstLine,
+      `1024: ${x.text} has dropped its trailing fact below the first line`,
+    ).toBe(true);
+  }
+  expect(clippedSubjects(floor), '1024: a name, context or trailing fact is cut off').toEqual([]);
 });
 
 test('the settled overview has no accessibility violations', async ({ page }) => {

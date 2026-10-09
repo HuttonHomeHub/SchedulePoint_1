@@ -1817,6 +1817,38 @@ test('a staff member reads the console by group and acts on a condition', async 
     'Alerts',
   ]);
 
+  // ------------------------------------- A status row keeps its verdict on the label's line (#472)
+  //
+  // `ListRow` wraps its trailing block beneath the text when the text would be left under 7rem
+  // (ADR-0184). This console is the one consumer the landing's measurements never see, so it pins
+  // "unchanged at or above the floor": the verdict badge's top is above the primary block's bottom,
+  // i.e. on the row's first flex line, centred against the two-line primary by the default `align`.
+  for (const [width, height] of [
+    [1024, 600],
+    [1912, 948],
+  ] as const) {
+    await staff.setViewportSize({ width, height });
+    const rows = await staff.evaluate(() =>
+      [...document.querySelectorAll('#staff-status li > div')].map((row) => {
+        const primary = row.children[0]?.getBoundingClientRect();
+        const verdict = row.children[1]?.getBoundingClientRect();
+        return primary && verdict
+          ? { primaryBottom: primary.bottom, verdictTop: verdict.top }
+          : null;
+      }),
+    );
+    // Pinned positive case: zero rows would satisfy "every badge is above" vacuously.
+    expect(rows.length, `${String(width)}: no status row was measured`).toBe(rowOrder.length);
+    for (const r of rows) {
+      expect(r, `${String(width)}: a status row has no verdict block`).not.toBeNull();
+      expect(
+        r!.verdictTop,
+        `${String(width)}: a verdict badge dropped beneath its row's text`,
+      ).toBeLessThan(r!.primaryBottom);
+    }
+  }
+  await staff.setViewportSize({ width: 1920, height: 1080 });
+
   // ----------------------------------------------- A status row moves focus to the box that answers
   await staff.getByRole('region', { name: 'Status' }).getByRole('link', { name: 'Alerts' }).click();
   const alerts = staff.locator('#staff-section-alerting');

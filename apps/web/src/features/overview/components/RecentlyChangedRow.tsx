@@ -72,6 +72,7 @@ export function RecentlyChangedRow({
 }): React.ReactElement {
   return (
     <ListRow
+      align="baseline"
       primary={
         <>
           <RowSubject
@@ -84,13 +85,7 @@ export function RecentlyChangedRow({
                 {plan.planName}
               </Link>
             }
-            badge={
-              plan.status === 'DRAFT' ? (
-                <Badge size="sm" className="shrink-0">
-                  Draft
-                </Badge>
-              ) : null
-            }
+            badge={plan.status === 'DRAFT' ? <Badge size="sm">Draft</Badge> : null}
             context={`${plan.projectName} · ${plan.clientName}`}
           />
           <FreshnessLine plan={plan} now={now} />

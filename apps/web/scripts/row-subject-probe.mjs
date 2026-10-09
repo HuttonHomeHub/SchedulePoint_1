@@ -55,6 +55,9 @@ export function probeRowSubjects() {
       const text = n.textContent ?? '';
       if (!text.trim()) continue;
       const host = n.parentElement;
+      // The `sr-only` ", " is a 1 px clipped box by design: reading it as text would report every
+      // row with a context as clipped.
+      if (host?.closest('.sr-only')) continue;
       const clip = host ? clipAncestor(n, subject) : null;
       const cr = clip ? clip.getBoundingClientRect() : null;
       const left = Math.max(0, cr ? cr.left : 0);
@@ -132,6 +135,46 @@ export function probeRowSubjects() {
         section?.getAttribute('aria-label') ??
         (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
       const row = subject.closest('.border-b');
+      // The ListRow's trailing block (M1): its text must be whole too, and where it sits relative to
+      // the primary block is the narrow-width drop (CQ-3, SC-3 floor clause, SC-9).
+      const primaryBlock = row && row.children.length > 1 ? row.children[0] : null;
+      const trailingBlock = primaryBlock ? row.children[1] : null;
+      let trailing = null;
+      if (primaryBlock && trailingBlock) {
+        const pr = primaryBlock.getBoundingClientRect();
+        const tr = trailingBlock.getBoundingClientRect();
+        const firstText = document
+          .createTreeWalker(primaryBlock, NodeFilter.SHOW_TEXT, {
+            acceptNode: (t) =>
+              (t.textContent ?? '').trim() && !t.parentElement?.closest('.sr-only')
+                ? NodeFilter.FILTER_ACCEPT
+                : NodeFilter.FILTER_REJECT,
+          })
+          .nextNode();
+        let firstLine = null;
+        if (firstText) {
+          const fr = document.createRange();
+          fr.selectNodeContents(firstText);
+          const rect = fr.getClientRects()[0];
+          if (rect) firstLine = { top: rect.top, bottom: rect.bottom };
+        }
+        const font = name ? getComputedStyle(name) : getComputedStyle(primaryBlock);
+        const ctx2d = document.createElement('canvas').getContext('2d');
+        ctx2d.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+        const zeroPx = ctx2d.measureText('0').width;
+        const centre = (tr.top + tr.bottom) / 2;
+        trailing = {
+          ...measure(trailingBlock, row),
+          text: (trailingBlock.textContent ?? '').trim().slice(0, 60),
+          primaryWidth: Math.round(pr.width),
+          primaryChars: Math.round((pr.width / zeroPx) * 10) / 10,
+          beneath: tr.top >= pr.bottom - 1,
+          topAbovePrimaryBottom: tr.top < pr.bottom - 1,
+          centreInFirstLine: firstLine
+            ? centre >= firstLine.top - 1 && centre <= firstLine.bottom + 1
+            : false,
+        };
+      }
       const nameM = measure(name, subject);
       const ctxM = measure(context, subject);
       // Lines are clusters of vertical centres: the name (16 px) and the context (14 px) sit at
@@ -142,11 +185,13 @@ export function probeRowSubjects() {
       return {
         region: region.trim(),
         text: (subject.textContent ?? '').trim().slice(0, 90),
-        hasBadge: Boolean(badge),
+        // After M1 the badge sits inside the name group, so it is a second element child there.
+        hasBadge: Boolean(badge) || (name?.children.length ?? 0) > 1,
         hasContext: Boolean(context),
         name: nameM,
         context: ctxM,
         lines: lineCount,
+        trailing,
         rowHeight: row ? Math.round(row.getBoundingClientRect().height) : null,
       };
     }),
@@ -169,6 +214,7 @@ export function summariseProbe(result) {
     medianNameShownChars: median(s.map((x) => x.name.shownChars)),
     medianContextShownPx: median(s.filter((x) => x.hasContext).map((x) => x.context.shownPx)),
     medianContextShownChars: median(s.filter((x) => x.hasContext).map((x) => x.context.shownChars)),
+    trailingClipped: s.filter((x) => x.trailing?.clipped).length,
     medianRowHeight: median(s.map((x) => x.rowHeight ?? 0)),
     docOverflowX: result.docOverflowX,
   };

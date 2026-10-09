@@ -378,20 +378,76 @@ describe('RowSubject', () => {
     expect(container.textContent).toBe('Tower B');
   });
 
-  it('lets the context give way before the name does', () => {
-    // The truncation rule is the decision this component owns. A call site must not be able to
-    // answer it differently, and a name clipped in favour of its project is the wrong sacrifice.
+  // jsdom lays nothing out, so these are tripwires on the markup, not proof of the behaviour: that is
+  // the probe in `e2e-overview` (ADR-0110). The test this replaces asserted `truncate` and
+  // `shrink-[3]`, i.e. the defect, and was green while 16 of 17 names were clipped.
+  const FORBIDDEN =
+    /(^|\s)(truncate|text-ellipsis|whitespace-nowrap|overflow-hidden|line-clamp-\S*|order-\S*|flex-row-reverse|flex-wrap-reverse)(\s|$)/;
+
+  it('never truncates, clips or reorders anything in the subject', () => {
+    const { container } = render(
+      <RowSubject name="Tower B" badge={<span>Draft</span>} context="Riverside · Acme" />,
+    );
+    const subject = container.querySelector('[data-row-subject]');
+    for (const el of [subject, ...(subject?.querySelectorAll('*') ?? [])]) {
+      expect(el?.getAttribute('class') ?? '', 'a subject part can clip its text').not.toMatch(
+        FORBIDDEN,
+      );
+    }
+  });
+
+  it('keeps the badge in the name group, and reads name, badge, context in that order', () => {
+    const { container } = render(
+      <RowSubject name="Tower B" badge={<span>Draft</span>} context="Riverside · Acme" />,
+    );
+    const subject = container.querySelector('p[data-row-subject]');
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    const [group, ctx] = [...(subject?.children ?? [])];
+    expect(group?.textContent).toBe('Tower B Draft');
+    expect(group?.lastElementChild?.textContent).toBe('Draft');
+    expect(ctx?.textContent).toBe(', Riverside · Acme');
+    expect(subject?.className).toMatch(/\bflex-wrap\b/);
+    expect(subject?.className).toMatch(/\bgap-y-0\b/);
+  });
+
+  it('puts one sr-only ", " before a context, and none when there is no context', () => {
+    const withContext = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+    const hidden = withContext.container.querySelectorAll('.sr-only');
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0]?.textContent).toBe(', ');
+    withContext.unmount();
+
+    const without = render(<RowSubject name="Tower B" />);
+    expect(without.container.querySelector('.sr-only')).toBeNull();
+  });
+
+  it('renders nothing after the name when there is no badge', () => {
     const { container } = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+    const group = container.querySelector('[data-row-subject]')?.firstElementChild;
+    expect(group?.childNodes).toHaveLength(1);
+    expect(group?.textContent).toBe('Tower B');
+  });
+});
 
-    const spans = [...container.querySelectorAll('span')];
-    const nameSpan = spans.find((el) => el.textContent === 'Tower B');
-    const contextSpan = spans.find((el) => el.textContent === 'Riverside · Acme');
+describe('ListRow wrapping', () => {
+  it('centres its trailing block by default and baselines it on request', () => {
+    const plain = render(<ListRow primary="a" trailing="b" />);
+    expect(plain.container.firstElementChild?.className).toMatch(/\bitems-center\b/);
+    expect(plain.container.firstElementChild?.className).not.toMatch(/items-baseline/);
+    plain.unmount();
 
-    expect(nameSpan?.className).toMatch(/\btruncate\b/);
-    expect(contextSpan?.className).toMatch(/\btruncate\b/);
-    // Three times faster, so the name survives a long project and client.
-    expect(contextSpan?.className).toMatch(/shrink-\[3\]/);
-    expect(nameSpan?.className).not.toMatch(/shrink-\[3\]/);
+    const based = render(<ListRow align="baseline" primary="a" trailing="b" />);
+    expect(based.container.firstElementChild?.className).toMatch(/\bitems-baseline\b/);
+    expect(based.container.firstElementChild?.className).not.toMatch(/items-center/);
+  });
+
+  it('wraps its trailing block under a primary that would be under 7rem, without reordering', () => {
+    const { container } = render(<ListRow primary="a" trailing="b" />);
+    const row = container.firstElementChild;
+    expect(row?.className).toMatch(/\bflex-wrap\b/);
+    expect(row?.className).not.toMatch(/flex-wrap-reverse|flex-row-reverse|\border-/);
+    expect(row?.firstElementChild?.className).toMatch(/\bmin-w-28\b/);
+    expect(row?.firstElementChild?.className).toMatch(/\bflex-1\b/);
   });
 });
 

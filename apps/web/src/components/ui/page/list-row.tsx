@@ -22,38 +22,53 @@ export interface RowSubjectProps {
    * does not import the router (see {@link rowLinkClass}).
    */
   name: React.ReactNode;
-  /** Where it lives — `project · client`. Muted, and the first thing to be truncated away. */
+  /**
+   * Where it lives — `project · client`. Muted. It never truncates: when it does not fit beside the
+   * name it moves whole to the line beneath, and wraps at words if it is longer than that line.
+   */
   context?: React.ReactNode;
-  /** A status marker sitting between the two, e.g. a `Draft` badge. Never shrinks. */
+  /**
+   * A status marker belonging to the name, e.g. a `Draft` badge. It follows the name's last word, and
+   * may start a line alone when the name fills its line to the last character.
+   */
   badge?: React.ReactNode;
 }
 
 /**
- * A row's subject and its context, on ONE line.
+ * A row's subject and its context: one line when they fit, as many as they need when they do not,
+ * and **never clipped** (ADR-0184, extending ADR-0146 D3/D4 from table columns to list rows).
  *
- * **This exists because the second line was the largest single term in the landing's height.**
- * Every row on the organisation overview rendered the name, then `project · client` beneath it in
- * muted small text — measured at 20 px a row across all four boxes, on a screen whose whole
- * problem was that it did not fit the window (`m8-density-measurement.md`). Merging them is worth
- * more than every other tightening on that screen put together.
+ * **This exists because the second line was the largest single term in the landing's height**, and
+ * it is a component rather than four copies of a flex row for the ADR-0143 reason: the wrap rule is
+ * one decision, not one a call site should answer differently. Merging name and context onto one
+ * line (M9 D1) saved 20 px a row where everything fits, and it is kept for exactly those rows.
  *
- * **It is a component rather than four copies of a flex row**, which is the ADR-0143 lesson at row
- * scale: four call sites each free-handing the same layout is how two tables in that epic ended up
- * 371 px and 660 px wide while both looked right alone. The truncation rule in particular is one
- * decision — a row's name must survive and its context may not — and it is not one a call site
- * should be able to answer differently.
+ * **What it replaced was a claim that was never true.** The old docblock said "a row's name must
+ * survive and its context may not" and gave the context `shrink-[3]` to make it so. Flexbox shares an
+ * overflow in proportion to shrink × base size, so the name still lost `W_name / (W_name + 3·W_context)`
+ * of every overflow: measured 2026-10-09, 16 of 17 names clipped at 1024 × 600 and 11 at 1912 × 948,
+ * one losing its final digit. The unit test that guarded the claim asserted a class string, and the
+ * instrument that counted truncation read only the direct parent's `text-overflow`, so it never
+ * saw a name (`docs/specs/row-subject-truncation/m0-measurement.md`).
  *
- * **The context shrinks three times faster than the name**, so a long plan name eats its project
- * and client rather than being clipped itself. `min-w-0` on both is what lets either truncate at
- * all inside a flex line; without it a flex item's minimum is its content and neither gives.
+ * **How it wraps.** The name and its badge are one flex child, the context another, so the break
+ * falls between them first and only then at words inside either. `gap-y-0` is deliberate: a vertical
+ * gap would break the whole-line steps a row's height takes. The context carries an `sr-only` ", "
+ * so a screen reader pauses between the name and the project rather than reading one run-on phrase.
+ * Visual order is DOM order; nothing here may reorder.
  */
 export function RowSubject({ name, context, badge }: RowSubjectProps): React.ReactElement {
   return (
-    <p data-row-subject className="flex min-w-0 items-center gap-2">
-      <span className="min-w-0 shrink truncate">{name}</span>
-      {badge}
+    <p data-row-subject className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
+      <span className="min-w-0">
+        {name}
+        {badge ? <> {badge}</> : null}
+      </span>
       {context ? (
-        <span className="text-muted-foreground min-w-0 shrink-[3] truncate text-sm">{context}</span>
+        <span className="text-muted-foreground min-w-0 text-sm">
+          <span className="sr-only">, </span>
+          {context}
+        </span>
       ) : null}
     </p>
   );
@@ -64,10 +79,23 @@ export interface ListRowProps extends React.HTMLAttributes<HTMLDivElement> {
   primary: React.ReactNode;
   /** Trailing content: a timestamp, a status pill, a row action. */
   trailing?: React.ReactNode;
+  /**
+   * Which edge the trailing block lines up with when the primary wraps: `'center'` (the default)
+   * centres it on the whole primary block, `'baseline'` puts it on the primary's first line, so a
+   * date sits beside the name rather than beside the middle of a tall row.
+   */
+  align?: 'center' | 'baseline';
 }
 
 /**
  * One row of a list: a primary block, an optional trailing block, one rhythm.
+ *
+ * **The trailing block drops beneath the primary when the primary would be left under 7rem**
+ * (`min-w-28` on a primary that otherwise grows to fill). At 320 px the old `shrink-0` trailing text
+ * left a plan name 6 characters (`docs/specs/row-subject-truncation/m0-measurement.md` §4); 7rem is
+ * about 12 characters, and being rem it scales with text size. At or above the 1024 px floor the
+ * narrowest track is 564 px, so it never fires there. This is behaviour, not a prop: every row gets
+ * it, because a call site could only get it wrong (ADR-0184 D4).
  *
  * **Its height is its content plus `py-2`, and it is deliberately not a fixed rhythm.** This
  * docblock claimed the height came from `--row-h` (ADR-0097 CQ-B) until 2026-09-16, and the class
@@ -81,18 +109,20 @@ export interface ListRowProps extends React.HTMLAttributes<HTMLDivElement> {
 export function ListRow({
   primary,
   trailing,
+  align = 'center',
   className,
   ...props
 }: ListRowProps): React.ReactElement {
   return (
     <div
       className={cn(
-        'border-border flex items-center justify-between gap-4 border-b py-2 last:border-b-0',
+        'border-border flex flex-wrap justify-between gap-x-4 gap-y-0 border-b py-2 last:border-b-0',
+        align === 'baseline' ? 'items-baseline' : 'items-center',
         className,
       )}
       {...props}
     >
-      <div className="min-w-0">{primary}</div>
+      <div className="min-w-28 flex-1">{primary}</div>
       {trailing ? <div className="flex shrink-0 items-center gap-3">{trailing}</div> : null}
     </div>
   );
