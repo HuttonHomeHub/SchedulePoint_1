@@ -26,7 +26,7 @@
  * Run with both dev servers up:
  *   PLAYWRIGHT_CHROMIUM_PATH=… node scripts/measure-overview.mjs > /tmp/m0.md
  */
-/* global document, window, getComputedStyle */
+/* global document, window, getComputedStyle, NodeFilter */
 import { mkdirSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
@@ -43,6 +43,10 @@ const WIDTHS = [1646, 1920, 1440, 1280];
 // photographs at. The fold is a property of the condition, not of this harness.
 const FOLD = 1000;
 const SHOT_DIR = process.env.SP_SHOT_DIR ?? '/tmp/landing-shots';
+// docs/specs/landing-two-columns M0: the split matrix below runs on its own when this is set, so the
+// older FC sections (which that epic does not re-judge) are not re-photographed into the record.
+const SPLIT_ONLY = process.env.SP_SPLIT_ONLY === '1';
+const SPLIT_SHOT_DIR = process.env.SP_SPLIT_SHOT_DIR ?? '/tmp/landing-split-shots';
 const tag = String(Date.now());
 const out = [];
 const p = (s = '') => out.push(s);
@@ -255,111 +259,113 @@ async function scanFold(width) {
   return answered;
 }
 
-await scanFold(1646);
-await scanFold(1920);
+if (!SPLIT_ONLY) {
+  await scanFold(1646);
+  await scanFold(1920);
 
-p("## FC-4 — each section's rendered content width");
-p();
-p('| Width | Section | Content width |');
-p('| ----: | ------- | ------------: |');
-for (const w of WIDTHS) {
-  await page.setViewportSize({ width: w, height: FOLD });
+  p("## FC-4 — each section's rendered content width");
+  p();
+  p('| Width | Section | Content width |');
+  p('| ----: | ------- | ------------: |');
+  for (const w of WIDTHS) {
+    await page.setViewportSize({ width: w, height: FOLD });
+    await page.waitForTimeout(300);
+    const widths = await page.evaluate(
+      (sel) =>
+        [...document.querySelectorAll(sel)].map((el) => {
+          const labelled = el.getAttribute('aria-labelledby');
+          const name =
+            el.getAttribute('aria-label') ??
+            (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
+          const cs = getComputedStyle(el);
+          // The CONTENT width, not the border box: padding is chrome, and a section that keeps its box
+          // and loses its padding has been narrowed in the only sense a reader notices.
+          const inner =
+            el.getBoundingClientRect().width -
+            parseFloat(cs.paddingLeft) -
+            parseFloat(cs.paddingRight) -
+            parseFloat(cs.borderLeftWidth) -
+            parseFloat(cs.borderRightWidth);
+          return { name: name.trim(), width: Math.round(inner) };
+        }),
+      REGION_SELECTOR,
+    );
+    if (widths.length === 0) p(`| ${String(w)} | **no named regions found** | — |`);
+    for (const s of widths) p(`| ${String(w)} | ${s.name} | ${String(s.width)} |`);
+  }
+  p();
+  /**
+   * **Section geometry at 1646 — not a falsification condition, an INPUT to one.**
+   *
+   * FC-1 asks whether each answer sits above `y = 1000`, and when one does not, its sanctioned
+   * remedies are "the layout is re-ordered, or a section is cut". Choosing between those needs each
+   * section's HEIGHT, and nothing was measuring it. The answer positions alone let a reader INFER
+   * section boundaries — `y = 1237` for Q5 says the standing section starts somewhere above 1237 and
+   * says nothing about how tall it is — so an ordering was being chosen by arithmetic over guessed
+   * boundaries, which is the reasoning this repository keeps replacing with a number.
+   *
+   * `rows` counts `li` inside the region, because every section here is a list and its height is
+   * very nearly its row count times a row.
+   */
+  p('## Section geometry at 1646 (the input to the ordering decision)');
+  p();
+  p('| Section | top | height | rows | bottom |');
+  p('| ------- | --: | -----: | ---: | -----: |');
+  await page.setViewportSize({ width: 1646, height: FOLD });
   await page.waitForTimeout(300);
-  const widths = await page.evaluate(
+  const geometry = await page.evaluate(
     (sel) =>
       [...document.querySelectorAll(sel)].map((el) => {
         const labelled = el.getAttribute('aria-labelledby');
         const name =
           el.getAttribute('aria-label') ??
           (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
-        const cs = getComputedStyle(el);
-        // The CONTENT width, not the border box: padding is chrome, and a section that keeps its box
-        // and loses its padding has been narrowed in the only sense a reader notices.
-        const inner =
-          el.getBoundingClientRect().width -
-          parseFloat(cs.paddingLeft) -
-          parseFloat(cs.paddingRight) -
-          parseFloat(cs.borderLeftWidth) -
-          parseFloat(cs.borderRightWidth);
-        return { name: name.trim(), width: Math.round(inner) };
+        const r = el.getBoundingClientRect();
+        return {
+          name: name.trim(),
+          top: Math.round(r.top + window.scrollY),
+          height: Math.round(r.height),
+          rows: el.querySelectorAll('li').length,
+        };
       }),
     REGION_SELECTOR,
   );
-  if (widths.length === 0) p(`| ${String(w)} | **no named regions found** | — |`);
-  for (const s of widths) p(`| ${String(w)} | ${s.name} | ${String(s.width)} |`);
-}
-p();
-/**
- * **Section geometry at 1646 — not a falsification condition, an INPUT to one.**
- *
- * FC-1 asks whether each answer sits above `y = 1000`, and when one does not, its sanctioned
- * remedies are "the layout is re-ordered, or a section is cut". Choosing between those needs each
- * section's HEIGHT, and nothing was measuring it. The answer positions alone let a reader INFER
- * section boundaries — `y = 1237` for Q5 says the standing section starts somewhere above 1237 and
- * says nothing about how tall it is — so an ordering was being chosen by arithmetic over guessed
- * boundaries, which is the reasoning this repository keeps replacing with a number.
- *
- * `rows` counts `li` inside the region, because every section here is a list and its height is
- * very nearly its row count times a row.
- */
-p('## Section geometry at 1646 (the input to the ordering decision)');
-p();
-p('| Section | top | height | rows | bottom |');
-p('| ------- | --: | -----: | ---: | -----: |');
-await page.setViewportSize({ width: 1646, height: FOLD });
-await page.waitForTimeout(300);
-const geometry = await page.evaluate(
-  (sel) =>
-    [...document.querySelectorAll(sel)].map((el) => {
-      const labelled = el.getAttribute('aria-labelledby');
-      const name =
-        el.getAttribute('aria-label') ??
-        (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
-      const r = el.getBoundingClientRect();
-      return {
-        name: name.trim(),
-        top: Math.round(r.top + window.scrollY),
-        height: Math.round(r.height),
-        rows: el.querySelectorAll('li').length,
-      };
-    }),
-  REGION_SELECTOR,
-);
-if (geometry.length === 0) {
-  throw new Error(
-    'Section geometry found no named regions — every ordering decision below would be arithmetic over nothing.',
-  );
-}
-for (const g of geometry) {
+  if (geometry.length === 0) {
+    throw new Error(
+      'Section geometry found no named regions — every ordering decision below would be arithmetic over nothing.',
+    );
+  }
+  for (const g of geometry) {
+    p(
+      `| ${g.name} | ${String(g.top)} | ${String(g.height)} | ${String(g.rows)} | ${String(g.top + g.height)} |`,
+    );
+  }
+  p();
   p(
-    `| ${g.name} | ${String(g.top)} | ${String(g.height)} | ${String(g.rows)} | ${String(g.top + g.height)} |`,
+    `Page content runs to **${String(Math.max(...geometry.map((g) => g.top + g.height)))} px**; the fold is ${String(FOLD)}.`,
   );
-}
-p();
-p(
-  `Page content runs to **${String(Math.max(...geometry.map((g) => g.top + g.height)))} px**; the fold is ${String(FOLD)}.`,
-);
-p();
+  p();
 
-/**
- * **Photographs, because every figure above is a number about a screen nobody looked at.**
- *
- * ADR-0099 was opened after four consecutive epics measured this product's layout and each reported
- * a plausible number; what settled it was a screenshot, and `shoot.mjs`'s list did not cover the
- * screen in question. The same hole existed here: this harness scored the landing at four widths
- * for a whole epic and never once produced an image of it. `fullPage` deliberately — the fold is
- * FC-1's subject, so a viewport-cropped shot would hide exactly what the reader scrolls to.
- */
-p('## Photographs');
-p();
-for (const w of [1920, 1646, 1280]) {
-  await page.setViewportSize({ width: w, height: FOLD });
-  await page.waitForTimeout(300);
-  const file = `${SHOT_DIR}/landing-${String(w)}.png`;
-  await page.screenshot({ path: file, fullPage: true });
-  p(`- \`${file}\` — full page at ${String(w)} × ${String(FOLD)}`);
+  /**
+   * **Photographs, because every figure above is a number about a screen nobody looked at.**
+   *
+   * ADR-0099 was opened after four consecutive epics measured this product's layout and each reported
+   * a plausible number; what settled it was a screenshot, and `shoot.mjs`'s list did not cover the
+   * screen in question. The same hole existed here: this harness scored the landing at four widths
+   * for a whole epic and never once produced an image of it. `fullPage` deliberately — the fold is
+   * FC-1's subject, so a viewport-cropped shot would hide exactly what the reader scrolls to.
+   */
+  p('## Photographs');
+  p();
+  for (const w of [1920, 1646, 1280]) {
+    await page.setViewportSize({ width: w, height: FOLD });
+    await page.waitForTimeout(300);
+    const file = `${SHOT_DIR}/landing-${String(w)}.png`;
+    await page.screenshot({ path: file, fullPage: true });
+    p(`- \`${file}\` — full page at ${String(w)} × ${String(FOLD)}`);
+  }
+  p();
 }
-p();
 
 p(`## FC-5 — requests to \`…/overview\` on one landing load`);
 p();
@@ -372,6 +378,225 @@ p('| ---- | -- |');
 for (const [k, v] of Object.entries(ids)) {
   if (Array.isArray(v)) continue;
   p(`| ${k} | \`${String(v)}\` |`);
+}
+
+/**
+ * **The split matrix** (docs/specs/landing-two-columns M0, spec SC-6): for each window and Explorer
+ * state, on the landing AND Members, the grid's width, its tracks, how many distinct tops the named
+ * regions have, how many boxes are wholly visible without scrolling, document overflow, and — the
+ * subject of SC-6 — every text run that wraps to a second line or is ellipsis-truncated.
+ *
+ * It throws, rather than prints, when a cell finds fewer regions than the screen has: the older
+ * sections here only print "no named regions found", which is a verdict about a page nobody
+ * measured.
+ */
+const CELLS = [
+  { w: 1024, h: 600, ex: 'default' },
+  { w: 1272, h: 1800, ex: 'default' },
+  { w: 1280, h: 800, ex: 'default' },
+  { w: 1349, h: 800, ex: 'default' },
+  { w: 1358, h: 636, ex: 'default' },
+  { w: 1440, h: 900, ex: 'default' },
+  { w: 1477, h: 900, ex: 'default' },
+  { w: 1912, h: 948, ex: 'default' },
+  { w: 1912, h: 1114, ex: 'default' },
+  { w: 1280, h: 800, ex: 'folded' },
+  { w: 1280, h: 800, ex: '420' },
+  { w: 1440, h: 900, ex: 'folded' },
+  { w: 1440, h: 900, ex: '420' },
+];
+const LANDING_REGIONS = [
+  'Jump back in',
+  'Needs your attention',
+  'Where the work stands',
+  'Recently changed',
+];
+
+/** Runs in the page. Returns one cell's readings for whichever screen is showing. */
+function readSplit({ sel }) {
+  const nameOf = (el) => {
+    const labelled = el.getAttribute('aria-labelledby');
+    return (
+      el.getAttribute('aria-label') ??
+      (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '')
+    ).trim();
+  };
+  const regions = [...document.querySelectorAll(sel)];
+  const rects = regions.map((el) => ({ name: nameOf(el), r: el.getBoundingClientRect() }));
+  const first = regions[0];
+  // The grid is the parent of the PageGridItem that wraps the first region.
+  let grid = first?.parentElement?.parentElement ?? null;
+  while (grid && getComputedStyle(grid).display !== 'grid') grid = grid.parentElement;
+  const tracks = grid
+    ? getComputedStyle(grid)
+        .gridTemplateColumns.split(' ')
+        .map((t) => Math.round(parseFloat(t)))
+    : [];
+  const main = document.querySelector('main');
+  const lineCount = (node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const tops = new Set([...range.getClientRects()].map((q) => Math.round(q.top / 4)));
+    return tops.size;
+  };
+  const wraps = [];
+  const truncated = [];
+  for (const el of regions) {
+    const region = nameOf(el);
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const seen = new Set();
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const host = n.parentElement;
+      if (!host || seen.has(host) || !(n.textContent ?? '').trim()) continue;
+      seen.add(host);
+      const cs = getComputedStyle(host);
+      if (cs.textOverflow === 'ellipsis' && host.scrollWidth > host.clientWidth) {
+        truncated.push({
+          region,
+          text: (host.textContent ?? '').trim().slice(0, 70),
+          shown: host.clientWidth,
+          needs: host.scrollWidth,
+        });
+      } else if (cs.whiteSpace !== 'nowrap' && lineCount(host) > 1) {
+        wraps.push({ region, text: (host.textContent ?? '').trim().slice(0, 70) });
+      }
+    }
+  }
+  const vh = window.innerHeight;
+  return {
+    regionNames: rects.map((x) => x.name),
+    gridWidth: grid ? Math.round(grid.getBoundingClientRect().width) : null,
+    tracks,
+    tops: [...new Set(rects.map((x) => Math.round(x.r.top)))].length,
+    visibleWhole: rects.filter((x) => x.r.top >= 0 && x.r.bottom <= vh).length,
+    heights: rects.map((x) => `${x.name}=${String(Math.round(x.r.height))}`),
+    mainScroll: main ? `${String(main.scrollHeight)}/${String(main.clientHeight)}` : 'n/a',
+    overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    wraps,
+    truncated,
+  };
+}
+
+async function setExplorer(state) {
+  const value =
+    state === 'folded'
+      ? { collapsed: true, size: 276 }
+      : state === '420'
+        ? { collapsed: false, size: 420 }
+        : { collapsed: false, size: 276 };
+  await page.evaluate(
+    (v) => localStorage.setItem('schedulepoint-explorer', JSON.stringify(v)),
+    value,
+  );
+}
+
+if (process.env.SP_SPLIT_MATRIX !== '0') {
+  mkdirSync(SPLIT_SHOT_DIR, { recursive: true });
+
+  // Long, realistic names so SC-6 is not vacuous: the seeded plans are 30-40 characters, which fits
+  // anywhere. These are the length a real programme carries (a staged works package, a client that
+  // is an authority). Nothing here is absurd; it is the long tail of ordinary data.
+  const longIds = await page.evaluate(async (org) => {
+    const call = async (method, path, body) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method,
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+      });
+      if (!response.ok) throw new Error(`${method} ${path}: ${response.status}`);
+      return (await response.json()).data;
+    };
+    const client = await call('POST', '/clients', {
+      name: 'Northern Ports and Harbours Authority',
+    });
+    const project = await call('POST', `/clients/${client.id}/projects`, {
+      name: 'Estuary Crossing Programme — Western Approaches',
+    });
+    const plan = await call('POST', `/projects/${project.id}/plans`, {
+      name: 'Berth 4 Deepening — Dredging and Revetment Works, Stage 2B',
+      plannedStart: '2026-02-02',
+    });
+    await call('POST', `/plans/${plan.id}/edit-lock`);
+    const a = await call('POST', `/plans/${plan.id}/activities`, {
+      name: 'Dredge channel',
+      code: 'D100',
+      durationDays: 12,
+    });
+    const b = await call('POST', `/plans/${plan.id}/activities`, {
+      name: 'Place revetment',
+      code: 'D110',
+      durationDays: 9,
+    });
+    await call('POST', `/plans/${plan.id}/dependencies`, {
+      predecessorId: a.id,
+      successorId: b.id,
+    });
+    await call('POST', `/plans/${plan.id}/schedule/recalculate`);
+    await call('POST', `/plans/${plan.id}/baselines`, { name: 'Contract award' });
+    return { plan: plan.id };
+  }, slug);
+  await page.goto(`${BASE}/orgs/${slug}/plans/${longIds.plan}`);
+  await page.waitForLoadState('networkidle');
+
+  p('## Split matrix (landing-two-columns M0)');
+  p();
+  p(
+    '| Window | Explorer | Screen | Grid | Tracks | Distinct tops | Boxes wholly visible | main scroll (h/client) | Doc overflow-x | Wrapped runs | Truncated runs |',
+  );
+  p('| --- | --- | --- | --: | --- | --: | --: | --- | --: | --: | --: |');
+  const detail = [];
+  for (const cell of CELLS) {
+    for (const screen of ['landing', 'members']) {
+      await page.setViewportSize({ width: cell.w, height: cell.h });
+      await page.goto(`${BASE}/orgs/${slug}/${screen === 'members' ? 'members' : ''}`);
+      await setExplorer(cell.ex);
+      await page.reload();
+      await page.getByRole('heading', { level: 1 }).waitFor();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(400);
+      const got = await page.evaluate(readSplit, { sel: REGION_SELECTOR });
+      const label = `${String(cell.w)}x${String(cell.h)} ${cell.ex} ${screen}`;
+      if (screen === 'landing') {
+        const missing = LANDING_REGIONS.filter((n) => !got.regionNames.includes(n));
+        if (missing.length > 0 || got.gridWidth === null) {
+          throw new Error(`${label}: landing regions missing ${JSON.stringify(missing)}`);
+        }
+      } else if (got.regionNames.length < 3 || got.gridWidth === null) {
+        throw new Error(`${label}: Members found ${JSON.stringify(got.regionNames)}`);
+      }
+      p(
+        `| ${String(cell.w)} × ${String(cell.h)} | ${cell.ex} | ${screen} | ${String(got.gridWidth)} | ${got.tracks.join(' + ')} | ${String(got.tops)} | ${String(got.visibleWhole)} of ${String(got.regionNames.length)} | ${got.mainScroll} | ${String(got.overflowX)} | ${String(got.wraps.length)} | ${String(got.truncated.length)} |`,
+      );
+      detail.push({ label, ...got });
+      const stem = `${SPLIT_SHOT_DIR}/${screen}-${String(cell.w)}x${String(cell.h)}-${cell.ex}`;
+      await page.screenshot({ path: `${stem}.png` });
+      if (cell.ex === 'default' && cell.h < 1500 && cell.w < 1900 && screen === 'landing') {
+        // The whole page, which `main` scrolls inside: grow the window until nothing scrolls.
+        await page.setViewportSize({ width: cell.w, height: 2400 });
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: `${stem}-tall.png` });
+      }
+    }
+  }
+  p();
+  p('### Wrapped and truncated runs, per cell');
+  p();
+  for (const d of detail) {
+    if (d.wraps.length === 0 && d.truncated.length === 0) continue;
+    p(`- **${d.label}** (grid ${String(d.gridWidth)}, tracks ${d.tracks.join(' + ')})`);
+    for (const w of d.wraps) p(`  - wraps — ${w.region}: ${JSON.stringify(w.text)}`);
+    for (const t of d.truncated) {
+      p(
+        `  - truncated — ${t.region}: ${JSON.stringify(t.text)} (${String(t.shown)} of ${String(t.needs)} px)`,
+      );
+    }
+  }
+  p();
+  p('### Region heights, per cell');
+  p();
+  for (const d of detail) p(`- ${d.label}: ${d.heights.join('; ')}`);
+  p();
 }
 
 console.log(out.join('\n'));

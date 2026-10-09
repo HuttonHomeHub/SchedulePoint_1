@@ -205,4 +205,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0179](0179-the-layout-is-designed-from-a-laptop-up.md)                                         | The layout is designed from a laptop up, and says so below it                              | Accepted           |
 | [0180](0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)                               | The panel takes the body when it cannot show rows                                          | Accepted           |
 | [0181](0181-the-below-md-single-pane-workspace-is-retired.md)                                   | The below-`md` single-pane workspace is retired                                            | Accepted           |
+| [0182](0182-a-page-grid-splits-on-the-width-it-has.md)                                          | A page grid splits on the width it has                                                     | Accepted           |
 | [0183](0183-a-row-grows-with-the-finger-it-holds.md)                                            | A row grows with the finger it holds, and the Gantt is the named exception                 | Accepted           |

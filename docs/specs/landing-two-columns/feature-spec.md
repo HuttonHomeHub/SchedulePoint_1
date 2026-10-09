@@ -18,6 +18,43 @@
 > every viewport breakpoint is blind to the Explorer, which moves the grid's width by up to 386 px at
 > one window size (§3.1). This spec therefore recommends a **container query** instead.
 
+> **Amendment 2026-10-09 — CQ-2 decided: `@6xl` (72rem), for all three consumers.** M0
+> (`m0-measurement.md`) applied SC-6 literally and it could not decide: its second clause (no
+> `project · client` subtitle truncated mid-word) fails at 1912 — the 732 px layout this spec leaves
+> unchanged — so no threshold can satisfy it, and it is **dropped as a threshold test**. The
+> truncation is a pre-existing `RowSubject` defect at every width, filed as `docs/TECH_DEBT.md` #472
+> and not touched here. The clause that does discriminate is the first (a plan name wraps to a second
+> line): it fails at the `@5xl` pair (500/505 px tracks) and passes at 546 and above, so the
+> threshold is **72rem**. Decided by the coordinator under the product owner's delegation ("CQ-2 by
+> the M0 photographs"); he can object. **Wherever this document says `@5xl`, `64rem`, 500 px or 1349,
+> read `@6xl`, `72rem`, 564 px and 1477**, and read the consequences below, which replace §1's
+> outcome table for the landing and Members (Explorer at 276, grid = window − 325):
+>
+> | Window                                                | Landing and Members now                         |
+> | ----------------------------------------------------- | ----------------------------------------------- |
+> | 1024–1476 (incl. 1280, 1366, **1440**)                | **one column**, 699 / 955 / 1033 / 1115 px wide |
+> | 1477 and up (incl. 1646, 1912)                        | two columns, 564 px tracks at the narrowest     |
+> | 1912 (both of the product owner's screens, landscape) | unchanged, 732 px tracks                        |
+>
+> **The honest cost: a 1440 laptop, which `@5xl` would have left in two 546 px columns, now gets one
+> 1115 px column** — the width ADR-0098 narrowed rows away from (ADR-0146:18 names 1104 as rejected).
+> It was accepted because the alternative leaves names wrapping at 500–505 px tracks. The staff
+> console, with no Explorer, splits from a **1200 px** window (grid = window − 48), so it changes in
+> 1024–1199 rather than 1024–1071 (still derived, not measured). The Explorer folded gives two
+> columns again from a 1245 window (grid = window − 93); at 420 a window must reach about 1621. SC-1 asserts four distinct
+> tops at 1280 × 800 and two at 1600 × 1000 (grid 1275, unchanged); SC-3's "1440 × 900 with the
+> Explorer at 420" is one column as before, and its fold case at 1280 is two columns (grid 1187).
+>
+> **Also amended, after review (2026-10-09):** the height caps follow the split too. The grid takes
+> `@6xl:min-h-0 @6xl:flex-1` and a `fill` section card `@6xl:h-full @6xl:min-h-0` with its body
+> `@6xl:min-h-0 @6xl:flex-1 @6xl:overflow-y-auto`, so in one column the four boxes stack at the height
+> their content needs and `<main>` scrolls (the first build capped them at 220 px each in every
+> state). The threshold is therefore written in two files, `page-grid.tsx` and `section-card.tsx`,
+> and `page-grid.structural.test.ts` holds them to one size. **CQ-2 is provisional**: decided by the
+> orchestrator under the product owner's delegation, pending his confirmation. 72rem is a named
+> Tailwind step chosen with margin, not the minimum the evidence allows (the wrap boundary lies
+> between 505 and 546 px tracks, a grid of about 1034–1115 px).
+
 ## 1. Business understanding
 
 ### Problem
@@ -281,12 +318,12 @@ flowchart TD
   the grid is `grid min-h-0 flex-1 grid-cols-1 gap-6 @5xl:grid-cols-2`, with **no public override**.
   No `frameClassName` prop.
 - New prop **`rows?: 'auto' | 'fit-then-fill'`** (default `'auto'`): `'fit-then-fill'` adds
-  `@5xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` to the grid — the top row takes what it needs,
+  `@6xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` to the grid — the top row takes what it needs,
   the bottom row takes the rest, and only where the grid is two columns. Named for what it does to
   the rows, not for the landing; it is the only caller today.
 - `PageGridItem`: `md:col-span-2` → `col-span-full`.
-- Docblock `:49-50` rewritten: "one column until **this grid's own width** reaches 64rem, so a column
-  is never narrower than 500 px whatever the window, the Explorer or the font size; `md` was a
+- Docblock `:49-50` rewritten: "one column until **this grid's own width** reaches 72rem, so a column
+  is never narrower than 564 px whatever the window, the Explorer or the font size; `md` was a
   viewport proxy for that rule and missed it by 28 px at the 1024 floor." The frame adds **no
   landmark and no role** (a plain `div`, like `PageContainer`, `page-container.tsx:45-51`).
 

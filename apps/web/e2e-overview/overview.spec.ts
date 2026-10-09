@@ -122,6 +122,194 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     )
     .toEqual({ count: 4, distinct: 2 });
 
+  // -------------------------------------------------- 5b2. The grid splits on the width IT has
+  //
+  // **A viewport breakpoint cannot pass this block.** The Explorer moves the grid's width by up to
+  // 386 px at one window size, so the same 1280 window must be one column with the Explorer open
+  // and two with it folded, and a 1440 window one column with the Explorer at 420 (ADR-0182,
+  // `docs/specs/landing-two-columns` SC-1, SC-3). Geometry again, never a class name: jsdom lays
+  // out no container query. It stays inside this test for the sign-up rate-limit reason above.
+  const settled = (columns: 1 | 2) =>
+    expect
+      .poll(
+        async () => {
+          const regions = await overviewPage.getByRole('region').all();
+          const boxes = await Promise.all(regions.map((r) => r.boundingBox()));
+          return {
+            count: boxes.length,
+            distinct: new Set(boxes.map((b) => Math.round(b?.y ?? -1))).size,
+            // A column is never narrower than 564 px (72rem less the gap, halved) whatever the
+            // window, Explorer or text size.
+            narrowest: Math.min(...boxes.map((b) => Math.round(b?.width ?? 0))) >= 564,
+          };
+        },
+        { message: `the landing never settled into ${String(columns)} column(s)` },
+      )
+      .toEqual({ count: 4, distinct: columns === 1 ? 4 : 2, narrowest: true });
+
+  /** The regions in DOM order, and the regions Tab walks through, in the order it reaches them. */
+  const readingAndTabOrder = async () => {
+    const regionOf = () =>
+      overviewPage.evaluate(
+        () => document.activeElement?.closest('section')?.getAttribute('aria-labelledby') ?? null,
+      );
+    const dom = await overviewPage.evaluate(() =>
+      [...document.querySelectorAll('main section[aria-labelledby]')].map(
+        (el) =>
+          document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ?? '',
+      ),
+    );
+    const first = overviewPage.locator('main section[aria-labelledby] a').first();
+    await first.focus();
+    const walked: string[] = [];
+    for (let i = 0; i < 80; i += 1) {
+      const id = await regionOf();
+      if (id === null) break;
+      const name = await overviewPage.evaluate(
+        (labelId) => document.getElementById(labelId)?.textContent ?? '',
+        id,
+      );
+      if (walked[walked.length - 1] !== name) walked.push(name);
+      await overviewPage.keyboard.press('Tab');
+    }
+    return { dom, walked };
+  };
+  const expectSameSequence = async (layout: string) => {
+    const { dom, walked } = await readingAndTabOrder();
+    expect(walked.length, `${layout}: Tab never left the first section`).toBeGreaterThan(1);
+    expect(walked, `${layout}: Tab order differs from DOM order`).toEqual(
+      dom.filter((name) => walked.includes(name)),
+    );
+  };
+  const axeBoth = async (layout: string) => {
+    const results = await new AxeBuilder({ page: overviewPage })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      // `region` is a best-practice rule and off by default; both are named so a clean report
+      // cannot mean the rule was never run.
+      .options({
+        rules: {
+          'scrollable-region-focusable': { enabled: true },
+          region: { enabled: true },
+        },
+      })
+      .analyze();
+    // The Explorer's splitter wrapper (`explorer-column.tsx:128-130`, a `contents` panel surface
+    // outside every landmark) fails `region` in every state, one column or two. It is the shell's,
+    // untouched by this change, and is filed as `docs/TECH_DEBT.md` #473 rather than hidden: it is
+    // filtered by that one target, so any OTHER `region` finding still fails.
+    const violations = results.violations
+      .map((v) => ({
+        ...v,
+        nodes: v.nodes.filter((n) => !(v.id === 'region' && n.target.join() === '.contents')),
+      }))
+      .filter((v) => v.nodes.length > 0);
+    expect(violations, `${layout}: axe`).toEqual([]);
+    expect(
+      results.passes.some((r) => r.id === 'scrollable-region-focusable') ||
+        results.inapplicable.some((r) => r.id === 'scrollable-region-focusable'),
+      `${layout}: scrollable-region-focusable was not run`,
+    ).toBe(true);
+  };
+
+  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows. With one
+  // plan every box is shorter than its floor, so a clamp to the floor and a box sized by its content
+  // read the same and the assertion below would pass against the defect it names.
+  await overviewPage.evaluate(async (org) => {
+    const call = async (path: string, body: object) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`POST ${path}: ${String(response.status)}`);
+      return ((await response.json()) as { data: { id: string } }).data;
+    };
+    const client = await call('/clients', { name: 'Filler Estates' });
+    const project = await call(`/clients/${client.id}/projects`, { name: 'Filler Works' });
+    for (let i = 1; i <= 6; i += 1) {
+      await call(`/projects/${project.id}/plans`, {
+        name: `Filler plan ${String(i)}`,
+        plannedStart: '2026-03-02',
+      });
+    }
+  }, orgSlug);
+  await overviewPage.reload();
+  await expect(section(overviewPage, 'Recently changed').getByRole('link').nth(5)).toBeVisible();
+
+  await expectSameSequence('two columns at 1600');
+  await axeBoth('two columns at 1600');
+
+  await overviewPage.setViewportSize({ width: 1280, height: 800 });
+  await settled(1);
+  // **In one column the boxes stack at the height their content needs and `<main>` scrolls.** A cap
+  // that survived the split clamped all four to their 220 px floor, each body scrolling on its own
+  // (ADR-0182, the accessibility review).
+  const stacked = await overviewPage.evaluate(() => {
+    const recent = [...document.querySelectorAll('main section[aria-labelledby]')].find(
+      (el) =>
+        document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ===
+        'Recently changed',
+    );
+    const body = recent?.querySelector('[tabindex="0"]');
+    const main = document.querySelector('main');
+    return {
+      boxHeight: Math.round(recent?.getBoundingClientRect().height ?? 0),
+      bodyClipped: body ? body.scrollHeight - body.clientHeight : -1,
+      mainScrolls: main ? main.scrollHeight > main.clientHeight : false,
+    };
+  });
+  expect(
+    stacked.boxHeight,
+    'the box is clamped to its floor, not sized by its rows',
+  ).toBeGreaterThan(300);
+  expect(stacked.bodyClipped, 'the box body scrolls on its own in one column').toBeLessThanOrEqual(
+    0,
+  );
+  expect(stacked.mainScrolls, 'the page does not scroll').toBe(true);
+  await expectSameSequence('one column at 1280');
+  await axeBoth('one column at 1280');
+
+  // Fold the Explorer: the same window now has the room, and the control that caused the reflow
+  // keeps focus (its counterpart takes it, `explorer-column.tsx:119`).
+  await overviewPage.getByRole('button', { name: 'Hide Project Explorer' }).click();
+  await settled(2);
+  await expect(overviewPage.getByRole('button', { name: 'Show Project Explorer' })).toBeFocused();
+  await expectSameSequence('two columns at 1280, Explorer folded');
+  await overviewPage.getByRole('button', { name: 'Show Project Explorer' }).click();
+  await settled(1);
+  await expect(overviewPage.getByRole('button', { name: 'Hide Project Explorer' })).toBeFocused();
+
+  // WCAG 1.4.4: at 200 % text the rem-based threshold keeps the page one column and nothing
+  // overflows sideways.
+  await overviewPage.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  await settled(1);
+  expect(
+    await overviewPage.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+    'the landing overflows horizontally at 200 % text',
+  ).toBeLessThanOrEqual(0);
+  await overviewPage.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
+
+  // A wider window, but the Explorer dragged to its 420 maximum: one column where two would not fit.
+  await overviewPage.setViewportSize({ width: 1440, height: 900 });
+  await overviewPage.getByRole('separator', { name: 'Resize Project Explorer' }).focus();
+  await overviewPage.keyboard.press('End');
+  await settled(1);
+  await expect(
+    overviewPage.getByRole('separator', { name: 'Resize Project Explorer' }),
+  ).toBeFocused();
+
+  // Leave the page as the next step expects it.
+  await overviewPage.keyboard.press('Home');
+  await overviewPage.setViewportSize({ width: 1600, height: 1000 });
+  await settled(2);
+
   // -------------------------------------------------- 5c. A capped box can be scrolled by keyboard
   //
   // **What this asserts, and what it deliberately does not.** The density work caps each box and

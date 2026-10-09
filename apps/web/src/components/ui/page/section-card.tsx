@@ -54,6 +54,11 @@ export interface SectionCardProps {
   /**
    * Fill the height the parent gives, keeping the heading in place and scrolling the body.
    *
+   * **Only from the `PageGrid` split (`@6xl`, ADR-0182).** In one column the card is sized by its
+   * content and the page scrolls; the caps are container variants resolved against the `PageGrid`
+   * frame, so a `fill` card outside a `PageGrid` never caps. The two files name one size, held by
+   * `page-grid.structural.test.ts`.
+   *
    * **For a section inside a height-constrained grid, and only there.** The parent has to supply a
    * definite height — a `1fr` grid row or a flex child with `min-h-0` — or `h-full` resolves
    * against an `auto` parent and the card simply sizes to its content, which looks exactly like
@@ -169,7 +174,7 @@ export function SectionCard({
         id === undefined
           ? undefined
           : 'focus-visible:ring-ring focus-visible:ring-offset-background scroll-mt-6 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
-        fill === true && 'flex h-full min-h-0 flex-col',
+        fill === true && 'flex flex-col @6xl:h-full @6xl:min-h-0',
         className,
       )}
       {...(id === undefined ? {} : { id, tabIndex: -1 })}
@@ -248,7 +253,10 @@ export function SectionCard({
          * that and the generated stylesheet, and it is **not established**: this form removes the
          * question rather than answering it, and inventing a cause would be a claim nobody checked.
          */
-        className={cn(flush && 'px-6 py-0', fill === true && 'min-h-0 flex-1 overflow-y-auto')}
+        className={cn(
+          flush && 'px-6 py-0',
+          fill === true && '@6xl:min-h-0 @6xl:flex-1 @6xl:overflow-y-auto',
+        )}
         /**
          * **`tabIndex={0}` is what makes a scrollable body operable from the keyboard** (WCAG 2.2
          * §2.1.1, level A). A scroll container that cannot take focus cannot be scrolled by

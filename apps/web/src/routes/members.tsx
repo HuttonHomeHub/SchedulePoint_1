@@ -13,10 +13,10 @@ import { canAdministerInvitations, useOrgRole } from '@/hooks/use-org-role';
  * The organisation members screen (`/orgs/$orgSlug/members`).
  *
  * **On the ADR-0097 archetypes**, converted from a hand-rolled `mx-auto w-full max-w-6xl p-6` frame
- * and a bare `<h1>`. The conversion is width-neutral by construction — `PageContainer`'s default is
- * `max-w-6xl`, the same class the frame spelled out — so it changes the heading tree and the
- * section semantics and nothing a reader measures. `MembersTable`'s existing suite passes through
- * it unchanged, which is the contract the conversion preserves: it queries by role and caption.
+ * and a bare `<h1>`. `PageContainer`'s default is `max-w-screen-2xl` (`page-container.tsx:38`), not the
+ * `max-w-6xl` the old frame spelled out, so the page's measure is the archetype's, not the old
+ * frame's. `MembersTable`'s existing suite passes through the conversion unchanged, which is the
+ * contract it preserves: it queries by role and caption.
  *
  * **The invitations section is omitted entirely for anyone who is not an Org Admin**, rather than
  * rendered empty or shaded — ADR-0082's first omit clause at section granularity. A Planner cannot

@@ -410,6 +410,31 @@ describe('SectionCard fill', () => {
     expect(body?.className).toMatch(/overflow-y-auto/);
   });
 
+  /**
+   * **A filled card caps itself only where its grid is two columns.** In one column the boxes stack
+   * at the height their content needs and `<main>` scrolls; a bare `min-h-0`/`overflow-y-auto`
+   * here clamped four boxes to their 220 px floor in every one-column state (ADR-0182, the
+   * accessibility review). jsdom evaluates no container query, so this pins the classes and the
+   * journey measures the heights.
+   */
+  it('caps and scrolls only from the grid split, never in one column', () => {
+    const { container } = render(
+      <SectionCard title="Recently changed" fill>
+        <p>row</p>
+      </SectionCard>,
+    );
+    const root = container.querySelector('section') as HTMLElement;
+    const body = container.querySelector('[tabindex="0"]') as HTMLElement;
+    for (const el of [root, body]) {
+      const tokens = el.className.split(/\s+/);
+      for (const bare of ['h-full', 'min-h-0', 'flex-1', 'overflow-y-auto']) {
+        expect(tokens, `\`${bare}\` applies in one column`).not.toContain(bare);
+      }
+    }
+    expect(body.className).toMatch(/@6xl:overflow-y-auto/);
+    expect(root.className).toMatch(/@6xl:min-h-0/);
+  });
+
   it('leaves the body alone when it is not filling', () => {
     // The rollback contract: every other screen in the product passes no `fill` and must be
     // byte-identical. A card that acquired a focus stop by default would put an unnamed tab
