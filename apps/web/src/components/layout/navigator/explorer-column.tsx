@@ -14,16 +14,6 @@ import { PanelSurface, Surface } from '@/components/ui/surface';
 import type { UseExpansionState } from '@/features/navigator';
 
 /**
- * The width of the collapsed **spine**.
- *
- * A spine rather than nothing, because a panel that vanishes leaves a reader with no way back —
- * the ADR-0082 "shade, never hide" rule applied to a whole surface. 34 px is enough for one
- * `icon-sm` control with the column's border, and the number is on the sizing scale's arbitrary
- * list for exactly that reason: it is a control's width, not a layout choice.
- */
-const SPINE_WIDTH = 34;
-
-/**
  * The **Project Explorer, docked on the leading edge** (workspace redesign M3-T1).
  *
  * ## Why it moved, and what it replaced
@@ -71,14 +61,19 @@ export function ExplorerColumn({
 
   if (prefs.collapsed) {
     return (
-      <PanelSurface
-        className="flex h-full flex-col items-center py-2"
-        style={{ width: SPINE_WIDTH }}
-      >
+      // **The spine is as wide as what it holds, and no constant says how wide** (dense-row-touch-
+      // targets M3). A spine rather than nothing, because a panel that vanishes leaves a reader with
+      // no way back — the ADR-0082 "shade, never hide" rule applied to a whole surface. `w-fit` takes
+      // its width from the destination links, their wrapper's `p-1` and the column's border: 45 px
+      // with a mouse (36 px links) and 53 px with a finger (44 px links, ADR-0118 D2). It was a
+      // fixed 34, which held 36 px links in a 44 px wrapper and overflowed on both pointers
+      // (`scrollWidth` 39 and 43 against 33, `m0-measurement.md` §3), so the width follows the
+      // pointer through the controls instead of being stated beside them.
+      <PanelSurface className="flex h-full w-fit shrink-0 flex-col items-center py-2">
         <Button
           ref={spineRef}
           variant="ghost"
-          size="icon-sm"
+          size="icon-row"
           aria-label="Show Project Explorer"
           aria-expanded={false}
           onClick={() => {

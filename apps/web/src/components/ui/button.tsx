@@ -81,12 +81,13 @@ const buttonVariants = cva(
         // above and 8 px below, on rows packed edge to edge. The gate of the day asked whether a
         // control's CENTRE hits itself, and a control overflowing its container passes that.
         //
-        // The only consumer meant to stay is `GanttRowMenu` (its rows are `GANTT_ROW_HEIGHT`, 28,
-        // and the product owner's device recorded 0 misses in 10 — ADR-0177 D4). The collapsed
-        // spine (`explorer-column`) still passes it until its width follows the pointer
-        // (`docs/specs/dense-row-touch-targets/`, M3); `control-height.structural.test.ts` lists
-        // the call sites, so a new one is a decision. The tables and the Explorer tree moved to
-        // `icon-row`: their rows follow the pointer, so they grow with the button.
+        // The only consumer is `GanttRowMenu` (its rows are `GANTT_ROW_HEIGHT`, 28, and the product
+        // owner's device recorded 0 misses in 10 — ADR-0177 D4). The collapsed spine
+        // (`explorer-column`) used to pass it and takes `icon-row` now: its width follows what it
+        // holds, so it grows with the button (`docs/specs/dense-row-touch-targets/`, M3).
+        // `control-height.structural.test.ts` lists the call sites, so a new one is a decision. The
+        // tables, the Explorer tree and the spine take `icon-row`: their containers follow the
+        // pointer, so they grow with the button.
         'icon-sm': 'size-7',
       },
     },
