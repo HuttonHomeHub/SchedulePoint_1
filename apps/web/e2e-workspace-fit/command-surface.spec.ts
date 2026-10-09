@@ -1594,6 +1594,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       await page.setViewportSize(viewport);
       await page.goto(`/orgs/${orgSlugForSweep}/clients`);
       await expect(page.locator('main table')).toBeVisible();
+      // The table paints before its rows' menus do: sweeping on the table alone found "no controls"
+      // on a slow run. Wait for the first row menu, which is what this test measures.
+      await expect(page.locator('main table [aria-haspopup="menu"]').first()).toBeVisible();
       const targets = await sweep(page, 'main table', undefined, false, '[aria-haspopup="menu"]');
       expect(
         targets.length,
