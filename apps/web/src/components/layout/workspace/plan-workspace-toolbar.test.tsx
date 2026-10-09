@@ -754,9 +754,9 @@ describe('the short-body swap', () => {
     resizeBody(590);
     expand();
     expect(canvasRow()).not.toBeNull();
-    resizeBody(610);
+    resizeBody(622);
     expect(canvasRow()).not.toBeNull();
-    resizeBody(624);
+    resizeBody(636);
     expect(canvasRow()).toBeNull();
   });
 
