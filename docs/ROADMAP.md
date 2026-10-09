@@ -774,6 +774,12 @@ discriminators. Each becomes a spec/plan before build:
   buttons in the seven tables, the Explorer tree's rows and the collapsed spine are 44 px; the Gantt stays
   28 px by named exception, with device evidence and a revisit trigger.
 
+- **The page grid splits on the width it has.** **Approved 2026-10-08; built as `landing-two-columns`**
+  ([ADR-0182](adr/0182-a-page-grid-splits-on-the-width-it-has.md); spec and plan at
+  [`docs/specs/landing-two-columns/`](specs/landing-two-columns/)). The organisation landing, Members and
+  the staff console show one column until the page itself is 72rem wide, so the Explorer, the window and
+  the text size all count; a 1440 laptop now gets one wide column, and a 1912 monitor is unchanged.
+
 - **Notifications.** **Designed, not built — deferred on a named trigger** ([ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md); spec and plan
   complete at [`docs/specs/notifications/`](specs/notifications/)). The product tells you things only
   while you are looking at the thing it is telling you about: a data-date move, a shared calendar's
