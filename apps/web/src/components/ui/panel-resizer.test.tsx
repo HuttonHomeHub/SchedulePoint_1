@@ -21,6 +21,16 @@ function renderResizer(over: Partial<React.ComponentProps<typeof PanelResizer>> 
 }
 
 describe('PanelResizer', () => {
+  it.each(['vertical', 'horizontal'] as const)(
+    'a %s divider takes the touch gesture itself (touch-action: none), or the browser cancels the drag',
+    (orientation) => {
+      const { separator } = renderResizer({ orientation });
+      // jsdom computes no real `touch-action`, so this pins the class on the element that owns the pointer
+      // handlers; the Gantt journey reads the computed value in Chromium.
+      expect(separator).toHaveClass('touch-none');
+    },
+  );
+
   it('a vertical splitter exposes width and grows/shrinks with Right/Left, jumps with Home/End', () => {
     const { separator, onResize } = renderResizer();
     expect(separator).toHaveAttribute('aria-orientation', 'vertical');

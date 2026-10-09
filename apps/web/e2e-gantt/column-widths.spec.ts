@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page } from '@playwright/test';
+import { type CDPSession, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
 
@@ -374,6 +374,69 @@ test('under a coarse pointer there are no edges, and the typed field is a 44 px 
     await openView(page);
     const box = await field(page, 'Code width').boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
+  } finally {
+    await page.close();
+  }
+});
+
+test('a finger drag of the Grid width divider follows the finger to the end', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  // A context of its own with `hasTouch` (see the coarse case above), driven with CDP touch events
+  // because `touch-action` is only consulted for a real touch gesture (TECH_DEBT #439).
+  const page = await browser.newPage({ viewport: { width: 1646, height: 1097 }, hasTouch: true });
+  try {
+    await ganttPlan(page);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(
+      pointer,
+      'this context did not report a coarse pointer — a mouse drag proves nothing',
+    ).toBe('coarse');
+
+    const separator = page.getByRole('separator', { name: 'Grid width' });
+    await expect(separator).toHaveCSS('touch-action', 'none');
+
+    // Events are counted on the separator itself, where the drag's handlers live.
+    await separator.evaluate((el) => {
+      const seen = { move: 0, cancel: 0 };
+      (window as unknown as { __divider: typeof seen }).__divider = seen;
+      el.addEventListener('pointermove', () => (seen.move += 1));
+      el.addEventListener('pointercancel', () => (seen.cancel += 1));
+    });
+
+    const box = await separator.boundingBox();
+    if (box === null) throw new Error('no box for the Grid width divider');
+    const start = Number(await separator.getAttribute('aria-valuenow'));
+    const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp: CDPSession = await page.context().newCDPSession(page);
+    const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', x?: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: x === undefined ? [] : [{ x, y: from.y }],
+      });
+
+    // 24 moves of 4 px: far past the three the browser allowed before it took the gesture over.
+    await send('touchStart', from.x);
+    for (let step = 1; step <= 24; step += 1) {
+      await send('touchMove', from.x + step * 4);
+      await page.waitForTimeout(16);
+    }
+    await send('touchEnd');
+
+    const seen = await page.evaluate(
+      () => (window as unknown as { __divider: { move: number; cancel: number } }).__divider,
+    );
+    expect(seen.cancel, 'the browser took the gesture over').toBe(0);
+    expect(seen.move).toBeGreaterThanOrEqual(20);
+    // The width kept following the finger: 96 px travelled, minus the chart guard's room, so assert
+    // well past the 16 px a cancelled drag managed (m0-measurement: 584 to 598).
+    await expect
+      .poll(async () => Number(await separator.getAttribute('aria-valuenow')) - start)
+      .toBeGreaterThanOrEqual(80);
+    await chartMeetsGrid(page, 'after a finger drag of the Grid width divider');
   } finally {
     await page.close();
   }
