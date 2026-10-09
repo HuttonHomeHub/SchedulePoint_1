@@ -7,7 +7,7 @@
 ## Breakdown
 
 The product owner's answers are **gates**: a milestone does not start until its gate is closed. CQ-1, CQ-2, CQ-3 and
-the free-space requirement were decided on 2026-10-09. CQ-4 is still open.
+the free-space requirement were decided on 2026-10-09, and CQ-4 later the same day. **No product gate is open.**
 
 ```mermaid
 flowchart LR
@@ -23,7 +23,7 @@ flowchart LR
   QF[[Free-space requirement]] --> M5[M5 Promotion ladder]
   M3 --> M5
   M4 --> M5
-  Q4[[CQ-4 open: org switcher]] --> M6V5[M6 V5 only]
+  Q4[[CQ-4 decided: org ghost button + menu]] --> M6V5[M6 V5: org switcher]
   M5 --> M6[M6 Visual brief V1-V7]
   M6 --> M7[M7 Close-out: ADR, docs, counts]
 ```
@@ -50,7 +50,8 @@ flowchart LR
 
 ### Milestone M0: Measure and verify the premises (ships dark)
 
-**Outcome:** `docs/specs/toolbar-redesign/m0-measurement.md`, `promotion-widths.json` and a go/no-go.
+**Outcome:** `docs/specs/toolbar-redesign/m0-measurement.md`, `promotion-widths.fine.json`,
+`promotion-widths.coarse.json` and a go/no-go.
 **Entry point:** `Ships dark: a measurement record and a harness spec.`
 **Journey:** none (a harness, ADR-0081 §3).
 
@@ -67,7 +68,9 @@ flowchart LR
   - 1280 × 600 and 1366 × 768 (short but wide, CQ-3);
   - 2560 × 1440;
   - #471's 640 × 480, 640 × 360, 640 × 300, 320 × 720 and 320 × 256;
-  - 1280 × 800 with `html { font-size: 200% }`.
+  - 1280 × 800 and 2560 × 1440 at text-only 200 %, set as the browser's **default font size** (Chromium DevTools
+    protocol `Page.setFontSizes`, standard 32). A CSS `html { font-size }` does not move rem media queries, so it
+    would not exercise the stages.
 
   Every cell on **both pointers**.
 
@@ -81,7 +84,10 @@ flowchart LR
   - per menu: item names, and the panel height at 1024 × 600 (View must reach SC-13);
   - any group seam at the start of a line (SC-12);
   - the minimap's box and its `bottom` offset (`TsldMinimap.tsx:400`), and when `minimapRoom` turns false
-    (`TsldCanvas.tsx:889`, `:2685`).
+    (`TsldCanvas.tsx:889`, `:2685`);
+  - the stage's horizontal scrollbar and the ruler's rects, for the corner column's geometry rule;
+  - **coarse:** the cluster at 44 px and the C1 presets' width;
+  - **search-field growth:** its width at each stage, and the 2560 grown width.
 - **Development steps:**
   1. Write the spec and run it.
   2. Write the record with **§0 "what contradicts the spec"** first.
@@ -92,16 +98,20 @@ flowchart LR
    in Panels, is each row one line at 1024 × 600 in **every** stress state?
    **Exit rule:** if any row misses by less than 20 px in any state, **stop and ask** rather than compacting a
    fourth item.
-2. **`--container-roomy`:** the smallest deck width at which every row is one line with every label visible.
+2. **`--container-roomy`:** derived from the first promotion stage (the deck width at `PROMOTE_80` minus insets).
+   Confirm that every row is one line with every label visible at that width; if it is not, stop and ask.
 3. **The Gantt route for Float paths:** does `GanttRowMenu.tsx` mirror the selection bar's object actions? Is
    `selection-actions.tsx:206` ("the Gantt renders no selection bar") still true? Decide D-c.
 4. **Tailwind v4:** confirm the `@container/deck` and `@max-roomy/deck:` syntax and the `--container-*` theme
    token in the installed version. Register a dependency claim if a docblock will assert it.
-5. **`promotion-widths.json`:**
-   - measure every ladder entry's **promoted form**, using a local, uncommitted run in which every entry is set to
-     the 1280 stage at a 4000 px viewport;
-   - run `computePromotionStages` (pure, committed with M5) to propose each entry's stage;
-   - record the header's free width at 1280 (H-P1).
+5. **Provisional `promotion-widths.{fine,coarse}.json`:**
+   - measure every ladder entry's **promoted form** on both pointers, using a local, uncommitted run with every
+     entry set to `at: 'always'` at 3840 × 1440;
+   - compute widths under the label state that applies at each stage;
+   - propose each entry's stage with the skip-fill rule (spec §4.11).
+
+   These JSON files are re-taken after M4, before M5, and checked by CI from then on (SC-18 (a)).
+
 6. **Suite impact:** every test that locates a moved or promotable control by name, with `file:line`.
 7. Replace every estimate in the spec with a reading.
 
@@ -120,7 +130,8 @@ only, below `--container-roomy`. One resolver and one helper decide every label.
 - the three compact items keep their names, show their tooltips on hover and focus, and Escape dismisses them;
 - 2.5.3 label-in-name;
 - no leading seam;
-- a 1280 × 800 text-only 200 % cell where every control is hit-testable.
+- 1280 × 800 and 2560 × 1440 text-only 200 % cells (browser default font size via `Page.setFontSizes`, not CSS)
+  where every control is hit-testable.
 
 ##### Task M1-T1: the stale lines first (≈ one PR, docs and comments only)
 
@@ -164,7 +175,11 @@ only, below `--container-roomy`. One resolver and one helper decide every label.
     (D-l); `print` is dropped;
   - `--container-roomy` goes in `@theme`, with a docblock citing M0;
   - the `'roomy'` items always mount a `description`-purpose tooltip, so Baseline overlay and Comments gain a
-    `description`.
+    `description`, and Settings' "Schedule settings" (a near name-echo) is replaced by "Calendar, critical path,
+    progress, levelling and earned value";
+  - `ToolbarButton.tsx`: delete the native `title` (`:105`) and the tooltip purpose derived from `!showLabel`
+    (`:131`), leaving one tooltip path;
+  - correct `selection-actions.tsx:934`, which cites `ICON_ONLY`.
 - **Complexity:** L
 - **Risks:**
   - A custom trigger made `'roomy'` without a tooltip: a structural test asserts every `'roomy'` item is a plain
@@ -200,9 +215,11 @@ Gantt row menu "Float paths"; "View" at 1024 × 600.
 
 ##### M2-T1: the identity row (≈ one PR)
 
-- **Description:** `row: 'identity'`, rendered by `Toolbar` in the identity portal.
-  - Summary: `aria-haspopup="dialog"`, `aria-expanded`, the name "Plan summary", a tooltip, focus return.
-  - Edit plan becomes "Edit plan details". The voice-command change goes in the changeset.
+- **Description:** registry row `identity`, rendered by a `Toolbar` named "Plan details" (its own Tab stop) in the
+  identity portal. Both items take taxonomy group `object`.
+  - Summary: `aria-haspopup="dialog"`, `aria-expanded`, the name "Plan summary", a purpose tooltip, focus return.
+  - Edit plan becomes "Edit plan details", gated on `model.canWrite`, with a purpose tooltip. The voice-command
+    change goes in the changeset.
 - **Complexity:** M
 - **Testing:** `pen-status.spec.ts` (the header is one line at 1024).
 
@@ -211,7 +228,11 @@ Gantt row menu "Float paths"; "View" at 1024 × 600.
 - **Description:**
   - a `DECK_GROUPS` remap: Panels is `{ row: 'look', members: ['help'] }` (ADR-0031 group 7, now empty), and `help`
     is removed from Plan;
-  - Legend, Resource view and Comments are registered in `help`;
+  - Legend, Resource view and Comments are registered in `help`. For Legend and Resource view this is the
+    **migration of `LensToggle.promotion` to the generalised `PromotableEntry` with `at: 'always'`** (spec §4.11):
+    `promotedLensItems`' hard-coded `group: 'lens'` and `atLeast` (`:437`, `:440`) become per-record. Baseline
+    overlay keeps `group: 'lens'`;
+  - the View fieldset id `'panels'` and the deck group "Panels" coexist until M4 deletes the fieldset;
   - one `ml-auto` on Panels and one on Plan.
 - **Complexity:** M
 - **Testing:**
@@ -271,9 +292,9 @@ band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 �
 
 ### Milestone M4: The diagram-corner cluster (gate: CQ-1, decided yes)
 
-**Outcome:** a "Diagram view" toolbar (Zoom out, Zoom in, Fit to plan, Minimap) at the stage's bottom-right, with
+**Outcome:** a "Diagram viewport" toolbar (Zoom out, Zoom in, Fit to plan, Minimap) at the stage's bottom-right, with
 the minimap stacking above it. Gone from the deck and from View ▾.
-**Entry point:** the Diagram view's "Diagram view" toolbar, then "Zoom in".
+**Entry point:** the Diagram view's "Diagram viewport" toolbar, then "Zoom in".
 **Journey:**
 
 - press Zoom in and see the scale change;
@@ -290,8 +311,14 @@ the minimap stacking above it. Gone from the deck and from View ▾.
 ##### M4-T1: design note (ui-architect) and cluster (≈ one PR)
 
 - **Description:**
-  - `row: 'canvas'` in the same registry; Minimap reaches it through a promotion target like `promotedLensItems()`;
+  - registry row `canvas` in the same registry; Minimap reaches it as a `PromotableEntry` with `at: 'always'` and
+    the `canvas` registry row;
+  - **the context:** `TsldCanvas` publishes a positioned slot node for its bottom-right column (the
+    `useChromeSlot` / `ChromePortal` pattern), and `plan-workspace-toolbar.tsx`, where `TsldToolbarContext` is built,
+    portals the `Toolbar` into it, so the context is derived once;
   - `Toolbar` renders that slice; `toolbarCardVariants`; `aria-keyshortcuts` on each item;
+  - geometry: the column sits above the horizontal scrollbar and below the ruler, and covers neither, including
+    with C1 promoted (M5); the reveal margin uses the column's live rect;
   - one positioned column, cluster fixed at the bottom and minimap above with `gap-2` (spec §4.7);
   - `minimapRoom` counts the cluster;
   - the reveal margin.
@@ -309,25 +336,36 @@ the minimap stacking above it. Gone from the deck and from View ▾.
 
 ### Milestone M5: Free space is used, the promotion ladder (gate: the product owner's requirement)
 
-**Outcome:** at 1280, 1440, 1912 and 2560 each row (LOOK, DO, header, corner) fills its spare width with promoted
-menu commands, in the spec's ladder order (§4.11). Promoted entries leave their menus.
-**Entry point:** the "Plan commands" toolbar at 1440 × 900. "Critical", "Late-start overlay", "Baselines…",
-"Print…" and "Share…" are on the bar there (if M0 confirms the stages).
-**Journey:** a new `command-surface.spec.ts` case per stage (SC-17, SC-18):
+**Outcome:** at 1280, 1440, 1912 and 2560, on both pointers, the LOOK and DO deck rows and the corner cluster fill
+their spare width with promoted menu commands in the spec's ladder order (§4.11). The search field grows at 2560.
+Promoted entries leave their menus, and **no menu ever empties** (each has an anchor). The header has no ladder this
+epic (D-b).
+**Entry point:** the "Plan commands" toolbar at 1440 × 900, where "Critical only", "Late-start overlay",
+"Health check" and "Share…" are on the bar (if M0 confirms the stages).
+**Journey:** new `command-surface.spec.ts` cases per stage and pointer:
 
-- each row's unused width is ≤ 15 % unless its ladder is exhausted;
-- no unpromoted entry's committed width fits the row's free gap;
-- each promoted item sits immediately after its source trigger, inside the same group;
-- its source menu no longer lists it, and an emptied menu's trigger is hidden;
+- SC-17: each deck row's unused width is ≤ 15 % or no remaining entry fits;
+- SC-18 (a): at 3840 × 1440, every promoted form's width matches `promotion-widths.<pointer>.json` within 2 px;
+- SC-18 (b): no unpromoted entry fits the free gap, **verified red** by raising one `at` (ADR-0110);
+- each promoted item sits immediately after its source trigger, inside the same deck group, with group names
+  unchanged;
+- its source menu no longer lists it, and every source trigger is present at every stage;
 - the roving order (ArrowRight, Home, End) matches visual order;
-- demoting under focus (resize) hands focus off with "Moved into the ‹menu› menu.";
-- **SC-18 is verified red** by raising one entry's stage (ADR-0110).
+- **E-1:** promote while the source menu is open with focus on that entry: the menu closes and focus lands on the
+  promoted button, announced;
+- **E-2:** demote while focused on the promoted item: focus goes to the source trigger with "Moved into the ‹menu›
+  menu.", also at 200 % text;
+- **E-3:** the trigger is never removed as the window widens;
+- Critical only and Filter ▾'s pressed state agree (both read `ctx.filterAttrs`);
+- the dock toggles' `aria-pressed` follows a dock closed from its own close button;
+- the kind presets arm their tool (Link, Add) exactly as the menu pick does, and are pen-gated with the same
+  reason.
 
 #### Feature: declared promotion
 
 > **Complexity:** XL (it turns six menus' promotable entries into declared lists).
-> **Dependencies:** M3 and M4 (the free widths depend on the settled layout); `promotion-widths.json` from M0, re-run
-> after M4.
+> **Dependencies:** M3 and M4 (the free widths depend on the settled layout); the M0 harness re-run after M4
+> to produce the committed `promotion-widths.{fine,coarse}.json`.
 > **Risks:**
 >
 > - A width mechanism returning, which is the ADR-0109 defect class. Mitigation: viewport stages only, committed
@@ -339,23 +377,35 @@ menu commands, in the spec's ladder order (§4.11). Promoted entries leave their
 ##### M5-T1: the manifest and the stage model, before any menu changes (≈ one PR, ships dark)
 
 - **Description:**
-  - commit `command-manifest.json` (every registry id, header control, selection-bar item and menu item name);
-  - `PROMOTE_*` constants in `lib/breakpoints.ts`, pinned in `breakpoints.test.ts`;
-  - `usePromotionStage()`;
-  - the pure `computePromotionStages`, with unit tests;
-  - SC-19's unit test, green against today (nothing promoted).
+  - `command-manifest.json`, produced by `pnpm --filter @repo/web manifest:commands`: every registry id, header
+    control, selection-bar item and menu item name, each with its flag condition (`EARNED_VALUE_ENABLED`,
+    `RESOURCE_CURVES_ENABLED`, …) and view scope (Diagram-only lenses);
+  - `PROMOTE_80` / `_90` / `_119_5` / `_160` (rem) in `lib/breakpoints.ts`, pinned in `breakpoints.test.ts`;
+  - `usePromotionStage()`, choosing the fine or coarse stage via `useCoarsePointer()`;
+  - the pure `computePromotionStages`, with unit tests (skip-fill, monotonic, never takes an anchor);
+  - `PromotableEntry` and `isPromoted`, generalising `LensToggle.promotion`. `defineToolbar` validates `from` and
+    asserts every source menu has an anchor;
+  - the structural test that a derived item is never `'roomy'` or `'never'`;
+  - the assertion that the deck at the first stage is ≥ `--container-roomy`;
+  - SC-19's **render-level** jsdom test (stubbed `matchMedia` and pointer, every source menu opened, bar xor menu),
+    green against today;
+  - SC-18 (c)'s unit test (`at` equals `computePromotionStages(json)`).
 
 ##### M5-T2 … T6: one menu per PR
 
-In ladder order of value: Filter (L1/L8/L11), Analysis (P1/P3/P5/P7/P8), Share & export (P2/P6/P11), View (L2–L7,
-L9, L10, and C1 into the corner), Link and Add (P4, P9, P10), and Account (H-P1). Each PR:
+In ladder order: Filter (L1, L6; anchor Has constraint), Analysis (P1, P6–P8; anchor Baselines…), Share & export
+(P4, P9; anchor the formats and Print), View (L2–L5; C1 into the corner), and Link and Add (P2, P3, P5, as kind
+presets; anchors Stop linking, Task and Level of effort). Each PR:
 
-- turns that menu's promotable entries into a declared list with `promotion.at` taken from the computed stages;
-- renders promoted forms (button, toggle or segment with `segmentLabels`);
+- declares that menu's promotable entries as `PromotableEntry` records (everything else in the menu stays JSX);
+- renders the derived items: toggles, flat pressed sets named with their set ("Colour by: Total float"), and kind
+  presets that arm their tool;
 - omits promoted entries from the menu;
 - adds a `lostReason` for each entry;
-- updates the journey and the manifest test;
+- updates the journeys and the manifest;
 - changeset patch or minor.
+
+The search-field growth at 2560 lands with the View PR.
 
 ##### M5-T7: re-measure (same as the last PR)
 
@@ -370,13 +420,24 @@ L9, L10, and C1 into the corner), Link and Add (P4, P9, P10), and Account (H-P1)
 **Entry point:** the band on any plan. V5 is the header on every screen.
 **Journey:** `command-surface.spec.ts` keeps SC-10, SC-12 and SC-17 green after each item.
 
-- **V1** Row identity: the LOOK and DO rows distinguishable at a glance.
+- **V1** Row identity: a quiet leading row mark only. No stripes, no tint band, no new accent colour.
 - **V2** Group pills, which also guard SC-12 (no leading seam).
-- **V3** The shaded-control audit: ADR-0082 shading is kept; the treatment is quieter, and the Author group reads as
-  one locked unit led by the pen.
-- **V4** Share & export as the row's secondary-filled closing action.
-- **V5** The organisation switcher as a ghost button opening a menu. **Gate: CQ-4.** Accessibility-reviewer
-  before release, carrying over `OrgSwitcher.tsx:45-57`.
+- **V3** The shaded-control audit: ADR-0082 shading is kept; the treatment is quieter, with text ≥ 4.5:1 signed off
+  by the accessibility-reviewer, and the Author group reads as one locked unit led by the pen.
+- **V4** Share & export as the row's secondary-filled closing action, with Share… promoted beside it.
+- **V5** The organisation switcher as a ghost button opening a menu (**CQ-4 decided**), to spec §4.12:
+  - the visible current name;
+  - the name "Active organisation: ‹Name›";
+  - `menuitemradio` with `aria-checked`;
+  - a single organisation shown as a plain label (ADR-0104);
+  - hidden until organisations exist;
+  - truncation with a tooltip;
+  - `--control-h` sizing and a sizing token instead of `max-w-[12rem]`;
+  - the unused `title` prop deleted;
+  - **type-ahead added to `Menu`** under an ADR-0111 review before release, or the arrow/Home/End-only limit stated
+    in the PR;
+  - every consumer and test listed in spec §4.12 updated. The rationale it carries over is `OrgSwitcher.tsx:7-10`
+    and `:33-36`.
 - **V6** Covered by M2-T3.
 - **V7** Balance, covered by M5.
 
@@ -388,7 +449,8 @@ L9, L10, and C1 into the corner), Link and Add (P4, P9, P10), and Account (H-P1)
    ADR-0091 (D3), ADR-0100 and ADR-0179 (D2 use), and record the completion note on ADR-0090 D6 and ADR-0091 D3a.
 2. **Update `CLAUDE.md` §1's counts (`pnpm check:counts`)**: the ADR count, the web source file count, and any suite
    count.
-3. `DESIGN_SYSTEM.md`: R1–R9, `--container-roomy`, the `PROMOTE_*` stages, and the amended `:225` rule.
+3. `DESIGN_SYSTEM.md`: R1–R9, `--container-roomy` (derived from the first stage), the rem `PROMOTE_*` stages, the
+   per-pointer widths, and the amended `:225` rule.
    `UX_STANDARDS.md`: R5 and R9.
 4. `TECH_DEBT.md`: close #471's band half; a new row for its second paragraph (D-j); close #193 with the overturn
    noted.
@@ -399,14 +461,18 @@ L9, L10, and C1 into the corner), Link and Add (P4, P9, P10), and Account (H-P1)
 
 **Every milestone from M2 on, and close-out: the promotion checks.**
 
-- [ ] **No spare width while something promotable sits in a menu**: SC-18's journey green at 1280, 1440, 1912 and
-      2560, verified red once.
-- [ ] Unused width per row ≤ 15 % or the ladder is exhausted (SC-17). The table is attached.
+- [ ] **No spare width while something promotable sits in a menu**: SC-18 (a), (b) and (c) green at 1280, 1440,
+      1912 and 2560 **on both pointers**, (b) verified red once.
+- [ ] Unused width per deck row ≤ 15 %, or no remaining entry fits after the search field grows (SC-17). The table
+      is attached.
 - [ ] **Roving order and keyboard**: ArrowRight, Home and End visit promoted items in visual order. One Tab stop
-      per toolbar. Group names (`View`, `Find`, `Panels`, `Author`, `Plan`) unchanged as items promote.
-- [ ] A promoted item is absent from its menu, not shaded. No duplicate accessible names in the tree. An emptied
-      menu's trigger is hidden.
-- [ ] Demotion under focus hands off with its `lostReason` (ADR-0135).
+      per toolbar. Group names (`View`, `Find`, `Panels`, `Author`, `Plan`) unchanged as items promote. No nested
+      `role="group"` (flat pressed sets).
+- [ ] A promoted item is absent from its menu, not shaded. No duplicate accessible names in the tree. **Every source
+      trigger stays present at every stage** (anchors).
+- [ ] Focus cases E-1, E-2 and E-3 journey-tested, E-2 also at 200 % text. Demotion hands focus to the source
+      trigger with its `lostReason` (ADR-0135).
+- [ ] Promoted items are labelled `'always'`; their tooltip names the source menu; flat-set names include the set.
 - [ ] **The "no tool is lost" manifest (SC-14, SC-19) covers both states**: every entry resolves on the bar xor in
       its menu at every stage.
 
@@ -473,4 +539,6 @@ journeys run locally before pushing.
 | Keyboard regressions in `Deck` scrolling, the cluster and the organisation menu | med        | high   | ADR-0111 reviews before release; journeys                                                       |
 | Text-only 200 % overflows rows                                                  | med        | low    | `flex-wrap` safety valve (R1), the SC-7 cell                                                    |
 | The cluster covers activities                                                   | med        | low    | The SC-15 reveal margin and its journey                                                         |
-| The CQ-4 answer is no                                                           | med        | low    | V5 becomes restyling the native select only                                                     |
+| The organisation menu loses the native select's type-ahead                      | med        | med    | Add type-ahead to `Menu` under an ADR-0111 review, or state the limit (V5)                      |
+| Promoted widths drift from the committed JSON                                   | med        | med    | SC-18 (a): CI re-measures at 3840 × 1440 on both pointers                                       |
+| Demotion under focus at 200 % text                                              | high       | med    | E-2's journey at 200 %; the source trigger is always present                                    |

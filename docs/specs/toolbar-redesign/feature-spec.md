@@ -100,8 +100,8 @@ supported hardware: **a 1280 × 800 laptop at 200 % zoom is a 640 × 400 viewpor
   Zoom, Fit and Minimap are in the diagram's corner. Baseline overlay, Comments and Settings show only their
   icons. Canvas about 362 px.
 
-- **Monitor (1912):** the same two lines, every command labelled, Panels and Plan on the trailing edge. No row more
-  than 25 % empty.
+- **Monitor (1912):** the same two lines, every command labelled, Panels and Plan on the trailing edge. Menu commands
+  promoted into the spare width; no row more than 15 % empty, or nothing promotable left (SC-17).
 - **Surface tablet posture:** the same layout at 44 px. At most three deck lines at 1024.
 - **Below 1024 wide:** one deck line that scrolls sideways, with a visible edge cue. In very short windows the
   band scrolls away with the page.
@@ -119,27 +119,27 @@ supported hardware: **a 1280 × 800 laptop at 200 % zoom is a 640 × 400 viewpor
 
 Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:564-577` does.
 
-| ID    | Criterion                                                                                                                                                                                                                                                              | Today                          | Target                                                         |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------- |
-| SC-1  | 1024 × 600: deck lines; canvas                                                                                                                                                                                                                                         | 4; 274                         | **2; ≥ 350**                                                   |
-| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080: each declared row is one line (measured, not forced)                                                                                                                                                                              | holds except LOOK at 1440 (m4) | holds                                                          |
-| SC-3  | Coarse 1024 × 600 / 1440 × 900 / 1912 × 1080: deck lines                                                                                                                                                                                                               | 4 / 3 / 2 (m4)                 | **≤ 3 / 2 / 2**                                                |
-| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                                                                                                             | holds                          | holds                                                          |
-| SC-5  | Below 1024: at 640 × 360 and 320 × 256 the band is ≤ 40 % of viewport height **or** scrolls away vertically; Expand and Recalculate are hit-testable at 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256                                                          | 99 % / 100 %; unreachable      | met                                                            |
-| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                                                                                                                    | 0                              | ≥ 1                                                            |
-| SC-7  | 1280 × 800 with text-only 200 % (`html { font-size: 200% }`): every deck control hit-testable; rows may wrap                                                                                                                                                           | unmeasured                     | holds                                                          |
-| SC-8  | One label decider: `Deck.tsx` and `Toolbar.tsx` hold no label logic of their own; every component calls the one resolver and class helper                                                                                                                              | 3 deciders, 4 implementations  | 1 and 1                                                        |
-| SC-9  | `BAND_MAX_PX` holds (`command-surface.spec.ts:535`); a 1024 bar is added at M0's reading                                                                                                                                                                               | ≤ 145                          | ≤ 145, plus a 1024 bar                                         |
-| SC-10 | One label size and one control height per surface (`command-surface.spec.ts:500-504`)                                                                                                                                                                                  | holds                          | holds                                                          |
-| SC-11 | Superseded by SC-17 (≤ 15 % at four viewports, with promotion)                                                                                                                                                                                                         | —                              | see SC-17                                                      |
-| SC-12 | No group seam at the start of any line, in any state (conflicts present, pen held by peer, shaded)                                                                                                                                                                     | fails at 1024                  | holds                                                          |
-| SC-13 | View ▾ panel ≤ 70 % of viewport height at 1024 × 600, no inner scroll                                                                                                                                                                                                  | 584 / 600                      | ≤ 420                                                          |
-| SC-14 | **No tool is lost:** a computed test against a committed manifest of registry ids, header controls, selection-bar items and menu item names; every manifest entry resolves in the after state                                                                          | —                              | passes                                                         |
-| SC-15 | Focus not obscured (WCAG 2.4.11): a keyboard reveal scrolls the focused activity clear of the corner cluster and minimap                                                                                                                                               | —                              | journey passes                                                 |
-| SC-17 | **Free space used:** at 1280 × 800, 1440 × 900, 1912 × 1080 and 2560 × 1440, each deck row's and the header's unused width is ≤ 15 % of the row, unless the row's promotion ladder is exhausted. Recorded per row per viewport in M0 (before) and at close-out (after) | M0 records                     | ≤ 15 %                                                         |
-| SC-18 | **Nothing promotable left in a menu:** a computed journey fails if, at any gated viewport, an unpromoted ladder item's measured width fits the row's free width                                                                                                        | —                              | passes; verified red first by raising one threshold (ADR-0110) |
-| SC-19 | SC-14's manifest covers both states: every command resolves either on the bar or in its menu, never both and never neither, at every gated viewport                                                                                                                    | —                              | passes                                                         |
-| SC-16 | The visual brief (§4.8): each item signed off by the product owner with before/after screenshots at 1024 × 600, 1280 × 800, 1440 × 900 and 1912 × 1080                                                                                                                 | —                              | signed                                                         |
+| ID    | Criterion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Today                          | Target                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------- |
+| SC-1  | 1024 × 600: deck lines; canvas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 4; 274                         | **2; ≥ 350**                                                   |
+| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080: each declared row is one line (measured, not forced)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | holds except LOOK at 1440 (m4) | holds                                                          |
+| SC-3  | Coarse 1024 × 600 / 1440 × 900 / 1912 × 1080: deck lines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 4 / 3 / 2 (m4)                 | **≤ 3 / 2 / 2**                                                |
+| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | holds                          | holds                                                          |
+| SC-5  | Below 1024: at 640 × 360 and 320 × 256 the band is ≤ 40 % of viewport height **or** scrolls away vertically; Expand and Recalculate are hit-testable at 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256                                                                                                                                                                                                                                                                                                                                               | 99 % / 100 %; unreachable      | met                                                            |
+| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 0                              | ≥ 1                                                            |
+| SC-7  | Text-only 200 % at 1280 × 800 **and** 2560 × 1440, set as the browser's **default** font size (Chromium DevTools protocol `Page.setFontSizes`, standard 32), **not** a CSS `html { font-size }`, which rem media queries ignore. Every control is hit-testable; rows may wrap; promotion stages and `roomy` respond as at the equivalent half-width viewport (demotion is correct here); demotion under focus hands off (E-2)                                                                                                                               | unmeasured                     | holds                                                          |
+| SC-8  | One label decider: `Deck.tsx` and `Toolbar.tsx` hold no label logic of their own; every component calls the one resolver and class helper                                                                                                                                                                                                                                                                                                                                                                                                                   | 3 deciders, 4 implementations  | 1 and 1                                                        |
+| SC-9  | `BAND_MAX_PX` holds (`command-surface.spec.ts:535`); a 1024 bar is added at M0's reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ≤ 145                          | ≤ 145, plus a 1024 bar                                         |
+| SC-10 | One label size and one control height per surface (`command-surface.spec.ts:500-504`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | holds                          | holds                                                          |
+| SC-11 | Superseded by SC-17 (≤ 15 % at four viewports, with promotion)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —                              | see SC-17                                                      |
+| SC-12 | No group seam at the start of any line, in any state (conflicts present, pen held by peer, shaded)                                                                                                                                                                                                                                                                                                                                                                                                                                                          | fails at 1024                  | holds                                                          |
+| SC-13 | View ▾ panel ≤ 70 % of viewport height at 1024 × 600, no inner scroll                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 584 / 600                      | ≤ 420                                                          |
+| SC-14 | **No tool is lost:** a computed test against a committed manifest of registry ids, header controls, selection-bar items and menu item names; every manifest entry resolves in the after state                                                                                                                                                                                                                                                                                                                                                               | —                              | passes                                                         |
+| SC-15 | Focus not obscured (WCAG 2.4.11): a keyboard reveal scrolls the focused activity clear of the corner cluster and minimap                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                              | journey passes                                                 |
+| SC-17 | **Free space used:** at 1280 × 800, 1440 × 900, 1912 × 1080 and 2560 × 1440, **on both pointers**, each deck row's unused width is ≤ 15 % of the row **or the ladder is exhausted**. "Exhausted" means no remaining ladder entry fits the row's free width; at 2560 that is judged after the search field has grown (§4.11). Recorded per row, per viewport and per pointer in M0 (before) and at close-out (after)                                                                                                                                         | M0 records                     | ≤ 15 %                                                         |
+| SC-18 | **Nothing promotable left in a menu**, as two CI checks on both pointers. (a) **The widths are real:** a journey at 3840 × 1440, past the widest stage, measures every ladder entry's promoted form and fails if it differs from `promotion-widths.<pointer>.json` by more than 2 px, so stale JSON fails. (b) **Nothing fits that is not promoted:** at each stage, a journey fails if an unpromoted entry's verified width fits the row's free gap. A unit test also pins every entry's `at` to `computePromotionStages(promotion-widths.<pointer>.json)` | —                              | passes; verified red first by raising one threshold (ADR-0110) |
+| SC-19 | SC-14's manifest covers both states. A **render-level** jsdom test per stage and pointer, with a stubbed `matchMedia`, opens every source menu and asserts each manifest name appears on the bar **xor** in its menu. The manifest records each entry's build-flag condition (`EARNED_VALUE_ENABLED`, `RESOURCE_CURVES_ENABLED`, …) and view scope (Diagram-only lenses), and is produced by `pnpm --filter @repo/web manifest:commands`; the test fails when the live set and the committed manifest differ                                                | —                              | passes                                                         |
+| SC-16 | The visual brief (§4.8): each item signed off by the product owner with before/after screenshots at 1024 × 600, 1280 × 800, 1440 × 900 and 1912 × 1080                                                                                                                                                                                                                                                                                                                                                                                                      | —                              | signed                                                         |
 
 ### Open questions
 
@@ -160,24 +160,30 @@ Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:5
 - **Free space must be used — DECIDED (product-owner requirement).** Menu commands promote onto the bar when there
   is room (§4.11).
 
-**Still open. This one gates M6's V5 only:**
+- **CQ-4 — DECIDED: yes.** The organisation switcher becomes a ghost button that opens a menu, on every screen's
+  header. Requirements are in §4.12.
 
-- **CQ-4 — May the organisation switcher become a ghost button with an icon that opens the existing menu,
-  replacing the bordered native `<select>`?** This changes every screen's header, not only the plan's.
-  _Recommendation: yes, subject to an accessibility review._ The native select's deliberate reasons
-  (`OrgSwitcher.tsx:45-57`) are carried over: name, current value announced, keyboard. _If no:_ restyle the
-  select's border and background only.
+**No product question remains open.** Every remaining choice is a default below, or is settled by M0's
+measurements against a stated rule.
 
 **Defaults taken (reviewers may overturn):**
 
-- **D-a:** Summary and Edit plan become **registry items in a new `identity` row**, rendered by `Toolbar` after the
-  status badge. Summary keeps its popover. The pencil is renamed **"Edit plan details"** so it cannot be confused
-  with the pen's "Start/Stop editing".
-- **D-b:** **Keyboard shortcuts stay in the Account menu.** ADR-0091 D6b moved them there because they are "a
-  reference about the application, not the plan". That argues against the plan's toolbar, not against the app
-  header. The UX review rates a header button as low value at the floor, where the header is full. **With the
-  free-space rule it promotes** to a header icon button (`aria-keyshortcuts="?"`) from 1280, if M0 measures room
-  there (§4.11, H-P1), and stays in the Account menu below that. `?` opens the same sheet either way.
+- **D-a:** Summary and Edit plan become **registry items in a new registry row `identity`**, rendered by a
+  `Toolbar` named **"Plan details"** after the status badge. It is its own Tab stop, with arrow-key roving between
+  its two items.
+  - **Taxonomy group:** `object` for both (required by `ToolbarItem`).
+  - **Summary:** "Plan summary", a popover trigger (`aria-haspopup="dialog"`, `aria-expanded`, focus return), with
+    a tooltip giving its purpose ("Status, data date and schedule").
+  - **Edit plan details:** gated on `model.canWrite` (absent otherwise, as today), with a tooltip ("Change the
+    plan's name, dates and status"). The rename from "Edit plan" changes the voice-control command, recorded in the
+    changeset, and keeps it distinct from the pen's "Start/Stop editing".
+  - Both are icon-only, so their names are not visible text and 2.5.3 does not bind; the tooltips carry the names
+    visually (ADR-0117).
+- **D-b:** **Keyboard shortcuts stay in the Account menu at every width; the header promotion (H-P1) is deferred.**
+  It would need a registry row and a host in the header's trailing region, which is not a `Toolbar` today. The UX
+  review rates it low value, and `?` already opens the sheet. ADR-0091 D6b's reason ("a reference about the
+  application, not the plan") argues against the plan's toolbar, not the app header, so a later spec may revisit it.
+  The header therefore has no promotion ladder in this epic.
 - **D-c:** **Float paths moves to the selection bar if M0 confirms a Gantt route.** `selection-actions.tsx:206`
   says the Gantt renders no selection bar, so its Gantt route would be the Gantt row menu (`GanttRowMenu.tsx`).
   If the row menu does not mirror the bar's object actions, Float paths stays on the deck.
@@ -190,11 +196,13 @@ Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:5
 - **D-g:** **The View ▾ panel is fixed at 1024**: two columns and collapsible sections (SC-13). The zoom-preset
   radios stay; they are not duplicates of ±.
 - **D-h:** Control heights are unchanged (36 / 44). The keyboard-cover gap stays declined (ADR-0183 D3).
-- **D-i:** The organisation switcher stays trailing (only its styling changes, CQ-4).
+- **D-i:** The organisation switcher stays trailing (it becomes a ghost button and menu, CQ-4, §4.12).
 - **D-j:** #471's second paragraph (the selection bar in the foot row) gets its own row at close-out.
 - **D-k:** No feature flag (ADR-0088 D1).
 - **D-l:** **Apply levelled dates… is labelled where the row allows** (`roomy`), since its icon fails the glyph
-  test. It is icon-only below roomy.
+  test. It is icon-only below roomy. It is a plain `onActivate` item (`tsld-toolbar-items.tsx:3140-3166`, verified),
+  so it may be `'roomy'` (US-2's rule). **Settings… gets a real description**, not the near name-echo "Schedule
+  settings": "Calendar, critical path, progress, levelling and earned value".
 - **D-m:** ~~Rows share one line on very wide bands.~~ **Withdrawn** with the product owner's free-space requirement
   (§4.11): each row fills its own spare width with promoted commands, so at 2560 neither row has room to share a
   line. Withdrawing it also removes the ADR-0133 D1 tension.
@@ -245,7 +253,7 @@ Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:5
 
 > **US-3 — Corner cluster (CQ-1).**
 >
-> - The Diagram view shows a `role="toolbar"` named **"Diagram view"** at the stage's bottom-right: Zoom out, Zoom in,
+> - The Diagram view shows a `role="toolbar"` named **"Diagram viewport"** at the stage's bottom-right: Zoom out, Zoom in,
 >   Fit to plan, Minimap. The minimap button has `aria-pressed`.
 > - Every item keeps its shortcut on `aria-keyshortcuts` and its shade reasons.
 > - It is rendered by `Toolbar` over a registry slice (`row: 'canvas'`). Minimap reaches that slice through a
@@ -296,7 +304,9 @@ Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:5
 > - **Given** a gated viewport (1280, 1440, 1912, 2560) and a row with spare width, **then** the next item on that
 >   row's promotion ladder that fits is shown on the bar, immediately after its source menu's trigger.
 > - **Given** a promoted item, **then** it is **removed from its menu**, not shown shaded. One accessible name
->   exists once in the tree. A menu emptied by promotion hides its trigger.
+>   exists once in the tree. **No menu ever empties**: each keeps a declared anchor entry, so every trigger stays in
+>   place (§4.11 "Focus and stability").
+> - Focus cases E-1 to E-3 (§4.11) hold, each with a journey, including at 200 % text.
 > - **Given** the window narrows past an item's threshold while focus is on it, **then** ADR-0135's hand-off fires
 >   with the static `lostReason` "Moved into the ‹menu› menu."
 > - **Given** any viewport, **then** every row's unused width is ≤ 15 % unless the row's ladder is exhausted (SC-17),
@@ -454,7 +464,7 @@ flowchart TB
     end
   end
   subgraph Stage["Diagram stage"]
-    MM["Minimap (when open)"] --> CL["Diagram view toolbar: − · + · Fit · Minimap (canvas row)"]
+    MM["Minimap (when open)"] --> CL["Diagram viewport toolbar: − · + · Fit · Minimap (registry row canvas)"]
   end
   Band --> Stage
   R["One registry: rows identity · mode · strip · canvas"] --> Header
@@ -554,39 +564,44 @@ View, with the trigger's annotation.
 
 ### 4.8 Visual brief (each is an M6 item with before/after screenshots at four viewports)
 
-| V   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                    | Tokens / primitive                                   |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| V1  | **Row identity:** LOOK and DO read as two rows at a glance: a faint leading mark or a tint difference on the DO row, chosen at review                                                                                                                                                                                                                                                                                       | `--chrome-muted` / `--chrome-accent` only            |
-| V2  | **Subtle group containers:** each deck group a low-contrast pill, matching the Diagram \| Gantt segment's container, replacing bare seams where it reads better (and so removing the leading-seam defect, SC-12)                                                                                                                                                                                                            | `rounded-md`, `--chrome-muted`                       |
-| V3  | **Fewer dead-grey controls:** audit every control shaded in an ordinary editing state (5+ today). ADR-0082 keeps shade-with-reason for a state the reader can change (for example Baseline overlay with no baseline), so the remedy is visual (a quieter shaded style) plus omission only where an action does not apply. Recommendation: the Author group reads as one locked unit led by the pen when the pen is not held | existing `disabled` state variant                    |
-| V4  | **Share & export is the row's deliberate closing action:** secondary-filled                                                                                                                                                                                                                                                                                                                                                 | `secondary` variant on chrome (`--chrome-secondary`) |
-| V5  | **Organisation switcher as a ghost button** with the org icon and a menu (CQ-4), on every header                                                                                                                                                                                                                                                                                                                            | `Button` ghost + `Menu`                              |
-| V6  | **View panel at the floor:** two columns, collapsible sections (SC-13)                                                                                                                                                                                                                                                                                                                                                      | `Popover`, `fieldset`                                |
-| V7  | **Balance:** ≤ 15 % empty per row at 1280 / 1440 / 1912 / 2560 through promotion (SC-17); one trailing group per row                                                                                                                                                                                                                                                                                                        | —                                                    |
+| V   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Tokens / primitive                                   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| V1  | **Row identity (decided form):** a quiet leading row mark only, with no stripe or tint band and no new accent colour; V2's pills carry the grouping                                                                                                                                                                                                                                                                                                                                                                            | `--chrome-muted` / `--chrome-accent` only            |
+| V2  | **Subtle group containers:** each deck group a low-contrast pill, matching the Diagram \| Gantt segment's container, replacing bare seams where it reads better (and so removing the leading-seam defect, SC-12)                                                                                                                                                                                                                                                                                                               | `rounded-md`, `--chrome-muted`                       |
+| V3  | **Fewer dead-grey controls:** audit every control shaded in an ordinary editing state (5+ today). ADR-0082 keeps shade-with-reason for a state the reader can change (for example Baseline overlay with no baseline), so the remedy is visual (a quieter shaded style) plus omission only where an action does not apply. Recommendation: the Author group reads as one locked unit led by the pen when the pen is not held. The quieter shaded style keeps text ≥ 4.5:1 against the band; accessibility-reviewer signs it off | existing `disabled` state variant                    |
+| V4  | **Share & export is the row's deliberate closing action:** secondary-filled                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `secondary` variant on chrome (`--chrome-secondary`) |
+| V5  | **Organisation switcher as a ghost button** with the org icon and a menu (CQ-4, decided; requirements in §4.12), on every header                                                                                                                                                                                                                                                                                                                                                                                               | `Button` ghost + `Menu`                              |
+| V6  | **View panel at the floor:** two columns, collapsible sections (SC-13)                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `Popover`, `fieldset`                                |
+| V7  | **Balance:** ≤ 15 % empty per row at 1280 / 1440 / 1912 / 2560 through promotion (SC-17); one trailing group per row                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                    |
 
 If the product owner declines V1–V5, SC-16 drops the word "amazing" and keeps only SC-1 to SC-15.
 
 ### 4.9 Component changes and consumers
 
-| Component                                                                                                                                    | Change                                                                                                                                                                         | Contract (ADR-0105) |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `toolbar-registry.ts` (+ `toolbar-registry.test.ts`)                                                                                         | `labelVisibility`; rows `identity`, `canvas`; delete bands, `ToolbarLayoutEnv.layout`, `isVisible`'s env argument, `priority`, `priorityOf`, `partitionByTier`, the tier guard | yes                 |
-| `toolbar-styles.ts`                                                                                                                          | `toolbarLabelClass` / `<ToolbarLabel>`; one resolver                                                                                                                           | yes                 |
-| `Deck.tsx` (+ tests)                                                                                                                         | container, `DECK_GROUPS` with Panels (`help`), trailing groups, scroll line, no `ICON_ONLY`                                                                                    | yes                 |
-| `Toolbar.tsx` (+ `Toolbar.test.tsx`)                                                                                                         | uses the resolver (`'roomy'` → `'always'`); `ToolbarItemRenderApi.layout` removed                                                                                              | yes                 |
-| `toolbar-band.tsx`                                                                                                                           | density-band text and provider purpose re-read; deleted if nothing reads it                                                                                                    | yes                 |
-| `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, the Analysis / Share & export / Add / Link triggers                                 | the label helper; `compact` removed                                                                                                                                            | yes                 |
-| `tsld-toolbar-items.tsx`                                                                                                                     | the moves; the stale docblocks fixed                                                                                                                                           | —                   |
-| `app-header.tsx`, the identity portal in `plan-workspace-toolbar.tsx`                                                                        | identity-row `Toolbar`                                                                                                                                                         | entry point         |
-| `OrgSwitcher.tsx`                                                                                                                            | ghost button + Menu (CQ-4)                                                                                                                                                     | yes                 |
-| `selection-actions.tsx`, `GanttRowMenu.tsx`, `GanttPanel.tsx`                                                                                | Float paths (D-c); correct `:183-199`, `:206` if stale                                                                                                                         | entry point         |
-| `TsldCanvas.tsx`, `TsldMinimap.tsx`                                                                                                          | the column; `minimapRoom`; reveal margin                                                                                                                                       | entry point         |
-| `globals.css`, `breakpoints.test.ts`, `container-query.structural.test.ts`                                                                   | `--container-roomy`, `@custom-variant squat`                                                                                                                                   | token               |
-| `measure-toolbar/m1-icon-only.spec.ts`                                                                                                       | harness reads `ICON_ONLY`: update or delete                                                                                                                                    | —                   |
-| `ViewTogglesPanel`, `FilterMenuControl`, `PlanAnalysisControl`, `ExportMenuControl`, `LinkControl`, `AddActivityControl`, `account-chip.tsx` | promotable entries rendered from declared lists; promoted entries omitted (§4.11)                                                                                              | yes                 |
-| `lib/breakpoints.ts` (+ `breakpoints.test.ts`), new `usePromotionStage`                                                                      | `PROMOTE_*` stage constants                                                                                                                                                    | yes                 |
-| `command-manifest.json`, `promotion-widths.json` (new, committed)                                                                            | SC-14/18/19 inputs                                                                                                                                                             | —                   |
-| Every `isVisible` call site using `env`                                                                                                      | typecheck-driven                                                                                                                                                               | —                   |
+| Component                                                                                                                                     | Change                                                                                                                                                                         | Contract (ADR-0105) |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `toolbar-registry.ts` (+ `toolbar-registry.test.ts`)                                                                                          | `labelVisibility`; rows `identity`, `canvas`; delete bands, `ToolbarLayoutEnv.layout`, `isVisible`'s env argument, `priority`, `priorityOf`, `partitionByTier`, the tier guard | yes                 |
+| `toolbar-styles.ts`                                                                                                                           | `toolbarLabelClass` / `<ToolbarLabel>`; one resolver                                                                                                                           | yes                 |
+| `Deck.tsx` (+ tests)                                                                                                                          | container, `DECK_GROUPS` with Panels (`help`), trailing groups, scroll line, no `ICON_ONLY`                                                                                    | yes                 |
+| `Toolbar.tsx` (+ `Toolbar.test.tsx`)                                                                                                          | uses the resolver (`'roomy'` → `'always'`); `ToolbarItemRenderApi.layout` removed                                                                                              | yes                 |
+| `toolbar-band.tsx`                                                                                                                            | density-band text and provider purpose re-read; deleted if nothing reads it                                                                                                    | yes                 |
+| `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, the Analysis / Share & export / Add / Link triggers                                  | the label helper; `compact` removed                                                                                                                                            | yes                 |
+| `tsld-toolbar-items.tsx`                                                                                                                      | the moves; the stale docblocks fixed                                                                                                                                           | —                   |
+| `app-header.tsx`, the identity portal in `plan-workspace-toolbar.tsx`                                                                         | identity-row `Toolbar`                                                                                                                                                         | entry point         |
+| `OrgSwitcher.tsx`                                                                                                                             | ghost button + Menu (CQ-4)                                                                                                                                                     | yes                 |
+| `selection-actions.tsx`, `GanttRowMenu.tsx`, `GanttPanel.tsx`                                                                                 | Float paths (D-c); correct `:183-199`, `:206` if stale                                                                                                                         | entry point         |
+| `TsldCanvas.tsx`, `TsldMinimap.tsx`                                                                                                           | the column; `minimapRoom`; reveal margin                                                                                                                                       | entry point         |
+| `globals.css`, `breakpoints.test.ts`, `container-query.structural.test.ts`                                                                    | `--container-roomy`, `@custom-variant squat`                                                                                                                                   | token               |
+| `ToolbarButton.tsx`                                                                                                                           | M1 deletes its native `title` (`:105`) and the tooltip purpose taken from `!showLabel` (`:131`); one tooltip path                                                              | yes                 |
+| `plan-workspace-toolbar.tsx` (`PLAN_MODE_SEGMENT_LABELS`, `:2334`; the identity and corner portals)                                           | identity row, corner slot                                                                                                                                                      | entry point         |
+| `selection-actions.tsx:934` (cites `ICON_ONLY`)                                                                                               | comment corrected                                                                                                                                                              | —                   |
+| `Deck.test.tsx`, `toolbar-segments.test.tsx`, `use-focus-handoff.ts` (+ test), `tooltip.tsx`, `help-action.ts`, the `TsldToolbarContext` type | updated for the label API, the derived items, the hand-off targets, and the dock-open facts                                                                                    | yes                 |
+| `tsld-toolbar-items.tsx` `LensToggle.promotion` / `lensTogglesIn` / `promotedLensItems` (`:244`, `:415-451`)                                  | generalised to `PromotableEntry` (§4.11)                                                                                                                                       | yes                 |
+| `measure-toolbar/m1-icon-only.spec.ts`                                                                                                        | harness reads `ICON_ONLY`: update or delete                                                                                                                                    | —                   |
+| `ViewTogglesPanel`, `FilterMenuControl`, `PlanAnalysisControl`, `ExportMenuControl`, `LinkControl`, `AddActivityControl`, `account-chip.tsx`  | promotable entries rendered from declared lists; promoted entries omitted (§4.11)                                                                                              | yes                 |
+| `lib/breakpoints.ts` (+ `breakpoints.test.ts`), new `usePromotionStage`                                                                       | `PROMOTE_*` stage constants                                                                                                                                                    | yes                 |
+| `command-manifest.json`, `promotion-widths.{fine,coarse}.json` (new, committed)                                                               | SC-14/18/19 inputs                                                                                                                                                             | —                   |
+| Every `isVisible` call site using `env`                                                                                                       | typecheck-driven                                                                                                                                                               | —                   |
 
 ### 4.10 ADR outline (ADR-0184, proposed)
 
@@ -612,7 +627,9 @@ their subject's surface, and one scrolling line below the floor."**
   - JS label measurement;
   - whole-shell scroll at every short height;
   - a second registry for the cluster;
-  - Shortcuts in the header at every width (low value at the floor; it promotes from 1280 instead, §4.11);
+  - Shortcuts in the header (deferred: low value, `?` exists, and the trailing region has no `Toolbar` host, D-b);
+  - hiding an emptied menu's trigger (breaks "commands stay in place"; anchors instead);
+  - a promoted segment as a nested sub-group (#154 nesting; a flat pressed set instead);
   - rows sharing a line on wide screens (withdrawn for promotion);
   - promotion by measuring the row in JavaScript (the ADR-0109 defect class);
   - promotion by CSS container queries alone (impossible for the menu half, see §4.11).
@@ -622,55 +639,171 @@ their subject's surface, and one scrolling line below the floor."**
 **The requirement.** Wherever a deck row, the header or the diagram corner has spare width, a command that lives in a
 menu and could sit on the bar is promoted out of its menu. It falls back into the menu only when the width runs out.
 (There is no `⋯` overflow any more; ADR-0109 deleted it. The menus in scope are View, Filter, Analysis, Add, Link,
-Share & export, Recent edits and Account.)
+Share & export and Recent edits. Recent edits and Account contribute nothing promotable in this epic.)
 
 #### Mechanism: one declarative place
 
-- **Menus become data for their promotable items.** Each source menu's promotable entries are declared in the
-  registry beside the trigger that owns them. The menu controls (`ViewTogglesPanel`, `FilterMenuControl`,
-  `PlanAnalysisControl`, `ExportMenuControl`, `LinkControl`, `AddActivityControl`, the Account menu) render those
-  entries from the list rather than as hand-written JSX. Each entry is:
+**Vocabulary.** Two different axes share the word "row" in the code (`toolbar-registry.ts:174-191`). This section
+always says **registry row** for `ToolbarItem.row`: today `mode` | `strip`, plus the new `identity` and `canvas`.
+It says **deck row** for `Deck`'s declared lines, `look` | `do` (`Deck.tsx:120`). The LOOK and DO ladders belong to
+registry row `strip`, deck rows `look` and `do`. The corner ladder belongs to registry row `canvas`. The header
+has no ladder in this epic (D-b).
+
+#### The data model: extend the record that already exists
+
+- **There is already a promotion field, and this generalises it rather than adding a second one.**
+  `LensToggle.promotion?: { icon; order }` (`tsld-toolbar-items.tsx:244`) is read by `lensTogglesIn`
+  (`:415-419`, which removes a promoted toggle from View ▾) and by `promotedLensItems` (`:432-451`, which derives
+  the bar item). It is used today by Baseline overlay, Resource view and Legend. That is exactly the pattern needed:
+  **a separate record that derives a `ToolbarItem`**. Menu entries cannot simply become `ToolbarItem`s, because they
+  are JSX (`FilterMenuControl`'s `CheckboxField`s `:1586-1597`, `PlanAnalysisControl`'s `MenuItem`s `:1503-1550`),
+  and a `ToolbarItem` needs `onActivate` xor `render` plus a taxonomy `group`.
+- **The generalised record**, `PromotableEntry`, has one shape for every source menu:
 
   ```ts
-  promotion?: {
-    from: MenuId;
-    rank: number; // within its row
-    form: 'button' | 'toggle' | 'segment';
-    at: PromotionStage; // committed constant
+  interface PromotableEntry<Ctx> {
+    id: string;
+    label: string; // the bar name; see "Names" below
+    menuLabel?: string; // the name in the menu, if different
+    icon: ReactNode;
+    from: string; // the source trigger's ToolbarItem.id; defineToolbar validates that it exists
+    group?: ToolbarGroupId; // defaults to the trigger's; set for D-d (Legend, Resource view → 'help')
+    rank: number; // order within its deck row's ladder
+    at: PromotionStageByPointer | 'always'; // 'always' = today's permanent promotions
+    isActive?: (ctx: Ctx) => boolean; // present → a toggle (aria-pressed)
+    segment?: string; // present → one of a flat pressed set (see Segments)
+    isEnabled?: (ctx: Ctx) => boolean;
+    disabledReason?: (ctx: Ctx) => string | undefined;
+    onActivate: (ctx: Ctx) => void;
   }
   ```
 
-  It also carries the entry's existing gate and reason, so a promoted control is shaded with the same reason as
-  its menu row.
+  - **`form` is dropped**: it is derived (`isActive` makes a toggle, `segment` makes a member of a set, otherwise a
+    button).
+  - `at` is per pointer (see Stages).
 
-- **Stages are named, pinned constants**: `PROMOTE_1280`, `PROMOTE_1440`, `PROMOTE_1912`, `PROMOTE_2560`, as
-  `min-width` media queries beside `DESIGNED_MIN_WIDTH_QUERY` (ADR-0179 D1) and pinned in `breakpoints.test.ts`. One
-  hook, `usePromotionStage()`, reads them, and `resolveItems` receives the stage.
-- **Why not CSS alone:** menus are portalled, so a container query on the deck cannot hide the menu half.
-- **Why the viewport is honest for the deck and header:** the band spans both grid columns
-  (`app-shell.tsx:195-200`, `col-span-2`), so its width is the viewport's, whatever the Explorer does.
-- **The corner cluster** uses the stage's width, which `TsldCanvas` already observes and which is imposed by its
-  container, not by the cluster.
-- **Thresholds are computed, not judged.** A pure function `computePromotionStages(rowWidth(stage), baseUsed,
-ladder)`, run by the M0 harness against measured item widths, assigns each item its stage. Its rules:
+- **The three existing consumers migrate** to `at: 'always'`. `promotedLensItems` today hard-codes `group: 'lens'`
+  and `showLabel: { atLeast: 'comfortable' }` (`:437`, `:440`); both become per-record, so Legend and Resource view
+  can carry `group: 'help'` for Panels (D-d).
+- **Ordering:** a derived item takes the trigger's group and `order = trigger.order + rank / 100`. Because
+  `resolveItems` sorts by `groupRank`, then `order`, then index (`toolbar-registry.ts:704-710`), it sorts
+  immediately after its trigger. Today's orders are integers, so this cannot collide with a neighbour. A
+  Panels-group entry sorts by its own `order` instead.
+- **Only promotable entries become data.** Every other menu row (the export formats, Go to date, Recent edits, View's
+  set-once settings, the Account items) stays hand-written JSX. Each menu control filters its own declared entries
+  through the same `isPromoted(entry, stage, pointer)` that the bar uses, so the bar and the menu cannot disagree.
+- **Labels:** a promoted item is always `labelVisibility: 'always'`. A structural test asserts that no derived item
+  is `'roomy'` or `'never'`. Its tooltip's description is the source menu's name, for example "Also in Analysis",
+  so a reader who learned the menu route still recognises it.
+- **`ViewToggleGroupId` `'panels'` (the View ▾ fieldset) and the deck group "Panels" coexist from M2 to M4**, until
+  Minimap, the fieldset's only member, leaves at M4 and the fieldset is deleted. The two are unrelated: one is a
+  popover fieldset id, the other a deck group's accessible name.
+
+#### Segments: a flat pressed set, not a nested group
+
+- `Deck` has no segment support. `partitionBySegment` is all-or-nothing per taxonomy group
+  (`toolbar-registry.ts:655-676`, `Toolbar.tsx:30-52`), and `defineToolbar` forces a segment to share a tier and a
+  registry row (`:593-627`). A promoted segment inside an already-named deck group would also nest
+  `role="group"` inside `role="group"` (#154).
+- **Decision:** a promoted radio set is a **flat run of `aria-pressed` buttons** inside the existing deck group.
+  - **There is no sub-group.**
+  - **Each name carries the set's name:** "Colour by: Criticality", "Colour by: Total float", "Colour by: WBS group",
+    using the real labels (`COLOUR_MODE_LABELS`, `:1612-1616`; ADR-0148). The visible label is the value
+    ("Criticality"), so label-in-name (2.5.3) holds.
+  - An `aria-hidden` leading caption "Colour" gives the sighted cue.
+  - **Mapping from the menu:** `menuitemradio aria-checked="true"` becomes `aria-pressed="true"` on exactly one
+    button. Pressing the pressed one is a no-op. The change is announced through the existing polite announcer.
+  - Estimated width about 340 px, not 250.
+- **Kind presets arm their tool, exactly as the menu pick does.** This covers Link type (P5), Start milestone and
+  Finish milestone (P2, P3). Today a Link menu pick **arms** link mode with that type (`LinkControl` docblock,
+  `:929-935`: "picking one arms link-mode with that kind"). The Add split does the same for a kind. So:
+  - a promoted "Link: Start-to-start" or "Add: Start milestone" calls the same handler and arms the tool;
+  - `aria-pressed` = (tool armed **and** kind = this one);
+  - `activeKind: 'armed'`;
+  - pen-gated, with the same `scheduleRefusal` reason;
+  - the same choice behaves the same at every width.
+
+  **The split trigger stays on the bar** (it arms with the current kind, and its armed state is the tool's). Its
+  menu keeps "Stop linking" or "Task" / "Level of effort", so it never empties. The two pressed controls describe
+  one state from two sides, tool and kind, which is how the split already reads ("Adding: Start milestone").
+
+- **Critical only:** the promoted Filter attribute is named "Critical only" (label and accessible name), with
+  `aria-pressed = ctx.filterAttrs.has('critical')`. Filter ▾'s pressed state stays
+  `ctx.filterAttrs.size > 0` (`:2787`), so the trigger and the promoted toggle derive from one source and agree.
+- **Promoted dock toggles** (Health check, Compare revisions): `aria-pressed` = the dock's open state read from the
+  context, so it stays in step when the dock is closed from its own close button. If `TsldToolbarContext` lacks the
+  open booleans, they are added (a fact, ADR-0133 D6).
+
+#### Stages: rem, per pointer, one source with `roomy`
+
+- **Stages are rem media queries**, consistent with `DESIGNED_MIN_WIDTH_QUERY = '(min-width: 64rem)'`
+  (`lib/breakpoints.ts:14`, ADR-0179):
+  - `PROMOTE_80` (1280 px at the default font size);
+  - `PROMOTE_90` (1440);
+  - `PROMOTE_119_5` (1912);
+  - `PROMOTE_160` (2560).
+
+  They are pinned in `breakpoints.test.ts`, and one hook, `usePromotionStage()`, reads them.
+
+- **Under 200 % text (a browser font-size setting), the stages demote correctly**: a 1280 window then measures as
+  40 rem, the same room in text terms. So **demotion under focus becomes ordinary at 200 %**, and E-2 is
+  journey-tested there (SC-7).
+- **Per pointer.** Widths measured with 36 px controls overflow at 44 px (Surface without its cover). So
+  `promotion-widths.fine.json` and `promotion-widths.coarse.json` both exist. `at` is `{ fine, coarse }`, and the
+  hook picks with `useCoarsePointer()`, the one sanctioned pointer reader (ADR-0183 D3). SC-17 and SC-18 run on
+  both pointers. With the cover attached the Surface reports `fine` and gets the fine stages, which matches its
+  36 px controls.
+- **`roomy` and the stages are one source.** `--container-roomy` is **derived** from the first stage: it is set to
+  the deck width at `PROMOTE_80` minus the deck's insets. An assertion checks that at the first stage the deck is
+  at least `roomy`, so nothing promotes while compact labels are still hidden. M0 computes stage widths with the
+  label state that actually applies at each stage (every label visible from the first stage up).
+- **Why the viewport is honest for the deck:** the band spans both grid columns
+  (`components/layout/navigator/app-shell.tsx:195-200`, `col-span-2`), so its width is the viewport's, whatever the
+  Explorer does.
+- **Why not CSS alone:** menus are portalled, so a container query on the deck cannot reach the menu half.
+- **The corner cluster** stages on the stage's own width, which `TsldCanvas` already observes and which is imposed
+  by its container.
+- **Thresholds are computed, not judged.** `computePromotionStages(rowWidths, baseUsed, ladder)` is pure and is
+  committed with M5. Its rules:
   - walk the stages narrow to wide;
-  - carry every item promoted at a narrower stage forward, so promotion is **monotonic** and an item never drops
-    out as the window widens;
-  - fill the remaining width in rank order, skipping an item that does not fit.
+  - carry every promoted entry forward (monotonic);
+  - fill the remainder in rank order, skipping an entry that does not fit;
+  - **never take a menu's anchor entry** (see Focus and stability).
 
-  The output is committed into the registry as each entry's `at`. No component holds a threshold.
+  A unit test pins every committed `at` to its output over the committed widths.
 
-- **Placement:** a promoted item renders **immediately after its source menu's trigger**, in the same deck group, so
-  DOM order equals visual order and the group's name is unchanged. A promoted radio group (Colour by, Link type,
-  Zoom presets) becomes a `segment` with `segmentLabels`, the mechanism the mode switch already uses (ADR-0119).
-- **What the menu shows for a promoted item:** **nothing; it is removed from the menu, not shaded.** So one
-  accessible name exists once in the tree. A menu section whose entries have all promoted is removed. A menu that
-  empties hides its trigger (for example Filter ▾ at 2560, if all three attributes promote). The trigger's label is
-  unchanged.
-- **Demotion under focus:** if the window narrows past an item's stage while focus is on it, ADR-0135's hand-off runs
-  with the static `lostReason` "Moved into the ‹menu› menu."
-- **Text-only zoom:** stages read CSS-px viewport width, so 200 % text does not demote. Rows wrap instead (R1's
-  safety valve, SC-7).
+#### Focus and stability
+
+- **No trigger ever disappears.** UX N3: "commands stay in place". Each source menu has a declared **anchor
+  entry** that never promotes, so the menu never empties and its trigger is always present:
+  - Filter ▾: Has constraint;
+  - Analysis ▾: Baselines…, chosen because it is flag-independent; the UX review ranked it 1912, and this
+    deviation keeps Analysis non-empty under every flag set;
+  - Share & export ▾: the formats;
+  - View ▾: its settings;
+  - Link ▾: Stop linking;
+  - Add ▾: Task and Level of effort.
+
+  A structural test asserts that every source menu has an anchor. So the case "a focused trigger empties and hides"
+  cannot arise, and no "Everything from ‹menu› is on the bar" sentence is needed.
+
+- **E-1: promotion while the source menu is open, or while focus is on that entry in the menu.** The menu closes
+  (`onClose`), focus moves to the promoted button (the same command), and the polite announcer says "‹name› is now
+  on the toolbar."
+- **E-2: demotion while focus is on a promoted item.** ADR-0135's hand-off runs, with the target being **the source
+  trigger**, which is mounted in every state, so it is always present first. The static `lostReason` is "Moved into
+  the ‹menu› menu."
+- **E-3: a trigger disappearing while focused as the window widens** cannot occur (anchors). The journey asserts the
+  trigger is still present at every stage.
+- Each case is a journey (plan M5), including at 200 % text.
+
+#### Getting the context to the corner cluster
+
+`TsldToolbarContext` is built in `plan-workspace-toolbar.tsx`; the cluster mounts inside `TsldCanvas`. `TsldCanvas`
+publishes a positioned **slot node** for its bottom-right column, the same pattern as `useChromeSlot` /
+`ChromePortal` (`chrome-slot.tsx`). `plan-workspace-toolbar.tsx` portals a `Toolbar` over the `canvas` registry row
+into it, so the context is derived once and the canvas owns only geometry (the column, the minimap, the reveal
+margin). Its accessible name is **"Diagram viewport"**.
 
 #### The ladders (estimates: widths are about 7 px per character plus icon and padding; M0 replaces every number)
 
@@ -682,45 +815,51 @@ Free width per row is the row's inner width minus today's controls after M1–M3
 | DO     | 114                | 274  | 746  | 1394 |
 | Corner | stage-width driven |      |      |      |
 
-At 1280 the rows are already ≤ 15 % empty (11 % and 9 %), so promotion matters most at 1440 and up.
+At 1280 the rows are already ≤ 15 % empty (11 % and 9 %), so promotion matters most at 1440 and up. The ranking
+folds in the UX review's (s3-4). M0's real widths finalise the stages, and D-n lets the product owner reorder. The
+stages below are fine-pointer estimates from the skip-fill rule; coarse stages are computed separately.
 
 **LOOK row** (rank = frequency × importance, then glyph clarity):
 
-| Rank | Command                                | From             | Promoted form          | Est. width | Stage (est.)                |
-| ---- | -------------------------------------- | ---------------- | ---------------------- | ---------- | --------------------------- |
-| L1   | Critical (show only)                   | Filter ▾         | toggle, `aria-pressed` | 95         | 1280                        |
-| L2   | Colour by: Criticality \| Float \| WBS | View ▾ › Insight | segment                | 250        | 1912 (blocked at 1440)      |
-| L3   | Late-start overlay                     | View ▾ › Insight | toggle                 | 150        | 1440                        |
-| L4   | Feasible window                        | View ▾ › Insight | toggle                 | 150        | 1912                        |
-| L5   | Today line                             | View ▾ › Markers | toggle                 | 105        | 1912                        |
-| L6   | Link gaps (Diagram only)               | View ▾ › Insight | toggle                 | 105        | 2560                        |
-| L7   | Levelled placement                     | View ▾ › Insight | toggle                 | 170        | 2560                        |
-| L8   | Has conflict (show only)               | Filter ▾         | toggle                 | 120        | 2560                        |
-| L9   | Labels                                 | View ▾ › Markers | toggle                 | 80         | 2560                        |
-| L10  | Data date line                         | View ▾ › Markers | toggle                 | 130        | 2560                        |
-| L11  | Has constraint (show only)             | Filter ▾         | toggle                 | 125        | beyond 2560 (stays in menu) |
+| Rank | Command (bar name)                               | From             | Kind (derived)   | Est. width | Stage (est., fine)                |
+| ---- | ------------------------------------------------ | ---------------- | ---------------- | ---------- | --------------------------------- |
+| L1   | Critical only                                    | Filter ▾         | toggle           | 110        | 1280                              |
+| L2   | Colour by: Criticality / Total float / WBS group | View ▾ › Insight | flat pressed set | 340        | 1912 (does not fit at 1440)       |
+| L3   | Late-start overlay                               | View ▾ › Insight | toggle           | 150        | 1440                              |
+| L4   | Feasible window                                  | View ▾ › Insight | toggle           | 150        | 1912                              |
+| L5   | Levelled placement                               | View ▾ › Insight | toggle           | 170        | 2560                              |
+| L6   | Has conflict only                                | Filter ▾         | toggle           | 135        | 2560                              |
+| —    | Search field grows 240 → about 480 px            | —                | —                | +240       | 2560 (counts toward SC-17's fill) |
 
-**DO row:**
+LOOK at 2560 after search growth: about 139 px unused (about 5 %), so the ladder is exhausted. **Filter's anchor:**
+Has constraint. **Left in View on purpose (set-once):** Today line, Labels, Data date line, Link gaps.
 
-| Rank | Command                          | From             | Promoted form                                   | Est. width | Stage (est.)                   |
-| ---- | -------------------------------- | ---------------- | ----------------------------------------------- | ---------- | ------------------------------ |
-| P1   | Baselines…                       | Analysis ▾       | button                                          | 105        | 1280                           |
-| P2   | Print…                           | Share & export ▾ | button                                          | 75         | 1440                           |
-| P3   | Health check                     | Analysis ▾       | toggle (dock), `aria-pressed`                   | 120        | 1912 (blocked at 1440)         |
-| P4   | Link type: FS \| SS \| FF \| SF  | Link ▾           | segment (sets the type the Link tool arms with) | 150        | 1912                           |
-| P5   | Compare revisions                | Analysis ▾       | toggle (dock)                                   | 170        | 1912                           |
-| P6   | Share…                           | Share & export ▾ | button                                          | 80         | 1440 (fills the gap P3 leaves) |
-| P7   | Earned value… (flag-gated)       | Analysis ▾       | button                                          | 130        | 2560                           |
-| P8   | Resource histogram… (flag-gated) | Analysis ▾       | button                                          | 170        | 2560                           |
-| P9   | Start milestone                  | Add ▾            | armed tool                                      | 130        | 2560                           |
-| P10  | Finish milestone                 | Add ▾            | armed tool                                      | 135        | 2560                           |
-| P11  | Schedule (CSV)                   | Share & export ▾ | button                                          | 120        | 2560                           |
+**DO deck row:**
 
-**Header:** H-P1, Keyboard shortcuts (Account menu → icon button, `aria-keyshortcuts="?"`), about 40 px, from 1280
-if M0 measures the header's free width there. This reconciles D-b: Account menu below 1280, the header above it.
+| Rank | Command (bar name)                                                          | From             | Kind (derived)                            | Est. width | Stage (est., fine)             |
+| ---- | --------------------------------------------------------------------------- | ---------------- | ----------------------------------------- | ---------- | ------------------------------ |
+| P1   | Health check                                                                | Analysis ▾       | toggle (dock open state)                  | 120        | 1440 (does not fit at 1280)    |
+| P2   | Add: Start milestone                                                        | Add ▾            | kind preset (arms Add)                    | 130        | 1912                           |
+| P3   | Add: Finish milestone                                                       | Add ▾            | kind preset (arms Add)                    | 135        | 1912                           |
+| P4   | Share…                                                                      | Share & export ▾ | button                                    | 80         | 1280 (fills the gap P1 leaves) |
+| P5   | Link: Finish-to-start / Start-to-start / Finish-to-finish / Start-to-finish | Link ▾           | kind presets (arm Link), flat pressed set | 200        | 1912                           |
+| P6   | Compare revisions                                                           | Analysis ▾       | toggle (dock open state)                  | 170        | 2560                           |
+| P7   | Earned value… (`EARNED_VALUE_ENABLED`)                                      | Analysis ▾       | button                                    | 130        | 2560                           |
+| P8   | Resource histogram… (`RESOURCE_CURVES_ENABLED`)                             | Analysis ▾       | button                                    | 170        | 2560                           |
+| P9   | Schedule (CSV)                                                              | Share & export ▾ | button                                    | 120        | 2560, **provisional**          |
 
-**Diagram corner:** C1, Zoom presets Day \| Week \| Month \| Quarter \| Year (View ▾ › Zoom → a segment in the
-cluster), about 250 px, when the stage is wider than about 900 px. When promoted, View ▾'s Zoom section is removed.
+**Anchors:** Analysis keeps Baselines…; Share & export keeps the formats **and Print…**. Share… promotes beside
+the closing Share & export (V4), and Print stays with the formats, as the UX review asked (one of the two, not
+both). DO at 2560 sums to about 1255 px against about 1394 free (estimate). **Every DO stage is provisional until
+M0**, P9 most of all.
+
+**Header:** no ladder this epic (D-b).
+
+**Diagram corner (registry row `canvas`):** C1, the zoom presets "Zoom: Day / Week / Month / Quarter / Year" as a
+flat pressed set in the cluster, about 250 px, staged on stage width (estimate: from about 900 px of stage). When
+promoted, View ▾'s Zoom section is removed. **Geometry rule:** the column, with C1 promoted, must sit above the
+stage's horizontal scrollbar and below the time-axis ruler, and never cover either. The SC-15 reveal margin uses
+the column's **live** rect, including the C1 case. M0 reads both.
 
 **Never promoted, with the reason** (so SC-17's "ladder exhausted" is a decision, not a gap):
 
@@ -731,17 +870,62 @@ cluster), about 250 px, when the stage is wider than about 900 px. When promoted
 - View › Structure (the grids, Month bands, WBS band, Logic links), Non-working, Activity codes, Duration & float,
   Dates, Compare on diagram, Flag over-allocated, and Gantt Columns: set-once view settings, or meaningful only with
   another surface open.
-- Account: Your account, My activity, Staff console, Sign out: personal, not plan commands.
+- Account: Your account, My activity, Staff console, Sign out: personal, not plan commands. Keyboard shortcuts:
+  deferred (D-b).
 - The organisation list: data, not commands.
+- Today line, Labels, Data date line, Link gaps: set-once markers (UX review).
+- Each menu's anchor (above).
 
 #### Checks
 
-- **SC-17** records each row's unused width per stage, before (M0) and after (close-out).
-- **SC-18** is a journey at each stage. It reads each row's free width (the gap before the trailing group) and fails
-  if any unpromoted ladder item's committed width, from `promotion-widths.json`, written by the M0 harness, is
-  smaller than that gap minus one `gap-1`. It is verified red by raising one item's stage.
-- **SC-19** is a pure unit test over `command-manifest.json`. It is pure because promotion is a function of a stage
-  value, not of the DOM: at every stage, every manifest entry resolves to the bar **xor** its menu.
+- **SC-17** records unused width per deck row, stage and pointer, before (M0) and after (close-out).
+- **SC-18 (a)** keeps the committed widths true: CI measures every entry's promoted form at 3840 × 1440 on both
+  pointers and compares it with the JSON within 2 px.
+- **SC-18 (b)** fails at a stage if an unpromoted entry's width fits the row's free gap. It is verified red by
+  raising one entry's `at`.
+- **SC-18 (c)** is a unit test: `at` equals `computePromotionStages(json)`.
+- **SC-19** is render-level: jsdom with a stubbed `matchMedia` and pointer, per stage and pointer, opens each source
+  menu and asserts each manifest name is on the bar **xor** in the menu, never both and never neither.
+
+### 4.12 The organisation switcher as a ghost button and menu (CQ-4, decided)
+
+**Today:** `apps/web/src/features/organizations/components/OrgSwitcher.tsx`. It is a native `<select>` "for full
+keyboard/screen-reader support", hidden until the user has organisations (`:7-10`). It has an `sr-only` label,
+"Active organisation". Its `title` exists only for a narrow rail that no longer exists (`:33-36`). The replacement
+must:
+
+- **show the current organisation's name visibly**, truncated with a tooltip carrying the whole name;
+- have an accessible name containing it ("Active organisation: ‹Name›"), so 2.5.3 holds;
+- open a `Menu` whose items are `menuitemradio` with `aria-checked` on the current one (`menu.tsx:368-432`
+  supports the checked state);
+- support **type-ahead** for long lists. The `Menu` primitive has none ("no submenus or typeahead",
+  `menu.tsx:26-27`), so add it to the primitive under an **ADR-0111 review before release**. Until then the limit
+  is stated: arrow-key and Home/End only;
+- keep every state:
+  - hidden until organisations exist;
+  - on an org-less route, the placeholder or no-current state;
+  - **a single organisation renders as a plain label, not a menu** (ADR-0104: no control whose action cannot
+    apply);
+- take `--control-h` sizing on both pointers. `max-w-[12rem]` is replaced by a sizing token, with no arbitrary
+  value;
+- **delete the unused `title` prop.**
+
+**Consumers and tests that change:**
+
+- `app-header.tsx:163`;
+- `features/organizations/index.ts:9`;
+- `app-header.test.tsx:104`, `:123`, `:146`;
+- `OrgSwitcher.test.tsx:40`;
+- `e2e/auth.spec.ts:54` (a `toHaveValue` on the select);
+- `e2e-shell/org-less-screens.spec.ts:84`;
+- `e2e-share/share.spec.ts`;
+- `scripts/measure-console.mjs:522`, `:544`;
+- `chrome-band.test.tsx:26`;
+- `navigator-rail.test.tsx:50`, possibly a dead mock: confirm and delete if so;
+- `control-height.structural.test.ts:15`;
+- `command-surface.spec.ts:230`.
+
+Line numbers are taken from the component review; the builder re-reads each one.
 
 ### Database / API changes
 
