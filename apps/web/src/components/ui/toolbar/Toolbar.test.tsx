@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { Toolbar } from './Toolbar';
@@ -17,8 +17,8 @@ interface Handlers {
 
 /**
  * A registry exercising groups 1/2/4/5, a pen-gated item, a toggle, and a render escape-hatch.
- * Its buttons pin `showLabel: 'always'` so these tests exercise the labelled chrome regardless of
- * the container width jsdom reports (0) — the width-responsive `'auto'` policy has its own tests.
+ * Its buttons pin `labelVisibility: 'always'` so these tests exercise the labelled chrome; the
+ * policy itself has its own cases under "label policy" below.
  */
 function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
   return defineToolbar<Ctx>([
@@ -26,7 +26,7 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
       id: 'fit',
       group: 'frame',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'fit',
       onActivate: handlers.fit ?? (() => {}),
@@ -35,7 +35,7 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
       id: 'grid',
       group: 'lens',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'grid',
       isActive: (c) => c.count % 2 === 0,
@@ -45,7 +45,7 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
       id: 'add',
       group: 'tools',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'add',
       penGated: true,
@@ -79,14 +79,14 @@ describe('Toolbar (APG primitive)', () => {
   it('a labelled button with a description keeps its label in the title', () => {
     // Regression: the tooltip helper used to drop the label for a labelled item with a description,
     // showing just the bare description. It must read "<label> — <description>".
-    // `showLabel` is declared, not inferred from `tier` — the two are separate concerns
+    // `labelVisibility` is declared, not inferred from `tier` — the two are separate concerns
     // (TECH_DEBT #61), so a test about labelling says so rather than leaning on the tier.
     const items = defineToolbar<Ctx>([
       {
         id: 'fit',
         group: 'frame',
         tier: 1,
-        showLabel: 'always',
+        labelVisibility: 'always',
         order: 0,
         label: 'Fit',
         description: 'Fit the diagram to the window',
@@ -96,7 +96,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'plain',
         group: 'frame',
         tier: 1,
-        showLabel: 'always',
+        labelVisibility: 'always',
         order: 1,
         label: 'Plain',
         onActivate: () => {},
@@ -121,7 +121,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'fit',
         group: 'frame',
         tier: 1,
-        showLabel: 'never',
+        labelVisibility: 'never',
         order: 0,
         label: 'Fit',
         onActivate: () => {},
@@ -130,7 +130,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'undo',
         group: 'frame',
         tier: 1,
-        showLabel: 'never',
+        labelVisibility: 'never',
         order: 1,
         label: 'Undo',
         isEnabled: () => false,
@@ -164,7 +164,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'fit',
         group: 'frame',
         tier: 1,
-        showLabel: 'never',
+        labelVisibility: 'never',
         order: 0,
         label: 'Fit',
         description: 'Fit the diagram to the window',
@@ -181,50 +181,24 @@ describe('Toolbar (APG primitive)', () => {
     expect(fit).toHaveAccessibleName('Fit'); // the name is still exactly the label
   });
 
-  describe('label policy — `showLabel` is presentation, `tier` is priority (TECH_DEBT #61)', () => {
-    /**
-     * Render with a stubbed container width; jsdom lays nothing out, so this is the only input.
-     *
-     * **The spy is restored in `afterEach`, not by the caller.** It used to be the caller's job, and
-     * when the case below started failing its `restore()` never ran — so a 20 px width leaked into
-     * the next six tests, which demoted every command and failed with "unable to find button 'fit'".
-     * One real defect arrived as eight, none of them pointing at it.
-     */
-    let widthSpy: { mockRestore: () => void } | null = null;
-    afterEach(() => {
-      widthSpy?.mockRestore();
-      widthSpy = null;
-    });
-    function renderAtWidth(width: number, items: ToolbarItem<Ctx>[]) {
-      widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
-      return render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
-    }
-
-    const autoItems = defineToolbar<Ctx>([
+  describe('label policy — `labelVisibility` is presentation, `tier` decides nothing (TECH_DEBT #61)', () => {
+    const defaulted = defineToolbar<Ctx>([
       { id: 'a', group: 'frame', tier: 1, order: 0, label: 'Alpha', onActivate: () => {} },
       { id: 'b', group: 'frame', tier: 2, order: 1, label: 'Beta', onActivate: () => {} },
     ]);
 
-    it('labels `auto` items when the row measurably has room', () => {
-      renderAtWidth(1200, autoItems);
-      // A labelled button carries its name as text, so it needs no `aria-label` to be reachable.
-      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-label');
-      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-label');
-    });
-
-    // `auto` USED to mean "label this if the row can afford it", and the ladder decided. A deck
-    // that wraps can always afford it, so `auto` now means labelled and only an explicit
-    // `'never'` suppresses. The case is inverted rather than deleted, because what it guards —
-    // that the policy is honoured at all — still matters.
-    it('labels `auto` items, because a wrapping surface can always afford one', () => {
-      render(<Toolbar items={autoItems} context={{ count: 1 }} label="T" />);
+    // The default is `'always'`, because a surface that wraps can always afford a label. It was
+    // `'auto'`, which meant "if the row can afford it" under the ladder and "yes" after it.
+    it('labels an item that declares nothing, whatever its tier', () => {
+      render(<Toolbar items={defaulted} context={{ count: 1 }} label="T" />);
       // Labelled: the visible text IS the accessible name, so no `aria-label` overrides it.
       const alpha = screen.getByRole('button', { name: 'Alpha' });
       expect(alpha).not.toHaveAttribute('aria-label');
       expect(alpha).toHaveTextContent('Alpha');
+      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-label');
     });
 
-    it('honours `always` / `never` regardless of width — tier never decides', () => {
+    it('honours `always` / `never` — tier never decides', () => {
       // Both items are tier 1. Under the old `showLabel={tier === 1}` rule they were forced to
       // agree; the policy is what separates them now.
       const pinned = defineToolbar<Ctx>([
@@ -232,7 +206,7 @@ describe('Toolbar (APG primitive)', () => {
           id: 'shown',
           group: 'frame',
           tier: 1,
-          showLabel: 'always',
+          labelVisibility: 'always',
           order: 0,
           label: 'Shown',
           onActivate: () => {},
@@ -241,22 +215,44 @@ describe('Toolbar (APG primitive)', () => {
           id: 'hidden',
           group: 'frame',
           tier: 1,
-          showLabel: 'never',
+          labelVisibility: 'never',
           order: 1,
           label: 'Hidden',
           onActivate: () => {},
         },
       ]);
-      // 110 px, not 20. Since M7 a plain button's width is derived, so at 20 px the row cannot hold
-      // these two at all and demotes both — which says nothing about how they would have been
-      // labelled. 110 px is narrow enough that an `'auto'` item would stay icon-only (the point of
-      // the case) and wide enough that policy is what is being read rather than the overflow.
-      renderAtWidth(110, pinned);
+      render(<Toolbar items={pinned} context={{ count: 1 }} label="T" />);
       expect(screen.getByRole('button', { name: 'Shown' })).not.toHaveAttribute('aria-label');
       expect(screen.getByRole('button', { name: 'Hidden' })).toHaveAttribute(
         'aria-label',
         'Hidden',
       );
+    });
+
+    // `Toolbar` is not a container, so there is no `@container/deck` for the `@max-roomy/deck:`
+    // variant to ask. `resolveLabelVisibility` says so in JS rather than leaving it to the absence
+    // of an ancestor: a `'roomy'` item here is painted exactly like an `'always'` one, with no
+    // `sr-only` class and no tooltip to carry a name nothing hides.
+    it("treats `roomy` as `always` — this surface is not the deck's container", () => {
+      const roomy = defineToolbar<Ctx>([
+        {
+          id: 'r',
+          group: 'frame',
+          tier: 1,
+          labelVisibility: 'roomy',
+          order: 0,
+          label: 'Roomy',
+          description: 'Says what it does',
+          onActivate: () => {},
+        },
+      ]);
+      render(<Toolbar items={roomy} context={{ count: 1 }} label="T" />);
+      const button = screen.getByRole('button', { name: 'Roomy' });
+      expect(button).not.toHaveAttribute('aria-label');
+      const label = within(button).getByText('Roomy');
+      expect(label.className).not.toMatch(/sr-only/);
+      fireEvent.focus(button);
+      expect(document.querySelector('[data-tooltip]')).toBeNull();
     });
   });
 
@@ -402,7 +398,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'plain',
         group: 'frame',
         tier: 1,
-        showLabel: 'always',
+        labelVisibility: 'always',
         order: 0,
         label: 'plain',
         icon: <span data-testid="plain-icon" />,
@@ -412,7 +408,7 @@ describe('Toolbar (APG primitive)', () => {
         id: 'ctx',
         group: 'frame',
         tier: 1,
-        showLabel: 'always',
+        labelVisibility: 'always',
         order: 1,
         label: 'ctx',
         icon: (c) => <span data-testid={c.count > 0 ? 'busy-icon' : 'idle-icon'} />,

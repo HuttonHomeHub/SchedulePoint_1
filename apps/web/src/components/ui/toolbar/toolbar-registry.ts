@@ -3,12 +3,13 @@ import type { ReactNode } from 'react';
 /**
  * The declarative **toolbar-item registry** (ADR-0031). A toolbar is described as *data* — an
  * array of {@link ToolbarItem}s — which a single generic {@link Toolbar} primitive renders. Adding
- * a command means registering one item; the primitive owns grouping, tiering, gating, overflow and
- * the APG keyboard model, so no consumer re-implements chrome or a11y.
+ * a command means registering one item; the primitive owns grouping, gating and the APG keyboard
+ * model, so no consumer re-implements chrome or a11y.
  *
- * This module is the **contract + the pure resolution/overflow maths** only — no React rendering,
- * no DOM — so the ordering, gating and demotion rules are exhaustively unit-testable. The
- * `Toolbar` component measures widths and delegates the actual decisions here.
+ * This module is the **contract + the pure resolution maths** only — no React rendering, no DOM —
+ * so the ordering and gating rules are exhaustively unit-testable. It resolves nothing about
+ * width: a command surface wraps rather than hiding (ADR-0109 D1), and the one width-dependent
+ * question left, whether a label shows, is {@link ToolbarLabelVisibility}.
  */
 
 /**
@@ -42,131 +43,35 @@ export function groupRank(group: ToolbarGroupId): number {
  * Prominence tier. `1` = always-visible inline control; `2` = a labelled popover trigger on the bar
  * (View/Summary/Legend/Filter); `3` = admitted last.
  *
- * **Nothing demotes on width any more.** ADR-0109 D1 deleted the `⋯`, the demotion pass and the
- * width ladder: a command surface wraps rather than hiding. Tier is prominence, not a demotion
- * order — this docblock described tier-2 demoting before tier-1 until the 2026-08-25 pass
- * (`docs/TECH_DEBT.md` #193).
+ * **Nothing reads this any more.** ADR-0109 D1 deleted the `⋯`, the demotion pass and the width
+ * ladder, and toolbar-redesign M1 deleted the last two functions that branched on it
+ * (`partitionByTier` and the segment-tier guard in {@link defineToolbar}). It is kept as a declared
+ * prominence on every item, not as a mechanism: setting it changes nothing, and `order` is the field
+ * that decides where an item sits (`docs/TECH_DEBT.md` #193).
  */
 export type ToolbarTier = 1 | 2 | 3;
 
 /**
- * How much room the row has, as **four named bands** rather than a raw number (ADR-0090 M3-T1).
- *
- * A band, not a media query, and the difference is load-bearing: this is derived from the row's own
- * `clientWidth` via the `ResizeObserver` the primitive already runs, so it stays correct if a future
- * dock, rail or split pane narrows the band without narrowing the window. Two sources for one
- * question is how they drift — the same argument `deriveChromeWidth` makes about reading the DOM.
- *
- * - `comfortable` (≥ 1536) — the row as designed; every command inline, labels where affordable.
- * - `compact` (1280–1536) — labels retract first; nothing is folded away.
- * - `condensed` (1024–1280) — related commands fold behind a single trigger (M3-T2).
- * - `collapsed` (< 1024) — the narrowest designed layout (M3-T3), Surface Pro portrait.
- */
-export type ToolbarLayoutMode = 'comfortable' | 'compact' | 'condensed' | 'collapsed';
-
-/**
- * The bands, **widest first** — the order {@link resolveLayoutMode} walks. Their index is the
- * ladder's rung number, which is what makes "narrower" and "wider" comparable without a second
- * lookup table that could disagree with this one.
- */
-const TOOLBAR_LAYOUT_BANDS: readonly { mode: ToolbarLayoutMode; min: number }[] = [
-  { mode: 'comfortable', min: 1536 },
-  { mode: 'compact', min: 1280 },
-  { mode: 'condensed', min: 1024 },
-  { mode: 'collapsed', min: 0 },
-];
-
-/**
- * Extra width required to move **back up** a rung, in px. Nothing here re-enters the measurement —
- * a mode changes what the row renders, and the row's width is imposed by its container — so this is
- * not damping a feedback loop. It exists for the one case that genuinely jitters: a user dragging a
- * window edge across a boundary, where a bare threshold re-lays the whole row out on every pixel of
- * hand tremor.
- *
- * Same size and same reason as {@link LABEL_PROMOTION_MARGIN_PX}'s second job, one rung up: 48 px is
- * wider than any plausible tremor and narrower than any deliberate resize.
- */
-export const TOOLBAR_LAYOUT_HYSTERESIS_PX = 48;
-
-/**
- * Which band a row of `width` px is in, given the band it is in **now**.
- *
- * **Deliberately asymmetric.** Narrowing takes effect immediately; widening requires clearing the
- * target band's floor by {@link TOOLBAR_LAYOUT_HYSTERESIS_PX}. That direction is the safe one: a row
- * that is denser than it strictly needs to be still fits, whereas one that is roomier than it can
- * afford is the defect this whole epic exists to remove.
- *
- * Widening walks **rung by rung** rather than testing the raw band alone. Jumping straight to the
- * band the width falls in and refusing it when the hysteresis is unmet would strand the row at its
- * old mode: growing from `collapsed` to 1550 px clears `compact` (1280 + 48) comfortably but not
- * `comfortable` (1536 + 48), and a single test would have answered "stay collapsed" — a row two
- * rungs denser than its width, which is worse than the jitter the margin is for.
- *
- * Pure; no DOM. `width` of 0 (no layout engine, an unpainted row) resolves to `collapsed` by the
- * bands alone, so callers must not ask before something has been measured.
- *
- * **No production caller today** (`docs/TECH_DEBT.md` #193): both `Deck` and `Toolbar` pass the
- * literal `'comfortable'`, so the other three bands are unreachable. This paragraph said `Toolbar`
- * "holds the previous mode… for the same reason it holds the previous overflow set" until the
- * 2026-08-25 pass — that primitive has neither a mode state nor an overflow set since ADR-0109 D1.
- */
-export function resolveLayoutMode(width: number, current: ToolbarLayoutMode): ToolbarLayoutMode {
-  const rawRung = TOOLBAR_LAYOUT_BANDS.findIndex((b) => width >= b.min);
-  const currentRung = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === current);
-  if (rawRung === currentRung || rawRung < 0 || currentRung < 0) return current;
-  // Narrower rung (higher index): act at once.
-  if (rawRung > currentRung) return TOOLBAR_LAYOUT_BANDS[rawRung]!.mode;
-  // Wider: the widest rung whose floor the width clears by the hysteresis.
-  for (let rung = rawRung; rung < currentRung; rung++) {
-    const band = TOOLBAR_LAYOUT_BANDS[rung]!;
-    if (width >= band.min + TOOLBAR_LAYOUT_HYSTERESIS_PX) return band.mode;
-  }
-  return current;
-}
-
-/**
  * Whether a plain-button item shows its text label beside the icon — a **presentation** choice,
- * deliberately separate from {@link ToolbarTier}, which is a **priority** one.
+ * stated once on the item and decided by one resolver ({@link resolveLabelVisibility} in
+ * `toolbar-styles.ts`).
  *
- * The two used to be the same line of code (`showLabel={item.tier === 1}`), so `tier` silently
- * answered both "what demotes into `⋯` first?" and "does this get a label?" — questions that only
- * coincide by convention. The measured consequence: at 1 920 px the Do row carries ~1 000 px of
- * unused slack, yet showed exactly as many icon-only controls as it does at 1 280 px, because
- * nothing ever asked whether a label was affordable at the width actually available.
- *
- * - `'always'` — always labelled. For the handful of primary controls whose name is the affordance.
- * - `'never'` — always icon-only (the name still reaches AT via `aria-label` + `title`).
- * - `'auto'` (default) — labelled **only when the row measurably has room**, decided per render
- *   from the container's width. Never at the cost of demoting a command into the overflow.
+ * - `'always'` (the default) — labelled at every width. A row that wraps can always afford a label,
+ *   so there is no width at which this one is withheld.
+ * - `'never'` — icon-only everywhere; the name still reaches AT through `aria-label` and the tooltip.
+ * - `'roomy'` — labelled when the **command deck** is at least `--container-roomy` wide, icon-only
+ *   below that. The deck is the only container that carries the query, so on any other surface
+ *   (`Toolbar`) `'roomy'` resolves to `'always'`. Because the label can vanish with no JavaScript
+ *   involved, the control always mounts a `description` tooltip, and only a plain `onActivate`
+ *   item — the one rendered by `ToolbarButton`, which owns that tooltip — may declare it.
  */
-export type ToolbarLabelPolicy =
-  | 'always'
-  | 'auto'
-  | 'never'
-  /**
-   * Labelled at this band and wider, icon-only below it (ADR-0091 D3a).
-   *
-   * **Still distinct from `'auto'`, but no longer for the reason this paragraph gave.** It said
-   * `'auto'` was a projected-width decision taken all-or-nothing for the whole row via
-   * `autoLabelsFit`. ADR-0109 D1 deleted the width ladder and that function with it; `'auto'` now
-   * means **always label** (`Toolbar.tsx`), because a row that wraps can always afford one. So the
-   * distinction survives and inverts: `'auto'` never withholds a label at any width, and a band
-   * rule is the only way left to go icon-only on a narrow window — which is what D3a's 1440
-   * finding was measured against.
-   */
-  | { atLeast: ToolbarLayoutMode };
+export type ToolbarLabelVisibility = 'always' | 'never' | 'roomy';
 
 /**
- * Is `layout` at least as wide as `atLeast`? Rung index is the ladder's own ordering — **lower index
- * is wider** ({@link TOOLBAR_LAYOUT_BANDS} is widest-first) — so "at least as wide" is `<=`. Derived
- * from the same array `resolveLayoutMode` walks rather than from a second table, which is the
- * property that stops the two disagreeing about where a band begins.
+ * What {@link resolveLabelVisibility} hands a control to paint: `'visible'` (a label), `'hidden'`
+ * (icon only) or `'roomy'` (a label the deck's container query hides below `--container-roomy`).
  */
-export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutMode): boolean {
-  const at = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === layout);
-  const floor = TOOLBAR_LAYOUT_BANDS.findIndex((b) => b.mode === atLeast);
-  return at >= 0 && floor >= 0 && at <= floor;
-}
+export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy';
 
 /**
  * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
@@ -177,7 +82,7 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
  * LINES (`DECK_ROWS`, `data-deck-row`), which are not this field. A stale sentence naming a dead
  * value became a cross-reference to the wrong live thing (M7 architecture review, `#288`).
  * The workspace renders one {@link Toolbar} per row, so this only
- * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
+ * partitions items — grouping, gating and the keyboard model are unchanged within each row.
  */
 /**
  * `mode` is the identity line's mode cluster; `strip` is the command deck.
@@ -190,23 +95,14 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
  */
 export type ToolbarRow = 'mode' | 'strip';
 
-/**
- * What the row's current width means, handed to the two places a consumer can act on it: an item's
- * {@link ToolbarItem.isVisible} predicate (fold a command away) and its {@link ToolbarItem.render}
- * escape hatch (render the same command more tightly).
- *
- * **Only those two, deliberately.** `isEnabled`, `isActive` and `disabledReason` answer questions
- * about the *plan*, not about the window — a command that is shut because the pen is elsewhere is
- * shut at every width, and letting narrowness disable something would be a dead end with no
- * explanation a reader could act on (ADR-0082's discriminator: shade for a state the reader can
- * change, omit when it does not apply).
- */
-export interface ToolbarLayoutEnv {
-  layout: ToolbarLayoutMode;
-}
-
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
-export interface ToolbarItemRenderApi extends ToolbarLayoutEnv {
+export interface ToolbarItemRenderApi {
+  /**
+   * Whether this item's label shows, already resolved by {@link resolveLabelVisibility} for the
+   * surface that renders it — hand it to `ToolbarPopover` / `ToolbarSplitButton` rather than
+   * deciding again. A `render` item never resolves to `'roomy'` (see {@link ToolbarLabelVisibility}).
+   */
+  labelState: ToolbarLabelState;
   /** Resolved enabled state (respects `isEnabled` + pen-gating) — mirror it on custom controls. */
   disabled: boolean;
   /**
@@ -252,62 +148,21 @@ export interface ToolbarItem<Ctx> {
   row?: ToolbarRow;
   tier: ToolbarTier;
   /**
-   * Whether this item's text label is shown beside its icon. Defaults to `'auto'` — labelled only
-   * where the row has measured room. Set `'always'` for a control whose name is the affordance, or
-   * `'never'` to pin it icon-only. See {@link ToolbarLabelPolicy}; ignored by `render` items, which
-   * own their own chrome.
+   * Whether this item's text label is shown beside its icon. Defaults to `'always'`. See
+   * {@link ToolbarLabelVisibility}. A `render` item resolves the same policy and hands it to its
+   * trigger as {@link ToolbarItemRenderApi.labelState}; only a plain `onActivate` item may be
+   * `'roomy'`, and {@link defineToolbar} refuses any other.
    *
-   * **A band form exists as of ADR-0091 D3a** — `{ atLeast: 'comfortable' }` labels at that band and
-   * wider, icon-only below.
-   *
-   * It was tried once before and reverted (ADR-0090 M3-T2): the plan's *"segments become icon
-   * pairs"* needed it, but the four segment items it named carried **no `icon`**, so dropping their
-   * labels rendered four blank 16 px buttons and `e2e-toolbar-fit` S5 caught the WCAG 2.5.8 failure
-   * the same hour. The widening was reverted with the task so no untested branch shipped, and the
-   * blocker was recorded as `docs/TECH_DEBT.md` #126 rather than guessed at. **That reason is now
-   * spent**: ADR-0091 D5 gave those four items icons, chosen by the product owner and registered in
-   * `scripts/dependency-claims.json`, so the revert's premise no longer holds and the form returns
-   * with its first honest consumer.
+   * It was `showLabel` with a third, band-shaped form (`{ atLeast: 'comfortable' }`, ADR-0091 D3a)
+   * until toolbar-redesign M1. That form depended on a width ladder ADR-0109 D1 had already deleted,
+   * so it labelled unconditionally everywhere it was read.
    */
-  showLabel?: ToolbarLabelPolicy;
+  labelVisibility?: ToolbarLabelVisibility;
   /**
    * Sort order **within the group** (ascending), i.e. left-to-right position. Ties break by
-   * registry order.
-   *
-   * **This is not the demotion key.** It used to be — `computeOverflow` sorted the whole row's
-   * demotion queue by `order` descending — which quietly made "where does this sit in its group"
-   * answer "what leaves the bar first", two questions that only coincide by accident. The measured
-   * consequence on Row 1 was that Zoom −, Zoom +, Fit and Go-to-today demoted **before** Legend and
-   * Keyboard shortcuts. See {@link priority}.
+   * registry order. Nothing demotes on width, so this is only ever a position.
    */
   order: number;
-  /**
-   * **INERT since ADR-0109 D1 — nothing reads this field** (`docs/TECH_DEBT.md` #193). A command
-   * surface wraps rather than hiding, so there is no budget, no demotion pass and no `⋯`; both
-   * comparators that order this surface key on `groupRank`, then `order`, then declaration index.
-   * The field's only reader is {@link priorityOf}, which has no caller. **Setting it on a new item
-   * changes nothing** — if you want an item to sit elsewhere, that is `order`.
-   *
-   * It is kept rather than removed for the reason the ten live declarations are: the ladder
-   * machinery was deliberately kept (ADR-0110 M5), and if a demotion pass returns, the ranks those
-   * items carry are the considered answers to defects a flag-on journey found — see
-   * `tsld-toolbar-items.tsx`'s `next-conflict` and the four `-100` items. Removing it is a separate
-   * decision (ADR-0105), not a tidy-up.
-   *
-   * **What it meant while it was live**, which is what the ranks in the registry still encode:
-   * how much this row wanted to keep the item — higher survived longer, lowest went into the `⋯`
-   * first. Separate from `order` because they answer different questions — `order` is *where does
-   * this sit*, `priority` was *what can this row afford to lose*. A zoom control is worth more than a
-   * link to the keyboard-shortcuts sheet even though it sits further left.
-   *
-   * **Defaults to `-order`, not `order`**, which is the only default that reads correctly *and*
-   * preserves today's behaviour. The old rule was "highest `order` demotes first", so importance
-   * runs *opposite* to position; defaulting to `order` would have made an unset item's priority say
-   * the reverse of what it does. The first draft did exactly that, and its own test caught it.
-   * Because the default is exact, every item that does not set this behaves as it always has —
-   * which is what keeps the existing suites a before/after oracle.
-   */
-  priority?: number;
   /**
    * Items sharing a `segment` are **alternatives to one another** — one two-state switch, not two
    * independent commands. `Diagram | Gantt` is one segment (`Early mode | Visual mode` was another
@@ -323,9 +178,8 @@ export interface ToolbarItem<Ctx> {
    * the durable fact: these items are one switch. {@link ToolbarProps.segmentLabels} is the first
    * consumer to use it for that.
    *
-   * Two invariants guard it in {@link defineToolbar} — a segment may not span a `tier` or a `row`.
-   * Both were written for demotion and are retained on the narrower ground that a split segment is
-   * wrong however it is rendered; see their comments.
+   * One invariant guards it in {@link defineToolbar} — a segment may not span a `row`. (It also
+   * refused a segment spanning a `tier` until toolbar-redesign M1, a guard written for demotion.)
    */
   segment?: string;
   /** Accessible name — always required (icon-only buttons still need it). */
@@ -355,14 +209,8 @@ export interface ToolbarItem<Ctx> {
    * when authoring is not enabled (ADR-0028), so read-only ↔ editing flips as one coherent state.
    */
   penGated?: boolean;
-  /**
-   * Whether the item is present at all in this context. Absent ⇒ always visible.
-   *
-   * The second argument carries the row's {@link ToolbarLayoutMode}, so a command can fold away
-   * where a narrower band offers it behind another trigger (M3-T2/T3). Ignore it and the item's
-   * visibility is width-independent, which is what every pre-M3 registry entry means.
-   */
-  isVisible?: (ctx: Ctx, env: ToolbarLayoutEnv) => boolean;
+  /** Whether the item is present at all in this context. Absent ⇒ always visible. */
+  isVisible?: (ctx: Ctx) => boolean;
   /** Whether the item is actionable. Absent ⇒ always enabled. Combined with pen-gating. */
   isEnabled?: (ctx: Ctx) => boolean;
   /** Toggle/segment pressed state → `aria-pressed`. Absent ⇒ not a toggle. */
@@ -574,35 +422,7 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
     );
   }
 
-  // **A segment's members must share a `tier`** (ADR-0090 M5, component gate).
-  //
-  // Written for demotion: a `tier: 3` member sat in the static overflow while its partner stayed on
-  // the bar, so the pair degraded silently to "one always hidden, the other sometimes" — a split
-  // segment, which is the state the field exists to prevent.
-  //
-  // **That pass was deleted at ADR-0109 D1, and `tier` now has no rendering effect at all**: nothing
-  // in `Toolbar` or `Deck` branches on it, and `partitionByTier` — the one function that would act
-  // on it — has no production caller (`docs/TECH_DEBT.md` #193). So this guard is **speculative and
-  // forward-only**, not protection for a live property: it is kept because `tier` still declares
-  // prominence and a surface may rank again, not because anything today would break.
-  //
-  // The previous version of this comment said the rule holds "however the surface renders", which
-  // implies a live protection that does not exist — ADR-0076 Class 2, inside a comment written the
-  // same day to fix a different stale one (component review, 2026-08-30).
-  const tierBySegment = new Map<string, ToolbarTier>();
-  for (const item of items) {
-    if (!item.segment) continue;
-    const seen = tierBySegment.get(item.segment);
-    if (seen === undefined) tierBySegment.set(item.segment, item.tier);
-    else if (seen !== item.tier) {
-      throw new Error(
-        `defineToolbar: segment "${item.segment}" mixes tier ${seen} and tier ${item.tier} — ` +
-          'the members of one switch must share a tier.',
-      );
-    }
-  }
-
-  // The same guard one axis over (ADR-0091 M1, B2). A segment split across rows used to lose its
+  // **A segment may not span rows** (ADR-0091 M1, B2). A segment split across rows used to lose its
   // partner entirely — the pair was resolved from **one row's** `bar`, so each half demoted on its
   // own row's arithmetic. Two rows made that impossible to express; a third makes it a
   // one-character typo in `row`.
@@ -622,6 +442,28 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       throw new Error(
         `defineToolbar: segment "${item.segment}" spans rows "${seen}" and "${row}" — ` +
           'the members of one switch must share a row.',
+      );
+    }
+  }
+
+  // **Only a plain `onActivate` item that carries a `description` may be `'roomy'`** (toolbar-redesign
+  // M1). A `'roomy'` label disappears under a container query, with no JavaScript involved, so the
+  // control must already carry the tooltip that names it: `ToolbarButton` mounts a `description`
+  // tooltip for exactly that state, and the custom triggers (`ToolbarPopover`,
+  // `ToolbarSplitButton`) have only a native `title`. A bare name-echo would be a tooltip that says
+  // the label back to a reader who can see it.
+  for (const item of items) {
+    if (item.labelVisibility !== 'roomy') continue;
+    if (typeof item.onActivate !== 'function') {
+      throw new Error(
+        `ToolbarItem "${item.id}": labelVisibility "roomy" is only for a plain onActivate item — ` +
+          'a render item has no description tooltip to carry its name when the label goes.',
+      );
+    }
+    if (!item.description) {
+      throw new Error(
+        `ToolbarItem "${item.id}": labelVisibility "roomy" needs a description, because the ` +
+          'tooltip it always mounts is the only thing naming the control once the label goes.',
       );
     }
   }
@@ -690,17 +532,10 @@ export function resolveItems<Ctx>(
   items: ToolbarItem<Ctx>[],
   ctx: Ctx,
   authoringEnabled: boolean,
-  /**
-   * The row's measured band. Defaults to `comfortable` — the band in which nothing folds — so every
-   * caller that predates M3 (and every test that renders a registry directly) resolves exactly the
-   * item set it always did.
-   */
-  layout: ToolbarLayoutMode = 'comfortable',
 ): ResolvedToolbarItem<Ctx>[] {
-  const env: ToolbarLayoutEnv = { layout };
   return items
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.isVisible?.(ctx, env) ?? true)
+    .filter(({ item }) => item.isVisible?.(ctx) ?? true)
     .sort((a, b) => {
       const byGroup = groupRank(a.item.group) - groupRank(b.item.group);
       if (byGroup !== 0) return byGroup;
@@ -718,64 +553,10 @@ export function resolveItems<Ctx>(
         activeKind: item.activeKind ?? 'selected',
         disabledReason: enabled ? undefined : item.disabledReason?.(ctx),
         srDescription: item.srDescription?.(ctx),
-        // A function icon is called exactly once here, not per consumer: the bar and the `⋯`
-        // overflow both render from this resolution, and calling it twice would let one item paint
-        // two different icons in the two places it can appear.
+        // A function icon is called exactly once here, not per consumer: every renderer reads this
+        // resolution, and calling it twice would let one item paint two different icons.
         icon: typeof item.icon === 'function' ? item.icon(ctx) : item.icon,
         busy: item.isBusy?.(ctx) ?? false,
       };
     });
 }
-
-/** Split resolved items into the bar (tiers 1–2, order preserved) and the always-overflow set (tier 3). */
-export function partitionByTier<Ctx>(resolved: ResolvedToolbarItem<Ctx>[]): {
-  bar: ResolvedToolbarItem<Ctx>[];
-  overflow: ResolvedToolbarItem<Ctx>[];
-} {
-  const bar: ResolvedToolbarItem<Ctx>[] = [];
-  const overflow: ResolvedToolbarItem<Ctx>[] = [];
-  for (const r of resolved) (r.item.tier === 3 ? overflow : bar).push(r);
-  return { bar, overflow };
-}
-
-/**
- * **How much the row wants to keep an item** — higher survives longer.
- *
- * **It has no production caller today** (`docs/TECH_DEBT.md` #193). It was exported because two
- * decisions had to agree about it — the demotion queue and the order in which the ladder withdrew
- * labels, which is this comparator reversed — and ADR-0109 D1 deleted both. Kept rather than
- * removed because ADR-0110 M5 deliberately kept the ladder machinery (the reduced strip does not
- * fit at 1280 or 1440), so this may yet be needed; removing it is a public-contract change and is
- * a separate decision from correcting this paragraph, which was simply wrong.
- *
- * The `-order` default is exact rather than approximate, which is what keeps every item that does
- * not declare a priority behaving as it always has (see {@link ToolbarItem.priority}).
- */
-export function priorityOf<Ctx>(item: ToolbarItem<Ctx>): number {
-  return item.priority ?? -item.order;
-}
-
-/**
- * **Nothing demotes on width any more, and `priority` no longer decides what a planner can reach.**
- * `computeOverflow` was deleted at ADR-0091 M7 in favour of `computeLadder` (`toolbar-ladder.ts`),
- * and ADR-0109 D1 then deleted **that** too: a command surface wraps rather than hiding, so there
- * is no budget, no demotion and no `⋯`. **`priority` survives as nothing at all**: both sorts
- * that order this surface — `resolveToolbarItems` (`:690-695`) and `Toolbar`'s own grouping pass
- * (`Toolbar.tsx:235-237`) — key on `groupRank`, then `order`, then declaration index. Neither
- * mentions `priority`; its only reader is `priorityOf`, which has no caller.
- *
- * This paragraph's opening claim had already been stale twice before that. It was written because ADR-0091 M7
- * *extended* `computeOverflow` with a new parameter and gave it three new tests hours before making
- * it unreachable — a component review found it still exported, still tested, and still describing
- * how the running component fed it. The replacement sentence then outlived its own subject by a day
- * short of a week, citing `toolbar-ladder.ts` after that file was deleted. Corrected by the
- * 2026-08-25 reconciliation pass; kept rather than deleted because a reader meeting `priority` still
- * needs to be told it is not the demotion key, which is the one thing both versions got right.
- *
- * **The sentence corrected above was the THIRD, and it is the instructive one** (2026-09-13,
- * `docs/TECH_DEBT.md` #193). The first two were citations that outlived their subject, which a
- * reader can catch by resolving a name against the tree. This one instead *asserted a residual
- * role the field does not have* — ordering within a group is `order`, one field along — and there
- * is no dangling name to resolve, so it reads as diligence. Established by reading both
- * comparators, not by anything failing.
- */

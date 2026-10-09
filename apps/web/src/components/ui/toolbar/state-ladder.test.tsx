@@ -85,7 +85,6 @@ describe('the state ladder paints five distinct states', () => {
           itemId="probe"
           label="Probe"
           icon={null}
-          showLabel
           disabled={false}
           disabledReason={undefined}
           srDescription={undefined}

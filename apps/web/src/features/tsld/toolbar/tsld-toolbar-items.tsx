@@ -6,6 +6,7 @@ import {
   AlignVerticalSpaceAround,
   BookOpen,
   ChartArea,
+  ChartColumnStacked,
   ChartGantt,
   Check,
   ChevronDown,
@@ -39,7 +40,6 @@ import {
   SquareDashedMousePointer,
   TriangleAlert,
   Undo2,
-  Users,
   Waypoints,
   X,
   GitCompareArrows,
@@ -62,15 +62,11 @@ import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import type {
   ToolbarItemRenderApi,
-  ToolbarLayoutMode,
+  ToolbarLabelVisibility,
   ToolbarRow,
 } from '@/components/ui/toolbar/toolbar-registry';
-import {
-  bandIsAtLeast,
-  defineToolbar,
-  type ToolbarItem,
-} from '@/components/ui/toolbar/toolbar-registry';
-import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
+import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
+import { toolbarControlVariants, toolbarLabelClass } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
@@ -159,7 +155,7 @@ type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels'
  * `{@link measureLabelWidth}` that stood here resolved to nothing — a broken TSDoc link of exactly
  * the `isWidthConstrained` class `docs/TECH_DEBT.md` #193 records.
  *
- * `showLabel: 'never'` was measured and rejected: it drops an item's label cost while keeping its
+ * `labelVisibility: 'never'` (then `showLabel`) was measured and rejected: it drops an item's label cost while keeping its
  * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
  * and it would have pinned three of the seven promotable buttons permanently icon-only to let the
  * other four gain text.
@@ -241,7 +237,22 @@ interface LensToggle {
    * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
    * promoted, so a control is on the row **or** in the popover and never in both.
    */
-  promotion?: { icon: React.ReactNode; order: number };
+  promotion?: {
+    icon: React.ReactNode;
+    order: number;
+    /**
+     * How the promoted control's label behaves (`ToolbarLabelVisibility`). Absent ⇒ `'always'`.
+     * Declared per record because the promoted lenses are not one policy: Legend names itself, and
+     * Baseline overlay and Resource view go icon-only below `--container-roomy`.
+     */
+    labelVisibility?: ToolbarLabelVisibility;
+    /**
+     * The tooltip sentence. **Required for `'roomy'`**, because the tooltip a `'roomy'` control
+     * always mounts is the only thing naming it once its label goes (`defineToolbar` refuses a
+     * `'roomy'` item without one).
+     */
+    description?: string;
+  };
 }
 
 /**
@@ -269,7 +280,12 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // stated rather than buried.
     //
     // `lensTogglesIn` drops it from `View ▾` by construction, so it cannot appear in both.
-    promotion: { icon: <Layers className="size-4" />, order: 23 },
+    promotion: {
+      icon: <Layers className="size-4" />,
+      order: 23,
+      labelVisibility: 'roomy',
+      description: 'Draw the active baseline beside each bar',
+    },
     enabled: CANVAS_LENSES_ENABLED,
     checked: (ctx) => ctx.baselineOverlay,
     toggle: (ctx) => ctx.toggleBaselineOverlay(),
@@ -330,7 +346,17 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // closes the popover behind the departing focus — from inside a list, that reads as being
     // thrown out. On a toolbar button, pressing a control and landing in the panel it opened is
     // ordinary. The surprise the sentence existed to remove is not there to remove.
-    promotion: { icon: <Users className="size-4" />, order: 21 },
+    //
+    // **Icon `ChartColumnStacked`, label `'roomy'`** (toolbar-redesign OD-1). `Users` read as
+    // "members", which is a different feature; the resource strip this opens is a stacked loading
+    // histogram under the diagram (ADR-0049), and that is the glyph. It is the fourth control that
+    // goes icon-only below the roomy width, and the one the conflict case at 1024 needs.
+    promotion: {
+      icon: <ChartColumnStacked className="size-4" />,
+      order: 21,
+      labelVisibility: 'roomy',
+      description: 'Show resource loading under the diagram',
+    },
   },
   {
     /**
@@ -422,12 +448,10 @@ function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
  * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
  * the same `LensToggle` records `View ▾` reads, never restated.
  *
- * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`. The original reason — that
- * `autoLabelsFit` was all-or-nothing for a whole row, so an `'auto'` item could label itself at a
- * narrow band that happened to have slack — **lapsed with the width ladder (ADR-0109 D1)**.
- * `'auto'` now means always label, so it would label these two at *every* width. These carry a
- * name a planner searches for and should still go icon-only on a narrow window, so a band rule
- * remains what they need; only the argument for it has changed.
+ * **Each record declares its own label policy** (`LensToggle.promotion.labelVisibility`), where this
+ * hard-coded `{ atLeast: 'comfortable' }` for all of them until toolbar-redesign M1. That band form
+ * depended on a width ladder ADR-0109 D1 had deleted, so it labelled these at every width. The
+ * policy is now a real one: `'roomy'` where a record says so, `'always'` where it does not.
  */
 function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
   return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
@@ -437,10 +461,10 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'strip',
       tier: 2,
-      showLabel: { atLeast: 'comfortable' },
+      labelVisibility: promotion.labelVisibility ?? 'always',
       order: promotion.order,
-      priority: 60,
       label: t.label,
+      ...(promotion.description ? { description: promotion.description } : {}),
       icon: promotion.icon,
       isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
       isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
@@ -647,7 +671,7 @@ function GoToTodayControl({
         {...(primaryReason ? { primaryDisabledReason: primaryReason } : {})}
         caretDisabledReason="Set the plan's start date first"
         haspopup="dialog"
-        compact={triggersAreCompact(api.layout)}
+        labelState={api.labelState}
         title="Go to today"
         icon={<LocateFixed aria-hidden="true" className="size-4" />}
         label="Go to today"
@@ -1097,43 +1121,16 @@ function applyLevellingPlanReason(
 }
 
 /**
- * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
- * their visible labels, and the search field gives up its preferred width for its floor.
+ * The search field's width. `w-[min(15rem,32vw)]` resolves to a flat **240 px** at any viewport at
+ * or above 750 px, so on the narrow widths the field never actually responds to `32vw` — it is
+ * simply the widest thing on Row 1. Below `sm` it drops to the `w-36` floor, which is 144 px and
+ * still a field rather than an icon.
  *
- * **Measured, and the measurement moved the task.** M3-T3's own risk note is flagged *"derived from
- * the measured anchors, not observed"* and predicts a 305 px collision at 960. After M2's cuts and
- * M3-T2's fold, the real figures (`docs/specs/workspace-layout/m3-narrow-widths.md`) are Row 1
- * laying out **883 px against an 872 px container at 960 — 11 px over — and against 680 px at 768**.
- * Row 2 already fits at every width. So the collapse is a Row-1 problem of two very different sizes,
- * and the honest remedy is sized to it rather than to the drafted number.
- *
- * `search` alone is **240 px of Row 1's 784**, exactly as the note predicted, and its `min-w-36`
- * floor gives 96 px back — enough for 960 and not for 768. The four popover triggers give ~60 px
- * each, which closes 768 with room to spare.
- */
-function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
-  // **`condensed` and narrower since Graphite M5, and the reason is that these thresholds encode
-  // "how much does this row need".** They were calibrated when ADR-0031's split gave the surface
-  // TWO rows, so Row 1 carried about fourteen items and only ran out of width below 1024. One
-  // merged strip carries all of them, and the fit gate said so: at 1280 it laid out **1363 px
-  // against a 1216 px container — 147 px over** — while `collapsed` alone left the field at its
-  // full 240 px and every trigger labelled.
-  //
-  // ADR-0099 said the band floors would be deleted; M5-T1 measured that they are needed and kept
-  // them. **Kept means re-tuned**: a floor is a number about a row, and the row changed.
-  return layout === 'condensed' || layout === 'collapsed';
-}
-
-/**
- * The search field's width, by band. `w-[min(15rem,32vw)]` resolves to a flat **240 px** at any
- * viewport at or above 750 px, so on the narrow widths the field never actually responds to `32vw` —
- * it is simply the widest thing on Row 1. In the collapsed band it drops to the `min-w-36` floor it
- * already declares, which is 144 px and still a field rather than an icon.
- *
- * An icon-triggered field (the other option M3-T3's note names) was not taken: it costs a click on
- * the one control a planner most often arrives wanting to use, and the measurement says the floor is
- * enough. Kept as one constant because two call sites render this field — the live one and the
- * flag-off stub — and a width that differed between them would show up only with the flag off.
+ * An icon-triggered field was not taken: it costs a click on the one control a planner most often
+ * arrives wanting to use. Kept as one constant because two call sites render this field — the live
+ * one and the flag-off stub — and a width that differed between them would show up only with the
+ * flag off. (It was a function of the row's density band until toolbar-redesign M1, whose
+ * `compact` branch nothing could reach after ADR-0109 D1.)
  *
  * **168 px below 1600, 240 above** (ADR-0179, `docs/specs/minimum-viewport/m4-measurement.md`). The
  * 240 was chosen with nothing to say what the deck had to fit, and the two LOOK groups sum to 1326
@@ -1143,9 +1140,7 @@ function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
  * placeholder is the only thing that loses room, and the accessible name does not. Wider windows
  * keep 240, so the product owner's own displays (1646 and 1912) are unchanged.
  */
-function searchFieldWidth(layout: ToolbarLayoutMode): string {
-  return triggersAreCompact(layout) ? 'w-36' : 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
-}
+const SEARCH_FIELD_WIDTH_CLASS = 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
 
 /**
  * The search field's own geometry, shared by the two components that render one.
@@ -1206,10 +1201,8 @@ function placeholderItem(o: {
  */
 function SearchFieldControl({
   itemProps,
-  layout,
 }: {
   itemProps: ToolbarItemRenderApi['itemProps'];
-  layout: ToolbarLayoutMode;
 }): React.ReactElement {
   return (
     <div className="relative ml-3 flex items-center">
@@ -1253,7 +1246,7 @@ function SearchFieldControl({
         // alone at 240 × 36, "the ONE deck control sized outside" the rule, for the second time and
         // for the same reason. A literal cannot follow a token; it can only agree with it until
         // the token moves.
-        className={cn(SEARCH_FIELD_CLASS, searchFieldWidth(layout))}
+        className={cn(SEARCH_FIELD_CLASS, SEARCH_FIELD_WIDTH_CLASS)}
       />
     </div>
   );
@@ -1383,7 +1376,7 @@ function LiveSearchControl({
           // projection in `e2e-workspace-fit/command-surface.spec.ts` that named it, not a read of
           // this file, which is why that gate exists.
           SEARCH_FIELD_CLASS,
-          searchFieldWidth(api.layout),
+          SEARCH_FIELD_WIDTH_CLASS,
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
           // absent, so the native glyph is exactly where it is today.
@@ -1473,7 +1466,7 @@ function PlanAnalysisControl({
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
-  const compact = triggersAreCompact(api.layout);
+  const labelClass = toolbarLabelClass(api.labelState);
   return (
     <>
       <button
@@ -1484,7 +1477,9 @@ function PlanAnalysisControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? ANALYSIS_LABEL) : ANALYSIS_LABEL}
-        {...(compact || (disabled && api.disabledReason) ? { 'aria-label': ANALYSIS_LABEL } : {})}
+        {...(labelClass === null || (disabled && api.disabledReason)
+          ? { 'aria-label': ANALYSIS_LABEL }
+          : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1492,7 +1487,7 @@ function PlanAnalysisControl({
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <ChartArea aria-hidden="true" className="size-4" />
-        {compact ? null : <span className="truncate">{ANALYSIS_LABEL}</span>}
+        {labelClass ? <span className={labelClass}>{ANALYSIS_LABEL}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -1571,7 +1566,7 @@ function FilterMenuControl({
       label="Filter"
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
-      compact={triggersAreCompact(api.layout)}
+      labelState={api.labelState}
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
@@ -1655,7 +1650,7 @@ function ExportMenuControl({
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   const disabled = api.disabled;
-  const compact = triggersAreCompact(api.layout);
+  const labelClass = toolbarLabelClass(api.labelState);
   return (
     <>
       <button
@@ -1666,7 +1661,7 @@ function ExportMenuControl({
         aria-expanded={open}
         aria-disabled={disabled || undefined}
         title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
-        {...(compact || (disabled && api.disabledReason)
+        {...(labelClass === null || (disabled && api.disabledReason)
           ? { 'aria-label': SHARE_EXPORT_LABEL }
           : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
@@ -1676,7 +1671,7 @@ function ExportMenuControl({
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        {compact ? null : <span className="truncate">{SHARE_EXPORT_LABEL}</span>}
+        {labelClass ? <span className={labelClass}>{SHARE_EXPORT_LABEL}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -2290,6 +2285,9 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'strip',
       tier: 2,
+      // Declared, not enforced: this control paints its own icon-only button, so the policy has
+      // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
+      labelVisibility: 'never',
       order: 8,
       label: 'Undo',
       penGated: true,
@@ -2314,6 +2312,9 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'strip',
       tier: 2,
+      // Declared, not enforced: this control paints its own icon-only button, so the policy has
+      // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
+      labelVisibility: 'never',
       order: 10,
       label: 'Redo',
       penGated: true,
@@ -2414,10 +2415,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     row: 'strip' as const,
     tier: 2 as const,
     order: 13,
-    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). Kept as the
-    // considered rank if a demotion pass returns. It meant: navigation survives longest on Row 1
-    // — ADR-0090 D3, a rule about a row that no longer exists.
-    priority: 100,
     label: 'Go to today',
     icon: <LocateFixed className="size-4" />,
   };
@@ -2425,31 +2422,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'comments',
     group: 'object' as const,
     row: 'strip' as const,
-    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
-    // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
-    // is kept as the considered answer if a demotion pass ever returns; everything below
-    // describes the deleted ladder and is history, not behaviour.
-    //
-    // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
-    // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
-    // measured: the strip laid out wider than its container at 1280. Something has to demote first,
-    // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
-    // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
-    // "how prominent should this be".
-    //
-    // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
-    // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
-    // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
-    // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
-    // to accommodate a mis-read of the mechanism.
-    //
-    // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
-    // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
-    // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
-    // simplify the strip would introduce this product's first nested menus, with their own focus and
-    // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
-    // already tested and already swept by this gate.
-    priority: -100,
     tier: 2 as const,
     order: 10,
     label: 'Comments',
@@ -2500,38 +2472,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // measured rather than derived.
     tier: 1 as const,
     order: 2,
-    /**
-     * **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The surface
-     * wraps rather than hiding, so there is no budget, no demotion and no `⋯`, and the defect
-     * described below cannot currently occur — it needed a row that drops a command. The rank is
-     * kept rather than deleted because it is the considered answer if a demotion pass returns, and
-     * because that answer was found by a journey rather than by reading. Everything from here down
-     * describes the deleted ladder.
-     *
-     * **A command outranks the read-out that describes it** (ADR-0094 M5).
-     *
-     * Without this the flag-on journey found the epic's purpose inverting the moment it applied:
-     * `next-conflict-status` is a `render` item and therefore **cannot demote**, so at the ordinary
-     * 1280 px journey viewport the ~130 px it takes the instant a plan HAS a conflict pushed
-     * something off the row — and the lowest-ranked candidate was the button the chip labels
-     * (default priority is `-order`, i.e. −2, below every neighbour). The result was a count sitting
-     * on the row beside no way to act on it, in the only state this epic exists for.
-     *
-     * **Raised 90 → 110 by Graphite M5, and the reason it was 90 is the reason it cannot stay
-     * there.** "Navigation survives longest" (ADR-0090 D3) was a rule about **Row 1**, where the
-     * only thing this command could displace was a viewport button with a second route. Merging
-     * ADR-0031's two rows puts the viewport cluster and this command on ONE budget, and the flag-on
-     * journey found the result at the product owner's 1646: the ladder demoted `next-conflict` and
-     * kept `zoom-out`, so ADR-0094 M2's whole finding — a shading nobody opens the menu to see is
-     * not a shading — was back, one epic later, without anyone deciding it.
-     *
-     * The trade is deliberate and asymmetric. Zooming out survives the `⋯` intact: it is also
-     * `View ▾ ▸ Zoom`, and Ctrl+scroll. `Next conflict` in the `⋯` has no second route, and its
-     * whole value is a shaded state and a count that must be **seen without opening anything**.
-     * The read-out still cannot be given the lower rank instead — it has no rank, which is the
-     * asymmetry that caused this in the first place.
-     */
-    priority: 110,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
@@ -2547,31 +2487,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'export',
     group: 'output' as const,
     row: 'strip' as const,
-    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
-    // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
-    // is kept as the considered answer if a demotion pass ever returns; everything below
-    // describes the deleted ladder and is history, not behaviour.
-    //
-    // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
-    // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
-    // measured: the strip laid out wider than its container at 1280. Something has to demote first,
-    // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
-    // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
-    // "how prominent should this be".
-    //
-    // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
-    // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
-    // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
-    // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
-    // to accommodate a mis-read of the mechanism.
-    //
-    // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
-    // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
-    // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
-    // simplify the strip would introduce this product's first nested menus, with their own focus and
-    // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
-    // already tested and already swept by this gate.
-    priority: -100,
     tier: 2 as const,
     order: 0,
     label: SHARE_EXPORT_LABEL,
@@ -2598,15 +2513,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'strip',
       tier: 2,
-      // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
-      // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
-      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
-      // label, so it would label these at every width. The 1440 measurement still forbids that,
-      // so the band rule stands on the measurement rather than on the deleted mechanism.
-      showLabel: { atLeast: 'comfortable' },
+      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
+      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
+      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
+      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
+      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
+      // one thing and the screen another. The declaration now says what the screen does.
+      labelVisibility: 'never',
       order: 10,
-      priority: 100,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
       // Below 1280 px this command lives inside `Zoom ▾` instead (M3-T2) — one predicate shared with
@@ -2620,15 +2534,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'strip',
       tier: 2,
-      // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
-      // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
-      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
-      // label, so it would label these at every width. The 1440 measurement still forbids that,
-      // so the band rule stands on the measurement rather than on the deleted mechanism.
-      showLabel: { atLeast: 'comfortable' },
+      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
+      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
+      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
+      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
+      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
+      // one thing and the screen another. The declaration now says what the screen does.
+      labelVisibility: 'never',
       order: 11,
-      priority: 100,
       label: 'Zoom in',
       icon: <Plus className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
@@ -2640,15 +2553,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'strip',
       tier: 2,
-      // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
-      // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
-      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
-      // label, so it would label these at every width. The 1440 measurement still forbids that,
-      // so the band rule stands on the measurement rather than on the deleted mechanism.
-      showLabel: { atLeast: 'comfortable' },
+      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
+      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
+      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
+      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
+      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
+      // one thing and the screen another. The declaration now says what the screen does.
+      labelVisibility: 'never',
       order: 12,
-      priority: 100,
       label: 'Fit to plan',
       icon: <Maximize2 className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
@@ -2656,8 +2568,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       onActivate: (ctx) => ctx.fit(),
     },
     // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
-    // with `isolate-logic` and `float-paths`. All three required a selection, so all three spent
-    // most of their life on Row 1 shaded — holding width to say "Select an activity first".
+    // with `isolate-logic`. Both required a selection, so both spent most of their life on Row 1
+    // shaded — holding width to say "Select an activity first". `float-paths` was named in that
+    // plan and **did not move**: it is still a deck item below, and it needs a selection for the
+    // same reason. It leaves for the selection bar in toolbar-redesign M2-T4 (D-c).
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
@@ -2671,8 +2585,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           // therefore pinned — a split button is not something you stuff into a menu — which is why
           // it takes the tier that never demotes rather than `today`'s old tier 2.
           //
-          // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
-          // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
+          // A `render` item owns its own chrome, and this one resolves its label from
+          // `api.labelState` exactly as its `View ▾` and `Summary ▾` neighbours do.
           // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
           // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
           // same milestone as the Early/Visual selector; the control itself is display-only and reads
@@ -2702,7 +2616,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           label={viewTriggerLabel(ctx)}
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
-          compact={triggersAreCompact(api.layout)}
+          labelState={api.labelState}
         >
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
@@ -2725,7 +2639,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'mode',
       tier: 1,
       // TECH_DEBT #61 (the `mode-early` item this pointed at was deleted by ADR-0148).
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 10,
       segment: 'view-mode',
       label: 'Diagram',
@@ -2739,7 +2653,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'mode',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 11,
       segment: 'view-mode',
       label: 'Gantt',
@@ -2772,9 +2686,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       : {
           ...searchShape,
           presentational: true,
-          render: (_ctx, api) => (
-            <SearchFieldControl itemProps={api.itemProps} layout={api.layout} />
-          ),
+          render: (_ctx, api) => <SearchFieldControl itemProps={api.itemProps} />,
         },
     // Filter — flag-on a real attribute Filter menu (Critical / Has constraint / Has conflict), whose
     // match set intersects with the search query; flag-off the "Coming soon" placeholder, byte-for-byte.
@@ -2844,7 +2756,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             order: 4,
             label: 'Float paths',
             icon: <Split className="size-4" />,
-            showLabel: 'auto',
             isActive: (ctx) => ctx.floatPathsOpen,
             isEnabled: (ctx) => ctx.activityCount > 0 && ctx.selectedActivity != null,
             disabledReason: (ctx) =>
@@ -2891,31 +2802,20 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Current conflict',
       presentational: true,
       /**
-       * Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2) — **and
-       * only once the row is at least `compact`.**
+       * Visible whenever there is something to count — not only mid-cycle (ADR-0094 M3-T2).
        *
-       * The band floor is the Project-finish chip's answer to the same problem, for the same reason:
-       * a `render` item can never demote, so every pixel it takes is paid at every width, and the
-       * only answer available to such an item is to withhold itself.
+       * It carried a second clause, `bandIsAtLeast(env.layout, 'compact')`, until toolbar-redesign M1:
+       * a width floor that withheld the chip on a narrow row, because a `render` item could never
+       * demote. The floor was dead on arrival of ADR-0109 D1 — `Deck` and `Toolbar` both pinned the
+       * band at `comfortable`, which clears every floor — so the chip has been unconditional since,
+       * and deleting the clause changes nothing a planner sees. The paragraph that defended the floor
+       * also claimed it fixed an `e2e-toolbar-fit` S4 overhang, and was withdrawn once measured: the
+       * fixture plan had no conflicts, so the chip never rendered there (ADR-0076 Class 3).
        *
-       * **It is not, however, what fixed the S4 overhang this epic hit, and that is worth saying.**
-       * This paragraph first claimed it was: `e2e-toolbar-fit` S4 went red at 1024 when
-       * `next-conflict` was promoted to tier 1, the read-out was the obvious new pinned cost, and
-       * the floor was written with the overhang cited as its evidence. Adding it changed the
-       * overhang by **exactly zero px** — the fixture plan carries no conflicts, so this chip was
-       * never rendering at that width at all. The real cause was `computeLadder` testing for a
-       * shortfall without charging the `⋯` it was already painting (`toolbar-ladder.ts`, Stage 2).
-       * The floor stays because the reasoning for it is sound on its own; the claim that it fixed
-       * something is withdrawn rather than deleted, because the wrong version is the more
-       * instructive half (ADR-0076 Class 3, caught by measuring instead of shipping the story).
-       *
-       * The count is not lost to an AT user below `compact`: `next-conflict`'s `srDescription`
-       * carries it, and that is read from the button rather than from this chip (which is
-       * `aria-hidden`). A sighted planner there loses the resting magnitude and keeps the button,
-       * which is a glance rather than a capability — the same trade the finish chip records.
+       * The count is also carried to AT by `next-conflict`'s `srDescription`, read from the button
+       * rather than from this chip (which is `aria-hidden`).
        */
-      isVisible: (ctx, env) =>
-        (ctx.hasConflicts || ctx.currentConflict != null) && bandIsAtLeast(env.layout, 'compact'),
+      isVisible: (ctx) => ctx.hasConflicts || ctx.currentConflict != null,
       render: (ctx, api) => <CurrentConflictStatus ctx={ctx} itemProps={api.itemProps} />,
     },
 
@@ -2959,7 +2859,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       order: -1,
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       label: 'Editing control',
       icon: <PenLine className="size-4" />,
       isVisible: (ctx) => ctx.penLock?.penManaged === true,
@@ -3016,7 +2916,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 1,
       // Its name is the affordance, so it stays labelled wherever the row can afford it
       // (TECH_DEBT #61).
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'Add activity',
       icon: <Plus className="size-4" />,
@@ -3147,13 +3047,15 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       description:
         'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
       icon: <Scale className="size-4" />,
-      // Icon-only at every width, and the deck is what decides that: it ignores `showLabel` and
-      // withholds a label only for `ICON_ONLY` (`Deck.tsx`), where this item is listed. The longest
-      // label on the strip cost the DO row its single line at 1280 (`command-surface.spec.ts` LINES),
-      // and a band rule here could not have helped, because the deck is fixed at `comfortable`. The
-      // accessible name and tooltip still carry the words (ADR-0117). `Scale` (balance) and not
-      // `CalendarCheck`, which read as a calendar glyph once the word was gone.
-      showLabel: 'never',
+      // Icon-only at every width, as it has always been — and **declared `'never'` for now, not
+      // `'roomy'`**, though the redesign's D-l wants it labelled on a roomy deck. Measured at M1:
+      // labelling it from 79 rem puts the DO row over one line at 1280 (`command-surface.spec.ts`
+      // LINES goes 2 → 3), because Summary and Comments still sit on that row. They leave in M2, and
+      // this becomes `'roomy'` there, with a description that is already written. Its icon fails
+      // the glyph test (a balance is not a universal sign for "apply levelled dates"), so the
+      // name and tooltip carry the words (ADR-0117). `Scale` (balance) and not `CalendarCheck`,
+      // which read as a calendar glyph once the word was gone.
+      labelVisibility: 'never',
       penGated: true,
       disabledReason: (ctx) =>
         ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),
@@ -3221,7 +3123,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           label="Summary"
           icon={<Info className="size-4" />}
           itemProps={api.itemProps}
-          compact={triggersAreCompact(api.layout)}
+          labelState={api.labelState}
         >
           {ctx.summaryContent}
         </ToolbarPopover>
@@ -3255,31 +3157,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'analysis',
       group: 'object',
       row: 'strip',
-      // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
-      // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
-      // is kept as the considered answer if a demotion pass ever returns; everything below
-      // describes the deleted ladder and is history, not behaviour.
-      //
-      // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
-      // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
-      // measured: the strip laid out wider than its container at 1280. Something has to demote first,
-      // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
-      // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
-      // "how prominent should this be".
-      //
-      // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
-      // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
-      // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
-      // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
-      // to accommodate a mis-read of the mechanism.
-      //
-      // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
-      // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
-      // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
-      // simplify the strip would introduce this product's first nested menus, with their own focus and
-      // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
-      // already tested and already swept by this gate.
-      priority: -100,
       tier: 2,
       order: 2,
       label: ANALYSIS_LABEL,
@@ -3296,35 +3173,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'calendar',
       group: 'object',
       row: 'strip',
-      // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
-      // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
-      // is kept as the considered answer if a demotion pass ever returns; everything below
-      // describes the deleted ladder and is history, not behaviour.
-      //
-      // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
-      // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
-      // measured: the strip laid out wider than its container at 1280. Something has to demote first,
-      // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
-      // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
-      // "how prominent should this be".
-      //
-      // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
-      // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
-      // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
-      // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
-      // to accommodate a mis-read of the mechanism.
-      //
-      // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
-      // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
-      // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
-      // simplify the strip would introduce this product's first nested menus, with their own focus and
-      // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
-      // already tested and already swept by this gate.
-      priority: -100,
       tier: 2,
       order: 3,
       label: 'Settings…',
-      description: 'Schedule settings',
+      // Real words, not a name-echo: the tooltip always mounts for a `'roomy'` item, and "Schedule
+      // settings" restated the name to a reader who could see it. This says what the dialog holds.
+      description: 'Calendar, critical path, progress, levelling and earned value',
+      labelVisibility: 'roomy',
       // The gear, not a calendar: the dialog stopped being only the calendar long ago, and
       // `SlidersHorizontal` (View ▾) is already the deck's slider glyph. `Settings2` would read as a
       // second one.
@@ -3379,6 +3234,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...commentsShape,
+          // Icon-only below `--container-roomy` (CQ-2). On the flag-on item only, so the flag-off
+          // placeholder stays byte-for-byte what it was.
+          labelVisibility: 'roomy' as const,
+          description: "Open the plan's comments beside the diagram",
           isVisible: () => NOTES_ENABLED,
           // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
           // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.

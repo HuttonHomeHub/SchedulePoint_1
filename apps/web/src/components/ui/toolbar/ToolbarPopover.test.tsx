@@ -85,23 +85,23 @@ describe('ToolbarPopover — the shut trigger', () => {
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
   });
 
-  it('keeps the name when compact withholds the visible label', () => {
+  it('keeps the name when the label is hidden', () => {
     render(
-      <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} compact>
+      <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} labelState="hidden">
         <p>panel</p>
       </ToolbarPopover>,
     );
     expect(screen.getByRole('button')).toHaveAccessibleName('Filter');
   });
 
-  it('keeps both the name and the reason when compact and shut together', () => {
-    // The state the collapsed band and an uncomputed plan produce at the same time — neither of the
+  it('keeps both the name and the reason when icon-only and shut together', () => {
+    // The state an icon-only trigger and an uncomputed plan produce at the same time — neither of the
     // two `aria-label` writers may win at the other's expense.
     render(
       <ToolbarPopover
         label="Filter"
         itemProps={ITEM_PROPS}
-        compact
+        labelState="hidden"
         disabled
         disabledReason="Add an activity first"
       >

@@ -147,9 +147,7 @@ export function GanttRowMenu({
   const items =
     resolved === null
       ? []
-      : selectionActionItems.filter((item) =>
-          item.isVisible ? item.isVisible(resolved, { layout: 'comfortable' }) : true,
-        );
+      : selectionActionItems.filter((item) => (item.isVisible ? item.isVisible(resolved) : true));
 
   return (
     <>

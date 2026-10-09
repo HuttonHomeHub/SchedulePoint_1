@@ -1,7 +1,12 @@
 import { ChevronDown } from 'lucide-react';
 import { useId } from 'react';
 
-import { toolbarControlVariants, toolbarSplitCaretVariants } from './toolbar-styles';
+import type { ToolbarLabelState } from './toolbar-registry';
+import {
+  toolbarControlVariants,
+  toolbarLabelClass,
+  toolbarSplitCaretVariants,
+} from './toolbar-styles';
 
 import { cn } from '@/lib/utils';
 
@@ -85,10 +90,12 @@ export interface ToolbarSplitButtonProps {
    */
   haspopup?: 'menu' | 'dialog';
   /**
-   * Withhold the visible label, keeping it as the accessible name. Mirrors `ToolbarPopover`'s prop
-   * of the same name so the two triggers compact the same way at the same band.
+   * Whether the visible label shows — pass the render API's `labelState`, already resolved by
+   * `resolveLabelVisibility`. `'hidden'` withholds it, keeping it as the accessible name. Mirrors
+   * `ToolbarPopover`'s prop of the same name so the two triggers resolve the same way. A split
+   * button cannot be `'roomy'`: its tooltip is a native `title`.
    */
-  compact?: boolean;
+  labelState?: ToolbarLabelState;
   /** The primary's tooltip; states the reason when `disabled`. */
   title: string;
   icon: React.ReactNode;
@@ -129,7 +136,7 @@ export function ToolbarSplitButton({
   primaryDisabledReason,
   caretDisabledReason,
   haspopup = 'menu',
-  compact = false,
+  labelState = 'visible',
   title,
   icon,
   label,
@@ -138,6 +145,7 @@ export function ToolbarSplitButton({
   onPrimary,
   onOpenMenu,
 }: ToolbarSplitButtonProps): React.ReactElement {
+  const labelClass = toolbarLabelClass(labelState);
   const primaryOff = primaryDisabled ?? disabled;
   const caretOff = caretDisabled ?? disabled;
   const reasonIds = useId();
@@ -176,7 +184,7 @@ export function ToolbarSplitButton({
         // The name is pinned whenever a reason span is rendered, for the same reason
         // `ToolbarButton` pins it: the span lives inside the button, and a button's name comes from
         // its content, so without this the reason would join the name as well as the description.
-        {...(compact || primaryDescribedBy ? { 'aria-label': label } : {})}
+        {...(labelClass === null || primaryDescribedBy ? { 'aria-label': label } : {})}
         {...(primaryDescribedBy ? { 'aria-describedby': primaryDescribedBy } : {})}
         title={primaryOff ? (primaryDisabledReason ?? title) : title}
         onClick={() => {
@@ -213,7 +221,7 @@ export function ToolbarSplitButton({
         className="inline-flex min-h-(--control-h) items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
       >
         {icon}
-        {compact ? null : <span className="truncate">{label}</span>}
+        {labelClass ? <span className={labelClass}>{label}</span> : null}
         {primaryReasonId ? (
           <span id={primaryReasonId} className="sr-only">
             {primaryDisabledReason}

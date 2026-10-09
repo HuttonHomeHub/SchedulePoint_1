@@ -1,6 +1,7 @@
 import { forwardRef, useId } from 'react';
 
-import { toolbarControlVariants } from './toolbar-styles';
+import type { ToolbarLabelState } from './toolbar-registry';
+import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
 
 import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -26,11 +27,21 @@ export interface ToolbarButtonProps {
   /** The item id — stamped as `data-toolbar-item` so the toolbar can focus it by query (roving). */
   itemId: string;
   label: string;
-  /** Supplementary hover-tooltip clause appended to the `title` (never the accessible name). */
+  /**
+   * Supplementary tooltip clause (`<name> — <description>`), never the accessible name. Required in
+   * practice for a `'roomy'` item, whose tooltip is the only thing naming it once the label goes —
+   * `defineToolbar` refuses one without.
+   */
   description?: string;
   icon?: React.ReactNode;
-  /** Show the text label beside the icon (Tier-1 emphasis); icon-only otherwise (label → aria-label). */
-  showLabel?: boolean;
+  /**
+   * Whether the label shows, **already resolved** by `resolveLabelVisibility` — this component never
+   * decides (SC-8). `'visible'` (default) paints it; `'hidden'` is icon-only (name → `aria-label`);
+   * `'roomy'` paints it `sr-only` below the deck's `--container-roomy`. Either of the latter two
+   * names itself with the Tooltip primitive, so the tooltip is mounted whenever the label *can* be
+   * absent, and the container query alone decides whether it is.
+   */
+  labelState?: ToolbarLabelState;
   pressed?: boolean;
   /**
    * Which picture a pressed control takes (console epic M3). `'armed'` is a modal tool holding the
@@ -62,7 +73,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       label,
       description,
       icon,
-      showLabel,
+      labelState = 'visible',
       pressed,
       activeKind,
       busy,
@@ -77,12 +88,15 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     },
     ref,
   ) {
-    // Native hover tooltip. A labelled button already shows its name, so with no description its live
-    // `title` is empty (nothing to add); an **icon-only** button shows nothing, so it always gets a
-    // `title` naming it. When the item carries a {@link description}, the live title reads
-    // `<name> — <description>` for BOTH tiers (a Tier-1 button keeps its label as the base — the earlier
-    // bug dropped it), so a terse command is self-explanatory on hover. A disabled title always leads
-    // with the reason (which already owns the tooltip); description isn't appended there.
+    // **Two tooltip channels, chosen by whether the label can be absent — and exactly one of them
+    // is ever live.** A control whose label is always painted keeps the native hover `title`: its
+    // name is visible and the title is a supplementary clause (a live `description`, or the reason
+    // while shaded). A control whose label can be absent (`'hidden'` or `'roomy'`) names itself with
+    // the Tooltip primitive instead, below, and carries no `title` at all — a native title beside
+    // the tooltip would be two tips on one hover. This was one boolean, `showLabel`, that selected
+    // the title, the tooltip and the purpose together, which is why `'roomy'` (label present on a
+    // wide deck, absent on a narrow one, in the same render) could not be expressed.
+    const tipped = labelState !== 'visible';
     const reasonId = useId();
     const srDescriptionId = useId();
     // Only when there IS a reason: an `aria-describedby` pointing at an element that renders nothing
@@ -102,40 +116,40 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     // would be appended to the name as well as the description: "Duplicate Take the edit lock to
     // change this plan." Thirteen existing toolbar tests caught that the moment it was written,
     // which is the argument for the primitive having them.
-    const liveTitle = description ? `${label} — ${description}` : showLabel ? undefined : label;
+    // The text both channels share. Labelled: only a description adds anything, and a shaded
+    // control's reason owns the tip (the description is not appended there). Tipped: the tip is the
+    // name, so it always has text — `<name> — <description>`, `<name> — <reason>` or the bare name.
+    const liveTitle = description ? `${label} — ${description}` : tipped ? label : undefined;
     const title = disabled
-      ? showLabel
+      ? tipped
         ? disabledReason
-        : disabledReason
           ? `${label} — ${disabledReason}`
           : label
+        : disabledReason
       : liveTitle;
     /**
-     * **The icon-only branch names itself with the Tooltip primitive, not `title`** (fix-slice
-     * M-B — #131/#204(a), ADR-0117). `title` is hover-only: no mainstream browser shows it on
-     * keyboard focus and touch has no hover at all, so an icon-only command's name was unreadable
-     * to exactly the users with the least other signal. The tooltip's content is the SAME string
-     * the `title` carried — character-identical, or copy has silently changed — and it is
-     * `purpose: 'name-echo'` because `aria-label` already pins the name and the reason is already
-     * `aria-describedby`-linked above: AT hears nothing new and nothing twice. The labelled branch
-     * keeps its native `title` (its name is visible; the title is a supplementary clause, and
-     * changing that channel is a copy decision — spec §4.2's discriminator table).
+     * **The tooltip is the Tooltip primitive, not `title`** (fix-slice M-B — #131/#204(a),
+     * ADR-0117). `title` is hover-only: no mainstream browser shows it on keyboard focus and touch
+     * has no hover at all, so a control with no visible label was unreadable to exactly the users
+     * with the least other signal. The content is the SAME string the `title` carried —
+     * character-identical, or copy has silently changed.
+     *
+     * `purpose` is DERIVED (the M-B accessibility review's finding 2): a tip carrying a live
+     * `description` is saying MORE than the name, and pre-M-B its `title` reached AT as the
+     * accessible description, so `'name-echo'` would have silently stranded that text from AT.
+     * `'description'` restores exactly that. The shaded branch stays `'name-echo'`: its reason
+     * already rides the `aria-describedby` reason span below, and linking the tooltip too would
+     * read it twice. `'name-echo'` is also `aria-hidden`, so AT hears nothing new and nothing twice.
      */
-    // `purpose` is DERIVED, not hardcoded (the M-B accessibility review's finding 2): an
-    // icon-only control whose tooltip carries a live `description` is saying MORE than its name,
-    // and pre-M-B its `title` reached AT as the accessible description (title maps there when no
-    // `aria-describedby` is set) — so `'name-echo'` would have silently stranded that text from
-    // AT the day a future ICON_ONLY item gained one. `'description'` restores exactly the
-    // pre-M-B AT experience. The disabled branch stays `'name-echo'`: its reason already rides
-    // the `aria-describedby` reason span above, and linking the tooltip too would read it twice.
-    const tipPurpose = !showLabel && description && !disabled ? 'description' : 'name-echo';
+    const tipPurpose = tipped && description && !disabled ? 'description' : 'name-echo';
     const tip = useTooltip({
-      content: showLabel ? undefined : title,
+      content: tipped ? title : undefined,
       purpose: tipPurpose,
-      disabled: !!showLabel,
+      disabled: !tipped,
     });
     // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr
     // chain — the explicit `aria-describedby` below would otherwise overwrite the spread's.
+    const labelClass = toolbarLabelClass(labelState);
     const fullDescribedBy =
       [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
     return (
@@ -159,8 +173,8 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         aria-disabled={disabled || undefined}
         {...(busy ? { 'aria-busy': true } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
-        {...(showLabel && !describedBy ? {} : { 'aria-label': label })}
-        {...(showLabel && title ? { title } : {})}
+        {...(!tipped && !describedBy ? {} : { 'aria-label': label })}
+        {...(!tipped && title ? { title } : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         tabIndex={tabIndex}
         onClick={() => {
@@ -184,7 +198,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
             {icon}
           </span>
         ) : null}
-        {showLabel ? <span className="truncate">{label}</span> : null}
+        {labelClass ? <span className={labelClass}>{label}</span> : null}
         {reasonRef ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}

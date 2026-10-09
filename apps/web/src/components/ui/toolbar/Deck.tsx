@@ -12,7 +12,11 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { TOOLBAR_INSET_RULE } from './toolbar-styles';
+import {
+  resolveLabelVisibility,
+  TOOLBAR_INSET_RULE,
+  toolbarLabelMinWidthClass,
+} from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
@@ -52,13 +56,11 @@ import { cn } from '@/lib/utils';
  * at M7 after being specified twice and built neither time.
  *
  * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
- * Read the paragraph below as history: its width argument still explains why the deck can afford to
- * wrap, but it no longer describes the layout. It said "stacked buttons" while the code two hundred
- * lines down had stopped stacking them.
- *
- * Icon above a 9.5 px label rather than beside it — roughly half the width for
- * the same information, which is the geometry that makes "every command labelled" affordable at all.
- * The label is suppressed only where the icon is genuinely universal ({@link ICON_ONLY}).
+ * A control is now its icon beside its label at the shared `text-sm` (the 9.5 px `text-micro` label
+ * the stacked geometry used went with it, `docs/specs/object-bar-defects/` M3). Read the stacked
+ * geometry's width argument as history: it explained why "every command labelled" was once
+ * affordable and describes no layout that exists. The label is suppressed only where the icon is
+ * genuinely universal, and that is each item's own `labelVisibility` rather than a list kept here.
  *
  * ## The 7 → 4 mapping
  *
@@ -122,31 +124,6 @@ type DeckRowId = (typeof DECK_ROWS)[number];
 
 export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
 
-/**
- * Commands whose icon carries the whole meaning, so a label beside it is cost without information.
- *
- * **The test is "would a planner who has never seen this product guess wrong?"** — not "do I
- * recognise it". A magnifier, a plus and minus, and the two undo arrows are among the most
- * standardised glyphs in software. `Arrange` and `Float paths` are not, and the difference between
- * a labelled and an unlabelled one there is the difference between a planner using the feature and
- * never finding it.
- *
- * Deliberately a small, closed set. Every addition trades discoverability for width, and the width
- * is no longer scarce now that the deck can wrap.
- */
-const ICON_ONLY = new Set([
-  'zoom-in',
-  'zoom-out',
-  'fit',
-  'undo',
-  'redo',
-  'print',
-  // The one member that fails the test above on merit: a balance is not a universal glyph for
-  // "apply levelled dates". It is here because the deck's DO row has a budget of one line and this
-  // is the longest label in it (ADR-0090); the name and tooltip carry the words (ADR-0117).
-  'apply-levelling',
-]);
-
 export interface DeckProps<Ctx> {
   /** The registry (validated via `defineToolbar`). */
   items: ToolbarItem<Ctx>[];
@@ -169,11 +146,8 @@ export function Deck<Ctx>({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // `layout` is fixed at `comfortable`: the deck never folds items away on width, so there is no
-  // band to resolve. Passing the constant keeps `isVisible` predicates that take an env working
-  // exactly as they did, rather than quietly changing what a registry resolves to.
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled, 'comfortable'),
+    () => resolveItems(items, context, authoringEnabled),
     [items, context, authoringEnabled],
   );
 
@@ -295,7 +269,14 @@ export function Deck<Ctx>({
       // was that the existing roving-walk case passes **unchanged** — the ADR-0062 extraction
       // argument applied to a layout change.
       className={cn(
-        'flex flex-col gap-2',
+        // **The deck is the label rule's container** (`@container/deck`, toolbar-redesign M1): a
+        // `'roomy'` label asks how wide THIS box is (`toolbarLabelClass`). It sits on the root and
+        // not on a control, because `@container` applies `contain: inline-size` and an auto-width
+        // `shrink-0` item stops sizing to its content (`docs/UX_STANDARDS.md`, "A collapse is
+        // triggered by the row's pressure"). The root is a block-level flex column inside a
+        // full-width wrapper, so its width is the band's inner width and `contain` changes nothing —
+        // `command-surface.spec.ts` asserts the equality at every cell.
+        '@container/deck flex flex-col gap-2',
         // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
         // This container became focusable only when the handoff gained somewhere to put focus,
         // and until then nothing had ever decided what "the toolbar itself is focused" looks
@@ -395,8 +376,11 @@ export function Deck<Ctx>({
                           sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
                         )}
                       >
-                        {section.map((r) =>
-                          r.item.render ? (
+                        {section.map((r) => {
+                          // One resolution per item: the `render` branch hands it to the trigger and
+                          // the plain branch to `ToolbarButton`, and neither decides for itself.
+                          const labelState = resolveLabelVisibility(r.item.labelVisibility, 'deck');
+                          return r.item.render ? (
                             // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
                             // `focusables()` queries `[data-toolbar-focusable]` in document order
                             // and a duplicate marker would put the wrapper in the roving walk. See
@@ -411,7 +395,7 @@ export function Deck<Ctx>({
                                 disabledReason: r.disabledReason,
                                 active: r.active,
                                 activeKind: r.activeKind,
-                                layout: 'comfortable',
+                                labelState,
                                 itemProps: r.item.presentational
                                   ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
                                   : {
@@ -430,7 +414,7 @@ export function Deck<Ctx>({
                               {...(r.item.description ? { description: r.item.description } : {})}
                               icon={r.icon}
                               {...(r.busy ? { busy: true } : {})}
-                              showLabel={!ICON_ONLY.has(r.item.id)}
+                              labelState={labelState}
                               {...(r.item.isActive ? { pressed: r.active } : {})}
                               activeKind={r.activeKind}
                               disabled={!r.enabled}
@@ -475,10 +459,10 @@ export function Deck<Ctx>({
                               //
                               // Deleting it leaves one scale declared in one place, by the primitive.
                               // `min-w-*` is kept: it is geometry, and it was never the problem.
-                              className={cn(ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12')}
+                              className={toolbarLabelMinWidthClass(labelState)}
                             />
-                          ),
-                        )}
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

@@ -42,6 +42,18 @@
   --breakpoint-wide: 100rem;
 }
 
+/* `roomy`: the command deck's width at which a `'roomy'` label shows (`@max-roomy/deck:`,
+   `toolbarLabelClass` in `toolbar-styles.ts`). 79rem is the deck's own measured width in a 1280 px
+   window — 1280 minus the 8 px inset either side of the band, 1264 px (toolbar-redesign
+   `m0-measurement.md` §4.2, both pointers). Below it Baseline overlay, Comments, Settings and
+   Resource view show their icon only. A CONTAINER query (the deck's
+   width, not the window's), so a docked panel or a future rail that narrows the deck is honoured;
+   rem, so text-only 200 % zoom moves it with the text (SC-7). A named token and never an
+   arbitrary `@max-[…]` value: the design system has no arbitrary values. */
+@theme {
+  --container-roomy: 79rem;
+}
+
 /* ------------------------------------------------------------------------- */
 /* The typeface (ADR-0097)                                                    */
 /*                                                                            */

@@ -234,11 +234,26 @@ So, for any command surface:
   what this shares with the container-query trap in `UX_STANDARDS.md`: both are `shrink-0` on an
   auto-width item, both are invisible to jsdom, and both were found by measuring a real browser.
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
-  taxonomy as four captioned groups that a reader can **fold**, which is a decision the reader makes
-  about their own screen — not one a `ResizeObserver` makes for them at a width nobody measured.
-- **`showLabel` is presentation and it means what it says.** `'auto'` now means _yes_: under the
-  ladder it meant "if the row can afford it", and a row that wraps can always afford it. `'never'`
-  is for the handful of icons that are genuinely universal (zoom ±, fit, undo, redo, print).
+  taxonomy as four named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
+  `aria-label` and nothing else: no visible caption, no fold, and a hairline between neighbours. The
+  captions that folded were removed in two steps (the fold on 2026-08-28, the caption itself at the
+  console epic's M6), so nothing here is a decision a reader makes for their screen.
+- **Whether a label shows is declared on the item and decided in one place.** Every registry item
+  carries `labelVisibility: 'always' | 'never' | 'roomy'` (default `'always'`; the old `'auto'` and
+  the `{ atLeast }` band form are gone). One resolver, `resolveLabelVisibility`, and one class helper,
+  `toolbarLabelClass`, both in `toolbar-styles.ts`, serve `Deck`, `Toolbar` and every trigger.
+  `'never'` is for the glyphs that are genuinely universal (zoom ±, fit, undo, redo).
+- **`'roomy'` is a container query on the deck, and it is the only width-dependent label there is.**
+  The label is `sr-only` below `--container-roomy` (**79 rem**, `globals.css`: the deck's own measured
+  width in a 1280 px window), via the **named** variant `@max-roomy/deck:` — never an arbitrary
+  `@max-[…]` value, because the design system has no arbitrary values. The deck declares
+  `@container/deck` on its root (a block-level box as wide as the band, so `contain: inline-size`
+  costs nothing; see the container-query trap in `UX_STANDARDS.md`). `Toolbar` is not a container, so
+  there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
+  a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
+  kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
+  rest). The four today: Baseline overlay, Resource view, Comments and Settings…. Apply levelled
+  dates… is meant to be a fifth and is `'never'` until the DO row has the room (toolbar-redesign M2).
 - **A command surface is horizontal.** `Toolbar` carried an `orientation` prop for Graphite's 48 px
   mode rail; ADR-0109 D2 deleted that rail, and the prop sat with **no consumer at all** while this
   clause went on documenting the rule that governed it — dead code kept alive by a standard
@@ -252,10 +267,9 @@ narrow window buys its commands with vertical space the content would otherwise 
 trade, made deliberately — all commands visible when there is room. The cost is measured
 and budgeted from the 1024 × 600 floor up, not defended down to a phone width.
 
-`tier` survives as **priority within a group**, and it is still not `showLabel`. They were one
-property once, which meant a static per-item flag decided a question about render-time width
-(ADR-0031, TECH_DEBT #61); they are two now for the opposite reason — neither of them is about
-width any more.
+`tier` is a declared prominence and **nothing reads it**: the deck has no ranking and will not get one
+(`docs/TECH_DEBT.md` #193). It was never `showLabel`, and it is not the order within a group either
+— that is `order`.
 
 **A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
 never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.
@@ -301,14 +315,16 @@ only in the relationship — the ADR-0093 shape.
 So, for any surface holding a mixed set of controls:
 
 - **The height is declared once and applied to every branch**, including the ones a `render` item
-  brings its own markup to. On the deck that is `min-h-9`; the width minimums (`min-w-9` icon-only,
-  `min-w-12` labelled) and the label's `text-micro` ramp step are the same in both branches.
-- **A caption is a control and takes the control's box.** The deck's group captions fold their
-  group and are roving tab stops, so a caption measured at a smaller height than the buttons beside
-  it was a target-size question wearing a typography costume (WCAG 2.2 §2.5.8).
-- **Turning the card on its side spends width, not height.** The caption leads its row rather than
-  sitting above it, because a full-width caption row costs the deck a line per group and the deck's
-  scarce axis is vertical.
+  brings its own markup to. On the deck that is `min-h-(--control-h)` (36 px, 44 px under a coarse
+  pointer, ADR-0118); the width minimums (`min-w-9` icon-only, `min-w-12` labelled) are the same in
+  both branches, and the label is the one type size the shared control declares (`text-sm`) — the
+  `text-micro` step the deck once forced on a labelled command was removed in
+  `docs/specs/object-bar-defects/` M3.
+- **A group has no caption to size.** The captions that folded their group, and were roving tab
+  stops, are gone; what marks a group now is an inset hairline, and the group's name reaches
+  assistive technology through its `aria-label`.
+- **The card stays on its side.** A group is one row of controls, so the deck's scarce axis, height,
+  is spent on controls rather than on a caption row.
 
 **What it measured, so the next reader does not re-derive it:** worst within-row label spread
 **12 px → 3 px**; deck height **116 → 108** at 1920/1646/1440 and **116 → 224 at 1280**, where the

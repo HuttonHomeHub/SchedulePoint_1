@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { Deck } from './Deck';
@@ -288,5 +288,90 @@ describe('arrows from the container itself', () => {
     fireEvent.keyDown(bar, { key: 'ArrowLeft' });
 
     expect(document.activeElement).toBe(stops.at(-1));
+  });
+});
+
+/**
+ * **The label rule on the deck** (toolbar-redesign M1). jsdom has no layout and no container
+ * queries, so these cases assert what the *markup* promises — which class the label carries, which
+ * name the control keeps, which tooltip is mounted — and the journey (`command-surface.spec.ts`)
+ * asserts that Chromium honours it at 79 rem. Verified red by making `Deck` resolve against the
+ * `'toolbar'` surface: the `roomy` cases lose their `sr-only` class and their tooltip.
+ */
+describe('Deck — the label rule', () => {
+  const labelItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+    { id: 'plain', group: 'frame', order: 1, tier: 1, label: 'Plain', onActivate: () => {} },
+    {
+      id: 'quiet',
+      group: 'frame',
+      order: 2,
+      tier: 1,
+      label: 'Quiet',
+      labelVisibility: 'never',
+      onActivate: () => {},
+    },
+    {
+      id: 'roomy',
+      group: 'frame',
+      order: 3,
+      tier: 1,
+      label: 'Roomy',
+      description: 'Says what it does',
+      labelVisibility: 'roomy',
+      onActivate: () => {},
+    },
+  ]);
+
+  const mount = (): void => {
+    render(<Deck items={labelItems} context={{}} label="Plan commands" />);
+  };
+
+  it('is the container the roomy variant asks, and nothing else is', () => {
+    mount();
+    const toolbar = screen.getByRole('toolbar', { name: 'Plan commands' });
+    expect(toolbar.className).toContain('@container/deck');
+    expect(toolbar.querySelectorAll('[class*="@container"]')).toHaveLength(0);
+  });
+
+  it('paints an always label plainly and withholds a never label, keeping its name', () => {
+    mount();
+    expect(screen.getByRole('button', { name: 'Plain' })).toHaveTextContent('Plain');
+    const quiet = screen.getByRole('button', { name: 'Quiet' });
+    expect(quiet).toHaveTextContent('');
+    expect(quiet).toHaveAttribute('aria-label', 'Quiet');
+    expect(quiet.className).toContain('min-w-9');
+  });
+
+  it('keeps a roomy label in the tree, sr-only below the roomy width, with both widths', () => {
+    mount();
+    const roomy = screen.getByRole('button', { name: 'Roomy' });
+    const label = within(roomy).getByText('Roomy');
+    expect(label.className).toContain('@max-roomy/deck:sr-only');
+    expect(roomy.className).toContain('@max-roomy/deck:min-w-9');
+    expect(roomy.className).toContain('min-w-12');
+  });
+
+  it('always mounts a description tooltip for a roomy control, label showing or not', () => {
+    mount();
+    const roomy = screen.getByRole('button', { name: 'Roomy' });
+    // No native title beside the tooltip: two tips on one hover.
+    expect(roomy).not.toHaveAttribute('title');
+    fireEvent.focus(roomy);
+    const tip = document.querySelector('[data-tooltip]');
+    expect(tip).toHaveAttribute('role', 'tooltip');
+    expect(tip).toHaveTextContent('Roomy — Says what it does');
+    expect(roomy).toHaveAccessibleDescription(/Says what it does/);
+    expect(roomy).toHaveAccessibleName('Roomy');
+  });
+
+  it('dismisses the roomy tooltip with Escape and leaves focus where it was', () => {
+    mount();
+    const roomy = screen.getByRole('button', { name: 'Roomy' });
+    roomy.focus();
+    fireEvent.focus(roomy);
+    expect(document.querySelector('[data-tooltip]')).not.toBeNull();
+    fireEvent.keyDown(roomy, { key: 'Escape' });
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+    expect(document.activeElement).toBe(roomy);
   });
 });

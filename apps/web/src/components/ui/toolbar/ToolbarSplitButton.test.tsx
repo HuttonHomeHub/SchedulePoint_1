@@ -114,7 +114,7 @@ describe('ToolbarSplitButton — per-half gating', () => {
   });
 });
 
-describe('ToolbarSplitButton — haspopup and compact', () => {
+describe('ToolbarSplitButton — haspopup and hidden label', () => {
   it('announces a menu by default and a dialog on request', () => {
     const { caret } = renderSplit();
     expect(caret).toHaveAttribute('aria-haspopup', 'menu');
@@ -127,9 +127,9 @@ describe('ToolbarSplitButton — haspopup and compact', () => {
   });
 
   it('keeps the name when it withholds the visible label', () => {
-    // `compact` may not cost the control its name — an icon-only button with no accessible name is
+    // A hidden label may not cost the control its name — an icon-only button with no accessible name is
     // the blank-button defect ADR-0090 M3 shipped once.
-    renderSplit({ compact: true });
+    renderSplit({ labelState: 'hidden' });
     const primary = screen.getByRole('button', { name: 'Today' });
     expect(primary).toHaveTextContent('');
   });

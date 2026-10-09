@@ -41,7 +41,7 @@ function twoSwitches(): ToolbarItem<Ctx>[] {
       tier: 1,
       // `'always'` so these cases exercise the labelled chrome whatever width jsdom reports (0) —
       // the same reason `Toolbar.test.tsx`'s own registry pins it.
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: i,
       isActive: (c: Ctx) => c.active === d.id,
       onActivate: () => {},

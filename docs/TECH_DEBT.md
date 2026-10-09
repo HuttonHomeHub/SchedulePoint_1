@@ -5112,8 +5112,22 @@ of the gate that catches what a reviewer cannot see.
 
 ### 193. Four toolbar exports have no production caller, and are deliberately kept
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-09
 
+> **The keep is OVERTURNED, and the ladder is deleted (2026-10-09, toolbar-redesign M1-T2).** This
+> row's last paragraph and ADR-0110 M5 both kept the machinery on the argument that the reduced strip
+> does not fit at 1280 or 1440 and "`resolveLayoutMode` may yet be needed". The toolbar redesign
+> (`docs/specs/toolbar-redesign/feature-spec.md` §4.2) decided the opposite, and decided it as the
+> ADR-0105 public-contract change this row said removal was: the surface fits by **moving commands to
+> their subject's surface and by one label rule**, never by a ladder, so no demotion pass will return.
+> Deleted: `resolveLayoutMode`, `bandIsAtLeast`, `TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`,
+> `ToolbarLayoutMode`, `ToolbarLayoutEnv` and the `layout` the render API carried, `isVisible`'s `env`
+> argument, `priority`, `priorityOf`, `partitionByTier`, the segment-tier guard, `triggersAreCompact`
+> and every `compact` prop. They completed ADR-0109's supersession of ADR-0090 D6 and ADR-0091 D3a.
+> **What survives, and why this row stays `open` until toolbar-redesign M7:** the `tier` field is
+> still declared on every item and is now read by nothing at all; removing it is a ~100-site edit the
+> plan does not schedule in M1, and M7's close-out closes this row once it is settled either way.
+>
 > **The docblock half of this row is CLOSED (2026-09-09).** All four named docblocks and both named
 > residues were corrected, and the last one this row identified — `toolbar-registry.test.ts`'s
 > `computeLadder` companion lookup, sitting fourteen lines above the correction meant to catch it —

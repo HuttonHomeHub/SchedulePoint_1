@@ -1,5 +1,7 @@
 import { cva } from 'class-variance-authority';
 
+import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-registry';
+
 /**
  * The **one** control-surface style for every {@link Toolbar} and {@link Deck} control (ADR-0031):
  * the plain {@link ToolbarButton}, the {@link ToolbarPopover} trigger, the deck's group captions,
@@ -308,3 +310,54 @@ export const toolbarControlVariants = cva(
     defaultVariants: { tone: 'control', state: 'rest', disabled: false },
   },
 );
+
+/**
+ * **The one resolver for whether a control's label shows** (toolbar-redesign M1). Every renderer
+ * calls it with the item's declared {@link ToolbarLabelVisibility} and the surface it paints on, and
+ * hands the answer to the control — `Deck` and `Toolbar` hold no label logic of their own, and a
+ * control that decided for itself is the second implementation this replaces.
+ *
+ * `'roomy'` is meaningful on the **deck** alone: that is the one surface that declares the
+ * `@container/deck` its query asks, so everywhere else (`Toolbar`) it resolves to `'visible'`. The
+ * absence of a container would give the same answer in CSS, but only by accident; stating it here
+ * is what makes it testable.
+ */
+export function resolveLabelVisibility(
+  visibility: ToolbarLabelVisibility | undefined,
+  surface: 'deck' | 'toolbar',
+): ToolbarLabelState {
+  switch (visibility ?? 'always') {
+    case 'never':
+      return 'hidden';
+    case 'roomy':
+      return surface === 'deck' ? 'roomy' : 'visible';
+    case 'always':
+      return 'visible';
+  }
+}
+
+/**
+ * **The one class helper for painting a label**, or `null` when the control is icon-only. Nothing
+ * outside this module writes `truncate` for a toolbar label or names the container variant, which
+ * is what `toolbar-label.structural.test.ts` pins.
+ *
+ * A `'roomy'` label is `sr-only` — still in the accessibility tree, so the name and 2.5.3's
+ * label-in-name hold either way — below `--container-roomy`. The variant is the **named** token
+ * (`globals.css`), never an arbitrary `@max-[…]` value: Tailwind 4.3.3 compiles both (M0 §4.4), and
+ * the named form is chosen because the design system has no arbitrary values. `deck` is the
+ * container's name (`@container/deck`, `Deck.tsx`).
+ */
+export function toolbarLabelClass(state: ToolbarLabelState): string | null {
+  if (state === 'hidden') return null;
+  return state === 'roomy' ? 'truncate @max-roomy/deck:sr-only' : 'truncate';
+}
+
+/**
+ * The deck's width minimum for a control, by label state: wide enough for a labelled command, or
+ * only for the icon. `'roomy'` carries both because its label comes and goes with the container.
+ * Part of the label rule rather than of `Deck`, so the minimum can never disagree with the label.
+ */
+export function toolbarLabelMinWidthClass(state: ToolbarLabelState): string {
+  if (state === 'hidden') return 'min-w-9';
+  return state === 'roomy' ? 'min-w-12 @max-roomy/deck:min-w-9' : 'min-w-12';
+}

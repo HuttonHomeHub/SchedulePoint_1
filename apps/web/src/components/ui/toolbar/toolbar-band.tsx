@@ -3,20 +3,22 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 /**
  * **The width of the band a toolbar sits in, as opposed to the width of the toolbar itself.**
  *
- * `Toolbar` asks its own `clientWidth` two different questions, and only one of them is a question
+ * A toolbar can be asked two different questions about width, and only one of them is a question
  * about the toolbar:
  *
  * | question                                  | honest input      | consumer                      |
  * | ----------------------------------------- | ----------------- | ----------------------------- |
- * | *how much room does this surface have?*   | the **band**      | `resolveLayoutMode`           |
+ * | *how much room does this surface have?*   | the **band**      | (nothing: `resolveLayoutMode` was deleted) |
  * | *does my content fit my box?*             | the **container** | (nothing, since ADR-0109 D1)  |
  *
- * The first is a property of the window; the second is a property of the row. **The second question
- * has no consumer today**: a command surface wraps, so `computeLadder` — which this row named until
- * the 2026-08-25 pass — was deleted with the width ladder, and `resolveLayoutMode` has no
- * production caller either (`docs/TECH_DEBT.md` #193). The distinction is kept because it is the
- * thing three withdrawn decisions turned on, not because either side is currently wired. Conflating them is
- * honest only while a toolbar IS the full-width row — and this register has now recorded that
+ * The first is a property of the window; the second is a property of the row. **Neither question
+ * has a consumer today**: a command surface wraps, so `computeLadder` — which this row named until
+ * the 2026-08-25 pass — was deleted with the width ladder, and `resolveLayoutMode`, which never
+ * had a production caller after that, went in toolbar-redesign M1 (`docs/TECH_DEBT.md` #193).
+ * `useToolbarBandWidth` is called by nothing and `Toolbar` measures nothing; this paragraph said
+ * otherwise ("`Toolbar` asks its own `clientWidth`…") until that pass. The distinction is kept because it is the thing
+ * three withdrawn decisions turned on, not because either side is currently wired. Conflating them
+ * is honest only while a toolbar IS the full-width row — and this register has now recorded that
  * assumption failing **three times**:
  *
  * 1. **ADR-0091 D4 was withdrawn** because merging the identity line into the command band would
@@ -37,9 +39,9 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
  * — that second question must keep reading the row's own box, or a wide band would hand labels to a
  * narrow row and overflow it.
  *
- * A toolbar with no provider above it falls back to its own `clientWidth`, which is correct for a
- * toolbar that genuinely is its own surface (the docked selection bar is one, and it is
- * deliberately not in a band).
+ * A toolbar needs no provider above it, because nothing reads this context. If a reader returns, a
+ * toolbar with none must fall back to its own `clientWidth` — correct for a toolbar that genuinely
+ * is its own surface (the docked selection bar is one, and it is deliberately not in a band).
  */
 const ToolbarBandContext = createContext<number | null>(null);
 

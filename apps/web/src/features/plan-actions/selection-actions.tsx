@@ -460,7 +460,7 @@ function ConflictRemedyControl({
  * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
- * Every item pins `showLabel: 'always'` — this is a compact floating bar of five actions where the
+ * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
  * name **is** the affordance, so a label is not something to trade away for width. Every item is also
  * `tier: 1`, but that is now a separate statement (TECH_DEBT #61): it says "demote these last", not
  * "label these". The two used to be the same property, and this file's own comment used to gloss
@@ -522,7 +522,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       id: 'conflict-remedy',
       group: 'object',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: -1,
       // A placeholder: the live label comes from the remedy map via `render`. `defineToolbar`
       // rejects an empty label, and the overflow menu reads `item.label` directly.
@@ -540,7 +540,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       id: 'open-logic',
       group: 'object',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'Logic',
       icon: <Waypoints className="size-4" />,
@@ -576,7 +576,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'notes',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 0.5,
             label: 'Notes',
             description: 'Add or read notes on this activity.',
@@ -595,7 +595,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'progress',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 1,
             /**
              * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
@@ -644,7 +644,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'resources',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 2,
             label: 'Resources',
             icon: <Users className="size-4" />,
@@ -673,7 +673,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       id: 'edit',
       group: 'object',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 4,
       label: 'Edit',
       icon: <SquarePen className="size-4" />,
@@ -699,7 +699,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'duplicate',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate',
             icon: <Copy className="size-4" />,
@@ -715,7 +715,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'duplicate-band',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate band',
             description: 'Copies the summary and every activity in it',
@@ -733,7 +733,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     /**
      * **Make milestone… — icon-only, and only for a zero-duration task** (ADR-0162 decision 4).
      *
-     * `showLabel: 'never'`, against this bar's every-item-carries-its-name rule, on a measurement:
+     * `labelVisibility: 'never'`, against this bar's every-item-carries-its-name rule, on a measurement:
      * M0-T5 found no labelled candidate that keeps the foot row on one line at 1646 (the shortest,
      * `Milestone…`, needs 116 px against 70 px of room), and a wrap costs the diagram 36 px on the
      * product owner's own screen, which ADR-0115 exists to prevent. The name still reaches everyone:
@@ -749,7 +749,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       id: 'make-milestone',
       group: 'object',
       tier: 1,
-      showLabel: 'never',
+      labelVisibility: 'never',
       order: 4.7,
       label: MAKE_MILESTONE_LABEL,
       icon: <Diamond className="size-4" />,
@@ -775,7 +775,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'dissolve',
             group: 'object',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 5,
             label: 'Dissolve',
             icon: <Ungroup className="size-4" />,
@@ -793,7 +793,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       id: 'delete',
       group: 'object',
       tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 6,
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
@@ -823,7 +823,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'clear-visual-placement',
             group: 'object' as const,
             tier: 1 as const,
-            showLabel: 'always' as const,
+            labelVisibility: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
             // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
@@ -909,7 +909,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // A separate `find` group, so the primitive draws its rule between "what to do with this
     // activity" and "how to look at it". Neither is pen-gated: looking is not editing.
     //
-    // `showLabel: 'always'` matches the object actions above rather than the Row-1 registrations
+    // `labelVisibility: 'always'` matches the object actions above rather than the Row-1 registrations
     // these replace, and the reason is the surface: this is a compact bar of a handful of commands
     // where the name IS the affordance, not a 25-item row rationing width. Same for `tier: 1`.
     //
@@ -919,7 +919,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // sitting in the block being edited.
     //
     // **`zoom-to-selection` KEEPS its label, and the round trip is worth recording.** M1 made it
-    // `showLabel: 'never'`: at ten items the bar needed 1037.4 px against 775.6 px at 1646, so it
+    // `labelVisibility: 'never'`: at ten items the bar needed 1037.4 px against 775.6 px at 1646, so it
     // wrapped and the diagram paid 36 px, and dropping this one label plus omitting
     // `clear-visual-placement` was the measured fix.
     //
@@ -931,8 +931,8 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // with a selection. They chose the label, with that cost stated.
     //
     // So the surface rule this file states one paragraph up survives intact: every item on this
-    // bar carries its name, because the name IS the affordance here. `Deck.tsx`'s `ICON_ONLY` set
-    // exists for glyphs a stranger cannot guess wrong, and a crosshair is not one of them.
+    // bar carries its name, because the name IS the affordance here. The deck's `'never'` items
+    // exist for glyphs a stranger cannot guess wrong, and a crosshair is not one of them.
     //
     // Moving these two to the command deck instead was approved and then **withdrawn on its own
     // measurement**: the deck goes two lines → three at 1646, costing 58 px to save 36. See
@@ -940,12 +940,10 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     //
     // **Two things a future reader will reach for, and neither works here.**
     //
-    // `showLabel: { atLeast: 'comfortable' }` — the band form (ADR-0091 D3a) — is **inert on this
-    // bar**. `Toolbar.tsx` pins `layout: 'comfortable'` and then resolves the policy as
-    // `(showLabel ?? 'auto') !== 'never'`, so an object literal is never equal to `'never'` and
-    // labels unconditionally. The docked selection bar sits outside any band by design
-    // (`toolbar-band.tsx`), so a width-conditional label here would read as conditional and not be
-    // one. `'never'` is the only lever that exists.
+    // `'roomy'` — the label that goes below the deck's container width — is **not available on this
+    // bar**. `Toolbar` is not a container, so `resolveLabelVisibility` turns it into `'always'`
+    // here, and a label that looks width-conditional and is not would read as a promise. `'never'`
+    // is the only lever that exists on this surface.
     //
     // And this is **not** a reversal of ADR-0114 D7, which declined to shorten this item's label
     // text on WCAG 2.4.6 grounds. The accessible name is unchanged — `ToolbarButton` pins it to
@@ -961,7 +959,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'zoom-to-selection',
             group: 'find',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 7,
             // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
             // named "Actions for <activity>", so in context the short form reads fine — but an
@@ -985,7 +983,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             activeKind: 'armed' as const,
             group: 'find',
             tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 8,
             label: 'Isolate logic path',
             icon: <Route className="size-4" />,

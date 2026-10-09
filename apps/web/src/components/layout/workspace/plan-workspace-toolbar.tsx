@@ -2103,10 +2103,11 @@ export function ToolbarPlanWorkspace({
           before the band existed. */}
 
         <ChromePortal>
-          {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
-            row's density reflects the surface rather than whatever width is left after its
-            siblings. Without it, the project-finish chip beside Row 1 silently costs the four
-            viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
+          {/* Publishes the BAND's width (`toolbar-band.tsx`). It was read to resolve each row's
+            density, so a row reflected the surface rather than whatever width was left after its
+            siblings — without it the project-finish chip beside Row 1 silently cost the four
+            viewport commands their labels, measured on a 1646 px screen and shipped in web-v0.86.0.
+            The density bands are gone (toolbar-redesign M1), so nothing reads the width now. */}
           {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
               directly on the band's 3 px amber rule with nothing between them — a double seam that
               said the same thing twice, 1 px apart. */}
@@ -2140,10 +2141,8 @@ export function ToolbarPlanWorkspace({
           that div would be the identity block, which is the header row's one shrinkable item — so
           the published figure would be "whatever width is left after my siblings", which is
           precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped once in
-          `web-v0.86.0`. Nothing is lost by leaving it out: `resolveLayoutMode` has no production
-          caller at all (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this
-          mode toolbar already resolving `collapsed` at every viewport under the old arrangement,
-          harmlessly, because all four of its items are `showLabel: 'always'`. */}
+          `web-v0.86.0`. Nothing is lost by leaving it out: no density is resolved from the band any
+          more (`resolveLayoutMode` was deleted in toolbar-redesign M1, `docs/TECH_DEBT.md` #193). */}
             {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
           mode cluster below (2026-08-26): the header places the two in different sections of a
           `justify-between` row, and one slot cannot put its contents in two places.
@@ -2268,10 +2267,8 @@ export function ToolbarPlanWorkspace({
           omission. That provider renders a `<div>` and publishes ITS width as the band width; here
           that div would be this section, whose width is whatever the row's `justify-between` leaves
           — which is precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped
-          once in `web-v0.86.0`. Nothing is lost: `resolveLayoutMode` has no production caller at all
-          (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this mode toolbar
-          already resolving `collapsed` at every viewport, harmlessly, because all four of its items
-          are `showLabel: 'always'`. */}
+          once in `web-v0.86.0`. Nothing is lost: no density is resolved from the band any more
+          (`resolveLayoutMode` was deleted in toolbar-redesign M1, `docs/TECH_DEBT.md` #193). */}
             <ChromePortal name="mode">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {/* **The mode cluster is back on the identity line, beside the pen** (workspace

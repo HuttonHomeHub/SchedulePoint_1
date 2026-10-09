@@ -129,8 +129,9 @@ function HeaderContents({
           `lg`** (ADR-0179, minimum-viewport M4). The cap is what keeps the row one line at 1024: the
           content did not shrink, so without it the organisation switcher wrapped to a second row
           (48 px of diagram). The plan name truncates instead, and its `title` carries the whole.
-          Below `lg` the section also holds the drawer trigger and a phone's width has no room to
-          give away, so there it is uncapped. They belong together:
+          Below `lg` — under the design floor (ADR-0179) — the section also holds the drawer trigger
+          and a window that narrow has no room to give away, so there it is uncapped. They belong
+          together:
           `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
           of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
           `shrink` because this is the section that gives way — it is text with a `title`. */}
@@ -195,25 +196,25 @@ export function AppHeaderRow({
   modeSlotRef: (node: HTMLDivElement | null) => void;
 }): React.ReactElement {
   return (
-    // **`ToolbarBandProvider` wraps the row, and the reason is a reading rather than a caution**
-    // (`m0-landing-d1-measurement.md`). The identity slot carries the plan's mode `Toolbar`, and a
-    // toolbar with no provider above it resolves its DENSITY from its own `clientWidth` — which for
-    // a `shrink-0` row is its content width, landing it in a narrow band on a wide screen.
+    // **`ToolbarBandProvider` wraps the row, and it is a wrapper now more than a reading.** It was
+    // here so a mode `Toolbar` inside a `shrink-0` row did not resolve its DENSITY from its own
+    // `clientWidth`, which for such a row is its content width and landed it in a narrow band on a
+    // wide screen (`m0-landing-d1-measurement.md`). The density bands are gone (ADR-0109 D1, deleted
+    // in toolbar-redesign M1), so the width it publishes has no reader (`toolbar-band.tsx`) and the
+    // `<div>` is what is left of its job.
     //
-    // It is NOT protection against the fit trap — a width-unconstrained row's `clientWidth` is an
+    // It was never protection against the fit trap — a width-unconstrained row's `clientWidth` is an
     // *output* of a fit decision, so charging it chrome makes the pass measure itself. That trap is
     // moot since ADR-0109 D1: the surface wraps, nothing demotes, and the guard this paragraph
-    // named — `isWidthConstrained` (`Toolbar.tsx:81-84`) — went with the ladder and does not exist
-    // at those lines or anywhere (`docs/TECH_DEBT.md` #193, 2026-08-30 verification sweep).
+    // once named — `isWidthConstrained` — went with the ladder and exists nowhere
+    // (`docs/TECH_DEBT.md` #193).
     //
     // The first answer here was "the mode items are `render`, so they cannot demote", and that was
     // false even then: `mode-early` had an `onActivate` and a `segment` (ADR-0148 has since
-    // deleted it). Recorded because it
-    // was nearly built on, and it is the more durable half — the density reading above is what this
-    // provider is actually for.
+    // deleted it). Recorded because it was nearly built on.
     //
-    // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
-    // surface is and never answers whether a row's content fits.
+    // `toolbar-band.tsx`'s invariant still reads right if a reader returns: the band width says how
+    // roomy the surface is and never answers whether a row's content fits.
     <ToolbarBandProvider className="min-h-12 px-4 py-1">
       <header className="flex min-h-full items-center">
         <HeaderContents identitySlotRef={identitySlotRef} modeSlotRef={modeSlotRef} />

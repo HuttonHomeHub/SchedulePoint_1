@@ -1,8 +1,8 @@
 import { ChevronDown } from 'lucide-react';
 import { useId, useRef } from 'react';
 
-import type { ToolbarItemRenderApi } from './toolbar-registry';
-import { toolbarControlVariants } from './toolbar-styles';
+import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry';
+import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
 import { usePopoverPanel } from './use-popover-panel';
 
 import { cn } from '@/lib/utils';
@@ -25,7 +25,7 @@ export function ToolbarPopover({
   title,
   disabledReason,
   align = 'start',
-  compact = false,
+  labelState = 'visible',
   children,
 }: {
   label: string;
@@ -70,19 +70,18 @@ export function ToolbarPopover({
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
   /**
-   * Icon-only trigger (ADR-0090 M3-T3): the visible label is withheld and moves to `aria-label` +
-   * the native tooltip, so the control keeps its **name** while giving back roughly 60 px.
-   *
-   * Set from the row's `collapsed` band and nothing else. The measured reason: at 960 px Row 1's six
-   * remaining controls lay out 11 px wider than their container and at 768 px 203 px wider, and four
-   * of the six are this component — so one prop here is most of the collapse.
-   *
-   * **The name moves; it does not disappear.** An icon-only `<button>` whose only child is an
+   * Whether the visible label shows — pass the render API's `labelState`, already resolved by
+   * `resolveLabelVisibility`. `'hidden'` withholds it: the name moves to `aria-label` + the native
+   * tooltip, so the control keeps its **name**. An icon-only `<button>` whose only child is an
    * `aria-hidden` glyph has no accessible name at all, which is the failure mode a `sr-only` span
    * would also solve — `aria-label` is chosen because this trigger's name is a plain string it
    * already receives, with no markup to preserve.
+   *
+   * This replaced a `compact` boolean (ADR-0090 M3-T3) that the row's `collapsed` band set and that
+   * no band could set after ADR-0109 D1. A trigger cannot be `'roomy'`: it has only a native
+   * `title`, and `defineToolbar` refuses the declaration.
    */
-  compact?: boolean;
+  labelState?: ToolbarLabelState;
   children: React.ReactNode;
 }): React.ReactElement {
   const reasonId = useId();
@@ -90,6 +89,8 @@ export function ToolbarPopover({
   // a dangling reference, which some AT reads as an empty description rather than as absence.
   const describedBy = disabled === true && disabledReason ? reasonId : undefined;
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const labelClass = toolbarLabelClass(labelState);
+  const iconOnly = labelClass === null;
   // The panel itself is `usePopoverPanel` (ADR-0091 M7-S6) — anchor, clamp, Escape, outside-pointer
   // and focus-left, and the portal. Extracted so the merged `Go to today ▾` split button can host
   // the same panel without a second implementation of behaviours this repository has already fixed
@@ -124,12 +125,12 @@ export function ToolbarPopover({
         // pins it: the span lives inside the button, and a button's name comes from its content, so
         // without this the reason would be appended to the name as well as the description
         // ("Filter Add an activity first").
-        {...(compact || describedBy ? { 'aria-label': label } : {})}
+        {...(iconOnly || describedBy ? { 'aria-label': label } : {})}
         // A disabled reason still wins the tooltip: "why can't I press this" outranks "what is it",
         // and in that state the `aria-label` is already carrying the name.
         {...((title ?? disabledReason)
           ? { title: title ?? disabledReason }
-          : compact
+          : iconOnly
             ? { title: label }
             : {})}
         {...(describedBy ? { 'aria-describedby': describedBy } : {})}
@@ -155,7 +156,7 @@ export function ToolbarPopover({
             {icon}
           </span>
         ) : null}
-        {compact ? null : <span className="truncate">{label}</span>}
+        {labelClass ? <span className={labelClass}>{label}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {describedBy ? (
           <span id={reasonId} className="sr-only">

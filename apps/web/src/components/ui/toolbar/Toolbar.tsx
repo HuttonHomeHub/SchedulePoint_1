@@ -10,6 +10,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { resolveLabelVisibility } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
@@ -161,11 +162,8 @@ export function Toolbar<Ctx>({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // `'comfortable'` is passed as a constant rather than measured. It is the band in which nothing
-  // folds, so every `isVisible` predicate that takes an env resolves exactly what it always did —
-  // deleting the ladder must not quietly change which items a registry produces.
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled, 'comfortable'),
+    () => resolveItems(items, context, authoringEnabled),
     [items, context, authoringEnabled],
   );
 
@@ -270,7 +268,7 @@ export function Toolbar<Ctx>({
           disabledReason: r.disabledReason,
           active: r.active,
           activeKind: r.activeKind,
-          layout: 'comfortable',
+          labelState: resolveLabelVisibility(r.item.labelVisibility, 'toolbar'),
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
             : {
@@ -289,10 +287,9 @@ export function Toolbar<Ctx>({
         {...(r.item.description ? { description: r.item.description } : {})}
         icon={r.icon}
         {...(r.busy ? { busy: true } : {})}
-        // The item's own policy decides, with `'auto'` now meaning "yes": under the
-        // ladder `'auto'` meant "if the row can afford it", and a row that wraps can
-        // always afford it.
-        showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
+        // The one resolver decides. This surface is not a container, so `'roomy'` is `'always'`
+        // here.
+        labelState={resolveLabelVisibility(r.item.labelVisibility, 'toolbar')}
         {...(r.item.isActive ? { pressed: r.active } : {})}
         // Forwarded here as well as in `Deck` — the component review caught this missing, which is
         // the "one correct pattern applied to a control and not its neighbour" shape named three

@@ -41,7 +41,7 @@ describe('flag-off: the toolbar', () => {
       // The band is irrelevant here — this seam is flag-gated, not width-gated — but the predicate
       // now takes it, and passing the roomiest band is the strongest form of the claim: not even a
       // row with every pixel it wants paints this item.
-      expect(item.isVisible?.({} as never, { layout: 'comfortable' })).toBe(false);
+      expect(item.isVisible?.({} as never)).toBe(false);
     }
   });
 });

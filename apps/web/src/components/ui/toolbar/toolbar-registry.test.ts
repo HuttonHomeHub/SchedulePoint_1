@@ -3,14 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   defineToolbar,
   groupRank,
-  partitionByTier,
   resolveItems,
-  resolveLayoutMode,
   splitByRow,
-  TOOLBAR_LAYOUT_HYSTERESIS_PX,
-  type ResolvedToolbarItem,
   type ToolbarItem,
-  type ToolbarLayoutMode,
 } from './toolbar-registry';
 
 interface Ctx {
@@ -215,134 +210,58 @@ describe('resolveItems', () => {
   });
 });
 
-describe('partitionByTier', () => {
-  it('sends tier-3 to overflow and keeps tier-1/2 on the bar, order preserved', () => {
-    const resolved: ResolvedToolbarItem<Ctx>[] = [
-      {
-        item: base({ id: 'a', tier: 1 }),
-        enabled: true,
-        active: false,
-        activeKind: 'selected',
-        disabledReason: undefined,
-        srDescription: undefined,
-      },
-      {
-        item: base({ id: 'b', tier: 2 }),
-        enabled: true,
-        active: false,
-        activeKind: 'selected',
-        disabledReason: undefined,
-        srDescription: undefined,
-      },
-      {
-        item: base({ id: 'c', tier: 3 }),
-        enabled: true,
-        active: false,
-        activeKind: 'selected',
-        disabledReason: undefined,
-        srDescription: undefined,
-      },
-    ];
-    const { bar, overflow } = partitionByTier(resolved);
-    expect(bar.map((r) => r.item.id)).toEqual(['a', 'b']);
-    expect(overflow.map((r) => r.item.id)).toEqual(['c']);
+/**
+ * **`labelVisibility: 'roomy'` is refused where its tooltip cannot be mounted** (toolbar-redesign
+ * M1). A `'roomy'` label vanishes under a container query with no JavaScript involved, so the control
+ * must already carry the `description` tooltip that names it; only `ToolbarButton` mounts one.
+ * Verified red by removing the two checks from `defineToolbar`: both rejections below pass through.
+ */
+describe('defineToolbar — only a plain, described item may be `roomy`', () => {
+  it('accepts a plain onActivate item with a description', () => {
+    expect(() =>
+      defineToolbar([
+        base({ id: 'ok', labelVisibility: 'roomy', description: 'Says what it does' }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('rejects a render item, whose trigger has no description tooltip to carry its name', () => {
+    expect(() =>
+      defineToolbar([
+        base({
+          id: 'trigger',
+          labelVisibility: 'roomy',
+          description: 'x',
+          render: () => null,
+        }),
+      ]),
+    ).toThrow(/trigger.*only for a plain onActivate item/);
+  });
+
+  it('rejects an item with no description, because a bare name-echo names nothing', () => {
+    expect(() => defineToolbar([base({ id: 'bare', labelVisibility: 'roomy' })])).toThrow(
+      /bare.*needs a description/,
+    );
+  });
+
+  it("does not hold 'always' or 'never' to that rule", () => {
+    expect(() =>
+      defineToolbar([
+        base({ id: 'a', labelVisibility: 'always', render: () => null }),
+        base({ id: 'n', labelVisibility: 'never' }),
+      ]),
+    ).not.toThrow();
   });
 });
 
-/**
- * **The layout ladder and its hysteresis** (ADR-0090 M3-T1).
- *
- * The plan asks for "unit at all six boundary edges" — three boundaries, each in both directions —
- * and that count is the point. Each boundary therefore appears twice, and the widening half is the
- * half that carries the weight.
- *
- * **Verified red by replacing the body with a bare `width >= min` ladder**, rather than assumed:
- * five assertions fail (all three widening cases, the rung-by-rung case and the sweep) and the three
- * narrowing cases pass. So a suite that only walked the width downwards would have been green
- * against a build with no hysteresis at all — which is why the direction is spelt out in each name.
- *
- * The thresholds are computed from `TOOLBAR_LAYOUT_HYSTERESIS_PX` rather than typed in, so changing
- * the margin changes the test's expectations rather than breaking it — the constant is the decision,
- * and a literal here would silently become a second, disagreeing one.
- */
-describe('resolveLayoutMode', () => {
-  const H = TOOLBAR_LAYOUT_HYSTERESIS_PX;
-  const BOUNDARIES: { min: number; wider: ToolbarLayoutMode; narrower: ToolbarLayoutMode }[] = [
-    { min: 1536, wider: 'comfortable', narrower: 'compact' },
-    { min: 1280, wider: 'compact', narrower: 'condensed' },
-    { min: 1024, wider: 'condensed', narrower: 'collapsed' },
-  ];
-
-  for (const { min, wider, narrower } of BOUNDARIES) {
-    it(`narrows to ${narrower} the moment the row drops below ${min}`, () => {
-      expect(resolveLayoutMode(min, wider)).toBe(wider);
-      expect(resolveLayoutMode(min - 1, wider)).toBe(narrower);
-    });
-
-    it(`holds ${narrower} until ${min} + ${H} on the way back up`, () => {
-      // The asymmetry itself. Every width in the hysteresis band is above the boundary and must
-      // still not promote — which is exactly what a `width >= min` implementation gets wrong.
-      expect(resolveLayoutMode(min, narrower)).toBe(narrower);
-      expect(resolveLayoutMode(min + H - 1, narrower)).toBe(narrower);
-      expect(resolveLayoutMode(min + H, narrower)).toBe(wider);
-    });
-  }
-
-  it('promotes rung by rung, never stranding the row two bands below its width', () => {
-    // Growing from `collapsed` to 1550: that width clears `compact`'s floor by 270 px but misses
-    // `comfortable`'s hysteresis by 34. Testing only the band the width falls in would answer
-    // "stay collapsed" — a row two rungs denser than the space it has.
-    expect(resolveLayoutMode(1550, 'collapsed')).toBe('compact');
-    expect(resolveLayoutMode(1536 + H, 'collapsed')).toBe('comfortable');
-  });
-
-  it('narrows by as many rungs as the width demands, in one step', () => {
-    expect(resolveLayoutMode(800, 'comfortable')).toBe('collapsed');
-  });
-
-  it('does not oscillate anywhere on a slow drag across the whole range', () => {
-    // The property the six edge cases imply but do not state: sweeping the width down and back up
-    // must cross each boundary exactly once per direction. A build with no hysteresis flips at the
-    // same pixel both ways, so the two crossing sets are identical — here they must differ.
-    const sweep = (from: number, to: number, step: number): number[] => {
-      const changes: number[] = [];
-      let mode: ToolbarLayoutMode = resolveLayoutMode(from, 'comfortable');
-      for (let w = from; step > 0 ? w <= to : w >= to; w += step) {
-        const next = resolveLayoutMode(w, mode);
-        if (next !== mode) changes.push(w);
-        mode = next;
-      }
-      return changes;
-    };
-    const down = sweep(1800, 800, -1);
-    const up = sweep(800, 1800, 1);
-    expect(down).toEqual([1535, 1279, 1023]);
-    expect(up).toEqual([1024 + H, 1280 + H, 1536 + H]);
-  });
-});
-
-/**
- * **The `segment` tier invariant** (ADR-0090 M5, component gate). Verified red by removing the
- * check from `defineToolbar`.
- */
-describe('defineToolbar — a segment’s members share a tier', () => {
-  const seg = (id: string, tier: 1 | 2 | 3): ToolbarItem<Ctx> =>
-    base({ id, tier, segment: 'view-mode', isActive: () => false });
-
-  it('accepts a pair on the same tier', () => {
-    expect(() => defineToolbar([seg('left', 1), seg('right', 1)])).not.toThrow();
-  });
-
-  it('rejects a pair whose tiers disagree, naming the group', () => {
-    // A tier-3 companion would split the segment: one half reached one way, the other another.
-    // That is the exact state `segment` exists to prevent, and it would look correct in the
-    // registry.
-    //
-    // This paragraph described the split in terms of `computeLadder`'s companion lookup and the
-    // static `⋯` — both deleted with the width ladder (ADR-0109 D1), and the correction fourteen
-    // lines below in this same file already said so about `companionsOf` while this one went on
-    // citing its sibling. Same class as `docs/TECH_DEBT.md` #193, inside the file that records it.
-    expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
+/** `isVisible` is a predicate over the context and nothing else: nothing narrows an item on width. */
+describe('resolveItems — isVisible takes the context alone', () => {
+  it('passes the context and no second argument', () => {
+    const ctx: Ctx = { editing: false, hasSelection: false };
+    const isVisible = vi.fn(() => true);
+    resolveItems([base({ id: 'a', isVisible })], ctx, true);
+    expect(isVisible).toHaveBeenCalledTimes(1);
+    expect(isVisible.mock.calls[0]).toEqual([ctx]);
   });
 });
 

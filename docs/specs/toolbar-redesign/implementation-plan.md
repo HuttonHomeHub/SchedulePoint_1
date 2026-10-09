@@ -155,6 +155,15 @@ Two lines at the floor are asserted at M4.
 The 1280 × 800 text-only cell (40 rem; band 88 % fine / 127 % coarse today, foot row unreachable on coarse, M0 §8)
 is **M3's** assertion, and "no leading seam" (SC-12) is **M6 V2's**: neither holds at M1.
 
+> **M1 result (2026-10-09), recorded where the plan and the code disagreed.** Built as listed, with
+> one deliberate deviation: **`apply-levelling` stays `'never'` at M1** and becomes `'roomy'` in M2.
+> T3 says to make it `'roomy'` now, and doing that is not behaviour-neutral. Labelling it at 79 rem
+> and wider adds its ~150 px label to a DO row that still carries Summary and Comments (they leave in
+> M2), so DO wraps and `LINES[1280]` goes from 2 to 3. The journey this milestone is held to says the
+> 1280 bound is unchanged, so the journey wins. D-l is delivered in M2-T1/T2, when those two controls
+> have left DO. The `'roomy'` set at M1 is therefore **four** (the CQ-2 + OD-1 set), and the
+> structural test pins that set.
+
 ##### Task M1-T1: the stale lines first (≈ one PR, docs and comments only)
 
 - **Lines to fix:**
