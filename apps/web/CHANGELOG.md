@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.181.1
+
+### Patch Changes
+
+- [#904](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/904) [`3abc11b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3abc11b537f856bbd565e55cf8f10199eba65025) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a touch screen, the narrow strip you get when you hide the Project Explorer now has 44 pixel buttons: the button that shows the Explorer again and the six links to Clients, Calendars and the other pages. The strip is 53 pixels wide on touch (it was 34) to hold them, so the plan area is 19 pixels narrower than before while the Explorer is hidden. This also fixes a bug that affected mouse users: the strip was 34 pixels wide but its links needed more, so they spilled out of it. With a mouse it is now 45 pixels wide (it was 34), 11 pixels wider than before, and the links fit.
+
 ## 0.181.0
 
 ### Minor Changes
