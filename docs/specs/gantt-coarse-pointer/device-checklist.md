@@ -17,6 +17,7 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > keyboard-menu behaviour, the Gantt's targets, or `/pointer-check.html` — updates this file in the
 > same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 > Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
+> Item 25 was added for TECH_DEBT #439 (dividers now follow a finger).
 > Items 13–24 were added on 2026-10-09 for the dense-row touch targets (`docs/specs/dense-row-touch-targets/`,
 > ADR-0183, TECH_DEBT #215). That work left the Gantt's targets unchanged (the `⋯` stays 28 px and the
 > arrow 24 px, ADR-0177 D4 and ADR-0183 D6), so items 1 to 12 do not change. **Revisit trigger:** if
@@ -169,6 +170,17 @@ known gap (ADR-0183 D3), not a fault to report.
       [ ] yes, and it stayed
 - [ ] **24. Scroll the activities table and click a row so it has focus, then fold or unfold the
       cover.** Your place and the row's focus survived: [ ] yes [ ] no: __________
+
+## Dragging a divider (about 1 minute, tablet posture)
+
+Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stopped after a moment.
+
+- [ ] **25. On a touch device, in the Gantt view, put one finger on the thin vertical line between the
+      table (left) and the chart (right) and drag it slowly sideways, a thumb's width or more,
+      without lifting.**
+      It: [ ] followed my finger the whole way [ ] stopped part-way [ ] the chart scrolled instead
+      [ ] nothing happened. Try the line between the Project Explorer and the plan too:
+      [ ] followed [ ] stopped part-way [ ] other: __________
 
 ## When you are done
 

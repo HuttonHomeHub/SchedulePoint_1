@@ -52,6 +52,13 @@ export interface PanelResizerProps {
  * resizes; arrows nudge; Home/End jump to the bounds. The single divider implementation shared
  * by the Project Explorer rail (ADR-0029) and the plan workspace's activity panel (ADR-0030).
  *
+ * **Touch contract (TECH_DEBT #439).** The separator is `touch-action: none`, so a finger drag
+ * delivers its pointer moves to the divider for the whole gesture instead of the browser claiming
+ * the gesture and ending it in `pointercancel` after a few pixels. The divider is a drag target
+ * and nothing else, so it gives up panning and pinch over its own strip. `className` is merged
+ * last, so a consumer could undo this; none may, and a structural test fails a `<PanelResizer>`
+ * call site that passes a `touch-*` class.
+ *
  * jsx-a11y treats `separator` as non-interactive, so the tabindex / handler rules are disabled
  * deliberately — the ARIA value + keyboard support are exactly what make it operable.
  */
@@ -120,7 +127,8 @@ export function PanelResizer({
       onPointerCancel={pointer.onPointerCancel}
       onKeyDown={onKeyDown}
       className={cn(
-        'relative shrink-0 outline-none',
+        // `touch-none` must be on the element that owns the pointer handlers; the hit-area child is covered by it (the effective touch-action is the intersection up the ancestors).
+        'relative shrink-0 touch-none outline-none',
         vertical
           ? 'w-px cursor-col-resize focus-visible:w-0.5'
           : 'h-px cursor-row-resize focus-visible:h-0.5',
