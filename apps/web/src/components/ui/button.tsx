@@ -73,8 +73,7 @@ const buttonVariants = cva(
         // 28 px on BOTH pointers, and that is ADR-0118 D1's second named exception rather than an
         // oversight** — see D6a.
         //
-        // A target in a row that grows with it is `icon-row`; a target in a fixed container is
-        // `icon-sm` and is on ADR-0118 D1's list.
+        // See `icon-row` above for which of the two a target takes.
         //
         // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back: a 44 px button
         // centred in `HierarchyTree`'s 28 px row (`ROW_HEIGHT`, a JavaScript constant feeding both

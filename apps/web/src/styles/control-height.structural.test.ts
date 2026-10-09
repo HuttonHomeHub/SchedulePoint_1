@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
+
 /**
  * **Every control height in `components/ui/` reads `--control-h*`, or is a NAMED exception**
  * (ADR-0118 D1/D2, built at M4).
@@ -78,24 +80,10 @@ const EXCEPTIONS = new Map<string, string>([
   ['page/empty-state.tsx::size-9', 'the same decorative glyph at its non-page size'],
 ]);
 
-const SRC_DIR = join(process.cwd(), 'src');
-
-/** Every non-test source file under `src/`, relative to it, with `/` separators. */
-function allSourceFiles(): string[] {
-  return readdirSync(SRC_DIR, { recursive: true, encoding: 'utf8' })
-    .filter((f) => /\.tsx?$/.test(f) && !f.includes('.test.') && !f.includes('.spec.'))
-    .map((f) => f.split('\\').join('/'));
-}
-
 function sourceFiles(): string[] {
   return readdirSync(UI_DIR, { recursive: true, encoding: 'utf8' }).filter(
     (f) => (f.endsWith('.tsx') || f.endsWith('.ts')) && !f.includes('.test.'),
   );
-}
-
-/** Strip block and line comments so a docblock describing the rule cannot violate it. */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
 describe('control heights in the design-system primitives', () => {
@@ -146,6 +134,8 @@ describe('control heights in the design-system primitives', () => {
     //
     // Interim list (dense-row-touch-targets M1). The plan's end state is `GanttRowMenu` alone;
     // `HierarchyTree` leaves at M2 and `explorer-column` at M3, and each removes its line below.
+    // TODO(M2/M3): `docs/specs/dense-row-touch-targets/implementation-plan.md` — delete those two
+    // entries (and the matching `button.tsx::size-7` wording) when the milestones land.
     const EXPECTED = new Map<string, number>([
       ['components/layout/navigator/explorer-column.tsx', 1],
       ['features/gantt/components/GanttRowMenu.tsx', 1],

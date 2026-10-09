@@ -1,9 +1,10 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { declarations, readGlobalsCss } from '@/test/css-blocks';
+import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
 
 /**
  * **The input axis, pinned** (ADR-0118 D2, built at M4 after the gate pass found it missing).
@@ -71,70 +72,66 @@ describe('the coarse-pointer input axis', () => {
 });
 
 /**
- * **The JS side of the axis, and the arbitrary-variant spelling** (dense-row-touch-targets, spec
- * §5). The CSS half above has one declaration site; the JS half had none, so a second component
- * could ask `matchMedia('(pointer: coarse)')` in its own words and drift from `viewport-notice`'s.
- * Scope is deliberately narrow: only a STRING LITERAL passed to `matchMedia(` / `useMediaQuery(`
- * that mentions `pointer` — an identifier argument (`COARSE_POINTER_QUERY`) is the sanctioned form
- * and is not matched — and no class string spelled `[@media(pointer:…)]`, because `pointer-coarse:`
- * is the utility that compiles to the same rule and that `control-height.structural.test.ts` reads.
+ * **The JS side of the axis** (dense-row-touch-targets, spec §5). The CSS half above has one
+ * declaration site; the JS half had none, so a second component could ask for the pointer in its
+ * own words and drift from `viewport-notice`'s. The rule is textual and deliberately blunt: any
+ * `(pointer: …)` / `(any-pointer: …)` query in code — in a `matchMedia` literal, a constant that is
+ * later passed to it (`const Q = '(pointer: coarse)'`), or a `[@media(pointer:…)]` class — is an
+ * offender unless it is the right-hand side of the `COARSE_POINTER_QUERY` definition or is listed
+ * below. `pointer-coarse:` is the utility that compiles to the same rule and is not matched.
  * Comments are stripped first, so `button.tsx`, `toolbar-styles.ts` and `GanttColumnEdge.tsx`
  * explaining the rule cannot break it.
  */
-const SRC_DIR = join(process.cwd(), 'src');
-
-const POINTER_QUERY_LITERAL = /(?:matchMedia|useMediaQuery)\(\s*(['"`])([^'"`]*pointer[^'"`]*)\1/g;
-const ARBITRARY_POINTER_VARIANT = /\[@media\(pointer:/g;
+const POINTER_QUERY = /\(\s*(?:any-)?pointer\s*:[^)]*\)/g;
+const COARSE_QUERY_DEFINITION = /COARSE_POINTER_QUERY\s*=\s*(['"`])[^'"`]*\1/g;
 
 /**
- * Sites that predate `COARSE_POINTER_QUERY` (created at M2 of the same epic). Each line is removed
- * by the milestone that moves the site onto the hook; none may be added.
+ * Sites that predate `COARSE_POINTER_QUERY` (created at M2 of the same epic), keyed by file and
+ * query text with the number of occurrences allowed — so a second identical literal in the same
+ * file fails. Each line is removed by the milestone that moves the site onto the hook; none may be
+ * added. TODO(M2): `docs/specs/dense-row-touch-targets/implementation-plan.md`.
  */
-const INTERIM = new Set<string>([
-  "components/layout/viewport-notice/viewport-notice.tsx::'(pointer: coarse)'",
-  'features/navigator/components/HierarchyTree.tsx::[@media(pointer:',
+const INTERIM = new Map<string, number>([
+  ['components/layout/viewport-notice/viewport-notice.tsx::(pointer: coarse)', 1],
+  ['features/navigator/components/HierarchyTree.tsx::(pointer:coarse)', 1],
 ]);
 
-function strip(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
-
-function pointerAxisOffenders(): string[] {
-  const offenders: string[] = [];
-  const files = readdirSync(SRC_DIR, { recursive: true, encoding: 'utf8' })
-    .filter((f) => /\.tsx?$/.test(f) && !f.includes('.test.') && !f.includes('.spec.'))
-    .map((f) => f.split('\\').join('/'));
-  for (const file of files) {
-    const code = strip(readFileSync(join(SRC_DIR, file), 'utf8'));
-    for (const m of code.matchAll(POINTER_QUERY_LITERAL)) {
-      const key = `${file}::${m[1]}${m[2]}${m[1]}`;
-      if (!INTERIM.has(key)) offenders.push(key);
-    }
-    for (const _ of code.matchAll(ARBITRARY_POINTER_VARIANT)) {
-      const key = `${file}::[@media(pointer:`;
-      if (!INTERIM.has(key)) offenders.push(key);
+function pointerQueryCounts(): Map<string, number> {
+  const found = new Map<string, number>();
+  for (const file of allSourceFiles()) {
+    const code = stripComments(readFileSync(join(SRC_DIR, file), 'utf8')).replace(
+      COARSE_QUERY_DEFINITION,
+      '',
+    );
+    for (const m of code.matchAll(POINTER_QUERY)) {
+      const key = `${file}::${m[0]}`;
+      found.set(key, (found.get(key) ?? 0) + 1);
     }
   }
-  return offenders;
+  return found;
 }
 
 describe('the JS side of the input axis', () => {
-  it('is asked only through COARSE_POINTER_QUERY, and never as a [@media(pointer:…)] class', () => {
+  it('writes no pointer media query of its own', () => {
+    const offenders = [...pointerQueryCounts()]
+      .filter(([key, n]) => n > (INTERIM.get(key) ?? 0))
+      .map(([key, n]) => `${key} ×${n}`);
     expect(
-      pointerAxisOffenders(),
-      'a `pointer` media query written as a literal is a second vocabulary for the axis — use ' +
-        '`COARSE_POINTER_QUERY` / `pointer-coarse:` (ADR-0118 D2, dense-row-touch-targets)',
+      offenders,
+      'a `(pointer: …)` query written out is a second vocabulary for the axis — use the ' +
+        '`pointer-coarse:` utility in a class, or, in code, the single `COARSE_POINTER_QUERY` ' +
+        'definition (created at M2 of dense-row-touch-targets; until it exists there is no ' +
+        'sanctioned JS form, so a new need is an M2 conversation, not a new literal)',
     ).toEqual([]);
   });
 
-  it('still finds each interim site, so the allowance cannot outlive the code', () => {
-    // The pinned positive: an INTERIM line matching nothing is a permission for code that has gone.
-    for (const key of INTERIM) {
-      const [file, needle] = key.split('::');
-      const code = strip(readFileSync(join(SRC_DIR, file as string), 'utf8'));
-      expect(code, `the interim allowance "${key}" matches nothing any more`).toContain(
-        needle as string,
-      );
+  it('still finds each interim site exactly, so the allowance cannot outlive the code', () => {
+    const found = pointerQueryCounts();
+    for (const [key, allowed] of INTERIM) {
+      expect(
+        found.get(key) ?? 0,
+        `the interim allowance "${key}" no longer matches ${String(allowed)} occurrence(s)`,
+      ).toBe(allowed);
     }
   });
 });

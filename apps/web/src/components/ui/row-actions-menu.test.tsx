@@ -40,6 +40,21 @@ describe('RowActionsMenu', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('sizes its trigger with `icon-row`, so a coarse pointer gets 44 px and the row grows with it', () => {
+    // jsdom paints nothing, so the class is the only tier-1 witness: a revert to a raw `size-7`
+    // (or to `icon-sm`, which stays 28 on touch) passes every other unit test and is caught only
+    // by the browser sweep (dense-row-touch-targets, #215).
+    render(
+      <RowActionsMenu subject="Northgate">
+        <MenuItem onSelect={vi.fn()}>Delete</MenuItem>
+      </RowActionsMenu>,
+    );
+    expect(screen.getByRole('button', { name: 'Actions for Northgate' })).toHaveClass(
+      'size-7',
+      'pointer-coarse:size-(--control-h)',
+    );
+  });
+
   it('keeps a shaded item reachable, with its reason attached rather than folded into the name', () => {
     render(
       <RowActionsMenu subject="Northgate">

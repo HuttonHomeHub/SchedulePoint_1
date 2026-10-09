@@ -334,6 +334,18 @@ describe('ActivitiesTable', () => {
   });
 });
 
+describe('ActivitiesTable — row actions trigger', () => {
+  it('sizes its trigger with `icon-row`, so a coarse pointer gets 44 px and the row grows with it', () => {
+    // Tier-1 pin for #215: the browser sweep is skipped at the 1024 × 600 floor, so a consumer
+    // reverting to a raw `size-7` / `icon-sm` would otherwise surface only on a device.
+    renderTable(false);
+    expect(screen.getByRole('button', { name: 'Actions for Excavate' })).toHaveClass(
+      'size-7',
+      'pointer-coarse:size-(--control-h)',
+    );
+  });
+});
+
 describe('ActivitiesTable — baseline variance', () => {
   function varianceRow(overrides: Partial<BaselineVarianceRow> = {}): BaselineVarianceRow {
     return {
