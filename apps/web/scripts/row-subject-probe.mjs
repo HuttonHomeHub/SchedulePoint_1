@@ -134,6 +134,8 @@ export function probeRowSubjects() {
       const region =
         section?.getAttribute('aria-label') ??
         (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
+      // Row discovery is tied to `ListRow`'s markup: a `.border-b` div whose two direct children are
+      // the primary block and the trailing block. Change that structure and this reads nothing.
       const row = subject.closest('.border-b');
       // The ListRow's trailing block (M1): its text must be whole too, and where it sits relative to
       // the primary block is the narrow-width drop (CQ-3, SC-3 floor clause, SC-9).

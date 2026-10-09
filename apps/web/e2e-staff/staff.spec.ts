@@ -1821,8 +1821,10 @@ test('a staff member reads the console by group and acts on a condition', async 
   //
   // `ListRow` wraps its trailing block beneath the text when the text would be left under 7rem
   // (ADR-0184). This console is the one consumer the landing's measurements never see, so it pins
-  // "unchanged at or above the floor": the verdict badge's top is above the primary block's bottom,
-  // i.e. on the row's first flex line, centred against the two-line primary by the default `align`.
+  // two things at and above the floor: the verdict badge's top is above the primary block's bottom
+  // (it stays on the first flex line, centred by the default `align`), and the primary now FILLS the
+  // row (`flex-1`), so the badge sits one `gap-x-4` (16 px) from the primary's right edge. The second
+  // is the one the old `ListRow` fails: its primary hugged its text and `justify-between` left a gap.
   for (const [width, height] of [
     [1024, 600],
     [1912, 948],
@@ -1833,7 +1835,12 @@ test('a staff member reads the console by group and acts on a condition', async 
         const primary = row.children[0]?.getBoundingClientRect();
         const verdict = row.children[1]?.getBoundingClientRect();
         return primary && verdict
-          ? { primaryBottom: primary.bottom, verdictTop: verdict.top }
+          ? {
+              primaryBottom: primary.bottom,
+              primaryRight: primary.right,
+              verdictTop: verdict.top,
+              verdictLeft: verdict.left,
+            }
           : null;
       }),
     );
@@ -1845,6 +1852,10 @@ test('a staff member reads the console by group and acts on a condition', async 
         r!.verdictTop,
         `${String(width)}: a verdict badge dropped beneath its row's text`,
       ).toBeLessThan(r!.primaryBottom);
+      expect(
+        Math.abs(r!.verdictLeft - r!.primaryRight - 16),
+        `${String(width)}: the row's text no longer fills the row up to the verdict`,
+      ).toBeLessThanOrEqual(1);
     }
   }
   await staff.setViewportSize({ width: 1920, height: 1080 });

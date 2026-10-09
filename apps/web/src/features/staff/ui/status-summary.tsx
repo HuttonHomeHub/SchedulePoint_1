@@ -24,7 +24,8 @@ import { cn } from '@/lib/utils';
  * buried in a clause. For a seasoned admin it is also a constant-time table of contents for a page
  * that is still seven screens long.
  *
- * **Every row is a link and the WHOLE row is the target.** WCAG 2.5.8, and the specific shape
+ * **Every row is a link, and the link is the label.** The badge is `ListRow`'s trailing block,
+ * outside the link, so the row's target is its label, not the whole row. WCAG 2.5.8, and the specific shape
  * ADR-0090 and ADR-0110 both record shipping wrong: a caret or an icon as the only hit area,
  * invisible to a target-size sweep because the sweep measures the element carrying the item
  * attribute and not its sibling. It reuses `ListRow` + `rowLinkClass` rather than inventing a list

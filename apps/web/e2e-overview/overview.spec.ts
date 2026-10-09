@@ -528,6 +528,109 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   await readSubjects(1280, 800);
   await controlSeesAnInjectedToken();
 
+  /** Re-read the probe after a style change, once two readings agree (the page does not reload). */
+  const reprobe = async (): Promise<ProbeResult> => {
+    let previous = '';
+    let reading = await overviewPage.evaluate(probeRowSubjects);
+    await expect
+      .poll(async () => {
+        reading = await overviewPage.evaluate(probeRowSubjects);
+        const signature = JSON.stringify(reading.subjects.map((x) => x.rowHeight));
+        const same = signature === previous;
+        previous = signature;
+        return same;
+      })
+      .toBe(true);
+    return reading;
+  };
+  /** A section body is a second scroll axis (SC-6): its content may not be wider than it is. */
+  const bodiesOverflowingSideways = (): Promise<string[]> =>
+    overviewPage.evaluate(() =>
+      [...document.querySelectorAll('main section[aria-labelledby]')]
+        .filter((el) => {
+          const body = el.lastElementChild;
+          return body ? body.scrollWidth > body.clientWidth : false;
+        })
+        .map(
+          (el) =>
+            document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ?? '',
+        ),
+    );
+  /** Within each section, rows stack: every row starts below the previous row's top and clear of it. */
+  const rowsThatOverlap = (): Promise<string[]> =>
+    overviewPage.evaluate(() => {
+      const bad: string[] = [];
+      for (const sectionEl of document.querySelectorAll('main section[aria-labelledby]')) {
+        let previous: DOMRect | null = null;
+        for (const subject of sectionEl.querySelectorAll('[data-row-subject]')) {
+          const row = subject.closest('li') ?? subject;
+          const rect = row.getBoundingClientRect();
+          if (previous && (rect.top <= previous.top || rect.top < previous.bottom - 1)) {
+            bad.push((subject.textContent ?? '').trim().slice(0, 40));
+          }
+          previous = rect;
+        }
+      }
+      return bad;
+    });
+
+  // SC-8, WCAG 1.4.12 text spacing: the four values the criterion names, injected as an author
+  // stylesheet at the three cells the spec lists. A row that wraps instead of clipping must also not
+  // collide with its neighbour once the lines grow.
+  for (const [width, height] of [
+    [1280, 800],
+    [1477, 900],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)} with text spacing`;
+    await readSubjects(width, height);
+    const spacing = await overviewPage.addStyleTag({
+      content:
+        '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important } p { margin-bottom: 2em !important }',
+    });
+    const reading = await reprobe();
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+    expect(await bodiesOverflowingSideways(), `${at}: a box body is wider than itself`).toEqual([]);
+    expect(await rowsThatOverlap(), `${at}: a row overlaps the one above it`).toEqual([]);
+    await spacing.evaluate((el) => (el as Element).remove());
+  }
+
+  // SC-6 / SC-9 at 200 % text, applied the way the earlier 200 % block does it (`html { font-size:
+  // 200% }`, a labelled proxy for the browser's text-only zoom, which a headless run cannot set).
+  // That block runs before any long name exists, so the row-subject claims are made here.
+  for (const [width, height] of [
+    [1280, 800],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)} at 200 % text`;
+    await readSubjects(width, height);
+    await overviewPage.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    const reading = await reprobe();
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+    expect(await bodiesOverflowingSideways(), `${at}: a box body is wider than itself`).toEqual([]);
+    const trailing = reading.subjects.filter((x) => x.trailing);
+    expect(trailing.length, `${at}: no row has a trailing fact to measure`).toBeGreaterThan(0);
+    for (const x of trailing) {
+      expect(
+        x.trailing?.primaryChars,
+        `${at}: ${x.text} leaves its name too little room`,
+      ).toBeGreaterThanOrEqual(12);
+    }
+    await overviewPage.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+  }
+
   // 320 x 800 is the 1280-at-400 % reflow proxy (WCAG 1.4.10). The "designed for larger screens"
   // notice sits above the landing; it is measured beneath, as M0 did.
   const narrow = await readSubjects(320, 800);
