@@ -44,6 +44,16 @@
 > columns again from a 1245 window (grid = window − 93); at 420 a window must reach about 1621. SC-1 asserts four distinct
 > tops at 1280 × 800 and two at 1600 × 1000 (grid 1275, unchanged); SC-3's "1440 × 900 with the
 > Explorer at 420" is one column as before, and its fold case at 1280 is two columns (grid 1187).
+>
+> **Also amended, after review (2026-10-09):** the height caps follow the split too. The grid takes
+> `@6xl:min-h-0 @6xl:flex-1` and a `fill` section card `@6xl:h-full @6xl:min-h-0` with its body
+> `@6xl:min-h-0 @6xl:flex-1 @6xl:overflow-y-auto`, so in one column the four boxes stack at the height
+> their content needs and `<main>` scrolls (the first build capped them at 220 px each in every
+> state). The threshold is therefore written in two files, `page-grid.tsx` and `section-card.tsx`,
+> and `page-grid.structural.test.ts` holds them to one size. **CQ-2 is provisional**: decided by the
+> orchestrator under the product owner's delegation, pending his confirmation. 72rem is a named
+> Tailwind step chosen with margin, not the minimum the evidence allows (the wrap boundary lies
+> between 505 and 546 px tracks, a grid of about 1034–1115 px).
 
 ## 1. Business understanding
 
@@ -308,12 +318,12 @@ flowchart TD
   the grid is `grid min-h-0 flex-1 grid-cols-1 gap-6 @5xl:grid-cols-2`, with **no public override**.
   No `frameClassName` prop.
 - New prop **`rows?: 'auto' | 'fit-then-fill'`** (default `'auto'`): `'fit-then-fill'` adds
-  `@5xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` to the grid — the top row takes what it needs,
+  `@6xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]` to the grid — the top row takes what it needs,
   the bottom row takes the rest, and only where the grid is two columns. Named for what it does to
   the rows, not for the landing; it is the only caller today.
 - `PageGridItem`: `md:col-span-2` → `col-span-full`.
-- Docblock `:49-50` rewritten: "one column until **this grid's own width** reaches 64rem, so a column
-  is never narrower than 500 px whatever the window, the Explorer or the font size; `md` was a
+- Docblock `:49-50` rewritten: "one column until **this grid's own width** reaches 72rem, so a column
+  is never narrower than 564 px whatever the window, the Explorer or the font size; `md` was a
   viewport proxy for that rule and missed it by 28 px at the 1024 floor." The frame adds **no
   landmark and no role** (a plain `div`, like `PageContainer`, `page-container.tsx:45-51`).
 

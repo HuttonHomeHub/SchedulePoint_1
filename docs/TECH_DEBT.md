@@ -11924,19 +11924,20 @@ The `contents` surface around `PanelResizer` sits outside every landmark, so the
 has reported it. The overview journey filters exactly that one target and fails on any other `region` finding. **Next:** put the splitter inside the Explorer's landmark or give it one; delete the filter.
 Shared shell keyboard/landmark change, so accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `explorer-column.tsx`.
 
-### 474. `SectionCard fill` body is a tab stop whether or not it scrolls, and has no focus ring
+### 474. `SectionCard fill` body is a tab stop whether or not it scrolls
 
-**Status:** open · **Verified:** 2026-10-09 (`section-card.tsx:263` `tabIndex={0}`; `:251` carries no focus ring)
+**Status:** open · **Verified:** 2026-10-09 (`section-card.tsx` `tabIndex={0}` on the filled body; `overview.spec.ts` step 5b2 measures the one-column box heights)
 **Raised:** 2026-10-09 · **Size:** S · **Owner:** web
 
-In one column (below the 72rem split, now reachable across the designed range) the landing's boxes are not height-capped, so each `fill` body is a tab stop that scrolls nothing. Not an AA failure — it is operable and
-inside a named region — but a purposeless stop. **Next:** make `tabIndex` conditional on real overflow and give the body the design-system ring (`focus-visible:ring-ring focus-visible:ring-2`, as `input.tsx:19`).
-A shared-primitive keyboard change: accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `section-card.tsx`.
+The body was a tab stop because it scrolled (WCAG 2.2 §2.1.1), and it did scroll before the page-grid split work. Since the split (ADR-0182) a filled card caps and scrolls only in two columns; in one column
+(below 72rem of grid, now reachable across the designed range) each box is sized by its content and its body scrolls nothing, so the `tabIndex={0}` there is a purposeless stop. Not an AA failure: it is operable and
+inside a named region. The row said the body "has no focus ring"; that was wrong in the version first filed: the body removes no outline, so the browser's own focus indicator applies (not photographed).
+**Next:** make `tabIndex` conditional on real overflow. A shared-primitive keyboard change: accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `section-card.tsx`.
 
 ### 475. Two stale statements found while writing the page-grid spec
 
-**Status:** open · **Verified:** 2026-10-09 (`routes/members.tsx:15-18`; `page-container.tsx:38`; `docs/HANDOFF.md:38`)
+**Status:** open · **Verified:** 2026-10-09 (`page-container.tsx:38`; `docs/HANDOFF.md:38`)
 **Raised:** 2026-10-09 · **Size:** S · **Owner:** docs
 
-`routes/members.tsx:15-18` says `PageContainer`'s default is `max-w-6xl`; it is `max-w-screen-2xl` (`page-container.tsx:38`). `docs/HANDOFF.md:38` no longer carries the 1912 × 1114 reading that ADR-0179:53 cites it for
-(the figure survives at `docs/specs/minimum-viewport/feature-spec.md:410`). **Next:** correct both. **Trigger:** the next edit to either file.
+The stale `routes/members.tsx` comment (it said `PageContainer`'s default is `max-w-6xl`; it is `max-w-screen-2xl`, `page-container.tsx:38`) was corrected with the page-grid split work. `docs/HANDOFF.md:38` no longer carries the 1912 × 1114 reading that ADR-0179:53 cites it for
+(the figure survives at `docs/specs/minimum-viewport/feature-spec.md:410`). **Next:** correct `HANDOFF.md`. **Trigger:** the next edit to that file.

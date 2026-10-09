@@ -1,8 +1,12 @@
-# M0 — the organisation landing, measured before anything is built
+# M1 after-reading — the page grid split, landing and Members, same harness and fixture as M0
 
-- **Taken:** 2026-10-09T07:24:05.175Z
-- **Build:** `web 0.181.1 · api 0.88.1` (read off the shell footer, not assumed — see the harness docblock)
-- **Organisation:** `m0-landing-1791530636188`, seeded by `landing-fixture.mjs`
+> Taken on the tree with the one-column stacking fix (`@6xl` caps on the grid and on a filled card).
+> An earlier version of this file was taken before that fix and showed every one-column box clamped to
+> 220 px; it is superseded by this one.
+
+- **Taken:** 2026-10-09T07:48:42.587Z
+- **Build:** `web 0.182.0 · api 0.88.1` (read off the shell footer, not assumed — see the harness docblock)
+- **Organisation:** `m0-landing-1791532113526`, seeded by `landing-fixture.mjs`
 - **Non-vacuity control:** PASS, 9 states asserted positively before any measurement
 
 ## FC-5 — requests to `…/overview` on one landing load
@@ -13,31 +17,31 @@ Counted **1** (bar: exactly 1).
 
 | Plan          | id                                     |
 | ------------- | -------------------------------------- |
-| projectId     | `01a11f8c-21d1-7102-aaad-ee1dc21e84b8` |
-| late          | `01a11f8c-22c5-79a1-94f6-188bcea82e0c` |
-| onPlan        | `01a11f8c-23fa-7672-bc99-d53493a60d2e` |
-| stale         | `01a11f8c-24c8-7260-b939-a306192633e3` |
-| never         | `01a11f8c-259d-7ea1-b72c-c8b05b303501` |
-| violating     | `01a11f8c-2638-7e72-8a5f-47cc85dee8d8` |
-| empty         | `01a11f8c-271c-7762-a6a7-5a17728c8468` |
-| liveInvite    | `01a11f8c-2783-79b0-a486-833a6dc453bd` |
-| expiredInvite | `01a11f8c-2792-7582-a870-15902cba75e9` |
+| projectId     | `01a11fa2-acf8-7fd0-bb01-7a537686daa5` |
+| late          | `01a11fa2-ade0-7880-9661-288388025c60` |
+| onPlan        | `01a11fa2-af14-7091-8cda-829355fa5953` |
+| stale         | `01a11fa2-afec-7441-b3ab-b610ee7d496e` |
+| never         | `01a11fa2-b0c5-79f2-8bf2-f2b99289d2c4` |
+| violating     | `01a11fa2-b15a-7d60-9865-a8b8b022aa0f` |
+| empty         | `01a11fa2-b247-7190-aac2-4b1b38d54912` |
+| liveInvite    | `01a11fa2-b2b6-7090-ab0e-51641b48f5f6` |
+| expiredInvite | `01a11fa2-b2c6-7a62-8c1c-1ce9095c078a` |
 
 ## Split matrix (landing-two-columns M0)
 
 | Window      | Explorer | Screen  | Grid | Tracks    | Distinct tops | Boxes wholly visible | main scroll (h/client) | Doc overflow-x | Wrapped runs | Truncated runs |
 | ----------- | -------- | ------- | ---: | --------- | ------------: | -------------------: | ---------------------- | -------------: | -----------: | -------------: |
-| 1024 × 600  | default  | landing |  699 | 699       |             4 |               1 of 4 | 1056/549               |              0 |            0 |             17 |
+| 1024 × 600  | default  | landing |  699 | 699       |             4 |               1 of 4 | 2179/549               |              0 |            0 |             17 |
 | 1024 × 600  | default  | members |  699 | 699       |             5 |               3 of 5 | 915/549                |              0 |            4 |              0 |
-| 1272 × 1800 | default  | landing |  947 | 947       |             4 |               4 of 4 | 1749/1749              |              0 |            0 |              3 |
+| 1272 × 1800 | default  | landing |  947 | 947       |             4 |               3 of 4 | 2179/1749              |              0 |            0 |              3 |
 | 1272 × 1800 | default  | members |  947 | 947       |             5 |               5 of 5 | 1749/1749              |              0 |            0 |              0 |
-| 1280 × 800  | default  | landing |  955 | 955       |             4 |               2 of 4 | 1056/749               |              0 |            0 |              3 |
+| 1280 × 800  | default  | landing |  955 | 955       |             4 |               1 of 4 | 2179/749               |              0 |            0 |              3 |
 | 1280 × 800  | default  | members |  955 | 955       |             5 |               4 of 5 | 911/749                |              0 |            0 |              0 |
-| 1349 × 800  | default  | landing | 1024 | 1024      |             4 |               2 of 4 | 1056/749               |              0 |            0 |              3 |
+| 1349 × 800  | default  | landing | 1024 | 1024      |             4 |               1 of 4 | 2179/749               |              0 |            0 |              3 |
 | 1349 × 800  | default  | members | 1024 | 1024      |             5 |               4 of 5 | 911/749                |              0 |            0 |              0 |
-| 1358 × 636  | default  | landing | 1033 | 1033      |             4 |               2 of 4 | 1056/585               |              0 |            0 |              3 |
+| 1358 × 636  | default  | landing | 1033 | 1033      |             4 |               1 of 4 | 2179/585               |              0 |            0 |              3 |
 | 1358 × 636  | default  | members | 1033 | 1033      |             5 |               4 of 5 | 911/585                |              0 |            0 |              0 |
-| 1440 × 900  | default  | landing | 1115 | 1115      |             4 |               3 of 4 | 1056/849               |              0 |            0 |              2 |
+| 1440 × 900  | default  | landing | 1115 | 1115      |             4 |               1 of 4 | 2179/849               |              0 |            0 |              2 |
 | 1440 × 900  | default  | members | 1115 | 1115      |             5 |               4 of 5 | 911/849                |              0 |            0 |              0 |
 | 1477 × 900  | default  | landing | 1152 | 564 + 564 |             2 |               2 of 4 | 933/849                |              0 |            1 |             18 |
 | 1477 × 900  | default  | members | 1152 | 564 + 564 |             4 |               5 of 5 | 849/849                |              0 |            2 |              0 |
@@ -47,11 +51,11 @@ Counted **1** (bar: exactly 1).
 | 1912 × 1114 | default  | members | 1488 | 732 + 732 |             4 |               5 of 5 | 1063/1063              |              0 |            0 |              0 |
 | 1280 × 800  | folded   | landing | 1187 | 582 + 582 |             2 |               2 of 4 | 933/749                |              0 |            1 |             18 |
 | 1280 × 800  | folded   | members | 1187 | 582 + 582 |             4 |               5 of 5 | 749/749                |              0 |            0 |              0 |
-| 1280 × 800  | 420      | landing |  811 | 811       |             4 |               2 of 4 | 1056/749               |              0 |            0 |              3 |
+| 1280 × 800  | 420      | landing |  811 | 811       |             4 |               1 of 4 | 2179/749               |              0 |            0 |              3 |
 | 1280 × 800  | 420      | members |  811 | 811       |             5 |               4 of 5 | 911/749                |              0 |            0 |              0 |
 | 1440 × 900  | folded   | landing | 1347 | 662 + 662 |             2 |               2 of 4 | 933/849                |              0 |            0 |             17 |
 | 1440 × 900  | folded   | members | 1347 | 662 + 662 |             4 |               5 of 5 | 849/849                |              0 |            0 |              0 |
-| 1440 × 900  | 420      | landing |  971 | 971       |             4 |               3 of 4 | 1056/849               |              0 |            0 |              3 |
+| 1440 × 900  | 420      | landing |  971 | 971       |             4 |               1 of 4 | 2179/849               |              0 |            0 |              3 |
 | 1440 × 900  | 420      | members |  971 | 971       |             5 |               4 of 5 | 911/849                |              0 |            0 |              0 |
 
 ### Wrapped and truncated runs, per cell
@@ -76,9 +80,9 @@ Counted **1** (bar: exactly 1).
   - truncated — Recently changed: "Dockside Regeneration · Harbourside Estates" (212 of 284 px)
 - **1024x600 default members** (grid 699, tracks 699)
   - wraps — Roster: "Ada Lovelace"
-  - wraps — Roster: "m0-overview-1791530636188@example.com"
+  - wraps — Roster: "m0-overview-1791532113526@example.com"
   - wraps — Organisation members: "Ada Lovelace"
-  - wraps — Organisation members: "m0-overview-1791530636188@example.com"
+  - wraps — Organisation members: "m0-overview-1791532113526@example.com"
 - **1272x1800 default landing** (grid 947, tracks 947)
   - truncated — Jump back in: "Estuary Crossing Programme — Western Approaches · Northern Ports and H" (460 of 584 px)
   - truncated — Where the work stands: "Estuary Crossing Programme — Western Approaches · Northern Ports and H" (303 of 584 px)
@@ -194,17 +198,17 @@ Counted **1** (bar: exactly 1).
 
 ### Region heights, per cell
 
-- 1024x600 default landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1024x600 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1024x600 default members: Roster=184; Organisation members=94; Pending invitations=273; Invited people=151; What each role can do=302
-- 1272x1800 default landing: Jump back in=220; Needs your attention=443; Where the work stands=443; Recently changed=443
+- 1272x1800 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1272x1800 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1280x800 default landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1280x800 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1280x800 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1349x800 default landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1349x800 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1349x800 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1358x636 default landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1358x636 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1358x636 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1440x900 default landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1440x900 default landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1440x900 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
 - 1477x900 default landing: Jump back in=585; Needs your attention=585; Where the work stands=220; Recently changed=220
 - 1477x900 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=342
@@ -214,9 +218,9 @@ Counted **1** (bar: exactly 1).
 - 1912x1114 default members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
 - 1280x800 folded landing: Jump back in=585; Needs your attention=585; Where the work stands=220; Recently changed=220
 - 1280x800 folded members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1280x800 420 landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1280x800 420 landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1280x800 420 members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
 - 1440x900 folded landing: Jump back in=585; Needs your attention=585; Where the work stands=220; Recently changed=220
 - 1440x900 folded members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302
-- 1440x900 420 landing: Jump back in=220; Needs your attention=220; Where the work stands=220; Recently changed=220
+- 1440x900 420 landing: Jump back in=179; Needs your attention=585; Where the work stands=609; Recently changed=589
 - 1440x900 420 members: Roster=180; Organisation members=90; Pending invitations=273; Invited people=151; What each role can do=302

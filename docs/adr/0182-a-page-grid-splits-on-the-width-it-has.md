@@ -1,9 +1,9 @@
 # ADR-0182: A page grid splits on the width it has
 
-- **Status:** Accepted — 2026-10-09. The spec was approved by the product owner on 2026-10-08 (CQ-1:
-  change the default for all three consumers). CQ-2, the threshold, was delegated to the M0
-  photographs and decided on 2026-10-09 by the coordinator under that delegation; the product owner can
-  object.
+- **Status:** Accepted (CQ-2 threshold provisional: chosen by the orchestrator under the product
+  owner's delegation, pending his confirmation) — 2026-10-09. The spec was approved by the product
+  owner on 2026-10-08 (CQ-1: change the default for all three consumers). CQ-2, the threshold, was
+  delegated to the M0 photographs; the rule could not decide it and the orchestrator chose 72rem.
 - **Spec:** [`docs/specs/landing-two-columns/feature-spec.md`](../specs/landing-two-columns/feature-spec.md)
   (with its dated amendment) · **Plan:** [`implementation-plan.md`](../specs/landing-two-columns/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/landing-two-columns/m0-measurement.md)
@@ -58,18 +58,43 @@ The brief's remedy, "two columns only from `xl`", is `min-width: 1280px` inclusi
 
 ## Consequences
 
-- With the Explorer at 276, the landing and Members are **one column at windows up to 1476** and two
-  from 1477. **A 1440 laptop, which `@5xl` would have left in two 546 px columns, gets one 1115 px
-  column.** That is the price of the name not wrapping, and it is the width ADR-0146 rejected as too
-  wide a single column; it is accepted here and stated rather than softened. The product owner's two
-  screens (1912) are unchanged, 732 px tracks.
+- **What a reader sees, measured on the same fixture before and after, Explorer at 276** (boxes
+  wholly visible without scrolling, of four; `m0-raw-run.md` and `m1-after-run.md`):
+
+  | Window                            | Before (two columns from `md`) | After (one column, stacked at content height)             |
+  | --------------------------------- | ------------------------------ | --------------------------------------------------------- |
+  | 1024 × 600                        | 2 of 4                         | **1 of 4**; `<main>` scrolls 2179 px in a 549 px viewport |
+  | 1280 × 800                        | 2 of 4                         | **1 of 4**; scrolls 2179 in 749                           |
+  | 1440 × 900                        | 2 of 4                         | **1 of 4**; scrolls 2179 in 849                           |
+  | 1272 × 1800 (the surface upright) | 4 of 4                         | **3 of 4**                                                |
+  | 1477 × 900 and up                 | unchanged                      | unchanged (two columns); 1912 is identical, 732 px tracks |
+
+  One column is the product's decision to put readable rows ahead of an above-the-fold count, and it
+  costs most at the 1024 × 600 floor: the first box ("Jump back in", 179 px) is what is visible, and
+  the other three are a scroll away. A 1440 laptop, which `@5xl` would have left in two 546 px
+  columns, gets one 1115 px column, the width ADR-0146 rejected as too wide a single column.
+
+- **The poorest two-column state.** At 1477, the narrowest pair, the long programme's `project ·
+client` subtitle shows **0 of 584 px** in "Where the work stands" and "Recently changed", and the
+  ordinary pair 154 and 124 of 284 px. That is `RowSubject`'s defect at every width
+  (`docs/TECH_DEBT.md` #472, at 1912 it still shows 133 and 125 px of the long one), not something the
+  threshold can remove. Only 1477 and 1912 were photographed; 1478–1911 is interpolated.
+- **72rem is a named Tailwind step chosen with margin, not the minimum the evidence allows.** The
+  name-wrap boundary is bracketed between 505 and 546 px tracks, so a grid of about 1034–1115 px would
+  keep a 1440 window in two columns. An arbitrary `@[69rem]` is a possible later refinement and needs
+  one re-take at 1400 and 1440; it was not taken because the evidence cannot place the boundary
+  inside that bracket.
 - The Explorer is now seen: folded at 1280 the grid is 1187 and splits; at 420 a 1440 window is 971 and
-  stays one column. Browser zoom counts as width — 150 % on a 1912 monitor (~1275) is one column.
-- The staff console has no Explorer, so it splits from a 1200 px window and changes only in 1024–1199
-  (derived, not measured).
-- The landing's height cap exists only where the grid is two columns; below the split the four boxes
-  stack at their own height and `<main>` scrolls. Each `fill` body keeps its tab stop although it no
-  longer scrolls (`docs/TECH_DEBT.md` #474).
+  stays one column. Browser zoom counts as width: 150 % on a 1912 monitor (~1275) is one column.
+- The staff console has no Explorer, so it splits from a 1200 px window and changes only in 1024-1199.
+  That result is **derived, not measured**: no staff track has ever been photographed.
+- **The cap is written in two files.** The grid takes its height only from the split (`@6xl:min-h-0
+@6xl:flex-1`) and so does a `fill` section card (`SectionCard`); in one column the four boxes stack
+  at their content height. The first build left the caps on in every state and clamped four boxes to
+  220 px each; the journey now measures box height, body clipping and `<main>` scroll in one column.
+  `page-grid.structural.test.ts` holds the two files to one container size.
+- Each `fill` body keeps its tab stop although in one column it no longer scrolls
+  (`docs/TECH_DEBT.md` #474).
 - `container-type: inline-size` applies layout containment: the frame is the containing block for any
   non-portalled `fixed` or `absolute` descendant. Nothing in the three screens renders one (scanned);
   `Menu` and `Tooltip` portal to `body`. The requirement stands for the next section added.
