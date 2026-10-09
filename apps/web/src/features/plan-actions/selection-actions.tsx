@@ -1023,9 +1023,14 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'float-paths',
             group: 'find',
             tier: 1,
-            labelVisibility: 'always',
+            // **Icon-only, on a measurement** (`dock.spec.ts`, ADR-0115): with its label this bar
+            // wraps to a second line in the foot row and a selection then costs the diagram 36 px,
+            // which is the guarantee that spec asserts as an equality. The name and the tooltip
+            // carry the words, as they do for Make milestone… above.
+            labelVisibility: 'never',
             order: 9,
             label: 'Float paths',
+            description: 'Trace the chains of activities that drive this one',
             icon: <Split className="size-4" />,
             isVisible: (ctx: SelectionActionContext) => ctx.toggleFloatPaths !== null,
             isActive: (ctx: SelectionActionContext) => ctx.floatPathsOpen,
