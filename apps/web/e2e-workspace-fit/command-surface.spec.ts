@@ -915,8 +915,8 @@ test.describe('The plan command surface', () => {
     test.setTimeout(240_000);
     // Names read from `activity-bottom-panel.tsx:163,325` rather than guessed — this repository
     // records three journeys broken by a locator matching copy nobody checked. (The names were
-    // read; the LINE NUMBERS were not — they said `:155,317` until 2026-09-09, which are two
-    // `hostsPlanSlots` props. A citation that is wrong about where it read something is a weaker
+    // read; the LINE NUMBERS were not — they said `:155,317` until 2026-09-09, which pointed at two
+    // unrelated props. A citation that is wrong about where it read something is a weaker
     // claim than it reads as, in the comment whose whole subject is not guessing.)
     // Select BEFORE expanding. The page is left at the previous case's 1024 x 600, where an expanded
     // panel takes the whole body and hides the diagram (ADR-0180), and a hidden listbox cannot be

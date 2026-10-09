@@ -11860,3 +11860,29 @@ menu. Dense-row touch targets M1 marks both labels `data-coarse-exempt="row-sele
 surface of the coarse sweep can pass honestly and name what it excuses. **Next:** grow the label to the coarse
 `--control-h` (the row is already 61 px with a 44 px `⋯`, so it costs no height) and delete the marker and
 `ROW_SELECT_EXEMPT`. **Trigger:** any device reading that misses a row checkbox, or the next touch pass over the table.
+
+### 471. At narrow widths the app header and wrapped command band take 355–603 px of the height, leaving the workspace body no room
+
+**Status:** open · **Verified:** 2026-10-09 (`docs/specs/retire-single-pane-workspace/m0-measurement.md` §2–§3, the container's Chromium, layout only; `<main>` starts at y = 355 at 640 wide and y = 603 at 320)
+**Raised:** 2026-10-09 · **Size:** M · **Owner:** web
+
+The shell's header (88 px at 640, 136 at 320) and the wrapped command band (248 at 640, 448 at 320) sit above `<main>`
+in **both** the old below-`md` layout and the one that replaced it, so the plan workspace's body is the viewport height
+less 355 px at 640 and less 603 px at 320: **117 px at 640 × 480, 109 px at 320 × 720, and 0 at 640 × 360, 640 × 300
+and 320 × 256**. Below about 604 px of viewport height at 640 wide, no layout shows a table row, and at 640 × 360 and
+below the foot row (Expand, Recalculate) is below the viewport and `<main>` has no height to scroll — a pointer cannot
+reach it. This is **pre-existing** (today's single pane shows 0 rows at 640 × 480 and 320 × 720 as well) and below the
+1024 × 600 design floor (ADR-0179), so retiring the single-pane layout neither causes nor fixes it. The retire-single-pane
+epic **withdrew** its "table keeps a row at 640 × 300 / 360 / 480" criteria for this reason; ADR-0181 records the figures.
+
+**Needs its own spec** (ADR-0105: a shell layout rule, and a component's public contract if the band or the header
+changes). The levers are the shell's, not the workspace's: let the command band collapse behind a disclosure below a
+height or width, or let the shell scroll as a whole when the window cannot hold its chrome plus the foot row. **Next:**
+spec it, measuring first (ADR-0113) at the retire-single-pane matrix. **Trigger:** a device or zoom reading that needs
+a table row or the foot row below 604 px of height, or the next pass over the narrow shell.
+
+**Separate, also pre-existing and independent of narrow widths:** a selection bar docked in the foot row grows it to
+167–367 px at 1280–1024 and below (M0 §5, an activity selected), already true at the 1024 floor, because the 582 px facts
+block beside the outlet is `shrink-0` and the outlet column is left 0–113 px wide. The foot row now wraps, which helps at
+narrow widths, but the outlet's `flex-1` / zero basis never asks for a line of its own. Give the outlet a content basis
+or its own row when it holds a bar.

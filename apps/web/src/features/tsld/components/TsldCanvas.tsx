@@ -892,7 +892,7 @@ export function TsldCanvas({
   const dirtyRef = useRef(true);
   const fittedRef = useRef(false);
   // Whether the surface is on-screen (an IntersectionObserver drives it below). When it's hidden —
-  // the below-`md` Activities pane showing, so the diagram pane is `display:none` — the rAF loop
+  // the short-body swap showing the activities panel, so the diagram row is `display:none` — the rAF loop
   // skips its paint/measure work (TECH_DEBT #30d). Defaults visible; where IntersectionObserver is
   // absent (jsdom) it stays visible, so the render path is unchanged under test.
   const visibleRef = useRef(true);
@@ -1779,8 +1779,9 @@ export function TsldCanvas({
 
     const frame = (): void => {
       raf = requestAnimationFrame(frame);
-      // Skip all paint/measure work while the surface is hidden (e.g. the below-`md` Activities pane
-      // is showing, so the diagram pane is `display:none`, or the canvas is scrolled off-screen):
+      // Skip all paint/measure work while the surface is hidden (e.g. the short-body swap has given
+      // the body to the activities panel, so the diagram row is `display:none`, or the canvas is
+      // scrolled off-screen):
       // otherwise the loop keeps painting an unseen canvas every frame (TECH_DEBT #30d). Visibility
       // comes from the IntersectionObserver below; where that API is absent (jsdom) it stays visible.
       if (!visibleRef.current) return;
@@ -2021,7 +2022,7 @@ export function TsldCanvas({
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
     ro?.observe(container);
 
-    // Pause the render loop when the surface is off-screen (hidden pane / scrolled away), and re-arm
+    // Pause the render loop when the surface is off-screen (hidden row / scrolled away), and re-arm
     // a repaint the moment it returns (TECH_DEBT #30d). No-op where IntersectionObserver is absent.
     const io =
       typeof IntersectionObserver !== 'undefined'
@@ -2059,6 +2060,10 @@ export function TsldCanvas({
       // owns the screen, and an Escape that closes its row menu or cancels its cell edit must not
       // also reach a tool or the ladder here. The same flag that pauses painting while hidden.
       if (!visibleRef.current) return;
+      // The same for a canvas the workspace has taken out of reach (`inert`: a dock has taken the
+      // whole row, or the row is too short to show a bar). It is still laid out, so the observer
+      // above calls it visible; the attribute is the only thing that says nobody can use it.
+      if (container.closest('[inert]') !== null) return;
       // An Escape a native modal open above the canvas (the viewport notice, a dialog) already
       // answered is not ours to take as "leave the tool": the keydown bubbles through the DOM past
       // a top-layer modal. Deliberately NOT `e.defaultPrevented` — an open tooltip prevents default

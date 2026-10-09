@@ -19,6 +19,46 @@
   `shortBody` swap and `DOCK_MIN_HEIGHT`'s docblock. **It lands first.** This spec writes no
   panel-height rule of its own.
 
+## M0 outcome (2026-10-09) — read this before the criteria below
+
+[`m0-measurement.md`](m0-measurement.md) measured the layout in a browser. It confirmed the revisions defect
+(Compare revisions renders nothing below 768 px today) and found **two premises of this spec false**. The product
+owner's delegate decided both (2026-10-09, final), and the text below is amended to match; each amendment is marked
+"(M0)".
+
+1. **The short-height row criteria are withdrawn.** The criteria "at 640 × 300, 640 × 360 and 640 × 480 with the
+   panel expanded the table shows at least one row" (success criteria, AC-3.2, M1-T5's conditional body minimum and
+   M1-T8's assertions at 640 × 300 / 360 / 480 and 320 × 256) cannot be met by anything this epic does. The app's own
+   header plus the wrapped command band take **355 px at 640 wide and 603 px at 320**, so `<main>` is **0–117 px
+   tall** there (117 at 640 × 480, 109 at 320 × 720, 0 at 640 × 360, 640 × 300 and 320 × 256) and not even ADR-0180's
+   swap can give the panel a row. That is a **pre-existing limit** — today's single pane also shows 0 rows at 640 × 480
+   and 320 × 720 — and it is below the 1024 × 600 design floor. It is recorded in ADR-0181 as a known limit, with the
+   M0 figures, and filed as `docs/TECH_DEBT.md` **#471** (Size M, needs its own spec: a shell layout rule).
+   Rows are asserted only where M0 shows one is possible: 700 × 900 and 640 × 844 with the swap.
+2. **`<main>` does not scroll to keep the foot row reachable at 640 × 360 and below** (it has no height), and the
+   conditional "minimum height on the workspace body" remedy is therefore withdrawn too — it would need the shell to
+   give the area, which is #471's. The foot-row reachability and "foot row visible" assertions are kept only at sizes
+   where the body has height.
+3. **Corrections folded into the design:**
+   - `dockBounds` is **one pixel short** in the plan's formula. The existing clamp forgets the 1 px splitter (at 767
+     the revisions dock renders 407 px and leaves a 359 px diagram). The squeeze test and the width cap use
+     `bodyWidth − CANVAS_MIN_WIDTH − SPLITTER_WIDTH`.
+   - **Four docks squeeze at 640 and three at 700 under the old clamp**; with the corrected arithmetic every dock is
+     squeezed at 640 and below, and the side-by-side layout survives only from about 700–740 px. That is the squeezed
+     rule working as designed (the dock takes the row, the stage is `inert`), not a bug.
+   - **Expand is not `shrink-0` today** (26 × 40 at 640, 16 × 40 at 320, at x = 606 and off-screen at 320); the 582 px
+     facts block is the `shrink-0` one. The foot-row remedy is `flex-wrap` with the facts wrapping to a second line,
+     and Expand and Recalculate staying on screen, with Expand given `shrink-0` and its touch size.
+   - **The zero-size focusables in dock cells are the dock's own `Resize … panel` handle** (the row has no height at
+     the small sizes), not the squeezed stage. The resizer is not rendered when `min ≥ cap` or the dock is squeezed,
+     and the collapsed-state canvas row is `inert` below the 40 px ruler band (M0 measured the band at 40 px in every
+     cell). "Skip to main content" and the 320 breadcrumb are pre-existing zero-size elements: any Tab assertion is
+     scoped to the dock's own controls.
+   - **#466 was not reproduced** (the row `⋯` buttons sit off-screen to the right at 320, no bar covers them): it is
+     left open and untouched.
+   - **The selection bar in the foot row** grows the foot row to 167–367 px at 1280–1024 and below, already true at
+     the 1024 floor and independent of this epic. `flex-wrap` helps; it is not fixed further here (noted in #471).
+
 ## 0. Summary in plain English
 
 **Who sees a difference:** only someone whose browser window is **narrower than 768 px** — in practice
@@ -73,8 +113,9 @@ is about 640 × 300–360.
   (ADR-0180) owns that problem.** Its option A1: when the body is too short, an expanded panel takes
   the workspace and the diagram is hidden until Collapse.
 - **This spec is sequenced after it.** Once the narrow layout is gone, that swap applies at every
-  width. The journeys here check that the table still shows rows under it at 640 × 300, 640 × 360 and
-  640 × 480.
+  width. The journeys here check that the table still shows rows under it at 700 × 900 and 640 × 844
+  (M0: at 640 × 300, 640 × 360 and 640 × 480 the shell's own chrome leaves no body to show a row in, which is
+  `docs/TECH_DEBT.md` #471 and not this spec's).
 - There is no longer a decision for you in this spec. The trade-off was decided in that one.
 
 ## 1. Business understanding
@@ -131,15 +172,17 @@ extended rather than replaced (§2, plan M1).
   `WorkspaceViewToggle`, `WorkspacePane`, `setPane` or `hostsPlanSlots`. Every remaining hit for
   "single-pane" or "below `md`" is in a comment that describes history or a different rule, and the
   PR lists each one.
-- At 700 × 900, 640 × 844, 640 × 480, 640 × 360, 640 × 300 and 320 × 720, after Continue:
+- At 700 × 900, 640 × 844 and 320 × 720, after Continue (M0: the 640 × 480, 640 × 360 and 640 × 300
+  rows are **withdrawn** — the body there is 0–117 px, #471):
   - each of the four docks opens and is visible;
   - the foot row's **Expand activities panel** and **Recalculate** are pointer-reachable
-    (`elementFromPoint`);
+    (`elementFromPoint`) where the body has height (700 × 900 and 640 × 844);
   - the document and the foot row do not scroll sideways;
   - axe with `target-size` is clean, including with a dock open at 320;
-  - pressing Tab from inside an open dock never lands on an element whose box is zero-sized;
-  - at 640 × 300, 640 × 360 and 640 × 480, with the panel expanded, the table shows at least one
-    row under the short-screen swap. The number of rows is set by ADR-0180.
+  - pressing Tab from inside an open dock never lands on a zero-sized element **of the dock's own controls**
+    (M0: "Skip to main content" and the 320 breadcrumb are pre-existing zero-size elements);
+  - at 700 × 900 and 640 × 844, with the panel expanded, the table shows rows under the short-screen swap
+    (M0: 10 and 8 rows). At 320 × 720 (109 px body) and below no row is asserted.
 - At 1024 and above, the M4 sweep readings (`m4-measurement.md`) are unchanged.
 
 ### Open questions
@@ -172,8 +215,15 @@ See §6. Only two are critical.
     - `PanelResizer`'s `max` (`:2382`, `:2414`, `:2438`, `:2462`);
     - every `on*Resize` handler (`:727`, `:747`, `:766`, `:786`).
   - The cap is `bodyWidth − SPLITTER_WIDTH` (`panel-resizer.tsx:14`, read: `1`).
+  - **(M0) The squeeze test and the width bound budget the splitter too:**
+    `squeezed = bodyWidth − min − SPLITTER_WIDTH < CANVAS_MIN_WIDTH`, and the widest a dock may be while the
+    diagram keeps its floor is `bodyWidth − CANVAS_MIN_WIDTH − SPLITTER_WIDTH`. The plan's first formula omitted the
+    pixel (at 767 the revisions dock rendered 407 px and left 359).
   - When the cap is below a dock's minimum, the `min` passed to the resizer is lowered to the cap, so
-    `aria-valuemin ≤ aria-valuemax`. When `min ≥ cap`, the resizer is not rendered.
+    `aria-valuemin ≤ aria-valuemax`. When `min ≥ cap`, the resizer is not rendered. **(M0)** It is also not
+    rendered when the dock is squeezed (its width is pinned to the row, so a drag would do nothing) or has no range
+    above its minimum, and the collapsed-state canvas row is `inert` below the ruler band, which takes the
+    resizer's zero-size handle out of the tab order at the small heights.
   - **When the squeeze rule fires** (AC-2.4: the stage would be under `CANVAS_MIN_WIDTH`), the dock's
     width is the cap, so the dock takes the whole row. Without this, the 380 px revisions dock at 640
     would leave a 259 px strip of `inert` stage beside it, which does nothing.
@@ -267,9 +317,10 @@ See §6. Only two are critical.
     - the foot row is `shrink-0` and must never be clipped;
     - if the window cannot hold the chrome plus the foot row, `<main>` (`app-shell.tsx:213`,
       `overflow-auto`) scrolls **vertically**, which 1.4.10 permits, rather than clipping Expand and
-      Recalculate. M0 reads whether this already holds at 640 × 300. If it does not, the remedy is a
-      minimum height on the workspace body equal to the foot row. That is agreed with the
-      short-screen spec before M1, because it touches the same body.
+      Recalculate. **(M0) It does not hold, and the remedy is withdrawn.** At 640 × 360, 640 × 300 and
+      320 × 256 `<main>` is 0–5 px tall and the foot row sits below the viewport; a body minimum cannot help a
+      container with no height. The shell would have to give the area, which is `docs/TECH_DEBT.md` #471
+      (pre-existing, below the design floor).
   - **Withdrawn from the first revision:** the yielding diagram minimum (`CANVAS_YIELD_MIN` = 160),
     this spec's own copy of a dock/panel exclusion rule (the short-screen spec owns that rule now —
     AC-2.4) and the claim that `TsldPanel.tsx:3279`'s `min-h-[240px]` pushes
@@ -301,8 +352,9 @@ See §6. Only two are critical.
     table region scrolls; it never competes with the diagram. The short-screen spec's
     `PANEL_USEFUL_MIN` cites `data-table.tsx:600` for "about three rows", which is this same floor, so
     the two agree.
-  - M0 verifies this at 640 × 844 and 640 × 360, and a journey asserts the region is at least 128 px
-    when the panel is open.
+  - M0 verified this at 640 × 844 and found it changes nothing visible where rows exist; at 640 × 480 and
+    320 × 720 the body is 117 and 109 px and shows no row with or without the floor (the floor only moves the
+    scroll to the panel body). A journey asserts the region is at least 128 px with the panel open at 640 × 844.
 
 ### Workflows
 
@@ -311,18 +363,18 @@ control and the panel's resizer, which have a keyboard path (`PanelResizer`).
 
 ### Edge cases
 
-| Case                                                      | Behaviour                                                                                                                                                    |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Crossing 768 with a dock open                             | **No re-layout at all.** Today the dock jumps from beside the diagram to replacing it.                                                                       |
-| Crossing 768 on the Activities pane                       | No longer possible. Today the table pane disappears on widening (`pane` state is lost into a collapsed panel).                                               |
-| Gantt view below 768                                      | Unchanged: the Gantt is `surface`. It gains the foot-row outlet, which gantt-editing's spec (`feature-spec.md:510`) recorded as missing below `md`.          |
-| 320 × 256 (the reflow floor's horizontal-content height)  | The wrapped command band takes most of the height **in both layouts**. That is pre-existing and not caused or fixed here (§3, WCAG). The ADR records it.     |
-| 640 × 300–360 (1280 × 720 at 200 %)                       | Collapsed: the canvas row is `inert` if squeezed below the ruler band (AC-2.4); Expand and Recalculate stay reachable. Expanded: ADR-0180's A1 swap.         |
-| A dock width saved at 1440, rendered at 640               | The cap applies at render only. Back at 1440 the saved width returns unchanged (AC-2.2).                                                                     |
-| Narrow window, dock open, then Expand on a short body     | The short-screen rule: the dock closes (`aria-pressed=false`) and the panel takes the body. Opening a dock while swapped collapses the panel first (AC-2.4). |
-| Narrow window, dock has taken the row, then Fit or a tool | `withDiagram` closes the dock first, then runs the command on the next frame (AC-2.4).                                                                       |
-| #466 (row `⋯` under a bar at 320)                         | The bar it is under is part of the narrow pane. M0 re-reads it in the new layout; it may close, or move.                                                     |
-| Notes reveal (`plan-workspace-toolbar.tsx:247`)           | Its guard stays. The section is mounted in both layouts already.                                                                                             |
+| Case                                                      | Behaviour                                                                                                                                                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Crossing 768 with a dock open                             | **No re-layout at all.** Today the dock jumps from beside the diagram to replacing it.                                                                                                            |
+| Crossing 768 on the Activities pane                       | No longer possible. Today the table pane disappears on widening (`pane` state is lost into a collapsed panel).                                                                                    |
+| Gantt view below 768                                      | Unchanged: the Gantt is `surface`. It gains the foot-row outlet, which gantt-editing's spec (`feature-spec.md:510`) recorded as missing below `md`.                                               |
+| 320 × 256 (the reflow floor's horizontal-content height)  | The wrapped command band takes most of the height **in both layouts**. That is pre-existing and not caused or fixed here (§3, WCAG). The ADR records it.                                          |
+| 640 × 300–360 (1280 × 720 at 200 %)                       | **(M0) Out of scope, #471.** The shell's chrome (355 px at 640) leaves a 0 px body: no row, and the foot row is below the viewport. Pre-existing; the canvas row is `inert` below the ruler band. |
+| A dock width saved at 1440, rendered at 640               | The cap applies at render only. Back at 1440 the saved width returns unchanged (AC-2.2).                                                                                                          |
+| Narrow window, dock open, then Expand on a short body     | The short-screen rule: the dock closes (`aria-pressed=false`) and the panel takes the body. Opening a dock while swapped collapses the panel first (AC-2.4).                                      |
+| Narrow window, dock has taken the row, then Fit or a tool | `withDiagram` closes the dock first, then runs the command on the next frame (AC-2.4).                                                                                                            |
+| #466 (row `⋯` under a bar at 320)                         | **(M0) Not reproduced** in either layout (the `⋯` buttons sit off-screen to the right; no bar covers them). Left open and untouched.                                                              |
+| Notes reveal (`plan-workspace-toolbar.tsx:247`)           | Its guard stays. The section is mounted in both layouts already.                                                                                                                                  |
 
 ### Permissions
 

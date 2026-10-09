@@ -1215,8 +1215,8 @@ export function ToolbarPlanWorkspace({
     onPaste: () => void model.pasteClipboard(),
   });
 
-  // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
-  // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
+  // The chromeless canvas is built once, so it isn't described twice and its viewport survives the
+  // short-body swap hiding its row. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
   // ONE derivation of which persisted dates draw a bar, handed to both hosts (ADR-0033). Written as
   // a single binding rather than the same expression twice, for the reason the architecture review
@@ -1846,7 +1846,7 @@ export function ToolbarPlanWorkspace({
 
   // The docked-notes panel content (entry-route win 1) — the shared `SheetHeader` (title + Close, which
   // toggles the dock shut) over a scrollable, unbounded `PlanNotesSection`. Built once and placed in the
-  // wide right column or the narrow single pane. `headingRef` keeps the flag-off scroll target wired.
+  // right column. `headingRef` keeps the flag-off scroll target wired.
   const notesDockContent = (
     // A named landmark for the dock (a11y) — "Plan notes panel" so it doesn't collide with the inner
     // note-thread region. Escape closes it (the non-modal dock has no native cancel) and returns focus

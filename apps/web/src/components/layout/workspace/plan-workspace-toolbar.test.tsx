@@ -392,18 +392,15 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
-    // **A seventh, and it widens rather than reverses** (workspace-chrome M2-T4). The facts now have
-    // TWO legitimate hosts: the collapsed activities bar when one is mounted, and the shell's status
-    // row when none is — which below `md` is every time, because that bar is not mounted at all
-    // there (measured: `m0-measurement.md`). Pinning the status row alone would have failed on the
-    // wide layout for the right reason and passed on the narrow one for the wrong one.
-    //
-    // The assertion's INTENT is unchanged and is what the comment above protects: a finish date is a
-    // fact, so it belongs in a facts host and never in the command strip. Both hosts are named, so
-    // this still fails if the read-out lands anywhere else.
+    // **An eighth, and it narrows again** (retire-single-pane M1). The seventh widened this to TWO
+    // hosts — the foot row, and the shell's status row for the below-`md` layout where that row was
+    // not mounted. That layout is retired (ADR-0181), so the foot row is the only host at every
+    // width, and the assertion names it alone: a read-out that fell back to the status row would now
+    // be a defect, not a second legitimate home. The INTENT is unchanged: a finish date is a fact,
+    // so it belongs in a facts host and never in the command strip.
     expect(
-      finish.closest('[data-chrome-slot="status"], [data-activities-bar]'),
-      'the finish read-out is in neither facts host',
+      finish.closest('[data-activities-bar]'),
+      'the finish read-out is not in the foot row',
     ).not.toBeNull();
     const row1 = screen.getByRole('toolbar', { name: 'Plan commands' });
     expect(row1.contains(finish)).toBe(false);
@@ -995,6 +992,185 @@ describe('the short-body swap', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
       expand();
       expect(canvasUi()?.mode).toBe('add-activity');
+    });
+  });
+});
+
+/**
+ * **A dock that has taken the row** (`docs/specs/retire-single-pane-workspace`, AC-2.2 and AC-2.4).
+ * The below-`md` single pane is gone, so a narrow body gets the same layout as a wide one and the
+ * docks answer to the width instead: a dock no width can fit beside the diagram fills the row and the
+ * diagram column is `inert`. jsdom has no layout, so the body's width and the canvas row's height are
+ * stubbed through the ResizeObserver the host already reads.
+ */
+describe('a dock that has taken the row', () => {
+  let bodyWidth = 0;
+  let bodyHeight = 0;
+  let rowHeight = 0;
+  const observed: { callback: ResizeObserverCallback; element: Element }[] = [];
+  const bodyEl = () => screen.getByTestId('workspace-body');
+  /** The canvas row: the body's stack, then its first child. */
+  const rowEl = () => bodyEl().firstElementChild?.firstElementChild;
+  const stageEl = () => screen.getByTestId('tsld-panel').parentElement;
+  function measure(width: number, height = 800, row = 500) {
+    bodyWidth = width;
+    bodyHeight = height;
+    rowHeight = row;
+    act(() => {
+      for (const { callback } of observed) callback([], {} as ResizeObserver);
+    });
+  }
+  const openHealth = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+  };
+  const healthResizer = () =>
+    screen.queryByRole('separator', { name: 'Resize health check panel' });
+  let frames: FrameRequestCallback[] = [];
+  const nextFrame = () => {
+    const due = frames;
+    frames = [];
+    act(() => {
+      for (const callback of due) callback(0);
+    });
+  };
+  const fitSignal = () =>
+    (h.tsldProps.current?.['canvasUi'] as { fitSignal: number } | undefined)?.fitSignal;
+
+  beforeEach(() => {
+    bodyWidth = 0;
+    bodyHeight = 0;
+    rowHeight = 0;
+    observed.length = 0;
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    localStorage.clear();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe(element: Element) {
+          observed.push({ callback: this.callback, element });
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const real = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.dataset['testid'] === 'workspace-body') {
+        return { height: bodyHeight, width: bodyWidth } as DOMRect;
+      }
+      if (this === rowEl()) return { height: rowHeight, width: bodyWidth } as DOMRect;
+      return real.call(this);
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('takes the whole row at 640, with the diagram column inert and no resizer', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    // Health's minimum is under 640 - 360 - 1, so no width leaves the diagram its floor.
+    expect(stageEl()).toHaveAttribute('inert');
+    expect(healthResizer()).toBeNull();
+    const dock = screen.getByRole('region', { name: /health/i });
+    expect(dock.closest('[data-surface]')).toHaveStyle({ width: '639px' });
+  });
+
+  it('keeps the diagram reachable and the dock resizable where both fit', () => {
+    renderScreen();
+    measure(1024);
+    openHealth();
+    expect(stageEl()).not.toHaveAttribute('inert');
+    expect(healthResizer()).not.toBeNull();
+  });
+
+  it('treats a body of 0 px as unmeasured, so nothing is made inert by mistake', () => {
+    renderScreen();
+    measure(0);
+    openHealth();
+    expect(stageEl()).not.toHaveAttribute('inert');
+    // Once the observer reports a real width the verdict arrives.
+    measure(640);
+    expect(stageEl()).toHaveAttribute('inert');
+  });
+
+  it('is inert only while the dock is open: closing it restores the diagram column', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    expect(stageEl()).toHaveAttribute('inert');
+    openHealth();
+    expect(stageEl()).not.toHaveAttribute('inert');
+  });
+
+  it('closes the dock for Fit and fits a frame later, with the stage reachable again', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    const before = fitSignal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+    expect(screen.queryByRole('region', { name: /health/i })).toBeNull();
+    expect(stageEl()).not.toHaveAttribute('inert');
+    expect(fitSignal()).toBe(before);
+
+    nextFrame();
+    expect(fitSignal()).toBe((before ?? 0) + 1);
+  });
+
+  it('does not reopen the dock when its own toggle closes it (a dock command runs in place)', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    openHealth();
+    expect(screen.queryByRole('region', { name: /health/i })).toBeNull();
+    expect(frames).toHaveLength(0);
+    nextFrame();
+    expect(screen.queryByRole('region', { name: /health/i })).toBeNull();
+  });
+
+  it('runs Fit at once when no dock has taken the row', () => {
+    renderScreen();
+    measure(1024);
+    openHealth();
+    const before = fitSignal();
+    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+    expect(fitSignal()).toBe((before ?? 0) + 1);
+    expect(screen.getByRole('region', { name: /health/i })).toBeInTheDocument();
+  });
+
+  describe('the canvas row', () => {
+    it('is inert when it is shorter than the ruler band', () => {
+      renderScreen();
+      measure(1024, 200, 20);
+      expect(rowEl()).toHaveAttribute('inert');
+    });
+
+    it('is not inert at the band’s own height, or before it has been measured', () => {
+      renderScreen();
+      expect(rowEl()).not.toHaveAttribute('inert');
+      measure(1024, 600, 40);
+      expect(rowEl()).not.toHaveAttribute('inert');
+    });
+
+    it('restores the row when the height comes back', () => {
+      renderScreen();
+      measure(1024, 200, 20);
+      expect(rowEl()).toHaveAttribute('inert');
+      measure(1024, 600, 400);
+      expect(rowEl()).not.toHaveAttribute('inert');
     });
   });
 });

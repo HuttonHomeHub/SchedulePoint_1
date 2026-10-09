@@ -29,8 +29,7 @@ export interface TsldLegendPanelProps {
  *
  * Positioning: absolute within the (relative) canvas region. With no saved position it sits in the
  * bottom-left corner; once dragged it uses committed top-left pixels, **re-clamped to the live region**
- * on mount and whenever the region resizes (the layout swaps panes below `md`, the activities panel
- * expands), so a shrunk viewport can never strand the panel off-screen behind the region's
+ * on mount and whenever the region resizes (the activities panel expands, a dock opens), so a shrunk viewport can never strand the panel off-screen behind the region's
  * `overflow-hidden`. Dragging is a pointer enhancement — the panel is fully readable and closable by
  * keyboard without it (repositioning is cosmetic, not an essential function).
  */

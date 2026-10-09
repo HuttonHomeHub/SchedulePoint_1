@@ -38,8 +38,9 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // Wide enough that the docked panel does not push the diagram below its floor — the
-        // narrow single-pane behaviour is a separate concern and is covered by unit tests.
+        // Wide enough that the docked panel does not push the diagram below its floor — how a dock
+        // behaves in a body too narrow for it (it takes the row) is covered by the unit tests and
+        // `e2e-narrow-shell`.
         // **2304, measured, not chosen.** This was 1920 with a comment saying that width kept the
         // whole Row 1 lens group inline. M1's honest budget ended that: the row now counts its own
         // gaps and dividers, so at 1920 six commands live in the `⋯` and at 2133 four still do.

@@ -6,10 +6,12 @@ import { TsldCanvas } from './TsldCanvas';
 import type { RenderActivity } from '@/features/tsld/render/render-model';
 
 /**
- * The hidden-pane render-loop pause (TECH_DEBT #30d). Below `md` the workspace keeps the diagram
- * pane mounted with `display:none` while the Activities pane is showing, so without this the rAF
- * loop keeps painting a canvas nobody can see — a real battery cost on the device most likely to
- * be at that width. An `IntersectionObserver` drives a `visibleRef` the frame checks first.
+ * The hidden-pane render-loop pause (TECH_DEBT #30d). The workspace can keep the diagram mounted
+ * with `display:none` — the short-body swap does while an expanded activities panel owns the body
+ * (ADR-0180) — so without this the rAF loop keeps painting a canvas nobody can see, a real battery
+ * cost on the device most likely to be that short. An `IntersectionObserver` drives a `visibleRef`
+ * the frame checks first. (The below-`md` Diagram/Activities pane that first needed this is retired,
+ * ADR-0181; the swap is the case that remains.)
  *
  * jsdom has no `IntersectionObserver`, and the component deliberately treats that as "always
  * visible" (never silently blank a real canvas because an API is missing), so the test supplies a
@@ -237,6 +239,40 @@ describe('TsldCanvas while the short-body swap hides it', () => {
     setVisible(true);
     escape();
     expect(onExitAddMode).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers no Escape inside an inert ancestor either, though it is laid out and "visible"', () => {
+    const onExitAddMode = vi.fn();
+    const { container } = render(
+      <div data-testid="stage">
+        <TsldCanvas
+          activities={ACTIVITIES}
+          edges={[]}
+          dataDate="2026-01-01"
+          selectedId={null}
+          onSelect={vi.fn()}
+          fitSignal={0}
+          editing
+          mode="add-activity"
+          onExitAddMode={onExitAddMode}
+        />
+      </div>,
+    );
+    const stage = container.querySelector('[data-testid="stage"]');
+    const escape = () =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+
+    // A dock that has taken the row makes the stage `inert` (retire-single-pane AC-2.4). The
+    // IntersectionObserver still calls it visible, so only the attribute can stop this keystroke.
+    stage?.setAttribute('inert', '');
+    escape();
+    expect(onExitAddMode).not.toHaveBeenCalled();
+
+    stage?.removeAttribute('inert');
+    escape();
+    expect(onExitAddMode).toHaveBeenCalledTimes(1);
   });
 });
 

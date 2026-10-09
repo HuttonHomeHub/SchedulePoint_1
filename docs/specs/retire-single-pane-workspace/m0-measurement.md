@@ -293,3 +293,12 @@ are withdrawn and the ADR records the 355 px / 603 px shell chrome as a pre-exis
 already says the band's short-height crowding is pre-existing, so this is the smaller change), or (b) the shell chrome
 at 640 and 320 is brought into scope, which is a new surface and needs its own spec. Premise 3 and the `dockBounds`
 off-by-one are fixable inside M1 as it stands.
+
+## 8. Decision (2026-10-09, product owner's delegate, final)
+
+Option (a) was taken: the 640 × 300 / 640 × 360 / 640 × 480 / 320 × 256 criteria are **withdrawn** and the shell
+chrome is recorded as a pre-existing limit (ADR-0181, `docs/TECH_DEBT.md` #471, own spec). Premise 3 and the
+`dockBounds` off-by-one are fixed inside M1. Everything that §0–§7 shows is meetable stays: the dock width cap and
+the squeezed rule, the inert stage, the resizer rule, the Compare-revisions fix, no sideways document scroll, the
+foot-row wrap, and keyboard and focus assertions at 700 × 900, 640 × 844 and 320 × 720 (scoped to the dock's own
+controls). #466 was not reproduced and is left alone. The amendments are in the spec and the plan ("M0 outcome").

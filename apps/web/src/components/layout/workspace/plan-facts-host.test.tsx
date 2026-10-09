@@ -10,9 +10,10 @@ import { PlanFactsHost, PlanFactsOutlet, PlanFactsProvider } from './plan-facts-
  * something correct" is the argument that lets a copy drift (ADR-0062).
  */
 describe('PlanFactsHost', () => {
-  it('renders in place when no outlet has registered — the narrow-layout fallback', () => {
-    // Below `md` the activities handle row is NOT MOUNTED (measured: `m0-measurement.md`). This is
-    // the case that keeps the plan's facts on the narrowest screens, so it is asserted first.
+  it('renders in place when no outlet has registered — the host with no foot row', () => {
+    // The host's fallback contract, for any mounting with no outlet in it. The workspace's own
+    // below-`md` layout was the production case until ADR-0181 retired it, and that is why it is
+    // asserted first: a host that drops its facts when nobody registered would lose them silently.
     render(
       <PlanFactsProvider>
         <PlanFactsHost>
