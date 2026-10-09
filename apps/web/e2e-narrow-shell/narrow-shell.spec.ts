@@ -716,6 +716,63 @@ async function hittableRows(page: Page): Promise<number> {
   });
 }
 
+interface RowReach {
+  row: string;
+  /** What `elementFromPoint` returns at the centre and the four corners of the `⋯`, summarised. */
+  hits: string[];
+  reachable: boolean;
+}
+
+/**
+ * The first and last activity rows a pointer can hit in the open panel, and for each whether its
+ * `⋯` is the topmost element at its centre and four corners (`docs/TECH_DEBT.md` #466: the bar was
+ * said to sit over it). The corners are taken 30 % in from the box's edges so a round button's cut-off corner is not read as a covering element.
+ */
+async function rowMenuReach(page: Page): Promise<RowReach[]> {
+  return page.getByRole('region', { name: 'Activities', exact: true }).evaluate((region) => {
+    const box = region.getBoundingClientRect();
+    const head = region.querySelector('thead')?.getBoundingClientRect();
+    const top = Math.max(box.top, head ? head.bottom : box.top);
+    const seen: HTMLButtonElement[] = [];
+    for (const tr of region.querySelectorAll('tbody tr')) {
+      const r = tr.getBoundingClientRect();
+      if (r.height === 0 || r.top < top - 1 || r.bottom > box.bottom + 1) continue;
+      const button = tr.querySelector<HTMLButtonElement>('button[aria-label^="Actions for "]');
+      if (button) seen.push(button);
+    }
+    const ends = seen.length > 1 ? [seen[0]!, seen[seen.length - 1]!] : seen;
+    return ends.map((button) => {
+      const r = button.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const dx = r.width * 0.3;
+      const dy = r.height * 0.3;
+      const points: Array<[number, number]> = [
+        [cx, cy],
+        [cx - dx, cy - dy],
+        [cx + dx, cy - dy],
+        [cx - dx, cy + dy],
+        [cx + dx, cy + dy],
+      ];
+      const hits = points.map(([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return el
+          ? el === button || button.contains(el)
+            ? 'self'
+            : el.tagName +
+              ':' +
+              (el.getAttribute('aria-label') ?? el.getAttribute('data-testid') ?? '')
+          : 'none';
+      });
+      return {
+        row: button.getAttribute('aria-label') ?? '',
+        hits,
+        reachable: hits.every((hit) => hit === 'self'),
+      };
+    });
+  });
+}
+
 interface TabStop {
   name: string;
   width: number;
@@ -871,6 +928,67 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
       }
     }
   });
+
+  for (const pointer of ['fine', 'coarse'] as const) {
+    test.describe(`the row menu is reachable by a ${pointer} pointer with the panel expanded`, () => {
+      test.use({ hasTouch: pointer === 'coarse' });
+
+      // `docs/TECH_DEBT.md` #466: the pane bar said to cover the row's `⋯` went with the single-pane
+      // layout (ADR-0181), and nothing sits over a row now. 320 is read at 320 x 1200 because the
+      // shell's chrome is 603 px tall there and a shorter window leaves the table too little height
+      // for a row to be hit (#471).
+      test('first and last visible rows: the ⋯ is the topmost element and opens its menu', async ({
+        page,
+      }) => {
+        test.setTimeout(300_000);
+        page.setDefaultTimeout(20_000);
+        const { planUrl } = await seedWorkspace(page);
+
+        for (const size of [
+          { width: 700, height: 900 },
+          { width: 320, height: 1200 },
+        ]) {
+          const tag = `${pointer} ${String(size.width)} x ${String(size.height)}`;
+          await page.setViewportSize(size);
+          await page.goto(planUrl);
+          expect(
+            await page.evaluate(() => matchMedia('(pointer: coarse)').matches),
+            `${tag}: the pointer is the one this block names`,
+          ).toBe(pointer === 'coarse');
+          await expandPanel(page).click();
+          await expect(collapsePanel(page)).toBeVisible();
+          await expect
+            .poll(() => hittableRows(page), { message: `${tag}: rows` })
+            .toBeGreaterThan(0);
+
+          // At 320 the table is wider than its 288 px region (447 px of columns), so the `⋯` at its
+          // right end is reached by scrolling the region sideways, which any pointer can do.
+          await page
+            .getByRole('region', { name: 'Activities', exact: true })
+            .evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
+          const reach = await rowMenuReach(page);
+          expect(reach.length, `${tag}: a first and a last row`).toBeGreaterThanOrEqual(1);
+          for (const row of reach) {
+            expect(row.hits, `${tag}: ${row.row} centre and corners`).toEqual(
+              Array(5).fill('self'),
+            );
+          }
+          for (const row of reach) {
+            const button = page.getByRole('button', { name: row.row, exact: true });
+            const box = await boxOf(button, row.row);
+            const x = box.x + box.width / 2;
+            const y = box.y + box.height / 2;
+            if (pointer === 'coarse') await page.touchscreen.tap(x, y);
+            else await page.mouse.click(x, y);
+            const menu = page.getByRole('menu');
+            await expect(menu, `${tag}: ${row.row} opens its menu`).toBeVisible();
+            await page.keyboard.press('Escape');
+            await expect(menu).toBeHidden();
+          }
+        }
+      });
+    });
+  }
 
   test('a squeezed dock gives way to Fit, and the panel and a dock never coexist', async ({
     page,
