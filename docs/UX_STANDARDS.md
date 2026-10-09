@@ -401,6 +401,11 @@ Where labels can be shed at all, prefer **always showing them** over a
 disclosure: a row that hides four facts behind a press has traded a width
 problem for a discoverability one.
 
+- **Below 1024 the command deck is one scrolling line, and a narrow-and-short window scrolls the whole shell**
+  (`squat`, `(width < 64rem) and (height <= 26rem)`; toolbar-redesign M3). The way back to a band scrolled away is the
+  foot strip or keyboard focus, and a keyboard-focused control is brought clear of the edge fade. At 1024 and up the deck
+  never scrolls sideways and the band never scrolls away, whatever the height.
+
 ### A short body gives the whole workspace to the panel (ADR-0180)
 
 When the workspace body is too short to give the diagram its minimum and the activities panel three

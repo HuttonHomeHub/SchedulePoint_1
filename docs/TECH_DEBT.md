@@ -11934,3 +11934,26 @@ sweep the 1 px separator box (not its child strip), so it would need a named exe
 onto the separator. The pointer-only, non-drag way to set a size for the non-Gantt consumers is #442 (keyboard twin
 only), left open here. **Next:** widen the strip to the coarse `--control-h` under `pointer-coarse:` and sweep the
 separator. **Trigger:** a device reading that misses a divider, or the next touch pass over the shell.
+
+### 477. The wheel over the canvas does not bring back a command band that `squat` has scrolled away
+
+**Status:** open · **Verified:** 2026-10-09 (`apps/web/measure-toolbar/toolbar-redesign-m3.spec.ts`, 640 × 300; `app-shell.tsx` makes the shell the scroller under `squat`, `<main>` is a full `100dvh`)
+**Raised:** 2026-10-09 (toolbar redesign M3 UX review) · **Size:** S · **Owner:** web
+
+Below 1024 wide and at or under 26 rem high the shell scrolls and the command band scrolls away above `<main>`. The ways
+back are the foot strip, which stays on screen, and keyboard focus (a focused band control scrolls the shell to it). A wheel
+or touch-scroll over the canvas pans the diagram and never reaches the shell, so a planner looking for the band has no
+cue that scrolling the page margin or the foot strip is the way. Not a defect in the SC-5 sense (every control is
+reachable); a discoverability gap. **Next:** decide with the owner whether the foot strip names the band ("Commands ↑"),
+or the shell takes the wheel at the canvas edge. **Trigger:** a user reading that loses the band at a short window, or the
+next pass over the narrow shell.
+
+### 478. The canvas ruler's day labels collide at 200 % text in a 1280 × 800 window
+
+**Status:** open · **Verified:** 2026-10-09 (toolbar redesign M3 UX review, text-only 200 % at 1280 × 800, a reviewer's screenshot; not measured with a harness)
+**Raised:** 2026-10-09 · **Size:** S · **Owner:** web
+
+At the browser's default font size of 200 % the canvas ruler's day-number labels overlap one another at 1280 × 800 (40 × 25
+rem). This is the canvas ruler, not the command band: M3's SC-7 cell passes (every deck control is hit-testable) and the
+ruler is outside its scope. **Next:** measure it (ADR-0113) at that cell and decide whether the ruler tier should thin its
+labels by pitch, as ADR-0141 does for the thumbnail. **Trigger:** the next pass over the ruler, or a 200 % text report.

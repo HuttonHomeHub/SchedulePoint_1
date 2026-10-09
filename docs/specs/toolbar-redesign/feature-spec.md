@@ -348,12 +348,15 @@ measurements against a stated rule.
 >
 > - Under `max-lg:` the deck renders LOOK then DO on one `flex-nowrap overflow-x-auto` line.
 > - Roving focus calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })` (**required**), with
->   `scroll-px-2` padding.
+>   `scroll-px-8` padding (the edge fade's 2 rem; `scroll-px-2` left a control under the fade, M3 §6).
 > - A visible overflow cue (an edge fade, and the last item clipped rather than hidden), because overlay
 >   scrollbars may not show.
 > - A menu anchored to a half-scrolled trigger clamps to the viewport (tested).
-> - Under the new `@custom-variant squat`, the band moves into the scrolling region and scrolls away vertically.
->   `squat` is `(max-width: 63.99rem) and (max-height: <M0 value>)`: narrow **and** short, per CQ-3. It sits beside
+> - Under the new `@custom-variant squat`, the band scrolls away vertically. **As shipped, the app shell itself
+>   scrolls** (its third grid row becomes a full `100dvh`, so the band and banner scroll away above a `<main>` that is
+>   still exactly viewport-tall); the band does not move into a scrolling region inside `<main>` (implementation plan,
+>   M3 result). `squat` is `(width < 64rem) and (height <= 26rem)`: narrow **and** short, per CQ-3 (the 64 rem boundary
+>   is exclusive, which is what `63.99rem` meant; 26 rem keeps the default 640 × 480 window held). It sits beside
 >   `tall`/`short` (`globals.css:31,36`) and is pinned by `breakpoints.test.ts`.
 > - At ≥ 1024 wide the deck never scrolls sideways and the band never scrolls away, whatever the height.
 >   1280 × 600 and 1366 × 768 keep two rows (CQ-3).
@@ -554,8 +557,9 @@ through the existing `identity` slot.
   - the selection on the selection bar and Gantt row menu;
   - panels in the Panels group;
   - deliverables closing the DO row.
-- **R6. Below the floor (width only, CQ-3):** under `max-lg:`, one scrolling line (US-6). The `squat` variant
-  (narrow and short) makes the band scroll away vertically. Wide windows are never affected by height.
+- **R6. Below the floor (width only, CQ-3):** under `max-lg:` (`< 64rem`), one scrolling line (US-6). The `squat`
+  variant (narrow and short) makes the **shell** scroll, so the band scrolls away vertically above a full-height
+  `<main>` (as shipped, M3; the band is not moved into a scrolling region). Wide windows are never affected by height.
 - **R7. No new heights, colours or type sizes.**
 - **R8. No flag; every milestone names its entry point and lands with a journey.**
 - **R9. Free space is used: menu items promote by a declared ladder** (§4.11).

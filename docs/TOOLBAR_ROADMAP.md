@@ -101,3 +101,6 @@ tooltip copy differentiates them.
   pad would need a composite widget with its own internal roving focus (one toolbar stop, four buttons),
   which the flat one-control-per-stop registry can't express. Revisit if the compact geometry is worth a
   bespoke primitive.
+- **Below 1024 the deck is one scrolling line** (toolbar-redesign M3, `docs/specs/toolbar-redesign/m3-measurement.md`):
+  every item above stays on it in LOOK-then-DO order, none is demoted, and a narrow-and-short window scrolls the shell so
+  the band scrolls away. At 1024 and up the two declared rows are unchanged.

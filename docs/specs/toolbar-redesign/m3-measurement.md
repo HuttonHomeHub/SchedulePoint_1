@@ -17,6 +17,19 @@ band one line (body 757 px at 700 × 900) and the premise is gone for good, so t
 body is short (740 px: 597 fine / 577 coarse, under the 611 px `isShortBody` line). `plan-switch` "opening another plan with
 the pen held recalculates nothing" and `zero-duration` "converts from the selection bar" (foot row 87, expected 51, at 1646) also fail at `fe0afcd`, before M3: not M3's.
 
+**Reproduced by** running the journeys in two clean `git worktree`s (no stash), one at `0c26cb2` and one at `6949c10`, in the
+container's Chromium on 2026-10-09: `pnpm exec playwright test -c playwright.narrow-shell.config.ts --project=chromium` and
+`-c playwright.workspace-chrome.config.ts` (where `activities-panel-scroll.spec.ts` lives), `PLAYWRIGHT_SKIP_WEBSERVER=1`
+against an isolated API and Vite. `0c26cb2` **failed** and `6949c10` **passed** the three cases below.
+
+| Case (narrow-shell unless stated)                            | `6949c10` (before M1) | `0c26cb2` (after M1, before M2) | Reading at `0c26cb2`                                                        |
+| ------------------------------------------------------------ | --------------------- | ------------------------------- | --------------------------------------------------------------------------- |
+| "the foot row wraps … rows under the swap" (700 × 900)       | passed                | **failed**                      | 3 rows, expected ≥ 5                                                        |
+| "every dock opens …"                                         | passed                | **failed**                      | an icon-only Comments tooltip, opened by the press, covers the next control |
+| activities-panel-scroll case 7 (700 × 900, workspace-chrome) | passed                | **failed**                      | "Diagram hidden" note not shown                                             |
+
+The commands are recorded from the M3 run's notes and were not re-executed when this paragraph was written.
+
 ## 2. #471's five cells and the neighbours
 
 | Cell (fine) | Header | Band | Share | `<main>` top | Squat | Expand at rest | Expand after scroll |
@@ -35,7 +48,11 @@ after scrolling at all five (**unreachable at all five before**). Before M3: ban
   Cause at 320, below: the header, not the deck. The deck line is 52 px (fine) in every cell below 1024.
 - The deck is **one line** (every control on one top) and overflows (about 1,970 px of line in 640 px fine, 2,300 coarse).
   The far edge fades by 2 rem at rest (`--deck-fade-end` 32 px) and the near edge by 0; both follow the scroll; one control
-  is cut at the edge at rest.
+  is cut at the edge at rest. **On touch there is no scrollbar, so the half-clipped control is the real overflow cue and the
+  fade is a refinement** (the fade is a scroll-driven mask, which not every browser has; the clipped control always is).
+- **The way back to a band that `squat` has scrolled away** is the foot strip (which stays on screen) or keyboard focus (a
+  focused band control scrolls the shell to it). The wheel over the canvas does not scroll the shell, so a planner who
+  expects the wheel to bring the band back is not told otherwise: `docs/TECH_DEBT.md` #477.
 - **1280 × 600, 1366 × 768 and 1280 × 800 keep their two rows** (fine 2 lines, band 139; coarse 3 lines, band 211), with no
   sideways scroll and no fade (CQ-3).
 - Text-only 200 % (root 32 px) at 1280 × 800 = 40 × 25 rem: squat, one line, band 283 px (35 %) fine and 323 (40.4 %)
