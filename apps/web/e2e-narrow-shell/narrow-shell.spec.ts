@@ -1365,6 +1365,10 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
         id: focused.getAttribute('data-toolbar-item'),
         leftGap: f.left - d.left,
         rightGap: d.right - f.right,
+        // A one-line deck: a control the deck's box does not contain vertically is on a wrapped line
+        // or under another layer, which the sideways gaps cannot see.
+        topGap: f.top - d.top,
+        bottomGap: d.bottom - f.bottom,
         scrollLeft: deck.scrollLeft,
         maxScroll: deck.scrollWidth - deck.clientWidth,
       };
@@ -1399,6 +1403,15 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
         reading.rightGap,
         `${label} (${String(reading.id)}): clear of the trailing edge`,
       ).toBeGreaterThanOrEqual(INSET);
+      // Half a pixel of rounding either way; a control on a second line is tens of pixels out.
+      expect(
+        reading.topGap,
+        `${label} (${String(reading.id)}): inside the deck, top`,
+      ).toBeGreaterThanOrEqual(-0.5);
+      expect(
+        reading.bottomGap,
+        `${label} (${String(reading.id)}): inside the deck, bottom`,
+      ).toBeGreaterThanOrEqual(-0.5);
       return reading;
     };
 
@@ -1514,6 +1527,67 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
     expect(wide.overflows, '1280 x 600 does not scroll sideways').toBe(false);
     expect(wide.mask, '1280 x 600 has no fade').toBe('none');
     expect(wide.rows, '1280 x 600 keeps its two rows (CQ-3)').toBe(2);
+  });
+
+  test('in a squat window, focus moving into a band that has scrolled away brings it back into view', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 640, height: 300 });
+    await page.goto(planUrl);
+    const deck = commandBand(page);
+    await expect(deck).toBeVisible();
+
+    const shellScrollTop = () =>
+      page.evaluate(() => document.querySelector('main')?.parentElement?.scrollTop ?? -1);
+    /** The focused control's vertical position against the window, and whether it is in the deck. */
+    const focusedInWindow = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        const inDeck = !!el?.closest('[role="toolbar"][aria-label="Plan commands"]');
+        const r = el?.getBoundingClientRect();
+        return { inDeck, top: r?.top ?? NaN, bottom: r?.bottom ?? NaN, h: window.innerHeight };
+      });
+    const scrollShellAway = async () => {
+      await page.evaluate(() => {
+        const shell = document.querySelector('main')?.parentElement;
+        if (shell) shell.scrollTop = shell.scrollHeight;
+      });
+      // Without this the cases below would pass against a shell that never scrolled.
+      expect(await shellScrollTop(), 'the shell scrolled, so the band is away').toBeGreaterThan(0);
+      const away = await deck.evaluate((el) => el.getBoundingClientRect().bottom);
+      expect(away, 'the band is above the window').toBeLessThanOrEqual(0);
+    };
+
+    // Shift+Tab from the foot strip, with the band scrolled away, until focus reaches the deck.
+    await scrollShellAway();
+    await expandPanel(page).focus();
+    let reached = false;
+    for (let i = 0; i < 80 && !reached; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      reached = (await focusedInWindow()).inDeck;
+    }
+    expect(reached, 'Shift+Tab from the foot strip reaches the deck').toBe(true);
+    let at = await focusedInWindow();
+    expect(at.top, 'Shift+Tab into the deck: its top is on screen').toBeGreaterThanOrEqual(0);
+    expect(at.bottom, 'Shift+Tab into the deck: its bottom is on screen').toBeLessThanOrEqual(at.h);
+
+    // An arrow press inside a deck that has scrolled away again: the roving move is the deck's own
+    // focus (preventScroll), so the shell only follows because `onFocus` scrolls it.
+    await scrollShellAway();
+    await page.keyboard.press('ArrowRight');
+    at = await focusedInWindow();
+    expect(at.inDeck, 'ArrowRight stays in the deck').toBe(true);
+    expect(
+      at.top,
+      'ArrowRight: the moved-to control is scrolled into the window, top',
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      at.bottom,
+      'ArrowRight: the moved-to control is scrolled into the window, bottom',
+    ).toBeLessThanOrEqual(at.h);
   });
 
   for (const pointer of ['fine', 'coarse'] as const) {
