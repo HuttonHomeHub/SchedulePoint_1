@@ -64,7 +64,7 @@ describe('PanelResizer call sites', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(WEB_SRC)) {
       for (const tag of openingTags(readFileSync(file, 'utf8'))) {
-        if (/(?<![\w-])touch-(?:auto|none|pan-\w+|pinch-zoom|manipulation)\b/.test(tag)) {
+        if (/(?<![\w-])touch-[\w[]|\[touch-action:/.test(tag)) {
           offenders.push(relative(WEB_SRC, file).split(sep).join('/'));
         }
       }

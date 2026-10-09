@@ -175,8 +175,9 @@ known gap (ADR-0183 D3), not a fault to report.
 
 Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stopped after a moment.
 
-- [ ] **25. In the Gantt, put one finger on the thin vertical line between the table and the chart
-      (named "Grid width") and drag it slowly sideways about 100 pixels without lifting.**
+- [ ] **25. On a touch device, in the Gantt view, put one finger on the thin vertical line between the
+      table (left) and the chart (right) and drag it slowly sideways, a thumb's width or more,
+      without lifting.**
       It: [ ] followed my finger the whole way [ ] stopped part-way [ ] the chart scrolled instead
       [ ] nothing happened. Try the line between the Project Explorer and the plan too:
       [ ] followed [ ] stopped part-way [ ] other: __________

@@ -127,7 +127,7 @@ export function PanelResizer({
       onPointerCancel={pointer.onPointerCancel}
       onKeyDown={onKeyDown}
       className={cn(
-        // `touch-none` must be on the element that owns the pointer handlers; the hit-area child inherits it.
+        // `touch-none` must be on the element that owns the pointer handlers; the hit-area child is covered by it (the effective touch-action is the intersection up the ancestors).
         'relative shrink-0 touch-none outline-none',
         vertical
           ? 'w-px cursor-col-resize focus-visible:w-0.5'
