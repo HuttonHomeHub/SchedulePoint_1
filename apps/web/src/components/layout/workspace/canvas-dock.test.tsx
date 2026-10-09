@@ -18,6 +18,19 @@ import { CanvasDock, CanvasDockOutlet, CanvasDockProvider } from './canvas-dock'
  * strips portal into a node on its way out of the document — visible nowhere, in no accessibility
  * tree, with nothing on screen looking wrong. Only the departing node's identity separates the two.
  */
+describe('CanvasDockOutlet', () => {
+  it('asks for room only when it holds a strip, so a narrow row wraps it instead of squeezing it', () => {
+    const { container } = render(
+      <CanvasDockProvider>
+        <CanvasDockOutlet />
+      </CanvasDockProvider>,
+    );
+    // **Verified red** by the journey, not here: jsdom has no layout. Without the floor the outlet's
+    // zero basis lets the facts take the line and the selection bar paints over them at 700 px.
+    expect(container.firstElementChild).toHaveClass('not-empty:min-w-80', 'flex-1');
+  });
+});
+
 describe('CanvasDock', () => {
   it('renders its children in place when no outlet has registered', () => {
     // The parity contract: the legacy stacked layout and every unit test that mounts `TsldPanel`

@@ -967,6 +967,41 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     ).toBe(true);
   });
 
+  test('a selected activity’s action bar and the plan facts do not overlap in the foot row', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.goto(planUrl);
+    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+    const bar = footRow(page).getByRole('toolbar', { name: /^Actions for / });
+    await expect(bar).toBeVisible();
+
+    // At the widths the narrow shell serves, the outlet that holds the bar used to ask for no width
+    // at all, so it shared a line with the facts and the two painted over each other.
+    for (const size of [
+      { width: 700, height: 900 },
+      { width: 640, height: 844 },
+    ]) {
+      await page.setViewportSize(size);
+      const tag = `${String(size.width)} x ${String(size.height)}`;
+      const barBox = await boxOf(bar, 'the action bar');
+      const factsBox = await boxOf(page.locator('[data-schedule-state]'), 'the plan facts');
+      const apart =
+        barBox.x + barBox.width <= factsBox.x + 0.5 ||
+        factsBox.x + factsBox.width <= barBox.x + 0.5 ||
+        barBox.y + barBox.height <= factsBox.y + 0.5 ||
+        factsBox.y + factsBox.height <= barBox.y + 0.5;
+      expect(
+        apart,
+        `${tag}: the action bar ${JSON.stringify(barBox)} and the facts ${JSON.stringify(factsBox)} do not intersect`,
+      ).toBe(true);
+    }
+  });
+
   test('Expand and Collapse keep focus on themselves from the keyboard', async ({ page }) => {
     test.setTimeout(300_000);
     page.setDefaultTimeout(20_000);
