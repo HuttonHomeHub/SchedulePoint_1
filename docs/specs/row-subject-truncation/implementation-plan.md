@@ -1,274 +1,238 @@
 # Implementation Plan: A row's subject wraps rather than clips (#472)
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved 2026-10-09 by the product owner (CQ-1, CQ-2, CQ-3 yes, on the M0-T3 photographs). M0 done; M1 and M2 approved for build.
 - **Owner:** web
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
-  E[Epic: RowSubject never clips] --> M0[M0: measure the problem<br/>probe first, then prototype photos]
-  M0 -->|CQ-1 answered on photos| M1[M1: RowSubject wraps on demand<br/>+ ListRow align + ADR-0184]
-  M1 --> M2[M2: after-reading, reviews, release]
+  E[Epic: RowSubject never clips] --> M0[M0: measured, prototyped, photographed<br/>DONE]
+  M0 --> M1[M1: RowSubject wraps; ListRow trailing drops at narrow widths<br/>tests + journeys]
+  M1 --> M2[M2: after-readings, reviews, ADR-0184, register, release]
 ```
 
 ### Epic
 
-**A row's subject wraps rather than clips** — closes `docs/TECH_DEBT.md` #472 and the name half of
-the product owner's 2026-10-09 report; ADR-0179 follow-ups.
+**A row's subject wraps rather than clips** — closes `docs/TECH_DEBT.md` #472 and the product owner's
+2026-10-09 report. No feature flag (ADR-0088 D1): the rollback is reverting M1's commit.
 
-No feature flag (ADR-0088 D1): the rollback is reverting M1's commit.
-
----
-
-### Milestone M0: measure the problem, with an instrument that can see it
-
-**Outcome:** a reading of how much of every name and every context is shown today, at the widths the
-product owner asked for, by a probe proven able to see a clipped name; and before/after photographs
-of an uncommitted prototype on which CQ-1 is answered.
-**Entry point:** `Ships dark: no visible change. M0's one product edit is an inert data-row-subject
-attribute on RowSubject's <p>, which renders nothing and exists so the SAME selector measures the
-tree before and after M1. M1 surfaces the capability.`
-**Journey:** none (no capability claimed).
-
-#### Feature: the probe counts what it claims to count
-
-> **Description:** `measure-overview.mjs` reports truncation only when a text node's **direct parent**
-> carries `text-overflow: ellipsis` (`apps/web/scripts/measure-overview.mjs:449-453`), and an element
-> `scrollWidth` check would be no better: the name's text sits in an **inline** `<a>`, whose
-> `scrollWidth` and `clientWidth` are 0. The probe uses `Range.getClientRects()` instead (spec SC-1).
-> **Complexity:** S
-> **Dependencies:** none
-> **Risks:** counts a scrolling `fill` body's vertical clipping → horizontal comparison only, against
-> the nearest `overflow-x` ≠ `visible` ancestor and the viewport.
-> **Testing requirements:** the SC-2 before-control on today's tree, before any reading is believed.
-
-##### Task M0-T1 — the `Range` probe, and the hook attribute
-
-- **Description:** one exported probe function (in `apps/web/scripts/`, importable by the
-  `e2e-overview` suite so harness and journey share it): for each `[data-row-subject]`, for every text
-  node, `Range.getClientRects()`; each rect compared horizontally against the nearest clipping or
-  scrolling ancestor and the viewport (> 0.5 px past an edge = clipped); plus any `text-overflow:
-ellipsis` in effect on an ancestor up to the subject. Reports name and context separately, in px and
-  characters (characters by walking the `Range` to the clip edge). Also reports per-subject line rects
-  (for SC-4, SC-7's order check and SC-8's no-overlap check).
-- **Complexity:** S
-- **Dependencies:** —
-- **Risks:** `data-row-subject` is a product edit → it is inert (no style, no ARIA), named in the
-  milestone's entry-point line, and precedented (`data-overview-*`, `PlanStandingRow.tsx:41-50`).
-- **Testing:** **before-control:** on today's tree at 1912 × 948 the probe reports at least one
-  **name** clipped (M0 photographed `Dockside — Ancillary work…`, `landing-two-columns/m0-measurement.md:67`).
-  Silent → the probe is wrong; stop.
-- **Development steps:**
-  1. `git log -- apps/web/src/components/ui/page/list-row.tsx` to confirm `RowSubject` is as measured
-     in `m1-after-run.md`.
-  2. Add `data-row-subject` to `RowSubject`'s `<p>`; nothing else in the component.
-  3. Write the probe; wire it into `readSplit`; print a per-cell table: rows, names clipped, contexts
-     clipped, median px and characters shown of each, median row height.
-  4. Run the before-control and record it.
-
-##### Task M0-T2 — fixture additions and the missing cells
-
-- **Description:** add to `landing-fixture.mjs`: `NetPoint reference: power-plant programme` (42 ch,
-  the product owner's example), a **Draft** plan with a long name in "Recently changed", and one plan
-  with name, project and client at the 200-character DTO maxima. Add cells **1465 × 900**,
-  **1646 × 1000** (M9.4's reference) and **320 × 800**; add the SC-6 injection (`html { font-size:
-200% }`) at 1280 × 800 and 1912 × 948 and the SC-8 text-spacing injection at 1280, 1477 and 1912.
-- **Complexity:** S
-- **Dependencies:** M0-T1
-- **Risks:** the 200-char plan dominates a box → report SC-5 with and without it.
-- **Testing:** the run itself.
-- **Development steps:**
-  1. Fixture additions through the public API, as the existing fixture does.
-  2. Run with `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome` against
-     the local stack; record the build from the shell footer.
-  3. Write `m0-measurement.md` here: names and contexts shown at **1024, 1280, 1465, 1912** (Explorer
-     default) and the rest of the matrix; whole rows per capped box at 1646 × 1000 and 1912 × 948;
-     region heights; the name's available width in characters at 320 × 800 and at 200 % (SC-6's
-     ~12-character clause, **today**). Photographs in `m0/`.
-  4. **Decision rules, committed now:** (a) if names are never clipped at any cell, the spec's name
-     half is withdrawn in writing and M1 proceeds on context alone; (b) if the name's available width
-     is under ~12 characters at 320 px or 200 % **today**, `ListRow`'s trailing block is in scope and
-     the spec is amended before M1.
-
-##### Task M0-T3 — the throwaway prototype, photographed (CQ-1 is answered here)
-
-- **Description:** apply spec §4.6 to a local tree **without committing it** — `RowSubject` markup,
-  `ListRow align`, the two consumers' `align="baseline"` — and photograph the landing **before and
-  after at 1912 × 948 and 1646 × 1000**, Explorer at default, on the M0-T2 fixture. Run the probe on
-  the prototype too, for an early read of SC-1, SC-3, SC-4 and SC-5. Commit **only** the photographs and
-  a short `m0-prototype.md` (whole rows per box, rows that went two-line, the badge-alone case if the
-  fixture produces it, the moved finish date in "Where the work stands"). Discard the code
-  (`git checkout -- apps/web/src`).
-- **Complexity:** S
-- **Dependencies:** M0-T2
-- **Risks:** prototype code leaks into a commit → the task's last step is `git status` showing only
-  `docs/specs/row-subject-truncation/`; M1 re-implements from the spec, not from the prototype.
-- **Testing:** none beyond the probe run; it is evidence, not product.
-- **Development steps:**
-  1. Edit locally; take the four photographs and the probe reading.
-  2. Discard the edit; commit the photographs and `m0-prototype.md`.
-  3. **Put CQ-1 to the product owner with the photographs.** M1 may be built while waiting, but **M1
-     does not merge until CQ-1 is answered.** If the answer is "height wins", M1 builds option D
-     (spec §4.7) instead and the spec is amended.
+**Build rule for this epic:** implement from the spec (§4.7), not from memory of the M0-T3 prototype,
+which was discarded. Every class string the builder needs is in spec §4.7. If anything in this plan
+turns out to contradict the code, stop and report — do not improvise a contract (ADR-0105).
 
 ---
 
-### Milestone M1: `RowSubject` wraps on demand (shippable slice)
+### Milestone M0: measure, prototype, photograph — **DONE 2026-10-09**
+
+Delivered: `apps/web/scripts/row-subject-probe.mjs`; `measure-overview.mjs` `SP_ROW_SUBJECT=1`;
+`landing-fixture.mjs` `seedLongNames`; the inert `data-row-subject` on `RowSubject`'s `<p>`;
+[`m0-measurement.md`](./m0-measurement.md), [`m0-prototype.md`](./m0-prototype.md), `m0-raw-*.md`,
+[`photos/`](./photos/). Decision rule (a) not triggered (names are clipped in all 13 cells); decision
+rule (b) triggered (name 6 characters at 320 px) → spec amended (CQ-3), `ListRow` in scope.
+
+---
+
+### Milestone M1: the rows never clip (shippable slice)
 
 **Outcome:** on the organisation landing, every plan name, Draft badge, project and client in "Jump
-back in", "Where the work stands" and "Recently changed" is shown in full at every width, and a
-wrapped row's date or "actor · time" sits on the name's line.
-**Entry point:** the organisation landing (`/orgs/$orgSlug`, the first screen after sign-in and the
-shell's wordmark) — the sections named `Jump back in`, `Where the work stands`, `Recently changed`.
-**Journey:** `e2e-overview` `overview.spec.ts` — a new step seeds a 57-character plan, opens the
-landing at 1477 × 900 and 1912 × 948 with the Explorer open, runs **the M0 probe** (zero clipped
-rects, zero ellipses), runs the **after-control** (injects a 300 px `inline-block` token into one
-context at 320 × 800 and requires the probe to report it), and asserts reading order from rects
-(name before badge before context; same line → left ascending, else top ascending) (SC-7).
+back in", "Where the work stands" and "Recently changed" is shown in full at every width; a wrapped
+row's date or "actor · time" sits on the name's line; on a very narrow screen it drops beneath the row's
+text so the name keeps room.
+**Entry point:** the organisation landing (`/orgs/$orgSlug`, the first screen after sign-in, and the
+shell's wordmark) — sections `Jump back in`, `Where the work stands`, `Recently changed`.
+**Journey:** `apps/web/e2e-overview/overview.spec.ts`, new step (M1-T2); plus a step in
+`apps/web/e2e-staff/staff.spec.ts` for the staff consumer (M1-T3).
 
-#### Feature: the component contract
+#### Feature: the component contracts
 
-> **Description:** spec §4.6 — props unchanged; nothing truncates; `flex-wrap items-baseline gap-x-2
-gap-y-0`; name group with a conditional word-space before the badge; `sr-only` ", " before the
-> context; `ListRow` gains additive `align`.
+> **Description:** spec §4.7 — `RowSubject` wraps and never clips; `ListRow` wraps its trailing block
+> beneath the primary when the primary would be under 7rem, and gains `align?: 'center' | 'baseline'`.
 > **Complexity:** S
-> **Dependencies:** M0 (and CQ-1 answered, before merge)
-> **Risks:** (1) height at two columns → SC-5 graded in M2 with named remedies; (2) badge alignment on
-> a wrapped name → first-baseline; seen in M0-T3's photographs; (3) the sizing ratchet refuses an
-> arbitrary value → spacing-step utilities only; (4) `align="baseline"` moves the finish date in
-> "Where the work stands" → photographed in M0-T3 and accepted with CQ-1.
-> **Testing requirements:** the journey and the probe carry the weight; the unit suite is a tripwire.
+> **Dependencies:** M0 (done)
+> **Risks:** (1) the sizing ratchet refuses a class → only `min-w-28`, `flex-1`, `gap-x-*`, `gap-y-0`
+> are new, all scale steps; (2) the staff link's hit area widens → expected (spec §4.7), reviewer
+> confirms; (3) an existing unit test asserts `textContent` equality and meets the `sr-only` ", " →
+> only rows with a context render it; fix such an assertion to the visible text, do not drop the separator.
+> **Testing requirements:** probe + journeys carry the weight; unit tests are tripwires.
 
-##### Task M1-T1 — `RowSubject`, `ListRow align`, the two consumers, docblocks
+##### Task M1-T1 — `list-row.tsx`, the two consumers, the unit tripwires
 
-- **Description:** `apps/web/src/components/ui/page/list-row.tsx` — `RowSubject` per spec §4.6;
-  `ListRow` gains `align?: 'center' | 'baseline'` (default `'center'`, emitting today's
-  `items-center`). Rewrite the `context` prop docblock (`:25`), the `badge` prop docblock ("Never
-  shrinks", `:27`), the component docblock (`:31-49`, including why the old "name survives" claim was
-  false) and `ListRow`'s for the new prop. In `RecentlyChangedRow.tsx` and `PlanStandingRow.tsx`:
-  remove the dead `className="shrink-0"` on the Draft badge (`:89`, `:78`) and pass
-  `align="baseline"`. `JumpBackInSection` (no trailing), `NeedsAttentionSection` and the staff
-  `status-summary` are not edited.
+- **Description:**
+  1. `RowSubject` exactly per spec §4.7 (the `<p data-row-subject …>`, the name group with the
+     conditional single space before the badge, the context span with its leading `sr-only` ", ").
+     Keep `data-row-subject` (M0 added it).
+  2. `ListRow` per spec §4.7's table: container gains `flex-wrap gap-x-4 gap-y-0` (replacing `gap-4`)
+     and takes `items-center` or `items-baseline` from `align` (default `'center'`); primary becomes
+     `min-w-28 flex-1`; trailing unchanged. Add `align` to `ListRowProps` with a docblock. Do not
+     touch `ListRowSkeleton`.
+  3. Rewrite the docblocks named in spec §4.7 (`context` `:25`, `badge` `:27`, `RowSubject` `:31-49`,
+     `ListRow` `:69-80`), citing ADR-0184.
+  4. `RecentlyChangedRow.tsx`: pass `align="baseline"`; remove `className="shrink-0"` from the Draft
+     `Badge` (`:89`). `PlanStandingRow.tsx`: the same (`:78`). No other consumer is edited.
 - **Complexity:** S
-- **Dependencies:** M0
-- **Risks:** a `Badge` without its caller's class looks different → `shrink-0` only governs flex
-  shrink, which no longer applies; the photographs confirm.
-- **Testing (tripwire only — jsdom lays nothing out, ADR-0110):** replace
-  `page-archetypes.test.tsx:381-395` (a class-string assertion) with: no descendant of the subject
-  carries `truncate`, `text-ellipsis`, `whitespace-nowrap`, `overflow-hidden`, `line-clamp-*`,
-  `order-*`, `flex-row-reverse` or `flex-wrap-reverse`; the badge is inside the name group; DOM order
-  name → badge → context; one `<p>` with `data-row-subject`; the `sr-only` separator is present only
-  with a context; no text after the name when there is no badge. Keep the two existing cases. A
-  `ListRow` case: default emits `items-center`, `align="baseline"` emits `items-baseline`. The test's
-  comment says the behaviour is the journey's, not this suite's.
+- **Dependencies:** —
+- **Risks:** see the feature box.
+- **Testing (unit, tripwires — jsdom lays nothing out; say so in the test comments, ADR-0110):**
+  - Replace `page-archetypes.test.tsx:381-395` ("lets the context give way…", a class-string check)
+    with: no element in the subject carries any of `truncate`, `text-ellipsis`, `whitespace-nowrap`,
+    `overflow-hidden`, `line-clamp-`, `order-`, `flex-row-reverse`, `flex-wrap-reverse`; the badge is
+    a descendant of the same child as the name; DOM order name → badge → context; one `<p>` with
+    `data-row-subject`; with a context there is exactly one `.sr-only` whose text is `", "`; without a
+    badge nothing follows the name inside its group; without a context there is no `.sr-only`.
+  - Keep the two existing `RowSubject` cases (`:364-379`).
+  - `ListRow`: default emits `items-center` and not `items-baseline`; `align="baseline"` the reverse;
+    the container has `flex-wrap`; the primary has `min-w-28` and `flex-1`; no reorder utility.
+  - Run `pnpm --filter @repo/web test`; `plan-standing-row.test.tsx`, `jump-back-in.test.tsx`,
+    `freshness-line.test.tsx`, `overview-screen.test.tsx` and the staff suites must stay green.
 - **Development steps:**
-  1. Edit; run `pnpm --filter @repo/web test` for the page archetypes and overview suites.
-  2. `plan-standing-row.test.tsx`, `jump-back-in.test.tsx`, `freshness-line.test.tsx`,
-     `overview-screen.test.tsx` and the staff suites stay green (they query by role and text; check
-     any `textContent` equality against the new `sr-only` ", ").
+  1. Edit `list-row.tsx`; edit the two consumers.
+  2. Update `page-archetypes.test.tsx`.
+  3. `pnpm --filter @repo/web test` and `pnpm --filter @repo/web typecheck`.
 
-##### Task M1-T2 — the journey step
+##### Task M1-T2 — the overview journey step
 
-- **Description:** `apps/web/e2e-overview/overview.spec.ts`: seed a long-named plan (`createPlan`,
-  `support.ts:41`), then SC-7 as written in the milestone header, importing the M0 probe. A pinned
-  positive count (≥ 1 `[data-row-subject]` found) precedes the verdict (ADR-0146's vacuous-journey
-  lesson).
+- **Description:** in `apps/web/e2e-overview/overview.spec.ts` add one test (or step) that:
+  1. Creates its own plan named `Berth 4 Deepening — Dredging and Revetment Works, Stage 2B` in a
+     project `Estuary Crossing Programme — Western Approaches` of client `Northern Ports and Harbours
+Authority` (`support.ts` `createClient` / `createProject` / `createPlan`), opens it once (so
+     "Jump back in" and "Recently changed" carry it), and opens the overview.
+  2. Imports the probe from `apps/web/scripts/row-subject-probe.mjs` (the same function the harness
+     uses — if it is not importable as-is, export it; do not copy it).
+  3. At **1477 × 900** and **1912 × 948**: asserts at least 1 `[data-row-subject]` is found (pinned
+     positive count), then 0 clipped names, 0 clipped contexts, 0 ellipses, 0 clipped trailing text;
+     asserts reading order from rects for the long-name row (name's first rect, badge, context: same
+     line → left ascending, else top ascending).
+  4. At **320 × 800**: runs the SC-2 after-control (inject a 32 × `W` text token into one unclipped
+     context; the probe must report it clipped; remove it) and asserts SC-9: every row with a trailing
+     block has primary width ≥ 12 × the advance of `0` in the name's font, and the trailing block's top
+     is below the primary block's bottom.
+  5. At **1024 × 600**: asserts every trailing block's vertical centre lies within its primary's first
+     line box (SC-3's floor clause).
 - **Complexity:** S
 - **Dependencies:** M1-T1
-- **Risks:** the suite's organisation holds one plan (`m9-density-design.md:190-197`) → the step
-  creates its own.
-- **Testing:** red with M1-T1's `RowSubject` reverted (it must fail on the clipping assertion), then
-  green; `scripts/e2e-local.sh web:overview`.
+- **Risks:** the suite's organisation otherwise holds one plan (`m9-density-design.md:190-197`) → the
+  step seeds its own; the 320 cell shows ADR-0179's narrow notice → measure beneath it, as M0 did.
+- **Testing:** verify **red** with M1-T1's `list-row.tsx` reverted (the clipping and SC-9 assertions
+  must fail), then green. `scripts/e2e-local.sh web:overview`.
 - **Development steps:**
-  1. Write the step; verify red on the old component; verify green.
+  1. Write the step; `git stash` the component change and confirm it fails; restore; confirm it passes.
 
-##### Task M1-T3 — ADR-0184, the design-system docs and the register
+##### Task M1-T3 — the staff journey step
 
-- **Description:** ADR-0184 from spec §4.7's outline; one line in CLAUDE.md §16; a dated note under M9
-  D1 in `organisation-landing-portfolio/m9-density-design.md` pointing at it (appended, not edited);
-  **`docs/COMPONENT_LIBRARY.md` and `docs/DESIGN_SYSTEM.md`**: update the `RowSubject` / `ListRow`
-  entries (the wrap rule, the `align` prop) and correct any row-truncation guidance found by grep;
-  changeset (`@repo/web` minor: visible layout change).
+- **Description:** in `apps/web/e2e-staff/staff.spec.ts`, after the status summary renders, at
+  **1024 × 600** and **1912 × 948**: for each status-summary row, the trailing verdict badge's top is
+  **above** its primary block's bottom (the badge is on the row's first flex line, centred against the
+  two-line primary by the default `align`, not wrapped beneath it). This pins "unchanged at or above the
+  floor" for the one consumer the landing harness never sees.
 - **Complexity:** S
 - **Dependencies:** M1-T1
-- **Risks:** `check:adr-coverage`, `check:counts` → `pnpm prepush`.
-- **Testing:** `pnpm prepush`.
+- **Risks:** the staff suite's setup (`STAFF_EMAILS`) → reuse its existing fixture; add no config.
+- **Testing:** `scripts/e2e-local.sh web:staff` (maps to `test:e2e:staff`, `apps/web/package.json:18`).
 - **Development steps:**
-  1. Write the ADR; add the §16 line; update the banner count if `check:counts` asks.
-  2. Edit the two design-system docs.
-  3. `pnpm changeset`.
+  1. Add the assertion beside the suite's existing status-summary step; run it.
 
 ---
 
-### Milestone M2: after-reading, reviews, release
+### Milestone M2: after-readings, reviews, records, release
 
-**Outcome:** the success criteria judged on the shipped tree; #472 closed.
-**Entry point:** as M1.
-**Journey:** as M1 (already landed).
+**Outcome:** every success criterion judged on the shipped tree; ADR-0184 filed; #472 closed.
+**Entry point:** as M1. **Journey:** as M1 (landed).
 
-#### Feature: judge it
+#### Feature: judge, review, record
 
-> **Description:** same probe, same fixture, one sitting.
+> **Description:** same probe, fixture and cells as M0; three reviewers; the registers.
 > **Complexity:** S
 > **Dependencies:** M1
-> **Risks:** SC-5 fails → apply its named remedies in order (raise the `min-h-55` floor; rebalance
-> rows), re-measure each; **never** re-truncate or `line-clamp`; if neither passes, report the number to
-> the product owner.
-> **Testing requirements:** SC-1 to SC-8.
+> **Risks:** a figure worse than SC-5's acceptance → stop and report it to the product owner; the
+> remedies (raise `min-h-55`, rebalance rows) are applied **only if he asks**; never re-truncate or
+> `line-clamp`.
+> **Testing requirements:** SC-1 to SC-9.
 
 ##### Task M2-T1 — the after-reading
 
-- **Description:** `m2-after-run.md` and `m2-verdict.md`: every SC judged PASS/FAIL with its number;
-  before/after median row height per cell; whole rows per capped box at 1646 × 1000 and 1912 × 948,
-  with and without the 200-character plan; the SC-6 and SC-8 injections; photographs at 1024, 1280,
-  1465 and 1912.
+- **Description:** run `measure-overview.mjs` with `SP_ROW_SUBJECT=1`, with and without the
+  200-character plan, on the M1 tree; write `m2-after-run.md` (raw) and `m2-verdict.md`: SC-1 to SC-9
+  each PASS/FAIL with its number against the spec's baselines (M0 today, M0-T3 prototype); the SC-5
+  table filled in; median row height per cell; the narrow-drop cells (where the trailing block went
+  beneath — expected only at 320 × 800). Photographs `photos/after-m2-{1024x600,1280x800,1465x900,1912x948,1646x1000,320x800}.png`.
 - **Complexity:** S
 - **Dependencies:** M1
-- **Risks:** stale build → read the build off the shell footer.
-- **Testing:** the probe, including both controls.
+- **Risks:** stale build → read the build off the shell footer and record it.
+- **Testing:** the probe with both SC-2 controls.
 - **Development steps:**
-  1. Run; write; close #472 citing the verdict (ADR-0131).
+  1. Run; write the two files; commit with the photographs.
 
-##### Task M2-T2 — reviews
+##### Task M2-T2 — reviews (before release, CLAUDE.md §19.13)
 
-- **Description:** **component-reviewer** (contract, tokens, the `align` prop, the tripwire),
-  **ux-reviewer** (the 1912 photographs, ragged heights, the badge-alone case, the moved finish date),
-  **accessibility-reviewer** (SC-6 and SC-8; the F69 verdict on today's tree; reading order; whether the
-  `sr-only` ", " reads as a pause). This is a shared primitive's reading contract, so the
-  accessibility pass runs **before** release (CLAUDE.md §19.13). No backend, API, security or database
-  reviewer: nothing in those layers changes. Fold blocking findings, each with a regression test
-  verified red first.
+- **Description:** run **component-reviewer** (both contracts, tokens, the `align` prop, the
+  tripwires, the staff link's hit area), **ux-reviewer** (`m2-verdict.md` and the photographs: ragged
+  heights, badge alone, moved finish date, the 320 drop), **accessibility-reviewer** (SC-6, SC-8, SC-9;
+  reading order; the `sr-only` ", "; the F69 verdict on the pre-change tree from `m0-measurement.md` §5).
+  No backend, API, security or database reviewer: nothing in those layers changes. Fold every blocking
+  finding with a regression test verified red first. If accessibility-reviewer finds the ", " is
+  announced as "comma", remove it and record the run-on in ADR-0184 as a known limitation.
 - **Complexity:** S
 - **Dependencies:** M2-T1
-- **Risks:** —
-- **Testing:** per finding.
+- **Testing:** per finding; re-run M1-T2/M1-T3 journeys after any fold.
 - **Development steps:**
-  1. Run the three reviewers; fold; re-run `pnpm prepush` and `scripts/e2e-local.sh web:overview`.
+  1. Run the three reviewers; fold; re-run.
+
+##### Task M2-T3 — ADR-0184 and the registers
+
+- **Description:**
+  1. `docs/adr/0184-a-rows-subject-wraps-it-never-clips.md` from spec §4.8's outline, Status
+     **Accepted**, citing `docs/specs/row-subject-truncation/` and `m2-verdict.md`.
+  2. CLAUDE.md §16: one line — `- **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A
+row's subject wraps; it never clips → [\`0184-a-rows-subject-wraps-it-never-clips.md\`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)`
+(`pnpm check:adr-coverage`).
+  3. **Counts:** run `pnpm check:counts` and correct the CLAUDE.md stage-banner figures it reports
+     (the ADR count goes 183 → 184; web source files only if M1 added one) — never edit a number the
+     gate did not ask for.
+  4. `docs/COMPONENT_LIBRARY.md` and `docs/DESIGN_SYSTEM.md`: update the `RowSubject` / `ListRow`
+     entries (wrap rule, the 7rem trailing drop, `align`) and correct any row-truncation guidance
+     (grep both for `truncat`, `RowSubject`, `ListRow`).
+  5. `docs/specs/organisation-landing-portfolio/m9-density-design.md`: append a dated note under D1
+     ("Reversed 2026-10-09 by ADR-0184 — the name never survived; see …"). Append, do not edit D1.
+  6. **`docs/TECH_DEBT.md` #472:** **delete the row** and add its number to the **Closed numbers**
+     ledger at the foot, in the existing lines' format (the third cell is a date), citing ADR-0184 and
+     `m2-verdict.md` — the register's rule (`TECH_DEBT.md:18-23`; `check:debt-status` A11 refuses a
+     deletion without a ledger line, and A3 refuses a "CLOSED" annotation). Also update the two other
+     places that point at #472 as open: `docs/HANDOFF.md:55` and `:75` (edit — it is a hand-off, not
+     a record), and ADR-0182's Consequences only by appending a dated "closed by ADR-0184" note — never
+     rewrite an ADR's body.
+  7. Changeset: `pnpm changeset`, `@repo/web` **minor** — "Plan names, projects and clients on the
+     organisation landing are never cut off; rows grow a line when they need one, and on very narrow
+     screens the date drops beneath the row."
+  8. Spec and plan headers: Status `Accepted — shipped (ADR-0184)` (`pnpm check:spec-status`).
+- **Complexity:** S
+- **Dependencies:** M2-T2
+- **Risks:** a gate refuses → fix the cause, never the gate.
+- **Testing:** `pnpm prepush` (runs every `check:*`), then `scripts/e2e-local.sh web:overview` and the
+  staff suite.
+- **Development steps:**
+  1. Steps 1–8; `pnpm prepush`; e2e; commit; PR with a Conventional Commit title, e.g.
+     `feat(web): wrap a list row's subject instead of clipping it (#472)`.
 
 ## Sequencing & slices
 
-M0-T1 → M0-T2 → M0-T3 (photographs; CQ-1 put to the product owner) → M1 (may be built in parallel
-with the wait, **merges only after CQ-1**) → M2. M0 changes no rendering; M1 is one revertible commit
-for the product change.
+M1-T1 → M1-T2 and M1-T3 (parallel) → M2-T1 → M2-T2 → M2-T3. M1 is one revertible product commit; M2
+adds records only. `main` stays releasable throughout.
 
 ## Definition of Done (per task)
 
-Each task's PR must satisfy the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md)
-(code, tests, docs, security, performance, accessibility, Docker build, CI, changelog, version
-impact), with `pnpm prepush` and `scripts/e2e-local.sh web:overview` **run**, not assumed.
+Each task's PR satisfies the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md), with
+`pnpm prepush` and the e2e half (`scripts/e2e-local.sh web:overview web:staff`) **run**, not
+assumed.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                 | Likelihood | Impact | Mitigation                                                                                          |
-| --------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------- |
-| Two-column rows mostly go two-line; fewer whole rows per capped box at 1912 × 948 | high       | med    | CQ-1 answered on M0-T3's photographs; SC-5 graded; remedies are floor then rebalance, never clamp   |
-| The probe is wrong (an inline box reads 0, or scroll bodies are counted)          | med        | high   | `Range` rects, horizontal only; before-control (M0) and after-control (M1 journey)                  |
-| The trailing block squeezes the name at 320 px / 200 %                            | med        | med    | SC-6's ~12-character clause, measured today in M0-T2; `ListRow` in scope by amendment if it fails   |
-| Prototype code is committed                                                       | low        | med    | M0-T3 ends with `git status` clean outside the spec directory                                       |
-| Names turn out not to be clipped                                                  | low        | low    | M0-T2 decision rule (a)                                                                             |
-| A 200-character row leaves a bottom box under one whole row                       | low        | low    | Raise the floor for it; if the window cannot give that, the box scrolls and the reading is recorded |
-| Badge alone at the start of a name's last line                                    | med        | low    | Accepted in the spec; seen in the photographs; ux-reviewer                                          |
-| The `sr-only` ", " is announced as "comma" by some reader                         | low        | low    | accessibility-reviewer in M2; drop it and record the run-on as a limitation if so                   |
-| This analysis drove no browser                                                    | certain    | med    | Spec §3.2; every figure is cited to a dated reading, and M0 re-takes them                           |
+| Risk / assumption                                                        | Likelihood | Impact | Mitigation                                                                                             |
+| ------------------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------------------ |
+| Fewer whole rows per two-column box (1912 × 948: 3 → 1)                  | certain    | med    | Measured and accepted by the owner (CQ-1); remedies only on his request                                |
+| The narrow drop fires at or above the 1024 floor                         | low        | med    | SC-3 floor clause in the overview and staff journeys; 7rem chosen far below the 564 px narrowest track |
+| The staff link's hit area widens                                         | certain    | low    | Intended; component-reviewer confirms                                                                  |
+| The probe goes silent                                                    | low        | high   | SC-2 after-control in the journey and the harness                                                      |
+| The `sr-only` ", " reads as "comma"                                      | low        | low    | accessibility-reviewer; remove and record if so                                                        |
+| Owner data differs from the fixture (top-row height changes box heights) | med        | low    | SC-5 is graded on the fixture and stated as such (`m0-measurement.md:146-148`)                         |
