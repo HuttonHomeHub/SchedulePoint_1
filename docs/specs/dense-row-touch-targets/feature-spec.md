@@ -521,5 +521,5 @@ flowchart TD
   - ADR-0118 and the new ADR-0183, plus its one line in `CLAUDE.md` §16;
   - `docs/UX_STANDARDS.md` and `docs/DESIGN_SYSTEM.md` (the criterion and the exception list);
   - `docs/COMPONENT_LIBRARY.md` (`icon-row` vs `icon-sm`);
-  - `docs/specs/gantt-coarse-pointer/device-checklist.md` (items 13 to 22 and the revisit trigger,
+  - `docs/specs/gantt-coarse-pointer/device-checklist.md` (items 13 to 24 and the revisit trigger,
     added in M4; the sheet's own update rule puts them there rather than in a second sheet).

@@ -155,7 +155,7 @@ the arbiter. They replace the spec's worked-out figures (ADR-0113).
   fold: the `⋯` resizes in CSS at once and the tree's JS row height follows one render later.
 - Coarse to fine at the very end of the list: the browser clamps the restored offset, so the end of
   the list stays in view, which is expected.
-- The device sheet (`docs/specs/gantt-coarse-pointer/device-checklist.md`, items 13 onward) carries
+- The device sheet (`docs/specs/gantt-coarse-pointer/device-checklist.md`, items 13 to 24) carries
   what no journey can: the posture flip, focus kept through it, and the 1024 × 600 activities row.
 
 ## References

@@ -17,6 +17,11 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > keyboard-menu behaviour, the Gantt's targets, or `/pointer-check.html` — updates this file in the
 > same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 > Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
+> Items 13–24 were added on 2026-10-09 for the dense-row touch targets (`docs/specs/dense-row-touch-targets/`,
+> ADR-0183, TECH_DEBT #215). That work left the Gantt's targets unchanged (the `⋯` stays 28 px and the
+> arrow 24 px, ADR-0177 D4 and ADR-0183 D6), so items 1 to 12 do not change. **Revisit trigger:** if
+> item 6 ever reads more than 1 miss in 10 on the Gantt's `⋯` or arrow, in either posture, say so: it
+> reopens the Gantt's 28 px (ADR-0183 D6).
 
 ## Before you start
 
@@ -118,6 +123,52 @@ For each run, first note the posture and the input, then do 12a and 12b.
         cell; if Code is hidden, a blank Duration cell). Stay on an activity's own line: the empty area
         below the last activity is not a row, so the browser's menu there is expected.**
         What appeared: [ ] SchedulePoint menu [ ] browser menu [ ] highlighted text [ ] nothing
+
+## Row targets under a finger (about 8 minutes, tablet posture)
+
+These confirm the dense-row work (ADR-0183) on the real Surface: row buttons are 44 px and tappable,
+and folding the cover while the Explorer is scrolled keeps your place and your focus. Do items 13 to
+24 in **tablet posture** (keyboard cover removed or folded back) unless a step says otherwise.
+
+**With the keyboard cover attached, nothing on these steps changes, by design.** The Surface then
+reports a mouse-type pointer, so every button below stays its small size in that posture. That is a
+known gap (ADR-0183 D3), not a fault to report.
+
+- [ ] **13. In the Project Explorer on the left, tap a client, project or plan row ten times** (any
+      row; each tap should open or expand it). The rows should look about as tall as a finger.
+      Missed or hit the wrong row, out of 10: ____ / 10
+- [ ] **14. In the Explorer, tap the three dots at the end of a row ten times.**
+      Missed or hit the wrong thing, out of 10: ____ / 10
+- [ ] **15. Open each of Clients, Projects, Plans, Resources and Calendars and tap the three dots on
+      a row** (once per page; a page with no rows can be skipped).
+      Each three-dot button is as big as the Edit button beside it and opened its menu:
+      [ ] yes, on every page I could try [ ] no, on: __________
+- [ ] **16. On the Clients page, tap a row's three dots ten times.**
+      Missed or hit the wrong thing, out of 10: ____ / 10
+- [ ] **17. Open the activities table and tap the three dots on a row ten times.**
+      Missed or hit the wrong thing, out of 10: ____ / 10
+- [ ] **18. Make the window small, about 1024 wide by 600 high if the Surface lets you (otherwise
+      skip this step), expand the activities table and tap the three dots on a row.**
+      The row is tall enough and the three dots opened their menu: [ ] yes [ ] no [ ] skipped
+- [ ] **19. Hide the Project Explorer (its collapse button), then tap "Show Project Explorer" and each
+      of the six icons on the narrow strip, one at a time.**
+      Every button is finger-sized and nothing is cut off: [ ] yes [ ] no, a button is clipped: __________
+- [ ] **20. Tap a row in the Explorer, then fold or unfold the keyboard cover. Press an arrow key.**
+      Focus is still on the row you tapped and the arrow moves it from there: [ ] yes [ ] no
+- [ ] **21. Scroll the Explorer to the top of a long list, then fold or unfold the cover.**
+      The same row is still in view, and an arrow key still moves from the row you were on: [ ] yes
+      [ ] no, it jumped: __________
+- [ ] **22. Scroll the Explorer well past 60% of its length, then fold or unfold the cover (to the
+      mouse-type pointer and back).** This is the case that needed a special fix.
+      The same row is still in view: [ ] yes [ ] no, it jumped: __________
+      An arrow key still moves from that row: [ ] yes [ ] no
+- [ ] **23. Scroll the Explorer to the very end of its list, then fold or unfold the cover.**
+      The end of the list is still in view: [ ] yes [ ] no
+      An arrow key still moves from the row that had focus: [ ] yes [ ] no
+      A blank strip appeared for a moment at the edge of the list: [ ] no [ ] yes, and it went away
+      [ ] yes, and it stayed
+- [ ] **24. Scroll the activities table and click a row so it has focus, then fold or unfold the
+      cover.** Your place and the row's focus survived: [ ] yes [ ] no: __________
 
 ## When you are done
 

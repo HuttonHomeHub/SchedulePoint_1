@@ -277,7 +277,7 @@ on the Surface.
    - Close the tables, tree and spine.
    - Restate the Gantt half as **decided** (CQ-1), with its evidence and trigger.
    - Record the four corrections from spec §1 in place.
-4. **Device steps, added to `docs/specs/gantt-coarse-pointer/device-checklist.md`** as items 13 to 22
+4. **Device steps, added to `docs/specs/gantt-coarse-pointer/device-checklist.md`** as items 13 to 24
    (that sheet's own rule says a change to a target it covers updates it in the same PR, and a second
    sheet would split the product owner's one session). About 8 minutes, tablet posture unless stated.
    It must also carry the activities-table row at 1024 × 600 (row 57 → 61, `⋯` 44), which the
