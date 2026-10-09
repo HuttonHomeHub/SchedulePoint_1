@@ -20,8 +20,8 @@ import { addActivity, onboard, openNewPlan, startEditing } from './support';
  * roving-tabindex APG widget. It then populates the plan so the frame controls + Project-finish chip light up, exercises an
  * inline plan action + a popover, drives the collapse/expand focus hand-off, and runs an a11y scan.
  *
- * Wide (desktop) viewport only: the below-`md` single-pane toggle is covered by the component tests;
- * here the full toolbar with the docked bottom panel is the subject.
+ * Wide (desktop) viewport only: narrow widths run the same layout (ADR-0181) and are covered by
+ * `e2e-narrow-shell`; here the full toolbar with the docked bottom panel is the subject.
  */
 test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ page }) => {
   const stamp = Date.now();

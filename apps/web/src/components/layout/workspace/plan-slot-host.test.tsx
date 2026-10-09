@@ -19,6 +19,19 @@ import {
  * host on a swap it should survive.
  */
 describe('plan slot registry', () => {
+  it('bounds the facts outlet by its row, so the facts can wrap in a narrow one', () => {
+    const { container } = render(
+      <PlanSlotProvider>
+        <PlanFactsOutlet />
+      </PlanSlotProvider>,
+    );
+    // **Verified red** by removing `max-w-full`: the outlet then sizes to the facts' one-line width
+    // and `PlanFacts`' own `max-w-full` resolves against that, not the row (320 px: Recalculate 76 px
+    // off screen, the foot row scrolling 270 px sideways). jsdom has no layout, so the class is the
+    // checkable half and the `narrow-shell` journey measures the rest.
+    expect(container.firstElementChild).toHaveClass('max-w-full', 'shrink-0');
+  });
+
   it('renders in place when no outlet is registered', () => {
     render(
       <PlanSlotProvider>

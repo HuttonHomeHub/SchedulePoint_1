@@ -242,6 +242,7 @@ as if the toolbar changed with the **planning mode**, even though no command is 
    secondary, low-frequency actions (Baselines, Calendar, Plan details, Shortcuts — already tier-3)
    live in the `⋯` overflow. With the leaner Frame group, core controls no longer demote at normal
    widths (below `md` the workspace still switches to a single pane per ADR-0031's responsive rule).
+   _(Superseded by ADR-0181, 2026-10-09: there is no below-`md` single pane any more.)_
 
 4. **Future-feature placeholders.** Reserved slots are no longer hidden stubs; they render as
    **disabled "Coming soon" placeholders** so the toolbar reads as fully designed and the roadmap is

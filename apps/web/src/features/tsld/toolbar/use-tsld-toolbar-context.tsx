@@ -171,8 +171,8 @@ export function useTsldToolbarContext({
   hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
   setPlanView?: (view: PlanViewMode) => void;
   /**
-   * The host's rule for a command that acts on the diagram (short-screen swap, ADR-0180): collapse
-   * the activities panel first when the swap has hidden the diagram. Applied HERE, to the context,
+   * The host's rule for a command that acts on the diagram (short-screen swap, ADR-0180; a dock that
+   * has taken the row, ADR-0181): make the diagram reachable first. Applied HERE, to the context,
    * so `render` items (View, Go to date, Find) are covered as well as plain buttons — the class of
    * every command is {@link COMMAND_CLASS}. Defaults to running in place, a host with no swap.
    */
@@ -596,10 +596,10 @@ export function useTsldToolbarContext({
       openResourceHistogram: () => openDialog('resource-histogram'),
       // The DCMA health report is a DOCKED COLUMN, not a dialog — the workspace owns its state and
       // the one-dock-at-a-time set (right-docks.ts), so this is a callback the host supplies.
-      toggleHealthCheck: withDiagram(toggleHealthCheck),
+      toggleHealthCheck: withDiagram(toggleHealthCheck, undefined, 'dock'),
       // The revision comparison is a DOCKED COLUMN too, for the health reason verbatim — the
       // workspace owns its state and the one-dock-at-a-time set, so this is a host callback.
-      toggleRevisionCompare: withDiagram(toggleRevisionCompare),
+      toggleRevisionCompare: withDiagram(toggleRevisionCompare, undefined, 'dock'),
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).
@@ -636,7 +636,7 @@ export function useTsldToolbarContext({
       todayIso,
       selectedActivityId,
       selectedActivity,
-      revealComments: withDiagram(revealComments),
+      revealComments: withDiagram(revealComments, undefined, 'dock'),
       // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
       notesOpen: model.notesOpen,
       canEditSchedule,
@@ -685,7 +685,7 @@ export function useTsldToolbarContext({
       // nothing reads these and `toggleFloatPaths` is never called.
       activityCount: activities.length,
       floatPathsOpen: model.floatPaths?.open ?? false,
-      toggleFloatPaths: withDiagram(toggleFloatPaths),
+      toggleFloatPaths: withDiagram(toggleFloatPaths, undefined, 'dock'),
       currentConflict,
       goToNextConflict: withDiagram(goToNextConflict),
       searchStatus,

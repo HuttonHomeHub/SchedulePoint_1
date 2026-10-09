@@ -9,7 +9,8 @@ import { defineConfig, devices } from '@playwright/test';
  * the Project Explorer on a narrow screen, the header hamburger that opens it, and every
  * `lg:hidden` branch in the shell had never been driven by a browser. The ADR-0114 M7 gate pass
  * found the below-`md` workspace losing the plan's facts entirely — by a specialist review,
- * because this suite did not exist to find it.
+ * because this suite did not exist to find it. (That workspace was its own single-pane layout until
+ * ADR-0181 retired it; the suite now also holds the one layout that replaced it, down to 320 px.)
  *
  * The default viewport is a 1280 × 960 window at 200 % zoom (640 × 480, under `md`; ADR-0179); the breakpoint-crossing test sets
  * its own sizes with `setViewportSize`. **The pointer stays fine** (Playwright's default): the

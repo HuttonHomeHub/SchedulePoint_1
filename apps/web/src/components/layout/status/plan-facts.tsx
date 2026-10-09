@@ -15,11 +15,11 @@ import { formatCalendarDate } from '@/lib/format-date';
  * acceptance condition for the extraction was that `plan-status-bar.test.tsx` passes **unedited**,
  * and it does — that suite is the before/after oracle (the ADR-0078 barrel-preserving argument).
  *
- * It exists because M2 gives these facts **two possible hosts**. On a wide plan layout they belong
- * in the activities handle row, where the reader is already looking; below `md` that row is **not
- * mounted at all** (measured — `m0-measurement.md`), so they must still render somewhere or the
- * plan's facts vanish on the narrowest screens. One component, two hosts, chosen by the host that
- * registers — never two copies, which is how a tab and a dialog drift (ADR-0062).
+ * It exists because M2 gave these facts **two possible hosts**: the activities foot row, where the
+ * reader is already looking, and the shell's status row for a layout with no foot row. The second
+ * host was the below-`md` single-pane workspace, which ADR-0181 retired — every width now has the
+ * foot row — but the host is still chosen by whichever outlet registers, and one component serving
+ * both is still the right shape: never two copies, which is how a tab and a dialog drift (ADR-0062).
  *
  * Every comment below is verbatim from the original. They record defects that shipped.
  */
@@ -100,11 +100,16 @@ export function PlanFacts({
        * which is the entire loss recovered. 300 px was measured too and only reaches 77 px, so the
        * bound is doing real work rather than being a round number.
        *
+       * **`max-w-full` bounds it by the foot row (retire-single-pane M1).** Without a bound the
+       * block is `shrink-0` at about 580 px of one-line width, so in a 320 px body it overflowed the
+       * row by 302 px and pushed Expand out of sight (M0). Bounded by its container it wraps its own
+       * items onto further lines instead, by the same mechanism as `max-w-64` above.
+       *
        * **What it does NOT do is fix 1646** — that was M1's, and wrapping the facts there buys
        * nothing, because a wrapping row breaks between ITEMS rather than by total width (ADR-0114
        * M2 recorded the same thing freeing 164 px and gaining zero).
        */
-      className="text-muted-foreground flex min-h-6 shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
+      className="text-muted-foreground flex min-h-6 max-w-full shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
     >
       {/* **The collapse is WITHDRAWN, on its own measurement** (M2-T3, reversed at M2-T4).
           Tailwind's `@container` sets `container-type: inline-size`, which applies

@@ -7,7 +7,7 @@ import { PlanNotesSection } from './PlanNotesSection';
 /**
  * The **Comments** reveal seam (toolbar quick-wins F2): `PlanNotesSection` exposes its heading via
  * `headingRef` (made programmatically focusable), and the workspace's `revealComments` guard scrolls +
- * focuses it — a safe no-op when the section is unmounted (the responsive single-pane toggle). The
+ * focuses it — a safe no-op when the section is unmounted (`VITE_NOTES` off, or the docked-panel entry route). The
  * notes data layer is irrelevant here, so its children + session are stubbed.
  */
 vi.mock('./NoteThread', () => ({ NoteThread: () => <div data-testid="thread" /> }));

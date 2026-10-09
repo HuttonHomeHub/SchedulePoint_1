@@ -1,15 +1,28 @@
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 /**
- * Wraps a command that acts on the diagram so it still means something when the short-body swap
- * has hidden the diagram (`docs/specs/short-screen-vertical-budget`, ADR-0180): while the swap is
- * active the host collapses the activities panel and runs the command on the next frame; otherwise
- * it runs at once. `when` lets a command that is only sometimes about the diagram say so for the
- * arguments it was given (the Find field's two-step Escape).
+ * Wraps a command that acts on the diagram so it still means something when the diagram is out of
+ * reach. Two things put it there, and the host answers each:
+ *
+ * - the short-body swap has hidden it (`docs/specs/short-screen-vertical-budget`, ADR-0180): the host
+ *   collapses the activities panel and runs the command on the next frame;
+ * - a dock has taken the whole row and the diagram is `inert` (`docs/specs/retire-single-pane-workspace`,
+ *   ADR-0181): the host closes the open dock and runs the command on the next frame — except a
+ *   command classed `dock`, which already replaces the open dock, and which closing first would turn
+ *   from "close this one" into "reopen it".
+ *
+ * The third argument is therefore only ever `'dock'` (the type says so), and
+ * `canvas-directed-commands.structural.test.tsx` holds every wrapped command's argument to
+ * {@link COMMAND_CLASS}: a fifth dock command that forgets it, or a viewport command that claims it,
+ * fails that test rather than misbehaving on a narrow window.
+ *
+ * Otherwise it runs at once. `when` lets a command that is only sometimes about the diagram say so for
+ * the arguments it was given (the Find field's two-step Escape).
  */
 export type WithDiagram = <A extends unknown[]>(
   command: (...args: A) => void,
   when?: (...args: A) => boolean,
+  commandClass?: Extract<CommandClass, 'dock'>,
 ) => (...args: A) => void;
 
 /** The host that has no swap to reckon with: every command runs at once. */

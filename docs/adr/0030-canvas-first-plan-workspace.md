@@ -90,6 +90,10 @@ segmented view toggle** shows one pane at a time (a phone can't usefully split c
 Both panes stay mounted (toggled with `hidden`) so the canvas viewport and table scroll survive
 a switch. A small reusable `useMediaQuery` hook drives the structural branch.
 
+> **Superseded in part by ADR-0181 (2026-10-09).** The below-`md` Diagram / Activities toggle and the
+> branch behind it are removed: the workspace is one layout at every width. The split at/above `md` is
+> unchanged, and ADR-0180's short-body swap now applies below it too.
+
 ## Alternatives considered
 
 - **Right-side utility panel for baselines/calendar** instead of a header overflow menu —

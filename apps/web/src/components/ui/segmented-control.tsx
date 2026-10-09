@@ -25,12 +25,12 @@ import { cn } from '@/lib/utils';
  *
  * ```tsx
  * <SegmentedControl
- *   label="Workspace view"
- *   value={pane}
- *   onChange={setPane}
+ *   label="Plan view"
+ *   value={view}
+ *   onChange={setView}
  *   options={[
  *     { value: 'diagram', label: 'Diagram' },
- *     { value: 'activities', label: 'Activities' },
+ *     { value: 'gantt', label: 'Gantt' },
  *   ]}
  * />
  * ```

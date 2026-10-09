@@ -271,7 +271,7 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
   test.describe('below the floor, after Continue anyway', () => {
     test.use({ acknowledgeViewportNotice: true });
 
-    test('scrolls as one region at 640px, the narrow single-pane layout too', async ({ page }) => {
+    test('scrolls as one region at 640px, below the floor too', async ({ page }) => {
       // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
       // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
       const orgSlug = await onboard(page, STAMP + 1);
@@ -280,14 +280,14 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
       await ensurePen(page);
       await seedSixty(page, orgSlug);
       await ensurePen(page);
-      // Tall on purpose: this asserts the single pane's scroll ownership, not the height budget. At
-      // 640 x 480 the chrome leaves the pane no height at all (m0-measurement.md §4), which is the
-      // cost of height never triggering the notice and has its own row in M4.
+      // Tall on purpose: this asserts the panel's scroll ownership, not the height budget. At
+      // 640 x 480 the shell's chrome leaves the workspace a ~117 px body and no row can show
+      // (retire-single-pane m0-measurement.md §2, `docs/TECH_DEBT.md` #471).
       await page.setViewportSize({ width: 640, height: 844 });
 
-      // Below `md` there is no separate expand/collapse — the view toggle IS the show/hide mechanism
-      // (`plan-workspace-toolbar.tsx`: both panes are always mounted, switched with `hidden`/`block`).
-      await page.getByRole('radio', { name: 'Activities' }).click();
+      // The same Expand as at every other width (ADR-0181): there is no separate narrow layout, and
+      // on this body ADR-0180's swap gives the table the row.
+      await expandButton(page).click();
       const region = activitiesRegion(page);
       await expect(region).toBeVisible();
 
@@ -744,33 +744,38 @@ test.describe('the short-body swap, one pointer', () => {
   test.describe('below md, after Continue anyway', () => {
     test.use({ acknowledgeViewportNotice: true });
 
+    // The swap applies at every width (ADR-0181; it was inert below `md` while that width had a
+    // layout of its own). 640 x 480 and 320 x 256 are not rows here: the shell's chrome leaves
+    // the workspace no body at those sizes, which no panel rule can repair (ADR-0181, `docs/TECH_DEBT.md`
+    // #471), so the sizes are the ones the body can hold a table in (m0-measurement.md §2).
     for (const size of [
-      { width: 640, height: 480 },
-      { width: 320, height: 256 },
+      { width: 700, height: 900 },
+      { width: 640, height: 844 },
     ]) {
-      test(`case 7: ${String(size.width)} x ${String(size.height)} keeps the single-pane layout`, async ({
+      test(`case 7: ${String(size.width)} x ${String(size.height)} swaps like the wide layout`, async ({
         page,
       }) => {
         test.setTimeout(240_000);
         await shortPlan(page, STAMP + 3100 + size.width, { width: 1280, height: 800 });
         await page.setViewportSize(size);
-        await expect(page.getByRole('radio', { name: 'Activities' })).toBeVisible();
-        await expect(expandButton(page)).toHaveCount(0);
-        // At 640 x 480 the chrome leaves the pane no height (m0-measurement.md §4), so "visible"
-        // would fail for a reason that predates the swap; what A1 must not do is hide a pane
-        // other than by the toggle (display:none, tested with checkVisibility) or print its note.
-        // By CSS: a `display:none` region leaves the accessibility tree, so a role query would not find it.
-        const rawRegion = page.locator('[role="region"][aria-label="Activities"]');
-        const hiddenAttr = (l: Locator) => l.evaluate((el) => !el.checkVisibility());
-        // dispatchEvent, not a pointer click: at 320 x 256 the chrome covers the toggle (the same
-        // no-height cost), and reachability there is not this case's subject.
-        await page.getByRole('radio', { name: 'Activities' }).dispatchEvent('click');
-        expect(await hiddenAttr(rawRegion)).toBe(false);
-        expect(await hiddenAttr(canvasEl(page))).toBe(true);
-        await expect(page.getByText(NOTE)).toHaveCount(0);
-        await page.getByRole('radio', { name: 'Diagram' }).dispatchEvent('click');
-        expect(await hiddenAttr(canvasEl(page))).toBe(false);
-        expect(await hiddenAttr(rawRegion)).toBe(true);
+        await expect(expandButton(page)).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Activities' })).toHaveCount(0);
+        await expect(page.getByRole('radio', { name: 'Diagram' })).toHaveCount(0);
+
+        await expandButton(page).click();
+        await expect(collapseButton(page)).toBeVisible();
+        await expect(activitiesRegion(page)).toBeVisible();
+        await expect(page.getByText(NOTE)).toBeVisible();
+        await expect.poll(() => hittableRows(page)).toBeGreaterThanOrEqual(3);
+        // Hidden, not removed (A1): the canvas stays mounted with its viewport.
+        const row = await canvasEl(page).evaluate((c) => ({
+          hidden: c.closest('[hidden]') !== null,
+          mounted: c.isConnected,
+        }));
+        expect(row).toEqual({ hidden: true, mounted: true });
+
+        await collapseButton(page).click();
+        await expect(canvasEl(page)).toBeVisible();
         await expect(page.getByText(NOTE)).toHaveCount(0);
       });
     }

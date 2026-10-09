@@ -10,6 +10,8 @@ import {
 } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
+import { dockBounds } from './dock-bounds';
+import { focusOutsideInert } from './focus-reachable';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
@@ -17,7 +19,7 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
-import { docksToClose, type RightDock } from './right-docks';
+import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -28,14 +30,12 @@ import {
 } from './use-activity-panel-prefs';
 import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
 import {
-  CANVAS_MIN_WIDTH,
   NOTES_PANEL_MAX_WIDTH,
   NOTES_PANEL_MIN_WIDTH,
   useNotesPanelPrefs,
 } from './use-notes-panel-prefs';
 import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
-import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
@@ -52,10 +52,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
-import { PanelSurface, Surface } from '@/components/ui/surface';
+import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
-import { useMediaQuery } from '@/components/ui/use-media-query';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -134,6 +133,7 @@ import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
 import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
+import type { CommandClass } from '@/features/tsld/toolbar/canvas-directed-commands';
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
@@ -153,8 +153,16 @@ import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
-/** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
-const MD_QUERY = '(min-width: 48rem)';
+/**
+ * The height of the time-ruler band at the top of the canvas (`TsldCanvas`'s sticky date ruler), in
+ * px — measured 40 in every cell of `docs/specs/retire-single-pane-workspace/m0-measurement.md` §2
+ * (ADR-0151: a constant carries its justification).
+ *
+ * A canvas row shorter than the band shows a ruler and no bar, so nothing in it can be used; the
+ * workspace makes such a row `inert` rather than leaving focusable controls in a box nobody can see
+ * into (WCAG 2.4.7 / 2.4.11). It is the floor for "a sliver", not a layout target.
+ */
+const RULER_BAND_PX = 40;
 
 /**
  * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
@@ -245,7 +253,7 @@ export function ToolbarPlanWorkspace({
     CANVAS_RESOURCE_VIEW_ENABLED && model.resourceViewOpen && plan.plannedStart !== null;
   // The **Comments** button's reveal target (toolbar quick-wins F2): a ref on the plan-notes heading +
   // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
-  // section isn't mounted (the responsive single-pane toggle / `VITE_NOTES` off), so it never throws.
+  // section isn't mounted (`VITE_NOTES` off), so it never throws.
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   const setNotesOpen = model.setNotesOpen;
   // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
@@ -572,13 +580,6 @@ export function ToolbarPlanWorkspace({
   // the toolbar context and to the foot row's cluster through the status portal.
   const penLock = usePenLockView(model.pen, model.currentUserId ?? undefined);
 
-  // Below `md` the vertical split can't give the canvas and the table useful height at once, so
-  // (like the ADR-0030 layout) one pane shows at a time via the Diagram/Activities toggle — never
-  // squeezing the canvas to its minimum on a phone. Both stay mounted (toggled with `hidden`) so
-  // switching preserves the canvas viewport and the table scroll.
-  const isWide = useMediaQuery(MD_QUERY, true);
-  const [pane, setPane] = useState<WorkspacePane>('diagram');
-
   // Activities panel: collapsed by default on this surface (drag up / Expand to reveal). Collapse
   // is session-local here; the resizer still persists the height via the shared prefs.
   const panel = useActivityPanelPrefs();
@@ -594,19 +595,116 @@ export function ToolbarPlanWorkspace({
   }, []);
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  const canvasRowRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
   const [bodyWidth, setBodyWidth] = useState(0);
+  // `null` until the first observation: an unmeasured row is not a zero-high one, so nothing is made
+  // `inert` for a height nobody has read (jsdom has no `ResizeObserver` and stays `null`).
+  const [canvasRowHeight, setCanvasRowHeight] = useState<number | null>(null);
   useEffect(() => {
     const el = bodyRef.current;
+    const row = canvasRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
       const rect = el.getBoundingClientRect();
       setBodyHeight(rect.height);
       setBodyWidth(rect.width);
+      if (row) setCanvasRowHeight(row.getBoundingClientRect().height);
     });
     ro.observe(el);
+    // The row's height moves with the panel's even when the body's does not.
+    if (row) ro.observe(row);
     return () => ro.disconnect();
   }, []);
+
+  // **The four right docks' widths, from one function** (`dock-bounds.ts`; retire-single-pane AC-2.2).
+  // Each dock is a resizable, collapsible RIGHT column that pushes the diagram and never overlays it,
+  // on the shared resizable-panel prefs with its own storage key. They sit ABOVE the toolbar context
+  // because `withDiagram` has to know whether a dock has taken the row. `dockBounds` reserves
+  // `CANVAS_MIN_WIDTH` for the diagram and the splitter's pixel, caps the dock at the body, and
+  // says when no dock width can leave the diagram that much (`squeezed`) — then the dock takes the
+  // whole row and the diagram column is `inert`. A render clamp only: the stored width is never
+  // rewritten, so a width dragged at 1440 is back at 1440 after a visit at 640.
+  const notesPanel = useNotesPanelPrefs();
+  const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
+  const notesBounds = dockBounds({
+    stored: notesPanel.size,
+    min: NOTES_PANEL_MIN_WIDTH,
+    max: NOTES_PANEL_MAX_WIDTH,
+    bodyWidth,
+  });
+  // A right-docked panel grows as the pointer moves left: width = the body's right edge − X.
+  const notesPointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+    [],
+  );
+  const notesMax = notesBounds.max;
+  const onNotesResize = useCallback(
+    (next: number) => notesPanel.setSize(Math.min(next, notesMax)),
+    [notesPanel, notesMax],
+  );
+
+  // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
+  // `toggleFloatPaths` above for why.
+  const floatPathsPrefs = useFloatPathsPanelPrefs();
+  const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
+  const floatPathsBounds = dockBounds({
+    stored: floatPathsPrefs.size,
+    min: FLOAT_PATHS_PANEL_MIN_WIDTH,
+    max: NOTES_PANEL_MAX_WIDTH,
+    bodyWidth,
+  });
+  const floatPathsPointerToSize = notesPointerToSize;
+  const floatPathsMax = floatPathsBounds.max;
+  const onFloatPathsResize = useCallback(
+    (next: number) => floatPathsPrefs.setSize(Math.min(next, floatPathsMax)),
+    [floatPathsPrefs, floatPathsMax],
+  );
+
+  // The Health check dock — the third member of the right-dock set, with its own DERIVED width floor
+  // (see the prefs docblock).
+  const healthPrefs = useScheduleHealthPanelPrefs();
+  const healthDockActive = healthOpen;
+  const healthBounds = dockBounds({
+    stored: healthPrefs.size,
+    min: HEALTH_PANEL_MIN_WIDTH,
+    max: NOTES_PANEL_MAX_WIDTH,
+    bodyWidth,
+  });
+  const healthPointerToSize = notesPointerToSize;
+  const healthMax = healthBounds.max;
+  const onHealthResize = useCallback(
+    (next: number) => healthPrefs.setSize(Math.min(next, healthMax)),
+    [healthPrefs, healthMax],
+  );
+
+  // The revision comparison dock — the fourth member, its floor DERIVED too (the two side pickers
+  // side by side, not a number copied from a sibling).
+  const revisionPrefs = useRevisionComparePanelPrefs();
+  const revisionsDockActive = revisionsOpen;
+  const revisionBounds = dockBounds({
+    stored: revisionPrefs.size,
+    min: REVISION_PANEL_MIN_WIDTH,
+    max: NOTES_PANEL_MAX_WIDTH,
+    bodyWidth,
+  });
+  const revisionPointerToSize = notesPointerToSize;
+  const revisionMax = revisionBounds.max;
+  const onRevisionResize = useCallback(
+    (next: number) => revisionPrefs.setSize(Math.min(next, revisionMax)),
+    [revisionPrefs, revisionMax],
+  );
+
+  // An open dock that no width can fit beside the diagram has taken the row: the diagram column is
+  // taken out of reach (`inert`: out of the tab order and the accessibility tree, but laid out, so the
+  // canvas keeps its viewport — `display: none` would not) and `withDiagram` closes the dock before a
+  // command that acts on the diagram (AC-2.4).
+  const dockSqueezed =
+    (notesDockActive && notesBounds.squeezed) ||
+    (floatPathsDockActive && floatPathsBounds.squeezed) ||
+    (healthDockActive && healthBounds.squeezed) ||
+    (revisionsDockActive && revisionBounds.squeezed);
 
   // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180). When the body
   // cannot give the panel three rows beside the diagram's minimum, an expanded panel takes the whole
@@ -618,7 +716,11 @@ export function ToolbarPlanWorkspace({
   const [wasShort, setWasShort] = useState(false);
   const short = isShortBody(bodyHeight, CANVAS_MIN_HEIGHT, wasShort);
   if (short !== wasShort) setWasShort(short);
-  const swapped = isWide && !collapsed && short;
+  const swapped = !collapsed && short;
+  // The collapsed panel's other short case: a body that holds the foot row and not even the ruler
+  // band above it (a zoomed laptop: `docs/specs/retire-single-pane-workspace/m0-measurement.md` §2).
+  // Hidden by the swap the row measures 0, which is not this case.
+  const canvasRowTooShort = !swapped && canvasRowHeight !== null && canvasRowHeight < RULER_BAND_PX;
 
   // Entering the swap puts an armed drawing tool away: a tool armed while the diagram is hidden has
   // no target, and Escape in the table must never have a tool to reach. `canvasUi` is this
@@ -632,6 +734,13 @@ export function ToolbarPlanWorkspace({
     canvasUi.setMode('select');
   } else if (!swapped && toolPutAway) {
     setToolPutAway(false);
+  }
+  // The same for a stage a dock has taken out of reach (`inert`): an armed tool there has no target,
+  // and Escape, its way out, is a canvas key the stage would never receive. No note is shown for it —
+  // the dock is the thing on screen — but the panel's own mode effects still announce the disarm.
+  // (A row merely too short for a bar is not covered: its measurement is the shell's, ADR-0181.)
+  if (dockSqueezed && canvasUi.mode !== 'select') {
+    canvasUi.setMode('select');
   }
 
   // **Collapse-first for a command that acts on the diagram** (A1, spec §2 "Commands while the
@@ -656,14 +765,47 @@ export function ToolbarPlanWorkspace({
       pending.clear();
     };
   }, []);
+  // The width case (retire-single-pane AC-2.4): a dock has taken the whole row, so the diagram is
+  // `inert` and a viewport move or an armed tool would act on something nobody can reach. Close the
+  // dock through its own closer — which also clears its toolbar toggle — then run the command on the
+  // next frame, once the diagram column is back. A dock command is exempt: it already replaces the
+  // open dock, and closing first would turn a toggle that means "close this one" into "reopen it".
+  //
+  // **Focus is handed on, and the closing is said.** The raw closers unmount whatever the planner
+  // had focused inside the dock, which strands focus on <body> (WCAG 2.4.3) — the reason each dock's
+  // own Close goes through an `...AndFocus` closer. Here the dock that held focus names its toolbar
+  // control, and the polite region says why the panel went, because nothing else on screen does.
+  const ganttAnnounce = useAnnounce();
+  const closeAllDocks = useCallback(() => {
+    const held = document.activeElement
+      ?.closest('[data-right-dock]')
+      ?.getAttribute('data-right-dock');
+    for (const closeDock of Object.values(closeDockOf)) closeDock();
+    if (held !== null && held !== undefined) {
+      const item = DOCK_TRIGGER_ITEM[held as RightDock];
+      (
+        document.querySelector<HTMLElement>(`[data-toolbar-item="${item}"]`) ??
+        document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]')
+      )?.focus();
+    }
+    ganttAnnounce('Panel closed to show the diagram.');
+  }, [closeDockOf, ganttAnnounce]);
   const withDiagram = useCallback(
-    <A extends unknown[]>(command: (...args: A) => void, when?: (...args: A) => boolean) =>
+    <A extends unknown[]>(
+      command: (...args: A) => void,
+      when?: (...args: A) => boolean,
+      commandClass?: CommandClass,
+    ) =>
       (...args: A): void => {
-        if (!swapped || (when !== undefined && !when(...args))) {
+        const aboutDiagram = when === undefined || when(...args);
+        if (swapped && aboutDiagram) {
+          collapseQuietly();
+        } else if (dockSqueezed && aboutDiagram && commandClass !== 'dock') {
+          closeAllDocks();
+        } else {
           command(...args);
           return;
         }
-        collapseQuietly();
         const pending = pendingFramesRef.current;
         const id = requestAnimationFrame(() => {
           pending.delete(id);
@@ -671,7 +813,7 @@ export function ToolbarPlanWorkspace({
         });
         pending.add(id);
       },
-    [swapped, collapseQuietly],
+    [swapped, dockSqueezed, collapseQuietly, closeAllDocks],
   );
 
   const ctx = useTsldToolbarContext({
@@ -773,89 +915,6 @@ export function ToolbarPlanWorkspace({
     [],
   );
 
-  // Docked notes panel (entry-route win 1): a right-side sibling of the bottom activity panel — a
-  // resizable, collapsible RIGHT column that participates in the layout (pushes the canvas, never
-  // overlays), toggled by the Comments button (`model.notesOpen`). Width is persisted like the activity
-  // panel's height. The effective max reserves {@link CANVAS_MIN_WIDTH} for the canvas as a best-effort
-  // FLOOR — like the activity panel's height variant, it's clamped only against this body's width, so a
-  // narrow viewport (or another panel/rail open near the breakpoint) can still leave the canvas below it.
-  const notesPanel = useNotesPanelPrefs();
-  const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
-  const notesEffectiveMax = Math.min(
-    NOTES_PANEL_MAX_WIDTH,
-    Math.max(NOTES_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
-  );
-  const notesWidth = Math.min(notesPanel.size, notesEffectiveMax);
-  // A right-docked panel grows as the pointer moves left: width = the body's right edge − X.
-  const notesPointerToSize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
-    [],
-  );
-  const onNotesResize = useCallback(
-    (next: number) => notesPanel.setSize(Math.min(next, notesEffectiveMax)),
-    [notesPanel, notesEffectiveMax],
-  );
-
-  // The Float paths dock (audit F4) — the notes dock's sibling, on the same shared resizable-panel
-  // prefs, with its own storage key and its own clamp. Mutually exclusive with notes; see
-  // `toggleFloatPaths` above for why.
-  const floatPathsPrefs = useFloatPathsPanelPrefs();
-  const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
-  const floatPathsEffectiveMax = Math.min(
-    NOTES_PANEL_MAX_WIDTH,
-    Math.max(FLOAT_PATHS_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
-  );
-  const floatPathsWidth = Math.min(floatPathsPrefs.size, floatPathsEffectiveMax);
-  const floatPathsPointerToSize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
-    [],
-  );
-  const onFloatPathsResize = useCallback(
-    (next: number) => floatPathsPrefs.setSize(Math.min(next, floatPathsEffectiveMax)),
-    [floatPathsPrefs, floatPathsEffectiveMax],
-  );
-
-  // The Health check dock — the third member of the right-dock set, on the same shared resizable
-  // prefs with its own storage key and its own DERIVED width floor (see the prefs docblock).
-  const healthPrefs = useScheduleHealthPanelPrefs();
-  const healthDockActive = healthOpen;
-  const healthEffectiveMax = Math.min(
-    NOTES_PANEL_MAX_WIDTH,
-    Math.max(HEALTH_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
-  );
-  const healthWidth = Math.min(healthPrefs.size, healthEffectiveMax);
-  const healthPointerToSize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
-    [],
-  );
-  const onHealthResize = useCallback(
-    (next: number) => healthPrefs.setSize(Math.min(next, healthEffectiveMax)),
-    [healthPrefs, healthEffectiveMax],
-  );
-
-  // The revision comparison dock — the fourth member of the right-dock set, on the same shared
-  // resizable prefs with its own storage key and its own DERIVED width floor (see its prefs
-  // docblock: the floor is the two side pickers side by side, not a number copied from a sibling).
-  const revisionPrefs = useRevisionComparePanelPrefs();
-  const revisionsDockActive = revisionsOpen;
-  const revisionEffectiveMax = Math.min(
-    NOTES_PANEL_MAX_WIDTH,
-    Math.max(REVISION_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
-  );
-  const revisionWidth = Math.min(revisionPrefs.size, revisionEffectiveMax);
-  const revisionPointerToSize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
-    [],
-  );
-  const onRevisionResize = useCallback(
-    (next: number) => revisionPrefs.setSize(Math.min(next, revisionEffectiveMax)),
-    [revisionPrefs, revisionEffectiveMax],
-  );
-
   // **The activities panel's clamp, computed BELOW the dock flags because it reads them** (the ux
   // gate's blocking finding on the polish pass, 2026-08-28). Since the dock-pushes-canvas-only
   // restructure, an open right dock's height IS the canvas row's height — so a clamp that reserved
@@ -883,11 +942,9 @@ export function ToolbarPlanWorkspace({
   // Expand with a dock open: on a body too short for both, the dock closes first so its toolbar
   // toggle never claims a dock nobody can see. Not short: both stay, exactly as before the swap.
   const expandPanel = useCallback(() => {
-    if (anyRightDockActive && isShortBody(bodyHeight, DOCK_MIN_HEIGHT, false)) {
-      for (const closeDock of Object.values(closeDockOf)) closeDock();
-    }
+    if (anyRightDockActive && isShortBody(bodyHeight, DOCK_MIN_HEIGHT, false)) closeAllDocks();
     expand();
-  }, [anyRightDockActive, bodyHeight, closeDockOf, expand]);
+  }, [anyRightDockActive, bodyHeight, closeAllDocks, expand]);
   // The other half of "the later request wins": a dock that opens (or survives a live resize) while
   // the diagram is hidden collapses the panel. A layout effect, not a render-time adjustment like
   // `wasShort`, because the quiet collapse reads where focus is (a ref and the DOM); it still runs
@@ -948,13 +1005,12 @@ export function ToolbarPlanWorkspace({
    * order is a tie-break that never fires rather than a precedence.
    */
   const focusPlanSurface = useCallback(() => {
-    const grid = document.querySelector('[role="treegrid"]');
+    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
     if (grid) {
-      const stop = grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
-      (stop ?? (grid as HTMLElement)).focus();
+      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
       return;
     }
-    document.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
   }, []);
 
   const session = useSession();
@@ -1160,7 +1216,6 @@ export function ToolbarPlanWorkspace({
    * looks. That row flips to `required` in the same commit as this hoist.
    */
   const canEdit = model.canEditSchedule && !lateOverlayActive;
-  const ganttAnnounce = useAnnounce();
 
   // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
   // handler bound to the workspace root. React events follow the React tree, so this keeps working
@@ -1183,8 +1238,8 @@ export function ToolbarPlanWorkspace({
     onPaste: () => void model.pasteClipboard(),
   });
 
-  // The chromeless canvas is built once and placed in whichever layout (wide split / narrow pane) is
-  // active, so it isn't described twice and its viewport survives a pane switch. Remount per plan so
+  // The chromeless canvas is built once, so it isn't described twice and its viewport survives the
+  // short-body swap hiding its row. Remount per plan so
   // selection/viewport state never leaks across a plan→plan nav.
   // ONE derivation of which persisted dates draw a bar, handed to both hosts (ADR-0033). Written as
   // a single binding rather than the same expression twice, for the reason the architecture review
@@ -1241,7 +1296,9 @@ export function ToolbarPlanWorkspace({
     // this asks the grid to restore its own roving stop — the smallest seam that keeps focus inside
     // the widget rather than dropping it to `<body>`.
     onCellClosed: () => {
-      document.querySelector<HTMLElement>('[role="treegrid"] [role="row"][tabindex="0"]')?.focus();
+      focusOutsideInert(
+        document.querySelector<HTMLElement>('[role="treegrid"] [role="row"][tabindex="0"]'),
+      );
     },
     recordUpdate: model.recordActivityUpdate,
   });
@@ -1484,7 +1541,7 @@ export function ToolbarPlanWorkspace({
   const focusGanttGrid = useCallback(() => {
     const grid = document.querySelector('[role="treegrid"]');
     const stop = grid?.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
-    (stop ?? (grid as HTMLElement | null))?.focus();
+    focusOutsideInert(stop ?? (grid as HTMLElement | null));
   }, []);
 
   /**
@@ -1814,7 +1871,7 @@ export function ToolbarPlanWorkspace({
 
   // The docked-notes panel content (entry-route win 1) — the shared `SheetHeader` (title + Close, which
   // toggles the dock shut) over a scrollable, unbounded `PlanNotesSection`. Built once and placed in the
-  // wide right column or the narrow single pane. `headingRef` keeps the flag-off scroll target wired.
+  // right column. `headingRef` keeps the flag-off scroll target wired.
   const notesDockContent = (
     // A named landmark for the dock (a11y) — "Plan notes panel" so it doesn't collide with the inner
     // note-thread region. Escape closes it (the non-modal dock has no native cancel) and returns focus
@@ -2450,129 +2507,158 @@ export function ToolbarPlanWorkspace({
             data-testid="workspace-body"
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
-            {isWide ? (
-              // Wide: a vertical stack — the canvas row (canvas beside any open right dock) above
-              // the full-width activities foot. **A dock pushes the CANVAS only** (workspace
-              // visual polish item 8, 2026-08-28): the docks used to be full-height siblings of
-              // this whole stack, so opening one narrowed the foot row too — and a narrowed foot
-              // is exactly the wrap ADR-0114/0115 measured at 36–76 px of lost diagram. The
-              // product owner asked "when the right popout is open should it just push the canvas
-              // rather than the bottom toolbar?", and the geometry now says yes by construction:
-              // the docks are siblings of the stage inside the canvas row, and the foot spans the
-              // full width beneath both. Measured at 1646 (M0 → after): the Health dock's bottom
-              // edge moves from the window (888) to the foot's top (845), and with the dock open
-              // the foot spans its full 1369 px instead of narrowing to 944. (The M0 table's 1345
-              // was the pre-full-bleed width — M1 removed the 12 px frame before this landed.)
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div
-                  // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
-                  // already removes it from the tree), and the canvas keeps its viewport.
-                  hidden={swapped}
-                  onFocus={trackFocusIn}
-                  onBlur={trackFocusOut}
-                  className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
-                >
-                  {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
-                  panel (when open) is overlaid via the `relative` container. */}
-                  {/* No padding — see the single-pane branch below for why. */}
-                  {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
-                    pass; it is FULLY FLUSH now on the product owner's explicit steer — no radius,
-                    no hairline, no shadow, the diagram runs to the surfaces around it. */}
-                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-                    {surface}
-                    {legendPanel}
-                    {resourceStripPanel}
-                  </div>
+            {/* A vertical stack at EVERY width (ADR-0181) — the canvas row (canvas beside any open right
+              dock) above the full-width activities foot. **A dock pushes the CANVAS only**
+              (workspace visual polish item 8, 2026-08-28): the docks used to be full-height siblings
+              of this whole stack, so opening one narrowed the foot row too — and a narrowed foot is
+              exactly the wrap ADR-0114/0115 measured at 36–76 px of lost diagram. The product owner
+              asked "when the right popout is open should it just push the canvas rather than the
+              bottom toolbar?", and the geometry now says yes by construction: the docks are siblings
+              of the stage inside the canvas row, and the foot spans the full width beneath both.
+              Measured at 1646 (M0 → after): the Health dock's bottom edge moves from the window
+              (888) to the foot's top (845), and with the dock open the foot spans its full 1369 px
+              instead of narrowing to 944. (The M0 table's 1345 was the pre-full-bleed width — M1
+              removed the 12 px frame before this landed.) */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div
+                ref={canvasRowRef}
+                // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
+                // already removes it from the tree), and the canvas keeps its viewport.
+                hidden={swapped}
+                onFocus={trackFocusIn}
+                onBlur={trackFocusOut}
+                className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
+              >
+                {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+                panel (when open) is overlaid via the `relative` container. */}
+                {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
+                  pass; it is FULLY FLUSH now on the product owner's explicit steer — no radius,
+                  no hairline, no shadow, the diagram runs to the surfaces around it. */}
+                {/* **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
+                  card floating in a pane rather than as the surface the workspace exists to show, and
+                  it cost 8 px of height and 32 px of width for nothing. Separation from the band
+                  above is the band's own `border-b`; from the dock beside it, the dock's. */}
+                {/* **`inert` while a dock has taken the row** (retire-single-pane AC-2.4): the stage is
+                  then a sliver beside a dock that fills the body, and a focusable diagram nobody can
+                  see is a focus-visibility failure of its own. Laid out, not `display: none`, so the
+                  canvas keeps its viewport; the legend and the resource strip ride inside it.
 
-                  {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the
-                  canvas, never overlays; toggled by Comments. Its vertical splitter sets the width. */}
-                  {floatPathsDockActive ? (
-                    <>
+                  **Also while the row is too short to show a bar** (the collapsed panel on a body that
+                  holds the foot row and not the ruler above it). It is the STAGE that goes inert and not
+                  the row: the row also holds the four right docks, and an inert dock cannot take focus
+                  on mount or be closed from the keyboard. */}
+                <div
+                  inert={dockSqueezed || canvasRowTooShort}
+                  className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
+                >
+                  {surface}
+                  {legendPanel}
+                  {resourceStripPanel}
+                </div>
+
+                {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the
+                canvas, never overlays; toggled by Comments. Its vertical splitter sets the width. */}
+                {/* Each dock's resizer is withheld when `dockBounds` says it means nothing: a squeezed dock
+                  is pinned to the whole row, and one whose minimum already fills the body has no range
+                  (retire-single-pane AC-2.2). `max-w-full` on the dock is the visual bound on the first
+                  paint, before the observer has reported a width. */}
+                {floatPathsDockActive ? (
+                  <>
+                    {floatPathsBounds.resizable ? (
                       <PanelResizer
                         orientation="vertical"
-                        size={floatPathsWidth}
-                        min={FLOAT_PATHS_PANEL_MIN_WIDTH}
-                        max={floatPathsEffectiveMax}
+                        size={floatPathsBounds.width}
+                        min={floatPathsBounds.min}
+                        max={floatPathsBounds.max}
                         label="Resize float paths panel"
                         onResize={onFloatPathsResize}
                         pointerToSize={floatPathsPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
-                      {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
-                      visual polish item 7, 2026-08-28). The Project Explorer on the other side of
-                      the stage is `<Surface tone="panel">`; these three were `bg-card` on the page
-                      scope — two mechanisms for one near-white, the exact split-pair class
-                      ADR-0097 names, and the product owner saw it as "does the grey/white need
-                      standardising between the project explorer and the right panels?". One scope
-                      now serves both edges: every token inside the docks rebinds to the panel
-                      family with no component change, and `border-border` draws the seam in the
-                      panel's own vocabulary. */}
-                      <PanelSurface
-                        border="start"
-                        style={{ width: floatPathsWidth }}
-                        className="shrink-0"
-                      >
-                        {floatPathsDockContent}
-                      </PanelSurface>
-                    </>
-                  ) : null}
+                    ) : null}
+                    {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
+                    visual polish item 7, 2026-08-28). The Project Explorer on the other side of
+                    the stage is `<Surface tone="panel">`; these three were `bg-card` on the page
+                    scope — two mechanisms for one near-white, the exact split-pair class
+                    ADR-0097 names, and the product owner saw it as "does the grey/white need
+                    standardising between the project explorer and the right panels?". One scope
+                    now serves both edges: every token inside the docks rebinds to the panel
+                    family with no component change, and `border-border` draws the seam in the
+                    panel's own vocabulary. */}
+                    <PanelSurface
+                      border="start"
+                      data-right-dock="floatPaths"
+                      style={{ width: floatPathsBounds.width }}
+                      className="max-w-full shrink-0"
+                    >
+                      {floatPathsDockContent}
+                    </PanelSurface>
+                  </>
+                ) : null}
 
-                  {healthDockActive ? (
-                    <>
+                {healthDockActive ? (
+                  <>
+                    {healthBounds.resizable ? (
                       <PanelResizer
                         orientation="vertical"
-                        size={healthWidth}
-                        min={HEALTH_PANEL_MIN_WIDTH}
-                        max={healthEffectiveMax}
+                        size={healthBounds.width}
+                        min={healthBounds.min}
+                        max={healthBounds.max}
                         label="Resize health check panel"
                         onResize={onHealthResize}
                         pointerToSize={healthPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
-                      {/* `panel` scope — see the Float paths dock above (item 7). */}
-                      <PanelSurface
-                        border="start"
-                        style={{ width: healthWidth }}
-                        className="shrink-0"
-                      >
-                        {healthDockContent}
-                      </PanelSurface>
-                    </>
-                  ) : null}
+                    ) : null}
+                    {/* `panel` scope — see the Float paths dock above (item 7). */}
+                    <PanelSurface
+                      border="start"
+                      data-right-dock="health"
+                      style={{ width: healthBounds.width }}
+                      className="max-w-full shrink-0"
+                    >
+                      {healthDockContent}
+                    </PanelSurface>
+                  </>
+                ) : null}
 
-                  {revisionsDockActive ? (
-                    <>
+                {revisionsDockActive ? (
+                  <>
+                    {revisionBounds.resizable ? (
                       <PanelResizer
                         orientation="vertical"
-                        size={revisionWidth}
-                        min={REVISION_PANEL_MIN_WIDTH}
-                        max={revisionEffectiveMax}
+                        size={revisionBounds.width}
+                        min={revisionBounds.min}
+                        max={revisionBounds.max}
                         label="Resize revision comparison panel"
                         onResize={onRevisionResize}
                         pointerToSize={revisionPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
-                      {/* `panel` scope — see the Float paths dock above (item 7). */}
-                      <PanelSurface
-                        border="start"
-                        style={{ width: revisionWidth }}
-                        className="shrink-0"
-                      >
-                        {revisionsDockContent}
-                      </PanelSurface>
-                    </>
-                  ) : null}
+                    ) : null}
+                    {/* `panel` scope — see the Float paths dock above (item 7). */}
+                    <PanelSurface
+                      border="start"
+                      data-right-dock="revisions"
+                      style={{ width: revisionBounds.width }}
+                      className="max-w-full shrink-0"
+                    >
+                      {revisionsDockContent}
+                    </PanelSurface>
+                  </>
+                ) : null}
 
-                  {notesDockActive ? (
-                    <>
+                {notesDockActive ? (
+                  <>
+                    {notesBounds.resizable ? (
                       <PanelResizer
                         orientation="vertical"
-                        size={notesWidth}
-                        min={NOTES_PANEL_MIN_WIDTH}
-                        max={notesEffectiveMax}
+                        size={notesBounds.width}
+                        min={notesBounds.min}
+                        max={notesBounds.max}
                         label="Resize notes panel"
                         onResize={onNotesResize}
                         pointerToSize={notesPointerToSize}
@@ -2581,115 +2667,63 @@ export function ToolbarPlanWorkspace({
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
-                      {/* `panel` scope — see the Float paths dock above (item 7). */}
-                      <PanelSurface
-                        border="start"
-                        style={{ width: notesWidth }}
-                        className="shrink-0"
-                      >
-                        {notesDockContent}
-                      </PanelSurface>
-                    </>
-                  ) : null}
-                </div>
-
-                {/* The full-width foot: below the canvas row, outside any dock's column — see the
-                  branch comment above (item 8). */}
-                {collapsed ? (
-                  <ActivityPanelCollapsedBar
-                    onExpand={expandPanel}
-                    focusExpandOnMount={interacted}
-                  />
-                ) : (
-                  <>
-                    {/* Withheld while swapped: the panel owns the body, so there is no edge to drag.
-                      `contents` keeps the wrapper out of the flex layout; it is only here to hear
-                      the focus the unmount would strand. */}
-                    {swapped ? null : (
-                      <div className="contents" onFocus={trackFocusIn} onBlur={trackFocusOut}>
-                        <PanelResizer
-                          orientation="horizontal"
-                          size={panelHeight}
-                          min={PANEL_MIN_OPEN}
-                          max={effectiveMax}
-                          label="Resize activities panel"
-                          onResize={onResize}
-                          pointerToSize={pointerToSize}
-                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                        />
-                      </div>
-                    )}
-                    {/* The same box in both states, re-styled and never re-mounted, so the plan's
-                      facts and dock outlets (inside the panel's foot row) mount exactly once. */}
-                    <div
-                      ref={panelBoxRef}
-                      style={swapped ? undefined : { height: panelHeight }}
-                      className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
+                    ) : null}
+                    {/* `panel` scope — see the Float paths dock above (item 7). */}
+                    <PanelSurface
+                      border="start"
+                      data-right-dock="notes"
+                      style={{ width: notesBounds.width }}
+                      className="max-w-full shrink-0"
                     >
-                      <ActivityBottomPanel
-                        model={activityPanelModel}
-                        onCollapse={collapse}
-                        focusCollapseOnMount={interacted}
-                        diagramHidden={swapped}
-                        hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
-                        toolDisarmed={toolPutAway}
-                        collapseRef={collapseButtonRef}
+                      {notesDockContent}
+                    </PanelSurface>
+                  </>
+                ) : null}
+              </div>
+
+              {/* The full-width foot: below the canvas row, outside any dock's column — see the
+                branch comment above (item 8). */}
+              {collapsed ? (
+                <ActivityPanelCollapsedBar onExpand={expandPanel} focusExpandOnMount={interacted} />
+              ) : (
+                <>
+                  {/* Withheld while swapped: the panel owns the body, so there is no edge to drag.
+                    `contents` keeps the wrapper out of the flex layout; it is only here to hear
+                    the focus the unmount would strand. */}
+                  {swapped ? null : (
+                    <div className="contents" onFocus={trackFocusIn} onBlur={trackFocusOut}>
+                      <PanelResizer
+                        orientation="horizontal"
+                        size={panelHeight}
+                        min={PANEL_MIN_OPEN}
+                        max={effectiveMax}
+                        label="Resize activities panel"
+                        onResize={onResize}
+                        pointerToSize={pointerToSize}
+                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
                     </div>
-                  </>
-                )}
-              </div>
-            ) : healthDockActive ? (
-              // Narrow: a right dock doesn't fit — Health check takes the single pane, exactly as
-              // Float paths and notes do beside it (the one-pane-at-a-time narrow philosophy).
-              // `panel` scope here too (item 7): the same content on the page scope one breakpoint
-              // down would be the split-pair drift the item exists to close.
-              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {healthDockContent}
-              </Surface>
-            ) : floatPathsDockActive ? (
-              // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
-              // does below. The emphasis it drives is not visible while it holds the pane; that is the
-              // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
-              // `panel` scope for the same reason as the Health pane above (item 7).
-              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {floatPathsDockContent}
-              </Surface>
-            ) : notesDockActive ? (
-              // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
-              // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
-              // `panel` scope for the same reason as the Health pane above (item 7).
-              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {notesDockContent}
-              </Surface>
-            ) : (
-              <>
-                <WorkspaceViewToggle value={pane} onChange={setPane} />
-                <div
-                  className={cn(
-                    // **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
-                    // card floating in a pane rather than as the surface the workspace exists to show, and it
-                    // cost 8 px of height and 32 px of width for nothing. Separation from the band above is
-                    // the band's own `border-b`; from the dock below, the dock's.
-                    'relative min-h-0 flex-1 flex-col gap-2',
-                    pane === 'diagram' ? 'flex' : 'hidden',
                   )}
-                >
-                  {surface}
-                  {legendPanel}
-                  {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
-                  {resourceStripPanel}
-                </div>
-                <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
-                  {/* `hostsPlanSlots={false}`: this pane is `display: none` whenever the planner is on the
-                    diagram, which is the default, so an outlet here would register while invisible
-                    and take every docked strip out of the accessibility tree. Without one,
-                    `CanvasDock` renders in place — where those strips were before this epic, and
-                    the right answer on a screen with no spare row to dock into. */}
-                  <ActivityBottomPanel model={activityPanelModel} hostsPlanSlots={false} />
-                </div>
-              </>
-            )}
+                  {/* The same box in both states, re-styled and never re-mounted, so the plan's
+                    facts and dock outlets (inside the panel's foot row) mount exactly once. */}
+                  <div
+                    ref={panelBoxRef}
+                    style={swapped ? undefined : { height: panelHeight }}
+                    className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
+                  >
+                    <ActivityBottomPanel
+                      model={activityPanelModel}
+                      onCollapse={collapse}
+                      focusCollapseOnMount={interacted}
+                      diagramHidden={swapped}
+                      hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
+                      toolDisarmed={toolPutAway}
+                      collapseRef={collapseButtonRef}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </CanvasDockProvider>
 

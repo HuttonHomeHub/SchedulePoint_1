@@ -29,8 +29,9 @@ import { clearMeasurement, writeMeasurement } from './output';
  * premise M2 invalidates unless it is re-established, and it is measured here in the state M2 would
  * create as well as today's.
  *
- * **3. The layouts that mount NO handle row.** `plan-workspace-toolbar.tsx:1583` passes
- * `hostsDock={false}` for a pane that is `display: none` on the narrow layout, so on those widths
+ * **3. The layouts that mounted NO handle row.** (Historical: the below-`md` single-pane layout
+ * this probed was retired by ADR-0181, and every width now has the foot row.) The workspace passed
+ * `hostsDock={false}` for a pane that was `display: none` on the narrow layout, so on those widths
  * there is no handle row for the facts to merge into. A literal merge would therefore **delete the
  * plan's facts** on exactly the screens with least room to lose them — ADR-0081's defect, which is
  * why this task's brief says it must be observed and not inferred.

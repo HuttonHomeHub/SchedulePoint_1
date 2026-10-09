@@ -101,7 +101,19 @@ export function CanvasDockOutlet(): React.ReactElement {
     },
     [register, unregister],
   );
-  return <div ref={ref} className="flex min-w-0 flex-1 flex-wrap items-center gap-2" />;
+  // **`not-empty:min-w-72`: a strip in the outlet asks for room, or for a line of its own.** The
+  // outlet is `flex-1`, which is a ZERO basis, so in the foot row's wrapping line it used to take
+  // whatever the facts left — 152 px at 700, where the selection bar stacked into a 356 px column and
+  // painted over the facts (retire-single-pane, UX review). With a floor, a row too narrow for both
+  // wraps the outlet onto its own full-width line instead. Empty it asks for nothing, so the row's
+  // height and the wide layouts are unchanged. 18 rem, not 20: the foot row's content at the 320 px
+  // reflow width is 304 px, and a floor above that is a sideways scroll of its own.
+  return (
+    <div
+      ref={ref}
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72"
+    />
+  );
 }
 
 /**

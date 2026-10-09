@@ -337,9 +337,11 @@ entry stops being needed.
   panel that vanishes leaves a reader with no way back — and becomes an
   off-canvas `Sheet` below `lg` (64rem). Its spine keeps the organisation's
   destinations: folding it is how a planner buys canvas width, and it must not
-  take the product's secondary navigation with it. The plan workspace swaps
-  from split panes to a single-pane toggle below `md` (48rem);
-  tables scroll horizontally within a bordered container; dialogs become
+  take the product's secondary navigation with it. The plan workspace is one
+  layout at every width (ADR-0181): there is no below-`md` view toggle, a right
+  dock that would leave the diagram under 360 px takes the whole row and the
+  stage beside it is `inert`, and the short-body swap (ADR-0180) applies at every
+  width; tables scroll horizontally within a bordered container; dialogs become
   full-height sheets in narrow or zoomed windows where appropriate.
 - **Target size (ADR-0118).** WCAG 2.2 §2.5.8 (**24 px**, level AA) is the floor
   everywhere and is gated by `e2e-workspace-fit`. Under **`pointer: coarse`** the
@@ -372,16 +374,20 @@ ranking is declared rather than emergent**. Three rules, each of which this
 product got wrong once:
 
 - **A fact relocates; it never disappears.** The plan's facts (activity count,
-  critical count, project finish, schedule state) render in the collapsed
-  activities row when that row exists and in the shell's status row when it does
-  not. Below `md` the activities row **is not mounted at all** — measured, not
-  assumed — so a merge that took the row's existence for granted would have
-  deleted the plan's facts on exactly the screens with least room to lose them.
+  critical count, project finish, schedule state) render in the workspace's foot
+  row when that row exists and in the shell's status row when it does not. The
+  foot row wraps (ADR-0181), so at 320 px the facts take their own lines and
+  Recalculate and Expand stay on screen. Until ADR-0181 the row was **not mounted
+  at all** below `md` — measured, not assumed — and a merge that took its
+  existence for granted deleted the plan's facts on exactly the screens with
+  least room to lose them; the layout that did that is gone, the rule is not.
 - **Two hosts, one mechanism: a registry, never a branch.** An outlet registers
   itself, the component renders into it, and it renders **in place** when no
   outlet is registered. The in-place fallback is not a courtesy — it is what
   makes the three states one mechanism instead of three conditionals to get
-  wrong.
+  wrong. With the single-pane layout retired the workspace never takes the in-place
+  fallback (ADR-0181); the read-only guest view still does, and it stays the
+  contract for any host with no outlet.
 - **A collapse is triggered by the row's pressure, not by its own width.** A
   container query on the cluster asks "am I narrow?", and what decides whether
   the cluster should shed its labels is whether the **row** is tight, which

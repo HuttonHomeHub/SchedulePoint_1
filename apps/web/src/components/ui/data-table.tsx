@@ -601,12 +601,14 @@ export function DataTable<T>({
     // region shrinks to whatever its siblings leave, and in the activities panel's default 280px a
     // selection's bulk-assign bar left 50px: the header and no rows at all (measured 2026-09-28).
     // With the floor the region keeps its rows and the host scrolls the rest (see its body div).
-    // From `md` up only: the single-pane narrow layout gives the whole panel body ~89px at 390,
-    // less than the floor itself, so there it would make the body scroll with nothing selected.
+    // At every width (retire-single-pane, AC-3.4). It was `md:` only because the single-pane narrow
+    // layout gave the whole panel body ~89px at 390, less than the floor itself; that layout is gone
+    // and the short-body swap (ADR-0180) hands an expanded panel the whole body instead. M0 measured
+    // the one place the floor still bites: a body under the panel's own fixed parts (117px at
+    // 640 x 480, where the shell chrome leaves almost nothing) shows no rows with or without it, and
+    // the floor only moves the scroll from this region to the panel body.
     <div
-      className={
-        contained ? 'min-h-0 flex-1 scroll-pt-12 overflow-auto md:min-h-32' : 'overflow-x-auto'
-      }
+      className={contained ? 'min-h-32 flex-1 scroll-pt-12 overflow-auto' : 'overflow-x-auto'}
       role="region"
       aria-label={caption}
       {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}

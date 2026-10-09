@@ -690,7 +690,12 @@ async function measureOverflow(browser, orgSlug, planId) {
   return facts;
 }
 
-/** N1: total long-task time while the narrow single-pane workspace opens with the hidden pane mounted. */
+/**
+ * N1: total long-task time while the plan workspace opens at a narrow viewport (390x844). Re-described
+ * when ADR-0181 retired the below-`md` single-pane layout: readings before then included mounting the
+ * hidden Activities pane, which the unconditional layout no longer does (the table mounts on Expand),
+ * so a new N1 is not comparable with an old one. Still REPORTED_ONLY.
+ */
 /* eslint-disable no-undef -- `addInitScript`/`evaluate` callbacks below run in the PAGE. */
 async function measureNarrowOpen(browser, orgSlug, planId) {
   const context = await browser.newContext({ storageState: AUTH_STATE, viewport: NARROW_VIEWPORT });

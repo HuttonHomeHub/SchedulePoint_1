@@ -408,7 +408,8 @@ describe('DataTable — Column.width', () => {
       expect(region.className).toContain('overflow-auto');
       expect(region.className).not.toContain('overflow-x-auto');
       expect(region.className).toContain('flex-1');
-      expect(region.className).toContain('md:min-h-32');
+      // The floor holds at every width: no `md:` prefix (retire-single-pane AC-3.4).
+      expect(region.className.split(' ')).toContain('min-h-32');
       expect(region.className).toContain('scroll-pt-12');
 
       // `border-separate` because a collapsed-model row border is not guaranteed to survive a

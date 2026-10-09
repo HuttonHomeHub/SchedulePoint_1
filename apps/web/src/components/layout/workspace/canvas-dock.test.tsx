@@ -18,6 +18,19 @@ import { CanvasDock, CanvasDockOutlet, CanvasDockProvider } from './canvas-dock'
  * strips portal into a node on its way out of the document — visible nowhere, in no accessibility
  * tree, with nothing on screen looking wrong. Only the departing node's identity separates the two.
  */
+describe('CanvasDockOutlet', () => {
+  it('asks for room only when it holds a strip, so a narrow row wraps it instead of squeezing it', () => {
+    const { container } = render(
+      <CanvasDockProvider>
+        <CanvasDockOutlet />
+      </CanvasDockProvider>,
+    );
+    // **Verified red** by the journey, not here: jsdom has no layout. Without the floor the outlet's
+    // zero basis lets the facts take the line and the selection bar paints over them at 700 px.
+    expect(container.firstElementChild).toHaveClass('not-empty:min-w-72', 'flex-1');
+  });
+});
+
 describe('CanvasDock', () => {
   it('renders its children in place when no outlet has registered', () => {
     // The parity contract: the legacy stacked layout and every unit test that mounts `TsldPanel`
@@ -120,37 +133,6 @@ describe('CanvasDock', () => {
     expect(screen.getByTestId('row')).toContainElement(screen.getByText('Pick a predecessor.'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Drop' }));
-    expect(screen.getByTestId('scene')).toContainElement(screen.getByText('Pick a predecessor.'));
-  });
-});
-
-/**
- * **The narrow single-pane layout must not host the outlet, and this pins the seam.**
- *
- * Below `md` the workspace mounts BOTH panes and hides the inactive one with `display: none`. The
- * default pane is the diagram, so an outlet rendered inside the activities pane registers while
- * invisible — and `CanvasDock` would then portal the armed-tool statement, both selection bars and
- * the edit-conflict banner into a node that is in no accessibility tree at all. A WCAG 4.1.3 failure
- * that looks like nothing on screen, because the strips are simply absent.
- *
- * jsdom cannot see the CSS, so this asserts the seam rather than the symptom: `hostsPlanSlots={false}`
- * renders no outlet, which is what lets `CanvasDock` fall back to rendering in place — where those
- * strips were before this epic, and the right answer on a screen with no spare row to dock into.
- * Found by the accessibility gate; nothing in the repository exercised the narrow path.
- */
-describe('the activities panel only hosts the dock when it is asked to', () => {
-  it('renders no outlet with hostsPlanSlots=false, so the dock falls back to rendering in place', () => {
-    render(
-      <CanvasDockProvider>
-        <div data-testid="scene">
-          <CanvasDock>
-            <p>Pick a predecessor.</p>
-          </CanvasDock>
-        </div>
-        {/* Stands in for the hidden pane: a panel that does not host the outlet. */}
-        <div data-testid="hidden-pane" />
-      </CanvasDockProvider>,
-    );
     expect(screen.getByTestId('scene')).toContainElement(screen.getByText('Pick a predecessor.'));
   });
 });
