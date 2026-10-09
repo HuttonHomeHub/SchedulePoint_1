@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1588 web
 > source files with 47 Playwright suites beside the base journey, and
-> 181 ADRs.
+> 182 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -430,8 +430,8 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0027** _(Accepted)_ — Per-package release tagging & per-image versions → [`0027-per-package-release-tagging.md`](docs/adr/0027-per-package-release-tagging.md)
 - **ADR-0028** _(Accepted)_ — Single-editor plan edit-lock (advisory lease + peer hand-off + write gate) → [`0028-plan-edit-lock.md`](docs/adr/0028-plan-edit-lock.md)
 - **ADR-0029** _(Proposed; "mobile-first" amended by ADR-0179)_ — Persistent app-shell & hierarchy navigator — evolve `_authed` into a mounted-once shell, URL-derived selection, hand-rolled ARIA tree & virtualization → [`0029-persistent-hierarchy-navigator.md`](docs/adr/0029-persistent-hierarchy-navigator.md)
-- **ADR-0030** _(Proposed)_ — Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel → [`0030-canvas-first-plan-workspace.md`](docs/adr/0030-canvas-first-plan-workspace.md)
-- **ADR-0031** _(Proposed)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
+- **ADR-0030** _(Proposed; below-`md` rule superseded by ADR-0181)_ — Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel → [`0030-canvas-first-plan-workspace.md`](docs/adr/0030-canvas-first-plan-workspace.md)
+- **ADR-0031** _(Proposed; below-`md` rule superseded by ADR-0181)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
 - **ADR-0033** _(Accepted; amended by ADR-0148 — the two scheduling modes are gone)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
 - **ADR-0034** _(Accepted)_ — Engine conformance & validation methodology → [`0034-engine-conformance-methodology.md`](docs/adr/0034-engine-conformance-methodology.md)
@@ -581,6 +581,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
 - **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
 - **ADR-0180** _(Accepted; amends ADR-0030 and ADR-0092)_ — The panel takes the body when it cannot show rows → [`0180-the-panel-takes-the-body-when-it-cannot-show-rows.md`](docs/adr/0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)
+- **ADR-0181** _(Accepted; supersedes ADR-0030's and ADR-0031's below-`md` rule)_ — The below-`md` single-pane workspace is retired → [`0181-the-below-md-single-pane-workspace-is-retired.md`](docs/adr/0181-the-below-md-single-pane-workspace-is-retired.md)
 - **ADR-0183** _(Accepted; amends ADR-0118)_ — A row grows with the finger it holds, and the Gantt is the named exception → [`0183-a-row-grows-with-the-finger-it-holds.md`](docs/adr/0183-a-row-grows-with-the-finger-it-holds.md)
 
 A lighter-weight running log of smaller decisions is in

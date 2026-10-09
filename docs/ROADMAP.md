@@ -760,6 +760,14 @@ discriminators. Each becomes a spec/plan before build:
   whole body and hides the diagram, and Collapse brings it back as it was. The three-line deck (Part B)
   was considered and not built; only the Settings… gear icon was kept.
 
+- **One workspace layout at every width.** **Approved 2026-10-08; built as `retire-single-pane-workspace`
+  M0-M1** ([ADR-0181](adr/0181-the-below-md-single-pane-workspace-is-retired.md); spec and plan at
+  [`docs/specs/retire-single-pane-workspace/`](specs/retire-single-pane-workspace/)). The below-768 px
+  Diagram / Activities toggle is gone: a narrow window has the same canvas row and foot row as a larger one,
+  a dock that would leave the diagram under 360 px takes the row, and Compare revisions opens on a narrow
+  window. The shell chrome that leaves a short narrow window no workspace body is recorded as
+  `docs/TECH_DEBT.md` #471 and is not fixed here.
+
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
   [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu
