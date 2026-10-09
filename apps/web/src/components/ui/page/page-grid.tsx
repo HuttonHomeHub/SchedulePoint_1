@@ -18,8 +18,8 @@ export interface PageGridItemProps extends React.HTMLAttributes<HTMLDivElement> 
   /**
    * How much of the grid this section needs.
    *
-   * `wide` spans every column (`col-span-full`, so it needs no breakpoint); `narrow` takes one and pairs with its neighbour. **It is a statement
-   * about the CONTENT, not about importance** — a section is `wide` because its body is a table
+   * `wide` spans every column (`col-span-full`, so it needs no breakpoint); `narrow` takes one and
+   * pairs with its neighbour. **It is a statement about the CONTENT, not about importance** — a section is `wide` because its body is a table
    * that cannot be read at half width, never because it matters more. Importance is expressed by
    * position, which is also DOM order, which is also the order a screen reader walks.
    */
@@ -66,9 +66,10 @@ export interface PageGridItemProps extends React.HTMLAttributes<HTMLDivElement> 
  * container — see `StatGrid`). The frame is a plain `div`, no landmark and no role.
  *
  * **The frame carries the caller's `className`** (the `StatGrid` convention) and is always
- * `flex min-h-0 flex-1 flex-col`, so a parent that gives it a height — the landing's capped
- * workspace — gets a grid that fills it, and a block parent (Members, the staff console) makes
- * those three classes inert. `container-type: inline-size` also applies layout containment: the
+ * `flex min-h-0 flex-1 flex-col`, and the grid inside takes that height only from the split
+ * (`@6xl:min-h-0 @6xl:flex-1`): the landing's capped workspace gets two rows that share it, while
+ * in one column the boxes stack at their content height and the page scrolls. A block parent
+ * (Members, the staff console) makes the frame's three classes inert. `container-type: inline-size` also applies layout containment: the
  * frame becomes the containing block for any non-portalled `fixed`/`absolute` descendant, so
  * nothing inside a grid section may render one (`Menu` and `Tooltip` portal to `body`).
  */
@@ -82,7 +83,7 @@ export function PageGrid({
     <div className={cn('@container flex min-h-0 flex-1 flex-col', className)} {...props}>
       <div
         className={cn(
-          'grid min-h-0 flex-1 grid-cols-1 gap-6 @6xl:grid-cols-2',
+          'grid grid-cols-1 gap-6 @6xl:min-h-0 @6xl:flex-1 @6xl:grid-cols-2',
           rows === 'fit-then-fill' && '@6xl:grid-rows-[minmax(0,auto)_minmax(0,1fr)]',
         )}
       >

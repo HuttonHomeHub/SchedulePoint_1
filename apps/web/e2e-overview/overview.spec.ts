@@ -138,8 +138,9 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
           return {
             count: boxes.length,
             distinct: new Set(boxes.map((b) => Math.round(b?.y ?? -1))).size,
-            // A column is never narrower than 500 px whatever the window, Explorer or text size.
-            narrowest: Math.min(...boxes.map((b) => Math.round(b?.width ?? 0))) >= 500,
+            // A column is never narrower than 564 px (72rem less the gap, halved) whatever the
+            // window, Explorer or text size.
+            narrowest: Math.min(...boxes.map((b) => Math.round(b?.width ?? 0))) >= 564,
           };
         },
         { message: `the landing never settled into ${String(columns)} column(s)` },
@@ -210,11 +211,62 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     ).toBe(true);
   };
 
+  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows. With one
+  // plan every box is shorter than its floor, so a clamp to the floor and a box sized by its content
+  // read the same and the assertion below would pass against the defect it names.
+  await overviewPage.evaluate(async (org) => {
+    const call = async (path: string, body: object) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`POST ${path}: ${String(response.status)}`);
+      return ((await response.json()) as { data: { id: string } }).data;
+    };
+    const client = await call('/clients', { name: 'Filler Estates' });
+    const project = await call(`/clients/${client.id}/projects`, { name: 'Filler Works' });
+    for (let i = 1; i <= 6; i += 1) {
+      await call(`/projects/${project.id}/plans`, {
+        name: `Filler plan ${String(i)}`,
+        plannedStart: '2026-03-02',
+      });
+    }
+  }, orgSlug);
+  await overviewPage.reload();
+  await expect(section(overviewPage, 'Recently changed').getByRole('link').nth(5)).toBeVisible();
+
   await expectSameSequence('two columns at 1600');
   await axeBoth('two columns at 1600');
 
   await overviewPage.setViewportSize({ width: 1280, height: 800 });
   await settled(1);
+  // **In one column the boxes stack at the height their content needs and `<main>` scrolls.** A cap
+  // that survived the split clamped all four to their 220 px floor, each body scrolling on its own
+  // (ADR-0182, the accessibility review).
+  const stacked = await overviewPage.evaluate(() => {
+    const recent = [...document.querySelectorAll('main section[aria-labelledby]')].find(
+      (el) =>
+        document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ===
+        'Recently changed',
+    );
+    const body = recent?.querySelector('[tabindex="0"]');
+    const main = document.querySelector('main');
+    return {
+      boxHeight: Math.round(recent?.getBoundingClientRect().height ?? 0),
+      bodyClipped: body ? body.scrollHeight - body.clientHeight : -1,
+      mainScrolls: main ? main.scrollHeight > main.clientHeight : false,
+    };
+  });
+  expect(
+    stacked.boxHeight,
+    'the box is clamped to its floor, not sized by its rows',
+  ).toBeGreaterThan(300);
+  expect(stacked.bodyClipped, 'the box body scrolls on its own in one column').toBeLessThanOrEqual(
+    0,
+  );
+  expect(stacked.mainScrolls, 'the page does not scroll').toBe(true);
   await expectSameSequence('one column at 1280');
   await axeBoth('one column at 1280');
 

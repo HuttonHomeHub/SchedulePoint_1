@@ -25,6 +25,15 @@ describe('PageGrid', () => {
     }
     const grid = frame.firstElementChild as HTMLElement;
     expect(grid.className, 'an element is never its own query container').not.toMatch(/@container/);
+    // The height cap belongs to the two-column layout only: in one column the boxes stack at their
+    // content height and `<main>` scrolls.
+    for (const bare of ['min-h-0', 'flex-1']) {
+      expect(grid.className.split(/\s+/), `\`${bare}\` caps the one-column grid`).not.toContain(
+        bare,
+      );
+    }
+    expect(grid.className).toMatch(/@6xl:min-h-0/);
+    expect(grid.className).toMatch(/@6xl:flex-1/);
     expect(grid.className).toMatch(/grid-cols-1/);
     expect(grid.className).toMatch(/@6xl:grid-cols-2/);
   });

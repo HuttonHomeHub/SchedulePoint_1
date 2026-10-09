@@ -79,11 +79,33 @@ describe('PageGrid splits on its own width, in one place', () => {
   });
 
   it('uses no viewport breakpoint variant', () => {
-    expect(/(?:^|[\s'"`])(?:sm|md|lg|xl|2xl|wide):/.test(source)).toBe(false);
+    // `@` and `-` before the size are excluded so `@6xl:` and `max-` forms are judged on their own.
+    expect(
+      /(?:^|[^\w@-])(?:sm|md|lg|xl|2xl|max-[\w[\]-]+|min-[\w[\]-]+):/.test(source),
+      'a viewport variant is back in the primitive',
+    ).toBe(false);
   });
 
   it('uses one container size throughout', () => {
     const sizes = new Set([...source.matchAll(/@(\w+):/g)].map((m) => m[1]));
     expect([...sizes]).toEqual(['6xl']);
+  });
+});
+
+/**
+ * **`SectionCard fill` is keyed to the same split, in another file.** Its caps are container
+ * variants resolved against the `PageGrid` frame, so they must use the grid's size or a card would
+ * cap in a layout its grid has already stacked. Tailwind needs the literal class in each file, so
+ * the one threshold cannot be a shared constant; this holds the two copies together.
+ */
+describe('SectionCard fill uses the grid split', () => {
+  const strip = (file: string) =>
+    readFileSync(join(import.meta.dirname, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+  const sizes = (src: string) => new Set([...src.matchAll(/@(\w+):/g)].map((m) => m[1]));
+
+  it('names the same container size as PageGrid, and only that one', () => {
+    expect([...sizes(strip('section-card.tsx'))]).toEqual([...sizes(strip('page-grid.tsx'))]);
   });
 });
