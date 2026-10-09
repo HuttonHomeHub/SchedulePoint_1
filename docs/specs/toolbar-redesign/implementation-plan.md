@@ -233,6 +233,15 @@ is **M3's** assertion, and "no leading seam" (SC-12) is **M6 V2's**: neither hol
 
 ### Milestone M2: Every tool on its subject's surface
 
+> **M2 result (2026-10-09), recorded where the plan and the code disagreed** (`m2-measurement.md`).
+> Built as listed, with these deviations: **View ▾ is Zoom plus the folded sections in one column and
+> Insight overlays spanning two** (whole-section columns measured 593 px; the panel is 366 / 390 px at 1024 × 600),
+> **the Gantt's Columns folds too**, and the Minimap's fieldset is renamed **Navigation** so the deck's
+> "Panels" is the only group of that name. `ToolbarPopover` gained `description` (an icon-only trigger's
+> tooltip) and `panelWidth`; `useMeasuredBox` re-measures an open overlay when it resizes. **Open for the
+> owner:** labelling Apply levelled dates… costs coarse 1280 a DO line (3 lines after M4, not 2), and the cycling
+> conflict read-out will still wrap LOOK at the floor by about 56 px after M4.
+
 **Outcome:**
 
 - an `identity` registry row (Plan summary, Edit plan details) rendered by `Toolbar` after the status badge;
