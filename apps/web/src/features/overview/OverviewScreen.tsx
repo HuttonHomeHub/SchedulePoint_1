@@ -210,28 +210,18 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
             ) : null}
           </>
         ) : (
-          <PageGrid
-            /*
-              **The top row takes what it needs; the bottom row takes the rest.** Not two equal
-              halves, which is what M9 shipped and what the product owner reported against: "Jump
-              back in" holds at most five plans and "Needs your attention" is an inbox that is
-              usually short, so an equal split leaves surplus in the top row while the bottom row —
-              the two eight-row lists this screen exists to show — scrolls. The asymmetry is a
-              property of the content rather than of the position: the top row is naturally
-              bounded and small, the bottom holds the long lists.
-
-              `minmax(0, auto)` rather than bare `auto` for the top row so it can still shrink when
-              the window is short; `minmax(0, 1fr)` rather than `1fr` for the bottom because a grid
-              track's implicit minimum is its content, so plain `1fr` grows to fit eight rows and
-              the cap never binds. The floor that hands the page its scroll back is the items'
-              `min-h-55`, not these tracks.
-
-              **Only from `md`, where the grid is two columns.** Below that it is a single column
-              of four boxes and capping each at a share of the screen would be four scrollbars on
-              a phone — there, the workspace scrolls exactly as it does today.
-            */
-            className="min-h-0 flex-1 md:grid-rows-[minmax(0,auto)_minmax(0,1fr)]"
-          >
+          /*
+            **The top row takes what it needs; the bottom row takes the rest.** Not two equal
+            halves, which is what M9 shipped and what the product owner reported against: "Jump
+            back in" holds at most five plans and "Needs your attention" is an inbox that is
+            usually short, so an equal split leaves surplus in the top row while the bottom row —
+            the two eight-row lists this screen exists to show — scrolls. The asymmetry is a
+            property of the content rather than of the position: the top row is naturally
+            bounded and small, the bottom holds the long lists. `PageGrid` owns the template
+            (`rows`) because it is only meaningful where the grid is two columns; below that split
+            the four boxes stack at their own height and the workspace scrolls.
+          */
+          <PageGrid rows="fit-then-fill">
             {/*
               **The order is measured, not preferred, and it corrects the approved plan.**
 

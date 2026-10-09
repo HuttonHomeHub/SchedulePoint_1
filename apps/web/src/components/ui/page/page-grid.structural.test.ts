@@ -58,3 +58,32 @@ describe('PageGrid never displaces a section from its DOM position', () => {
     expect(pattern.test(source), `\`page-grid.tsx\` would re-order its children`).toBe(false);
   });
 });
+
+/**
+ * **The split is written once, and it is a container query.** `PageGrid` splits on its own width
+ * (ADR-0182), not on the viewport, because the Explorer moves the grid's width by up to 386 px at one
+ * window size and a viewport variant cannot see it. These pin the shape: no viewport variant
+ * anywhere in the file, and every container variant uses one size, so the column rule and the row
+ * template (which is keyed to the same split) cannot drift apart.
+ *
+ * **Verified red** by mutating one `@6xl` occurrence to `@5xl`, and by restoring `md:grid-cols-2`.
+ */
+describe('PageGrid splits on its own width, in one place', () => {
+  const source = readFileSync(PAGE_GRID, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  it('states the two-column rule and the full-width span', () => {
+    expect(source).toContain('@6xl:grid-cols-2');
+    expect(source).toContain('col-span-full');
+  });
+
+  it('uses no viewport breakpoint variant', () => {
+    expect(/(?:^|[\s'"`])(?:sm|md|lg|xl|2xl|wide):/.test(source)).toBe(false);
+  });
+
+  it('uses one container size throughout', () => {
+    const sizes = new Set([...source.matchAll(/@(\w+):/g)].map((m) => m[1]));
+    expect([...sizes]).toEqual(['6xl']);
+  });
+});
