@@ -27,6 +27,7 @@ import {
   isShortBody,
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
+import { useDockOpener } from './use-dock-opener';
 import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
 import {
   NOTES_PANEL_MAX_WIDTH,
@@ -398,6 +399,28 @@ export function ToolbarPlanWorkspace({
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
   }, [setNotesOpen, closeOtherDocks]);
+
+  /**
+   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
+   * listbox (ADR-0026 D7).
+   *
+   * **One callback rather than one per view**, because its caller is the placement-migration
+   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
+   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
+   * reason that one states.
+   *
+   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
+   * order is a tie-break that never fires rather than a precedence.
+   */
+  const focusPlanSurface = useCallback(() => {
+    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
+    if (grid) {
+      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
+      return;
+    }
+    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
+  }, []);
+
   // **The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
   // right columns, and each reserves `CANVAS_MIN_WIDTH` for the diagram only as a best-effort floor
   // (see `notesEffectiveMax` below) — two of them plus the Project Explorer rail on a 1280 px screen
@@ -407,41 +430,61 @@ export function ToolbarPlanWorkspace({
   const floatPaths = model.floatPaths;
   const openFloatPathsWith = floatPaths.openWith;
   const closeFloatPaths = floatPaths.close;
-  // Close the dock AND return focus to the control that opened it — the notes dock's `closeNotes`
-  // rule, copied deliberately. The panel's own Close button and its Escape handler both go through
-  // this, not through the raw `close`: unmounting the focused Close button with nothing to catch
-  // focus strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
+  // Close the dock AND return focus — the notes dock's `closeNotes` rule, copied deliberately. The
+  // panel's own Close button and its Escape handler both go through this, not through the raw
+  // `close`: unmounting the focused Close button with nothing to catch focus strands it on `<body>`
+  // (WCAG 2.4.3), which is what shipped until the a11y gate found it.
   //
-  // Searched from `document`, not `rootRef`: the control is in the plan's foot row, which is not a
-  // DOM descendant of the workspace root. **It is the selection bar's item now** (toolbar-redesign
-  // M2-T4), present in both views whenever one activity is selected. When the panel was opened from
-  // a Gantt row menu on an activity that is not the selection, or the selection has since gone
-  // plural, there is no such control to return to and focus stays where the close left it — the
-  // panel's own Close button unmounts onto the page, which is the same outcome as any dock closed
-  // with its opener gone. The deck's old fallback to a `⋯` trigger named a control ADR-0109 D1
-  // deleted.
+  // **Three destinations, in order** (ADR-0135's hand-off, for a dock rather than a roving item):
+  // the selection bar's Float paths control, which exists only while ONE activity is selected and is
+  // searched from `document` because the plan's foot row is not a descendant of the workspace root;
+  // else the control the panel was opened from, if it is still in the document (a Gantt row's `⋯`);
+  // else the plan surface itself. The middle step is what the first version lacked: opened from a
+  // row menu with nothing selected there is no bar control, and focus went to `<body>`, which also
+  // silently disables every workspace accelerator (they are handlers on the root).
+  const floatPathsOpener = useDockOpener();
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
-    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
-  }, [closeFloatPaths]);
+    const opener = floatPathsOpener.take();
+    const barControl = document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]');
+    if (barControl) barControl.focus();
+    else if (opener) opener.focus();
+    else focusPlanSurface();
+  }, [closeFloatPaths, floatPathsOpener, focusPlanSurface]);
 
   /**
-   * Open Float paths into `targetId`, or close the panel if it is already showing. The target is
-   * **the activity the control belongs to** — the selection bar's activity, or the Gantt row the
-   * menu was opened on — rather than "the workspace selection", because a row menu acts on its own
-   * row (`rowMenuContextFor`). The old deck item read the selection, which had to exist; this takes
-   * it as an argument, so a target is required and never inferred (CQ-2).
+   * Open Float paths into `targetId`, close it when it is already showing THAT activity, or
+   * **retarget** when it is showing another. The target is **the activity the control belongs to** —
+   * the selection bar's activity, or the Gantt row the menu was opened on — rather than "the
+   * workspace selection", because a row menu acts on its own row (`rowMenuContextFor`). The old deck
+   * item read the selection, which had to exist; this takes it as an argument, so a target is
+   * required and never inferred (CQ-2). A press on a control whose activity is not the target must
+   * not close the panel: its `aria-pressed` says "off", and a press on an off control turns it on.
+   *
+   * The opener is recorded at open time. A row menu's item is the active element when this runs, and
+   * it unmounts with its menu — which restores focus to the `⋯` trigger a frame later — so a menu
+   * item is resolved to its trigger there, after the menu has handed focus back.
    */
   const toggleFloatPathsInto = useCallback(
     (targetId: string) => {
-      if (floatPaths.open) {
+      if (floatPaths.open && floatPaths.targetId === targetId) {
         closeFloatPathsAndFocus();
         return;
       }
-      closeOtherDocks('floatPaths');
+      if (!floatPaths.open) {
+        floatPathsOpener.remember();
+        closeOtherDocks('floatPaths');
+      }
       openFloatPathsWith(targetId);
     },
-    [floatPaths.open, closeFloatPathsAndFocus, openFloatPathsWith, closeOtherDocks],
+    [
+      floatPaths.open,
+      floatPaths.targetId,
+      floatPathsOpener,
+      closeFloatPathsAndFocus,
+      openFloatPathsWith,
+      closeOtherDocks,
+    ],
   );
 
   // Close the health dock AND return focus — the Float-paths rule verbatim: the menu item that
@@ -993,26 +1036,6 @@ export function ToolbarPlanWorkspace({
    * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
    * both problems go away at once: it is self-invalidating.
    */
-  /**
-   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
-   * listbox (ADR-0026 D7).
-   *
-   * **One callback rather than one per view**, because its caller is the placement-migration
-   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
-   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
-   * reason that one states.
-   *
-   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
-   * order is a tie-break that never fires rather than a precedence.
-   */
-  const focusPlanSurface = useCallback(() => {
-    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
-    if (grid) {
-      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
-      return;
-    }
-    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
-  }, []);
 
   const session = useSession();
   const migrationUserId = session.data?.user.id ?? null;
@@ -1483,7 +1506,10 @@ export function ToolbarPlanWorkspace({
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
       selectionCanvas={selectionCanvas}
-      floatPathsOpen={floatPaths.open}
+      floatPathsOpen={
+        floatPaths.open &&
+        floatPaths.targetId === (model.selectedActivityId ?? model.logicActivity?.id)
+      }
       onToggleFloatPaths={onToggleFloatPaths}
     />
   );
@@ -1640,7 +1666,10 @@ export function ToolbarPlanWorkspace({
     },
     // Float paths on the Gantt's bar and row menu (toolbar-redesign M2-T4): the same toggle the
     // diagram's bar receives (minus the diagram's swap), so the two views open the panel one way.
-    floatPathsOpen: floatPaths.open,
+    // Pressed means THIS activity is the target — not that the panel is open for some other one.
+    floatPathsOpen:
+      floatPaths.open &&
+      floatPaths.targetId === (model.selectedActivityId ?? model.logicActivity?.id),
     // Not wrapped in `withDiagram`: the Gantt has no diagram to collapse or restore, and wrapping
     // would make this input read the swap's refs during render (`react-hooks/refs`).
     onToggleFloatPaths: (activity) => toggleFloatPathsInto(activity.id),
@@ -1663,6 +1692,7 @@ export function ToolbarPlanWorkspace({
       ...ganttSelectionInput,
       selectedId: activity.id,
       selectionCount: 1,
+      floatPathsOpen: floatPaths.open && floatPaths.targetId === activity.id,
     });
 
   /**

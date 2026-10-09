@@ -194,8 +194,14 @@ test('a planner opens Float paths from the Gantt bar and from a row menu', async
   const floatPaths = bar.getByRole('button', { name: 'Float paths', exact: true });
   await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
 
-  // By keyboard from the bar: Enter opens the panel, and closing it returns focus to the button.
-  await floatPaths.focus();
+  // By keyboard from the bar, reached by Tab from the selected row rather than by `focus()`: Enter
+  // opens the panel, and closing it returns focus to the button.
+  await ganttRow(page, 'Seeded 0').focus();
+  for (let i = 0; i < 12; i += 1) {
+    if (await floatPaths.evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect(floatPaths, 'Tab never reached the bar\u2019s Float paths').toBeFocused();
   await page.keyboard.press('Enter');
   const panel = page.getByRole('region', { name: 'Float paths' });
   await expect(panel).toBeVisible();
@@ -208,11 +214,101 @@ test('a planner opens Float paths from the Gantt bar and from a row menu', async
   // From another row's menu: the menu acts on ITS row, not on the selection, so the panel opens
   // into Seeded 1 while Seeded 0 stays selected.
   await ganttRow(page, 'Seeded 1').getByRole('button', { name: 'Actions for Seeded 1' }).click();
-  await page.getByRole('menuitem', { name: 'Float paths' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Float paths' }).click();
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Seeded 1');
   await panel.getByRole('button', { name: 'Close float paths' }).click();
   await expect(panel).toHaveCount(0);
+});
+
+/**
+ * **Float paths opened from a row menu with NOTHING selected hands focus back, and says which row it
+ * is on** (toolbar-redesign M2 review). There is no bar control then, so the first version's close
+ * focused nothing and left `<body>` holding focus — which also switches off every workspace
+ * accelerator. The panel's own Close button, and Escape, both go through the hand-off; the opener
+ * (the row's `Actions` button) is where focus lands.
+ *
+ * It also pins the three states the control reports: the row-menu item is a checkbox that says it is
+ * on, the bar's button is pressed only for the activity the panel is showing, and pressing it for a
+ * different activity retargets the panel rather than closing it.
+ */
+test('Float paths from a row menu with nothing selected returns focus, and the controls say which activity is open', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+  await expect(page.getByRole('toolbar', { name: /Actions for/ })).toHaveCount(0);
+
+  const panel = page.getByRole('region', { name: 'Float paths' });
+  const trigger = ganttRow(page, 'Seeded 1').getByRole('button', { name: 'Actions for Seeded 1' });
+  const activeIsBody = (): Promise<boolean> =>
+    page.evaluate(() => document.activeElement === document.body);
+
+  // Close by the panel's own button.
+  await trigger.click();
+  const item = page.getByRole('menuitemcheckbox', { name: 'Float paths' });
+  await expect(item).toHaveAttribute('aria-checked', 'false');
+  await item.click();
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Close float paths' }).click();
+  await expect(panel).toHaveCount(0);
+  expect(await activeIsBody(), 'focus fell to <body> after Close').toBe(false);
+  await expect(trigger).toBeFocused();
+
+  // Close by Escape.
+  await trigger.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Float paths' }).click();
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Close float paths' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  expect(await activeIsBody(), 'focus fell to <body> after Escape').toBe(false);
+
+  // The row menu reports the open panel as ITS row's, and only its row's.
+  await trigger.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Float paths' }).click();
+  await expect(panel).toContainText('Seeded 1');
+  await page.keyboard.press('Escape');
+  await trigger.click();
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Float paths' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('Escape');
+  const other = ganttRow(page, 'Seeded 2').getByRole('button', { name: 'Actions for Seeded 2' });
+  await other.click();
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Float paths' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+  await page.keyboard.press('Escape');
+
+  // The bar's button is pressed for the panel's own activity, and retargets for any other.
+  await ganttRow(page, 'Seeded 0').click();
+  const floatPaths = page
+    .getByRole('toolbar', { name: /Actions for/ })
+    .getByRole('button', { name: 'Float paths', exact: true });
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
+  await floatPaths.click();
+  await expect(panel).toContainText('Seeded 0');
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'true');
+  await trigger.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Float paths' }).click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Seeded 1');
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
+  await floatPaths.click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Seeded 0');
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the docked bar in the Gantt is accessible', async ({ page }) => {

@@ -122,7 +122,9 @@ describe('the items', () => {
     // and a reader without the pen must still be able to open it.
     const toggleFloatPaths = vi.fn();
     openMenu(context({ canEditSchedule: false, toggleFloatPaths }));
-    const item = screen.getByRole('menuitem', { name: /^Float paths/ });
+    // A checkbox, because it is a standing panel: the item says whether it is on.
+    const item = screen.getByRole('menuitemcheckbox', { name: /^Float paths/ });
+    expect(item).toHaveAttribute('aria-checked', 'false');
     expect(item).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(item);
     expect(toggleFloatPaths).toHaveBeenCalledTimes(1);
@@ -130,7 +132,27 @@ describe('the items', () => {
 
   it('omits Float paths when the host has no panel to open, rather than lighting it inert', () => {
     openMenu(context({ toggleFloatPaths: null }));
+    expect(screen.queryByRole('menuitemcheckbox', { name: /^Float paths/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /^Float paths/ })).toBeNull();
+  });
+
+  it('says the panel is on for its own row', () => {
+    openMenu(context({ floatPathsOpen: true, toggleFloatPaths: vi.fn() }));
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Float paths/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('puts the looking tools before the edits and Delete last', () => {
+    openMenu(context({ toggleFloatPaths: vi.fn() }));
+    const names = [...screen.getByRole('menu').querySelectorAll('[role^="menuitem"]')].map(
+      (el) => el.textContent?.trim() ?? '',
+    );
+    const at = (label: RegExp): number => names.findIndex((n) => label.test(n));
+    expect(at(/^Float paths/)).toBeGreaterThan(-1);
+    expect(at(/^Float paths/)).toBeLessThan(at(/^Edit/));
+    expect(at(/^Delete/), 'Delete is not last').toBe(names.length - 1);
   });
 
   it('offers Make milestone… on a zero-duration task and converts it (ADR-0162 decision 4)', () => {
