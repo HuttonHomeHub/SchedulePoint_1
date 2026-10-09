@@ -34,6 +34,8 @@ Dependencies point **down** the tiers only. Primitives never import feature code
   One primary component per file; co-locate tightly-coupled subcomponents.
 - **Hooks:** `useCamelCase` (`useMediaQuery`), in `hooks/` (shared) or a
   feature's `hooks/`.
+  `useCoarsePointer` (`components/ui/`) sits beside `useMediaQuery` and is the one JS spelling of
+  `(pointer: coarse)`, for a number no class can reach (a virtualized row's height).
 - **Types/interfaces:** `PascalCase`; a component's props are `‹Name›Props`.
 - **Variants:** named, semantic values (`intent="destructive"`, `size="sm"`) —
   never style-leaking names like `blueBig`. For a row's icon button: a target in a row that grows

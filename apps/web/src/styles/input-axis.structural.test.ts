@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { treeRowHeight } from '@/features/navigator/components/HierarchyTree';
+import { treeRowHeight } from '@/features/navigator/lib/tree-row-geometry';
 import { declarations, readGlobalsCss } from '@/test/css-blocks';
 import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
 
@@ -125,7 +125,10 @@ describe('the JS side of the input axis', () => {
 
   it("gives the tree's coarse row height the coarse --control-h, so JS and CSS cannot disagree", () => {
     // The tree's rows are a number the virtualizer multiplies by, so they are the one control
-    // height that cannot read the token. 2.75rem at the default root size is 44 px.
+    // height that cannot read the token. 2.75rem at the default root size is 44 px — this
+    // assumes the 16 px browser-default root font, which globals.css leaves alone ("never lock the
+    // root size in px"). A user's larger text size scales the token but not the virtualizer's
+    // literal — that is the same limit as the rows' fixed heights, not a defect of this parity check.
     const rem = Number.parseFloat(declarations(coarseBlockBody()).get('--control-h') ?? '');
     expect(treeRowHeight(true)).toBe(rem * 16);
   });

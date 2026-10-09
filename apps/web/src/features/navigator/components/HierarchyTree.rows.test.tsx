@@ -1,15 +1,13 @@
 import type { ClientSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { defaultRangeExtractor } from '@tanstack/react-virtual';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useReducer } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  anchorAt,
-  HierarchyTree,
-  pinnedRange,
-  reanchoredOffset,
-  treeRowHeight,
-} from './HierarchyTree';
+import { anchorAt, pinnedRange, reanchoredOffset, treeRowHeight } from '../lib/tree-row-geometry';
+
+import { HierarchyTree } from './HierarchyTree';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 
@@ -33,6 +31,10 @@ vi.mock('@tanstack/react-virtual', async (importActual) => ({
     .defaultRangeExtractor,
   useVirtualizer: (options: { count: number; estimateSize: (index: number) => number }) => {
     virtualizer.options = options;
+    // The real `measure()` notifies the virtualizer, which re-renders the component on its own; the
+    // restore is deliberately applied on THAT render (see the effect in `HierarchyTree`), so the
+    // stub has to re-render too or the restore would never be reachable.
+    const [, rerender] = useReducer((count: number) => count + 1, 0);
     const size = options.estimateSize(0);
     return {
       getTotalSize: () => options.count * size,
@@ -44,7 +46,10 @@ vi.mock('@tanstack/react-virtual', async (importActual) => ({
           size,
         })),
       scrollToIndex: () => {},
-      measure: virtualizer.measure,
+      measure: () => {
+        virtualizer.measure();
+        rerender();
+      },
       scrollToOffset: virtualizer.scrollToOffset,
     };
   },
@@ -85,8 +90,8 @@ function setPointer(next: boolean): void {
 beforeEach(() => {
   coarse = false;
   listeners.clear();
-  virtualizer.measure.mockClear();
-  virtualizer.scrollToOffset.mockClear();
+  virtualizer.measure.mockReset();
+  virtualizer.scrollToOffset.mockReset();
   window.matchMedia = ((query: string) => ({
     get matches() {
       return query.includes('pointer: coarse') && coarse;
@@ -146,11 +151,13 @@ describe('pinnedRange', () => {
   const range = { startIndex: 0, endIndex: 5, overscan: 2, count: 100 };
 
   it('adds the pinned indexes to a window that excludes them, in order', () => {
-    expect(pinnedRange(range, [40, 20])).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 20, 40]);
+    expect(pinnedRange(defaultRangeExtractor(range), [40, 20])).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 20, 40,
+    ]);
   });
 
   it('ignores an absent pin (-1) and a pin already inside the window', () => {
-    expect(pinnedRange(range, [-1, 3])).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(pinnedRange(defaultRangeExtractor(range), [-1, 3])).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
   });
 });
 
@@ -206,16 +213,28 @@ describe('HierarchyTree rows follow the pointer', () => {
     expect(virtualizer.scrollToOffset.mock.calls[0]?.[0]).toBeCloseTo(300, 2);
   });
 
-  it('uses the scroll captured BEFORE the browser limited it, not the limited one', async () => {
+  it('restores from the tracked anchor, not from a scrollTop read at flip time (defensive)', async () => {
     coarse = true;
     const tree = await renderTree();
     scrollTo(tree, 1600);
-    // The content shrinks 44 → 28 px a row, so the browser caps `scrollTop` at the new maximum
-    // (1400 − 600 = 800) during layout, before any effect runs. No scroll event has been handled
-    // yet; a restore that read `scrollTop` here would ask for 800 × 28/44 and land far short.
+    // Should `scrollTop` already differ when the flip lands (no scroll event handled yet), the
+    // restore must still start from the last position the user scrolled to. Reading `scrollTop`
+    // here would ask for 800 × 28/44 and land far short. This is NOT how the browser limits the
+    // offset in practice (that is the stale-sizer case in `HierarchyTree.pinning.test.tsx`).
     Object.defineProperty(tree, 'scrollTop', { configurable: true, value: 800 });
     setPointer(false);
     expect(virtualizer.scrollToOffset.mock.calls[0]?.[0]).toBeCloseTo(1018.18, 2);
+  });
+
+  it('applies the restore on the re-render measure() causes, not in the same commit', async () => {
+    const tree = await renderTree();
+    scrollTo(tree, 300);
+    const order: string[] = [];
+    virtualizer.measure.mockImplementation(() => order.push('measure'));
+    virtualizer.scrollToOffset.mockImplementation(() => order.push('scroll'));
+    setPointer(true);
+    // measure() first; the scroll only after it, on the next commit when the sizer is the new height.
+    expect(order).toEqual(['measure', 'scroll']);
   });
 
   it('keeps tracking from the re-based anchor across a second flip', async () => {

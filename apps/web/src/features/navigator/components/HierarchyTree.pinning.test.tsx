@@ -146,13 +146,29 @@ describe('HierarchyTree pins the focused row through a pointer change', () => {
     expect(row.style.transform).toBe(`translateY(${String(49 * 28)}px)`);
   });
 
-  it('asks the real scroller to move, once, to the re-based offset', async () => {
+  it('lands on the same rows: the final scroll is scrollTop × 44/28 against a real-height sizer', async () => {
     await renderWithFarRowFocused();
+    const tree = screen.getByRole('tree');
+    const sizer = tree.firstElementChild as HTMLElement;
+    // jsdom has no layout (scrollHeight and clientHeight are 0, so every clamp would be to 0). Give
+    // the scroller what a browser gives it: a viewport of 600 and a scrollable height that FOLLOWS
+    // THE SIZER'S CURRENT style.height (plus the scroller's 8 px of vertical padding). That is the
+    // property the defect turns on — the virtualizer clamps `scrollToOffset` to this maximum, and
+    // in the commit where the pointer flips the sizer is still the old height.
+    Object.defineProperty(tree, 'clientHeight', { configurable: true, value: 600 });
+    Object.defineProperty(tree, 'scrollHeight', {
+      configurable: true,
+      get: () => Number.parseFloat(sizer.style.height) + 8,
+    });
+    // 70 % of the 1400 px range: past the ~60 % where a clamp to the OLD maximum (808) bites.
+    Object.defineProperty(tree, 'scrollTop', { configurable: true, value: 1000 });
+    fireEvent.scroll(tree);
     scrollTo.mockClear();
+
     setPointer(true);
-    // The virtualizer clamps to its own maximum (50 × 44 − 600 = 1600); the point here is that the
-    // request reaches `scrollTo` at all, through `measure()` and `scrollToOffset`.
-    expect(scrollTo).toHaveBeenCalled();
-    expect(scrollTo.mock.lastCall?.[0]).toMatchObject({ top: expect.any(Number) });
+
+    const lastTop = (scrollTo.mock.lastCall?.[0] as { top: number } | undefined)?.top;
+    // 1000 px at 28 px is row 35.7; at 44 px that is 1571.43 — inside the new maximum of 1608.
+    expect(lastTop).toBeCloseTo((1000 * 44) / 28, 1);
   });
 });

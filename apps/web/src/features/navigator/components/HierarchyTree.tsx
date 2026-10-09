@@ -8,6 +8,13 @@ import { useHierarchyTree, type LazyLoadOutcome } from '../hooks/use-hierarchy-t
 import { useNavigatorCrud, type NodeActionTarget } from '../lib/navigator-crud-context';
 import { nodeActions } from '../lib/tree-actions';
 import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '../lib/tree-model';
+import {
+  anchorAt,
+  pinnedRange,
+  reanchoredOffset,
+  treeRowHeight,
+  type RowAnchor,
+} from '../lib/tree-row-geometry';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -24,54 +31,6 @@ const KIND_ICON: Record<NodeKind, typeof Building2> = {
   project: Folder,
   plan: CalendarRange,
 };
-
-/**
- * Row height (px) for the pointer in use. Rows are single-line, so no per-item measurement is
- * needed — but the height is a number the virtualizer multiplies by, so it cannot come from a
- * `pointer-coarse:` class and must be stated here. 44 is the house rule (ADR-0118 D1; `--control-h`
- * under `@media (pointer: coarse)`, which `treeRowHeight.test` pins to this literal). The cost is
- * measured, not estimated (`docs/specs/dense-row-touch-targets/m0-measurement.md`): at 1912 × 1104
- * on touch the tree shows 20 rows at 28 and 12 at 44 (-40 %), and at 1024 × 600 it shows 4 and
- * 2 (-50 %), whole rows only.
- */
-export function treeRowHeight(coarse: boolean): number {
-  return coarse ? 44 : 28;
-}
-
-/**
- * Where the scroller is, expressed in rows so it survives a change of row height: the row at the
- * top, how far into it (px), and the height those two were measured at.
- */
-export interface RowAnchor {
-  index: number;
-  intraOffset: number;
-  height: number;
-}
-
-export function anchorAt(scrollTop: number, height: number): RowAnchor {
-  const index = Math.floor(scrollTop / height);
-  return { index, intraOffset: scrollTop - index * height, height };
-}
-
-/** The `scrollTop` that keeps the same row, the same fraction into it, at `height`. */
-export function reanchoredOffset(anchor: RowAnchor, height: number): number {
-  return anchor.index * height + (anchor.intraOffset * height) / anchor.height;
-}
-
-/**
- * The rows to mount: the virtualizer's window plus every pinned index. Always keeping the focused,
- * selected and open-menu rows mounted lets roving-tabindex focus, deep-link selection and menu
- * focus-return reach them even when scrolled out of the window — and lets a re-layout (a pointer
- * change resizes every row) leave focus on the element it was on (WCAG 2.4.3).
- */
-export function pinnedRange(
-  range: Parameters<typeof defaultRangeExtractor>[0],
-  pins: readonly number[],
-): number[] {
-  const indices = new Set(defaultRangeExtractor(range));
-  for (const pin of pins) if (pin >= 0) indices.add(pin);
-  return [...indices].sort((a, b) => a - b);
-}
 
 const STATE_LABEL: Record<'loading' | 'error', string> = {
   loading: 'Loading…',
@@ -247,16 +206,15 @@ export function HierarchyTree({
 
   const rangeExtractor = useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) =>
-      pinnedRange(range, [activeIndex, selectedIndex, menuIndex]),
+      pinnedRange(defaultRangeExtractor(range), [activeIndex, selectedIndex, menuIndex]),
     [activeIndex, selectedIndex, menuIndex],
   );
 
   const rowHeight = treeRowHeight(useCoarsePointer());
   // Where the scroller is, in rows, kept current by `onScroll` and re-based only by the layout
-  // effect below. It is a ref written on every scroll and NOT read after the fact because the
-  // browser clamps `scrollTop` during layout when the content shrinks (coarse → fine, the keyboard
-  // cover going on) — before any effect runs — so an effect that read `scrollTop` would read the
-  // already-clamped value and restore the wrong row. `height` is the height the DOM currently
+  // effect below. It is a ref written on every scroll (a state would re-render the tree on every
+  // scroll event) and it is NOT recomputed from `scrollTop` at flip time, so the flip works from
+  // the last position the user actually scrolled to. `height` is the height the DOM currently
   // lays out with, which is why only that effect, and never a render, may change it.
   const anchorRef = useRef<RowAnchor>(anchorAt(0, rowHeight));
 
@@ -280,16 +238,31 @@ export function HierarchyTree({
 
   // A pointer change resizes every row. The virtualizer caches the sizes it has seen and keys its
   // measurements on that cache, not on `estimateSize` — so without `measure()` it would keep laying
-  // rows (including the pinned ones) out at the old height — and the scroll offset, which is in
-  // pixels, would land on a different row. No `setState` here (this component is outside the React
-  // Compiler's analysis, but the rule is the same): `measure()` notifies the virtualizer, which
-  // re-renders on its own. The unchanged-height early return also makes this a no-op on first
+  // rows (including the pinned ones) out at the old height. No `setState` here (this component is
+  // outside the React Compiler's analysis, but the rule is the same): `measure()` notifies the
+  // virtualizer, which re-renders on its own.
+  //
+  // **The scroll cannot be restored in the same effect** (ADR-0111; virtual-core `getTotalSize`,
+  // `scrollToOffset`): in this commit the sizer is still the OLD height, `measure()` only schedules
+  // the re-render, and `scrollToOffset` clamps to the DOM's stale `scrollHeight - clientHeight` —
+  // and stores the clamped value as its target, so nothing corrects it later. Fine → coarse past
+  // ~60 % of the list would land on the wrong rows. So this effect stashes the target, and the
+  // effect declared BEFORE it (which therefore runs first within a commit, and so only ever sees a
+  // target stashed by a previous commit) applies it on the re-render `measure()` causes, when the
+  // sizer has the new height. The unchanged-height early return also makes this a no-op on first
   // mount and under StrictMode's second run.
+  const pendingRestoreRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pendingRestoreRef.current === null) return;
+    const offset = pendingRestoreRef.current;
+    pendingRestoreRef.current = null;
+    virtualizer.scrollToOffset(offset);
+  });
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (anchor.height === rowHeight) return;
     virtualizer.measure();
-    virtualizer.scrollToOffset(reanchoredOffset(anchor, rowHeight));
+    pendingRestoreRef.current = reanchoredOffset(anchor, rowHeight);
     anchorRef.current = {
       index: anchor.index,
       intraOffset: (anchor.intraOffset * rowHeight) / anchor.height,
