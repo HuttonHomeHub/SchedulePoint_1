@@ -1085,6 +1085,13 @@ interface CoarseSurface {
   /** The surface is the activities panel's table, which is collapsed until it is expanded. */
   activities?: true;
   /**
+   * Skipped below this viewport height. At 1024 × 600 the activities panel is 140 px tall and sits
+   * at y 497..625 on a 600 px viewport, so no row is painted inside the viewport and the sweep has
+   * nothing to measure (`docs/specs/dense-row-touch-targets/m0-measurement.md` §2) — the table's
+   * floor is covered by the unit tier and the device sheet, not by this projection.
+   */
+  minHeight?: number;
+  /**
    * A scroller that is swept at its top and again at its bottom. The sweep skips a control below a
    * scroller's fold, so at the floor — where the Explorer column scrolls as a whole — one position
    * sees only part of the column and the positive would count a viewport, not the surface.
@@ -1118,6 +1125,7 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     atLeast: 0,
     only: '[aria-haspopup="menu"]',
     activities: true,
+    minHeight: 700,
   },
   // Switched to in the test, not here. `minWidth` is the floor (1024): the pinned grid block is
   // 584 px, so below it the grid overflows its scroller and its controls sit outside the viewport,
@@ -1308,6 +1316,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
 
       for (const surface of COARSE_SURFACES) {
         if (surface.minWidth !== undefined && viewport.width < surface.minWidth) continue;
+        if (surface.minHeight !== undefined && viewport.height < surface.minHeight) continue;
         // The Gantt grid exists only in its own view; every other surface is swept in the diagram.
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
         if (surface.activities) await showActivities(page);
