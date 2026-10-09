@@ -12,6 +12,6 @@
   "headroomRatioIsAJudgement": "1.05 is a CHOICE, not a measurement (product-owner decision, docs/specs/delivery-gates/ CQ-2). It is about 20 kB gzip on the entry graph — room for an ordinary feature without a conversation, and not room for a library. There is no evidence behind the number; it is the smallest margin that does not make the gate fire on routine work.",
   "entryGraphGzipBytes": 189440,
   "maxNonEntryChunkGzipBytes": 135168,
-  "cssGzipBytes": 17408,
-  "raisedBecause": null
+  "cssGzipBytes": 18432,
+  "raisedBecause": "CSS 17408 -> 18432: toolbar-redesign M3 adds the narrow scrolling command line (max-lg utilities, the scroll-driven edge fade, the squat and xs variants) for +0.49 KiB gzip, measured against fe0afcd (16.66 -> 17.15 KiB); the entry graph is unchanged."
 }
