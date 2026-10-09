@@ -60,7 +60,7 @@ describe('toolbarLabelMinWidthClass', () => {
     expect(toolbarLabelMinWidthClass('visible')).toBe('min-w-12');
     expect(toolbarLabelMinWidthClass('roomy')).toBe('min-w-12 @max-roomy/deck:min-w-9');
     expect(toolbarLabelMinWidthClass('roomy-fine')).toBe(
-      'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-9',
+      'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-(--control-h)',
     );
   });
 });

@@ -363,7 +363,7 @@ export function toolbarLabelClass(state: ToolbarLabelState): string | null {
 export function toolbarLabelMinWidthClass(state: ToolbarLabelState): string {
   if (state === 'hidden') return 'min-w-9';
   if (state === 'roomy-fine') {
-    return 'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-9';
+    return 'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-(--control-h)';
   }
   return state === 'roomy' ? 'min-w-12 @max-roomy/deck:min-w-9' : 'min-w-12';
 }
