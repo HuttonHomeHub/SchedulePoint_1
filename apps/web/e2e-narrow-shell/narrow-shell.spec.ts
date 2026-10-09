@@ -625,6 +625,24 @@ async function openDockByKeyboard(page: Page, dock: DockSpec): Promise<void> {
   await expect(dockRegion(page, dock)).toBeVisible();
 }
 
+/**
+ * Wait until a dock has finished loading its content, read as its controls standing still across two
+ * reads a quarter of a second apart. The Float paths and Compare revisions panels fetch on open, and a
+ * Tab walk that starts while they show a spinner finds only the Close button — a race this journey
+ * lost in one run in three before it waited.
+ */
+async function dockSettled(page: Page, dock: DockSpec): Promise<void> {
+  const controls = () => dockRegion(page, dock).locator('button, [href], input, select').count();
+  let last = -1;
+  for (let i = 0; i < 20; i += 1) {
+    const now = await controls();
+    if (now === last && now > 0) return;
+    last = now;
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`${dock.key} dock never settled`);
+}
+
 /** Whether the diagram's stage is `inert` — read from its canvas, which is what a reader would reach. */
 function stageInert(page: Page): Promise<boolean> {
   return page.evaluate(
@@ -905,6 +923,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
 
         // From the dock's Close, the Tab order runs through the dock and never lands on a zero-size
         // control in the body — the resize handle was the one M0 found at zero size.
+        await dockSettled(page, dock);
         const close = dockRegion(page, dock).getByRole('button', { name: dock.close });
         await close.focus();
         const forward = await tabStopsInBody(page, 'Tab', 12);
@@ -921,7 +940,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
         }
         expect(
           [...forward, ...backward].some((stop) => stop.zone === 'dock'),
-          `${label}: the Tab order runs through the dock`,
+          `${label}: the Tab order runs through the dock (${JSON.stringify([...forward, ...backward].map((stop) => `${stop.zone}:${stop.name}`))})`,
         ).toBe(true);
 
         // Escape closes it as at 1024, and focus goes to the control that opened it, never <body>.
@@ -950,6 +969,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     // against a layout that had lost the rule it exists to hold.
     const revisions = DOCKS[1];
     await openDockByKeyboard(page, revisions);
+    await dockSettled(page, revisions);
     await page.evaluate(() => {
       const wrapper = document
         .querySelector('section[aria-label="Time-scaled logic diagram"] canvas')
