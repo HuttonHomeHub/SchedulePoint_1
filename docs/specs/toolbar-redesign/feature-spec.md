@@ -1,22 +1,26 @@
 # Feature Spec: Toolbar redesign for a laptop, Surface Pro and monitor-first app
 
 - **Status:** Draft
-- **Author(s):** feature-analyst (for the product owner, james)
+- **Author(s):** feature-analyst (for the product owner, james); revision 2 folds in the UX, component and
+  accessibility reviews
 - **Date:** 2026-10-09
 - **Tracking issue / epic:** — (none yet)
 - **Roadmap link:** UI consistency / minimum-viewport follow-on (ADR-0179)
-- **Related ADR(s):** amends ADR-0031, ADR-0090 D6, ADR-0091 D3a/D6b, ADR-0109 D1, ADR-0133 D1; applies ADR-0093,
-  ADR-0117, ADR-0118/0183 (unchanged), ADR-0179 D2, ADR-0181. New ADR required (outline in §4.9).
-- **Folds in:** `docs/TECH_DEBT.md` #471 (first half), #193 (the inert ladder machinery).
+- **Related ADR(s):** a new ADR is required (outline in §4.10). It completes ADR-0109's supersession of ADR-0090 D6 and
+  ADR-0091 D3a by deleting their dead code. It amends the **live** parts of ADR-0031 (tier text; the zoom
+  controls in group 1), ADR-0091 D3 (zoom placement), ADR-0100 (minimap toggle location) and ADR-0133 D1 (rows
+  sharing a line, argued in §4.4). It applies ADR-0179 D2, ADR-0093, ADR-0082, ADR-0117 and ADR-0135. It does not
+  change ADR-0118/0183.
+- **Folds in:** `docs/TECH_DEBT.md` #471 (first half). It also **overturns** #193's deliberate keep of the
+  ladder machinery: ADR-0110 M5 kept it on purpose, and removing it is an ADR-0105 public-contract change, made
+  here with the reason in §4.2.
 
-> **Read this first: the measurements in this spec were not taken in this session.** The analyst that wrote it
-> had no shell, so it could not drive the harness. Every "today" figure below is quoted from a committed
-> measurement record, with the file named. Every "target" figure is an **estimate** derived from those records
-> and the class names in the code, and is labelled as one. **M0 of the plan retakes all of them** at the matrix the
-> product owner asked for (1024 × 600, 1280 × 800, 1440 × 900, 1912 × 1080), on both pointers, before any build
-> work starts. If M0 contradicts a premise, the work stops and this spec is amended (the precedent is
-> `docs/specs/retire-single-pane-workspace/m0-measurement.md` §0). That is ADR-0113/0142 applied honestly rather
-> than claimed.
+> **About the measurements.** Revision 1 was written without a shell, and its figures were estimates. The UX
+> review then took real readings in the container's Chromium. They are quoted below as **"UX review reading"**.
+> The screenshots are in `/tmp/claude-0/shots/`, a temporary directory that is **not committed**. M0 retakes
+> these readings and commits a record, including the coarse-pointer and stress-state cells the UX review did not
+> take. Anything still marked **estimate** is replaced by M0. If M0 contradicts a premise, the work stops (the
+> precedent is `docs/specs/retire-single-pane-workspace/m0-measurement.md` §0).
 
 ---
 
@@ -24,178 +28,169 @@
 
 ### Problem
 
-SchedulePoint is now designed for laptops, Surface Pros and desktop monitors. The floor is 1024 × 600 (ADR-0179),
-the narrow single-pane workspace has been retired (ADR-0181), and phones are not supported. The two toolbars at
-the top of the app were shaped through a long period when every pixel of **width** was fought over: a width
-ladder, a `⋯` overflow menu, band floors and label-demotion passes (ADR-0090, ADR-0091, ADR-0094). ADR-0109
-replaced all of that with "the surface wraps", which fixed the hiding. It also moved the cost into **height**,
-and nobody has gone back over the tools to ask where each one belongs now that width is not the scarce thing.
+SchedulePoint is designed from a 1024 × 600 floor up (ADR-0179). The narrow single-pane workspace is retired
+(ADR-0181) and phones are unsupported. The two toolbars were shaped when **width** was the scarce resource. A
+width ladder and a `⋯` overflow were later replaced by "the surface wraps" (ADR-0109), which moved the cost into
+**height**. Nobody has since re-asked where each tool belongs.
 
-What a planner gets today (measured, `docs/specs/minimum-viewport/m4-measurement.md`, fine pointer):
+| Viewport (fine) | Header | Deck              | Canvas            | Source                                                              |
+| --------------- | ------ | ----------------- | ----------------- | ------------------------------------------------------------------- |
+| 1024 × 600      | 40     | **168 (4 lines)** | **274**           | UX review reading; agrees with `minimum-viewport/m4-measurement.md` |
+| 1280 × 800 +    | 40     | 80 (2 lines)      | 562 at 1280 × 800 | UX review reading; m4                                               |
 
-| Viewport   | Header | Deck lines | Canvas height | Canvas as share of window |
-| ---------- | ------ | ---------- | ------------- | ------------------------- |
-| 1024 × 600 | 40     | **4**      | **274**       | 46 %                      |
-| 1280 × 800 | 40     | 2          | 562           | 70 %                      |
-| 1440 × 900 | 40     | 2          | 662           | 74 %                      |
-| 1912 × 948 | 40     | 2          | 710           | 75 %                      |
+Coarse pointer (m4, not re-read): 1024 × 600 has 4 lines and a 234 px canvas; 1440 × 900 has 3 lines. **M0 re-reads
+coarse.**
 
-Coarse pointer (Surface without its keyboard cover, 44 px controls, same record): **1024 × 600: 4 lines, canvas
-234**; 1280 × 800: 4 lines, canvas 434; 1440 × 900: 3 lines, canvas 586; 1912 × 948: 2 lines, canvas 686.
+Below the floor it is worse (#471). The header and the wrapped deck take 355 px at 640 wide and 603 at 320, so the
+foot row is unreachable at 640 × 360 (`retire-single-pane-workspace/m0-measurement.md` §2). That is reachable on
+supported hardware: **a 1280 × 800 laptop at 200 % zoom is a 640 × 400 viewport**.
 
-At the floor the command deck alone is **168 px, 28 % of the window** (`minimum-viewport/m0-measurement.md` §1),
-and M4 of that epic records that it is four lines "by arithmetic": the four groups are 733, 513, 627 and 622 px
-in a 1008 px row, so no two share a line without something losing its label. That M4 also wrote down the option
-this spec takes up: _"dropping the labels of Summary, Calendar and Export below 1280 px … would put DO on one line
-… It trades labelled commands for height and is a design call"_ (`m4-measurement.md:56-58`).
+**Left over from the width era, verified in code:**
 
-Below the floor it gets much worse, which is #471: the header plus the wrapped deck take **355 px at 640 wide
-and 603 px at 320**, so the workspace body is 0 px at 640 × 360 and the foot row (Expand, Recalculate) is out of
-reach (`retire-single-pane-workspace/m0-measurement.md` §2). That is not only a phone problem. **A 1280 × 800
-laptop at 200 % browser zoom is a 640 × 400 CSS viewport**, and WCAG 1.4.4 (resize text) applies there. So #471 is
-reachable by a supported device and an AA obligation, not just by an unsupported phone.
+1. **Three things decide whether a label shows:**
+   - `Toolbar.tsx:295` (`showLabel !== 'never'`);
+   - `Deck`'s `ICON_ONLY` id list (`Deck.tsx:137-148`, used instead of `showLabel` at `:433`);
+   - the triggers' `compact` prop via `triggersAreCompact` (`tsld-toolbar-items.tsx:1114-1125`). This can never be
+     true, because both `Deck` and `Toolbar` pass `'comfortable'` (`toolbar-registry.ts:108-112`, `Deck.tsx:172-177`).
 
-There is also code left over from the width era that no longer does anything, and some of it is now **wrong**.
-Each item below was checked against the code:
+   The rule is implemented four times: `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, and the custom
+   `render` triggers (Analysis, Share & export). `ICON_ONLY` also lists `print`, which is not a deck item: Print is
+   a menu item (`tsld-toolbar-items.tsx:1794-1801`).
 
-1. **The layout bands have no production caller.** `resolveLayoutMode` (`toolbar-registry.ts:108-112`), and
-   `Deck` passes the literal `'comfortable'` (`Deck.tsx:172-177`, `:414`). So every `compact` branch in a trigger
-   (`triggersAreCompact`, `tsld-toolbar-items.tsx:1114-1125`) can never run, and every `showLabel: { atLeast }`
-   rule always resolves to "labelled".
-2. **Two sources decide whether a deck button shows its label, and they disagree.** The registry's `showLabel`,
-   and `Deck`'s own `ICON_ONLY` set (`Deck.tsx:137-148`), which `Deck` uses **instead** (`:433`). The zoom items
-   declare `showLabel: { atLeast: 'comfortable' }` (labelled), but `ICON_ONLY` makes them icon-only.
-   `ICON_ONLY` also lists `print`, and no deck item has that id: Print is a menu item inside Share & export
-   (`tsld-toolbar-items.tsx:1794-1801`).
-3. **`tier` and `priority` are inert** (`toolbar-registry.ts:41-50`, `:285-290`). Ten items still carry
-   `priority: -100 … 110` with long comments about a demotion pass that no longer exists.
-4. **Two documents describe things that are no longer true.** `DESIGN_SYSTEM.md:236-238` says the deck's groups
-   are captioned and "a reader can **fold**" them. The fold was removed on 2026-08-28 and the captions at console
-   M6 (`Deck.tsx:42-52`). `DESIGN_SYSTEM.md:304` says the deck's height is `min-h-9`; it is `--control-h`
-   (`toolbar-styles.ts:179`, `globals.css:1034`).
-5. **A registry comment claims a move that did not happen.** `tsld-toolbar-items.tsx:2658` says Float paths
-   moved to the selection bar with Isolate and Zoom to selection. It did not, on purpose:
-   `selection-actions.tsx:183-199` says Float paths "keeps its Row-1 seat **until a destination exists that both
-   views share**". Since then the object bar has gained Notes, present in both views, with the Gantt row menu
-   mirroring its roster (`tsld-toolbar-items.tsx:3167-3179`). The condition looks met. M0 confirms it before
-   anything moves.
-
-**Why now:** the product owner has made the device decision (ADR-0179/0181) and asked for both toolbars to "look
-amazing", with every tool, including the ones in dropdowns, re-evaluated. #471 is open and records that it
-"needs its own spec".
+2. **`tier` and `priority` are inert** (`toolbar-registry.ts:41-50`, `:285-310`).
+3. **Stale prose:**
+   - `DESIGN_SYSTEM.md:236-238`: captions that fold;
+   - `:239-241`: lists `print` as a deck icon;
+   - `:255-258`: tier as "priority within a group";
+   - `:304-308`: `min-h-9`, `text-micro` and captions as controls;
+   - `Deck.tsx:61`: the `text-micro` label;
+   - `tsld-toolbar-items.tsx:2658`: claims Float paths moved;
+   - `tsld-toolbar-items.tsx:3150-3153`: "the deck is fixed at `comfortable`" as the reason for icon-only;
+   - `plan-workspace-toolbar.tsx:2143`, `:2271`: `resolveLayoutMode` asides;
+   - `toolbar-band.tsx:11-16`: density bands.
+4. **The View ▾ panel is 584 px tall in a 600 px window at the floor** (UX review reading). It scrolls, and nearly
+   covers the diagram.
+5. **A group seam is painted at the start of a line at 1024** (UX review reading): the `before:` rule of a group that
+   wrapped to a new line (`Deck.tsx:364-365`).
 
 ### Users
 
-Every organisation role sees both toolbars. Nothing here changes what a role may do.
-
-| Role                | What they need from the toolbars                                                                                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Planner / Org Admin | Authoring tools (pen, add, link, arrange, undo) one press away. Diagram as tall as possible. Commands always in the same place.                                        |
-| Contributor         | Read and navigate. Comments, notes and progress (object bar). Authoring shown shaded with the reason.                                                                  |
-| Viewer              | Read and navigate. Export and print. Authoring shown shaded with the reason.                                                                                           |
-| External Guest      | **Not affected.** The share route renders its own guest bar (`features/share/`), not this band. Checked: no route other than `plan-detail.tsx` mounts `PlanWorkspace`. |
+| Role                | Need                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Planner / Org Admin | Authoring one press away; the tallest diagram; commands that stay in place                                                 |
+| Contributor         | Read, navigate, comment; authoring shaded with its reason                                                                  |
+| Viewer              | Read, navigate, export and print; authoring shaded with its reason                                                         |
+| External Guest      | **Not affected.** The share route has its own guest bar (`features/share/`); only `plan-detail.tsx` mounts `PlanWorkspace` |
 
 ### Primary use cases
 
-1. A planner on a 1024 × 600 laptop window works the diagram with the tallest canvas the chrome allows.
-2. A planner on a 1920-wide monitor sees every frequent command with its name, anchored in a stable place.
-3. A planner on a Surface in tablet posture (44 px targets) reaches every command without the deck eating the
-   diagram.
-4. A planner at 200 % browser zoom (or in a short window) can still reach the workspace, the foot row and every
-   command.
-5. Any reader finds a tool by where its subject lives: plan facts by the plan's name, viewport controls on the
-   diagram, selection actions on the selection, application help in the header.
+1. Work the diagram at 1024 × 600 with the tallest canvas the chrome allows.
+2. On a monitor, see every frequent command labelled, in a stable, balanced arrangement.
+3. On a Surface in tablet posture (44 px targets), reach everything without the deck eating the diagram.
+4. At 200 % zoom (page or text-only), still reach the workspace, the foot row and every command.
+5. Find a tool by its subject: the plan's facts by its name, the viewport on the diagram, the selection on the
+   selection's bar.
 
-### User journeys
+### User journeys (if M0 confirms)
 
-- **Happy path (1024 × 600, fine):** open a plan. One header line (brand, Project / Plan, status, Summary, Edit,
-  Diagram | Gantt, organisation, help, account). Two deck lines: LOOK (Go to today, View, Baseline overlay,
-  Find, Panels) and DO (pen, authoring, then Plan actions on the trailing edge). Zoom and Fit are in the diagram's
-  corner. Canvas about 360 px instead of 274 (estimate, SC-1).
-- **Alternate, monitor:** at 1912 the same two lines, every command labelled, Find and Plan held to the
-  trailing edge. At 2560 wide the two rows share one line if they fit (R2).
-- **Alternate, Surface tablet posture:** the same layout at 44 px. The deck may take a third line at 1024
-  (SC-3), never four.
-- **Alternate, short or zoomed window (#471):** below 1024 wide or 600 tall the deck becomes one line that
-  scrolls sideways (R6). The workspace keeps its body and the foot row stays reachable.
+- **1024 × 600 fine:** one header line. Two deck lines:
+  - LOOK: View group, Find group, and a trailing Panels group;
+  - DO: the pen and Author group, and a trailing Plan group.
 
-### Expected outcomes
+  Zoom, Fit and Minimap are in the diagram's corner. Baseline overlay, Comments and Settings show only their
+  icons. Canvas about 362 px.
 
-- About **88 px more diagram at the floor** (four deck lines become two). Estimate, SC-1.
-- Every tool placed for a reason that is written down in §4.6, including those inside menus.
-- One rule for icon-only labels, read from one place, applied by CSS (no JavaScript measuring).
-- #471's band half closed; #193's inert machinery deleted.
-- A cleaner, more balanced look: edges anchored, one label size, one control height, a clear hierarchy of
-  separators. The tokens do not change.
+- **Monitor (1912):** the same two lines, every command labelled, Panels and Plan on the trailing edge. No row more
+  than 25 % empty.
+- **Surface tablet posture:** the same layout at 44 px. At most three deck lines at 1024.
+- **Below 1024 wide:** one deck line that scrolls sideways, with a visible edge cue. In very short windows the
+  band scrolls away with the page.
+
+### Expected outcomes (if M0 confirms)
+
+- About 88 px more diagram at the floor.
+- One label API and one class helper, read from one place.
+- Every tool placed with a written reason.
+- #471's band half closed.
+- The dead ladder deleted.
+- The visual decisions in §4.8, each signed off with screenshots.
 
 ### Success criteria
 
-All are measured by M0's harness (before) and by the journeys and harness after each milestone. Fine pointer
-unless stated. "Deck lines" counts distinct control rows, the way `command-surface.spec.ts:564-577` does it.
+Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:564-577` does.
 
-| ID    | Criterion                                                                                                                                                                     | Today (record)                              | Target                         |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------ |
-| SC-1  | 1024 × 600 fine: deck lines; canvas height                                                                                                                                    | 4; 274                                      | **2; ≥ 350** (estimate 362)    |
-| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080 fine: deck lines (each declared row exactly one line)                                                                                     | 2 (LOOK may wrap at 1440)                   | **2, no row wraps**            |
-| SC-3  | 1024 × 600 coarse: deck lines; 1440 × 900 coarse; 1912 × 1080 coarse                                                                                                          | 4; 3; 2                                     | **≤ 3; 2; 2**                  |
-| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                    | holds (M4)                                  | holds                          |
-| SC-5  | #471 cells 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256: `<main>` starts at y ≤ 150 at 640 and ≤ 200 at 320; Expand and Recalculate are hit-testable at their centre | y = 355 / 603; unreachable at 360 and below | **met at every cell**          |
-| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                           | 0                                           | **≥ 1**                        |
-| SC-7  | Every command is reachable at every cell above, by pointer and by keyboard, with an accessible name; any icon-only control has a tooltip (ADR-0117)                           | holds ≥ 1024                                | holds at every cell            |
-| SC-8  | One source decides a label: `Deck.tsx` holds no id list; every icon-only deck control is declared `showLabel` in the registry                                                 | 2 sources                                   | 1 source                       |
-| SC-9  | Band height bar `BAND_MAX_PX` (`command-surface.spec.ts:535`) still holds at every gated width, and is lowered to the new reading at 1024                                     | ≤ 145                                       | ≤ 145, plus a 1024 bar from M0 |
-| SC-10 | One label size and one control height per surface (the existing `command-surface.spec.ts` label-size assertion, `:500-504`)                                                   | holds                                       | holds                          |
-| SC-11 | The product owner signs off screenshots at 1024 × 600, 1280 × 800, 1440 × 900, 1912 × 1080, fine and coarse                                                                   | —                                           | signed                         |
-
-The figures for SC-1, SC-3 and SC-5 are estimates (§4.7). M0 replaces them with measured targets before M1 starts.
+| ID    | Criterion                                                                                                                                                                                                     | Today                          | Target                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ---------------------- |
+| SC-1  | 1024 × 600: deck lines; canvas                                                                                                                                                                                | 4; 274                         | **2; ≥ 350**           |
+| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080: each declared row is one line (measured, not forced)                                                                                                                     | holds except LOOK at 1440 (m4) | holds                  |
+| SC-3  | Coarse 1024 × 600 / 1440 × 900 / 1912 × 1080: deck lines                                                                                                                                                      | 4 / 3 / 2 (m4)                 | **≤ 3 / 2 / 2**        |
+| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                                                    | holds                          | holds                  |
+| SC-5  | Below 1024: at 640 × 360 and 320 × 256 the band is ≤ 40 % of viewport height **or** scrolls away vertically; Expand and Recalculate are hit-testable at 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256 | 99 % / 100 %; unreachable      | met                    |
+| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                                                           | 0                              | ≥ 1                    |
+| SC-7  | 1280 × 800 with text-only 200 % (`html { font-size: 200% }`): every deck control hit-testable; rows may wrap                                                                                                  | unmeasured                     | holds                  |
+| SC-8  | One label decider: `Deck.tsx` and `Toolbar.tsx` hold no label logic of their own; every component calls the one resolver and class helper                                                                     | 3 deciders, 4 implementations  | 1 and 1                |
+| SC-9  | `BAND_MAX_PX` holds (`command-surface.spec.ts:535`); a 1024 bar is added at M0's reading                                                                                                                      | ≤ 145                          | ≤ 145, plus a 1024 bar |
+| SC-10 | One label size and one control height per surface (`command-surface.spec.ts:500-504`)                                                                                                                         | holds                          | holds                  |
+| SC-11 | ≤ 25 % empty horizontal space in each deck row at 1912 × 1080                                                                                                                                                 | M0 records                     | ≤ 25 %                 |
+| SC-12 | No group seam at the start of any line, in any state (conflicts present, pen held by peer, shaded)                                                                                                            | fails at 1024                  | holds                  |
+| SC-13 | View ▾ panel ≤ 70 % of viewport height at 1024 × 600, no inner scroll                                                                                                                                         | 584 / 600                      | ≤ 420                  |
+| SC-14 | **No tool is lost:** a computed test against a committed manifest of registry ids, header controls, selection-bar items and menu item names; every manifest entry resolves in the after state                 | —                              | passes                 |
+| SC-15 | Focus not obscured (WCAG 2.4.11): a keyboard reveal scrolls the focused activity clear of the corner cluster and minimap                                                                                      | —                              | journey passes         |
+| SC-16 | The visual brief (§4.8): each item signed off by the product owner with before/after screenshots at 1024 × 600, 1280 × 800, 1440 × 900 and 1912 × 1080                                                        | —                              | signed                 |
 
 ### Open questions
 
-**Critical** (they change the design or the scope). Each has a recommendation.
+**Critical.** Each one gates a milestone in the plan's dependency graph.
 
-- **CQ-1 — Do Zoom out, Zoom in, Fit to plan and the Minimap toggle move onto the diagram itself?** A small
-  floating cluster in the diagram's bottom-right corner, the way maps and whiteboards do it.
-  _Recommendation: **yes**._ They only work on the diagram: today they shade in the Gantt with a "canvas only"
-  reason (`canvasViewportReason`). On the diagram they cost no height and they sit beside what they control.
-  They also free about 130 px of the LOOK row (estimate), which is part of what gets the floor to two lines. The
-  cost is a small overlay over the diagram's corner and a new keyboard stop. _If no:_ they stay icon-only on the
-  deck, and SC-1 needs one or two more compact labels on LOOK (§4.5) to compensate.
-- **CQ-2 — At narrower windows, may a short named list of commands show only their icon (name kept for screen
-  readers and in a tooltip), so each toolbar row stays on one line?** The list (§4.5) starts with the clearest
-  icons: Settings (gear), Comments (speech bubble), Select (marquee). Only as many are switched as M0 shows are
-  needed, and only below one width, set by a token.
-  _Recommendation: **yes**._ It is the option M4 of the minimum-viewport epic measured and left open. The
-  commands stay visible and named; only the word beside the icon goes, and only where it is needed. _If no:_ the
-  floor stays at three or four deck lines and SC-1 is withdrawn.
-- **CQ-3 — In a short or zoomed window (below 1024 wide or 600 tall), may the command deck become a single line
-  that scrolls sideways, instead of wrapping into many lines?** (#471.)
-  _Recommendation: **yes**._ ADR-0179 D2 already allows "the command band may scroll in both directions" below
-  the floor, and WCAG 1.4.10 names "interfaces where it is necessary to keep toolbars in view while manipulating
-  content" as an allowed two-dimensional case (W3C Understanding 1.4.10, Note 2, read 2026-10-09). The
-  alternative, letting the whole shell scroll, scrolls the toolbar away from the diagram it operates.
+- **CQ-1 — Do Zoom out, Zoom in, Fit to plan and the Minimap toggle move onto the diagram's corner?**
+  _Recommendation: yes._ They only work on the diagram: today they are shaded in the Gantt via
+  `canvasViewportReason`. In the corner they cost no height. Geometry is in §4.7. _If no:_ they stay icon-only on
+  the deck. Then LOOK needs about 130 px more compaction (estimate), which means more icon-only items than the
+  three the UX review accepted.
+- **CQ-2 — May exactly three commands show only their icon below the roomy width: Baseline overlay, Comments and
+  Settings?** Each keeps its name for assistive tech and gets a hover/focus tooltip. _Recommendation: yes._ It is
+  the measured minimum: −107, −71 and −66 px puts LOOK from about 1120 to about 942, inside 1008 (UX review
+  reading). Select stays labelled. Resource view is not on the list: its people glyph reads as "members".
+- **CQ-3 — Below 1024 wide, may the deck become one line that scrolls sideways? And in very short windows may the
+  whole band scroll away vertically?** _Recommendation: yes, triggered by width only._ 1280 × 600 and 1366 × 768
+  keep two rows. ADR-0179 D2 already lets the band scroll below the floor. WCAG 1.4.10 Note 2 names "interfaces
+  where it is necessary to keep toolbars in view while manipulating content" (W3C Understanding 1.4.10, read
+  2026-10-09). The 1.4.10 obligation is that the band not consume the viewport, which is why the vertical
+  scroll-away exists.
+- **CQ-4 — May the organisation switcher become a ghost button with an icon that opens the existing menu,
+  replacing the bordered native `<select>`?** This changes every screen's header, not only the plan's.
+  _Recommendation: yes, subject to an accessibility review._ The native select's deliberate reasons
+  (`OrgSwitcher.tsx:45-57`) are carried over: name, current value announced, keyboard. _If no:_ restyle the
+  select's border and background only.
 
-**Not asked. Defaults taken, and a reviewer may overturn any of them:**
+**Defaults taken (reviewers may overturn):**
 
-- D-a: **Summary moves into the header**, as an icon button beside the plan's status. It is the plan's facts, so
-  it belongs beside the plan's name.
-- D-b: **Keyboard shortcuts move from the Account menu to a header help button** (keyboard icon, tooltip
-  "Keyboard shortcuts (?)"), only on plan routes. The Account menu is about the person; this is a reference about
-  the app.
-- D-c: **Float paths moves to the object bar** (and so to the Gantt row menu) **if M0 confirms** that destination
-  renders in both views. If it does not, it stays on the deck.
-- D-d: **Legend, Resource view and Comments form a "Panels" section** at the trailing end of the LOOK row. All
-  three open a panel beside the diagram. Comments leaves the DO row.
-- D-e: **Each row's last group is held to the trailing edge**: Find on LOOK, Plan on DO.
-- D-f: **Analysis ▾ shows which docks are open** (Health check and Compare revisions as checkable items), if the
-  `Menu` primitive's keyboard contract review (ADR-0111) accepts it. If not, they stay plain items.
-- D-g: **The View ▾ panel lays out in columns at ≥ 1280** instead of one long scrolling list.
-- D-h: **Control heights do not change** (36 / 44 px, ADR-0118/0183). The keyboard-cover gap (ADR-0183 D3) stays
-  declined, as decided there.
-- D-i: **The organisation switcher stays on the trailing side.** Moving it into the leading path would cut about
-  190 px from the plan name at 1024.
-- D-j: **#471's second paragraph (the selection bar growing the foot row) is split into its own row at close-out
-  and not built here.** It is the foot row, a third surface the product owner did not name.
-- D-k: **No feature flag** (ADR-0088 D1). Each milestone is a commit boundary.
+- **D-a:** Summary and Edit plan become **registry items in a new `identity` row**, rendered by `Toolbar` after the
+  status badge. Summary keeps its popover. The pencil is renamed **"Edit plan details"** so it cannot be confused
+  with the pen's "Start/Stop editing".
+- **D-b:** **Keyboard shortcuts stay in the Account menu.** ADR-0091 D6b moved them there because they are "a
+  reference about the application, not the plan". That argues against the plan's toolbar, not against the app
+  header. But the `?` key already opens the sheet and the UX review rates a header button as low value, so the
+  smallest correct change is none. A header button (`aria-keyshortcuts="?"`) is recorded as the alternative.
+- **D-c:** **Float paths moves to the selection bar if M0 confirms a Gantt route.** `selection-actions.tsx:206`
+  says the Gantt renders no selection bar, so its Gantt route would be the Gantt row menu (`GanttRowMenu.tsx`).
+  If the row menu does not mirror the bar's object actions, Float paths stays on the deck.
+- **D-d:** **A fifth deck group, "Panels"**, on the LOOK row, trailing: Legend, Resource view, Comments. It reuses
+  the empty registry group **`help`** (ADR-0031 group 7, which first held the legend) through a `DECK_GROUPS`
+  remap, so the taxonomy is unchanged.
+- **D-e:** **One trailing group per row: Panels on LOOK, Plan on DO.** Applies when the rows are stacked.
+- **D-f:** cut. Analysis ▾ checkable dock items are out of this epic. (`Menu` already supports `menuitemcheckbox`,
+  `menu.tsx:368-432`, so there was never a primitive change in it.)
+- **D-g:** **The View ▾ panel is fixed at 1024**: two columns and collapsible sections (SC-13). The zoom-preset
+  radios stay; they are not duplicates of ±.
+- **D-h:** Control heights are unchanged (36 / 44). The keyboard-cover gap stays declined (ADR-0183 D3).
+- **D-i:** The organisation switcher stays trailing (only its styling changes, CQ-4).
+- **D-j:** #471's second paragraph (the selection bar in the foot row) gets its own row at close-out.
+- **D-k:** No feature flag (ADR-0088 D1).
+- **D-l:** **Apply levelled dates… is labelled where the row allows** (`roomy`), since its icon fails the glyph
+  test. It is icon-only below roomy.
+- **D-m:** **Rows share one line on very wide bands** (R2). The ADR-0133 D1 tension is argued in §4.4; it is the
+  first thing to drop if the UX review disagrees.
 
 ---
 
@@ -203,225 +198,217 @@ The figures for SC-1, SC-3 and SC-5 are estimates (§4.7). M0 replaces them with
 
 ### User stories & acceptance criteria
 
-> **US-1 — Two lines at the floor.** As a planner on a 1024 × 600 window, I want the command deck on two lines,
-> so that the diagram gets the height.
+> **US-1 — Two lines at the floor.**
 >
-> - **Given** a plan open at 1024 × 600 (fine), Explorer at its 276 px default, **then** the deck's controls sit
->   on exactly two rows (LOOK, DO), and neither declared row wraps.
-> - **Given** the same at 1024 × 600 coarse, **then** the deck has at most three rows, and only LOOK or DO wraps,
->   never both (SC-3).
-> - **Given** any width ≥ 1280 (fine), **then** each declared row is one line (SC-2).
+> - At 1024 × 600 fine (Explorer 276), the deck's controls sit on two lines (LOOK, DO). This is a **measured**
+>   outcome: rows keep `flex-wrap` as a safety valve.
+> - Coarse 1024: ≤ 3 lines.
+> - The same holds in the stress states M0 defines: conflicts present (chip shown), pen held by a peer, no
+>   computed diagram, Gantt view.
 
-> **US-2 — Labels give way by a rule, not by measuring.** As a planner, I want the same commands to lose their
-> words in the same order every time, so that the toolbar never rearranges itself unpredictably.
+> **US-2 — One label rule.**
 >
-> - **Given** an item declared `showLabel: { below: 'roomy' }` (name final at build), **when** the deck's
->   container is narrower than the `roomy` container token, **then** its label is visually hidden and still in
->   the accessible name, and the control has a name-echo tooltip on hover and focus (ADR-0117).
-> - **Given** the deck at or above the token, **then** the label is visible and the tooltip is not a bare
->   name-echo.
-> - **Given** any item, **then** whether it shows its label is decided only by its registry `showLabel`
->   (`Deck.tsx` holds no id list) (SC-8).
-> - No JavaScript reads the deck's width to decide a label (structural test).
+> - Every registry item declares `labelVisibility: 'always' | 'never' | 'roomy'`.
+>   - The existing `'auto'` (which already means "always") becomes `'always'`, which is also the default.
+>   - The band form `{ atLeast }` is removed.
+>   - `ICON_ONLY` is deleted. Its members are declared `'never'`, except `apply-levelling`, which becomes `'roomy'`.
+>     `print` is dropped.
+> - One resolver (`resolveLabelVisibility`) and one exported helper (`toolbarLabelClass()` or `<ToolbarLabel>` in
+>   `toolbar-styles.ts`) are used by `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton` and every custom
+>   trigger. A structural test fails if a component paints a label any other way.
+> - **Inside `Deck`** (the only `@container/deck`), a `'roomy'` label is `sr-only` under the theme container token
+>   `--container-roomy`, using the named variant `@max-roomy/deck:`. It is never an arbitrary `@max-[…]` value,
+>   which is invalid in Tailwind v4.
+> - **Inside `Toolbar`** (not a container: mode row, identity row, corner cluster), `'roomy'` resolves to `'always'`,
+>   and a unit test says so.
+> - **Tooltip:** a CSS rule cannot switch the tooltip, because it is portalled to `document.body`
+>   (`tooltip.tsx:389`) and `disabled` is a JS prop (`:62`). **Decision:** every `'roomy'` item always mounts a
+>   tooltip whose purpose is its `description`, never a bare name-echo. So it reads correctly whether or not the
+>   label is showing, and Escape dismisses it. Baseline overlay and Comments gain a `description`; Settings already
+>   has one.
+> - **Custom triggers** (Analysis, Share & export, `ToolbarPopover`, `ToolbarSplitButton`) have only a native
+>   `title`, so **they may not be `'roomy'`**. A structural test asserts that every `'roomy'` item is a plain
+>   `onActivate` item rendered by `ToolbarButton`.
+> - **The container-query trap** (`UX_STANDARDS.md:391-398`): `@container` applies `contain: inline-size`, so it
+>   goes on the deck's full-width block wrapper, never on a `shrink-0` auto-width item. This is honoured in
+>   `container-query.structural.test.ts`, plus a layout assertion that the deck's width equals the band's inner
+>   width at every cell.
 
-> **US-3 — Viewport controls on the diagram (CQ-1).** As a planner, I want zoom, fit and the minimap on the
-> diagram, so that they sit beside what they control and cost the diagram no height.
+> **US-3 — Corner cluster (CQ-1).**
 >
-> - **Given** the Diagram view, **then** a "Diagram view" toolbar (`role="toolbar"`) with Zoom out, Zoom in, Fit
->   to plan and Minimap is pinned to the stage's bottom-right inset, above the canvas and below any dock.
-> - **Given** the Gantt view, **then** the cluster is absent, because the Gantt mounts no canvas (ADR-0082: omit
->   when the action does not apply).
-> - **Given** no computed diagram, **then** Zoom and Fit are shaded with today's reasons
->   (`canvasViewportReason`); Minimap is shaded with `LENS_NO_DIAGRAM_REASON`.
-> - **Given** keyboard focus, **then** the cluster is one Tab stop with arrow-key roving (the `Toolbar` primitive),
->   and it comes after the canvas in the tab order.
-> - **Given** the minimap is open, **then** the cluster sits beside it rather than over it (ADR-0100's panel
->   keeps its position).
-> - Keyboard shortcuts for zoom and fit are unchanged.
+> - The Diagram view shows a `role="toolbar"` named **"Diagram view"** at the stage's bottom-right: Zoom out, Zoom in,
+>   Fit to plan, Minimap. The minimap button has `aria-pressed`.
+> - Every item keeps its shortcut on `aria-keyshortcuts` and its shade reasons.
+> - It is rendered by `Toolbar` over a registry slice (`row: 'canvas'`). Minimap reaches that slice through a
+>   promotion target, like `promotedLensItems()` (`tsld-toolbar-items.tsx:432-451`). There is no second registry.
+> - It reuses `toolbarCardVariants`.
+> - Geometry, overlaps and states are in §4.7.
+> - Tab order: canvas → minimap (when open) → cluster.
+> - Shaded buttons stay focusable with a reason (ADR-0082/0083).
+> - ADR-0135 focus hand-off: when the cluster unmounts under focus (switching to the Gantt), focus goes to the
+>   view switch's pressed segment, and the move is announced. Tested.
+> - Switching Diagram ↔ Gantt causes no layout shift in the band.
 
-> **US-4 — Every tool on the surface of its subject.** As any reader, I want each tool where its subject lives.
+> **US-4 — Every tool on its subject's surface.**
 >
-> - Summary is an icon button in the header after the status badge, named "Plan summary", and opens today's
->   popover unchanged (D-a).
-> - Keyboard shortcuts is a header button on plan routes and no longer in the Account menu. `?` still opens it
->   (D-b).
-> - Float paths, if moved (D-c), is an object-bar action available in Diagram **and** Gantt (row menu), and
->   `float-paths-view-agnostic.structural.test.ts` still passes.
-> - Legend, Resource view and Comments sit in a Panels section at the trailing end of LOOK, keep their pressed
->   state, and each still opens its panel (D-d).
-> - **No tool is lost.** The before/after inventory (M0 vs. close-out) lists every command id and menu item with
->   its home, and every "before" entry has an "after" entry.
+> - Summary is a registry item in the `identity` row: a popover trigger with `aria-haspopup="dialog"`,
+>   `aria-expanded`, the name **"Plan summary"**, a tooltip, and focus returning to the trigger.
+> - Edit plan is also an identity-row item, renamed **"Edit plan details"**. The rename changes the voice-control
+>   command, which is recorded in the changeset.
+> - Float paths, if moved (D-c), works by keyboard from the selection bar (Diagram) and the Gantt row menu.
+>   `float-paths-view-agnostic.structural.test.ts` stays green.
+> - Panels toggles keep `aria-pressed`. Opening a panel never strands focus on `<body>`.
+> - SC-14's manifest test passes.
 
-> **US-5 — A stable, anchored layout.** As a planner, I want each row's groups anchored to the row's edges.
+> **US-5 — Anchored, balanced rows (stacked case).**
 >
-> - **Given** ≥ 1280 fine, **then** the first control of each row starts at the deck's leading inset, and the last
->   control of each row ends within 1 px of the trailing inset (D-e).
-> - **Given** a toggle changes a label (for example "View · WBS group"), **then** no control in the other row
->   moves.
+> - With the rows stacked at ≥ 1280: each row's first control starts at the leading inset, and its trailing group
+>   (Panels, Plan) ends within 1 px of the trailing inset.
+> - DOM order equals visual order, asserted.
+> - No leading seam on any line (SC-12).
 
-> **US-6 — Short and zoomed windows (#471, CQ-3).** As a planner at 200 % zoom or in a short window, I want the
-> toolbar to stay one line, so that I can still work the plan.
+> **US-6 — Below the floor (#471, CQ-3).**
 >
-> - **Given** a viewport below 1024 wide **or** below 600 tall, **then** the deck is one line that scrolls sideways
->   (`overflow-x-auto`, scrollbar visible), LOOK then DO, and does not wrap.
-> - **Given** keyboard focus moves by arrow keys onto an off-screen control, **then** the control scrolls into
->   view.
-> - **Given** the #471 cells, **then** SC-5 and SC-6 hold.
-> - **Given** ≥ 1024 × 600, **then** the deck never scrolls sideways.
+> - Under `max-lg:` the deck renders LOOK then DO on one `flex-nowrap overflow-x-auto` line.
+> - Roving focus calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })` (**required**), with
+>   `scroll-px-2` padding.
+> - A visible overflow cue (an edge fade, and the last item clipped rather than hidden), because overlay
+>   scrollbars may not show.
+> - A menu anchored to a half-scrolled trigger clamps to the viewport (tested).
+> - Under the new `@custom-variant squat` (a height condition beside `tall`/`short`, `globals.css:31,36`, pinned by
+>   `breakpoints.test.ts`), the band moves into the scrolling region and scrolls away vertically.
+> - At ≥ 1024 the deck never scrolls sideways, whatever the height.
 
-> **US-7 — Wide monitors use the width.** As a planner on a very wide monitor, I want both rows on one line when
-> they fit.
->
-> - **Given** the band can hold LOOK and DO side by side, **then** they share one line; otherwise they stack. A
->   declared row never splits across lines at ≥ 1024 fine (R2).
+> **US-7 — Rows share a line (D-m).** When the band can hold LOOK and DO side by side, they share one line. A
+> group never changes rows.
 
-### Workflows
+### Accessibility acceptance criteria (journeys)
 
-- **Finding a tool:** subject first. The plan's facts and name are in the header. Looking (frame, lens, find,
-  panels) is the LOOK row. Doing (pen, authoring, plan actions, deliverables) is the DO row. The viewport is on
-  the diagram. The selection is on the object bar.
-- **Taking the pen:** unchanged. The pen leads the DO row (ADR-0133 D5) and shades or unshades the Author group
-  as one set.
+1. The deck is one roving stop: ArrowRight order, Home and End, at 1024 × 600, 1440 × 900 and 1912 × 1080.
+2. Every compact item keeps its accessible name, shows its tooltip on hover and focus, and Escape dismisses it.
+3. Label-in-name (2.5.3): each visible label is contained in its accessible name, swept over every control.
+4. Header Summary and Edit plan details: open, close with Escape, focus returns to the trigger.
+5. Keyboard shortcuts: `?` and the Account menu item open the same sheet (D-b unchanged).
+6. Panels toggles: `aria-pressed` follows state; focus is never on `body` after opening or closing.
+7. Float paths (if moved): reachable and operable by keyboard from the selection bar and the Gantt row menu.
+8. Cluster: Tab order canvas → minimap → cluster; shaded buttons focusable with their reason; focus after a
+   Gantt switch is defined (US-3).
+9. SC-7 (text-only 200 %) and SC-15 (focus not obscured).
+10. Scroll line: after every arrow press, the focused control's rect is inside the scroller's visible rect.
+11. Band ≤ 40 % of height, or scrolled away, at 640 × 360 and 320 × 256 (SC-5).
 
 ### Edge cases
 
-| Case                                         | Expected                                                                                                                                       |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Empty plan / no computed diagram             | Zoom, Fit, Minimap shaded with reasons. Deck rows keep their shape (shade, don't hide).                                                        |
-| Gantt view                                   | Viewport cluster absent. Deck identical to the Diagram view's except view-scoped items (which already exist).                                  |
-| Very long plan or project name at 1024       | Header section 1 truncates with `title` (`app-header.tsx:137`). The new Summary button is `shrink-0`; the **name** gives way, never a control. |
-| Conflicts present (chip visible)             | LOOK still one line at ≥ 1280. At 1024 the chip is accounted for in M0's compact set.                                                          |
-| Pen held by a peer / hand-off                | Unchanged (foot row).                                                                                                                          |
-| Minimap open plus a dock open                | Cluster stays inside the stage, beside the minimap. Never under a dock.                                                                        |
-| Window resized across 1024 or 600            | Switches between the two-row deck and the scrolling line with no remount of items (same registry, same roving state).                          |
-| `pointer` changes (cover folded or unfolded) | Heights follow `--control-h`. Labels follow the container token (independent of pointer).                                                      |
-| Browser zoom 150–400 %                       | Behaves as the equivalent CSS viewport. SC-5/6/7 cover 200 % on 1280 × 800 and 400 % (320 wide).                                               |
-| Non-plan routes                              | Header only. No Summary or help button (plan-scoped, registered callbacks). Deck absent.                                                       |
+| Case                                                                | Expected                                                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Empty plan / no diagram                                             | Cluster and lenses shaded with today's reasons; rows keep their shape                                   |
+| Gantt view                                                          | No cluster; deck otherwise identical; no band shift                                                     |
+| Long plan name at 1024                                              | The name truncates; the identity row's controls are `shrink-0`                                          |
+| Conflicts present, pen held by a peer                               | Measured in M0; each row one line at 1024 or M0 stops (plan M0 exit)                                    |
+| Minimap on but no room (`minimapRoom` false, `TsldCanvas.tsx:2685`) | Toggle shaded with the reason "Not enough room for the minimap"; cluster unmoved                        |
+| Docked panel open (Health, Compare, Float paths, Comments)          | Cluster sits in the stage, left of the dock, never under it                                             |
+| Selection bar present                                               | Cluster keeps its corner; the selection bar is docked in the foot row and does not collide; M0 verifies |
+| Pointer change (cover folded)                                       | Heights follow `--control-h`; labels follow container width only                                        |
+| Non-plan routes                                                     | Header only; no identity row; deck absent                                                               |
 
 ### Permissions
 
-No permission changes. Every control keeps its existing gate: pen-gated authoring (ADR-0028), `canShare`,
-`canWriteNotes`, `canInterchangeExport`, `model.canWrite` for Edit plan. Viewing controls stay open to every role.
-Organisation scoping is untouched: no new API call, no new data. **The recalc parity gate is unaffected:** this is
-presentation only, nothing reaches `computeSchedule`, and no scheduling input is added. **The pen:** no new write,
-so no new structural write.
+No changes. Every control keeps its gate: pen gating (ADR-0028), `canShare`, `canWriteNotes`,
+`canInterchangeExport`, `model.canWrite` on Edit plan details. Viewer and Contributor see the cluster fully live:
+viewing is not a write. Nothing reaches `computeSchedule` (recalc parity is unaffected), and no new write is
+added (the pen is unaffected).
 
-### Validation rules
+### Validation rules / error scenarios
 
-None. There is no input or data. The "rules" are layout rules (§4.4), enforced by structural tests and journeys.
+There is no input. Failures are build failures:
 
-### Error scenarios
+- a manifest entry lost (SC-14);
+- a `'roomy'` item that is not a plain button;
+- a label painted outside the helper;
+- the focused control outside the scroller;
+- a leading seam.
 
-| Scenario                                     | Detection                                                                | User-facing result | Status |
-| -------------------------------------------- | ------------------------------------------------------------------------ | ------------------ | ------ |
-| A command ends up in no surface after a move | M0 → close-out inventory diff; registry structural test                  | Build fails        | —      |
-| An icon-only control has no tooltip or name  | coarse/fine sweep in `command-surface.spec.ts`; `ToolbarButton` contract | Build fails        | —      |
-| Scrolling deck hides the focused control     | journey: arrow to last control, assert in view                           | Build fails        | —      |
-| Export/print failure                         | unchanged (`exportError` banner)                                         | unchanged          | —      |
+The export error banner is unchanged.
 
 ---
 
 ## 3. Technical analysis
 
-| Area           | Impact   | Notes                                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **high** | `Deck.tsx`, `toolbar-registry.ts`, `ToolbarButton`, the trigger controls in `tsld-toolbar-items.tsx`, `app-header.tsx`, `account-chip.tsx`, `plan-workspace-toolbar.tsx` (portals), `selection-actions.tsx` (D-c), a new on-canvas viewport cluster in the TSLD stage (CQ-1), `globals.css` (one container token).                                             |
-| Backend        | none     | —                                                                                                                                                                                                                                                                                                                                                              |
-| Database       | none     | No schema. `database-architect` not required.                                                                                                                                                                                                                                                                                                                  |
-| API            | none     | —                                                                                                                                                                                                                                                                                                                                                              |
-| Security       | none     | No new data, call or permission. Existing gates move with their controls (verified per item at M2).                                                                                                                                                                                                                                                            |
-| Performance    | low      | CSS container queries replace nothing that ran (the ladder is already gone). The on-canvas cluster is DOM over the canvas and does not repaint it. Canvas frame budget (#75) unaffected; performance-reviewer confirms.                                                                                                                                        |
-| Infrastructure | none     | No new Playwright config or CI step. The M0 harness is a spec in the existing `playwright.measure-toolbar.config.ts`, which is not a CI gate.                                                                                                                                                                                                                  |
-| Observability  | none     | —                                                                                                                                                                                                                                                                                                                                                              |
-| Testing        | **high** | Unit (registry, `Deck`, `ToolbarButton` label rule), structural (one label source; no width reads), journeys (`e2e-workspace-fit/command-surface.spec.ts` LINES/band bars, `pen-status.spec.ts`, `e2e-narrow-shell`, `e2e-gantt*`, minimap and float-paths journeys), a11y (ADR-0111 review for `Deck` scroll focus, `Menu` checkable items, the new cluster). |
+| Area                     | Impact | Notes                                                                                                                |
+| ------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| Frontend                 | high   | See the consumer list in §4.9                                                                                        |
+| Backend / Database / API | none   | No schema; database-architect not needed                                                                             |
+| Security                 | none   | Gates move with their controls; asserted by the existing suites                                                      |
+| Performance              | low    | CSS only for labels; the cluster is DOM over the canvas with no repaint; performance-reviewer confirms (#75)         |
+| Infrastructure           | none   | The M0 harness is a spec in the existing non-CI `playwright.measure-toolbar.config.ts`; no new config or CI step     |
+| Testing                  | high   | Unit, structural, the journeys in §2, `breakpoints.test.ts`, `container-query.structural.test.ts`, the manifest test |
 
-### Dependencies
+**Dependencies:**
 
-- **Before M1:** M0's readings, and CQ-1/2/3 answered.
-- Tailwind v4 container-query variants (`@container`, `@max-*`, theme `--container-*`). The builder verifies the
-  exact syntax against the installed version, and registers the claim in `scripts/dependency-claims.json` if a
-  docblock asserts it (§19.11).
-- The object bar renders in both views (D-c). M0 verifies; if false, D-c is dropped.
-- ADR-0100 (minimap panel position) for CQ-1.
-- Suites that locate commands by role and name will need updating where commands move:
-  `command-surface.spec.ts` (group membership), the shortcuts sheet, float paths, minimap, legend and comments
-  journeys. The suite-impact list is an M0 output.
+- M0 readings.
+- The CQ answers: gates in the plan graph.
+- Installed Tailwind v4 container variants: verify the syntax and register a `scripts/dependency-claims.json`
+  entry where a docblock asserts it.
+- The Gantt row menu's roster (D-c).
 
 ---
 
 ## 4. Solution design
 
-### 4.1 Inventory today (verified against code, 2026-10-09)
+### 4.1 Inventory today (verified in code)
 
-**Header row** (`app-header.tsx`, `plan-workspace-toolbar.tsx:2155-2355`):
+**Header:**
 
-| #   | Control                                                                                                                                | Where / rule today                                            | Source                                                       |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| H1  | Show Project Explorer (≡)                                                                                                              | leading; `lg:hidden` (below 1024 only)                        | `app-header.tsx:139-149`                                     |
-| H2  | Brand link                                                                                                                             | leading, always                                               | `:150`                                                       |
-| H3  | Project crumb (link)                                                                                                                   | section 1, `nowrap`, truncates; section capped `lg:max-w-1/2` | `plan-workspace-toolbar.tsx:2224-2234`, `app-header.tsx:137` |
-| H4  | Plan name crumb                                                                                                                        | as H3                                                         | same                                                         |
-| H5  | Plan status badge                                                                                                                      | after crumbs                                                  | `:2235`                                                      |
-| H6  | Edit plan (pencil, icon)                                                                                                               | `model.canWrite` only                                         | `:2244-2261`                                                 |
-| H7  | Diagram \| Gantt                                                                                                                       | section 2, registry `row: 'mode'`, labelled always            | `tsld-toolbar-items.tsx:2722-2750`                           |
-| H8  | Organisation switcher (native `select`)                                                                                                | section 3, `max-w-[12rem]`                                    | `app-header.tsx:163`                                         |
-| H9  | Account ▾ menu: email · Your account · My activity · Staff console (runtime) · **Diagram keyboard shortcuts** (plan routes) · Sign out | section 3                                                     | `account-chip.tsx:79-189`                                    |
+| #     | Control                                                                                               | Rule today                                        | Source                                                       |
+| ----- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
+| H1    | Show Project Explorer                                                                                 | `lg:hidden`                                       | `app-header.tsx:139-149`                                     |
+| H2    | Brand                                                                                                 | always                                            | `:150`                                                       |
+| H3/H4 | Project / Plan crumbs                                                                                 | `nowrap`, truncate; section capped `lg:max-w-1/2` | `plan-workspace-toolbar.tsx:2224-2234`, `app-header.tsx:137` |
+| H5    | Status badge                                                                                          | —                                                 | `:2235`                                                      |
+| H6    | Edit plan (pencil)                                                                                    | `model.canWrite`                                  | `:2244-2261`                                                 |
+| H7    | Diagram \| Gantt                                                                                      | registry `row: 'mode'` via `Toolbar`              | `tsld-toolbar-items.tsx:2722-2750`                           |
+| H8    | Organisation (bordered native `select`)                                                               | `max-w-[12rem]`                                   | `app-header.tsx:163`, `OrgSwitcher.tsx`                      |
+| H9    | Account ▾: email · Your account · My activity · Staff console · Diagram keyboard shortcuts · Sign out | —                                                 | `account-chip.tsx:79-189`                                    |
 
-**Command deck** (`Deck`, two declared rows, `Deck.tsx:96-120`). Rows → groups → registry sections. "Label"
-means what `Deck` paints: `ICON_ONLY` wins over `showLabel` (`Deck.tsx:433`).
+**Deck** (`Deck.tsx:96-120`: LOOK = View + Find; DO = Author + Plan). "Label" is what `Deck` paints.
 
-| #   | Id                     | Label (accessible name)             | Row · group · section | Tier | Label shown                      | Menu / popover contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Source                               |
-| --- | ---------------------- | ----------------------------------- | --------------------- | ---- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| D1  | `today`                | Go to today ▾ Go to date            | LOOK · View · frame   | 1    | yes                              | date picker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `:2666-2687`                         |
-| D2  | `zoom-out`             | Zoom out                            | LOOK · View · frame   | 2    | **no** (ICON_ONLY)               | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2596-2617`                         |
-| D3  | `zoom-in`              | Zoom in                             | LOOK · View · frame   | 2    | no                               | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2618-2637`                         |
-| D4  | `fit`                  | Fit to plan                         | LOOK · View · frame   | 2    | no                               | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2638-2657`                         |
-| D5  | `view`                 | View ▾ (· colour when not default)  | LOOK · View · lens    | 2    | yes                              | **Zoom** (Day/Week/Month/Quarter/Year radios) · **Structure** (Day grid, Month grid, Year grid, Month bands, WBS band, Logic links [Gantt]) · **Markers** (Data date line, Today line, Non-working, Labels, Activity codes [Diagram], Duration & float [Diagram]) · **Insight overlays** (Colour by: Criticality / Total float / WBS group; Dates, Feasible window, Link gaps [Diagram], Late-start overlay, Compare on diagram, Levelled placement, Flag over-allocated) · **Panels** (Minimap) · **Columns** (Gantt) | `:1918-2038`, `:462-522`, `:253-413` |
-| D6  | `resource-view`        | Resource view                       | LOOK · View · lens    | 2    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:319-334`, `:432-451`               |
-| D7  | `legend`               | Legend                              | LOOK · View · lens    | 2    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:384-396`                           |
-| D8  | `baseline-overlay`     | Baseline overlay                    | LOOK · View · lens    | 2    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:254-286`                           |
-| D9  | `search`               | Search or filter activities (field) | LOOK · Find           | 1    | field, 168 / 240 px              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2761-2778`, `m4-measurement.md:51` |
-| D10 | `filter`               | Filter ▾                            | LOOK · Find           | 2    | yes                              | Show only: Critical, Has constraint, Has conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:1562-1600`                         |
-| D11 | `next-conflict`        | Next conflict                       | LOOK · Find           | 1    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2798-2821`                         |
-| D12 | `next-conflict-status` | (read-out chip)                     | LOOK · Find           | 2    | read-out, when conflicts exist   | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2885-2920`                         |
-| D13 | `float-paths`          | Float paths                         | LOOK · Find           | 3    | yes                              | — (selection-gated)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `:2837-2859`                         |
-| D14 | `pen`                  | Start / Stop editing                | DO · Author · tools   | 1    | yes, primary slab                | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2957-3011`                         |
-| D15 | `add-activity`         | Add activity ▾                      | DO · Author           | 1    | yes                              | Draw: Task, Start milestone, Finish milestone · Span: Level of effort (+ placeholders)                                                                                                                                                                                                                                                                                                                                                                                                                                 | `:3012-3054`, `:738-`                |
-| D16 | `link-tool`            | Link activities ▾                   | DO · Author           | 1    | yes                              | Link type: FS / SS / FF / SF                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `:3058-3073`, `:937-`                |
-| D17 | `marquee-select`       | Select                              | DO · Author           | 2    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:3092-3108`                         |
-| D18 | `auto-arrange`         | Arrange                             | DO · Author           | 2    | yes                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:3109-3125`                         |
-| D19 | `apply-levelling`      | Apply levelled dates…               | DO · Author           | 3    | no (`'never'` **and** ICON_ONLY) | — (dialog)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `:3140-3166`                         |
-| D20 | `undo`                 | Undo                                | DO · Author           | 2    | no                               | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2288-2299`                         |
-| D21 | `undo-history`         | Recent edits ▾                      | DO · Author           | 2    | (caret)                          | Undo… / Redo… steps                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `:2300-2311`                         |
-| D22 | `redo`                 | Redo                                | DO · Author           | 2    | no                               | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `:2312-2323`                         |
-| D23 | `summary`              | Summary ▾                           | DO · Plan · object    | 2    | yes                              | status, data date, schedule strip, Edit plan…                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `:3211-3229`                         |
-| D24 | `analysis`             | Analysis ▾                          | DO · Plan · object    | 2    | yes                              | Baselines…, Earned value…, Resource histogram…, Health check… (dock), Compare revisions… (dock)                                                                                                                                                                                                                                                                                                                                                                                                                        | `:3254-3288`, `:1455-1553`           |
-| D25 | `calendar`             | Settings…                           | DO · Plan · object    | 2    | yes                              | — (dialog: calendar + six settings groups)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `:3295-3333`                         |
-| D26 | `comments`             | Comments                            | DO · Plan · object    | 2    | yes                              | — (dock toggle)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `:3379-3389`                         |
-| D27 | `export`               | Share & export ▾                    | DO · Plan · output    | 2    | yes                              | Schedule: CSV (+ matching) · Diagram: PNG whole/view, PDF whole/view · Interchange: XER, MSPDI · Deliver: Print…, Share…                                                                                                                                                                                                                                                                                                                                                                                               | `:3354-3374`, `:1637-1817`           |
+| #       | Id                             | Name                        | Row · group | Label            | Menu / contents                                                                                                         | Source       |
+| ------- | ------------------------------ | --------------------------- | ----------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------ |
+| D1      | `today`                        | Go to today ▾ Go to date    | LOOK · View | yes              | date picker                                                                                                             | `:2666-2687` |
+| D2–D4   | `zoom-out`, `zoom-in`, `fit`   | Zoom out / in, Fit to plan  | LOOK · View | no (`ICON_ONLY`) | —                                                                                                                       | `:2596-2657` |
+| D5      | `view`                         | View ▾                      | LOOK · View | yes              | Zoom radios · Structure (6) · Markers (6) · Insight (colour-by radios + 8 toggles) · Panels (Minimap) · Columns (Gantt) | `:1918-2038` |
+| D6      | `resource-view`                | Resource view               | LOOK · View | yes              | —                                                                                                                       | `:319-334`   |
+| D7      | `legend`                       | Legend                      | LOOK · View | yes              | —                                                                                                                       | `:384-396`   |
+| D8      | `baseline-overlay`             | Baseline overlay            | LOOK · View | yes              | —                                                                                                                       | `:254-286`   |
+| D9      | `search`                       | Search or filter activities | LOOK · Find | field 168 / 240  | —                                                                                                                       | `:2761-2778` |
+| D10     | `filter`                       | Filter ▾                    | LOOK · Find | yes              | Critical, Has constraint, Has conflict                                                                                  | `:1562-1600` |
+| D11/D12 | `next-conflict`, chip          | Next conflict               | LOOK · Find | yes, read-out    | —                                                                                                                       | `:2798-2920` |
+| D13     | `float-paths`                  | Float paths                 | LOOK · Find | yes              | —                                                                                                                       | `:2837-2859` |
+| D14     | `pen`                          | Start / Stop editing        | DO · Author | yes, primary     | —                                                                                                                       | `:2957-3011` |
+| D15     | `add-activity`                 | Add activity ▾              | DO · Author | yes              | Task, Start / Finish milestone, Level of effort                                                                         | `:3012-3054` |
+| D16     | `link-tool`                    | Link activities ▾           | DO · Author | yes              | FS / SS / FF / SF                                                                                                       | `:3058-3073` |
+| D17     | `marquee-select`               | Select                      | DO · Author | yes              | —                                                                                                                       | `:3092-3108` |
+| D18     | `auto-arrange`                 | Arrange                     | DO · Author | yes              | —                                                                                                                       | `:3109-3125` |
+| D19     | `apply-levelling`              | Apply levelled dates…       | DO · Author | no               | dialog                                                                                                                  | `:3140-3166` |
+| D20–D22 | `undo`, `undo-history`, `redo` | Undo, Recent edits ▾, Redo  | DO · Author | no               | steps                                                                                                                   | `:2288-2323` |
+| D23     | `summary`                      | Summary ▾                   | DO · Plan   | yes              | status, data date, schedule strip, Edit plan…                                                                           | `:3211-3229` |
+| D24     | `analysis`                     | Analysis ▾                  | DO · Plan   | yes              | Baselines…, Earned value…, Resource histogram…, Health check…, Compare revisions…                                       | `:1455-1553` |
+| D25     | `calendar`                     | Settings…                   | DO · Plan   | yes              | dialog                                                                                                                  | `:3295-3333` |
+| D26     | `comments`                     | Comments                    | DO · Plan   | yes              | dock toggle                                                                                                             | `:3379-3389` |
+| D27     | `export`                       | Share & export ▾            | DO · Plan   | yes              | CSV (+ matching), PNG ×2, PDF ×2, XER, MSPDI, Print…, Share…                                                            | `:1637-1817` |
 
-Outside the two toolbars, for context only and not moved here (except D-c): the object/selection bar
-(`selection-actions.tsx`: Zoom to selection, Isolate, Notes, Progress, …), the foot row (facts, Recalculate when
-stale, Expand, pen status and hand-off), and the Gantt row menu.
+### 4.2 Rules that change, and their true sources
 
-### 4.2 Which width-era rules no longer apply (amendments)
-
-| Rule today                                                                                         | Where                                                                  | Why it no longer holds                                                            | Change                                                                                                                                                                  |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Four width bands (`comfortable/compact/condensed/collapsed`) resolved from the row's `clientWidth` | ADR-0090 D6; `toolbar-registry.ts:53-125`                              | No caller since ADR-0109 (`:108-112`); `Deck` passes `'comfortable'`              | **Retire.** Replaced by one CSS container token (R3)                                                                                                                    |
-| `showLabel: { atLeast: band }`; `triggersAreCompact`                                               | ADR-0091 D3a; `toolbar-registry.ts:157`; `tsld-toolbar-items.tsx:1114` | Always resolves to "labelled"                                                     | **Re-point** to the container token (`{ below: 'roomy' }`); triggers honour it through CSS                                                                              |
-| `ICON_ONLY` id list inside `Deck`                                                                  | `Deck.tsx:137-148`                                                     | A second source that overrides the registry; lists a non-item (`print`)           | **Delete**; the registry's `showLabel` is the only source                                                                                                               |
-| `tier` as prominence, `priority` as a demotion rank                                                | ADR-0031, ADR-0090 D2, ADR-0091 D2                                     | Inert (`toolbar-registry.ts:41-50`, `:285-310`); nothing ranks or demotes         | **Delete** `priority`, `priorityOf`, `partitionByTier`, and the tier-mixing guard. Keep `tier` only if the reviewers want it as documentation; default is delete (#193) |
-| "Never `overflow-x-auto`" for a command surface                                                    | ADR-0109 D1; `DESIGN_SYSTEM.md:225`                                    | ADR-0179 D2 allows the band to scroll below the floor; WCAG 1.4.10 Note 2         | **Amend:** permitted below the floor or 600 px tall only (R6)                                                                                                           |
-| A declared row's lines are produced by flex only; rows always stack                                | ADR-0133 D1                                                            | On monitors wide enough for both rows, stacking wastes a line                     | **Amend:** a declared row is the unit of wrap; rows may share a line (R2)                                                                                               |
-| Viewport commands live in the deck's frame section, shaded in the Gantt                            | ADR-0031 group 1, ADR-0091 D3                                          | Shading a canvas-only control in a view without a canvas costs a slot for nothing | **Amend** (CQ-1): on-canvas cluster                                                                                                                                     |
-| Keyboard shortcuts in the Account menu                                                             | ADR-0091 D6b                                                           | Chosen because the `⋯` was the only alternative; a desktop app has header room    | **Amend** (D-b)                                                                                                                                                         |
-| "Captions fold" / `min-h-9`                                                                        | `DESIGN_SYSTEM.md:236-238`, `:304`                                     | Already false (§1 item 4)                                                         | **Correct the doc**                                                                                                                                                     |
-| Header section 1 uncapped "below `lg`… a phone's width"                                            | `app-header.tsx:131-133` comment                                       | Phone unsupported (ADR-0179/0181); below the floor is reflow-only                 | Correct the comment. Behaviour stays (below-floor reflow)                                                                                                               |
-
-**Not amended, on purpose:** ADR-0118/0183 heights (36 / 44 px) and their pointer axis; ADR-0133 D5 (pen leads DO);
-ADR-0028 pen gating; ADR-0082/0083 shade-with-reason; ADR-0117 tooltips; ADR-0135 focus hand-off; ADR-0093
-(applied, not changed).
+| Rule                                                      | True source                                                                           | Status                                              | Change                                                                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Width bands, `{ atLeast }` labels, `triggersAreCompact`   | ADR-0090 D6, ADR-0091 D3a                                                             | **Already superseded by ADR-0109**; dead code since | **Delete.** This completes the supersession; no ADR amendment is needed for these                                                             |
+| `ICON_ONLY` in `Deck`                                     | `Deck.tsx:137-148` (no ADR)                                                           | live, conflicting                                   | Delete; one resolver                                                                                                                          |
+| `tier` / `priority`                                       | ADR-0031 tier text; kept deliberately by ADR-0110 M5 (#193)                           | live text, inert code                               | **Overturn the keep** (ADR-0105 contract change): the deck has no ranking and will not get one under R1                                       |
+| "Never `overflow-x-auto`"                                 | **`DESIGN_SYSTEM.md:225`**, not ADR-0109 D1 (whose words are "wraps; it never hides") | live                                                | Amend the design-system rule: allowed below the floor, as ADR-0179 D2 already permits. ADR-0109 D1 still holds: nothing is hidden, it scrolls |
+| A group may not move rows responsively; rows are declared | ADR-0133 D1                                                                           | live                                                | Kept for groups. Rows sharing a line is argued in §4.4 (D-m)                                                                                  |
+| Zoom and fit in deck group 1                              | ADR-0031, ADR-0091 D3                                                                 | live                                                | Amend (CQ-1)                                                                                                                                  |
+| Minimap toggle inside View ▾                              | ADR-0100                                                                              | live                                                | Amend (CQ-1)                                                                                                                                  |
+| Keyboard shortcuts in the Account menu                    | ADR-0091 D6b                                                                          | live                                                | **Unchanged** (D-b)                                                                                                                           |
 
 ### 4.3 Architecture overview
 
@@ -429,273 +416,197 @@ ADR-0028 pen gating; ADR-0082/0083 shade-with-reason; ADR-0117 tooltips; ADR-013
 flowchart TB
   subgraph Band["Chrome band (Surface tone=chrome, 3px --primary rule)"]
     direction TB
-    subgraph Header["Header row: one line at ≥1024 (40 fine / 44 coarse)"]
+    subgraph Header["Header: one line ≥1024"]
       direction LR
-      H1["Brand · Project / Plan · Status · [ⓘ Summary] · [✎ Edit]"] --- H2["Diagram | Gantt"] --- H3["Org ▾ · [⌨ Shortcuts] · Account ▾"]
+      I["Brand · Project / Plan · Status · [Plan summary] · [Edit plan details] (identity row)"] --- M["Diagram | Gantt (mode row)"] --- O["Org (ghost button) · Account ▾"]
     end
-    subgraph Deck["Command deck (@container)"]
+    subgraph Deck["Deck (@container/deck)"]
       direction TB
-      subgraph LOOK["LOOK row: one line ≥1024 fine"]
+      subgraph LOOK["LOOK"]
         direction LR
-        L1["View: Go to today ▾ · View ▾ · Baseline overlay"] --- L2["Find: Search · Filter ▾ · Next conflict (chip)"] --- L3["Panels: Legend · Resource view · Comments"]
+        V["View: Go to today ▾ · View ▾ · Baseline overlay*"] --- F["Find: Search · Filter ▾ · Next conflict"] --- P["Panels (trailing): Legend · Resource view · Comments*"]
       end
-      subgraph DO["DO row: one line ≥1024 fine"]
+      subgraph DO["DO"]
         direction LR
-        A1["Author: PEN · Add ▾ · Link ▾ · Select · Arrange · ⚖ · ↶ ▾ ↷"] --- P1["Plan (trailing): Analysis ▾ · Settings… · Share & export ▾"]
+        A["Author: PEN · Add ▾ · Link ▾ · Select · Arrange · Apply levelled dates (roomy) · Undo · Recent ▾ · Redo"] --- PL["Plan (trailing): Analysis ▾ · Settings* · Share & export ▾"]
       end
     end
   end
-  subgraph Main["main → workspace"]
-    direction TB
-    Stage["Diagram stage"] --> Cluster["Viewport cluster (bottom-right): − · + · Fit · Minimap"]
-    Stage --> ObjBar["Object bar (selection): … · Float paths (D-c)"]
-    Foot["Foot row (unchanged)"]
+  subgraph Stage["Diagram stage"]
+    MM["Minimap (when open)"] --> CL["Diagram view toolbar: − · + · Fit · Minimap (canvas row)"]
   end
-  Band --> Main
+  Band --> Stage
+  R["One registry: rows identity · mode · strip · canvas"] --> Header
+  R --> Deck
+  R --> Stage
 ```
 
-The shell stays plan-unaware (ADR-0029). The header's Summary and Shortcuts arrive through the existing `identity`
-slot and a `HelpActionProvider` registration, the same way the mode cluster and the shortcuts callback reach the
-header today (`chrome-band.tsx:94-130`, `account-chip.tsx:163`).
+`*` marks the three compact items (CQ-2). The shell stays plan-unaware (ADR-0029): the identity row is portalled
+through the existing `identity` slot.
 
-### 4.4 Layout rules (the new standard)
+### 4.4 Layout rules
 
-- **R1. Two declared rows, each one line, from the floor up.** Fine pointer: LOOK and DO are each one line at
-  every width ≥ 1024. Coarse: each is at most two lines at 1024 and one line at ≥ 1440 (SC-3). Enforced by
-  `command-surface.spec.ts` LINES, tightened to the new readings.
-- **R2. A declared row is the unit of wrap.** The deck is a wrapping flex container whose two children are the
-  rows; a row does not wrap internally at ≥ 1024 fine. If both fit, they share one line; if not, DO goes below
-  LOOK. A command can never change rows (ADR-0133's guarantee, kept).
-- **R3. A label gives way by declaration and container width, never by measurement.** The registry declares
-  `showLabel: 'always' | 'never' | { below: 'roomy' }`. `Deck` is `@container/deck`. The label span of a
-  `{ below }` item is `sr-only` under that container size (accessible name kept, tooltip on). The size is one
-  theme token in `globals.css` (`--container-deck-roomy`, set from M0, expected around 78–80rem), never an
-  arbitrary value. This is not the old ladder: the deck's width is imposed by the full-bleed band and does not
-  depend on its content, so there is no feedback loop to damp, and no JavaScript reads a width.
-- **R4. Edges are anchored.** The last group of each row is pushed to the trailing edge with **one** `ml-auto` per
-  row (ADR-0091 M7's single-auto-margin rule): Panels on LOOK, Plan on DO. The first control of each row sits at
-  the leading inset.
-- **R5. A control lives on the surface of its subject.** Plan facts → header. Viewport → the diagram. Selection →
-  object bar. Application reference → header. Panels → the Panels section. Deliverables → the trailing end of DO.
-- **R6. Below the floor, one scrolling line.** At `(max-width: 63.99rem), (max-height: 37.49rem)` the deck renders
-  LOOK then DO on one line, `overflow-x-auto`, scrollbar visible, `flex-nowrap`. Focusing a control by arrow key
-  scrolls it into view. The two-row deck and the line are the same `Deck` and registry; only CSS changes.
-- **R7. No new heights, colours or type sizes.** `--control-h` 36 / 44, `text-sm font-medium`, Lucide 16 px, the
-  existing state ladder (`toolbar-styles.ts`).
-- **R8. No flag** (ADR-0088 D1). Every user-facing milestone names its entry point and lands with a journey
-  (ADR-0081).
+- **R1. Two declared rows; one line each is the measured target, not a constraint.** Rows keep `flex-wrap` at
+  ≥ 1024 as a safety valve, so text-only zoom or a long label wraps rather than overlapping (SC-7). The
+  `command-surface.spec.ts` LINES gate pins the measured outcome.
+- **R2. Rows may share a line (D-m).** **The ADR-0133 D1 tension.** D1 declared the rows because flex once moved
+  _groups_ between lines, so commands changed place. Under R2 a group's row never changes and its order within the
+  row never changes; only the DO row's _position_ changes (below LOOK, or beside it). That happens at one width
+  boundary that does not move with content. Membership assertions stay. If the UX review judges the move itself
+  disorienting, drop R2.
+- **R3. Labels: one API, one resolver, one helper** (US-2). The container is the deck. `Toolbar` has no container
+  and treats `'roomy'` as `'always'`. The token is `--container-roomy` in `@theme`, its value from M0 (the smallest
+  deck width at which every row is one line with every label visible).
+- **R4. One trailing group per row, when stacked:** Panels on LOOK and Plan on DO, each pushed by a single `ml-auto`.
+- **R5. A control lives on its subject's surface:**
+  - plan facts in the identity row;
+  - the viewport on the diagram;
+  - the selection on the selection bar and Gantt row menu;
+  - panels in the Panels group;
+  - deliverables closing the DO row.
+- **R6. Below the floor (width only):** under `max-lg:`, one scrolling line (US-6). The `squat` height variant
+  makes the band scroll away vertically.
+- **R7. No new heights, colours or type sizes.**
+- **R8. No flag; every milestone names its entry point and lands with a journey.**
 
-### 4.5 Compact-label candidates (CQ-2)
+### 4.5 The compact set (CQ-2, UX review reading)
 
-Applied **in this order, and only as far as M0 shows each row needs** to hold one line at 1024 × 600 fine. The
-test is the `Deck` docblock's own test: "would a planner who has never seen this product guess wrong?"
-(`Deck.tsx:126-136`).
+| Item             | Row           | Saves  | Glyph         | Why                                                  |
+| ---------------- | ------------- | ------ | ------------- | ---------------------------------------------------- |
+| Baseline overlay | LOOK          | 107 px | Layers        | Its largest saving; a lens with a reason when shaded |
+| Comments         | LOOK (Panels) | 71 px  | speech bubble | Universal                                            |
+| Settings…        | DO            | 66 px  | gear          | Universal                                            |
 
-| Order | Item             | Row           | Icon                   | Why it passes the test             |
-| ----- | ---------------- | ------------- | ---------------------- | ---------------------------------- |
-| 1     | Settings…        | DO            | gear                   | the most standard settings glyph   |
-| 2     | Comments         | LOOK (Panels) | speech bubble          | universal for comments             |
-| 3     | Select           | DO            | dashed-marquee pointer | standard selection-tool glyph      |
-| 4     | Baseline overlay | LOOK          | layers                 | weaker; only if 1–3 are not enough |
-| 5     | Resource view    | LOOK (Panels) | people                 | weaker                             |
+LOOK is about 1120 → about 942 in a 1008 px row. DO is about 1000 and fits "by a hair", so Settings compacting gives
+it about 66 px of margin. **Not compacted:** Resource view (its glyph reads as "members"), Select, and every
+custom trigger (US-2). Apply levelled dates… is `'roomy'`: labelled at roomy widths, icon-only below.
+**M0's exit rule:** if any row misses one line by **less than 20 px** in any stress state, stop and ask rather than
+compacting a fourth item.
 
-Never compacted: the pen, Add activity, Link activities, Arrange, Go to today, View, Filter, Next conflict,
-Analysis, Share & export, Legend, the search field. These are names a planner searches for, and two
-(`Arrange`, `Float paths`) the `Deck` docblock already names as failing the glyph test.
+### 4.6 Placement, item by item
 
-### 4.6 Item-by-item placement
+| Item                                   | New home                             | Size / label                                                                                      | Why                                                  |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| H1–H5                                  | stay                                 | —                                                                                                 | identity                                             |
+| **D23 Summary**                        | identity row, after status           | icon button "Plan summary", popover, tooltip                                                      | plan facts beside the plan name; −about 100 px on DO |
+| **H6 Edit plan → "Edit plan details"** | identity row                         | icon button                                                                                       | registered beside Summary; renamed against the pen   |
+| H7 Diagram \| Gantt                    | stays                                | labelled segment                                                                                  | ADR-0091 D1                                          |
+| H8 Organisation                        | stays trailing                       | ghost button + menu (CQ-4)                                                                        | fixes the bordered select on every header            |
+| H9 Account                             | stays; shortcuts stay inside         | —                                                                                                 | D-b                                                  |
+| D1 Go to today ▾                       | stays first                          | labelled split                                                                                    | works in both views                                  |
+| **D2–D4 Zoom, Fit**                    | corner cluster                       | icon-only, tooltips                                                                               | CQ-1                                                 |
+| D5 View ▾                              | stays                                | panel in two columns at 1024; the Panels fieldset deleted once Minimap leaves (its sole occupant) | SC-13; the `panels` `ViewToggleGroupId` goes         |
+| D8 Baseline overlay                    | stays in View                        | `'roomy'`                                                                                         | CQ-2                                                 |
+| D9–D12 Find                            | stay                                 | —                                                                                                 | —                                                    |
+| **D13 Float paths**                    | selection bar + Gantt row menu (D-c) | labelled                                                                                          | ADR-0093                                             |
+| **D6/D7 Resource view, Legend**        | Panels (`help`)                      | labelled                                                                                          | they open panels                                     |
+| **D26 Comments**                       | Panels                               | `'roomy'`                                                                                         | opens a panel; rebalances the rows                   |
+| D14–D18, D20–D22                       | stay                                 | as today (`'never'` for undo/redo)                                                                | —                                                    |
+| D19 Apply levelled dates…              | stays                                | `'roomy'`                                                                                         | D-l                                                  |
+| D24 Analysis ▾                         | stays, Plan                          | labelled                                                                                          | menu kept as is (D-f cut)                            |
+| D25 Settings…                          | stays, Plan                          | `'roomy'`                                                                                         | CQ-2                                                 |
+| D27 Share & export ▾                   | stays, last                          | labelled, the row's deliberate closing action (V4)                                                | deliverables                                         |
+| **Minimap**                            | corner cluster (promotion target)    | icon toggle, `aria-pressed`                                                                       | navigation of the same viewport                      |
 
-"New size / label" uses the registry vocabulary. Every row has a reason. "Stays" is a decision too.
+Menus re-evaluated and kept: Add, Link, Recent edits, Filter, Analysis, Share & export, View. Colour-by stays in
+View, with the trigger's annotation.
 
-**Header**
+### 4.7 Corner cluster geometry (CQ-1)
 
-| Item                                      | New home                       | New size / label                                                           | Why                                                                                                                                                   |
-| ----------------------------------------- | ------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H1 Explorer drawer                        | stays; below 1024 only         | icon                                                                       | Above 1024 the Explorer is docked                                                                                                                     |
-| H2 Brand                                  | stays leading                  | —                                                                          | Identity                                                                                                                                              |
-| H3/H4 Crumbs                              | stay; the name gives way first | text, truncates with `title`                                               | Only route from a plan to its project (`plan-workspace-toolbar.tsx:2206-2219`)                                                                        |
-| H5 Status                                 | stays                          | badge                                                                      | Plan fact                                                                                                                                             |
-| **D23 Summary → header**                  | after the status badge         | `Button` ghost icon, `Info`, name "Plan summary", tooltip                  | Its content is the plan's facts and Edit plan (`use-tsld-toolbar-context.tsx:262-274`); belongs by the name (R5). Frees about 100 px of DO (estimate) |
-| H6 Edit plan                              | stays, after Summary           | icon (`SquarePen`)                                                         | One-press edit is a deliberate shortcut                                                                                                               |
-| H7 Diagram \| Gantt                       | stays, section 2               | labelled segment                                                           | A mode belongs beside the identity (ADR-0091 D1)                                                                                                      |
-| H8 Organisation                           | stays trailing                 | select, `max-w-[12rem]`                                                    | Leading placement costs plan-name width at 1024 (D-i)                                                                                                 |
-| **Keyboard shortcuts → header** (from H9) | trailing, before Account       | ghost icon, `Keyboard`, tooltip "Keyboard shortcuts (?)", plan routes only | A reference about the app, on a keyboard-heavy desktop surface; the Account menu is about the person (D-b)                                            |
-| H9 Account ▾                              | stays last                     | avatar + caret                                                             | Menu becomes: email, Your account, My activity, Staff console, Sign out                                                                               |
+- **Today:** the minimap is `absolute right-3` with `z-10`, a fixed 200 × 120 box (`TsldMinimap.tsx:43,400`), and is
+  rendered only when `minimapActive && minimapRoom` (`TsldCanvas.tsx:2685`).
+- **Design:** one positioned column at the stage's bottom-right (inset `3`, 12 px, matching the minimap). The
+  **cluster is fixed at the bottom**; the minimap, when open, stacks **above** it with `gap-2`. Opening or closing
+  the minimap never moves the button the pointer is on. The minimap's own `bottom` offset becomes the column's job
+  (M0 reads its current `bottom`).
+- **Room:** `minimapRoom` also accounts for the cluster's height. When there is no room, the toggle is shaded with a
+  reason and the cluster stays.
+- **Overlaps:**
+  - the foot row is outside the stage, so no overlap;
+  - a docked panel narrows the stage, and the column moves with the stage's right edge;
+  - the selection bar is docked in the foot row, not the stage (M0 verifies);
+  - in the loading state the cluster renders shaded.
+- **Gantt:** the stage unmounts, so the cluster unmounts and focus hands off (US-3). The band does not change, so
+  there is no layout shift.
+- **Reveal margin (SC-15):** the keyboard reveal that scrolls a focused activity into view adds a bottom-right
+  margin equal to the column's rect, so the activity is never under the cluster or the minimap. The journey focuses
+  the bottom-right-most activity and asserts its rect does not intersect either.
+- **Style:** `toolbarCardVariants`, `shadow-sm` (elevation 1), inside the canvas surface scope (ADR-0055).
 
-**LOOK row**
+### 4.8 Visual brief (each is an M6 item with before/after screenshots at four viewports)
 
-| Item                                       | New home                                                | New size / label                                                          | Why                                                                                                                                                             |
-| ------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1 Go to today ▾                           | stays, first                                            | split, labelled                                                           | Works in both views (the caret needs only an anchored plan, `:592-596`); first in the row that frames                                                           |
-| **D2–D4 Zoom out, Zoom in, Fit → diagram** | on-canvas viewport cluster (CQ-1)                       | icon-only, tooltips                                                       | Canvas-only commands on the canvas; absent rather than shaded in the Gantt; zero height                                                                         |
-| D5 View ▾                                  | stays                                                   | labelled popover; panel in columns at ≥ 1280 (D-g); Minimap row leaves it | The settings drawer for the diagram; 30-odd rows deserve a wide panel on a wide screen                                                                          |
-| D8 Baseline overlay                        | stays in View group                                     | labelled, compact candidate 4                                             | A mark drawn **on** the diagram, a lens rather than a panel                                                                                                     |
-| D9 Search                                  | stays, starts Find                                      | 168 / 240 px field                                                        | Unchanged (M4)                                                                                                                                                  |
-| D10 Filter ▾                               | stays                                                   | labelled                                                                  | —                                                                                                                                                               |
-| D11/D12 Next conflict + chip               | stay                                                    | labelled + read-out                                                       | A count that must be seen without opening anything (ADR-0094)                                                                                                   |
-| **D13 Float paths → object bar**           | object half of the selection bar + Gantt row menu (D-c) | labelled                                                                  | Its subject is the selected activity (ADR-0093); `selection-actions.tsx:198` waited for a destination both views share, which now exists. **Conditional on M0** |
-| **D7 Legend → Panels**                     | Panels section, trailing end of LOOK                    | labelled                                                                  | Opens a panel beside the diagram                                                                                                                                |
-| **D6 Resource view → Panels**              | Panels                                                  | labelled, compact candidate 5                                             | Opens a panel                                                                                                                                                   |
-| **D26 Comments → Panels** (from DO)        | Panels                                                  | labelled, compact candidate 2                                             | Opens a panel (`notesOpen`); reading, not authoring. Rebalances LOOK and DO                                                                                     |
+| V   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                    | Tokens / primitive                                   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| V1  | **Row identity:** LOOK and DO read as two rows at a glance: a faint leading mark or a tint difference on the DO row, chosen at review                                                                                                                                                                                                                                                                                       | `--chrome-muted` / `--chrome-accent` only            |
+| V2  | **Subtle group containers:** each deck group a low-contrast pill, matching the Diagram \| Gantt segment's container, replacing bare seams where it reads better (and so removing the leading-seam defect, SC-12)                                                                                                                                                                                                            | `rounded-md`, `--chrome-muted`                       |
+| V3  | **Fewer dead-grey controls:** audit every control shaded in an ordinary editing state (5+ today). ADR-0082 keeps shade-with-reason for a state the reader can change (for example Baseline overlay with no baseline), so the remedy is visual (a quieter shaded style) plus omission only where an action does not apply. Recommendation: the Author group reads as one locked unit led by the pen when the pen is not held | existing `disabled` state variant                    |
+| V4  | **Share & export is the row's deliberate closing action:** secondary-filled                                                                                                                                                                                                                                                                                                                                                 | `secondary` variant on chrome (`--chrome-secondary`) |
+| V5  | **Organisation switcher as a ghost button** with the org icon and a menu (CQ-4), on every header                                                                                                                                                                                                                                                                                                                            | `Button` ghost + `Menu`                              |
+| V6  | **View panel at the floor:** two columns, collapsible sections (SC-13)                                                                                                                                                                                                                                                                                                                                                      | `Popover`, `fieldset`                                |
+| V7  | **Balance:** ≤ 25 % empty per row at 1912 (SC-11); one trailing group per row                                                                                                                                                                                                                                                                                                                                               | —                                                    |
 
-**DO row**
+If the product owner declines V1–V5, SC-16 drops the word "amazing" and keeps only SC-1 to SC-15.
 
-| Item                               | New home                     | New size / label                                             | Why                                                                            |
-| ---------------------------------- | ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| D14 Pen                            | stays first                  | primary slab, labelled                                       | ADR-0133 D5                                                                    |
-| D15 Add activity ▾                 | stays                        | labelled                                                     | Name is the affordance                                                         |
-| D16 Link activities ▾              | stays                        | labelled                                                     | —                                                                              |
-| D17 Select                         | stays                        | labelled, compact candidate 3                                | Standard glyph                                                                 |
-| D18 Arrange                        | stays                        | labelled                                                     | Fails the glyph test (`Deck.tsx:130-132`)                                      |
-| D19 Apply levelled dates…          | stays                        | `'never'` in the registry (one source)                       | Already decided (ADR-0090, `:3150-3156`)                                       |
-| D20–D22 Undo, Recent edits ▾, Redo | stay, end of Author          | icon-only, `'never'`                                         | Universal glyphs                                                               |
-| D24 Analysis ▾                     | stays, Plan group (trailing) | labelled; Health check and Compare revisions checkable (D-f) | Measurement tools used occasionally; the dock items show whether they are open |
-| D25 Settings…                      | stays                        | labelled, compact candidate 1                                | Gear                                                                           |
-| D27 Share & export ▾               | stays, **last**              | labelled                                                     | Deliverables close the row; contents unchanged                                 |
+### 4.9 Component changes and consumers
 
-**New: viewport cluster on the diagram (CQ-1)**
+| Component                                                                                                    | Change                                                                                                                                                                         | Contract (ADR-0105) |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `toolbar-registry.ts` (+ `toolbar-registry.test.ts`)                                                         | `labelVisibility`; rows `identity`, `canvas`; delete bands, `ToolbarLayoutEnv.layout`, `isVisible`'s env argument, `priority`, `priorityOf`, `partitionByTier`, the tier guard | yes                 |
+| `toolbar-styles.ts`                                                                                          | `toolbarLabelClass` / `<ToolbarLabel>`; one resolver                                                                                                                           | yes                 |
+| `Deck.tsx` (+ tests)                                                                                         | container, `DECK_GROUPS` with Panels (`help`), trailing groups, scroll line, no `ICON_ONLY`                                                                                    | yes                 |
+| `Toolbar.tsx` (+ `Toolbar.test.tsx`)                                                                         | uses the resolver (`'roomy'` → `'always'`); `ToolbarItemRenderApi.layout` removed                                                                                              | yes                 |
+| `toolbar-band.tsx`                                                                                           | density-band text and provider purpose re-read; deleted if nothing reads it                                                                                                    | yes                 |
+| `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, the Analysis / Share & export / Add / Link triggers | the label helper; `compact` removed                                                                                                                                            | yes                 |
+| `tsld-toolbar-items.tsx`                                                                                     | the moves; the stale docblocks fixed                                                                                                                                           | —                   |
+| `app-header.tsx`, the identity portal in `plan-workspace-toolbar.tsx`                                        | identity-row `Toolbar`                                                                                                                                                         | entry point         |
+| `OrgSwitcher.tsx`                                                                                            | ghost button + Menu (CQ-4)                                                                                                                                                     | yes                 |
+| `selection-actions.tsx`, `GanttRowMenu.tsx`, `GanttPanel.tsx`                                                | Float paths (D-c); correct `:183-199`, `:206` if stale                                                                                                                         | entry point         |
+| `TsldCanvas.tsx`, `TsldMinimap.tsx`                                                                          | the column; `minimapRoom`; reveal margin                                                                                                                                       | entry point         |
+| `globals.css`, `breakpoints.test.ts`, `container-query.structural.test.ts`                                   | `--container-roomy`, `@custom-variant squat`                                                                                                                                   | token               |
+| `measure-toolbar/m1-icon-only.spec.ts`                                                                       | harness reads `ICON_ONLY`: update or delete                                                                                                                                    | —                   |
+| Every `isVisible` call site using `env`                                                                      | typecheck-driven                                                                                                                                                               | —                   |
 
-| Item                           | From               | Size                                     | Why                                                               |
-| ------------------------------ | ------------------ | ---------------------------------------- | ----------------------------------------------------------------- |
-| Zoom out, Zoom in, Fit to plan | deck frame section | `--control-h` icon buttons, tooltips     | Above                                                             |
-| Minimap                        | View ▾ › Panels    | icon toggle (`Map` glyph), pressed state | Navigation of the same viewport; the map control's natural member |
+### 4.10 ADR outline (ADR-0184, proposed)
 
-**Menus, re-evaluated and kept as menus:** Add ▾ (draw kind), Link ▾ (link type), Recent edits ▾, Filter ▾,
-Analysis ▾ and Share & export ▾. Each holds alternatives or occasional actions behind a labelled trigger. That
-is the right shape on any screen, not a space saving. View ▾ keeps its settings. Colour-by stays inside it, with
-the trigger's "View · WBS group" annotation (`:1900-1916`). Promoting it would cost about 250 px for a setting
-changed rarely.
+**"A command surface is designed from the floor up: two declared rows, labels that give way by declaration, tools on
+their subject's surface, and one scrolling line below the floor."**
 
-### 4.7 Visual and size decisions (tokens)
+- **D1:** R1 + R2, with the ADR-0133 D1 tension argued.
+- **D2:** the one label API; deleting the ladder completes ADR-0109's supersession of ADR-0090 D6 and ADR-0091 D3a;
+  #193's keep (ADR-0110 M5) is overturned.
+- **D3:** placements: the corner cluster (amends ADR-0031 group 1, ADR-0091 D3, ADR-0100), the identity row, Panels
+  via `help`, Float paths.
+- **D4:** below the floor: amends `DESIGN_SYSTEM.md:225`; uses ADR-0179 D2; WCAG 1.4.10 Note 2.
+- **D5:** no flag.
+- **Rejected options:**
+  - menus to reach one line (against "all commands visible", ADR-0109);
+  - JS label measurement;
+  - whole-shell scroll at every short height;
+  - a second registry for the cluster;
+  - Shortcuts in the header (low value; `?` exists).
 
-| Decision                    | Token / primitive                                                                                                | Note                                                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Band surface                | `Surface tone="chrome"` (`--chrome`), `border-b-[3px] border-b-primary`                                          | Unchanged (`chrome-band.tsx:74`)                                                                             |
-| Control box                 | `toolbarControlVariants`, `min-h-(--control-h)`, `rounded-md`, `text-sm` medium, Lucide `size-4`                 | Unchanged; one geometry (ADR-0110)                                                                           |
-| Group seam vs. section seam | group rule `inset-y-1/5` (60 %), section `TOOLBAR_INSET_RULE` (50 %)                                             | Unchanged hierarchy (`Deck.tsx:361-365`)                                                                     |
-| Spacing                     | `gap-1` within a section, `gap-2` + rule between groups, `gap-2` between rows                                    | Spacing scale only; M0 checks whether `gap-1` between rows reads cleaner (saves 4 px)                        |
-| Emphasis                    | pen = only `primary` slab; armed tools `armed`; toggles `selected`                                               | `defineToolbar` enforces one primary per registry                                                            |
-| Compact label               | `sr-only` under `@max-[--container-deck-roomy]/deck`; tooltip `purpose: 'name-echo'`                             | ADR-0117                                                                                                     |
-| Viewport cluster            | `bg-background border border-border rounded-lg shadow-sm`, inset `4` (16 px) from the stage edges; one `Toolbar` | Elevation level 1 (`DESIGN_SYSTEM.md:170-180`); canvas surface scope (ADR-0055); does not repaint the canvas |
-| Header buttons              | `Button variant="ghost" size="icon"`                                                                             | Same as Edit plan (`plan-workspace-toolbar.tsx:2251-2260`)                                                   |
-| Scrolling line              | `overflow-x-auto`, visible scrollbar, `scroll-px-2`                                                              | No hidden-scrollbar trick; the affordance must be visible                                                    |
-| Motion                      | none on wrap, compaction or row-sharing; hover and press 150 ms                                                  | `DESIGN_SYSTEM.md:184-192`                                                                                   |
-
-**Height estimates** (derived, not measured; M0 replaces them). A deck line is `--control-h` (36) and rows are
-`gap-2` (8) apart (`Deck.tsx:298`), inside a `py-1` wrapper (`plan-workspace-toolbar.tsx:2406`). So two lines are
-36 + 8 + 36 + 8 = **88 px** and four lines **168** (agrees with the measured 168). The floor therefore gains
-**about 80–88 px of canvas**: 274 → about 354–362 at 1024 × 600 fine (SC-1). Below the floor the band becomes the
-header plus one line (36 + 8): at 640 wide 88 + 44 + 3 = **about 135 px** (today 355); at 320 wide 136 + 44 + 3 =
-**about 183 px** (today 603). SC-5's bars (150 / 200) leave margin for M0's reading.
-
-**Width estimates for the floor** (from M4's group widths, `m4-measurement.md:46`). LOOK today 733 + 513 = 1246,
-less the three zoom controls and their section (about 130), less Float paths (about 110), plus Comments (about
-110): **about 1120 against 1008**, so compact candidates 2 and 4 (about 70 + 100) bring it to about 950. DO today
-627 + 622 = 1249, less Summary (about 100), less Comments (about 110): **about 1040**, so candidate 1 (about 70)
-brings it to about 970. The individual item widths are guesses at roughly 7 px per character plus padding, which is
-exactly why M0 measures each item before the compact set is frozen.
-
-### 4.8 Data flow and user flow
-
-```mermaid
-sequenceDiagram
-  participant Reg as Registry (buildTsldToolbarItems)
-  participant Res as resolveItems (no layout arg)
-  participant Deck as Deck (@container/deck)
-  participant CSS as Container query (--container-deck-roomy)
-  participant AT as Accessibility tree
-  Reg->>Res: items (showLabel declared per item)
-  Res->>Deck: resolved items (enabled, active, reason)
-  Deck->>Deck: group into LOOK / DO rows (R2)
-  Deck->>CSS: label span classes from showLabel
-  CSS-->>Deck: label visible or sr-only (no JS)
-  Deck->>AT: name = label text in both states; tooltip when compact
-```
-
-```mermaid
-flowchart TD
-  A[Open a plan] --> B{Window ≥1024 wide and ≥600 tall?}
-  B -- yes --> C[Header one line + deck two rows]
-  C --> D{Rows fit side by side?}
-  D -- yes --> E[One deck line]
-  D -- no --> F[LOOK over DO]
-  B -- no --> G[Header + one scrolling deck line]
-  C --> H{Need zoom / fit / minimap?}
-  H -- Diagram view --> I[Corner cluster on the diagram]
-  H -- Gantt view --> J[Not offered: Gantt has no canvas]
-  C --> K{Acting on a selection?}
-  K -- yes --> L[Object bar: Float paths, Isolate, Notes…]
-```
-
-### 4.9 ADR required: outline
-
-**ADR-0184 (proposed) — A command surface is designed from the floor up: two rows that never wrap, labels that
-give way by declaration, and one scrolling line below the floor.**
-
-- **Context:** the §1 measurements; the dead ladder (§1 items 1–3); #471; ADR-0179/0181.
-- **D1:** R1 + R2 (amends ADR-0133 D1).
-- **D2:** R3; deletes `ToolbarLayoutMode`, `resolveLayoutMode`, `bandIsAtLeast`, `priority`, `priorityOf`,
-  `partitionByTier`, `ICON_ONLY` (amends ADR-0090 D6, ADR-0091 D3a, ADR-0031 tiers; closes #193).
-- **D3:** R5 placements: viewport cluster (amends ADR-0031 group 1, ADR-0091 D3), Summary and Shortcuts to the
-  header (amends ADR-0091 D6b), Float paths to the object bar (applies ADR-0093), Panels section.
-- **D4:** R6 (amends ADR-0109 D1, under ADR-0179 D2 and WCAG 1.4.10 Note 2); closes #471's band half.
-- **D5:** no flag (ADR-0088 D1).
-- **Options rejected:** (a) one deck line by moving many commands into menus (reverses the product owner's "all
-  commands visible", ADR-0109); (b) JS measurement for labels (the defect class ADR-0109 removed); (c) whole-shell
-  scroll for #471 (scrolls the toolbar away from the diagram); (d) the org switcher in the leading path (plan-name
-  truncation).
-- **Consequences:** suites that locate moved commands need edits; one new keyboard stop on the diagram; a
-  container token to keep in step with M0.
-
-### Database changes
+### Database / API changes
 
 None.
-
-### API changes
-
-None.
-
-### Component changes
-
-| Component                                                                                                     | Change                                                                                                                                                 | Contract change (ADR-0105)     |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| `toolbar-registry.ts`                                                                                         | `showLabel` gains `{ below: 'roomy' }`; band types and the inert fields are removed                                                                    | **yes** (shared primitive)     |
-| `Deck.tsx`                                                                                                    | `@container/deck`; reads `showLabel`; `ICON_ONLY` deleted; rows as wrap units; `ml-auto` on each row's last group; scrolling-line mode below the floor | **yes**                        |
-| `ToolbarButton.tsx`, `ToolbarPopover`, `ToolbarSplitButton`, the trigger controls in `tsld-toolbar-items.tsx` | Label span carries the container class; tooltip when compact; `compact` / `triggersAreCompact` removed                                                 | **yes**                        |
-| New `CanvasViewportControls` (TSLD stage)                                                                     | `Toolbar` of four items; positioned in the stage                                                                                                       | new (CQ-1)                     |
-| `app-header.tsx` / identity slot                                                                              | Summary button; Shortcuts button via `HelpActionProvider`                                                                                              | entry points                   |
-| `account-chip.tsx`                                                                                            | Shortcuts item removed                                                                                                                                 | —                              |
-| `selection-actions.tsx`                                                                                       | Float paths object action (D-c)                                                                                                                        | entry point                    |
-| `Menu` (`menuitemcheckbox`)                                                                                   | only if D-f is accepted                                                                                                                                | **yes**; ADR-0111 review first |
-| `globals.css`                                                                                                 | `--container-deck-roomy`                                                                                                                               | token                          |
-
-States: every control keeps its loading, shaded (reason), pressed and armed states. The cluster's shaded state
-reuses today's reasons. No empty or error state is new.
 
 ### Implementation approach & alternatives
 
-**Chosen:** measure first (M0), then a sequence of commit-sized slices. The primitive's label rule comes first
-because the floor needs it. Then the relocations, each with its journey. Then the canvas cluster, rows as wrap
-units with the View panel, and the below-floor line. Then docs and the ADR. See the plan.
+Measure (M0), then: the docs and the label rule, the moves, the floor below 1024, the cluster, wide screens and the
+View panel, the visual brief, and close-out. **Rejected:**
 
-**Alternatives considered:**
-
-1. **Keep the layout and only polish visuals.** Leaves the floor at four lines and #471 open. Rejected.
-2. **Re-introduce a JS layout ladder.** Rejected (ADR-0109's whole argument; `Deck.tsx:35-38`).
-3. **One deck line at every width by folding Plan actions into a `Plan ▾` menu.** Already rejected once
-   (nested menus, `tsld-toolbar-items.tsx:2446-2451`), and against "all commands visible".
-4. **Merge the header and the LOOK row.** Header sections need about 1040 px and LOOK about 1100 at 1920
-   (estimate), so it fits only above about 2160. R2's row-sharing gets the same effect on very wide screens without
-   coupling the shell to the plan.
-
----
+- polish only (the floor stays at four lines);
+- a JS ladder;
+- `Plan ▾` folding (nested menus, `tsld-toolbar-items.tsx:2446-2451`);
+- merging the header and LOOK (fits only above about 2160 px).
 
 ## 5. Links
 
-- Implementation plan: [`implementation-plan.md`](implementation-plan.md)
-- Measurement baselines: `docs/specs/minimum-viewport/m0-measurement.md`, `m4-measurement.md`,
+- Plan: [`implementation-plan.md`](implementation-plan.md)
+- Baselines: `docs/specs/minimum-viewport/m0-measurement.md`, `m4-measurement.md`,
   `docs/specs/retire-single-pane-workspace/m0-measurement.md`
-- Docs updated by this change (at close-out): `docs/DESIGN_SYSTEM.md` (§ "A command surface wraps", "One geometry"),
-  `docs/UX_STANDARDS.md` (where a tool lives), `docs/TECH_DEBT.md` (#471, #193, new row for #471's second half),
-  `CLAUDE.md` §16 (the new ADR line), the ADRs listed in §4.2 (amendment notes), `docs/TEST_PLAYBOOK.md` if a seeded
-  plan is used for the journeys.
+- Docs at close-out:
+  - `DESIGN_SYSTEM.md` (the stale lines in §1 item 3, and the R1–R6 rules);
+  - `UX_STANDARDS.md` (R5);
+  - `TECH_DEBT.md` (#471, #193, a new row for #471's second half);
+  - `CLAUDE.md` §1 counts (`pnpm check:counts`) and §16;
+  - ADR amendment notes.
