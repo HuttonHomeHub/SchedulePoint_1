@@ -120,9 +120,14 @@ export const PlanFactsProvider = PlanSlotProvider;
  * the thing that should wrap onto a second line, because a strip is transient and the facts are
  * always there. Below the container-query threshold the facts collapse themselves rather than being
  * squeezed — never to nothing, which is the rule that milestone turned on.
+ *
+ * **`max-w-full` is what lets the facts wrap in a narrow row** (retire-single-pane M1). `PlanFacts`
+ * bounds itself by its container (`max-w-full`), and this node is that container: without a bound
+ * of its own it sizes to the facts' one-line width (about 580 px), so at 320 the facts never wrap
+ * and Recalculate sits 76 px off the right edge (measured, the foot row scrolling 270 px sideways).
  */
 export function PlanFactsOutlet(): React.ReactElement {
-  return <div ref={usePlanSlotRef('facts')} className="flex shrink-0 items-center" />;
+  return <div ref={usePlanSlotRef('facts')} className="flex max-w-full shrink-0 items-center" />;
 }
 
 /** Render the facts into the activities row's outlet when one exists, in place when none does. */

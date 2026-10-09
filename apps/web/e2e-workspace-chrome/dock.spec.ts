@@ -223,24 +223,26 @@ test.describe('below the floor, after Continue anyway', () => {
     /**
      * **Below `md` the facts must still exist somewhere, and M4 made them vanish.**
      *
-     * The narrow layout mounts both panes and hides the inactive one with `display: none`, defaulting
-     * to the diagram. M4 put `PlanFactsOutlet` in the foot row and gated only its neighbour, so on
-     * that layout the outlet registered inside the hidden pane, `PlanStatusBar` portalled the facts,
-     * the schedule state, the only `Recalculate` control and the pen's `role="status"` region into a
-     * node nobody could see, and the shell's `empty:hidden` status row collapsed. The plan's facts
-     * disappeared entirely on the smallest screens while three docblocks said they moved to the shell.
+     * That was a separate single-pane layout: it mounted both panes and hid the inactive one with
+     * `display: none`, and M4 put `PlanFactsOutlet` in the foot row and gated only its neighbour, so
+     * the outlet registered inside the hidden pane, `PlanStatusBar` portalled the facts, the schedule
+     * state, the only `Recalculate` control and the pen's `role="status"` region into a node nobody
+     * could see, and the shell's `empty:hidden` status row collapsed. The pane is gone (ADR-0181), so
+     * that mechanism cannot recur; what this keeps is the claim it protected: at 700 px wide the
+     * facts exist exactly once and are on screen, after the panel has been expanded and the
+     * window narrowed under it.
      *
-     * Nothing could have caught it: every unit suite runs in jsdom, where `useMediaQuery` defaults
-     * wide and `display: none` means nothing because there is no layout. This assertion is the whole
-     * reason it is here rather than in a unit test — and it is exactly one `setViewportSize` call.
+     * Nothing could have caught the original: every unit suite runs in jsdom, where `useMediaQuery`
+     * defaulted wide and `display: none` means nothing because there is no layout. This stays a
+     * journey for the same reason — one `setViewportSize` call.
      *
-     * **Verified red** against the ungated outlet: `toBeVisible()` fails, the facts having been
-     * portalled into the hidden pane.
+     * **Verified red** at the time against the ungated outlet: `toBeVisible()` failed, the facts
+     * having been portalled into the hidden pane.
      */
     await page.setViewportSize({ width: 700, height: 900 });
     await expect(
       page.locator('[data-schedule-state]'),
-      'the plan facts must survive the narrow single-pane layout',
+      'the plan facts must survive the narrowing',
     ).toBeVisible();
     await expect(page.locator('[data-schedule-state]')).toHaveCount(1);
   });

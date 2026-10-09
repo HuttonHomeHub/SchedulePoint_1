@@ -3,6 +3,7 @@ import { type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
+import { recalculate } from '../e2e-support/toolbar';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
 /**
@@ -12,8 +13,10 @@ import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notic
  * window at 200 % zoom — because below the 1024 floor is the zoom band, not a phone (ADR-0179). Its subjects are the branches
  * no browser had opened: the off-canvas `Sheet` that IS the Project Explorer on a narrow screen,
  * the header hamburger that opens it, the `matchMedia` transition effect that closes it on
- * crossing `lg`, and the below-`md` workspace fallback that ADR-0114 M7's gate pass found broken
- * — by a specialist review, because this suite did not exist to find it.
+ * crossing `lg`, and the below-`md` workspace that ADR-0114 M7's gate pass found broken — by a
+ * specialist review, because this suite did not exist to find it. That workspace was a separate
+ * single-pane layout until ADR-0181 retired it; the last block here drives the one layout that
+ * replaced it, at the widths the old branch served.
  *
  * **Seeding happens at a WIDE viewport, deliberately.** The subject is the narrow SHELL, not
  * every creation dialog at 640 px; seeding through the proven wide path keeps a dialog-layout
@@ -149,7 +152,7 @@ async function pageOverflow(page: Page): Promise<{ x: number; document: number }
   });
 }
 
-test.describe('after "Continue anyway" the shell is the existing narrow layout', () => {
+test.describe('after "Continue anyway" the shell is the narrow layout', () => {
   // The reader has pressed Continue anyway before this test starts (ADR-0179): this journey's
   // subject is the shell's narrow branches, not the page that precedes them.
   test.use({ acknowledgeViewportNotice: true });
@@ -193,8 +196,10 @@ test.describe('after "Continue anyway" the shell is the existing narrow layout',
     await expect(page).toHaveURL(/\/plans\//);
     await expect(sheet).not.toBeVisible();
 
-    // ── FR-4: below `md` the plan's facts render in the shell fallback, not a hidden pane
-    // (the ADR-0114 M7 regression, asserted in a real layout for the first time).
+    // ── FR-4: the plan's facts render in the workspace's foot row, which is on screen at 640 x 480
+    // (a ~117 px body, retire-single-pane m0-measurement.md §2) — the ADR-0114 M7 regression, where
+    // they went missing in a hidden pane, asserted in a real layout for the first time. The pane is
+    // gone with ADR-0181; the facts' visibility is what is kept.
     /**
      * **Named by its label, not matched by its text** (`docs/TECH_DEBT.md` #347).
      *
@@ -367,7 +372,7 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await expect(dialog).toBeHidden();
 
-  // ── 6. At 320 x 256, after Continue: the existing narrow layout still works.
+  // ── 6. At 320 x 256, after Continue: the narrow shell still works.
   await page.setViewportSize({ width: 320, height: 256 });
   await page.goto(`/orgs/${orgSlug}`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -396,23 +401,21 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await expectNoSidewaysScroll(page, 'calendars at 320 x 256');
   await expectAxeClean(page, 'calendars at 320 x 256');
 
-  // A dialog: the activity editor, reached from the Activities pane's row menu. At 320 px WIDE but
-  // not 256 tall: 1.4.10 is a width obligation, and the plan workspace's chrome (band, facts row)
-  // leaves a 256 px window no pane to click in — height never triggers the notice and its own
-  // vertical budget is the M4 payoff (`m0-measurement.md` §4), not a reflow defect.
-  await page.setViewportSize({ width: 320, height: 720 });
+  // A dialog: the activity editor, reached from the Activities panel's row menu. It is opened at
+  // 700 x 900 and the window is then narrowed to the 1.4.10 width, because at 320 x 720 the shell's
+  // chrome leaves the workspace a ~109 px body (retire-single-pane m0-measurement.md §2): Expand is
+  // under it for a pointer and the table shows no rows, a limit below the design floor that
+  // `docs/TECH_DEBT.md` #471 owns. 1.4.10 is a width obligation and the dialog is what it covers.
+  await page.setViewportSize({ width: 700, height: 900 });
   await page.goto(planUrl);
   await ensurePen(page);
-  await page.getByRole('radio', { name: 'Activities' }).click();
-  // By keyboard: at 320 px the row's `⋯` is under the pane's own bar for a pointer (a finding
-  // below the designed floor, not a reflow failure — nothing scrolls sideways and the control is
-  // keyboard-reachable; docs/TECH_DEBT.md #466).
-  await page.getByRole('button', { name: 'Actions for Dig footings' }).focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('menuitem', { name: 'Edit' }).focus();
-  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Expand activities panel' }).click();
+  await page.getByRole('button', { name: 'Actions for Dig footings' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
   await expect(activityEditor(page)).toBeVisible();
-  await expectAxeClean(page, 'the activity editor at 320 x 256');
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect(activityEditor(page)).toBeVisible();
+  await expectAxeClean(page, 'the activity editor at 320 x 720');
 });
 
 /**
@@ -527,3 +530,436 @@ async function expectNoSidewaysScroll(page: Page, label: string): Promise<void> 
   expect(over.document, `${label}: the document does not scroll sideways`).toBeLessThanOrEqual(0);
   expect(over.main, `${label}: main does not scroll sideways`).toBeLessThanOrEqual(0);
 }
+
+/**
+ * **One workspace layout at every width** (ADR-0181, `docs/specs/retire-single-pane-workspace/`).
+ *
+ * Below 768 px the plan workspace used to be a separate single-pane layout with a Workspace-view
+ * toggle; it is the same stack as at 1024 now — canvas row, then the foot row — and this block drives
+ * it at the widths the old branch served. The readings it holds the layout to are
+ * `m0-measurement.md`'s: 700 × 900 and 640 × 844 have a body tall enough for rows and the foot row;
+ * 320 × 720 has a ~109 px body (the shell's wrapped chrome is 603 px), so only width facts are
+ * asserted there — `docs/TECH_DEBT.md` #471 owns the height. Nothing is asserted about the table at
+ * 640 × 480 and below: the criteria that did were withdrawn with M0.
+ *
+ * **The dock rule, stated as the arithmetic the journey can check from the outside.** A right dock
+ * that would leave the diagram under 360 px (`CANVAS_MIN_WIDTH`) takes the whole row and the stage
+ * beside it is `inert`; otherwise the stage keeps at least 360 px and nothing is inert. The dock's own
+ * minimum is declared here rather than read from the app, so a minimum that moves has to be moved in
+ * two places on purpose.
+ */
+const DOCKS = [
+  {
+    key: 'health',
+    region: 'Health check',
+    close: 'Close health check',
+    min: 340,
+    trigger: 'analysis',
+    menuItem: 'Health check…',
+  },
+  {
+    key: 'revisions',
+    region: 'Compare revisions',
+    close: 'Close revision comparison',
+    min: 380,
+    trigger: 'analysis',
+    menuItem: 'Compare revisions…',
+  },
+  {
+    key: 'float paths',
+    region: 'Float paths',
+    close: 'Close float paths',
+    min: 300,
+    trigger: 'float-paths',
+    menuItem: null,
+  },
+  {
+    key: 'notes',
+    region: 'Plan notes panel',
+    close: 'Close plan notes',
+    min: 280,
+    trigger: 'comments',
+    menuItem: null,
+  },
+] as const;
+type DockSpec = (typeof DOCKS)[number];
+
+/** Diagram floor and splitter, `use-notes-panel-prefs.ts` and `panel-resizer.tsx`. */
+const CANVAS_FLOOR = 360;
+const SPLITTER = 1;
+
+const NARROW_DOCK_SIZES = [
+  { width: 700, height: 900 },
+  { width: 640, height: 844 },
+  { width: 320, height: 1000 },
+] as const;
+
+const commandBand = (page: Page) => page.getByRole('toolbar', { name: 'Plan commands' });
+const expandPanel = (page: Page) => page.getByRole('button', { name: 'Expand activities panel' });
+const collapsePanel = (page: Page) =>
+  page.getByRole('button', { name: 'Collapse activities panel' });
+const footRow = (page: Page) => page.locator('[data-activities-bar]');
+const dockRegion = (page: Page, dock: DockSpec) =>
+  page.getByRole('region', { name: dock.region, exact: true });
+const dockSurface = (page: Page, dock: DockSpec) =>
+  dockRegion(page, dock).locator('xpath=ancestor::*[@data-surface="panel"][1]');
+
+/** Open a dock the way a pointer does. */
+async function openDock(page: Page, dock: DockSpec): Promise<void> {
+  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  await trigger.click();
+  if (dock.menuItem !== null) await page.getByRole('menuitem', { name: dock.menuItem }).click();
+  await expect(dockRegion(page, dock)).toBeVisible();
+}
+
+/** Open a dock from the keyboard alone: focus the trigger, Enter, and Enter on the menu item if any. */
+async function openDockByKeyboard(page: Page, dock: DockSpec): Promise<void> {
+  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  if (dock.menuItem !== null) {
+    const item = page.getByRole('menuitem', { name: dock.menuItem });
+    await item.focus();
+    await page.keyboard.press('Enter');
+  }
+  await expect(dockRegion(page, dock)).toBeVisible();
+}
+
+/** Whether the diagram's stage is `inert` — read from its canvas, which is what a reader would reach. */
+function stageInert(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () =>
+      document
+        .querySelector('section[aria-label="Time-scaled logic diagram"] canvas')
+        ?.closest('[inert]') != null,
+  );
+}
+
+async function boxOf(locator: ReturnType<Page['locator']>, what: string) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${what} has no layout box`);
+  return box;
+}
+
+/** Everything a dock sitting in the workspace body has to satisfy at the current width. */
+async function expectDockRule(page: Page, dock: DockSpec, label: string): Promise<void> {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('no viewport');
+  const body = await boxOf(page.getByTestId('workspace-body'), 'the workspace body');
+  const surface = await boxOf(dockSurface(page, dock), `${dock.key} dock`);
+  const squeezed = body.width - dock.min - SPLITTER < CANVAS_FLOOR;
+  const inert = await stageInert(page);
+  const resizers = await page.getByRole('separator', { name: /^Resize / }).count();
+
+  expect(surface.width, `${label}: the dock has width`).toBeGreaterThan(0);
+  expect(surface.x, `${label}: the dock starts on screen`).toBeGreaterThanOrEqual(-0.5);
+  expect(surface.x + surface.width, `${label}: the dock ends on screen`).toBeLessThanOrEqual(
+    viewport.width + 0.5,
+  );
+  expect(inert, `${label}: the stage is inert exactly when the dock is squeezed`).toBe(squeezed);
+  if (squeezed) {
+    expect(
+      Math.abs(surface.width - (body.width - SPLITTER)),
+      `${label}: a squeezed dock takes the whole row, with no dead strip beside it`,
+    ).toBeLessThanOrEqual(1);
+    expect(resizers, `${label}: a pinned dock has no resize handle`).toBe(0);
+  } else {
+    const stage = await boxOf(
+      page.locator('section[aria-label="Time-scaled logic diagram"]'),
+      'the stage',
+    );
+    expect(stage.width, `${label}: the diagram keeps its floor`).toBeGreaterThanOrEqual(
+      CANVAS_FLOOR - 0.5,
+    );
+  }
+}
+
+/** Neither the document, `main`, nor the foot row scrolls sideways. */
+async function expectNoSidewaysOverflow(page: Page, label: string): Promise<void> {
+  await expectNoSidewaysScroll(page, label);
+  const foot = await footRow(page).evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(foot, `${label}: the foot row does not scroll sideways`).toBeLessThanOrEqual(0);
+}
+
+/** Rows a pointer can hit below the pinned header inside the Activities region (the swap's reading). */
+async function hittableRows(page: Page): Promise<number> {
+  return page.getByRole('region', { name: 'Activities', exact: true }).evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const head = el.querySelector('thead')?.getBoundingClientRect();
+    const top = Math.max(box.top, head ? head.bottom : box.top);
+    let rows = 0;
+    for (const tr of el.querySelectorAll('tbody tr')) {
+      const r = tr.getBoundingClientRect();
+      if (r.height === 0 || r.top < top - 1 || r.bottom > box.bottom + 1) continue;
+      const hit = document.elementFromPoint(r.left + 8, (r.top + r.bottom) / 2);
+      if (hit && tr.contains(hit)) rows += 1;
+    }
+    return rows;
+  });
+}
+
+/**
+ * Walk the Tab order `steps` times in `direction` and report each stop inside the workspace body.
+ * Stops outside it (the skip link, the breadcrumb) are the shell's and are not this block's subject.
+ */
+async function tabStopsInBody(
+  page: Page,
+  direction: 'Tab' | 'Shift+Tab',
+  steps: number,
+): Promise<{ name: string; width: number; height: number; inDock: boolean }[]> {
+  const stops: { name: string; width: number; height: number; inDock: boolean }[] = [];
+  for (let i = 0; i < steps; i += 1) {
+    await page.keyboard.press(direction);
+    const stop = await page.evaluate(() => {
+      const el = document.activeElement;
+      const body = document.querySelector('[data-testid="workspace-body"]');
+      if (!el || !body || !body.contains(el)) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        name:
+          el.getAttribute('aria-label') ??
+          el.getAttribute('title') ??
+          (el.textContent ?? '').trim().slice(0, 30) ??
+          el.tagName,
+        width: r.width,
+        height: r.height,
+        inDock: el.closest('[data-surface="panel"]') !== null,
+      };
+    });
+    if (stop) stops.push(stop);
+  }
+  return stops;
+}
+
+/** A plan with twelve activities, opened at 700 x 900 with the pen held and the first one selected. */
+async function seedWorkspace(page: Page): Promise<{ orgSlug: string; planUrl: string }> {
+  const orgSlug = await seedOrganisation(page);
+  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+  for (let i = 1; i <= 12; i += 1) await seedActivity(page, orgSlug, `Task ${String(i)}`);
+  return { orgSlug, planUrl: page.url() };
+}
+
+test.describe('one workspace layout at every width (ADR-0181)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  test('every dock opens, on screen and obeying the squeeze rule, at 700, 640 and 320 wide', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+
+    // One page load at the widest size, with an activity selected so Float paths has a target, then
+    // narrowed live: a selection is client state, and below 700 px there is no canvas to select in.
+    // 320 is read at 320 x 1000 because the shell's chrome is 603 px tall at that width, so the
+    // 320 x 720 window has a 109 px body that no dock can show in (`docs/TECH_DEBT.md` #471).
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.goto(planUrl);
+    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+
+    for (const size of NARROW_DOCK_SIZES) {
+      const tag = `${String(size.width)} x ${String(size.height)}`;
+      await page.setViewportSize(size);
+      await expect(footRow(page)).toBeVisible();
+      await expectNoSidewaysOverflow(page, `${tag}: collapsed`);
+
+      // Every dock opens, is on screen, obeys the squeeze rule and closes.
+      for (const dock of DOCKS) {
+        const label = `${tag}, ${dock.key} dock`;
+        await openDock(page, dock);
+        await expectDockRule(page, dock, label);
+        await expectNoSidewaysOverflow(page, label);
+        if (size.width === 320) await expectAxeClean(page, label);
+        await dockRegion(page, dock).getByRole('button', { name: dock.close }).click();
+        await expect(dockRegion(page, dock)).toBeHidden();
+        expect(await stageInert(page), `${label}: closing the dock frees the stage`).toBe(false);
+      }
+    }
+  });
+
+  test('the foot row wraps instead of leaving the screen, and the panel swaps for rows', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+
+    // No selection here: a selected activity docks its action bar in the foot row and grows it to
+    // most of a narrow body (m0-measurement.md §5, pre-existing), which is a different reading.
+    for (const size of [
+      { width: 700, height: 900, bodyRows: true },
+      { width: 640, height: 844, bodyRows: true },
+      { width: 320, height: 720, bodyRows: false },
+    ] as const) {
+      const tag = `${String(size.width)} x ${String(size.height)}`;
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await page.goto(planUrl);
+      await expect(footRow(page)).toBeVisible();
+
+      // The facts wrap inside the row rather than pushing Recalculate and Expand out of the body.
+      await expectNoSidewaysOverflow(page, tag);
+      const expand = expandPanel(page);
+      const recalculate = page.getByRole('button', { name: 'Recalculate' });
+      await expect(expand).toBeVisible();
+      await expect(recalculate).toBeVisible();
+      for (const [name, control] of [
+        ['Expand activities panel', expand],
+        ['Recalculate', recalculate],
+      ] as const) {
+        const box = await boxOf(control, name);
+        expect(box.x, `${tag}: ${name} starts on screen`).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, `${tag}: ${name} ends on screen`).toBeLessThanOrEqual(
+          size.width + 0.5,
+        );
+        await pointerReachable(page, `${tag}: ${name}`, control);
+      }
+      expect(
+        (await boxOf(expand, 'Expand activities panel')).width,
+        `${tag}: Expand keeps its touch width`,
+      ).toBeGreaterThanOrEqual(24);
+
+      // The panel, where the body has the height for it: ADR-0180's swap shows rows, the table's
+      // region keeps its floor, and the way back is there.
+      if (size.bodyRows) {
+        await expand.click();
+        await expect(collapsePanel(page)).toBeVisible();
+        await expectNoSidewaysOverflow(page, `${tag}: expanded`);
+        await expect
+          .poll(() => hittableRows(page), { message: `${tag}: rows under the swap` })
+          .toBeGreaterThanOrEqual(5);
+        const region = await boxOf(
+          page.getByRole('region', { name: 'Activities', exact: true }),
+          'the Activities region',
+        );
+        expect(region.height, `${tag}: the table region keeps its floor`).toBeGreaterThanOrEqual(
+          128,
+        );
+        await collapsePanel(page).click();
+        await expect(expand).toBeVisible();
+      }
+    }
+  });
+
+  test('a squeezed dock gives way to Fit, and the panel and a dock never coexist', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 640, height: 844 });
+    await page.goto(planUrl);
+    const health = DOCKS[0];
+
+    // Fit acts on the diagram, so a dock that has taken the row closes first and the stage is back.
+    // Fit is shaded until the schedule is calculated, and calculating needs the pen.
+    await ensurePen(page);
+    await recalculate(page);
+    await openDock(page, health);
+    expect(await stageInert(page), 'the squeezed dock made the stage inert').toBe(true);
+    await commandBand(page).getByRole('button', { name: 'Fit to plan' }).click();
+    await expect(dockRegion(page, health)).toBeHidden();
+    expect(await stageInert(page), 'Fit freed the stage').toBe(false);
+
+    // ADR-0180's exclusivity, now at this width: Expand closes an open dock, and opening a dock over
+    // the swapped panel collapses the panel.
+    await openDock(page, health);
+    await expandPanel(page).click();
+    await expect(collapsePanel(page)).toBeVisible();
+    await expect(dockRegion(page, health)).toBeHidden();
+    await openDock(page, health);
+    await expect(expandPanel(page)).toBeVisible();
+    await expect(dockRegion(page, health)).toBeVisible();
+  });
+
+  test('keyboard and focus per dock at 320 and 640: no zero-size stop, and focus is handed back', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.goto(planUrl);
+    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+
+    for (const size of NARROW_DOCK_SIZES.slice(1)) {
+      const width = size.width;
+      await page.setViewportSize(size);
+      for (const dock of DOCKS) {
+        const label = `${String(width)} wide, ${dock.key} dock`;
+        await openDockByKeyboard(page, dock);
+
+        // From the dock's Close, the Tab order runs through the dock and never lands on a zero-size
+        // control in the body — the resize handle was the one M0 found at zero size.
+        const close = dockRegion(page, dock).getByRole('button', { name: dock.close });
+        await close.focus();
+        const forward = await tabStopsInBody(page, 'Tab', 12);
+        await close.focus();
+        const backward = await tabStopsInBody(page, 'Shift+Tab', 12);
+        for (const stop of [...forward, ...backward]) {
+          expect(stop.width, `${label}: "${stop.name}" has width`).toBeGreaterThan(0);
+          expect(stop.height, `${label}: "${stop.name}" has height`).toBeGreaterThan(0);
+        }
+        expect(
+          [...forward, ...backward].some((stop) => stop.inDock),
+          `${label}: the Tab order runs through the dock`,
+        ).toBe(true);
+
+        // Escape closes it as at 1024, and focus goes to the control that opened it, never <body>.
+        await close.focus();
+        await page.keyboard.press('Escape');
+        await expect(dockRegion(page, dock)).toBeHidden();
+        const handedBack = await page.evaluate(() =>
+          document.activeElement?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item'),
+        );
+        expect(handedBack, `${label}: Escape hands focus back to the trigger`).toBe(dock.trigger);
+
+        // And Close, from the keyboard, does the same.
+        await openDockByKeyboard(page, dock);
+        await dockRegion(page, dock).getByRole('button', { name: dock.close }).focus();
+        await page.keyboard.press('Enter');
+        await expect(dockRegion(page, dock)).toBeHidden();
+        const afterClose = await page.evaluate(() =>
+          document.activeElement?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item'),
+        );
+        expect(afterClose, `${label}: Close hands focus back to the trigger`).toBe(dock.trigger);
+      }
+    }
+
+    // The positive control for the zero-size check (ADR-0110): lift `inert` off a squeezed stage and
+    // the same walk must find a stop in the body with no size — otherwise the loop above would pass
+    // against a layout that had lost the rule it exists to hold.
+    const revisions = DOCKS[1];
+    await openDockByKeyboard(page, revisions);
+    await page.evaluate(() => {
+      const wrapper = document
+        .querySelector('section[aria-label="Time-scaled logic diagram"] canvas')
+        ?.closest('[inert]');
+      if (wrapper instanceof HTMLElement) wrapper.inert = false;
+    });
+    await dockRegion(page, revisions).getByRole('button', { name: revisions.close }).focus();
+    const unguarded = [
+      ...(await tabStopsInBody(page, 'Tab', 16)),
+      ...(await tabStopsInBody(page, 'Shift+Tab', 16)),
+    ];
+    expect(
+      unguarded.some((stop) => stop.width === 0 || stop.height === 0 || !stop.inDock),
+      'without inert the walk leaves the dock for the invisible stage',
+    ).toBe(true);
+  });
+
+  test('Expand and Collapse keep focus on themselves from the keyboard', async ({ page }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.goto(planUrl);
+    await expandPanel(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(collapsePanel(page)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(expandPanel(page)).toBeFocused();
+  });
+});
