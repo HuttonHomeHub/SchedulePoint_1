@@ -11,13 +11,18 @@ import type { TsldToolbarContext } from './tsld-toolbar-context';
  *   command classed `dock`, which already replaces the open dock, and which closing first would turn
  *   from "close this one" into "reopen it".
  *
+ * The third argument is therefore only ever `'dock'` (the type says so), and
+ * `canvas-directed-commands.structural.test.tsx` holds every wrapped command's argument to
+ * {@link COMMAND_CLASS}: a fifth dock command that forgets it, or a viewport command that claims it,
+ * fails that test rather than misbehaving on a narrow window.
+ *
  * Otherwise it runs at once. `when` lets a command that is only sometimes about the diagram say so for
  * the arguments it was given (the Find field's two-step Escape).
  */
 export type WithDiagram = <A extends unknown[]>(
   command: (...args: A) => void,
   when?: (...args: A) => boolean,
-  commandClass?: CommandClass,
+  commandClass?: Extract<CommandClass, 'dock'>,
 ) => (...args: A) => void;
 
 /** The host that has no swap to reckon with: every command runs at once. */

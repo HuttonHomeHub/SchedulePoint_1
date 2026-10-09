@@ -127,9 +127,11 @@ const PLAN = {
 
 function buildWrapped() {
   const wrapped = new WeakSet<object>();
-  const withDiagram: WithDiagram = (command) => {
+  const passedClass = new WeakMap<object, string | undefined>();
+  const withDiagram: WithDiagram = (command, _when, commandClass) => {
     const marked = (...args: Parameters<typeof command>): void => command(...args);
     wrapped.add(marked);
+    passedClass.set(marked, commandClass);
     return marked;
   };
   const model = makeModel();
@@ -145,7 +147,7 @@ function buildWrapped() {
       withDiagram,
     }),
   );
-  return { ctx: result.current as unknown as Record<string, unknown>, wrapped };
+  return { ctx: result.current as unknown as Record<string, unknown>, wrapped, passedClass };
 }
 
 describe('useTsldToolbarContext — canvas-directed commands', () => {
@@ -175,6 +177,18 @@ describe('useTsldToolbarContext — canvas-directed commands', () => {
     }
     expect(unwrapped, 'canvas-directed but not wrapped in withDiagram').toEqual([]);
     expect(overWrapped, 'wrapped but classified as unaffected').toEqual([]);
+  });
+
+  it('passes the dock class to exactly the commands classified as dock commands', () => {
+    const { ctx, passedClass } = buildWrapped();
+    const wrong: string[] = [];
+    for (const [key, commandClass] of Object.entries(COMMAND_CLASS)) {
+      const value = ctx[key];
+      if (typeof value !== 'function' || !passedClass.has(value)) continue;
+      const expected = commandClass === 'dock' ? 'dock' : undefined;
+      if (passedClass.get(value) !== expected) wrong.push(key);
+    }
+    expect(wrong, 'wrapped with a class that disagrees with COMMAND_CLASS').toEqual([]);
   });
 
   it('runs every command in place when the host supplies no swap', () => {
