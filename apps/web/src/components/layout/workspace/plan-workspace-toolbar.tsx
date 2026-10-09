@@ -735,6 +735,13 @@ export function ToolbarPlanWorkspace({
   } else if (!swapped && toolPutAway) {
     setToolPutAway(false);
   }
+  // The same for a stage a dock has taken out of reach (`inert`): an armed tool there has no target,
+  // and Escape, its way out, is a canvas key the stage would never receive. No note is shown for it —
+  // the dock is the thing on screen — but the panel's own mode effects still announce the disarm.
+  // (A row merely too short for a bar is not covered: its measurement is the shell's, ADR-0181.)
+  if (dockSqueezed && canvasUi.mode !== 'select') {
+    canvasUi.setMode('select');
+  }
 
   // **Collapse-first for a command that acts on the diagram** (A1, spec §2 "Commands while the
   // diagram is hidden"). Quiet — `interacted` is cleared — so the collapsed bar does not take focus

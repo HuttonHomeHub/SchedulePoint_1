@@ -1158,6 +1158,20 @@ describe('a dock that has taken the row', () => {
     expect(document.activeElement).toBe(fit);
   });
 
+  it('puts an armed drawing tool away when a dock takes the row and the diagram goes out of reach', () => {
+    renderScreen();
+    measure(640);
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    const mode = () => (h.tsldProps.current?.['canvasUi'] as { mode: string } | undefined)?.mode;
+    expect(mode()).toBe('add-activity');
+
+    openHealth();
+    // **Red** without the put-away: the tool stayed armed against a stage nobody can reach, and
+    // Escape (the way out of a tool) is a canvas key the inert stage never receives.
+    expect(stageEl()).toHaveAttribute('inert');
+    expect(mode()).toBe('select');
+  });
+
   it('does not reopen the dock when its own toggle closes it (a dock command runs in place)', () => {
     renderScreen();
     measure(640);
