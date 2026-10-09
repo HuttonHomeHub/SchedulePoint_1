@@ -367,6 +367,14 @@ were told about, which is worse than the undifferentiated group. `partitionBySeg
 `console.warn` naming the group and its items, because a silent fallback is how a capability
 regresses with nothing saying so.
 
+**`ToolbarPopover`'s `description` and `panelWidth`, and the `identity` row** (toolbar-redesign M2).
+`description` is the trigger's tooltip sentence (`<label> — <description>`), which an icon-only
+trigger needs to be named by purpose and not only by its label. `panelWidth` is `'default'` (one
+column, 20 rem) or `'wide'` (44 rem, for a panel that lays out in columns); both are viewport-capped
+named tokens. `ToolbarRow` has a third value, `identity`: the plan's facts beside its name in the
+header (Plan summary, Edit plan details) — its own `role="toolbar"` and Tab stop, like `strip` and
+`mode`.
+
 **Three rules for a consumer:**
 
 1. **Still pass `groupLabels`.** It is defence in depth, not decoration. If the precondition ever

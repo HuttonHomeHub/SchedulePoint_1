@@ -127,7 +127,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     const panel = screen.getByRole('dialog', { name: 'View' });
     // Markers starts folded (toolbar-redesign M2-T3): open it, then toggle.
-    fireEvent.click(within(panel).getByRole('button', { name: 'Markers' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /^Markers/ }));
     fireEvent.click(within(panel).getByLabelText('Non-working'));
     expect(spies.toggleView).toHaveBeenCalledWith('nonWorking');
   });
@@ -137,7 +137,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     const panel = screen.getByRole('dialog', { name: 'View' });
     for (const name of ['Structure', 'Markers']) {
-      const fold = within(panel).getByRole('button', { name });
+      const fold = within(panel).getByRole('button', { name: new RegExp(`^${name}`) });
       expect(fold).toHaveAttribute('aria-expanded', 'false');
       // A folded section is unmounted, not clipped: a hidden toggle must not be a tab stop.
       expect(within(panel).queryByRole('group', { name })).toBeNull();
@@ -145,7 +145,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(panel).queryByLabelText('Non-working')).toBeNull();
     expect(within(panel).getByRole('radiogroup', { name: 'Zoom level' })).toBeInTheDocument();
     // Opening one reveals its rows inside a named group, and closing it takes them away again.
-    const markers = within(panel).getByRole('button', { name: 'Markers' });
+    const markers = within(panel).getByRole('button', { name: /^Markers/ });
     fireEvent.click(markers);
     expect(markers).toHaveAttribute('aria-expanded', 'true');
     expect(
@@ -155,17 +155,31 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(panel).queryByLabelText('Non-working')).toBeNull();
   });
 
+  it('says in a folded section\u2019s name how many of its toggles are on', () => {
+    const base = ctx().viewToggles;
+    renderRows(ctx({ viewToggles: { ...base, nonWorking: true, today: true, labels: true } }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    const markers = within(panel).getByRole('button', { name: /^Markers/ });
+    const count = Number(/\((\d+) on\)$/.exec(markers.textContent ?? '')?.[1]);
+    expect(count).toBeGreaterThanOrEqual(3);
+  });
+
   it('opens folded again on the next opening — the open state lives for one opening (ADR-0169)', () => {
     renderRows(ctx());
     const trigger = screen.getByRole('button', { name: /View/ });
     fireEvent.click(trigger);
     fireEvent.click(
-      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', { name: 'Markers' }),
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+        name: /^Markers/,
+      }),
     );
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.click(trigger);
     expect(
-      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', { name: 'Markers' }),
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+        name: /^Markers/,
+      }),
     ).toHaveAttribute('aria-expanded', 'false');
   });
 

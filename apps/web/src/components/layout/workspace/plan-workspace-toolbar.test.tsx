@@ -365,7 +365,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // longer identifies this row, and reaching for it would find the app header instead.
     renderScreen();
     // **Re-scoped a fourth time, for ADR-0091 M7-S4, and this time the answer inverts.** The
-    // read-out moved back beside `Summary ▾` at the product owner's request; M4 did that by making
+    // read-out moved back beside `Summary ▾` (now `Plan summary`) at the product owner's request; M4 did that by making
     // it Row 1's SIBLING, which kept ADR-0090 M2-T3's rule intact — a non-operable read-out must not
     // be a stop inside `role="toolbar"`.
     //

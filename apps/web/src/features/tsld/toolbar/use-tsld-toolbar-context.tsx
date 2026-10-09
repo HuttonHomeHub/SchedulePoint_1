@@ -249,18 +249,17 @@ export function useTsldToolbarContext({
     [canWrite, setEditing],
   );
 
-  // The Summary popover folds the former Plan-details facts (status + data date) together with the
+  // The Summary popover folds the former Plan-details status together with the
   // computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
   const summaryContent = useMemo(
     () => (
       <PlanSummaryPanel
         statusLabel={PLAN_STATUS_LABELS[plan.status]}
-        dataDate={plan.plannedStart}
         orgSlug={orgSlug}
         planId={planId}
       />
     ),
-    [orgSlug, planId, plan.status, plan.plannedStart],
+    [orgSlug, planId, plan.status],
   );
 
   const { open: legendOpen, toggle: toggleLegend } = legend;
@@ -1023,7 +1022,6 @@ export function useTsldToolbarContext({
     navState.isolateMode,
     toggleIsolate,
     setIsolateMode,
-    // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
     toggleHealthCheck,
     toggleRevisionCompare,
     orderedConflictHits.length,

@@ -18,7 +18,7 @@ const ESTIMATED_HEIGHT = 320;
  * (ADR-0091 M7-S6) so a second control can host one without a second implementation.
  *
  * There is exactly one thing this hook is for. `Go to date` merges into `Go to today` as a split
- * button, and its caret has to open the same kind of panel `View ▾` and `Summary ▾` open — anchored,
+ * button, and its caret has to open the same kind of panel `View ▾` and `Plan summary` open — anchored,
  * clamped to the viewport, closed by Escape, by an outside pointer press and by focus leaving, and
  * portalled so it escapes the row's clip. Every one of those behaviours has a defect recorded
  * against it, and this repository's standing finding is that two implementations of one behaviour

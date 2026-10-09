@@ -60,7 +60,7 @@ the panel's size).
 
 Plan summary, Edit plan details, Baseline overlay, Comments, Settings…, Resource view and Apply levelled dates… all
 mount a tooltip on both pointers and both paths; Legend is a labelled control and has none. Comments reads "Show the
-plan's comments beside the diagram"; a shaded Baseline overlay reads "No active baseline. Set one to draw it beside
+plan's comments beside the diagram"; a shaded Baseline overlay reads "No active baseline. Set one in Analysis → Baselines… to draw it beside
 each bar".
 
 ## 5. No tool is lost — before and after

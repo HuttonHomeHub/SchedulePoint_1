@@ -56,7 +56,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await recalculate(page);
 
   // With activities computed, the `hasDiagram`-gated controls light up on Row 1 · Look — the `View▾`
-  // lens popover — and the Project-finish read-out appears beside `Summary ▾`.
+  // lens popover — and the Project-finish read-out appears beside the plan's identity row.
   //
   // **This assertion inverted twice and the second inversion is the interesting one.** ADR-0090
   // M2-T3 moved the read-out OUT of the toolbar, so this used to assert it was absent from the row.

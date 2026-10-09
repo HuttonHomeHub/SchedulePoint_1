@@ -1387,7 +1387,7 @@ test.describe('The plan command surface', () => {
     const edit = details.getByRole('button', { name: 'Edit plan details', exact: true });
     await expect(edit).toBeVisible();
     await edit.click();
-    const dialog = page.getByRole('dialog', { name: 'Edit plan' });
+    const dialog = page.getByRole('dialog', { name: 'Edit plan details' });
     await expect(dialog).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
@@ -1543,11 +1543,10 @@ test.describe('The plan command surface', () => {
           await tooltip.count(),
           `more than one tooltip is open on ${String(here.id)}`,
         ).toBeLessThanOrEqual(1);
-        if (here.id === 'resource-view' || here.id === 'comments') {
+        const tipped = here.id === null ? undefined : ROOMY_ITEMS.find((i) => i.id === here.id);
+        if (tipped !== undefined) {
           await expect(tooltip, `no tooltip on focus of ${here.id} at ${at}`).toBeVisible();
-          await expect(tooltip).toContainText(
-            here.id === 'comments' ? 'Comments —' : 'Resource view —',
-          );
+          await expect(tooltip).toContainText(`${tipped.label} —`);
           // Escape dismisses it; focus does not move.
           await page.keyboard.press('Escape');
           await expect(tooltip, `Escape did not dismiss the tooltip on ${here.id}`).toHaveCount(0);
@@ -1557,6 +1556,19 @@ test.describe('The plan command surface', () => {
       }
       expect(visited, `the walk never reached Resource view at ${at}`).toContain('resource-view');
       expect(visited, `the walk never reached Comments at ${at}`).toContain('comments');
+      // Every roomy control the deck carries is walked and tipped, not the two that were first.
+      for (const spec of ROOMY_ITEMS) {
+        expect(visited, `the walk never reached ${spec.id} at ${at}`).toContain(spec.id);
+      }
+
+      // The identity row is its own toolbar and its own Tab stop; its two icon-only controls name
+      // themselves by tooltip on focus too.
+      const identity = page.getByRole('toolbar', { name: 'Plan details', exact: true });
+      for (const label of ['Plan summary', 'Edit plan details']) {
+        await identity.getByRole('button', { name: label }).focus();
+        await expect(tooltip, `no tooltip on focus of ${label} at ${at}`).toBeVisible();
+        await expect(tooltip).toContainText(label);
+      }
 
       // Blur closes it: land on a roomy control, then leave the deck with Tab.
       await deck.locator('[data-toolbar-item="comments"]').focus();

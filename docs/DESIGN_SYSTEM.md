@@ -239,7 +239,7 @@ So, for any command surface:
   captions that folded were removed in two steps (the fold on 2026-08-28, the caption itself at the
   console epic's M6), so nothing here is a decision a reader makes for their screen.
 - **Whether a label shows is declared on the item and decided in one place.** Every registry item
-  carries `labelVisibility: 'always' | 'never' | 'roomy'` (default `'always'`; the old `'auto'` and
+  carries `labelVisibility: 'always' | 'never' | 'roomy' | 'roomy-fine'` (default `'always'`; the old `'auto'` and
   the `{ atLeast }` band form are gone). One resolver, `resolveLabelVisibility`, and one class helper,
   `toolbarLabelClass`, both in `toolbar-styles.ts`, serve `Deck`, `Toolbar` and every trigger.
   `'never'` is for the glyphs that are genuinely universal (zoom ±, fit, undo, redo).
@@ -252,8 +252,14 @@ So, for any command surface:
   there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
   a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
   kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
-  rest). The four today: Baseline overlay, Resource view, Comments and Settings…. Apply levelled
-  dates… is meant to be a fifth and is `'never'` until the DO row has the room (toolbar-redesign M2).
+  rest). The five today: Baseline overlay, Resource view, Comments, Settings… and Apply levelled
+  dates…. The last is `'roomy-fine'`: the same rule for a mouse, and icon-only under a coarse pointer
+  at every width (`pointer-coarse:`), because the word cost touch a deck line at 1280 (owner
+  decision, 2026-10-09).
+- **A popover panel's width is a named token.** `ToolbarPopover` takes `panelWidth: 'default' | 'wide'`
+  and `usePopoverPanel` maps them to `--container-popover` (20 rem) and `--container-popover-wide`
+  (44 rem, View ▾'s three columns), each capped at the viewport less 1 rem — tokens in `globals.css`,
+  not arbitrary `max-w-[min(…)]` values, which the sizing ratchet counts.
 - **A command surface is horizontal.** `Toolbar` carried an `orientation` prop for Graphite's 48 px
   mode rail; ADR-0109 D2 deleted that rail, and the prop sat with **no consumer at all** while this
   clause went on documenting the rule that governed it — dead code kept alive by a standard

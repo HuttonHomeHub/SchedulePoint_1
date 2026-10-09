@@ -637,7 +637,7 @@ const GOTO_HINT_ID = 'tsld-goto-date-hint';
  * That is the ADR-0081 dead-end shape, and `ToolbarSplitButton`'s per-half props exist for it; its
  * own docblock names this merge.
  *
- * The panel is `usePopoverPanel`, the same one `View ▾` and `Summary ▾` open, and focus restores to
+ * The panel is `usePopoverPanel`, the same one `View ▾` and the header's `Plan summary` open, and focus restores to
  * the **primary** — the caret is `tabIndex={-1}`, so restoring there strands a keyboard user.
  *
  * The panel's own `Today` button is gone with the merge: the primary half now does exactly that,
@@ -1093,7 +1093,8 @@ const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
  * before they have. Analysis ▾ → Baselines… is where one is set, and the sentence says what setting
  * one buys.
  */
-const NO_ACTIVE_BASELINE_REASON = 'No active baseline. Set one to draw it beside each bar';
+const NO_ACTIVE_BASELINE_REASON =
+  'No active baseline. Set one in Analysis → Baselines… to draw it beside each bar';
 
 /** Disabled reason for the over-allocation highlight when nothing is over-allocated (Stage E M2) — a
  * plan that never levelled, or a levelled plan with no over-allocation, has none. Mirrors
@@ -1452,7 +1453,7 @@ function LiveSearchControl({
  * **Named "Analysis", not "Plan ▾" as the plan proposed.** Two collisions made that name unusable
  * and the pre-approval review caught both: it would sit inside a group whose `aria-label` is
  * already **"Plan actions"**, so a screen-reader user would hear "Plan actions, Plan, menu button";
- * and Row 1 already carries **`Summary ▾`**, which is also about the plan as a whole — heard back to
+ * and the plan's identity row already carries **`Plan summary`**, which is also about the plan as a whole — heard back to
  * back, "Plan" and "Summary" do not say which holds what. "Analysis" names what is actually inside:
  * three surfaces for **measuring** a plan against something (a baseline, a budget, a resource
  * capacity).
@@ -1477,7 +1478,7 @@ function PlanAnalysisControl({
   // **This trigger honours the collapsed band like every other one on the row** — it did not until
   // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
   // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
-  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // their text at every width while `Go to today`, `View ▾` and the rest went icon-only
   // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
   // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
   // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
@@ -1661,7 +1662,7 @@ function ExportMenuControl({
   // **This trigger honours the collapsed band like every other one on the row** — it did not until
   // 2026-08-13, and that is what made Row 2 nine pixels too wide at 960 once `snap-to-grid` was
   // deleted (`e2e-toolbar-fit` S4). Both this control and its `Share & export` neighbour painted
-  // their text at every width while `Go to today`, `View ▾`, `Summary ▾` and the rest went icon-only
+  // their text at every width while `Go to today`, `View ▾` and the rest went icon-only
   // below 1024 — 145 px of text between them, which the deleted button's 36 px had been masking.
   // The ADR-0064 §7 shape again: one correct pattern applied to a control and not its neighbour,
   // invisible to every gate until an unrelated change moved the arithmetic past a boundary.
@@ -1964,6 +1965,15 @@ const VIEW_FIRST_COLUMN: ReadonlyArray<ViewToggleGroupId> = [
 
 /** The sections that start folded. Their open state is the disclosure's own, for one opening
  * (ADR-0169): the panel unmounts on close, so every opening starts folded again. */
+/**
+ * One look for every section heading in View ▾ — the `<legend>` of an open section and the button
+ * of a folded one — so the panel does not read as two systems. Uppercase small-caps ink is the
+ * heading; a folded one adds the border and hover wash that say it can be pressed.
+ */
+const VIEW_SECTION_HEADING = 'text-muted-foreground text-xs font-medium tracking-wide uppercase';
+const VIEW_FOLDED_TRIGGER =
+  'border-border hover:bg-muted ml-0 w-full justify-start border text-xs font-medium tracking-wide uppercase';
+
 const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
   'structure',
   'markers',
@@ -2106,12 +2116,17 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     // reader cannot see (WCAG 2.4.7). The rows keep a named group inside, so a reader who opens it
     // hears what they are in.
     if (VIEW_FOLDED_SECTIONS.has(id)) {
+      const onCount =
+        keys.filter((key) => ctx.viewToggles[key]).length +
+        lenses.filter((lens) => lens.checked(ctx)).length;
       return (
         <Disclosure
           key={id}
-          label={label}
+          // The count rides in the button's name, so a folded section still says what is on inside
+          // it — to the eye and to a screen reader alike.
+          label={onCount === 0 ? label : `${label} (${String(onCount)} on)`}
           collapsed="hidden"
-          triggerClassName="w-full justify-start text-xs font-medium tracking-wide uppercase"
+          triggerClassName={VIEW_FOLDED_TRIGGER}
         >
           <div role="group" aria-label={label} className="flex flex-col gap-2">
             {rows}
@@ -2125,9 +2140,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
         // Insight spans the other two columns (`VIEW_FIRST_COLUMN`).
         className={cn('flex min-w-0 flex-col gap-2', id === 'insight' && 'sm:col-span-2')}
       >
-        <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
-          {label}
-        </legend>
+        <legend className={cn(VIEW_SECTION_HEADING, 'mb-1')}>{label}</legend>
         {rows}
       </fieldset>
     );
@@ -2707,7 +2720,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           // it takes the tier that never demotes rather than `today`'s old tier 2.
           //
           // A `render` item owns its own chrome, and this one resolves its label from
-          // `api.labelState` exactly as its `View ▾` and `Summary ▾` neighbours do.
+          // `api.labelState` exactly as its `View ▾` neighbour does.
           // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
           // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
           // same milestone as the Early/Visual selector; the control itself is display-only and reads
@@ -2738,7 +2751,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
-          // Three columns (`VIEW_COLUMNS`), which a 20 rem panel cannot hold.
+          // Three columns (`VIEW_FIRST_COLUMN` and Insight), which a 20 rem panel cannot hold.
           panelWidth="wide"
         >
           <ViewTogglesPanel ctx={ctx} />
@@ -3242,7 +3255,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // **Renamed from the header pencil's "Edit plan"** — it is a writer's control (`ctx.editPlan` is
     // `null` for a Viewer, the existing `canWrite` gate), and "Edit plan" sat one word from the pen's
     // "Start editing": two controls a planner could take for the same verb. The dialog it opens is
-    // still titled "Edit plan"; what this names is the control, and it says what the control edits.
+    // titled "Edit plan details" to match; the control names what it edits.
     //
     // A plain `onActivate` item so the one tooltip path (`ToolbarButton`) names it, with its purpose.
     // Absent rather than shaded for a reader without the right, as the pencil was: ADR-0082's omit

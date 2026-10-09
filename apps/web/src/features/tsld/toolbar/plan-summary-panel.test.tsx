@@ -7,33 +7,17 @@ vi.mock('@/features/schedule', () => ({
 }));
 
 const { PlanSummaryPanel } = await import('./plan-summary-panel');
-const { formatCalendarDate } = await import('@/lib/format-date');
 
 function renderPanel(over: Partial<Parameters<typeof PlanSummaryPanel>[0]> = {}) {
-  return render(
-    <PlanSummaryPanel
-      statusLabel="Active"
-      dataDate="2026-01-01"
-      orgSlug="acme"
-      planId="p1"
-      {...over}
-    />,
-  );
+  return render(<PlanSummaryPanel statusLabel="Active" orgSlug="acme" planId="p1" {...over} />);
 }
 
 describe('PlanSummaryPanel', () => {
-  it('shows the status and data date, and embeds the schedule strip', () => {
+  it('shows the status, and embeds the schedule strip', () => {
     renderPanel();
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Data date')).toBeInTheDocument();
-    expect(screen.getByText(formatCalendarDate('2026-01-01'))).toBeInTheDocument();
     expect(screen.getByTestId('schedule-strip')).toBeInTheDocument();
-  });
-
-  it('renders a dash when the data date is unset', () => {
-    renderPanel({ dataDate: null });
-    expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   /**
@@ -66,12 +50,10 @@ describe('PlanSummaryPanel', () => {
    * would meet no resistance at all.
    */
   it('offers no Edit plan control — the header pencil is the one route', () => {
-    render(
-      <PlanSummaryPanel statusLabel="Active" dataDate="2026-01-01" orgSlug="acme" planId="p1" />,
-    );
+    render(<PlanSummaryPanel statusLabel="Active" orgSlug="acme" planId="p1" />);
     expect(screen.queryByRole('button', { name: /Edit plan/ })).not.toBeInTheDocument();
     // The pinned positive: the panel still renders its facts, so the assertion above cannot pass
     // by the panel having failed to render at all.
-    expect(screen.getByText('Data date')).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
   });
 });
