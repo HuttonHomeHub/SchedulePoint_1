@@ -5590,6 +5590,9 @@ happening — recorded here so it is a decision rather than an omission.
 > `hostsPlanSlots` props). The spec repeated both — the second under a comment reading _"Names read
 > from `activity-bottom-panel.tsx:155,317` rather than guessed"_. The **names** were read and the
 > locators work; the **line numbers** were not, in the sentence claiming they were. All corrected.
+>
+> _(2026-10-09, ADR-0181: `hostsPlanSlots`, which those two line numbers named, is gone with the
+> below-`md` single-pane layout. The labels and the wrong-citation record above stand as history.)_
 
 > **FIXED 2026-09-11 (`docs/specs/unmount-focus-handoff/`, M1–M3), and (c) is CLOSED.**
 >
@@ -5661,6 +5664,8 @@ anywhere. This is the seam that produced the milestone's largest blocking findin
 `activity-bottom-panel.test.tsx` pins exactly the two branches this item names ("gates BOTH plan
 slots on `hostsPlanSlots`, never just one"; "renders the toggle when given one, and nothing in its
 place when not"), 4/4 green. Added after this row was filed; the row was not updated. Item closed.
+_(2026-10-09, ADR-0181: the `hostsPlanSlots` case was removed with the prop; the unit now pins "renders
+BOTH plan slots, always", and the foot row's wrap and the outlet's bound are pinned beside it.)_
 
 **(f) ~~`bg-foreground/5` now paints on the canvas-dock surface scope for the first time.~~
 WITHDRAWN 2026-08-31 — the premise lapsed within twelve hours of the row being filed.** There is no
@@ -11886,3 +11891,9 @@ a table row or the foot row below 604 px of height, or the next pass over the na
 block beside the outlet is `shrink-0` and the outlet column is left 0–113 px wide. The foot row now wraps, which helps at
 narrow widths, but the outlet's `flex-1` / zero basis never asks for a line of its own. Give the outlet a content basis
 or its own row when it holds a bar.
+
+**Read in a browser while building ADR-0181 (2026-10-09, the container's Chromium):** once the foot row wraps
+and its facts outlet is bounded (the facts no longer push Recalculate off the right edge at 320), the row is **123 px at
+320 × 720**, taller than the **109 px** body: the canvas row has no height, a dock opened there is 0 px tall, and Expand
+sits 10 px below the viewport (its centre is reachable). The journey reads docks at 320 × 1000 for that reason
+(body 397, canvas row 274).

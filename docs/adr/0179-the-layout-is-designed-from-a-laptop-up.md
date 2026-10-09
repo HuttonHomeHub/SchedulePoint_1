@@ -221,6 +221,8 @@ and the deck order at 1024. That is the payoff of D2.
 - The reflow fallback remains shipped code with a smaller ambition. A named follow-up may retire the
   below-`md` single-pane workspace, once accessibility agrees the command band is a toolbar kept in
   view.
+  **Done by ADR-0181 (2026-10-09):** the single-pane workspace is retired, and the tiny-window criteria the
+  spec first aimed at are recorded there as a known limit (`docs/TECH_DEBT.md` #471).
 - Two shared extractions (`useNativeModal`, `BrandCard`) and one canvas keyboard guard are reviewed
   under ADR-0111.
 - `docs/TECH_DEBT.md` #438 closes as out of scope.
