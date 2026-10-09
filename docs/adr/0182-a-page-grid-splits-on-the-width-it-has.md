@@ -37,7 +37,7 @@ The brief's remedy, "two columns only from `xl`", is `min-width: 1280px` inclusi
    tracks (`@5xl`'s narrowest pair) and not in 546 px or wider. The rule's other clause — no
    `project · client` subtitle truncated mid-word — fails at 1912 (258 of 284 px shown) and so cannot
    choose a threshold; it is dropped as a threshold test. That truncation is `RowSubject`'s, at every
-   width, and is `docs/TECH_DEBT.md` #471.
+   width, and is `docs/TECH_DEBT.md` #472.
 3. **Everything keyed to the split is emitted by the primitive.** A `wide` item spans
    `col-span-full`, which needs no breakpoint; the landing's capped, fit-then-fill row template is the
    `rows="fit-then-fill"` prop, emitted beside `@6xl:grid-cols-2` in the same file, so the threshold is
@@ -69,7 +69,7 @@ The brief's remedy, "two columns only from `xl`", is `min-width: 1280px` inclusi
   (derived, not measured).
 - The landing's height cap exists only where the grid is two columns; below the split the four boxes
   stack at their own height and `<main>` scrolls. Each `fill` body keeps its tab stop although it no
-  longer scrolls (`docs/TECH_DEBT.md` #473).
+  longer scrolls (`docs/TECH_DEBT.md` #474).
 - `container-type: inline-size` applies layout containment: the frame is the containing block for any
   non-portalled `fixed` or `absolute` descendant. Nothing in the three screens renders one (scanned);
   `Menu` and `Tooltip` portal to `body`. The requirement stands for the next section added.
@@ -78,6 +78,6 @@ The brief's remedy, "two columns only from `xl`", is `min-width: 1280px` inclusi
 
 ## References
 
-- `docs/TECH_DEBT.md` #333 (the report), #471 (subtitle truncation), #472 (splitter `region`), #473
-  (fill-body tab stop), #474 (stale statements)
+- `docs/TECH_DEBT.md` #333 (the report), #472 (subtitle truncation), #473 (splitter `region`), #474
+  (fill-body tab stop), #475 (stale statements)
 - `apps/web/src/components/ui/page/page-grid.tsx`, `page-grid.structural.test.ts`

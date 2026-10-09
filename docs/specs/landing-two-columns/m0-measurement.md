@@ -117,6 +117,6 @@ Option (a) was taken by the coordinator under the product owner's delegation ("C
 photographs"): the name-wrap clause is the operative test and the threshold is **`@6xl` (72rem) for
 the landing, Members and the staff console**. The subtitle clause fails at the 1912 baseline, so it
 cannot discriminate and is dropped as a threshold test; the truncation is a pre-existing `RowSubject`
-defect at every width (`docs/TECH_DEBT.md` #471, its own spec, `RowSubject` untouched here). The
+defect at every width (`docs/TECH_DEBT.md` #472, its own spec, `RowSubject` untouched here). The
 product owner can object. Consequence stated without softening: a 1440 laptop gets one 1115 px
 column. The spec carries a dated amendment; ADR-0182 states the amended rule.

@@ -121,7 +121,7 @@ correct: two 366 px columns on a tablet would reproduce exactly what this exists
 
 > **Forward note, 2026-10-09:** both statements above are superseded. `PageGrid` no longer splits on `md`: it is
 > one column until its own width reaches 72rem (ADR-0182, `docs/specs/landing-two-columns/`), so 1280 is one
-> column, not 464 px ones. The subtitle truncation noted here is the same at 1912 and is `docs/TECH_DEBT.md` #471.
+> column, not 464 px ones. The subtitle truncation noted here is the same at 1912 and is `docs/TECH_DEBT.md` #472.
 
 ## 5. What did not have to be built
 

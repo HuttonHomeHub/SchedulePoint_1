@@ -22,7 +22,7 @@
 > (`m0-measurement.md`) applied SC-6 literally and it could not decide: its second clause (no
 > `project · client` subtitle truncated mid-word) fails at 1912 — the 732 px layout this spec leaves
 > unchanged — so no threshold can satisfy it, and it is **dropped as a threshold test**. The
-> truncation is a pre-existing `RowSubject` defect at every width, filed as `docs/TECH_DEBT.md` #471
+> truncation is a pre-existing `RowSubject` defect at every width, filed as `docs/TECH_DEBT.md` #472
 > and not touched here. The clause that does discriminate is the first (a plan name wraps to a second
 > line): it fails at the `@5xl` pair (500/505 px tracks) and passes at 546 and above, so the
 > threshold is **72rem**. Decided by the coordinator under the product owner's delegation ("CQ-2 by

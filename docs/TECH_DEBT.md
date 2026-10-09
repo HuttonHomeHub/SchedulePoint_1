@@ -10346,7 +10346,7 @@ to three sentences and a trailing fact, and at 464 px the trailing fact is takin
 comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
 roughly 768–1400 px wide.
 
-**Fix in review (2026-10-09, `docs/specs/landing-two-columns/`, ADR-0182):** `PageGrid` splits on its own width at 72rem for all three consumers. This row stays open until that lands and M2's after-reading closes it. The subtitle half of this complaint is not a width defect (#471).
+**Fix in review (2026-10-09, `docs/specs/landing-two-columns/`, ADR-0182):** `PageGrid` splits on its own width at 72rem for all three consumers. This row stays open until that lands and M2's after-reading closes it. The subtitle half of this complaint is not a width defect (#472).
 
 ### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
 
