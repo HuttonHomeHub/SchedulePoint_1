@@ -36,7 +36,8 @@ Dependencies point **down** the tiers only. Primitives never import feature code
   feature's `hooks/`.
 - **Types/interfaces:** `PascalCase`; a component's props are `‹Name›Props`.
 - **Variants:** named, semantic values (`intent="destructive"`, `size="sm"`) —
-  never style-leaking names like `blueBig`.
+  never style-leaking names like `blueBig`. For a row's icon button: a target in a row that grows
+  with it is `icon-row`; a target in a fixed container is `icon-sm` and is on ADR-0118 D1's list.
 - **Booleans:** positive and prefixed (`isLoading`, `hasError`, `disabled`).
 - **Event props:** `onX` for events, `onXChange` for controlled value changes.
 - **Test files:** `‹Name›.test.tsx`, co-located with the component.

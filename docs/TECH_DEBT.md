@@ -11919,3 +11919,14 @@ effect). They share one input (`bodyHeight`) and one output (`swapped` plus four
 **Next:** move them into a `useShortBodySwap` hook beside `use-activity-panel-prefs.ts`, behaviour unchanged, with the
 existing `the short-body swap` cases in `plan-workspace-toolbar.test.tsx` as the proof. **Trigger:** the next change that
 touches the swap, or the file passing 2,800 lines.
+
+### 470. The activities table's row checkboxes are 24 px labels around 16 px boxes, under the 44 px house rule on touch
+
+**Status:** open · **Verified:** 2026-10-09 (`ActivitiesTable.tsx` `SelectAllCheckbox` and `RowSelectCheckbox`, both `size-6`; swept as the named `row-select` exemption in `apps/web/e2e-workspace-fit/command-surface.spec.ts`)
+**Raised:** 2026-10-09 · **Size:** S · **Owner:** web
+
+AA under WCAG 2.2 §2.5.8 (24 px floor), below the house rule (ADR-0118 D1), and outside #215, which is about the row
+menu. Dense-row touch targets M1 marks both labels `data-coarse-exempt="row-select"` so the new activities-table
+surface of the coarse sweep can pass honestly and name what it excuses. **Next:** grow the label to the coarse
+`--control-h` (the row is already 61 px with a 44 px `⋯`, so it costs no height) and delete the marker and
+`ROW_SELECT_EXEMPT`. **Trigger:** any device reading that misses a row checkbox, or the next touch pass over the table.
