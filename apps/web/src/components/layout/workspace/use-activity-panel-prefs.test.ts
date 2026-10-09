@@ -30,9 +30,10 @@ describe('the panel minimum is made of the panel’s own parts', () => {
   });
 
   it('is pinned to the measured readings (m0-measurement.md, coarse header and foot)', () => {
-    expect(PANEL_MIN_OPEN).toBe(245);
-    expect(PANEL_USEFUL_MIN).toBe(359);
-    expect(CANVAS_MIN_HEIGHT + PANEL_USEFUL_MIN).toBe(599);
+    // ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1).
+    expect(PANEL_MIN_OPEN).toBe(249);
+    expect(PANEL_USEFUL_MIN).toBe(371);
+    expect(CANVAS_MIN_HEIGHT + PANEL_USEFUL_MIN).toBe(611);
   });
 
   it('is larger than the old 140, which was smaller than the panel’s own fixed parts (#468)', () => {

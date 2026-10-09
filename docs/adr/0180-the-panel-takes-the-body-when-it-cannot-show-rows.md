@@ -36,12 +36,15 @@ own fixed parts, so a panel dragged to its minimum showed no rows on any screen.
 short when `bodyHeight − reserve < PANEL_USEFUL_MIN` (three rows), with `reserve` being
 `CANVAS_MIN_HEIGHT` (240), or `DOCK_MIN_HEIGHT` (360) while a right dock is open.
 
-- The measured constants are `PANEL_MIN_OPEN` **245**, `PANEL_USEFUL_MIN` **359**, so the line is a
-  body under **599** with no dock. Each constant is the sum of named parts, not a number.
-- At 1024 × 600 the swap delivers about **3.3 rows** with a fine pointer and **2.5** with a coarse
-  one: (365 − 52 − 51 − 16 − 57) / 57 and (329 − 60 − 55 − 16 − 57) / 57.
+- The measured constants are `PANEL_MIN_OPEN` **249**, `PANEL_USEFUL_MIN` **371**, so the line is a
+  body under **611** with no dock. (They were 245, 359 and 599 until `ROW_PX` 57->61 when the
+  activities row's ⋯ grows to 44 on touch, dense-row-touch-targets M1: the row is 61 on a coarse
+  pointer, and the constant is sized for the larger part.) Each constant is the sum of named parts, not a number.
+- At 1024 × 600 the swap delivers about **3.3 rows** with a fine pointer (row 57) and **2.2** with a
+  coarse one (row 61): (365 − 52 − 51 − 16 − 57) / 57 and (329 − 60 − 55 − 16 − 57) / 61.
+  (2.5 coarse before the row grew to 61.)
 - 24 px of hysteresis stops a drag-resize flickering across the line.
-- 1280 × 720 (body 573) swaps, by 26 px. 1280 × 800 fine (body 653) does not. Coarse 1280 × 800 was
+- 1280 × 720 (body 573) swaps, by 38 px. 1280 × 800 fine (body 653) does not. Coarse 1280 × 800 was
   not read and probably swaps (its deck is four lines).
 
 **D2 — One coarse-sized constant, not a fine/coarse pair.** The Surface reports `pointer: fine`
@@ -131,10 +134,14 @@ glyph. If the four-line deck is revisited, the spec's Part B and its reviews are
 
 - At the floor the panel shows rows, and a panel at its minimum always shows one.
 - A planner on a short window loses sight of the diagram while the panel is expanded, and is told so.
-- The six suites that press Expand at Playwright's default 1280 × 720 (body 573, under 599) now run
+- The six suites that press Expand at Playwright's default 1280 × 720 (body 573, under 611) now run
   at 1280 × 800: `e2e` (all three browser projects), `e2e-edit`, `e2e-notes`, `e2e-programme`,
   `e2e-toolbar` and `e2e-undo`. No suite gets a test-only threshold. `e2e-toolbar`'s explicit
   1280 × 520 case is left as it was.
+- The 12 px raise of the line (599 to 611) makes more touch screens swap, coarse 1280 × 800
+  among them; that is expected, the row there really is 61.
+- The line rising from 599 to 611 makes more touch screens swap, coarse 1280 × 800 among them;
+  that is expected, the row there really is 61.
 - Nothing changes on the product owner's 1912 × 948 and 1912 × 1114 screens.
 - The constants are measured in a container's layout engine; the journey asserts every real part is
   at most its constant on both pointers.

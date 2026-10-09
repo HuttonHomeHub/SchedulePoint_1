@@ -22,15 +22,16 @@ const STORAGE_KEY = 'schedulepoint-activity-panel';
  * pointer-keyed size would under-reserve on the one touch device the product owner uses.
  *
  * `TABLE_HEAD_PX` and `ROW_PX` are keyed on the stage's **width**, not the pointer: at 1024–1280
- * wide the cells wrap and both read 57; at 1912 wide they read 37 and 45. The constant is sized for
- * the narrow case, which is where a short body exists at all, so it over-reserves by 12 px a row on
- * a wide screen. The M-A journey asserts each real part is `<=` its constant on both pointers.
+ * wide the cells wrap and the head reads 57 and a row 57 (61 on a coarse pointer, where the row's ⋯
+ * grows to 44); at 1912 wide they read 37 and 45 (61 coarse). The constants are sized for the
+ * narrow, coarse case, which is where a short body exists at all, so they over-reserve on a wide
+ * screen. ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1). The M-A journey asserts each real part is `<=` its constant on both pointers.
  */
 export const PANEL_HEADER_PX = 60;
 export const PANEL_FOOT_PX = 55;
 export const PANEL_BODY_PAD_PX = 16;
 export const TABLE_HEAD_PX = 57;
-export const ROW_PX = 57;
+export const ROW_PX = 61;
 
 /**
  * Smallest open height: every fixed part plus ONE row. The old 140 was smaller than the panel's own
