@@ -1130,6 +1130,34 @@ describe('a dock that has taken the row', () => {
     expect(fitSignal()).toBe((before ?? 0) + 1);
   });
 
+  it('hands focus to the dock’s toolbar control, and says so, when Fit closes the dock it was in', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    const close = screen.getByRole('button', { name: /close health check/i });
+    close.focus();
+    expect(close).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+    // **Verified red** against the raw closers: the focused Close button unmounted and focus fell
+    // to <body> (WCAG 2.4.3).
+    expect(
+      document.activeElement?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item'),
+    ).toBe('analysis');
+    nextFrame();
+    expect(screen.getByTestId('announcer')).toHaveTextContent('Panel closed to show the diagram.');
+  });
+
+  it('leaves focus alone when the dock closed for Fit did not hold it', () => {
+    renderScreen();
+    measure(640);
+    openHealth();
+    const fit = screen.getByRole('button', { name: 'Fit to plan' });
+    fit.focus();
+    fireEvent.click(fit);
+    expect(document.activeElement).toBe(fit);
+  });
+
   it('does not reopen the dock when its own toggle closes it (a dock command runs in place)', () => {
     renderScreen();
     measure(640);
@@ -1151,26 +1179,38 @@ describe('a dock that has taken the row', () => {
     expect(screen.getByRole('region', { name: /health/i })).toBeInTheDocument();
   });
 
-  describe('the canvas row', () => {
-    it('is inert when it is shorter than the ruler band', () => {
+  describe('a canvas row shorter than the ruler band', () => {
+    it('makes the stage inert, and only the stage', () => {
       renderScreen();
       measure(1024, 200, 20);
-      expect(rowEl()).toHaveAttribute('inert');
+      expect(stageEl()).toHaveAttribute('inert');
+      expect(rowEl()).not.toHaveAttribute('inert');
     });
 
     it('is not inert at the band’s own height, or before it has been measured', () => {
       renderScreen();
-      expect(rowEl()).not.toHaveAttribute('inert');
+      expect(stageEl()).not.toHaveAttribute('inert');
       measure(1024, 600, 40);
-      expect(rowEl()).not.toHaveAttribute('inert');
+      expect(stageEl()).not.toHaveAttribute('inert');
     });
 
-    it('restores the row when the height comes back', () => {
+    it('restores the stage when the height comes back', () => {
       renderScreen();
       measure(1024, 200, 20);
-      expect(rowEl()).toHaveAttribute('inert');
+      expect(stageEl()).toHaveAttribute('inert');
       measure(1024, 600, 400);
-      expect(rowEl()).not.toHaveAttribute('inert');
+      expect(stageEl()).not.toHaveAttribute('inert');
+    });
+
+    it('leaves an open dock operable: the dock shares the row and is never inert', () => {
+      renderScreen();
+      measure(1024, 200, 20);
+      openHealth();
+      const dock = screen.getByRole('region', { name: /health/i });
+      // **Verified red** with `inert` on the row: the dock sits inside it, so its Close button and
+      // its Escape handler were unreachable the moment a dock opened on a body this short.
+      expect(dock.closest('[inert]')).toBeNull();
+      expect(screen.getByRole('button', { name: /close health check/i })).toBeInTheDocument();
     });
   });
 });

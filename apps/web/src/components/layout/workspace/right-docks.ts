@@ -19,3 +19,15 @@ export type RightDock = (typeof RIGHT_DOCKS)[number];
 export function docksToClose(opening: RightDock): readonly RightDock[] {
   return RIGHT_DOCKS.filter((dock) => dock !== opening);
 }
+
+/**
+ * The toolbar control (`data-toolbar-item`) each dock is opened from, which is where focus goes when
+ * a dock closes while it holds focus. A `Record` over the set, so a fifth dock cannot be added
+ * without naming its trigger.
+ */
+export const DOCK_TRIGGER_ITEM: Record<RightDock, string> = {
+  notes: 'comments',
+  floatPaths: 'float-paths',
+  health: 'analysis',
+  revisions: 'analysis',
+};

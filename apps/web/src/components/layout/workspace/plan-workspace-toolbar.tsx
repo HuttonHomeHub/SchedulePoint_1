@@ -18,7 +18,7 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
-import { docksToClose, type RightDock } from './right-docks';
+import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -762,9 +762,26 @@ export function ToolbarPlanWorkspace({
   // dock through its own closer — which also clears its toolbar toggle — then run the command on the
   // next frame, once the diagram column is back. A dock command is exempt: it already replaces the
   // open dock, and closing first would turn a toggle that means "close this one" into "reopen it".
+  //
+  // **Focus is handed on, and the closing is said.** The raw closers unmount whatever the planner
+  // had focused inside the dock, which strands focus on <body> (WCAG 2.4.3) — the reason each dock's
+  // own Close goes through an `...AndFocus` closer. Here the dock that held focus names its toolbar
+  // control, and the polite region says why the panel went, because nothing else on screen does.
+  const ganttAnnounce = useAnnounce();
   const closeAllDocks = useCallback(() => {
+    const held = document.activeElement
+      ?.closest('[data-right-dock]')
+      ?.getAttribute('data-right-dock');
     for (const closeDock of Object.values(closeDockOf)) closeDock();
-  }, [closeDockOf]);
+    if (held !== null && held !== undefined) {
+      const item = DOCK_TRIGGER_ITEM[held as RightDock];
+      (
+        document.querySelector<HTMLElement>(`[data-toolbar-item="${item}"]`) ??
+        document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]')
+      )?.focus();
+    }
+    ganttAnnounce('Panel closed to show the diagram.');
+  }, [closeDockOf, ganttAnnounce]);
   const withDiagram = useCallback(
     <A extends unknown[]>(
       command: (...args: A) => void,
@@ -1192,7 +1209,6 @@ export function ToolbarPlanWorkspace({
    * looks. That row flips to `required` in the same commit as this hoist.
    */
   const canEdit = model.canEditSchedule && !lateOverlayActive;
-  const ganttAnnounce = useAnnounce();
 
   // The workspace keyboard scope — `?` plus the ADR-0048 undo/redo accelerators — as ONE React
   // handler bound to the workspace root. React events follow the React tree, so this keeps working
@@ -2500,10 +2516,6 @@ export function ToolbarPlanWorkspace({
                 // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
                 // already removes it from the tree), and the canvas keeps its viewport.
                 hidden={swapped}
-                // The one `inert` row: a row too short to show a bar (the collapsed panel on a body that
-                // holds the foot row and not the ruler above it). It stays laid out, so the canvas
-                // keeps its viewport; focus cannot land in a box nobody can see into.
-                inert={canvasRowTooShort}
                 onFocus={trackFocusIn}
                 onBlur={trackFocusOut}
                 className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
@@ -2520,9 +2532,14 @@ export function ToolbarPlanWorkspace({
                 {/* **`inert` while a dock has taken the row** (retire-single-pane AC-2.4): the stage is
                   then a sliver beside a dock that fills the body, and a focusable diagram nobody can
                   see is a focus-visibility failure of its own. Laid out, not `display: none`, so the
-                  canvas keeps its viewport; the legend and the resource strip ride inside it. */}
+                  canvas keeps its viewport; the legend and the resource strip ride inside it.
+
+                  **Also while the row is too short to show a bar** (the collapsed panel on a body that
+                  holds the foot row and not the ruler above it). It is the STAGE that goes inert and not
+                  the row: the row also holds the four right docks, and an inert dock cannot take focus
+                  on mount or be closed from the keyboard. */}
                 <div
-                  inert={dockSqueezed}
+                  inert={dockSqueezed || canvasRowTooShort}
                   className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
                 >
                   {surface}
@@ -2562,6 +2579,7 @@ export function ToolbarPlanWorkspace({
                     panel's own vocabulary. */}
                     <PanelSurface
                       border="start"
+                      data-right-dock="floatPaths"
                       style={{ width: floatPathsBounds.width }}
                       className="max-w-full shrink-0"
                     >
@@ -2588,6 +2606,7 @@ export function ToolbarPlanWorkspace({
                     {/* `panel` scope — see the Float paths dock above (item 7). */}
                     <PanelSurface
                       border="start"
+                      data-right-dock="health"
                       style={{ width: healthBounds.width }}
                       className="max-w-full shrink-0"
                     >
@@ -2614,6 +2633,7 @@ export function ToolbarPlanWorkspace({
                     {/* `panel` scope — see the Float paths dock above (item 7). */}
                     <PanelSurface
                       border="start"
+                      data-right-dock="revisions"
                       style={{ width: revisionBounds.width }}
                       className="max-w-full shrink-0"
                     >
@@ -2642,6 +2662,7 @@ export function ToolbarPlanWorkspace({
                     {/* `panel` scope — see the Float paths dock above (item 7). */}
                     <PanelSurface
                       border="start"
+                      data-right-dock="notes"
                       style={{ width: notesBounds.width }}
                       className="max-w-full shrink-0"
                     >
