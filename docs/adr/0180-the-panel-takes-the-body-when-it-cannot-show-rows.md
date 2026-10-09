@@ -140,8 +140,6 @@ glyph. If the four-line deck is revisited, the spec's Part B and its reviews are
   1280 × 520 case is left as it was.
 - The 12 px raise of the line (599 to 611) makes more touch screens swap, coarse 1280 × 800
   among them; that is expected, the row there really is 61.
-- The line rising from 599 to 611 makes more touch screens swap, coarse 1280 × 800 among them;
-  that is expected, the row there really is 61.
 - Nothing changes on the product owner's 1912 × 948 and 1912 × 1114 screens.
 - The constants are measured in a container's layout engine; the journey asserts every real part is
   at most its constant on both pointers.
