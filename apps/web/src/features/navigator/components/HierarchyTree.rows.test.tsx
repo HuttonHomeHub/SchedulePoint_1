@@ -29,7 +29,7 @@ const virtualizer = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-virtual', async (importActual) => ({
   // The library's own extractor, so `pinnedRange` below is tested against the real windowing.
-  defaultRangeExtractor: (await importActual<typeof import('@tanstack/react-virtual')>())
+  defaultRangeExtractor: (await importActual<{ defaultRangeExtractor: unknown }>())
     .defaultRangeExtractor,
   useVirtualizer: (options: { count: number; estimateSize: (index: number) => number }) => {
     virtualizer.options = options;

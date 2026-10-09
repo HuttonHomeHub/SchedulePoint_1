@@ -73,7 +73,7 @@ beforeEach(() => {
     configurable: true,
     get: () => 600,
   });
-  Element.prototype.scrollTo = scrollTo as unknown as typeof Element.prototype.scrollTo;
+  Element.prototype.scrollTo = scrollTo;
 });
 
 afterEach(() => {

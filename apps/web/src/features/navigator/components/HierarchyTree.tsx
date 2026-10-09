@@ -12,8 +12,8 @@ import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
-import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { useToolbarFocusHandoff } from '@/components/ui/toolbar/use-focus-handoff';
+import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { cn } from '@/lib/utils';
 
 /** Long-press duration (ms) that opens the row-actions menu on touch. */
