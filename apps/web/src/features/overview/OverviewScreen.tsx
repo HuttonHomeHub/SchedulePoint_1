@@ -71,6 +71,10 @@ import { canManageHierarchy } from '@/hooks/use-org-role';
  * boxes in a row end level. Reversed on the product owner's report against `web-v0.134.0`: "if
  * there is free space the boxes should fill them rather than shrink".
  *
+ * **The floor is a two-column rule (`@6xl:`).** In one column the card inside does not stretch, so a
+ * wrapper held at 220 px left a 100-130 px empty band under every short box (measured at 1465 px with
+ * the Explorer open; the cause was this floor, not the grid's row stretch).
+ *
  * 220 px is derived, not chosen: the worst heading block on this screen measured 97 px and a row
  * measured 61 px after M9.1's tightening, so 97 + 2 × 61 = 219 (`m8-density-measurement.md`,
  * `m9-density-design.md` D5). It is spelled `min-h-55` — 55 × the 4 px spacing step — rather than
@@ -78,7 +82,7 @@ import { canManageHierarchy } from '@/hooks/use-org-role';
  * value as drift and is right to: the same number on the spacing scale is the same 220 px and one
  * fewer one-off.
  */
-const GRID_ITEM_CLASS = 'flex min-h-55 flex-col';
+const GRID_ITEM_CLASS = 'flex flex-col @6xl:min-h-55';
 
 export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactElement {
   const { data: session } = useSession();

@@ -242,6 +242,17 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
 
   await overviewPage.setViewportSize({ width: 1280, height: 800 });
   await settled(1);
+  // **One column means one ordinary gap between boxes, not a floor's worth of air.** The 220 px
+  // floor is a two-column rule; applied in one column it held each wrapper at 220 while the card
+  // inside stopped at its content, leaving 100-130 px bands between short boxes (measured at 1465
+  // with the Explorer open). Geometry, because jsdom lays out nothing.
+  const gaps = await overviewPage.evaluate(() => {
+    const boxes = [...document.querySelectorAll('main section[aria-labelledby]')].map((el) =>
+      el.getBoundingClientRect(),
+    );
+    return boxes.slice(1).map((b, i) => Math.round(b.top - (boxes[i]?.bottom ?? 0)));
+  });
+  expect(gaps, 'one-column gaps between boxes').toEqual([24, 24, 24]);
   // **In one column the boxes stack at the height their content needs and `<main>` scrolls.** A cap
   // that survived the split clamped all four to their 220 px floor, each body scrolling on its own
   // (ADR-0182, the accessibility review).
