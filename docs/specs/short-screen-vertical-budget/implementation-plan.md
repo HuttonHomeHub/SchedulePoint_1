@@ -88,8 +88,8 @@ is a clean outcome.
 > **Risks:**
 >
 > 1. **Default-viewport suites will swap — high likelihood.** Playwright's default is 1280 × 720.
->    M0 measured the body there at 573 px, under the 599 px threshold
->    (`240 + PANEL_USEFUL_MIN` = 240 + 359). So every suite that presses Expand at the default viewport and then
+>    M0 measured the body there at 573 px, under the 611 px threshold
+>    (`240 + PANEL_USEFUL_MIN` = 240 + 371; 599 / 359 before ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1)). So every suite that presses Expand at the default viewport and then
 >    uses the canvas would collapse the panel or find the canvas hidden. 18 e2e files press Expand
 >    (`grep "Expand activities panel" apps/web/e2e*`).
 >    - **The fix,** in the same commit, is to derive the list (grep plus each config's `viewport`)

@@ -66,4 +66,14 @@ describe('buttonVariants', () => {
     // The caller's fill replaces the variant's; the gated hover class stays but is inert while shaded.
     expect(button).not.toHaveClass('bg-primary');
   });
+
+  it('icon-row is 28 px on a fine pointer and follows --control-h on a coarse one', () => {
+    // Both halves are asserted because either alone is the defect: `size-7` alone never grows on
+    // touch (that is `icon-sm`), and the coarse read alone would take a mouse user below 28.
+    render(<Button size="icon-row" aria-label="Actions" />);
+    expect(screen.getByRole('button', { name: 'Actions' })).toHaveClass(
+      'size-7',
+      'pointer-coarse:size-(--control-h)',
+    );
+  });
 });

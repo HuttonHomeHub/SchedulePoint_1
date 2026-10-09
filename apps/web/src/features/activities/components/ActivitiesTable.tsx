@@ -129,7 +129,10 @@ function SelectAllCheckbox({
     // command surfaces, and axe's `target-size` rule is `wcag22aa` (not requested) *and* ships
     // `enabled: false`. The box stays 16 px — this widens what a pointer may hit, not what a reader
     // sees. `ActivityMembersPanel` has always done it this way; these two never did.
-    <label className="flex size-6 cursor-pointer items-center justify-center">
+    <label
+      data-coarse-exempt="row-select"
+      className="flex size-6 cursor-pointer items-center justify-center"
+    >
       <input
         ref={ref}
         type="checkbox"
@@ -184,7 +187,10 @@ function RowSelectCheckbox({
 }): React.ReactElement {
   const checked = useSyncExternalStore(store.subscribe, () => store.getState().selectedIds.has(id));
   return (
-    <label className="flex size-6 cursor-pointer items-center justify-center">
+    <label
+      data-coarse-exempt="row-select"
+      className="flex size-6 cursor-pointer items-center justify-center"
+    >
       <input
         type="checkbox"
         className="accent-primary size-4 align-middle"
@@ -242,7 +248,7 @@ function RowActionsButton({
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-row"
       aria-label={`Actions for ${activity.name}`}
       aria-haspopup="menu"
       aria-expanded={openHere}

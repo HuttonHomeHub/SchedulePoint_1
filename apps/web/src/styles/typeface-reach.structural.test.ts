@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FONT_STACK } from '@/features/tsld/render/geometry';
+import { SRC_DIR as WEB_SRC, stripComments } from '@/test/source-files';
 
 /**
  * **The product's typeface reaches every layer that opts out of the cascade** — the canvas and the
@@ -44,13 +45,6 @@ import { FONT_STACK } from '@/features/tsld/render/geometry';
  * |                                              | browser under print media; that is the instrument for this.                   |
  * | The size or the weight                       | Only the family. The type scale is `globals.css`'s and has its own rules.     |
  */
-const WEB_SRC = join(process.cwd(), 'src');
-
-/** Strip block and line comments — four gates in this repository have matched their own prose. */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
-
 function walk(dir: string, ext: readonly string[]): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter(
     (f) => ext.some((e) => f.endsWith(e)) && !f.includes('.test.'),

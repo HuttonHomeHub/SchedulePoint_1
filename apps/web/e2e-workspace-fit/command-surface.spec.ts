@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page } from '@playwright/test';
 
+import { showActivities } from '../e2e/workspace';
 import { ganttRow } from '../e2e-gantt/support';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
@@ -133,9 +134,21 @@ async function sweep(
    * marker counts (`assertGanttExemptionsPresent`) rather than a swept count.
    */
   allowEmpty = false,
+  /**
+   * Narrows the swept set to controls matching this selector. For a surface whose OTHER controls
+   * are outside the question being asked (the activities table's sort headers and name cells are
+   * not row-menu triggers), so the set is named rather than filtered by size.
+   */
+  only?: string,
 ): Promise<Target[]> {
   return page.evaluate(
-    ({ minTarget, root: rootSelector, exemptWithin: exempt, allowEmpty: mayBeEmpty }) => {
+    ({
+      minTarget,
+      root: rootSelector,
+      exemptWithin: exempt,
+      allowEmpty: mayBeEmpty,
+      only: keep,
+    }) => {
       const deck = document.querySelector(rootSelector);
       if (!deck) throw new Error(`command-surface: no surface matched ${rootSelector}`);
 
@@ -164,6 +177,7 @@ async function sweep(
         ];
         for (const el of all) {
           if (exempt && el.closest(exempt)) continue;
+          if (keep && !el.matches(keep)) continue;
           // **Not rendered is not the same as painted at zero, and the difference is the whole
           // point of the zero-size assertion below.** An element with `display: none` — or an
           // ancestor with it — returns NO client rects; one that is laid out and collapsed
@@ -257,7 +271,7 @@ async function sweep(
       void minTarget;
       return out;
     },
-    { minTarget: MIN_TARGET, root, exemptWithin, allowEmpty },
+    { minTarget: MIN_TARGET, root, exemptWithin, allowEmpty, only },
   );
 }
 
@@ -1066,6 +1080,18 @@ interface CoarseSurface {
   minWidth?: number;
   /** The plan view this surface is only drawn in. */
   view?: 'gantt';
+  /** Narrows the sweep to controls matching this selector (see `sweep`'s `only`). */
+  only?: string;
+  /** The surface is the activities panel's table, which is collapsed until it is expanded. */
+  activities?: true;
+  /**
+   * Skipped below this viewport height. At 1024 × 600 the activities panel is 140 px tall and sits
+   * at y 497..625 on a 600 px viewport, so no row is painted inside the viewport and the sweep has
+   * nothing to measure (`docs/specs/dense-row-touch-targets/m0-measurement.md` §2) — the floor is
+   * asked for SIZE ONLY (`assertActivitiesRowMenuSizeOnly`); reachability there is covered by the
+   * device sheet.
+   */
+  minHeight?: number;
   /**
    * A scroller that is swept at its top and again at its bottom. The sweep skips a control below a
    * scroller's fold, so at the floor — where the Explorer column scrolls as a whole — one position
@@ -1090,6 +1116,17 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     atLeast: 6,
     minWidth: 1024,
     scrollEnds: 'nav[aria-label="Project Explorer"]',
+  },
+  // The activities table (#215): swept for its row-menu triggers only. Its other controls (sort
+  // headers, name cells) are a different question, and its 24 px row checkboxes are the named
+  // `row-select` exemption (`ROW_SELECT_EXEMPT`), asserted present in the test.
+  {
+    name: 'activities table',
+    root: 'table',
+    atLeast: 0,
+    only: '[aria-haspopup="menu"]',
+    activities: true,
+    minHeight: 700,
   },
   // Switched to in the test, not here. `minWidth` is the floor (1024): the pinned grid block is
   // 584 px, so below it the grid overflows its scroller and its controls sit outside the viewport,
@@ -1140,6 +1177,19 @@ const EXEMPT_WITHIN = ['nav[aria-label="Breadcrumb"]', '[role="tree"]'].join(','
  * - `cell-input` — an open cell's field, 24 px; the activity editor is the large route.
  */
 const GANTT_EXEMPT_KINDS = ['disclosure', 'row-menu', 'sort', 'cell-input'] as const;
+/**
+ * **The activities table's row checkboxes, a named coarse exception** (`docs/TECH_DEBT.md`, filed
+ * with #215). 24 px labels around 16 px boxes: AA under WCAG 2.2 §2.5.8, below the house rule, and
+ * outside the row-menu question this surface asks.
+ *
+ * **This marker excludes nothing from the sweep** — that surface is narrowed by
+ * `only: '[aria-haspopup="menu"]'`, which never matches a checkbox. It works as an INVENTORY
+ * assertion (`assertRowSelectExemptionsPresent`): every checkbox in the table carries it, there is
+ * at least one, and the marked labels really are below 44, so the exception is named, counted and
+ * able to go red. It is asserted at the wide viewport only (the floor skips this surface).
+ */
+const ROW_SELECT_EXEMPT = '[data-coarse-exempt="row-select"]';
+
 const ganttExempt = (kinds: readonly string[] = GANTT_EXEMPT_KINDS): string =>
   kinds.map((kind) => `[role="treegrid"] [data-gantt-coarse-exempt="${kind}"]`).join(',');
 
@@ -1168,6 +1218,7 @@ const UPRIGHT_TABLET = { width: 834, height: 1112 };
 test.describe('The plan command surface, under a coarse pointer', () => {
   let page: Page;
   let context: BrowserContext;
+  let orgSlugForSweep: string;
 
   test.beforeAll(async ({ browser }) => {
     // A context, not `browser.newPage()`: axe refuses a page that has no context of its own.
@@ -1180,6 +1231,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     await acknowledgeViewportNotice(context);
     page = await context.newPage();
     const orgSlug = await onboard(page, Date.now() + 7);
+    orgSlugForSweep = orgSlug;
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Touch');
     await ensurePen(page);
@@ -1271,10 +1323,21 @@ test.describe('The plan command surface, under a coarse pointer', () => {
 
       for (const surface of COARSE_SURFACES) {
         if (surface.minWidth !== undefined && viewport.width < surface.minWidth) continue;
+        if (surface.minHeight !== undefined && viewport.height < surface.minHeight) {
+          if (surface.activities) await assertActivitiesRowMenuSizeOnly(viewport);
+          continue;
+        }
         // The Gantt grid exists only in its own view; every other surface is swept in the diagram.
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
+        if (surface.activities) await showActivities(page);
         const exempt = surface.view === 'gantt' ? ganttExempt() : EXEMPT_WITHIN;
-        let targets = await sweep(page, surface.root, exempt, surface.markersOnly === true);
+        let targets = await sweep(
+          page,
+          surface.root,
+          surface.activities ? ROW_SELECT_EXEMPT : exempt,
+          surface.markersOnly === true,
+          surface.only,
+        );
         if (surface.scrollEnds !== undefined) {
           const scroller = page.locator(surface.scrollEnds);
           await scroller.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
@@ -1293,6 +1356,11 @@ test.describe('The plan command surface, under a coarse pointer', () => {
             targets.length,
             `no controls swept on ${surface.name} at ${viewport.width}`,
           ).toBeGreaterThan(surface.atLeast);
+          // A row of invisible targets would pass every visible-filtered check below vacuously.
+          expect(
+            targets.some((t) => t.visible),
+            `${surface.name}: nothing swept is actually painted at ${viewport.width}`,
+          ).toBe(true);
         }
 
         const belowHouse = targets.filter(
@@ -1316,8 +1384,106 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         ).toEqual([]);
 
         if (surface.view === 'gantt') await assertGanttExemptionsPresent(viewport.width);
+        if (surface.activities) await assertRowSelectExemptionsPresent(viewport.width);
       }
     }
+  });
+
+  /**
+   * **The floor's share of the activities table, SIZE ONLY.** At 1024 × 600 the panel sits at
+   * y 497..625 on a 600 px viewport, so no row is hit-testable and the reachability half of the
+   * sweep cannot run (`m0-measurement.md` §2). The `⋯` is still laid out, so its box is read and
+   * held to 44; that the row grows to fit (57 → 61) is the layout's doing and is not asserted.
+   */
+  async function assertActivitiesRowMenuSizeOnly(viewport: {
+    width: number;
+    height: number;
+  }): Promise<void> {
+    await showView('tsld');
+    await showActivities(page);
+    const sizes = await page.locator('table [aria-haspopup="menu"]').evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { w: r.width, h: r.height };
+      }),
+    );
+    expect(
+      sizes.length,
+      `no activities row menu is laid out at ${viewport.width} × ${viewport.height}`,
+    ).toBeGreaterThan(0);
+    expect(
+      sizes.filter((t) => t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+      `activities table: row menu below ${HOUSE_TARGET} at ${viewport.width} × ${viewport.height} (size only)`,
+    ).toEqual([]);
+    // At the floor an expanded panel hides the Gantt ("Gantt hidden. Collapse to return."), and the
+    // next surface in the loop needs it.
+    await page.getByRole('button', { name: 'Collapse activities panel' }).click();
+    await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
+  }
+
+  /**
+   * **The `row-select` exemption is exercised, so it can fail (ADR-0110 D5).** Every checkbox in the
+   * activities table sits inside a marked label, and there is at least one: an unmarked checkbox is
+   * a new under-size target nobody named, and an empty set would make the exemption read as cover.
+   * The marked labels are also asserted to be the sub-44 controls they claim to excuse.
+   */
+  async function assertRowSelectExemptionsPresent(width: number): Promise<void> {
+    const table = page.locator('table');
+    const checkboxes = await table.locator('input[type="checkbox"]').count();
+    const marked = await table.locator(`${ROW_SELECT_EXEMPT} input[type="checkbox"]`).count();
+    expect(checkboxes, `no row checkboxes in the activities table at ${width}`).toBeGreaterThan(0);
+    expect(marked, `a row checkbox lost its 'row-select' marker at ${width}`).toBe(checkboxes);
+    const boxes = await table.locator(ROW_SELECT_EXEMPT).evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return Math.min(r.width, r.height);
+      }),
+    );
+    expect(
+      boxes.every((side) => side < HOUSE_TARGET),
+      `the 'row-select' exemption covers a control that already clears ${HOUSE_TARGET} at ${width}: delete the exemption`,
+    ).toBe(true);
+  }
+
+  /**
+   * **The list pages' `⋯`** (`RowActionsMenu`, six tables; Clients is the one swept). The loop above
+   * runs on the plan page only, so this leaves it, sweeps the Clients table at both coarse widths
+   * and returns to the plan URL it saved — a later test in this serial group needs the plan.
+   */
+  test('the Clients list row menu clears 44 × 44 under a coarse pointer', async () => {
+    test.setTimeout(120_000);
+    const planUrl = page.url();
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.goto(`/orgs/${orgSlugForSweep}/clients`);
+      await expect(page.locator('main table')).toBeVisible();
+      const targets = await sweep(page, 'main table', undefined, false, '[aria-haspopup="menu"]');
+      expect(
+        targets.length,
+        `no row menu swept in the Clients list at ${viewport.width}`,
+      ).toBeGreaterThan(0);
+      expect(
+        targets.some((t) => t.visible),
+        `no Clients row menu is painted at ${viewport.width}: the checks below would pass vacuously`,
+      ).toBe(true);
+      const belowHouse = targets.filter(
+        (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+      );
+      expect(
+        belowHouse,
+        `Clients list: below the ${HOUSE_TARGET}×${HOUSE_TARGET} house rule under a coarse pointer at ${viewport.width}: ${JSON.stringify(belowHouse)}`,
+      ).toEqual([]);
+      const unreachable = targets.filter((t) => t.visible && !t.reachable);
+      expect(
+        unreachable,
+        `Clients list: a pointer cannot reach these at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+      ).toEqual([]);
+    }
+    await page.goto(planUrl);
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+    // A fresh navigation re-acquires the plan lock from scratch; do not leave a later test in the
+    // serial group depending on the pen `beforeAll` took.
+    await ensurePen(page);
   });
 
   /**

@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { declarations, readGlobalsCss } from '@/test/css-blocks';
+import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
 
 /**
  * **The input axis, pinned** (ADR-0118 D2, built at M4 after the gate pass found it missing).
@@ -64,5 +68,70 @@ describe('the coarse-pointer input axis', () => {
     // compute against — which is exactly why this axis needs a structural gate and not a unit one.
     expect(decls.get('--control-h')?.trim()).toBe('2.75rem');
     expect(decls.get('--control-h-sm')?.trim()).toBe('2.75rem');
+  });
+});
+
+/**
+ * **The JS side of the axis** (dense-row-touch-targets, spec §5). The CSS half above has one
+ * declaration site; the JS half had none, so a second component could ask for the pointer in its
+ * own words and drift from `viewport-notice`'s. The rule is textual and deliberately blunt: any
+ * `(pointer: …)` / `(any-pointer: …)` query in code — in a `matchMedia` literal, a constant that is
+ * later passed to it (`const Q = '(pointer: coarse)'`), or a `[@media(pointer:…)]` class — is an
+ * offender unless it is the right-hand side of the `COARSE_POINTER_QUERY` definition or is listed
+ * below. `pointer-coarse:` is the utility that compiles to the same rule and is not matched.
+ * Comments are stripped first, so `button.tsx`, `toolbar-styles.ts` and `GanttColumnEdge.tsx`
+ * explaining the rule cannot break it.
+ */
+const POINTER_QUERY = /\(\s*(?:any-)?pointer\s*:[^)]*\)/g;
+const COARSE_QUERY_DEFINITION = /COARSE_POINTER_QUERY\s*=\s*(['"`])[^'"`]*\1/g;
+
+/**
+ * Sites that predate `COARSE_POINTER_QUERY` (created at M2 of the same epic), keyed by file and
+ * query text with the number of occurrences allowed — so a second identical literal in the same
+ * file fails. Each line is removed by the milestone that moves the site onto the hook; none may be
+ * added. TODO(M2): `docs/specs/dense-row-touch-targets/implementation-plan.md`.
+ */
+const INTERIM = new Map<string, number>([
+  ['components/layout/viewport-notice/viewport-notice.tsx::(pointer: coarse)', 1],
+  ['features/navigator/components/HierarchyTree.tsx::(pointer:coarse)', 1],
+]);
+
+function pointerQueryCounts(): Map<string, number> {
+  const found = new Map<string, number>();
+  for (const file of allSourceFiles()) {
+    const code = stripComments(readFileSync(join(SRC_DIR, file), 'utf8')).replace(
+      COARSE_QUERY_DEFINITION,
+      '',
+    );
+    for (const m of code.matchAll(POINTER_QUERY)) {
+      const key = `${file}::${m[0]}`;
+      found.set(key, (found.get(key) ?? 0) + 1);
+    }
+  }
+  return found;
+}
+
+describe('the JS side of the input axis', () => {
+  it('writes no pointer media query of its own', () => {
+    const offenders = [...pointerQueryCounts()]
+      .filter(([key, n]) => n > (INTERIM.get(key) ?? 0))
+      .map(([key, n]) => `${key} ×${n}`);
+    expect(
+      offenders,
+      'a `(pointer: …)` query written out is a second vocabulary for the axis — use the ' +
+        '`pointer-coarse:` utility in a class, or, in code, the single `COARSE_POINTER_QUERY` ' +
+        'definition (created at M2 of dense-row-touch-targets; until it exists there is no ' +
+        'sanctioned JS form, so a new need is an M2 conversation, not a new literal)',
+    ).toEqual([]);
+  });
+
+  it('still finds each interim site exactly, so the allowance cannot outlive the code', () => {
+    const found = pointerQueryCounts();
+    for (const [key, allowed] of INTERIM) {
+      expect(
+        found.get(key) ?? 0,
+        `the interim allowance "${key}" no longer matches ${String(allowed)} occurrence(s)`,
+      ).toBe(allowed);
+    }
   });
 });

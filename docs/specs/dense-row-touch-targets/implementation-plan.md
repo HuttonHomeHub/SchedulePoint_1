@@ -115,6 +115,19 @@ the activities table is 44 px. Mouse is unchanged.
 
 - **Reviewers before merge:** component-reviewer (a new public variant) and accessibility-reviewer.
 
+##### M1 exit criteria, as built
+
+- **The floor (1024 × 600) is measured for SIZE only.** The activities panel sits at y 497..625 on
+  a 600 px viewport, so no row is hit-testable there: the activities-table sweep is skipped below
+  700 px of height, and `assertActivitiesRowMenuSizeOnly` reads the `⋯` box instead and holds it to 44. Reachability at the floor is **not** asserted by any journey; it is a device-sheet item. The
+  M0 figure to expect there: the row goes **57 → 61** and the button is **44** (`m0-measurement.md`
+  §2), against 45 → 61 at 1912.
+- **The `row-select` exemption is asserted at the wide viewport only** (1646 × 1097), because the
+  floor skips that surface. It is an inventory assertion, not an exclusion: the surface sweeps
+  `[aria-haspopup="menu"]` only.
+- **Tier-1 pins** for both consumers (`row-actions-menu.test.tsx`, `ActivitiesTable.test.tsx`)
+  assert the `icon-row` classes, so a revert to `size-7` fails without a browser.
+
 ---
 
 ### Milestone M2: The Explorer tree's rows grow on touch
@@ -259,6 +272,8 @@ on the Surface.
    - Restate the Gantt half as **decided** (CQ-1), with its evidence and trigger.
    - Record the four corrections from spec §1 in place.
 4. **New `device-checklist.md` beside this plan** (about 8 minutes, tablet posture unless stated).
+   It must also carry the activities-table row at 1024 × 600 (row 57 → 61, `⋯` 44), which the
+   journeys measure for size only and cannot hit-test (M1 exit criteria).
    It opens with: **"With the keyboard cover attached, nothing on this sheet changes, by design."**
    Steps:
    - **Taps:**

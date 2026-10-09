@@ -46,7 +46,7 @@ switches on for the Surface. Both parts are for **short screens**: a 1366 × 768
   - Opening a side panel such as Health or Notes collapses the activities panel. Expanding the
     activities panel closes the side panel. Whatever you asked for last is what you see.
 - **What you get:** at 1024 × 600, about 3 rows with a mouse and about 2–3 with a finger (measured
-  3.3 and 2.5). The panel's smallest drag size rises from 140 px to 245 px, so it always shows a row.
+  3.3 and 2.5). The panel's smallest drag size rises from 140 px to 249 px, so it always shows a row.
 
 **Part B: dropping three toolbar labels (optional, after A). NOT BUILT.** The product owner chose
 B0 (keep four lines) on 2026-10-08. Only the Settings… gear icon was kept; the label drop, `deckLabel`,
@@ -312,12 +312,13 @@ request.
 | `PANEL_FOOT_PX`     | 51            | 55              | `activity-bottom-panel.tsx:472`                          |
 | `PANEL_BODY_PAD_PX` | 16            | 16              | `activity-bottom-panel.tsx:311`                          |
 | `TABLE_HEAD_PX`     | 57            | 57              | measured; width-keyed (37 at 1912 wide)                  |
-| `ROW_PX`            | 57            | 57              | measured; width-keyed (45 at 1912 wide)                  |
+| `ROW_PX`            | 57            | 61              | measured; width-keyed (45 / 61 at 1912 wide)             |
 
 From these:
 
-- **`PANEL_MIN_OPEN`** = header + foot + pad + head + 1 × row = **245**.
-- **`PANEL_USEFUL_MIN`** = header + foot + pad + head + 3 × row = **359**. The swap line is therefore a body under 240 + 359 = **599**.
+- **`PANEL_MIN_OPEN`** = header + foot + pad + head + 1 × row = **249**.
+- **`PANEL_USEFUL_MIN`** = header + foot + pad + head + 3 × row = **371**. The swap line is therefore a body under 240 + 371 = **611**.
+  (245, 359 and 599 until ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1).)
 - **One constant each, not a fine/coarse pair.** The Surface reports `pointer: fine` with its cover
   attached (`GanttPanel.tsx:200-202`, ADR-0118 D7), so a pointer-keyed size would under-reserve on
   the one touch device the product owner uses. The cost is that a mouse user's header and foot are
@@ -338,7 +339,7 @@ split would give three rows, the table's own floor ("the header and about three 
 the smallest body the design allows:
 
 - **Fine:** body 365 − 52 − 51 − 16 − 57 = 189, which is about 3.3 rows at 57 px (≥ 3 is asserted).
-- **Coarse:** body 329 − 60 − 55 − 16 − 57 = 141, which is about 2.5 rows at 57 px (≥ 2 is asserted).
+- **Coarse:** body 329 − 60 − 55 − 16 − 57 = 141, which is about 2.2 rows at 61 px (≥ 2 is asserted; 2.5 at 57 before ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1)).
 - The body at 1024 × 600 is 365 / 329, not the first draft's 325 / 289: that estimate left out the
   40 px view-controls strip above the canvas.
 
@@ -354,7 +355,7 @@ These are consistent. Every body above the floor gives at least as much.
 
 **What the threshold means in window terms:**
 
-- **1024 wide, fine:** a body under 599, which is a window under about 834 px tall.
+- **1024 wide, fine:** a body under 611, which is a window under about 846 px tall.
 - **1280 × 720 fine:** body 573, so it **swaps**, by 26 px; hence the six default-viewport suites move
   to 1280 × 800.
 - **1280 × 800 fine:** body 653, so no swap. SC-A3 is asserted by Playwright. **Coarse** 1280 × 800 was

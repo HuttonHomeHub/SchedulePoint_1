@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
+
 /**
  * **Every control height in `components/ui/` reads `--control-h*`, or is a NAMED exception**
  * (ADR-0118 D1/D2, built at M4).
@@ -56,10 +58,11 @@ function isOffendingClassString(text: string): boolean {
 const EXCEPTIONS = new Map<string, string>([
   [
     'button.tsx::size-7',
-    // `Button`'s `icon-sm`, ADR-0118 D1 exception 2: five of its six consumers sit inside a
-    // container whose height is fixed independently of them — the sharpest a virtualizer's JS
-    // constant — so raising it overflows the row rather than growing it (`docs/TECH_DEBT.md` #215).
-    "Button's icon-sm — ADR-0118 D1 exception 2, dense rows whose height is fixed elsewhere",
+    // `Button`'s `icon-sm`, ADR-0118 D1 exception 2: a container whose height is fixed
+    // independently of it — `GanttRowMenu`'s `GANTT_ROW_HEIGHT` is the one meant to stay; the tree
+    // and the spine still sit here until M2/M3 of `docs/specs/dense-row-touch-targets/`. Raising it
+    // overflows the row rather than growing it (`docs/TECH_DEBT.md` #215). Tables take `icon-row`.
+    "Button's icon-sm — ADR-0118 D1 exception 2, GanttRowMenu's row is fixed elsewhere (GANTT_ROW_HEIGHT)",
   ],
   [
     'button.tsx::h-11 px-6',
@@ -81,11 +84,6 @@ function sourceFiles(): string[] {
   return readdirSync(UI_DIR, { recursive: true, encoding: 'utf8' }).filter(
     (f) => (f.endsWith('.tsx') || f.endsWith('.ts')) && !f.includes('.test.'),
   );
-}
-
-/** Strip block and line comments so a docblock describing the rule cannot violate it. */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
 describe('control heights in the design-system primitives', () => {
@@ -127,5 +125,36 @@ describe('control heights in the design-system primitives', () => {
       expect(code, `the exception "${key}" matches nothing any more`).toContain(needle as string);
       expect(reason.length, `"${key}" has no reason`).toBeGreaterThan(20);
     }
+  });
+
+  it('defines `icon-sm` once and lets a call site take it only by name', () => {
+    // The `button.tsx::size-7` exception above is a needle, and it stays green if `icon-sm` is
+    // deleted, because `icon-row`'s string also contains `size-7`. So the variant's consumers are
+    // counted at the call sites instead, comments stripped: a new `icon-sm` is a decision made here.
+    //
+    // Interim list (dense-row-touch-targets M1). The plan's end state is `GanttRowMenu` alone;
+    // `HierarchyTree` leaves at M2 and `explorer-column` at M3, and each removes its line below.
+    // TODO(M2/M3): `docs/specs/dense-row-touch-targets/implementation-plan.md` — delete those two
+    // entries (and the matching `button.tsx::size-7` wording) when the milestones land.
+    const EXPECTED = new Map<string, number>([
+      ['components/layout/navigator/explorer-column.tsx', 1],
+      ['features/gantt/components/GanttRowMenu.tsx', 1],
+      ['features/navigator/components/HierarchyTree.tsx', 1],
+    ]);
+    const found = new Map<string, number>();
+    let definitions = 0;
+    for (const file of allSourceFiles()) {
+      const code = stripComments(readFileSync(join(SRC_DIR, file), 'utf8'));
+      if (file === 'components/ui/button.tsx') {
+        definitions = (code.match(/'icon-sm'\s*:/g) ?? []).length;
+        expect(code.match(/size="icon-sm"/g), 'Button must not use its own variant').toBeNull();
+        continue;
+      }
+      const uses = (code.match(/icon-sm/g) ?? []).length;
+      if (uses > 0) found.set(file, uses);
+    }
+    expect(definitions, "`icon-sm` is defined once, in button.tsx's size map").toBe(1);
+    expect([...found].sort()).toEqual([...EXPECTED].sort());
+    expect(found.has('features/gantt/components/GanttRowMenu.tsx')).toBe(true);
   });
 });

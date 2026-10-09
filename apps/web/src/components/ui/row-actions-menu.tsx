@@ -83,7 +83,7 @@ export function RowActionsMenu({
       <Button
         ref={triggerRef}
         variant="ghost"
-        size="icon-sm"
+        size="icon-row"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={anchor !== null}

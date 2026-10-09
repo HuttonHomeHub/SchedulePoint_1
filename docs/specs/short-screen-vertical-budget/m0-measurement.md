@@ -128,7 +128,7 @@ The spec's body estimates (325 / 289) were built from the collapsed canvas plus 
 view-controls strip above the canvas (the chain reads 40 + 482 canvas row + 51 foot). That is a constant error and it
 points the same way at every viewport.
 
-**Does any reading move the recommendation?** A1 still meets SC-A1 (3.3 fine rows, 2.5 coarse), the swap still fires
+**Does any reading move the recommendation?** A1 still meets SC-A1 (3.3 fine rows, 2.5 coarse; the constants were later raised, ROW_PX 57->61 when the activities row's ⋯ grows to 44 on touch (dense-row-touch-targets M1), making the coarse figure 2.2 and the line 611), the swap still fires
 at 1280 × 720, and the suite list is six, not "large". What moves is the **numbers and one assumption the spec rests
 on**:
 

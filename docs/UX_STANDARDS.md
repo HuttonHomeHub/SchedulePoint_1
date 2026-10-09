@@ -398,7 +398,7 @@ problem for a discoverability one.
 ### A short body gives the whole workspace to the panel (ADR-0180)
 
 When the workspace body is too short to give the diagram its minimum and the activities panel three
-rows (a body under 599 px with no dock open), **Expand hides the diagram instead of squeezing both**.
+rows (a body under 611 px with no dock open), **Expand hides the diagram instead of squeezing both**.
 A panel that shows no rows is not an expanded panel.
 
 - **The diagram is hidden, not removed.** `display: none` (the `hidden` attribute), still mounted, and
