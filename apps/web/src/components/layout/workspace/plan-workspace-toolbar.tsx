@@ -18,6 +18,7 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
+import { focusOutsideInert } from './focus-reachable';
 import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
@@ -997,13 +998,12 @@ export function ToolbarPlanWorkspace({
    * order is a tie-break that never fires rather than a precedence.
    */
   const focusPlanSurface = useCallback(() => {
-    const grid = document.querySelector('[role="treegrid"]');
+    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
     if (grid) {
-      const stop = grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
-      (stop ?? (grid as HTMLElement)).focus();
+      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
       return;
     }
-    document.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
   }, []);
 
   const session = useSession();
@@ -1289,7 +1289,9 @@ export function ToolbarPlanWorkspace({
     // this asks the grid to restore its own roving stop — the smallest seam that keeps focus inside
     // the widget rather than dropping it to `<body>`.
     onCellClosed: () => {
-      document.querySelector<HTMLElement>('[role="treegrid"] [role="row"][tabindex="0"]')?.focus();
+      focusOutsideInert(
+        document.querySelector<HTMLElement>('[role="treegrid"] [role="row"][tabindex="0"]'),
+      );
     },
     recordUpdate: model.recordActivityUpdate,
   });
@@ -1532,7 +1534,7 @@ export function ToolbarPlanWorkspace({
   const focusGanttGrid = useCallback(() => {
     const grid = document.querySelector('[role="treegrid"]');
     const stop = grid?.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
-    (stop ?? (grid as HTMLElement | null))?.focus();
+    focusOutsideInert(stop ?? (grid as HTMLElement | null));
   }, []);
 
   /**
