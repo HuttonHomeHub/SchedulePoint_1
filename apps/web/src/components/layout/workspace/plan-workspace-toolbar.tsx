@@ -11,6 +11,7 @@ import {
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { dockBounds } from './dock-bounds';
+import { focusOutsideInert } from './focus-reachable';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
@@ -18,7 +19,6 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
-import { focusOutsideInert } from './focus-reachable';
 import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
