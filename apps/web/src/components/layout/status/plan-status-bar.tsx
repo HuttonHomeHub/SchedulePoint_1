@@ -7,8 +7,9 @@ import { PlanFactsHost } from '@/components/layout/workspace/plan-facts-host';
  * The plan status bar — grid row 3 (ADR-0099 D5, Graphite M7), now a **thin host** (M2-T1).
  *
  * The facts and the schedule-state region moved to {@link PlanFacts}, and the pure state derivation
- * to `./schedule-state`, because M2 gives this content **two possible hosts**: the activities handle
- * row on a wide plan layout, and this bar below `md`, where that row is not mounted at all.
+ * to `./schedule-state`, because M2 gave this content **two possible hosts**: the activities foot row,
+ * and this bar for any host with no foot row mounted (the below-`md` layout that was the second case
+ * is retired, ADR-0181; the in-place render is what the unit suites still exercise).
  *
  * **This file re-exports `deriveScheduleState`, `scheduleStateAttr` and `ScheduleState`
  * deliberately.** `plan-status-bar.test.tsx` imports them from here, and the extraction's acceptance
@@ -31,11 +32,10 @@ export function PlanStatusBar(props: {
   /** The summary has not arrived. Distinct from "arrived and empty", which is a real answer. */
   pending: boolean;
 }): React.ReactElement {
-  // **The registry decides where these render, with no conditional here** (M2-T4). An outlet is
-  // mounted only by the COLLAPSED activities bar, so the rule falls out rather than being written:
-  // collapsed, the facts portal into the row the planner is already reading and this slot is empty;
-  // expanded, that bar has unmounted and they render here; below `md` there is no bar at all and
-  // they render here too. Three states, one mechanism, no branch to get wrong.
+  // **The registry decides where these render, with no conditional here** (M2-T4). The foot row
+  // mounts the outlet in both panel states (collapsed bar and expanded panel), so the facts portal
+  // into it at every width and this slot is empty. Where no outlet is mounted — a suite that renders
+  // this bar alone — they render here. One mechanism, no branch to get wrong.
   //
   // `plan-status-bar.test.tsx` mounts this with no provider, so `PlanFactsHost` finds no outlet and
   // renders in place — which is why that suite still passes unedited through this change.

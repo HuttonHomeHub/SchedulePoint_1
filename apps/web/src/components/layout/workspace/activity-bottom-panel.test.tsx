@@ -10,15 +10,16 @@ import { ActivityPanelCollapsedBar, PlanActivitiesFootRow } from './activity-bot
  * The row is covered transitively through two callers and end to end by `dock.spec.ts`, and its
  * positional invariant genuinely needs a real layout — that part belongs in the journey and stays
  * there. What did not need a browser, and was pinned nowhere, is the branching: whether the
- * `chrome` scope actually reaches the row, whether `hostsPlanSlots` gates **both** outlets, and
- * whether the toggle renders when given and is absent when not.
+ * `chrome` scope actually reaches the row, whether **both** outlets render, whether the row wraps,
+ * and whether the toggle renders when given and is absent when not.
  *
- * The middle one is not hypothetical. `hostsPlanSlots` shipped as `hostsDock`, guarding the dock
- * while `PlanFactsOutlet` registered unconditionally forty lines below the docblock explaining why
- * that is fatal — below `md` the whole panel sits in a `display: none` pane, so the plan's facts,
- * its schedule state, its only `Recalculate` and the pen's live region all portalled somewhere no
- * reader could reach them. That was caught by an architecture review, not by a test, and this is
- * the test.
+ * The middle ones are not hypothetical. A `hostsPlanSlots` prop once gated the outlets for the
+ * below-`md` single-pane layout and shipped as `hostsDock`, guarding the dock while `PlanFactsOutlet`
+ * registered unconditionally — so the plan's facts, its schedule state, its only `Recalculate` and
+ * the pen's live region portalled into a `display: none` pane. The layout and the prop are retired
+ * (ADR-0181); what stays pinned is that the pair is **unconditional**, so no future prop can drop
+ * one outlet and keep the other. The wrap is what keeps Expand on screen in a 320 px body, where a
+ * ~580 px facts block used to push it out (retire-single-pane M0).
  *
  * The surface assertion exists because ADR-0102's finding was that a scope can go unreached for a
  * long time with nothing reporting it — `resolveTsldPalette` read the page's family for months
@@ -45,16 +46,22 @@ describe('PlanActivitiesFootRow', () => {
     );
   });
 
-  it('gates BOTH plan slots on `hostsPlanSlots`, never just one', () => {
-    const { rerender } = render(<PlanActivitiesFootRow hostsPlanSlots />);
+  it('renders BOTH plan slots, always', () => {
+    render(<PlanActivitiesFootRow />);
+    // The pair is the point. Rendering one and not the other is exactly what shipped once, and a
+    // test asserting only the dock would have passed against it.
     expect(screen.getByTestId('dock-outlet')).toBeInTheDocument();
     expect(screen.getByTestId('facts-outlet')).toBeInTheDocument();
+  });
 
-    rerender(<PlanActivitiesFootRow hostsPlanSlots={false} />);
-    // The pair is the point. Guarding one and not the other is exactly what shipped once, and a
-    // test asserting only the dock would have passed against it.
-    expect(screen.queryByTestId('dock-outlet')).toBeNull();
-    expect(screen.queryByTestId('facts-outlet')).toBeNull();
+  it('wraps, with a height floor and no fixed height, so a narrow body grows the row', () => {
+    const { container } = render(<PlanActivitiesFootRow />);
+    const row = container.querySelector('[data-activities-bar]');
+    // **Verified red** by removing `flex-wrap`: a nowrap row keeps Expand on the first line and the
+    // 580 px facts push it out of a 320 px body. jsdom has no layout, so the class is the checkable
+    // half and the journey (`narrow-shell`) measures the rest.
+    expect(row).toHaveClass('flex-wrap', 'min-h-9', 'shrink-0');
+    expect(row?.className).not.toMatch(/(^|\s)h-\d/);
   });
 
   it('renders the toggle when given one, and nothing in its place when not', () => {
@@ -64,6 +71,12 @@ describe('PlanActivitiesFootRow', () => {
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
     rerender(<PlanActivitiesFootRow />);
     expect(screen.queryByRole('button', { name: 'Collapse' })).toBeNull();
+  });
+
+  it('keeps the Expand control from shrinking, under its verbatim name', () => {
+    render(<ActivityPanelCollapsedBar onExpand={vi.fn()} />);
+    // `shrink-0` is what M0 found missing: Expand was 26 x 40 at 640 and 16 x 40 at 320.
+    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toHaveClass('shrink-0');
   });
 
   it('is the same row in the collapsed state, with an Expand control', () => {
