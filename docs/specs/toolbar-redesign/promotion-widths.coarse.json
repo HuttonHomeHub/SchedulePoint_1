@@ -1,0 +1,394 @@
+{
+  "pointer": "coarse",
+  "provisional": true,
+  "note": "M0 provisional. Re-taken after M4 and before M5, then checked by CI (SC-18 a). Widths are clones of a real labelled deck button with its label replaced, read at 3840x1440 (Playwright 1.63 / Chromium 1194); NOT a build with every entry at: always, because the promoted forms do not exist yet. Stage proposals use the worst stress state per row (conflicts + peer pen) so a late-arriving conflict chip cannot wrap a row; projected layout B (zoom, Summary, Float paths and Comments moved; compact labels below roomy).",
+  "donor": {
+    "id": "marquee-select",
+    "width": 86.2,
+    "height": 44
+  },
+  "itemGapPx": 4,
+  "entries": [
+    {
+      "rank": "L1",
+      "row": "look",
+      "name": "Critical only",
+      "from": "Filter",
+      "memberWidths": {
+        "L1 Critical only": 121.9
+      },
+      "width": 121.9
+    },
+    {
+      "rank": "L2",
+      "row": "look",
+      "name": "Colour by: Criticality / Total float / WBS group",
+      "from": "View > Insight",
+      "memberWidths": {
+        "L2a Colour: Criticality": 107.6,
+        "L2b Colour: Total float": 110.5,
+        "L2c Colour: WBS group": 117
+      },
+      "captionWidth": 47.2,
+      "width": 394.3
+    },
+    {
+      "rank": "L3",
+      "row": "look",
+      "name": "Late-start overlay",
+      "from": "View > Insight",
+      "memberWidths": {
+        "L3 Late-start overlay": 159.6
+      },
+      "width": 159.6
+    },
+    {
+      "rank": "L4",
+      "row": "look",
+      "name": "Feasible window",
+      "from": "View > Insight",
+      "memberWidths": {
+        "L4 Feasible window": 153.3
+      },
+      "width": 153.3
+    },
+    {
+      "rank": "L5",
+      "row": "look",
+      "name": "Levelled placement",
+      "from": "View > Insight",
+      "memberWidths": {
+        "L5 Levelled placement": 170.9
+      },
+      "width": 170.9
+    },
+    {
+      "rank": "L6",
+      "row": "look",
+      "name": "Has conflict only",
+      "from": "Filter",
+      "memberWidths": {
+        "L6 Has conflict only": 152
+      },
+      "width": 152
+    },
+    {
+      "rank": "P1",
+      "row": "do",
+      "name": "Health check",
+      "from": "Analysis",
+      "memberWidths": {
+        "P1 Health check": 129.7
+      },
+      "width": 129.7
+    },
+    {
+      "rank": "P2",
+      "row": "do",
+      "name": "Add: Start milestone",
+      "from": "Add",
+      "memberWidths": {
+        "P2 Add: Start milestone": 177.9
+      },
+      "width": 177.9
+    },
+    {
+      "rank": "P3",
+      "row": "do",
+      "name": "Add: Finish milestone",
+      "from": "Add",
+      "memberWidths": {
+        "P3 Add: Finish milestone": 184.7
+      },
+      "width": 184.7
+    },
+    {
+      "rank": "P4",
+      "row": "do",
+      "name": "Share…",
+      "from": "Share & export",
+      "memberWidths": {
+        "P4 Share…": 94.8
+      },
+      "width": 94.8
+    },
+    {
+      "rank": "P5",
+      "row": "do",
+      "name": "Link: Finish-to-start / Start-to-start / Finish-to-finish",
+      "from": "Link",
+      "memberWidths": {
+        "P5a Link: Finish-to-start": 173.3,
+        "P5b Link: Start-to-start": 166.2,
+        "P5c Link: Finish-to-finish": 178.4
+      },
+      "width": 525.9
+    },
+    {
+      "rank": "P6",
+      "row": "do",
+      "name": "Compare revisions",
+      "from": "Analysis",
+      "memberWidths": {
+        "P6 Compare revisions": 164.8
+      },
+      "width": 164.8
+    },
+    {
+      "rank": "P7",
+      "row": "do",
+      "name": "Earned value…",
+      "from": "Analysis",
+      "memberWidths": {
+        "P7 Earned value…": 141
+      },
+      "width": 141
+    },
+    {
+      "rank": "P8",
+      "row": "do",
+      "name": "Resource histogram…",
+      "from": "Analysis",
+      "memberWidths": {
+        "P8 Resource histogram…": 185.2
+      },
+      "width": 185.2
+    }
+  ],
+  "freeWidthByStage": {
+    "look": {
+      "PROMOTE_80": {
+        "cell": "1280x800",
+        "avail": 1264,
+        "naturalBase": 1243.4,
+        "freeBase": 20.6,
+        "worstState": "conflicts",
+        "naturalWorst": 1347.7,
+        "freeWorst": -83.7
+      },
+      "PROMOTE_90": {
+        "cell": "1440x900",
+        "avail": 1424,
+        "naturalBase": 1243.4,
+        "freeBase": 180.6,
+        "worstState": "conflicts",
+        "naturalWorst": 1347.7,
+        "freeWorst": 76.3
+      },
+      "PROMOTE_119_5": {
+        "cell": "1912x1080",
+        "avail": 1896,
+        "naturalBase": 1315.4,
+        "freeBase": 580.6,
+        "worstState": "conflicts",
+        "naturalWorst": 1419.7,
+        "freeWorst": 476.3
+      },
+      "PROMOTE_160": {
+        "cell": "2560x1440",
+        "avail": 2544,
+        "naturalBase": 1555.4,
+        "freeBase": 988.6,
+        "worstState": "conflicts",
+        "naturalWorst": 1659.7,
+        "freeWorst": 884.3
+      }
+    },
+    "do": {
+      "PROMOTE_80": {
+        "cell": "1280x800",
+        "avail": 1264,
+        "naturalBase": 1218,
+        "freeBase": 46,
+        "worstState": "peer-pen",
+        "naturalWorst": 1220.1,
+        "freeWorst": 43.9
+      },
+      "PROMOTE_90": {
+        "cell": "1440x900",
+        "avail": 1424,
+        "naturalBase": 1218,
+        "freeBase": 206,
+        "worstState": "peer-pen",
+        "naturalWorst": 1220.1,
+        "freeWorst": 203.9
+      },
+      "PROMOTE_119_5": {
+        "cell": "1912x1080",
+        "avail": 1896,
+        "naturalBase": 1218,
+        "freeBase": 678,
+        "worstState": "peer-pen",
+        "naturalWorst": 1220.1,
+        "freeWorst": 675.9
+      },
+      "PROMOTE_160": {
+        "cell": "2560x1440",
+        "avail": 2544,
+        "naturalBase": 1218,
+        "freeBase": 1326,
+        "worstState": "peer-pen",
+        "naturalWorst": 1220.1,
+        "freeWorst": 1323.9
+      }
+    }
+  },
+  "proposedStagesWorstStateReserve": {
+    "look": {
+      "L1": "PROMOTE_119_5",
+      "L3": "PROMOTE_119_5",
+      "L4": "PROMOTE_119_5",
+      "L2": "PROMOTE_160"
+    },
+    "do": {
+      "P1": "PROMOTE_90",
+      "P2": "PROMOTE_119_5",
+      "P3": "PROMOTE_119_5",
+      "P4": "PROMOTE_119_5",
+      "P5": "PROMOTE_160",
+      "P6": "PROMOTE_160"
+    }
+  },
+  "proposedStagesBaseStateOnly": {
+    "look": {
+      "L1": "PROMOTE_90",
+      "L2": "PROMOTE_119_5",
+      "L3": "PROMOTE_160",
+      "L4": "PROMOTE_160"
+    },
+    "do": {
+      "P1": "PROMOTE_90",
+      "P2": "PROMOTE_119_5",
+      "P3": "PROMOTE_119_5",
+      "P4": "PROMOTE_119_5",
+      "P5": "PROMOTE_160",
+      "P6": "PROMOTE_160"
+    }
+  },
+  "unusedAfterPromotionBaseState": {
+    "look": {
+      "PROMOTE_80": {
+        "unusedPxBase": 20.6,
+        "unusedPctBase": 1.6,
+        "entriesPromoted": []
+      },
+      "PROMOTE_90": {
+        "unusedPxBase": 180.6,
+        "unusedPctBase": 12.7,
+        "entriesPromoted": []
+      },
+      "PROMOTE_119_5": {
+        "unusedPxBase": 133.8,
+        "unusedPctBase": 7.1,
+        "entriesPromoted": ["L1", "L3", "L4"]
+      },
+      "PROMOTE_160": {
+        "unusedPxBase": 143.5,
+        "unusedPctBase": 5.6,
+        "entriesPromoted": ["L1", "L2", "L3", "L4"]
+      }
+    },
+    "do": {
+      "PROMOTE_80": {
+        "unusedPxBase": 46,
+        "unusedPctBase": 3.6,
+        "entriesPromoted": []
+      },
+      "PROMOTE_90": {
+        "unusedPxBase": 72.3,
+        "unusedPctBase": 5.1,
+        "entriesPromoted": ["P1"]
+      },
+      "PROMOTE_119_5": {
+        "unusedPxBase": 74.9,
+        "unusedPctBase": 4,
+        "entriesPromoted": ["P1", "P2", "P3", "P4"]
+      },
+      "PROMOTE_160": {
+        "unusedPxBase": 24.2,
+        "unusedPctBase": 1,
+        "entriesPromoted": ["P1", "P2", "P3", "P4", "P5", "P6"]
+      }
+    }
+  },
+  "unusedBeforeToday": {
+    "PROMOTE_80": {
+      "cell": "1280x800",
+      "look": {
+        "linesToday": 2,
+        "avail": 1264,
+        "natural": 1386.1,
+        "unusedPct": -9.7
+      },
+      "do": {
+        "linesToday": 2,
+        "avail": 1264,
+        "natural": 1468.9,
+        "unusedPct": -16.2
+      }
+    },
+    "PROMOTE_90": {
+      "cell": "1440x900",
+      "look": {
+        "linesToday": 1,
+        "avail": 1424,
+        "natural": 1386.1,
+        "unusedPct": 2.7
+      },
+      "do": {
+        "linesToday": 2,
+        "avail": 1424,
+        "natural": 1468.9,
+        "unusedPct": -3.2
+      }
+    },
+    "PROMOTE_119_5": {
+      "cell": "1912x1080",
+      "look": {
+        "linesToday": 1,
+        "avail": 1896,
+        "natural": 1458.1,
+        "unusedPct": 23.1
+      },
+      "do": {
+        "linesToday": 1,
+        "avail": 1896,
+        "natural": 1468.9,
+        "unusedPct": 22.5
+      }
+    },
+    "PROMOTE_160": {
+      "cell": "2560x1440",
+      "look": {
+        "linesToday": 1,
+        "avail": 2544,
+        "natural": 1458.1,
+        "unusedPct": 42.7
+      },
+      "do": {
+        "linesToday": 1,
+        "avail": 2544,
+        "natural": 1468.9,
+        "unusedPct": 42.3
+      }
+    }
+  },
+  "c1ZoomPresets": {
+    "widthWithCaption": 470,
+    "members": {
+      "C1a Zoom: Day": 70.3,
+      "C1b Zoom: Week": 81.9,
+      "C1c Zoom: Month": 86.6,
+      "C1d Zoom: Quarter": 95.4,
+      "C1e Zoom: Year": 74.7
+    },
+    "captionWidth": 41.1
+  },
+  "clusterButtons": {
+    "zoom-out": 44,
+    "zoom-in": 44,
+    "fit": 44,
+    "undo": 44,
+    "redo": 44
+  }
+}
