@@ -5,6 +5,7 @@ import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry
 import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
 import { usePopoverPanel } from './use-popover-panel';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -24,7 +25,9 @@ export function ToolbarPopover({
   activeKind,
   title,
   disabledReason,
+  description,
   align = 'start',
+  panelWidth = 'default',
   labelState = 'visible',
   children,
 }: {
@@ -67,8 +70,21 @@ export function ToolbarPopover({
    * Also fills the tooltip when no explicit {@link title} is given, so the two cannot disagree.
    */
   disabledReason?: string;
+  /**
+   * What the control is for, as a sentence — the tooltip an **icon-only** trigger names itself with
+   * (`<label> — <description>`). Ignored while the label is painted, because a visible name needs no
+   * tip. An icon-only trigger without one tips its bare name (ADR-0117's `'name-echo'`).
+   *
+   * The tooltip is the Tooltip primitive and not a native `title`: `title` is hover-only, which is
+   * the gap ADR-0117 closed for `ToolbarButton`, and this trigger became icon-only for the first
+   * time when Summary moved to the plan's identity row (toolbar-redesign M2-T1). It stands down
+   * while the panel is open, so the tip never lies across the panel it opened.
+   */
+  description?: string;
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
+  /** How wide the panel may grow — see {@link usePopoverPanel}. `'wide'` is for a panel in columns. */
+  panelWidth?: 'default' | 'wide';
   /**
    * Whether the visible label shows — pass the render API's `labelState`, already resolved by
    * `resolveLabelVisibility`. `'hidden'` withholds it: the name moves to `aria-label` + the native
@@ -95,13 +111,41 @@ export function ToolbarPopover({
   // and focus-left, and the portal. Extracted so the merged `Go to today ▾` split button can host
   // the same panel without a second implementation of behaviours this repository has already fixed
   // defects in. This component's props did not change, which is what makes its suite the oracle.
-  const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef, align });
+  const { open, openPanel, close, panel } = usePopoverPanel({
+    triggerRef,
+    align,
+    panelWidth,
+  });
+  // Purpose is derived exactly as `ToolbarButton` derives it: a tip carrying a `description` says
+  // MORE than the name, so it is linked to the control; one that restates the name is not, or a
+  // screen reader says the name twice. A shaded trigger's reason already rides `aria-describedby`.
+  const tipped = iconOnly && !open;
+  const tip = useTooltip({
+    content: iconOnly
+      ? disabled === true && disabledReason
+        ? `${label} — ${disabledReason}`
+        : description
+          ? `${label} — ${description}`
+          : label
+      : undefined,
+    purpose: description && disabled !== true ? 'description' : 'name-echo',
+    disabled: !tipped,
+  });
+  const fullDescribedBy =
+    [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
 
   return (
     <>
       <button
         {...itemProps}
-        ref={triggerRef}
+        // Spread after `itemProps` and before the two keys that need composing, as `ToolbarButton`
+        // does: a key added to the tooltip's `triggerProps` later reaches the DOM without this file
+        // knowing. Both are inert unless the trigger is icon-only and closed.
+        {...tip.triggerProps}
+        ref={(el) => {
+          tip.triggerProps.ref(el);
+          triggerRef.current = el;
+        }}
         type="button"
         aria-disabled={disabled || undefined}
         aria-haspopup="dialog"
@@ -127,13 +171,21 @@ export function ToolbarPopover({
         // ("Filter Add an activity first").
         {...(iconOnly || describedBy ? { 'aria-label': label } : {})}
         // A disabled reason still wins the tooltip: "why can't I press this" outranks "what is it",
-        // and in that state the `aria-label` is already carrying the name.
-        {...((title ?? disabledReason)
-          ? { title: title ?? disabledReason }
-          : iconOnly
-            ? { title: label }
+        // and in that state the `aria-label` is already carrying the name. An icon-only trigger
+        // speaks through the Tooltip primitive above instead of a native `title` — two tips on one
+        // hover — so it keeps a `title` only when the caller passes one.
+        {...(iconOnly
+          ? title
+            ? { title }
+            : {}
+          : (title ?? disabledReason)
+            ? { title: title ?? disabledReason }
             : {})}
-        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+        {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
+        onFocus={(event) => {
+          tip.triggerProps.onFocus(event);
+          itemProps.onFocus?.();
+        }}
         onClick={() => {
           if (disabled) return;
           if (open) close(false);
@@ -163,6 +215,7 @@ export function ToolbarPopover({
             {disabledReason}
           </span>
         ) : null}
+        {tip.tooltip}
       </button>
 
       {panel(label, children)}

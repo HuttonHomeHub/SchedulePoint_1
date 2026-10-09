@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFloatPathsPanel } from './model/use-float-paths-panel';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 import { makeTsldToolbarContext } from '@/features/tsld/toolbar/test-helpers';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 
@@ -51,12 +52,12 @@ afterEach(() => {
 const SELECTED = { id: 'a1', version: 1, name: 'Excavate' } as unknown as ActivitySummary;
 
 describe('VITE_FLOAT_PATHS off — parity with the prior product', () => {
-  it('registers no Float paths toolbar item at all — not even a placeholder', () => {
+  it('registers no Float paths item at all, on the deck or the selection bar — not even a placeholder', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     render(
       <Toolbar
         items={rows.strip}
-        context={makeTsldToolbarContext({ activityCount: 12, selectedActivity: SELECTED })}
+        context={makeTsldToolbarContext({ selectedActivity: SELECTED })}
         label="Plan commands"
         authoringEnabled
       />,
@@ -64,6 +65,9 @@ describe('VITE_FLOAT_PATHS off — parity with the prior product', () => {
     expect(screen.queryByRole('button', { name: /float paths/i })).not.toBeInTheDocument();
     // And no "Coming soon" stub under that name either.
     expect(screen.queryByText(/float paths/i)).not.toBeInTheDocument();
+    // Nor on the selection bar and the Gantt row menu it feeds, where the item lives since
+    // toolbar-redesign M2-T4: the flag gates the registration, so the bar is the pre-epic bar.
+    expect(selectionActionItems.map((item) => item.id)).not.toContain('float-paths');
   });
 
   it('never issues the analysis request, even if the panel state is somehow opened', () => {

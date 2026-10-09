@@ -308,12 +308,14 @@ describe('defineToolbar — a segment’s members share a row', () => {
  * call site rather than a silent mis-partition. It failed at four of them, which is the point.
  */
 describe('splitByRow — every row is a key, and the default is `strip`', () => {
-  it('partitions both rows and defaults a row-less item to the strip', () => {
+  it('partitions every row and defaults a row-less item to the strip', () => {
     const rows = splitByRow([
+      base({ id: 'i', tier: 1, row: 'identity' }),
       base({ id: 'm', tier: 1, row: 'mode' }),
       base({ id: 's', tier: 1, row: 'strip' }),
       base({ id: 'bare', tier: 1 }),
     ]);
+    expect(rows.identity.map((i) => i.id)).toEqual(['i']);
     expect(rows.mode.map((i) => i.id)).toEqual(['m']);
     expect(rows.strip.map((i) => i.id)).toEqual(['s', 'bare']);
   });
@@ -321,6 +323,6 @@ describe('splitByRow — every row is a key, and the default is `strip`', () => 
   it('returns an entry for every row even when the registry is empty', () => {
     // The mode row must exist as an empty array rather than `undefined`: the workspace renders
     // `rows.mode` unconditionally, and a missing key is a crash rather than an empty toolbar.
-    expect(splitByRow([])).toEqual({ mode: [], strip: [] });
+    expect(splitByRow([])).toEqual({ identity: [], mode: [], strip: [] });
   });
 });

@@ -1,6 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
-import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -49,7 +48,6 @@ import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
 import { deriveScheduleState, type ScheduleState } from '@/components/layout/status/schedule-state';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
@@ -409,46 +407,42 @@ export function ToolbarPlanWorkspace({
   const floatPaths = model.floatPaths;
   const openFloatPathsWith = floatPaths.openWith;
   const closeFloatPaths = floatPaths.close;
-  const floatPathsSelectedId = model.selectedActivityId;
-  // Close the dock AND return focus to the toolbar item — the notes dock's `closeNotes` rule,
-  // copied deliberately. The panel's own Close button and its Escape handler both go through this,
-  // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
-  // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
+  // Close the dock AND return focus to the control that opened it — the notes dock's `closeNotes`
+  // rule, copied deliberately. The panel's own Close button and its Escape handler both go through
+  // this, not through the raw `close`: unmounting the focused Close button with nothing to catch
+  // focus strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
   //
-  // Searched from `document`, not `rootRef`: the toolbar lives in the chrome band and is not a
-  // DOM descendant of the workspace root.
+  // Searched from `document`, not `rootRef`: the control is in the plan's foot row, which is not a
+  // DOM descendant of the workspace root. **It is the selection bar's item now** (toolbar-redesign
+  // M2-T4), present in both views whenever one activity is selected. When the panel was opened from
+  // a Gantt row menu on an activity that is not the selection, or the selection has since gone
+  // plural, there is no such control to return to and focus stays where the close left it — the
+  // panel's own Close button unmounts onto the page, which is the same outcome as any dock closed
+  // with its opener gone. The deck's old fallback to a `⋯` trigger named a control ADR-0109 D1
+  // deleted.
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
-    // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
-    // command to tier 3, so it is a menu item that UNMOUNTS with the menu the moment it is chosen —
-    // by the time the panel closes there is no `[data-toolbar-item="float-paths"]` to return to, and
-    // focus was landing on `<body>` (WCAG 2.4.3). The `⋯` is the stable ancestor of wherever the
-    // command actually lives, so it is the honest destination: the planner is returned to the
-    // control they opened this from. Found by `e2e-float-paths`, which asserts the restore — no unit
-    // test could, because the element only goes missing once a real menu closes.
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
+    document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]')?.focus();
   }, [closeFloatPaths]);
 
-  const toggleFloatPaths = useCallback(() => {
-    if (floatPaths.open) {
-      closeFloatPathsAndFocus();
-      return;
-    }
-    // The ladder already refuses the no-selection case, so this is a guard rather than a branch a
-    // planner reaches: a target is required, never inferred (CQ-2).
-    if (floatPathsSelectedId === null) return;
-    closeOtherDocks('floatPaths');
-    openFloatPathsWith(floatPathsSelectedId);
-  }, [
-    floatPaths.open,
-    closeFloatPathsAndFocus,
-    openFloatPathsWith,
-    floatPathsSelectedId,
-    closeOtherDocks,
-  ]);
+  /**
+   * Open Float paths into `targetId`, or close the panel if it is already showing. The target is
+   * **the activity the control belongs to** — the selection bar's activity, or the Gantt row the
+   * menu was opened on — rather than "the workspace selection", because a row menu acts on its own
+   * row (`rowMenuContextFor`). The old deck item read the selection, which had to exist; this takes
+   * it as an argument, so a target is required and never inferred (CQ-2).
+   */
+  const toggleFloatPathsInto = useCallback(
+    (targetId: string) => {
+      if (floatPaths.open) {
+        closeFloatPathsAndFocus();
+        return;
+      }
+      closeOtherDocks('floatPaths');
+      openFloatPathsWith(targetId);
+    },
+    [floatPaths.open, closeFloatPathsAndFocus, openFloatPathsWith, closeOtherDocks],
+  );
 
   // Close the health dock AND return focus — the Float-paths rule verbatim: the menu item that
   // opened this unmounts with its menu, so the stable ancestor (`analysis`, else the deck's `⋯`)
@@ -645,7 +639,7 @@ export function ToolbarPlanWorkspace({
   );
 
   // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
-  // `toggleFloatPaths` above for why.
+  // `toggleFloatPathsInto` above for why.
   const floatPathsPrefs = useFloatPathsPanelPrefs();
   const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
   const floatPathsBounds = dockBounds({
@@ -815,6 +809,15 @@ export function ToolbarPlanWorkspace({
     [swapped, dockSqueezed, collapseQuietly, closeAllDocks],
   );
 
+  // **Float paths opens a dock, so it is class `dock`** (`canvas-directed-commands.ts`): it replaces
+  // an open dock and shares the short body with the expanded panel, exactly as the deck item it
+  // replaced was wrapped. The bar in either view and the Gantt row menu take this one function.
+  const onToggleFloatPaths = useCallback(
+    (activity: ActivitySummary): void =>
+      withDiagram((id: string) => toggleFloatPathsInto(id), undefined, 'dock')(activity.id),
+    [withDiagram, toggleFloatPathsInto],
+  );
+
   const ctx = useTsldToolbarContext({
     model,
     penLock,
@@ -835,7 +838,6 @@ export function ToolbarPlanWorkspace({
       activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
         ? activeCompare.data.fromPlan.name
         : undefined,
-    toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
     planView,
@@ -1481,6 +1483,8 @@ export function ToolbarPlanWorkspace({
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
       selectionCanvas={selectionCanvas}
+      floatPathsOpen={floatPaths.open}
+      onToggleFloatPaths={onToggleFloatPaths}
     />
   );
 
@@ -1634,6 +1638,12 @@ export function ToolbarPlanWorkspace({
       focusGanttRow(a.id);
       model.onMakeMilestone(a);
     },
+    // Float paths on the Gantt's bar and row menu (toolbar-redesign M2-T4): the same toggle the
+    // diagram's bar receives (minus the diagram's swap), so the two views open the panel one way.
+    floatPathsOpen: floatPaths.open,
+    // Not wrapped in `withDiagram`: the Gantt has no diagram to collapse or restore, and wrapping
+    // would make this input read the swap's refs during render (`react-hooks/refs`).
+    onToggleFloatPaths: (activity) => toggleFloatPathsInto(activity.id),
   };
 
   const ganttSelectionCtx = buildSelectionBarContext(ganttSelectionInput);
@@ -2229,24 +2239,32 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                  {model.canWrite ? (
-                    // `icon`, not `icon-sm` (ADR-0118 M4). This is not a dense-list row — it sits
-                    // in the plan identity line, whose height is its content's — so it takes the
-                    // ordinary icon button and reaches 44 px under a coarse pointer. `icon-sm`
-                    // stays 28 px on both pointers as D1's second named exception, and that
-                    // exception is for consumers inside a container whose height is fixed
-                    // independently of them; this one is not, so it does not qualify.
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => model.setEditing(true)}
-                      title="Edit plan…"
-                      aria-label="Edit plan"
-                      className="text-muted-foreground shrink-0"
-                    >
-                      <SquarePen aria-hidden="true" className="size-4" />
-                    </Button>
-                  ) : null}
+                  {/* **The plan's facts, as their own named toolbar — Plan summary and Edit plan
+                details** (toolbar-redesign M2-T1). The pencil that stood here was a hand-rolled
+                `Button` and the Summary popover was a deck item two rows down; both are registry
+                items now (`row: 'identity'`), rendered by one `Toolbar`, so they get the same
+                gating, tooltip and roving model as every other command rather than a copy of it.
+
+                Its own `role="toolbar"` and therefore its own Tab stop: the deck is one stop and
+                the mode switch is another, and folding these two into either would put a plan fact
+                in the middle of the sequence for a command surface. `ChromePortal` moves the DOM
+                node and leaves the React tree alone, so `ctx` reaches it unchanged.
+
+                The previous comment here argued `icon` against `icon-sm` for the pencil (ADR-0118
+                M4: not a dense-list row, so it reaches 44 px under a coarse pointer). That is still
+                the rule and is now the registry's: `ToolbarButton` and `ToolbarPopover` size
+                through `toolbarControlVariants`, which reads `--control-h`. */}
+                  <Toolbar
+                    items={rows.identity}
+                    context={ctx}
+                    label="Plan details"
+                    // The group is named for what it holds. The default, "Plan actions", would sit
+                    // beside the deck's "Plan" group and the "Plan view" switch, and an accessible
+                    // name that is a substring of two others is a locator trap (the e2e suites
+                    // match by name).
+                    groupLabels={{ object: 'About this plan' }}
+                    className="shrink-0"
+                  />
                 </div>
               </div>
             </ChromePortal>

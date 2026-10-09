@@ -34,10 +34,12 @@ function openView(): void {
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — the Minimap toggle', () => {
-  it('appears under the Panels group in View ▾ and toggles the panel', () => {
+  it('appears under the Navigation group in View ▾ and toggles the panel', () => {
     renderRows(ctx());
     openView();
-    const panels = screen.getByRole('group', { name: 'Panels' });
+    // "Navigation", not "Panels": the deck's own group is "Panels" now, and with View ▾ open both are
+    // in the tree — two groups of one name would be a locator and a screen-reader collision.
+    const panels = screen.getByRole('group', { name: 'Navigation' });
     const row = within(panels).getByRole('checkbox', { name: 'Minimap' });
     expect(row).not.toBeChecked();
     fireEvent.click(row);

@@ -601,6 +601,14 @@ export interface TsldPanelProps {
    * context; **absent ⇒ the bar is byte-for-byte its pre-M2 self**, which is the rollback contract.
    */
   selectionCanvas?: SelectionCanvasContext | undefined;
+  /**
+   * Float paths on the docked selection bar (toolbar-redesign M2-T4): whether the panel is showing,
+   * and the toggle that opens it into the given activity or closes it. Both come from the workspace,
+   * which owns the right-hand dock they open; **absent ⇒ the bar offers no Float paths**, never a
+   * lit control that does nothing.
+   */
+  floatPathsOpen?: boolean | undefined;
+  onToggleFloatPaths?: ((activity: ActivitySummary) => void) | undefined;
 }
 
 interface PendingCreate {
@@ -690,6 +698,8 @@ export function TsldPanel({
   overAllocationHighlight = false,
   floatPathIds,
   selectionCanvas,
+  floatPathsOpen,
+  onToggleFloatPaths,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -1810,6 +1820,8 @@ export function TsldPanel({
         onOpenEditorAt,
         definitionGate,
         onMakeMilestone,
+        floatPathsOpen,
+        onToggleFloatPaths,
       }),
     [
       selectionCanvas,
@@ -1837,6 +1849,8 @@ export function TsldPanel({
       // selection bar offering the old answer.
       canWriteNotes,
       onNotes,
+      floatPathsOpen,
+      onToggleFloatPaths,
     ],
   );
 

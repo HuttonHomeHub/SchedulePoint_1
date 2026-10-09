@@ -74,26 +74,25 @@ export type ToolbarLabelVisibility = 'always' | 'never' | 'roomy';
 export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy';
 
 /**
- * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
- * always-live view/navigate/find row; `do` = the build-&-manage row (its pen-gated authoring cluster
- * shades as a set). **Absent ⇒ `strip`** — this read "Absent ⇒ `look`" until M7, stale since
- * Graphite M5 merged the two command rows and renamed the values, and newly confusing since the
- * console epic's M4 revived `look`/`do` as live identifiers on a **different axis**: the deck's two
- * LINES (`DECK_ROWS`, `data-deck-row`), which are not this field. A stale sentence naming a dead
- * value became a cross-reference to the wrong live thing (M7 architecture review, `#288`).
- * The workspace renders one {@link Toolbar} per row, so this only
- * partitions items — grouping, gating and the keyboard model are unchanged within each row.
- */
-/**
- * `mode` is the identity line's mode cluster; `strip` is the command deck.
+ * Which toolbar an item is rendered by. **`strip`** is the command deck (`Deck`, the default);
+ * **`mode`** is the plan's `Diagram | Gantt` switch; **`identity`** is the plan's facts beside its
+ * name in the header — Plan summary and Edit plan details (toolbar-redesign M2). They are three
+ * `Toolbar`/`Deck` instances, each its own `role="toolbar"` and its own Tab stop, and this field only
+ * partitions the registry between them; grouping, gating and the keyboard model are unchanged
+ * within each. **Absent ⇒ `strip`.**
  *
- * **`look` and `do` merged at Graphite M5.** ADR-0031's two-row amendment split the surface into
- * "what you look at" and "what you build with", and four epics then spent themselves making both
- * rows fit. One row of commands is the shape ADR-0099 chose, and `TOOLBAR_GROUPS` was already a
- * menu structure — `frame · lens · find · tools · object · output · help` — so the merge is a
- * deletion of the split rather than a re-grouping.
+ * This is not the deck's two LINES (`DECK_ROWS`, `data-deck-row`, the `look`/`do` identifiers in
+ * `Deck.tsx`): that is a different axis, and this docblock read "Absent ⇒ `look`" for a long time
+ * after the value was renamed, which sent a reader to the wrong live thing (M7 architecture review,
+ * `#288`).
+ *
+ * `look` and `do` merged into `strip` at Graphite M5. ADR-0031's two-row amendment had split the
+ * surface into "what you look at" and "what you build with", and four epics then spent themselves
+ * making both rows fit; one row of commands is the shape ADR-0099 chose, and `TOOLBAR_GROUPS` was
+ * already a menu structure — `frame · lens · find · tools · object · output · help` — so the merge
+ * was a deletion of the split rather than a re-grouping.
  */
-export type ToolbarRow = 'mode' | 'strip';
+export type ToolbarRow = 'identity' | 'mode' | 'strip';
 
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
 export interface ToolbarItemRenderApi {
@@ -144,7 +143,7 @@ export interface ToolbarItem<Ctx> {
   /** Stable unique id (test/telemetry handle; dedup key). */
   id: string;
   group: ToolbarGroupId;
-  /** Which toolbar row this item lives on (ADR-0031 two-row amendment). Absent ⇒ `look`. */
+  /** Which toolbar renders this item — see {@link ToolbarRow}. Absent ⇒ `strip`. */
   row?: ToolbarRow;
   tier: ToolbarTier;
   /**
@@ -518,7 +517,7 @@ export function partitionBySegment<T extends { item: { segment?: string } }>(
 }
 
 export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
-  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], strip: [] };
+  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { identity: [], mode: [], strip: [] };
   for (const item of items) rows[item.row ?? 'strip'].push(item);
   return rows;
 }

@@ -126,8 +126,47 @@ describe('TSLD toolbar registry (two-row)', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     const panel = screen.getByRole('dialog', { name: 'View' });
+    // Markers starts folded (toolbar-redesign M2-T3): open it, then toggle.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Markers' }));
     fireEvent.click(within(panel).getByLabelText('Non-working'));
     expect(spies.toggleView).toHaveBeenCalledWith('nonWorking');
+  });
+
+  it('starts Structure and Markers folded, and keeps Zoom and Insight overlays open', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    for (const name of ['Structure', 'Markers']) {
+      const fold = within(panel).getByRole('button', { name });
+      expect(fold).toHaveAttribute('aria-expanded', 'false');
+      // A folded section is unmounted, not clipped: a hidden toggle must not be a tab stop.
+      expect(within(panel).queryByRole('group', { name })).toBeNull();
+    }
+    expect(within(panel).queryByLabelText('Non-working')).toBeNull();
+    expect(within(panel).getByRole('radiogroup', { name: 'Zoom level' })).toBeInTheDocument();
+    // Opening one reveals its rows inside a named group, and closing it takes them away again.
+    const markers = within(panel).getByRole('button', { name: 'Markers' });
+    fireEvent.click(markers);
+    expect(markers).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(within(panel).getByRole('group', { name: 'Markers' })).getAllByRole('checkbox'),
+    ).not.toHaveLength(0);
+    fireEvent.click(markers);
+    expect(within(panel).queryByLabelText('Non-working')).toBeNull();
+  });
+
+  it('opens folded again on the next opening — the open state lives for one opening (ADR-0169)', () => {
+    renderRows(ctx());
+    const trigger = screen.getByRole('button', { name: /View/ });
+    fireEvent.click(trigger);
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', { name: 'Markers' }),
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(trigger);
+    expect(
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', { name: 'Markers' }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('keeps the two rows on distinct toolbars (Look / Do)', () => {
@@ -157,10 +196,12 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(lookRow).queryByTestId('finish-chip-body')).toBeNull();
   });
 
-  it('renders the Summary popover body from the context', () => {
+  it('does not carry Summary or Edit plan details — they are the identity row (M2-T1)', () => {
+    // Moved to the header's own "Plan details" toolbar; `plan-identity-toolbar.test.tsx` drives the
+    // popover body from the context there. The deck keeping a copy would be one control, two homes.
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Summary/ }));
-    expect(screen.getByTestId('summary-body')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Summary/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit plan/ })).not.toBeInTheDocument();
   });
 
   it('toggles the on-canvas Legend panel from Row 1, and offers it nowhere else', () => {

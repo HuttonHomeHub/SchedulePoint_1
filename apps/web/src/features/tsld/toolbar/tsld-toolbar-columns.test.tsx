@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -55,6 +55,13 @@ function renderRows(context: TsldToolbarContext) {
 function openView(): void {
   const trigger = screen.getByRole('button', { name: /^View/ });
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+  // Structure and Markers start folded (toolbar-redesign M2-T3), and a folded section is unmounted.
+  // Every assertion here is about what the panel OFFERS, so unfold them: the "absent" cases would
+  // otherwise pass vacuously against a panel that offered the toggle inside a section nobody opened.
+  const panel = screen.getByRole('dialog', { name: /^View/ });
+  for (const folded of within(panel).queryAllByRole('button', { expanded: false })) {
+    fireEvent.click(folded);
+  }
 }
 
 describe('in the Gantt', () => {

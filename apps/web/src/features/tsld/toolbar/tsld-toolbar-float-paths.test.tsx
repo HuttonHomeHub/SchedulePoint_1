@@ -1,27 +1,34 @@
-import type { ActivitySummary } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
 import { makeTsldToolbarContext } from './test-helpers';
-import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
-import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**
- * The **Float paths** toolbar item, flag ON (audit F4).
+ * **Float paths on the selection bar, flag ON** (audit F4; moved off the command deck by
+ * toolbar-redesign M2-T4, D-c).
  *
- * Two of these tests exist because the ui-architect review found the plan's ladder wrong:
+ * The assertions are the deck item's, re-homed rather than rewritten, so the relocation is checkable
+ * against what the control did before:
  *
- * - the item must be **live in the Gantt**, because it is an analysis and not a viewport command
- *   (the ADR-0059 M6 lesson inverted — shade what only the canvas can do, never what both can); and
- * - it must gate on the plan's **activity count**, not `hasDiagram`. `hasDiagram` means *computed*
- *   (it requires a non-null `earlyStart`), while this endpoint runs its own `computeSchedule` per
- *   request — so gating on it would shade the item with "Add an activity first" on a plan that is
- *   full of activities and simply has not been recalculated.
+ * - it is **live in the Gantt**, because it is an analysis and not a viewport command (the ADR-0059
+ *   M6 lesson inverted — shade what only the canvas can do, never what both can). Here that means
+ *   it renders with `canvas: null`, the Gantt's projection of this bar;
+ * - it is **never pen-gated**: it stays live with the pen not held.
+ *
+ * What did NOT come across: *"shades with 'Select an activity first'"* and *"shades with 'Add an
+ * activity first'"*. Both reasons are unreachable on this bar, which renders only for a selected
+ * activity, so they cannot occur — keeping them would assert a state the code can no longer enter.
+ * The cost is the one `selection-actions.canvas.test.tsx` already records for the canvas commands:
+ * a planner with nothing selected no longer sees the precondition spelled out, because they no
+ * longer see the command. *"stays ENABLED on a plan that has never been recalculated"* has no
+ * counterpart either: the item reads no `hasDiagram`, and the context it is built from has none.
  *
  * The flag-off shape (the item **absent**, not a "Coming soon" stub) is pinned by the parity suite
- * beside this one.
+ * in `features/float-paths`.
  */
 
 vi.mock('@/config/env', async (importOriginal) => ({
@@ -30,108 +37,88 @@ vi.mock('@/config/env', async (importOriginal) => ({
   CANVAS_NAV_ENABLED: true,
 }));
 
-const SELECTED = { id: 'a1', version: 1, name: 'Excavate' } as unknown as ActivitySummary;
-
 const toggleFloatPaths = vi.fn();
 
-function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
-  return makeTsldToolbarContext({
+function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
+  return {
+    canvas: null,
+    targetName: 'Excavate',
+    definitionGate: null,
+    makeMilestone: { applies: false },
+    onMakeMilestone: vi.fn(),
+    floatPathsOpen: false,
     toggleFloatPaths,
-    activityCount: 12,
-    selectedActivity: SELECTED,
+    canEditSchedule: true,
+    scheduleRefusal: (action: string) => `Start editing to ${action}.`,
+    canReportProgress: true,
+    canWriteNotes: true,
+    onNotes: vi.fn(),
+    isSummary: false,
+    hasPlacement: false,
+    conflictKey: null,
+    clearPlacement: { enabled: true, reason: null },
+    onClearVisualPlacement: vi.fn(),
+    onOpenEditorAt: vi.fn(),
+    onOpenLogic: vi.fn(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onDissolve: vi.fn(),
+    onDuplicate: vi.fn(),
+    onDuplicateBand: vi.fn(),
+    onResources: vi.fn(),
+    onProgress: vi.fn(),
     ...over,
-  });
+  };
 }
 
-function renderRows(context: TsldToolbarContext) {
-  const rows = splitByRow(buildTsldToolbarItems());
-  return render(
-    <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />,
-  );
-}
-
-const floatPathsButton = () => overflowItem(/float paths/i);
-
-/**
- * Reach a command that USED to live in the `⋯` overflow.
- *
- * **The overflow is gone** (workspace redesign, 2026-08-24): the command deck wraps instead of
- * demoting, so every command is a top-level control and there is no menu to open. This helper is
- * kept rather than inlined at ~15 call sites, and kept with its history, because what these
- * assertions prove has not changed — only where the control is. It is now a plain `getByRole`.
- *
- * The shade cases still assert an accessible DESCRIPTION rather than a `title`: a `MenuItem` linked
- * its reason by `aria-describedby` and so does `ToolbarButton`, so that half needed no change at
- * all — which is worth knowing, since it means those assertions were testing the contract rather
- * than the markup.
- */
-function overflowItem(name: string | RegExp): HTMLElement {
-  return screen.getByRole('button', { name });
-}
+const floatPathsButton = () => screen.getByRole('button', { name: /float paths/i });
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('TSLD toolbar — Float paths (flag on)', () => {
-  it('opens the analysis when activated with an activity selected', () => {
-    renderRows(ctx());
+describe('selection bar — Float paths (flag on)', () => {
+  it('opens the analysis when activated', () => {
+    render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(floatPathsButton());
     expect(toggleFloatPaths).toHaveBeenCalledOnce();
   });
 
   it('carries the panel open state as aria-pressed, and closes when pressed again', () => {
-    renderRows(ctx({ floatPathsOpen: true }));
-    const button = floatPathsButton();
-    // `aria-pressed`, not `toBeChecked()`. In the `⋯` this was a `menuitemcheckbox`, which is a
-    // checkable role; as a top-level toolbar control it is a toggle BUTTON, and a button conveys
-    // its state through `aria-pressed`. The state being asserted is identical — the role carrying
-    // it changed when the overflow went.
-    expect(button).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(button);
+    render(<SelectionActionsBar context={ctx({ floatPathsOpen: true })} />);
+    expect(floatPathsButton()).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(floatPathsButton());
     expect(toggleFloatPaths).toHaveBeenCalledOnce();
   });
 
-  it('shades with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ selectedActivity: undefined }));
-    const button = floatPathsButton();
-    expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(button).toHaveAccessibleDescription(/select an activity first/i);
-  });
-
-  it('shades with "Add an activity first" on a genuinely empty plan', () => {
-    renderRows(ctx({ activityCount: 0, selectedActivity: undefined }));
-    expect(floatPathsButton()).toHaveAccessibleDescription(/add an activity first/i);
-  });
-
-  it('stays ENABLED on a plan that has never been recalculated', () => {
-    // The endpoint computes the schedule itself. `hasDiagram: false` means "no early dates yet",
-    // which is exactly the spec's own edge case — and gating on it would make that case
-    // unreachable while telling the planner to add activities they already have.
-    renderRows(ctx({ hasDiagram: false }));
-    expect(floatPathsButton()).not.toHaveAttribute('aria-disabled', 'true');
+  it('is not pressed while the panel is closed', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    expect(floatPathsButton()).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('stays live in the Gantt view — it is an analysis, not a canvas viewport command', () => {
-    renderRows(ctx({ planView: 'gantt', canvasActive: false }));
+    // `canvas: null` is the Gantt's projection of this bar: the two canvas-only items drop out and
+    // this one does not.
+    render(<SelectionActionsBar context={ctx({ canvas: null })} />);
+    expect(screen.queryByRole('button', { name: /zoom to selection/i })).not.toBeInTheDocument();
     expect(floatPathsButton()).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('is never pen-gated: it stays live with authoring disabled', () => {
-    const rows = splitByRow(buildTsldToolbarItems());
-    render(
-      <Toolbar
-        items={rows.strip}
-        context={ctx({ canEditSchedule: false })}
-        label="Plan commands"
-        authoringEnabled={false}
-      />,
-    );
+  it('is never pen-gated: it stays live when the pen is not held', () => {
+    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
     expect(floatPathsButton()).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  // *"shades Isolate in the Gantt, where it drives a canvas that is not mounted"* was here
-  // until ADR-0090 M2-T1. Isolate is now **absent** from the Gantt rather than shaded there —
-  // it lives on the canvas selection bar — which is the stronger form of the same guarantee,
-  // so the ADR-0059 M6 rule it defended now holds by construction. Float paths itself did NOT
-  // move, and deliberately: it is a view-agnostic analysis that runs in the Gantt too, which
-  // `float-paths-view-agnostic.structural.test.ts` exists to keep true.
+  it('is omitted, not lit and inert, when the host has no panel to open', () => {
+    render(<SelectionActionsBar context={ctx({ toggleFloatPaths: null })} />);
+    expect(screen.queryByRole('button', { name: /float paths/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('the command deck no longer carries Float paths', () => {
+  it('registers nothing under the id, and the selection bar is where it lives', () => {
+    // The move's other half: a deck item left behind would be one control with two homes, which is
+    // the ADR-0093 defect, and `selection-duplication.structural.test.ts` would also fail on it.
+    expect(buildTsldToolbarItems().map((item) => item.id)).not.toContain('float-paths');
+    expect(selectionActionItems.map((item) => item.id)).toContain('float-paths');
+    expect(makeTsldToolbarContext()).not.toHaveProperty('toggleFloatPaths');
+  });
 });

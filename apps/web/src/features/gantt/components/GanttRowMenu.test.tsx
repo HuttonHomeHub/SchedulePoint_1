@@ -30,6 +30,8 @@ const context = (over: Partial<SelectionBarContext> = {}): SelectionBarContext =
   definitionGate: null,
   makeMilestone: { applies: false },
   onMakeMilestone: vi.fn(),
+  floatPathsOpen: false,
+  toggleFloatPaths: null,
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,
@@ -112,6 +114,23 @@ describe('the items', () => {
     const ctx = openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /^Progress/ }));
     expect(ctx.onProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Float paths, never pen-gated, and runs the host toggle (toolbar-redesign M2-T4)', () => {
+    // The item came off the command deck into the object roster, so the Gantt row menu gets it by
+    // derivation. It is an analysis, not a canvas command: it must be present with `canvas: null`,
+    // and a reader without the pen must still be able to open it.
+    const toggleFloatPaths = vi.fn();
+    openMenu(context({ canEditSchedule: false, toggleFloatPaths }));
+    const item = screen.getByRole('menuitem', { name: /^Float paths/ });
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(toggleFloatPaths).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits Float paths when the host has no panel to open, rather than lighting it inert', () => {
+    openMenu(context({ toggleFloatPaths: null }));
+    expect(screen.queryByRole('menuitem', { name: /^Float paths/ })).toBeNull();
   });
 
   it('offers Make milestone… on a zero-duration task and converts it (ADR-0162 decision 4)', () => {

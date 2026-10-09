@@ -257,6 +257,73 @@ describe('Deck — the captions are gone and the group names are not', () => {
   });
 });
 
+/**
+ * **The Panels group and the trailing edge** (toolbar-redesign M2-T2, R4).
+ *
+ * ADR-0031 group 7 (`help`) is rendered as its own deck group, named "Panels", on the LOOK line;
+ * "Plan" no longer holds it. And each line has exactly one trailing group, pushed to the line's end
+ * by one `ml-auto` — free space on a flex line is shared among every auto margin on it, so a second
+ * would strand a group mid-line (ADR-0091 M7 S10).
+ *
+ * **Its blind spot, stated**: jsdom does no layout, so that the margin really pushes the group right
+ * is `command-surface.spec.ts`'s ("trailing edges at ≥ 1280"). What this pins is the markup that
+ * layout consumes, and the order a Tab/arrow walk meets it in.
+ */
+describe('Deck — the Panels group and one trailing group per row', () => {
+  const panelItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+    { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+    { id: 'filter', group: 'find', order: 1, tier: 1, label: 'Filter', onActivate: () => {} },
+    { id: 'legend', group: 'help', order: 0, tier: 1, label: 'Legend', onActivate: () => {} },
+    { id: 'comments', group: 'help', order: 2, tier: 1, label: 'Comments', onActivate: () => {} },
+    { id: 'add', group: 'tools', order: 1, tier: 1, label: 'Add activity', onActivate: () => {} },
+    { id: 'analysis', group: 'object', order: 1, tier: 1, label: 'Analysis', onActivate: () => {} },
+    { id: 'export', group: 'output', order: 1, tier: 1, label: 'Export', onActivate: () => {} },
+  ]);
+
+  it('names the `help` registry group "Panels", on the LOOK line, after Find', () => {
+    render(<Deck items={panelItems} context={{}} label="Plan commands" />);
+    const look = document.querySelector('[data-deck-row="look"]')!;
+    const names = [...look.querySelectorAll(':scope > [role="group"]')].map((g) =>
+      g.getAttribute('aria-label'),
+    );
+    expect(names).toEqual(['View', 'Find', 'Panels']);
+    const panels = within(look as HTMLElement).getByRole('group', { name: 'Panels' });
+    expect(
+      within(panels)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Legend', 'Comments']);
+    // And Plan no longer holds it: Analysis and Export are the Plan group.
+    const plan = screen.getByRole('group', { name: 'Plan' });
+    expect(within(plan).queryByRole('button', { name: 'Legend' })).toBeNull();
+  });
+
+  it('pushes exactly one group per line to the trailing edge: Panels on LOOK, Plan on DO', () => {
+    render(<Deck items={panelItems} context={{}} label="Plan commands" />);
+    for (const [row, trailing] of [
+      ['look', 'Panels'],
+      ['do', 'Plan'],
+    ] as const) {
+      const groups = [
+        ...document.querySelectorAll(`[data-deck-row="${row}"] > [role="group"]`),
+      ] as HTMLElement[];
+      const pushed = groups.filter((g) => /(^|\s)ml-auto(\s|$)/.test(g.className));
+      expect(
+        pushed.map((g) => g.getAttribute('aria-label')),
+        `${row} must have exactly one auto margin`,
+      ).toEqual([trailing]);
+    }
+  });
+
+  it('keeps DOM order equal to reading order, so the arrow walk meets Panels after Find', () => {
+    render(<Deck items={panelItems} context={{}} label="Plan commands" />);
+    const order = [...document.querySelectorAll('[data-toolbar-item]')].map((el) =>
+      el.getAttribute('data-toolbar-item'),
+    );
+    expect(order).toEqual(['today', 'filter', 'legend', 'comments', 'add', 'analysis', 'export']);
+  });
+});
+
 describe('arrows from the container itself', () => {
   /**
    * **The deck's half of the container-focus case.** `Toolbar.test.tsx` got these two and `Deck`

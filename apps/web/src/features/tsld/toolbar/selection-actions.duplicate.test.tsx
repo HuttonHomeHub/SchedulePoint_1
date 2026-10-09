@@ -51,6 +51,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     definitionGate: null,
     makeMilestone: { applies: false },
     onMakeMilestone: vi.fn(),
+    floatPathsOpen: false,
+    toggleFloatPaths: null,
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,

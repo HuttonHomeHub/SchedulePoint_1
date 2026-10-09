@@ -83,7 +83,6 @@ export function useTsldToolbarContext({
   legend,
   minimap,
   revealComments,
-  toggleFloatPaths = () => {},
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
   hasRevisionPair = false,
@@ -127,15 +126,6 @@ export function useTsldToolbarContext({
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
-  /**
-   * Open the Float paths analysis on the current selection, or close it if it is already showing
-   * (audit F4). Passed IN for the same reason as `revealComments`: the two are right-side docks and
-   * only one can hold the edge, so the mutual exclusion belongs to the workspace that lays them out
-   * — not to the toolbar, which would have to know about a column it does not render.
-   *
-   * Defaults to a no-op, describing a build where the panel has no host.
-   */
-  toggleFloatPaths?: () => void;
   /** Toggle the docked Health check panel (health M2). Defaults to a no-op for standalone hosts. */
   toggleHealthCheck?: () => void;
   /** Toggle the docked revision comparison (revision M2). Defaults to a no-op for standalone hosts. */
@@ -680,12 +670,6 @@ export function useTsldToolbarContext({
       conflictCount: orderedConflictHits.length,
       hasConflicts: orderedConflictHits.length > 0,
 
-      // Float paths (audit F4) — the count the ladder reads, the pressed state, and the toggle.
-      // Inert while `VITE_FLOAT_PATHS` is off: the registry does not register the item at all, so
-      // nothing reads these and `toggleFloatPaths` is never called.
-      activityCount: activities.length,
-      floatPathsOpen: model.floatPaths?.open ?? false,
-      toggleFloatPaths: withDiagram(toggleFloatPaths, undefined, 'dock'),
       currentConflict,
       goToNextConflict: withDiagram(goToNextConflict),
       searchStatus,
@@ -1040,8 +1024,6 @@ export function useTsldToolbarContext({
     toggleIsolate,
     setIsolateMode,
     // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
-    model.floatPaths?.open,
-    toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
     orderedConflictHits.length,

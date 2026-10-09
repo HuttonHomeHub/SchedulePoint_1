@@ -62,13 +62,15 @@ import { cn } from '@/lib/utils';
  * affordable and describes no layout that exists. The label is suppressed only where the icon is
  * genuinely universal, and that is each item's own `labelVisibility` rather than a list kept here.
  *
- * ## The 7 → 4 mapping
+ * ## The 7 → 5 mapping
  *
  * The registry's seven-group taxonomy (ADR-0031) is **not** discarded and the ~40 registrations are
  * untouched. Seven named groups would be more chrome than commands, so pairs that answer the same
  * question share one and keep a hairline between them: `frame`+`lens` are both "what am I looking
- * at", `object`+`output`+`help` are all "this plan, as a document". The taxonomy survives as
- * structure **inside** a group rather than as a name above it.
+ * at", `object`+`output` are both "this plan, as a document". `help` stands alone as **Panels** —
+ * the controls that open a panel beside the diagram (toolbar-redesign M2). The taxonomy survives as
+ * structure **inside** a group rather than as a name above it. This section said 7 → 4 until that
+ * milestone gave `help` a name of its own.
  *
  * **There is no card**, and this paragraph said there was until M7. M1 deleted the box (a border
  * and padding at ≈1.2:1 against the band, drawing a boundary a 175 %-scaled screen cannot see) and
@@ -98,13 +100,25 @@ import { cn } from '@/lib/utils';
 const DECK_GROUPS = [
   { id: 'view', name: 'View', row: 'look', members: ['frame', 'lens'] },
   { id: 'find', name: 'Find', row: 'look', members: ['find'] },
+  // **Panels — ADR-0031 group 7 (`help`), renamed by what it now holds** (toolbar-redesign M2-T2).
+  // `help` was in Plan and held nothing after the shortcuts left for the account menu (ADR-0091
+  // M7-S5); Legend, Resource view and Comments are what sits in it now, because each opens a panel
+  // beside the diagram. No taxonomy change: the registry still has seven groups, and the deck still
+  // maps them onto a handful of named ones (the 7 → 4 argument above, now 7 → 5).
+  //
+  // `trailing` is R4: **one trailing group per row**, pushed to the line's end by a single
+  // `ml-auto`. Free space on a flex line is shared equally among every auto margin on it, so a
+  // second one would strand a group mid-row (the `alignEndGroup` defect, ADR-0091 M7 S10); the
+  // `satisfies` below cannot say "at most one per row", and `Deck.test.tsx` does.
+  { id: 'panels', name: 'Panels', row: 'look', members: ['help'], trailing: true },
   { id: 'author', name: 'Author', row: 'do', members: ['tools'] },
-  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
+  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output'], trailing: true },
 ] as const satisfies ReadonlyArray<{
   id: string;
   name: string;
   row: DeckRowId;
   members: readonly ToolbarGroupId[];
+  trailing?: true;
 }>;
 
 /**
@@ -323,6 +337,7 @@ export function Deck<Ctx>({
                   // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
                   className={cn(
                     'flex items-stretch gap-2',
+                    'trailing' in group && 'ml-auto',
                     // **The group seam, built at M7 having been promised twice and never made.**
                     // `TOOLBAR_INSET_RULE`'s own docblock states as fact that "the group-level seam
                     // joins it at M4"; M1-T3 specified its geometry. Neither happened, and M6 then

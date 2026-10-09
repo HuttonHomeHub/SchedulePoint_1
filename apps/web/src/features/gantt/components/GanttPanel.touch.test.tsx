@@ -64,6 +64,8 @@ const rowContext = (): SelectionBarContext => ({
   definitionGate: null,
   makeMilestone: { applies: false },
   onMakeMilestone: vi.fn(),
+  floatPathsOpen: false,
+  toggleFloatPaths: null,
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,

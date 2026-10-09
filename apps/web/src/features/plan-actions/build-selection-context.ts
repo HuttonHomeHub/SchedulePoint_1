@@ -73,6 +73,13 @@ export interface SelectionContextInput {
    * (`selection-actions.tsx:98`). Typed loosely here first, which the compiler rejected. */
   onOpenEditorAt?:
     ((activity: ActivitySummary, at: 'constraint' | 'resources') => void) | undefined;
+  /** Whether the Float paths panel is showing (the item's `aria-pressed`). Absent ⇒ not showing. */
+  floatPathsOpen?: boolean | undefined;
+  /**
+   * Open Float paths into this activity, or close the panel if it is showing. Absent ⇒ the host has
+   * no panel and the action is omitted, never lit and inert.
+   */
+  onToggleFloatPaths?: ((activity: ActivitySummary) => void) | undefined;
 }
 
 /**
@@ -134,5 +141,8 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
         ? deriveMakeMilestoneGate(activity, input.definitionGate)
         : { applies: false },
     onMakeMilestone: () => input.onMakeMilestone?.(activity),
+    floatPathsOpen: input.floatPathsOpen ?? false,
+    toggleFloatPaths:
+      input.onToggleFloatPaths === undefined ? null : () => input.onToggleFloatPaths?.(activity),
   };
 }

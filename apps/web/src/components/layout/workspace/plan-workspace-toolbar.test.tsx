@@ -498,15 +498,20 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(h.tsldProps.current?.resourceStripActive).toBe(false);
   });
 
-  it('offers a header edit-pencil to writers (folded from the toolbar), hidden for viewers', () => {
-    // The standalone Edit-plan toolbar button folded into a header pencil beside the status pill.
+  it('offers a header "Edit plan details" button to writers, hidden for viewers', () => {
+    // The standalone Edit-plan toolbar button folded into a header pencil beside the status pill, and
+    // the pencil became a registered item on the "Plan details" toolbar (toolbar-redesign M2-T1),
+    // renamed so it is not one word from the pen's "Start editing".
     const writer = renderScreen();
-    expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit plan details' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument();
     writer.unmount();
 
     h.role = 'VIEWER';
     renderScreen();
-    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit plan details' })).not.toBeInTheDocument();
+    // The Summary half of the same toolbar is a plan fact for every role.
+    expect(screen.getByRole('button', { name: 'Plan summary' })).toBeInTheDocument();
   });
 
   /**

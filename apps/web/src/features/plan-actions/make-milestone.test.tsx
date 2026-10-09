@@ -18,6 +18,8 @@ const ctx = (over: Partial<SelectionBarContext> = {}): SelectionBarContext => ({
   definitionGate: { writable: true, reason: null, readable: true },
   makeMilestone: { applies: true, enabled: true, reason: null },
   onMakeMilestone: vi.fn(),
+  floatPathsOpen: false,
+  toggleFloatPaths: null,
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,

@@ -36,8 +36,8 @@ import {
   Share2,
   SlidersHorizontal,
   Spline,
-  Split,
   SquareDashedMousePointer,
+  SquarePen,
   TriangleAlert,
   Undo2,
   Waypoints,
@@ -57,10 +57,12 @@ import { GanttColumnsGroup } from './gantt-columns-group';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
+import { Disclosure } from '@/components/ui/disclosure';
 import { CheckboxField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import type {
+  ToolbarGroupId,
   ToolbarItemRenderApi,
   ToolbarLabelVisibility,
   ToolbarRow,
@@ -86,7 +88,6 @@ import {
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   EXPORT_PRINT_ENABLED,
-  FLOAT_PATHS_ENABLED,
   GANTT_VIEW_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
@@ -171,7 +172,14 @@ const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: str
   // Added by ADR-0090 M2-T2 for the Legend, answering the product owner's Q2 directly. A section of
   // its own rather than a fourth "overlay", because a panel is a surface you read *beside* the
   // diagram, not a mark drawn *on* it — the distinction the other group names already make.
-  { id: 'panels', label: 'Panels' },
+  //
+  // **Labelled "Navigation", not "Panels", since toolbar-redesign M2-T2.** The Legend left it for the
+  // deck, and the deck's own group is now named "Panels"; with `View ▾` open both are in the
+  // accessibility tree, and two groups of one name is a locator and a screen-reader collision
+  // (`getByRole('group', { name: 'Panels' })` must resolve to exactly one element). Its only
+  // occupant is the Minimap, which is what the new name says, and M4 moves the Minimap to the
+  // diagram's corner and deletes this section. The id stays until then.
+  { id: 'panels', label: 'Navigation' },
   // The Gantt's grid columns (ADR-0095 M5-T1). Here rather than as a `Columns ▾` button above the
   // grid, which is what the plan's entry-point line named: that button is a new horizontal band,
   // and ADR-0092 spent a whole milestone reclaiming 249 px of chrome from above the diagram on the
@@ -241,6 +249,14 @@ interface LensToggle {
     icon: React.ReactNode;
     order: number;
     /**
+     * The registry group the promoted item sits in. Absent ⇒ `'lens'`, which the Baseline overlay
+     * keeps. Legend and Resource view declare `'help'`: they open a panel beside the diagram rather
+     * than draw on it, and `Deck` renders that group as **Panels** (toolbar-redesign M2-T2). Declared
+     * per record because the promoted lenses are not one group — the same reason the label policy
+     * below is.
+     */
+    group?: ToolbarGroupId;
+    /**
      * How the promoted control's label behaves (`ToolbarLabelVisibility`). Absent ⇒ `'always'`.
      * Declared per record because the promoted lenses are not one policy: Legend names itself, and
      * Baseline overlay and Resource view go icon-only below `--container-roomy`.
@@ -267,8 +283,8 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     group: 'insight',
     label: 'Baseline overlay',
     // **Promoted onto the deck** (foot-row-and-deck M6), and it is the only one of the three the
-    // product owner named that could be. `Float paths` is ALREADY a deck item (`float-paths`,
-    // `group: 'find'`, tier 3) and `Critical path` is not a lens toggle at all — it is a column
+    // product owner named that could be. `Float paths` was ALREADY a deck item then (it has since
+    // moved to the selection bar) and `Critical path` is not a lens toggle at all — it is a column
     // header in the activities table and a settings-section title. Those two came from my own
     // question's options rather than from this registry, which is the ADR-0076 Class 3 shape one
     // step upstream of a document: a choice offered from memory instead of from the code.
@@ -297,7 +313,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
           : ctx.varianceError
             ? 'Baseline unavailable'
             : !ctx.hasActiveBaseline
-              ? 'No active baseline'
+              ? NO_ACTIVE_BASELINE_REASON
               : undefined,
   },
   {
@@ -353,7 +369,8 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // goes icon-only below the roomy width, and the one the conflict case at 1024 needs.
     promotion: {
       icon: <ChartColumnStacked className="size-4" />,
-      order: 21,
+      group: 'help',
+      order: 1,
       labelVisibility: 'roomy',
       description: 'Show resource loading under the diagram',
     },
@@ -418,7 +435,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.legendOpen,
     toggle: (ctx) => ctx.toggleLegend(),
     reason: () => undefined,
-    promotion: { icon: <BookOpen className="size-4" />, order: 22 },
+    promotion: { icon: <BookOpen className="size-4" />, group: 'help', order: 0 },
   },
   {
     // The minimap panel (ADR-0100, minimap M2-T3). `panels` for the legend's reason — a surface
@@ -458,7 +475,7 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
     const promotion = t.promotion as NonNullable<LensToggle['promotion']>;
     return {
       id: t.id,
-      group: 'lens',
+      group: promotion.group ?? 'lens',
       row: 'strip',
       tier: 2,
       labelVisibility: promotion.labelVisibility ?? 'always',
@@ -1064,14 +1081,19 @@ function LinkControl({
  * (ADR-0059 §2) — panning, stepping and fitting are the canvas's own, and the Gantt's chart already
  * spans the plan, so there is nothing to fit it to.
  */
-/** Both remaining Find-group commands need a selection to act on. */
-const ISOLATE_NO_SELECTION_REASON = 'Select an activity first';
-
 const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
 const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
+/**
+ * Why Baseline overlay is shut when the plan has no active baseline. It **teaches the way out**
+ * (toolbar-redesign UX review): "No active baseline" named the condition and left a planner who had
+ * never set one to guess where baselines live, and this control is the one place that meets them
+ * before they have. Analysis ▾ → Baselines… is where one is set, and the sentence says what setting
+ * one buys.
+ */
+const NO_ACTIVE_BASELINE_REASON = 'No active baseline. Set one to draw it beside each bar';
 
 /** Disabled reason for the over-allocation highlight when nothing is over-allocated (Stage E M2) — a
  * plan that never levelled, or a levelled plan with no over-allocation, has none. Mirrors
@@ -1910,124 +1932,220 @@ function viewTriggerLabel(ctx: TsldToolbarContext): string {
     : `View · ${COLOUR_MODE_LABELS[ctx.colourMode]}`;
 }
 
+/**
+ * **How View ▾ is laid out, and which sections start folded** (toolbar-redesign M2-T3, V6).
+ *
+ * One column of ~1,265 px of content could not fit the 1024 × 600 floor: the panel measured 584 px
+ * in 600, and two balanced columns were still about 633 px against SC-13's 420 (`m0-measurement.md`
+ * §0.8). So the panel is **three columns**, and the sections a planner opens least — Structure
+ * (grid tiers, WBS band), Markers (on-canvas indicators) and, in the Gantt, Columns (a chooser and
+ * its width fields: 681 px on its own, which left the Gantt's panel at 584 of 600 with an inner
+ * scroll) — start **folded**.
+ *
+ * **The columns are not one section each, and the first draft that did that measured 593 px.**
+ * Insight overlays alone is the colour-by radios, four plain toggles and three lenses that carry
+ * their own visible hint or reason (ADR-0082/0122 — a shut lens says why, in words, beside itself),
+ * which wrap to several lines in a 213 px column. No assignment of whole sections can bring that
+ * under the budget, so Insight spans **two** columns and splits inside: what changes how the bars are
+ * drawn (colour-by and the four toggles) on the left, the three lenses with their sentences on the
+ * right. The first column holds everything else — Zoom, the two folded sections, the Minimap's
+ * fieldset and, in the Gantt, its columns.
+ *
+ * DOM order is visual order: left column top to bottom, then Insight's two halves, so a keyboard
+ * reader meets the controls in the order a sighted one reads them. Below `sm:` it is one column.
+ */
+const VIEW_FIRST_COLUMN: ReadonlyArray<ViewToggleGroupId> = [
+  'zoom',
+  'structure',
+  'markers',
+  'panels',
+  'columns',
+];
+
+/** The sections that start folded. Their open state is the disclosure's own, for one opening
+ * (ADR-0169): the panel unmounts on close, so every opening starts folded again. */
+const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
+  'structure',
+  'markers',
+  'columns',
+]);
+
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
-  return (
-    <div className="flex flex-col gap-3">
-      {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
-        const keys = viewToggleKeysFor(id, ctx.planView);
-        const lenses = lensTogglesIn(id);
-        // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
-        // groups), so an emptiness test that only counts those would drop them. Without this the
-        // zoom group is registered, ordered, typed — and never rendered: a milestone with no entry
-        // point, which is the ADR-0081 defect exactly, and one no typecheck can see.
-        // `columns` renders content that is neither a toggle nor a lens, so it needs its entry
-        // here or it would be registered, ordered, typed — and never drawn. That is the exact
-        // failure the zoom group's own note records, and it is invisible to a typecheck.
-        const hasOwnContent =
-          id === 'zoom' ||
-          (id === 'insight' && CANVAS_LENSES_ENABLED) ||
-          (id === 'columns' && ctx.ganttColumns !== undefined);
-        if (keys.length === 0 && lenses.length === 0 && !hasOwnContent) return null;
-        return (
-          <fieldset key={id} className="flex flex-col gap-2">
-            <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
-              {label}
-            </legend>
-            {/* Colour-by leads the Insight group (ADR-0090 M2-T2): it is the one control here that
-                changes what every bar MEANS rather than adding a mark on top, so it reads first.
-                A radio group, not checkboxes — the three modes are exclusive, which the old
-                menu-button expressed with `menuitemradio` and this expresses natively. */}
-            {/* The relocated zoom presets (ADR-0091 D3). This RELOCATES ADR-0056 §1, it does not
-                withdraw it: `pxPerDayForPreset`, `presetOf`/`isAtPreset` and the required-width
-                parameter are untouched — only the surface that calls them moves. A radio group for
-                the same reason colour-by is one: the levels are exclusive, which the menu expressed
-                with `menuitemradio` and this expresses natively. Each row carries its target visible
-                range, so the names stop being ambiguous about what they frame. */}
-            {id === 'zoom' ? (
-              <div role="radiogroup" aria-label="Zoom level" className="flex flex-col gap-2">
-                {ZOOM_LEVELS.map((level) => (
-                  <label key={level} className={TOGGLE_ROW}>
-                    <input
-                      type="radio"
-                      name="tsld-zoom-preset"
-                      checked={ctx.zoomPreset === level}
-                      onChange={() => ctx.setZoomPreset(level)}
-                      className="accent-primary size-4"
-                    />
-                    {CANVAS_TIME_AXIS_ENABLED
-                      ? `${ZOOM_LABELS[level] ?? level} — ${ZOOM_RANGE_LABELS[level]}`
-                      : (ZOOM_LABELS[level] ?? level)}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-            {id === 'columns' && ctx.ganttColumns !== undefined ? (
-              <GanttColumnsGroup columns={ctx.ganttColumns} />
-            ) : null}
-            {id === 'insight' && CANVAS_LENSES_ENABLED ? (
-              <div
-                role="radiogroup"
-                aria-label="Colour bars by"
-                className="border-border mb-1 flex flex-col gap-2 border-b pb-2"
-              >
-                {COLOUR_MODE_ORDER.map((mode) => (
-                  <label key={mode} className={TOGGLE_ROW}>
-                    <input
-                      type="radio"
-                      name="tsld-colour-mode"
-                      checked={ctx.colourMode === mode}
-                      onChange={() => ctx.setColourMode(mode)}
-                      className="accent-primary size-4"
-                    />
-                    Colour · {COLOUR_MODE_LABELS[mode]}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-            {keys.map((key) => (
-              <CheckboxField
-                key={key}
-                label={VIEW_TOGGLE_META[key].label}
-                density="compact"
-                checked={ctx.viewToggles[key]}
-                onChange={() => ctx.toggleView(key)}
+  const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
+    const keys = viewToggleKeysFor(id, ctx.planView);
+    const lenses = lensTogglesIn(id);
+    // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
+    // groups), so an emptiness test that only counts those would drop them. Without this the
+    // zoom group is registered, ordered, typed — and never rendered: a milestone with no entry
+    // point, which is the ADR-0081 defect exactly, and one no typecheck can see.
+    // `columns` renders content that is neither a toggle nor a lens, so it needs its entry
+    // here or it would be registered, ordered, typed — and never drawn. That is the exact
+    // failure the zoom group's own note records, and it is invisible to a typecheck.
+    const hasOwnContent =
+      id === 'zoom' ||
+      (id === 'insight' && CANVAS_LENSES_ENABLED) ||
+      (id === 'columns' && ctx.ganttColumns !== undefined);
+    if (keys.length === 0 && lenses.length === 0 && !hasOwnContent) return null;
+
+    const zoomRows =
+      id === 'zoom' ? (
+        // The relocated zoom presets (ADR-0091 D3). This RELOCATES ADR-0056 §1, it does not
+        // withdraw it: `pxPerDayForPreset`, `presetOf`/`isAtPreset` and the required-width
+        // parameter are untouched — only the surface that calls them moves. A radio group for
+        // the same reason colour-by is one: the levels are exclusive, which the menu expressed
+        // with `menuitemradio` and this expresses natively. Each row carries its target visible
+        // range, so the names stop being ambiguous about what they frame.
+        <div role="radiogroup" aria-label="Zoom level" className="flex flex-col gap-2">
+          {ZOOM_LEVELS.map((level) => (
+            <label key={level} className={TOGGLE_ROW}>
+              <input
+                type="radio"
+                name="tsld-zoom-preset"
+                checked={ctx.zoomPreset === level}
+                onChange={() => ctx.setZoomPreset(level)}
+                className="accent-primary size-4"
               />
-            ))}
-            {/* The relocated lens toggles (ADR-0090 M2-T2). `aria-disabled` + a guard rather than
-                native `disabled`, per ADR-0083: a control whose only operation is changing its value
-                takes the ARIA form, so the row stays focusable and its REASON stays readable —
-                which is the whole point of moving these rather than dropping them. The reason is
-                `aria-describedby`-linked to the input (never folded into its name) and shown
-                visibly beside it, because this surface has no `title` tooltip to fall back on and a
-                sighted planner needs it as much as a screen-reader one. */}
-            {lenses.map((lens) => {
-              const reason = lens.reason(ctx);
-              const shut = reason !== undefined;
-              // The ids and the hand-built `aria-describedby` are gone: `CheckboxField` owns both,
-              // and its `mergeDescribedBy` already carries a hint AND a gate reason together —
-              // which is what the removed line was doing by hand, one component down. Keeping a
-              // second implementation of that merge is how the two drift.
-              return (
-                <CheckboxField
-                  key={lens.id}
-                  label={lens.label}
-                  density="compact"
-                  data-view-lens={lens.id}
-                  checked={lens.checked(ctx)}
-                  // The lens's own rule, expressed as the gate the primitive already speaks
-                  // (ADR-0083): shut with a LINKED reason rather than a native `disabled`, which
-                  // would take the control out of the tab order and drop its explanation with it.
-                  gate={{ writable: !shut, reason: reason ?? null }}
-                  {...(lens.note ? { hint: lens.note } : {})}
-                  onChange={() => {
-                    if (!shut) lens.toggle(ctx);
-                  }}
-                />
-              );
-            })}
-          </fieldset>
-        );
-      })}
+              {CANVAS_TIME_AXIS_ENABLED
+                ? `${ZOOM_LABELS[level] ?? level} — ${ZOOM_RANGE_LABELS[level]}`
+                : (ZOOM_LABELS[level] ?? level)}
+            </label>
+          ))}
+        </div>
+      ) : null;
+    const columnsRows =
+      id === 'columns' && ctx.ganttColumns !== undefined ? (
+        <GanttColumnsGroup columns={ctx.ganttColumns} />
+      ) : null;
+    // Colour-by leads the Insight group (ADR-0090 M2-T2): it is the one control here that changes
+    // what every bar MEANS rather than adding a mark on top, so it reads first. A radio group, not
+    // checkboxes — the three modes are exclusive, which the old menu-button expressed with
+    // `menuitemradio` and this expresses natively.
+    const colourRows =
+      id === 'insight' && CANVAS_LENSES_ENABLED ? (
+        <div
+          role="radiogroup"
+          aria-label="Colour bars by"
+          className="border-border mb-1 flex flex-col gap-2 border-b pb-2"
+        >
+          {COLOUR_MODE_ORDER.map((mode) => (
+            <label key={mode} className={TOGGLE_ROW}>
+              <input
+                type="radio"
+                name="tsld-colour-mode"
+                checked={ctx.colourMode === mode}
+                onChange={() => ctx.setColourMode(mode)}
+                className="accent-primary size-4"
+              />
+              Colour · {COLOUR_MODE_LABELS[mode]}
+            </label>
+          ))}
+        </div>
+      ) : null;
+    const toggleRows = keys.map((key) => (
+      <CheckboxField
+        key={key}
+        label={VIEW_TOGGLE_META[key].label}
+        density="compact"
+        checked={ctx.viewToggles[key]}
+        onChange={() => ctx.toggleView(key)}
+      />
+    ));
+    // The relocated lens toggles (ADR-0090 M2-T2). `aria-disabled` + a guard rather than native
+    // `disabled`, per ADR-0083: a control whose only operation is changing its value takes the ARIA
+    // form, so the row stays focusable and its REASON stays readable — which is the whole point of
+    // moving these rather than dropping them. The reason is `aria-describedby`-linked to the input
+    // (never folded into its name) and shown visibly beside it, because this surface has no `title`
+    // tooltip to fall back on and a sighted planner needs it as much as a screen-reader one.
+    const lensRows = lenses.map((lens) => {
+      const reason = lens.reason(ctx);
+      const shut = reason !== undefined;
+      // The ids and the hand-built `aria-describedby` are gone: `CheckboxField` owns both, and its
+      // `mergeDescribedBy` already carries a hint AND a gate reason together — which is what the
+      // removed line was doing by hand, one component down. Keeping a second implementation of that
+      // merge is how the two drift.
+      return (
+        <CheckboxField
+          key={lens.id}
+          label={lens.label}
+          density="compact"
+          data-view-lens={lens.id}
+          checked={lens.checked(ctx)}
+          // The lens's own rule, expressed as the gate the primitive already speaks (ADR-0083):
+          // shut with a LINKED reason rather than a native `disabled`, which would take the control
+          // out of the tab order and drop its explanation with it.
+          gate={{ writable: !shut, reason: reason ?? null }}
+          {...(lens.note ? { hint: lens.note } : {})}
+          onChange={() => {
+            if (!shut) lens.toggle(ctx);
+          }}
+        />
+      );
+    });
+
+    const rows =
+      id === 'insight' ? (
+        // Two halves, side by side from `sm:` — see `VIEW_FIRST_COLUMN` for why Insight is split.
+        <div className="grid grid-cols-1 items-start gap-x-5 gap-y-2 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            {colourRows}
+            {toggleRows}
+          </div>
+          <div className="flex flex-col gap-2">{lensRows}</div>
+        </div>
+      ) : (
+        <>
+          {zoomRows}
+          {columnsRows}
+          {toggleRows}
+          {lensRows}
+        </>
+      );
+
+    // A folded section is a disclosure (APG): the button names it, and `collapsed="hidden"` unmounts
+    // the rows rather than clipping them, so a folded toggle is not a tab stop a sighted keyboard
+    // reader cannot see (WCAG 2.4.7). The rows keep a named group inside, so a reader who opens it
+    // hears what they are in.
+    if (VIEW_FOLDED_SECTIONS.has(id)) {
+      return (
+        <Disclosure
+          key={id}
+          label={label}
+          collapsed="hidden"
+          triggerClassName="w-full justify-start text-xs font-medium tracking-wide uppercase"
+        >
+          <div role="group" aria-label={label} className="flex flex-col gap-2">
+            {rows}
+          </div>
+        </Disclosure>
+      );
+    }
+    return (
+      <fieldset
+        key={id}
+        // Insight spans the other two columns (`VIEW_FIRST_COLUMN`).
+        className={cn('flex min-w-0 flex-col gap-2', id === 'insight' && 'sm:col-span-2')}
+      >
+        <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+          {label}
+        </legend>
+        {rows}
+      </fieldset>
+    );
+  };
+
+  const labels = new Map(VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => [id, label]));
+  const sectionFor = (id: ViewToggleGroupId): React.ReactElement | null =>
+    renderSection(id, labels.get(id) ?? id);
+  const first = VIEW_FIRST_COLUMN.flatMap((id) => {
+    const section = sectionFor(id);
+    return section === null ? [] : [section];
+  });
+  const insight = sectionFor('insight');
+
+  return (
+    <div className="grid grid-cols-1 items-start gap-x-5 gap-y-3 sm:grid-cols-3">
+      {first.length > 0 ? <div className="flex min-w-0 flex-col gap-3">{first}</div> : null}
+      {insight}
     </div>
   );
 }
@@ -2421,10 +2539,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   };
   const commentsShape = {
     id: 'comments',
-    group: 'object' as const,
+    // **Panels, not Plan** (toolbar-redesign M2-T2): Comments opens a panel beside the diagram, which
+    // is what the Legend and Resource view do, and it left the DO row so the row that carries the
+    // pen can hold a labelled Apply levelled dates. Taxonomy group 7 (`help`) is the Panels group.
+    group: 'help' as const,
     row: 'strip' as const,
     tier: 2 as const,
-    order: 10,
+    order: 2,
     label: 'Comments',
     icon: <MessageSquare className="size-4" />,
   };
@@ -2571,8 +2692,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
     // with `isolate-logic`. Both required a selection, so both spent most of their life on Row 1
     // shaded — holding width to say "Select an activity first". `float-paths` was named in that
-    // plan and **did not move**: it is still a deck item below, and it needs a selection for the
-    // same reason. It leaves for the selection bar in toolbar-redesign M2-T4 (D-c).
+    // plan and did not move then; it followed in toolbar-redesign M2-T4 (below).
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
@@ -2618,6 +2738,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
+          // Three columns (`VIEW_COLUMNS`), which a 20 rem panel cannot hold.
+          panelWidth="wide"
         >
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
@@ -2732,43 +2854,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           onActivate: (ctx) => ctx.goToNextConflict(),
         }
       : placeholderItem(nextConflictShape),
-    // Float paths (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into the selected
-    // activity, in a docked right panel. Row 1 · Look, `find` group at order 4, beside Isolate and
-    // Next-conflict, which is where a planner already looks to trace logic.
-    //
-    // **Live in the Gantt as well as the Diagram.** It is an analysis, not a viewport command —
-    // the ADR-0059 M6 lesson inverted: shade what only the canvas can do, never what both can.
-    //
-    // The ladder reads `activityCount`, deliberately NOT `hasDiagram`. That flag means *computed*
-    // (it requires a non-null `earlyStart`), and this endpoint runs its own `computeSchedule` per
-    // request — so gating on it would shade the item with "Add an activity first" on a plan full of
-    // activities that simply has not been recalculated yet.
-    //
-    // Flag-off the item is **absent**, not a "Coming soon" placeholder: flag-off must be
-    // byte-for-byte today's toolbar, and a stub would add a control to a shipped row.
-    // View-only: never `penGated`.
-    ...(FLOAT_PATHS_ENABLED
-      ? [
-          {
-            id: 'float-paths',
-            group: 'find',
-            row: 'strip',
-            tier: 3,
-            order: 4,
-            label: 'Float paths',
-            icon: <Split className="size-4" />,
-            isActive: (ctx) => ctx.floatPathsOpen,
-            isEnabled: (ctx) => ctx.activityCount > 0 && ctx.selectedActivity != null,
-            disabledReason: (ctx) =>
-              ctx.activityCount === 0
-                ? 'Add an activity first'
-                : ctx.selectedActivity == null
-                  ? ISOLATE_NO_SELECTION_REASON
-                  : undefined,
-            onActivate: (ctx) => ctx.toggleFloatPaths(),
-          } satisfies ToolbarItem<TsldToolbarContext>,
-        ]
-      : []),
+    // `float-paths` MOVED to the SELECTION BAR and the Gantt row menu (toolbar-redesign M2-T4,
+    // D-c): its subject is the selected activity (ADR-0093), and on this row it spent most of its
+    // life shaded with "Select an activity first". See `features/plan-actions/selection-actions.tsx`.
     // Next-conflict VISIBLE status chip (U2) — a presentational `role="status"` read-out pinned next to
     // the Next-conflict button while a conflict is being cycled, so the reason is on screen and not only
     // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
@@ -3048,15 +3136,14 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       description:
         'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
       icon: <Scale className="size-4" />,
-      // Icon-only at every width, as it has always been — and **declared `'never'` for now, not
-      // `'roomy'`**, though the redesign's D-l wants it labelled on a roomy deck. Measured at M1:
-      // labelling it from 79 rem puts the DO row over one line at 1280 (`command-surface.spec.ts`
-      // LINES goes 2 → 3), because Summary and Comments still sit on that row. They leave in M2, and
-      // this becomes `'roomy'` there, with a description that is already written. Its icon fails
-      // the glyph test (a balance is not a universal sign for "apply levelled dates"), so the
-      // name and tooltip carry the words (ADR-0117). `Scale` (balance) and not `CalendarCheck`,
-      // which read as a calendar glyph once the word was gone.
-      labelVisibility: 'never',
+      // Icon-only below `--container-roomy`, labelled above it (toolbar-redesign D-l). It was icon-only
+      // at every width, and was **held at `'never'` through M1** on a measurement: labelling it from
+      // 79 rem put the DO row over one line at 1280 while Summary and Comments still sat on that row.
+      // Both have left (M2-T1/T2), so the label now fits where the deck is roomy. Its icon fails the
+      // glyph test (a balance is not a universal sign for "apply levelled dates"), so the name and
+      // the tooltip carry the words below that width (ADR-0117). `Scale` (balance) and not
+      // `CalendarCheck`, which read as a calendar glyph once the word was gone.
+      labelVisibility: 'roomy',
       penGated: true,
       disabledReason: (ctx) =>
         ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),
@@ -3111,17 +3198,36 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Legend + Resource view, back on Row 1 (workspace-chrome M4) — see `promotedLensItems`.
     ...promotedLensItems(),
 
+    // --- identity · the plan's facts, beside its name in the header (toolbar-redesign M2-T1) -----
+    // Summary and Edit plan details are registered here and rendered by their own `Toolbar`, named
+    // "Plan details", in the header's `identity` slot — not by the deck. Their subject is the plan,
+    // which is what the plan's name is the subject of, so R5 puts them beside it (spec §4.6). It
+    // took about 100 px off the DO row at the floor, where Summary was the widest control it could
+    // spare (M0 §5).
+    //
+    // **Both are taxonomy group `object`** — "this plan, as a document" — which is what they were
+    // on the deck (ADR-0031 group 5). Stated rather than left as a default: a registry row is a
+    // placement, and the group is what names it to assistive technology ("About this plan").
+    //
+    // The id stays `summary`: it is the stable handle the journeys and the focus-return code locate
+    // by, and the name a planner hears is "Plan summary". `Summary ▾` named a thing a reader could
+    // not tell from the status bar's summary strip.
     {
       id: 'summary',
       group: 'object',
-      row: 'strip',
+      row: 'identity',
       tier: 2,
-      order: 1,
-      label: 'Summary',
+      // Icon-only: it sits beside a breadcrumb and a status badge in a header that holds one line at
+      // 1024, and a labelled disclosure there would take back the width this move exists to free.
+      // The tooltip names it and says what it holds (ADR-0117).
+      labelVisibility: 'never',
+      order: 0,
+      label: 'Plan summary',
       icon: <Info className="size-4" />,
       render: (ctx, api) => (
         <ToolbarPopover
-          label="Summary"
+          label="Plan summary"
+          description="Status, data date and the schedule at a glance"
           icon={<Info className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
@@ -3129,6 +3235,28 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           {ctx.summaryContent}
         </ToolbarPopover>
       ),
+    },
+    // **Renamed from the header pencil's "Edit plan"** — it is a writer's control (`ctx.editPlan` is
+    // `null` for a Viewer, the existing `canWrite` gate), and "Edit plan" sat one word from the pen's
+    // "Start editing": two controls a planner could take for the same verb. The dialog it opens is
+    // still titled "Edit plan"; what this names is the control, and it says what the control edits.
+    //
+    // A plain `onActivate` item so the one tooltip path (`ToolbarButton`) names it, with its purpose.
+    // Absent rather than shaded for a reader without the right, as the pencil was: ADR-0082's omit
+    // branch, since a Viewer will never be able to change what it would open.
+    {
+      id: 'edit-plan',
+      group: 'object',
+      row: 'identity',
+      tier: 2,
+      labelVisibility: 'never',
+      order: 1,
+      label: 'Edit plan details',
+      description: "Change the plan's name, status, planned start and description",
+      icon: <SquarePen className="size-4" />,
+      isVisible: (ctx) => ctx.editPlan !== null,
+      lostReason: 'This appears only while you can edit the plan.',
+      onActivate: (ctx) => ctx.editPlan?.(),
     },
     /**
      * The **Project-finish read-out**, back inside the registry — a knowing reversal of ADR-0090
@@ -3238,7 +3366,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           // Icon-only below `--container-roomy` (CQ-2). On the flag-on item only, so the flag-off
           // placeholder stays byte-for-byte what it was.
           labelVisibility: 'roomy' as const,
-          description: "Open the plan's comments beside the diagram",
+          description: "Show the plan's comments beside the diagram",
           isVisible: () => NOTES_ENABLED,
           // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
           // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.

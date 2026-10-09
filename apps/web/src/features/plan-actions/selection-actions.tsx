@@ -7,6 +7,7 @@ import {
   Diamond,
   Eraser,
   Route,
+  Split,
   SquarePen,
   StickyNote,
   Trash2,
@@ -37,6 +38,7 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   ENTRY_ROUTES_ENABLED,
+  FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
@@ -140,6 +142,19 @@ export interface SelectionActionContext {
   makeMilestone: MakeMilestoneGate;
   /** Open the Make milestone dialog for the selected activity. */
   onMakeMilestone: () => void;
+  /**
+   * Whether the Float paths panel is showing — the item's `aria-pressed`. A context **fact** rather
+   * than a read of the panel's state from inside the registry, for the reason every other state on
+   * this bar is one (ADR-0133 D6): the bar says what is true and the host owns where it came from.
+   */
+  floatPathsOpen: boolean;
+  /**
+   * Open Float paths on the selected activity, or close the panel if it is showing. `null` when the
+   * host has no panel to open, in which case the item is **omitted** rather than lit and inert (the
+   * ADR-0064 §7 dead end). It is a toggle because the panel's close path hands focus back to this
+   * very control, which only exists to receive it while the bar is mounted.
+   */
+  toggleFloatPaths: (() => void) | null;
 }
 
 /**
@@ -180,31 +195,29 @@ export interface SelectionCanvasContext {
 }
 
 /**
- * **`float-paths` is deliberately NOT here, and the plan said it should be.**
+ * **`float-paths` is on this bar, and is deliberately NOT in {@link SelectionCanvasContext}.**
  *
- * `implementation-plan.md` M2-T1 lists it with the other two on the grounds that _"`isEnabled`
- * requires a selection"_. That is true and it is the wrong test: it conflates **needs a selection**
- * with **is a canvas command**. Float paths is an *analysis* and runs in the **Gantt** as well as
- * the diagram — its `isEnabled` reads `activityCount`, deliberately not `canvasActive` or even
- * `hasDiagram` — so moving it into a bar that only the canvas renders would delete it from the
- * Gantt outright.
+ * It moved here from the command deck (toolbar-redesign M2-T4, ADR-0093: its `isEnabled` required a
+ * selection, which makes the selected activity its subject). Until then this paragraph said the
+ * opposite, and was right to: the item is an *analysis* that runs in the Gantt as well as the
+ * diagram, so putting it in the canvas half would have deleted it from the Gantt. The plan that
+ * once proposed exactly that (`implementation-plan.md` M2-T1 of the workspace-layout epic) conflated
+ * **needs a selection** with **is a canvas command**.
  *
- * That is not an inference. `tsld-toolbar-items.tsx` states it at the registration (_"Live in the
- * Gantt as well as the Diagram… the ADR-0059 M6 lesson inverted: shade what only the canvas can do,
- * never what both can"_), and `float-paths-view-agnostic.structural.test.ts` exists **specifically**
- * to make that fail loudly, because — in its own words — a canvas coupling "would only show up as a
- * broken Gantt in someone's browser".
- *
- * So M2-T1 moves **two** commands, not three. Float paths keeps its Row-1 seat until a destination
- * exists that both views share; the pinned-floor saving is correspondingly smaller.
+ * What made the move possible is that the Gantt DOES render this bar: `plan-workspace-toolbar.tsx`
+ * mounts the same {@link SelectionActionsBar} in the Gantt's dock row, and the Gantt row menu is
+ * derived from {@link selectionActionItems}. So the item lives in the object context
+ * ({@link SelectionActionContext.floatPathsOpen}), reaches both views by construction, and
+ * `float-paths-view-agnostic.structural.test.ts` still pins that the analysis imports nothing from
+ * either view.
  */
 
 /**
  * What the bar's items are actually typed over: the object actions, plus a **nullable** canvas half.
  *
  * Nested and nullable rather than a flat intersection, because the canvas half genuinely can be
- * absent — the Gantt renders no selection bar today, but `TsldPanel` is not the only conceivable
- * host, and the alternative (inert no-op defaults plus a separate "are these real?" boolean) is the
+ * absent — the Gantt renders this bar too, with `canvas: null`, so the two canvas-only items drop
+ * out there — and the alternative (inert no-op defaults plus a separate "are these real?" boolean) is the
  * fused shape ADR-0062 warns about: two facts in one object where neither can be checked.
  * `canvas === null` is the whole statement, and the three items' `isVisible` reads exactly it.
  */
@@ -991,6 +1004,33 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             render: (ctx: SelectionBarContext, api: ToolbarItemRenderApi) =>
               ctx.canvas ? <IsolateControl canvas={ctx.canvas} api={api} /> : <></>,
           } satisfies ToolbarItem<SelectionBarContext>,
+        ]
+      : []),
+    // **Float paths — moved here from the command deck** (toolbar-redesign M2-T4, D-c). The ranked
+    // driving chains INTO the selected activity, in a docked right panel (audit F4,
+    // `VITE_FLOAT_PATHS`). Its subject is the selected object, which is ADR-0093's discriminator, and
+    // on the deck it spent most of its life shaded with "Select an activity first".
+    //
+    // **View-agnostic, so it is NOT gated on `canvas`**: the analysis runs in the Gantt as well as
+    // the diagram (the ADR-0059 M6 lesson inverted — shade what only the canvas can do, never what
+    // both can). The gates the deck item carried carry over by construction rather than by copy: the
+    // deck required `activityCount > 0` and a selected activity, and this bar renders only for a
+    // selection, so both hold whenever the item exists. It is never pen-gated — looking is not
+    // editing. Flag-off the item is absent, as it was on the deck.
+    ...(FLOAT_PATHS_ENABLED
+      ? [
+          {
+            id: 'float-paths',
+            group: 'find',
+            tier: 1,
+            labelVisibility: 'always',
+            order: 9,
+            label: 'Float paths',
+            icon: <Split className="size-4" />,
+            isVisible: (ctx: SelectionActionContext) => ctx.toggleFloatPaths !== null,
+            isActive: (ctx: SelectionActionContext) => ctx.floatPathsOpen,
+            onActivate: (ctx: SelectionActionContext) => ctx.toggleFloatPaths?.(),
+          } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
   ]);

@@ -16,14 +16,14 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * dropping one is a decision rather than an accident.
  *
  * The set is the compact set CQ-2 + OD-1 named — Baseline overlay, Comments, Settings and Resource
- * view. **Apply levelled dates… (D-l) is deliberately not in it yet**: labelled from 79 rem it puts
- * the DO row over one line at 1280 while Summary and Comments still sit there (measured: the deck's
- * line count goes 2 → 3 at 1280), so it joins in M2, when they have left.
+ * view — **plus Apply levelled dates… (D-l)**. That one joined at M2: labelled from 79 rem it put
+ * the DO row over one line at 1280 while Summary and Comments still sat there (measured: the deck's
+ * line count went 2 → 3), and both have since left it.
  *
  * **Its blind spot, stated**: it reads the declarations. That `ToolbarButton` really mounts the
  * tooltip and `Deck` really applies the variant is `ToolbarButton`'s and the journey's to prove.
  */
-const ROOMY = ['baseline-overlay', 'calendar', 'comments', 'resource-view'];
+const ROOMY = ['apply-levelling', 'baseline-overlay', 'calendar', 'comments', 'resource-view'];
 
 const registries: [string, ToolbarItem<never>[]][] = [
   ['the command deck', buildTsldToolbarItems()],
@@ -35,7 +35,7 @@ describe("the registries' 'roomy' items", () => {
     items.filter((i) => i.labelVisibility === 'roomy').map((item) => ({ surface, item })),
   );
 
-  it('are exactly the four the design names for M1', () => {
+  it('are exactly the five the design names', () => {
     expect(roomy.map(({ item }) => item.id).sort()).toEqual(ROOMY);
   });
 
