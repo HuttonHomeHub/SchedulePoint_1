@@ -109,13 +109,23 @@ NetPoint name, a Draft with a long name, and the 200 + 200 + 200 maxima), at **1
 1465 × 900, 1477 × 900, 1646 × 1000, 1912 × 948 and 1912 × 1114**, Explorer at default, plus 1280
 folded and 1440 at 420.
 
-- **SC-1 — nothing in a `RowSubject` is clipped.** Zero runs inside any `RowSubject` with
-  `scrollWidth > clientWidth`, measured on **every element** of the subject (name link, its wrapping
-  span, badge, context), not only a text node's direct parent. Before: 11–18 truncated context runs per
-  two-column cell, names uncounted.
-- **SC-2 — the instrument is non-vacuous.** Run against today's tree, the fixed harness reports at
-  least one **name** truncation at 1912 × 948 (the `Dockside — Ancillary work…` M0 photographed). If it
-  reports none, the instrument is wrong and nothing after it is believed.
+**The probe (one function, used by the harness AND the journey — SC-1, SC-2, SC-7).** Element
+`scrollWidth` cannot be the test: the name's text sits in an **inline** `<a>`, and an inline box's
+`scrollWidth`/`clientWidth` are 0, so a check on it passes whatever happens. The probe instead takes,
+for every text node inside a `[data-row-subject]`, `Range.getClientRects()`, and compares each rect
+horizontally against (a) the nearest ancestor whose computed `overflow-x` is not `visible` (the
+clipping or scrolling box) and (b) the viewport. A rect past either edge by more than 0.5 px is
+**clipped**. It separately reports any ancestor up to the subject with `text-overflow: ellipsis` in
+effect. Vertical clipping by a `fill` body that scrolls is by design and is not counted.
+
+- **SC-1 — nothing in a `RowSubject` is clipped.** The probe reports zero clipped rects and zero
+  ellipses in every subject, name and context reported separately (px and characters). Before:
+  11–18 truncated context runs per two-column cell, names uncounted.
+- **SC-2 — the instrument is non-vacuous, before and after.** _Before the change_: on today's tree
+  the probe reports at least one **name** clipped at 1912 × 948 (the `Dockside — Ancillary work…` M0
+  photographed). _After the change_: a positive control injects a 300 px `inline-block` token into one
+  subject's context at 320 × 800 (wider than the line, so it must overflow) and the probe must report
+  it. Either control silent → the instrument is wrong and no reading after it is believed.
 - **SC-3 — a row that fits costs nothing.** At 1280 × 800 (one 955 px column, where the ordinary pair
   is whole today), every ordinary row's height is **identical** before and after (±0 px).
 - **SC-4 — a row grows by lines it needs, and no more.** Every `RowSubject` row's height is
@@ -123,15 +133,46 @@ folded and 1440 at 420.
   not fit. Reported per cell as the median row height and the count of rows that went two-line.
 - **SC-5 — the boxes still answer at a glance (the cost limb).** At 1646 × 1000, the M9.4 reference
   (`m9-density-design.md:233-241`), a bottom-row box shows **≥ 4 whole rows** (M9.4 measured 6; M9's
-  FC-D2 floor was 4), and `<main>` does not scroll (949/949). **If it fails, the build stops and the
-  number goes to the product owner — the row is not softened back to truncation** (M9's own rule).
-  At 1912 × 948 the two bottom boxes are already at their `min-h-55` floor (220 px,
-  `m1-after-run.md:215`), so the before/after whole-row count is **reported, not graded**: it was ~2
-  before.
-- **SC-6 — reflow and text resize.** At 320 × 800 (WCAG 1.4.10's 1280-at-400 % equivalent) and at
-  1280 × 800 with text at 200 % (1.4.4): document `overflow-x` is 0, and SC-1 holds.
-- **SC-7 — the journey drives it.** `e2e-overview` asserts SC-1 on a seeded 57-character name at
-  1477 × 900 and 1912 × 948 in a real browser.
+  FC-D2 floor was 4), and `<main>` does not scroll (949/949). At 1912 × 948 the two bottom boxes are
+  already at their `min-h-55` floor (220 px, `m1-after-run.md:215`), so the before/after whole-row
+  count there is **reported, not graded**: it was ~2 before.
+  **Named remedy if SC-5 fails, in this order:** (1) raise the box floor (`min-h-55`, the one
+  `min-height` M9 D5 put on the grid items) by the measured shortfall; (2) rebalance the rows
+  (`PageGrid rows="fit-then-fill"`, so the top row yields height to the bottom). Each is re-measured.
+  **Never** re-truncate and never `line-clamp` — that is the defect this spec removes. If neither
+  remedy passes, the number goes to the product owner.
+  **The 200-character case:** if the maxima plan alone leaves a bottom box showing **less than one
+  whole row**, remedy (1) applies to that case too, and if the floor it needs would exceed what the
+  window can give, the box scrolls (it already does, with a stated count) and the reading is
+  recorded as accepted for a pathological name rather than fixed by cutting it.
+- **SC-6 — reflow and text resize, and how each is done.**
+  - _Reflow (1.4.10):_ a **320 × 800** viewport is the proxy for 1280 at 400 % ("320 CSS pixels is
+    equivalent to a starting viewport width of 1280 CSS pixels wide at 400% zoom", Understanding
+    1.4.10, Note 1 — read 2026-10-09).
+  - _Text resize (1.4.4):_ `html { font-size: 200% }` injected at 1280 × 800 and 1912 × 948.
+    Tailwind's type and spacing scale is rem, so text and spacing double; **container queries in rem
+    (ADR-0182's `@6xl`) re-evaluate against the root font size, so the landing goes single-column**;
+    viewport media queries in rem do **not** (Media Queries evaluate relative units against the
+    initial font size), so any `md:`/`lg:` rule stays where it was. Browser text-only zoom is not
+    scriptable in headless Chromium, which is why this is the proxy and is labelled one.
+  - _Asserted at both:_ document `overflow-x` is 0; every `SectionCard fill` body has
+    `scrollWidth <= clientWidth` (no second scroll axis); SC-1 holds; and the **name's available
+    width beside the `shrink-0` trailing block is at least ~12 characters** of the name's font
+    (measured as the primary block's width ÷ the advance of `0` at that size). If that last clause
+    fails, **`ListRow` comes into scope** — the trailing block must move under the primary at narrow
+    widths — and the work stops for a spec amendment rather than growing silently.
+  - F69 is cited as read (2026-10-09): "Failure of Success Criterion 1.4.4 when resizing visually
+    rendered text up to 200 percent causes the text, image or controls to be clipped, truncated or
+    obscured". Today's row truncates **more** at 200 % than at 100 %, which is that failure's shape;
+    accessibility-reviewer gives the verdict on whether it applies to today's tree.
+- **SC-7 — the journey drives it.** `e2e-overview` runs **the same probe** on a seeded 57-character
+  name at 1477 × 900 and 1912 × 948 in a real browser, with the SC-2 after-control in the same step,
+  and asserts reading order from rects: the name's first rect precedes the badge's, which precedes
+  the context's (same line → left ascending; otherwise top ascending), matching DOM order.
+- **SC-8 — text spacing (1.4.12).** With `* { line-height: 1.5 !important; letter-spacing: 0.12em
+!important; word-spacing: 0.16em !important } p { margin-bottom: 2em !important }` injected at
+  1280 × 800, 1477 × 900 and 1912 × 948: SC-1 holds, document `overflow-x` is 0, and no subject's
+  lines overlap each other or the next row (rect tops strictly increase line to line).
 
 ### Open questions
 
@@ -145,6 +186,10 @@ folded and 1440 at 420.
   identify is not a row you saved space on, and the boxes already scroll with a stated count.
   Alternative: keep one line, stop the name ever being clipped, and accept that project and client are
   still cut (option D in §4.7) — cheaper in height, and it leaves half of your complaint standing.
+  **This answer is given on pictures, not on prose.** Plan task M0-T3 applies the design as a
+  throwaway, **uncommitted** prototype on a local tree and photographs the landing before and after at
+  **1912 × 948** and **1646 × 1000** (the photographs are committed; the prototype code is not). CQ-1 is
+  answered against those photographs, and **M1 does not merge until it has been**.
 - **CQ-2 — The ADR.** Reversing M9 D1 for a shared primitive is recorded as **ADR-0184**
   (recommendation) rather than only in this spec and the component's docblock.
 
@@ -153,10 +198,22 @@ folded and 1440 at 420.
 - **No line cap.** A 200-character name (the DTO maximum, `create-plan.dto.ts:23`) wraps to as many
   lines as it needs. A `line-clamp` would reintroduce the truncation for exactly the names that most
   need reading. M0 measures the 200 + 200 + 200 case so the cost is known.
-- **The badge stays glued to the name** (follows its last word), so a wrapped context never appears to
-  be the thing that is a Draft.
-- **When it wraps, the whole context moves under the name** (ADR-0146 D4), rather than breaking
-  `project · client` mid-pair across the end of line 1.
+- **The badge belongs to the name group** (follows its last word), so a wrapped context never appears
+  to be the thing that is a Draft. **Accepted consequence:** when the name's last word and the badge do
+  not fit together, the badge lands **alone at the start of the name's last line**. It is still above
+  the context line and still reads as the name's. Gluing it to the last word would need the name split
+  into words, and `name` is a caller-built node (a router `<Link>`), so the component cannot.
+- **When it wraps, the whole context moves under the name** (extending ADR-0146 D4 to list rows),
+  rather than breaking `project · client` mid-pair across the end of line 1.
+- **Ragged row heights within a box are accepted.** One row on two lines beside a neighbour on one is
+  the design, not a defect: each row is as tall as its own text. The rejected alternative ("every row
+  in a box goes two-line when one does") is in §4.7.
+- **The trailing fact sits on the name's first line** (first-baseline aligned), not centred on a
+  wrapped row — see §4.6.
+- **The screen-reader run-on is fixed, not recorded.** Today a reader hears "…power-plant programme
+  Draft Dockside Regeneration · Harbourside Estates" with nothing between the name and the project.
+  `RowSubject` renders a visually hidden ", " before the context, only when a context is present
+  (accessibility-reviewer confirms in M2 that it reads as a pause and not as "comma").
 - **Scope is `RowSubject`'s three consumers.** `NeedsAttentionSection` already wraps (two-line rows,
   no `RowSubject`); the Explorer tree, the Gantt and `DataTable` are out of scope.
 - **No feature flag** (ADR-0088 D1): the rollback is the commit.
@@ -186,6 +243,9 @@ folded and 1440 at 420.
 >
 > - **Given** any row **then** reading order is name, badge, project · client, then the trailing fact;
 >   the name remains the row's one link; no `title`, tooltip or extra tab stop is added.
+> - **Given** any row **then** visual order equals DOM order: no `order-*`, `flex-row-reverse`,
+>   `flex-col-reverse` or `flex-wrap-reverse` on the subject or its children (a tripwire in the unit
+>   test; the rect assertion in SC-7 is the real check).
 
 ### Workflows
 
@@ -194,18 +254,20 @@ row (`RecentlyChangedRow.tsx:84-94`, `PlanStandingRow.tsx:73-83`, `JumpBackInSec
 
 ### Edge cases
 
-| Case                                                           | Expected                                                                                     |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Everything fits                                                | One line; height identical to today (SC-3)                                                   |
-| Context does not fit beside the name                           | Context on line 2, whole                                                                     |
-| Name alone wider than the column                               | Name wraps; badge follows its last word; context below                                       |
-| One unbroken token (e.g. a 60-char code) wider than the column | Breaks anywhere (`wrap-anywhere`, already on `rowLinkClass`, `list-row.tsx:16`); no overflow |
-| 200-char name, project and client (DTO maxima)                 | Wraps to N lines, no overflow-x; the `fill` box scrolls; measured in M0                      |
-| No context (a `RowSubject` without `context`)                  | Name only, as today (`page-archetypes.test.tsx:375-379`)                                     |
-| Draft badge                                                    | Never separated from the name onto the context's line                                        |
-| One-column layout (< 72rem grid)                               | Boxes size to content (ADR-0182); taller rows lengthen the page scroll, nothing clips        |
-| Two-column layout, capped box                                  | Body scrolls (already a tab stop, `SectionCard fill`); the count in the header is unchanged  |
-| Coarse pointer                                                 | Unaffected: the link is a text target and a wrapped name makes it larger (ADR-0183 D4 n/a)   |
+| Case                                                           | Expected                                                                                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Everything fits                                                | One line; height identical to today (SC-3)                                                             |
+| Context does not fit beside the name                           | Context on line 2, whole                                                                               |
+| Name alone wider than the column                               | Name wraps; badge follows its last word; context below                                                 |
+| One unbroken token (e.g. a 60-char code) wider than the column | Breaks anywhere (`wrap-anywhere`, already on `rowLinkClass`, `list-row.tsx:16`); no overflow           |
+| 200-char name, project and client (DTO maxima)                 | Wraps to N lines, no overflow-x; the `fill` box scrolls; measured in M0                                |
+| No context (a `RowSubject` without `context`)                  | Name only, as today (`page-archetypes.test.tsx:375-379`)                                               |
+| Draft badge                                                    | Never separated from the name onto the context's line; may start the name's last line alone (accepted) |
+| Subject wraps, row has a trailing fact                         | Trailing fact on the name's first line (first baseline); the second line runs under the name only      |
+| Rows of different heights in one box                           | Accepted (ragged); each row is as tall as its own text                                                 |
+| One-column layout (< 72rem grid)                               | Boxes size to content (ADR-0182); taller rows lengthen the page scroll, nothing clips                  |
+| Two-column layout, capped box                                  | Body scrolls (already a tab stop, `SectionCard fill`); the count in the header is unchanged            |
+| Coarse pointer                                                 | Unaffected: the link is a text target and a wrapped name makes it larger (ADR-0183 D4 n/a)             |
 
 ### Permissions
 
@@ -226,17 +288,17 @@ None. No input.
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes                                                                                                                                                             |
-| -------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | low    | `RowSubject` only (`list-row.tsx:18-60`): class string, item grouping, docblock. Props unchanged. No consumer edit is required; one consumer test may gain a case |
-| Backend        | none   | —                                                                                                                                                                 |
-| Database       | none   | No schema change, so database-architect is not engaged (no model, column, index or migration)                                                                     |
-| API            | none   | —                                                                                                                                                                 |
-| Security       | none   | Render-only of already-authorised data                                                                                                                            |
-| Performance    | low    | Wrapped text costs no JS; no measurement, `ResizeObserver` or re-render is added. Page height grows in one column (§3.3)                                          |
-| Infrastructure | none   | No new Playwright config or CI step: `e2e-overview` exists                                                                                                        |
-| Observability  | none   | —                                                                                                                                                                 |
-| Testing        | med    | Unit: replace the class-string test with a structural contract. Harness: fix the blind spot (SC-2). Journey: SC-1 on a long name at two widths                    |
+| Area           | Impact | Notes                                                                                                                                                                                                                                                  |
+| -------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frontend       | low    | `RowSubject` (`list-row.tsx:18-60`): classes, grouping, sr-only separator, `data-row-subject`, docblocks; props unchanged. `ListRow`: one **additive** `align` prop, default unchanged. Two consumers: drop a dead `shrink-0`, pass `align="baseline"` |
+| Backend        | none   | —                                                                                                                                                                                                                                                      |
+| Database       | none   | No schema change, so database-architect is not engaged (no model, column, index or migration)                                                                                                                                                          |
+| API            | none   | —                                                                                                                                                                                                                                                      |
+| Security       | none   | Render-only of already-authorised data                                                                                                                                                                                                                 |
+| Performance    | low    | Wrapped text costs no JS; no measurement, `ResizeObserver` or re-render is added. Page height grows in one column (§3.3)                                                                                                                               |
+| Infrastructure | none   | No new Playwright config or CI step: `e2e-overview` exists                                                                                                                                                                                             |
+| Observability  | none   | —                                                                                                                                                                                                                                                      |
+| Testing        | med    | Weight on the probe and the journey (real layout). Unit: a structural **tripwire** only (jsdom lays nothing out). Harness: the `Range` probe with before/after controls (SC-2). SC-6/SC-8 injections                                                   |
 
 **The CPM engine is not imported** and `computeSchedule` is unreachable from anything here, so the
 recalc parity gate holds by construction.
@@ -251,8 +313,9 @@ recalc parity gate holds by construction.
 | Unit tests              | `page-archetypes.test.tsx:363-396`  | —     | —                                 |
 | Barrel                  | `components/ui/page/index.ts:27,30` | —     | —                                 |
 
-No other screen uses it. `ListRow` (also used by `NeedsAttentionSection` and
-`features/staff/ui/status-summary.tsx`) is **not** changed.
+No other screen uses it. `ListRow` is also used by `NeedsAttentionSection` (no trailing) and
+`features/staff/ui/status-summary.tsx:109-122` (a two-line primary with a trailing verdict badge,
+centred today). Its change is **additive and default-off** (§4.6), so neither of those moves.
 
 ### 3.2 What I could not measure in this run, and why
 
@@ -293,7 +356,7 @@ flowchart LR
     RC[RecentlyChangedRow]
   end
   subgraph ui["components/ui/page"]
-    LR[ListRow<br/>unchanged]
+    LR[ListRow<br/>+ align prop, default unchanged]
     RS[RowSubject<br/>CHANGED: wraps, never clips]
   end
   JB --> LR
@@ -318,7 +381,7 @@ sequenceDiagram
   API->>Q: planName, projectName, clientName, status
   Q->>S: rows
   S->>R: name (Link), badge, context "project · client"
-  R-->>S: one flex line that wraps at word boundaries
+  R-->>S: one flex line that wraps between groups, then at words
 ```
 
 ### 4.3 User flow
@@ -328,8 +391,8 @@ flowchart TD
   A[Open organisation landing] --> B{name + badge + context fit the row?}
   B -- yes --> C[One line, today's height]
   B -- no --> D{name + badge fit?}
-  D -- yes --> E[Line 1: name + badge<br/>Line 2: project · client, whole]
-  D -- no --> F[Name wraps over lines; badge after its last word<br/>context on the next line, whole]
+  D -- yes --> E[Line 1: name + badge, trailing fact on this line<br/>Line 2: project · client, muted text-sm, whole]
+  D -- no --> F[Name wraps over lines; badge after its last word, possibly alone<br/>context on the next line, whole; trailing fact on line 1]
   C --> G[Read; press the name to open the plan]
   E --> G
   F --> G
@@ -345,9 +408,8 @@ None.
 
 ### 4.6 Component changes — the exact contract
 
-**Props: unchanged** (`name: ReactNode`, `context?: ReactNode`, `badge?: ReactNode`). No consumer
-edit is required. What changes is the **behavioural contract**, which is the public contract
-ADR-0105 means:
+**Props: unchanged** (`name: ReactNode`, `context?: ReactNode`, `badge?: ReactNode`). What changes is
+the **behavioural contract**, which is the public contract ADR-0105 means:
 
 | Clause                    | Today (`list-row.tsx:25-48`)                                | After                                                                                                         |
 | ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -356,45 +418,96 @@ ADR-0105 means:
 | Where text breaks         | n/a                                                         | Between the name group and the context first; then at word boundaries; anywhere only for an unbreakable token |
 | Badge                     | A sibling flex item between name and context                | Part of the name group, after the name's last word; never on the context's line alone                         |
 | Height                    | Fixed at one line                                           | `base + extra lines`; identical to today when it fits (SC-3)                                                  |
-| Reading order / semantics | name, badge, context; one `<p>`                             | Unchanged                                                                                                     |
+| Reading order / semantics | name, badge, context; one `<p>`                             | Unchanged order; one `<p>`; a visually hidden ", " before the context when present; visual order = DOM order  |
+| Hook                      | none                                                        | `data-row-subject` on the `<p>` (inert; the probe's and journey's selector — added in M0, see plan)           |
 
-Shape of the markup (described, not written — the builder writes it): the `<p>` becomes a wrapping
-flex line aligned on the first baseline with a row gap; child 1 is a span holding the name and, inline
-after it, the badge; child 2 is the muted `text-sm` context span. Both children keep `min-w-0` so a
-child wider than the line shrinks to it and wraps inside. Tokens and spacing steps only: the sizing
-ratchet in `token-architecture.test.ts` refuses arbitrary values (`m9-density-design.md:199-201`).
+**Shape of the markup** (described, not written — the builder writes it):
 
-The `context` prop docblock ("the first thing to be truncated away", `list-row.tsx:25`) and the
-component docblock (`:31-49`) are rewritten to state the new rule, why M9 D1 is reversed, and that the
-old "name survives" claim was false (with the arithmetic).
+- The `<p>` is `flex flex-wrap items-baseline gap-x-2 gap-y-0 min-w-0`. **`gap-y-0` is deliberate:**
+  a vertical gap would make a wrapped row taller than "one more line", breaking SC-4's `base + k ×
+line` and adding height SC-3/SC-5 would have to pay for. The second line's spacing is the context's
+  own `text-sm` line-height and nothing else.
+- Child 1, the **name group**: a `min-w-0` span holding the name, then — **only when `badge` is
+  given** — a single collapsible space text node followed by the badge, inline. The space is the
+  name-to-badge spacing: it is a word-space, so it disappears at a line break and never indents a line
+  the badge starts. No margin utility on the badge (a margin would indent a wrapped line). When no
+  badge is given, nothing is rendered after the name (the existing "renders nothing for the context"
+  case keeps `textContent === 'Tower B'`).
+- Child 2, the **context** (only when `context` is given): a visually hidden ", " (`sr-only`), then
+  the muted `text-sm` span exactly as today's colour and size (`text-muted-foreground text-sm`), with
+  `min-w-0` and no truncation. **The second line is this span**: muted, `text-sm`, starting at the
+  row's left edge under the name, wrapping at words.
+- Both children keep `min-w-0` so a child wider than the line shrinks to it and wraps inside.
+- Forbidden on the subject and its children: `truncate`, `text-ellipsis`, `whitespace-nowrap`,
+  `overflow-hidden`, `line-clamp-*`, `order-*`, `flex-row-reverse`, `flex-wrap-reverse`.
+- Tokens and spacing steps only: the sizing ratchet in `token-architecture.test.ts` refuses arbitrary
+  values (`m9-density-design.md:199-201`).
 
-States: loading is `ListRowSkeleton` (two bars), which a wrapped row now resembles more closely than
-today's one-line row does. Empty and error states are the sections', untouched.
+**Where the trailing fact sits when the subject wraps — first-baseline aligned, on the name's line.**
+`ListRow` today is `items-center` (`list-row.tsx:90`), which on a wrapped row floats "Ada Lovelace · 3
+hours ago" or "Finishes 13 Feb 2026" between the two lines, belonging to neither. `ListRow` gains an
+**additive** prop `align?: 'center' | 'baseline'`, default `'center'` (so `NeedsAttentionSection` and
+the staff `status-summary` are unchanged); `'baseline'` emits `items-baseline`, which aligns the
+trailing text to the **first** baseline of the primary block — the name's line. The two consumers with
+a trailing fact (`RecentlyChangedRow`, `PlanStandingRow`) pass `align="baseline"`. **Visible side
+effect, accepted and photographed in M0-T3:** "Where the work stands" rows are already multi-line (the
+movement sentence, flags), so their finish date moves from the row's middle to the name's line even
+where the subject fits. Row heights do not change (SC-3 is unaffected).
+
+**Docblocks.** The `context` prop ("Muted, and the first thing to be truncated away",
+`list-row.tsx:25`), the `badge` prop ("Never shrinks", `:27` — it is now in the name group and the
+phrase describes the removed flex item), and the component docblock (`:31-49`) are rewritten: the new
+rule, why M9 D1 is reversed, and that the old "name survives" claim was false (with the arithmetic).
+
+**Consumer clean-up.** The callers' `className="shrink-0"` on the Draft badge
+(`PlanStandingRow.tsx:78`, `RecentlyChangedRow.tsx:89`) is dead once the badge is not a flex item, and
+is removed so it does not read as a contract it no longer has.
+
+**States.** Loading is `ListRowSkeleton`, **unchanged and out of scope**: it is two bars
+(`list-row.tsx:120-123`) and did not match today's one-line settled row either, so this change neither
+creates nor fixes that mismatch. Empty and error states are the sections', untouched.
 
 ### 4.7 Implementation approach & alternatives
 
 **Recommended — C: wrap on demand.** It is the only option that satisfies both halves of the complaint
-(name and context) with no JavaScript, it keeps M9's 20 px wherever the content fits, and it is what
-ADR-0146 D3 already decided for table columns ("wraps rather than truncating, because a truncated name
-is a name the reader cannot read") and D4 decided for facts ("a fact belongs under its row").
+(name and context) with no JavaScript, and it keeps M9's 20 px wherever the content fits. It
+**extends** two existing decisions to list rows rather than citing them as already covering this:
+ADR-0146 D3 decided "wraps rather than truncating, because a truncated name is a name the reader
+cannot read" for **table columns** (`Column.width: 'bounded'`), and D4 decided "a fact about a row
+belongs under that row" for the audit log and Recently deleted. Neither reached `RowSubject`, which
+was designed one day earlier (M9 D1, 2026-09-16) on the opposite rule — so ADR-0184 states the
+extension explicitly.
 
-| Option                                                        | Name clipped? | Context clipped? | Height                      | JS  | Verdict                                                                                                                       |
-| ------------------------------------------------------------- | ------------- | ---------------- | --------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------- |
-| A. Status quo + `title` tooltip                               | yes           | yes              | 1 line                      | no  | **Rejected**: `title` is invisible to keyboard and touch (`docs/UX_STANDARDS.md` §6, cited at `RecentlyChangedRow.tsx:13-15`) |
-| B. Always two lines (revert M9 D1)                            | no\*          | no\*             | +20 px every row            | no  | Rejected: pays the cost on rows that fit (1280, 1440 one-column); \*still needs wrapping to be clip-free                      |
-| **C. Wrap on demand**                                         | **no**        | **no**           | +20 px only where needed    | no  | **Recommended**                                                                                                               |
-| D. One line, name `shrink-0` (wraps), context alone truncates | no            | **yes**          | 1 line (more if name wraps) | no  | Fallback if CQ-1 says height wins. Leaves "EDF - Hynamics Propo…"'s project/client cut                                        |
-| E. Middle truncation (`Dockside Reg…de Estates`)              | yes           | yes              | 1 line                      | yes | Rejected: still loses text, needs measurement on every resize, and is new machinery for a worse outcome                       |
-| F. Drop the client first, then the project, whole words       | no            | drops whole      | 1 line                      | yes | Rejected: a `ResizeObserver` per row and facts silently absent; ADR-0127 "count what you do not draw" would demand a marker   |
-| G. Wider columns / later split                                | yes           | yes              | —                           | no  | Rejected by #472 itself and ADR-0182 D2: the 732 px layout already fails                                                      |
+| Option                                                                          | Name clipped? | Context clipped? | Height                       | JS  | Verdict                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ------------- | ---------------- | ---------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Status quo + `title` tooltip                                                 | yes           | yes              | 1 line                       | no  | **Rejected**: `title` is invisible to keyboard and touch (`docs/UX_STANDARDS.md` §6, cited at `RecentlyChangedRow.tsx:13-15`)                                                                                                               |
+| B. Always two lines (revert M9 D1)                                              | no\*          | no\*             | +20 px every row             | no  | Rejected: pays the cost on rows that fit (1280, 1440 one-column); \*still needs wrapping to be clip-free                                                                                                                                    |
+| **C. Wrap on demand**                                                           | **no**        | **no**           | +20 px only where needed     | no  | **Recommended**                                                                                                                                                                                                                             |
+| D. One line, name `shrink-0` (wraps), context alone truncates                   | no            | **yes**          | 1 line (more if name wraps)  | no  | Fallback if CQ-1 says height wins. Leaves "EDF - Hynamics Propo…"'s project/client cut                                                                                                                                                      |
+| A2. `useTooltip` on the name link (`tooltip.tsx:163`), `purpose: 'description'` | yes           | yes              | 1 line                       | yes | Rejected: meets 1.4.13, but the context is not focusable so only the link can carry it; it costs one hover/focus/500 ms long-press **per row**, which defeats scanning a list — the use case                                                |
+| A3. A disclosure/popover per row showing the full subject                       | yes           | yes              | 1 line                       | yes | Rejected: an extra control and tab stop on every row (US-3), and the same one-action-per-row cost                                                                                                                                           |
+| B2. Two lines for every row in a box when any row needs it                      | no            | no               | +20 px every row in that box | yes | Rejected: buys uniform height with JS or a container measurement, and charges rows that fit. Ragged heights accepted instead                                                                                                                |
+| E. Middle truncation (`Dockside Reg…de Estates`)                                | yes           | yes              | 1 line                       | yes | Rejected: still loses text; removes the **middle**, which is exactly where plans sharing a prefix and suffix differ, and breaks reading left to right, so the reader cannot scan the prefix and continue; needs measurement on every resize |
+| F. Drop the client first, then the project, whole words                         | no            | drops whole      | 1 line                       | yes | Rejected: a `ResizeObserver` per row and facts silently absent; ADR-0127 "count what you do not draw" would demand a marker                                                                                                                 |
+| G. Wider columns / later split                                                  | yes           | yes              | —                            | no  | Rejected by #472 itself and ADR-0182 D2: the 732 px layout already fails                                                                                                                                                                    |
 
-**WCAG.** Today's truncation is treated here as a usability defect rather than a clear AA failure:
-the full text is in the DOM (the link's accessible name is whole) and one activation away. That
-reading of 1.4.10 is **not verified against the Understanding text in this analysis**, and nothing
-in the decision depends on it — the accessibility-reviewer pass in M2 states the verdict. The remedy
-must not **create** a 1.4.10 or 1.4.4 failure, and C
-cannot: it removes `nowrap`, so the only horizontal-overflow risk is an unbreakable token, which
-`wrap-anywhere` already handles. SC-6 measures it.
+**WCAG, as read on 2026-10-09 (not from memory).** Understanding 1.4.10 lists as an acceptable
+pattern "The content is presented as truncated, but a link is provided to a web page where the
+content is fully visible". The name is such a link, so at the reflow width today's row is arguably
+conforming for 1.4.10. Failure **F69** (1.4.4) is "…resizing visually rendered text up to 200 percent
+causes the text, image or controls to be clipped, truncated or obscured", and F69 states no
+link-to-full-content exception; today's row truncates more at 200 %, which is F69's shape.
+**accessibility-reviewer gives the verdict on today's tree in M2**; the design does not depend on it,
+because C removes the truncation either way. The remedy must not **create** a 1.4.10, 1.4.4 or 1.4.12
+failure, and C cannot on its own: it removes `nowrap`, so the only horizontal-overflow risk is an
+unbreakable token, which `wrap-anywhere` already handles. The one place it could is `ListRow`'s
+`shrink-0` trailing block squeezing the name at 320 px or 200 % — SC-6's ~12-character clause
+measures exactly that, and brings `ListRow` into scope if it fails. SC-6 and SC-8 measure the rest.
+
+**Screen-reader reading.** Today the name, the badge and the context are read with no boundary
+between name and project ("…programme Draft Dockside Regeneration · Harbourside Estates"). C fixes it
+with the `sr-only` ", " (§4.6), rather than recording it as a limitation, because it costs nothing and
+is the component's own text.
 
 **Row-height ADRs.** ADR-0151 (canvas lane pitch) and ADR-0121 (resource-strip cap) govern the
 diagram's rows and do not reach `ListRow`, whose docblock states it is "deliberately not a fixed
@@ -406,12 +519,17 @@ is a text target and only grows. The binding height constraint is M9's box budge
 - _Context:_ M9 D1 merged subject and context into one line for 20 px; its "the name survives" claim
   was false (flex-shrink scales by base size); the product owner reported names cut at 1912; the
   measuring harness could not see names.
-- _Decision:_ D1 `RowSubject` never truncates; D2 one line when it fits, the context moves under the
-  name when it does not; D3 the badge belongs to the name; D4 the harness counts clipping on every
-  element of a subject, with a non-vacuity control.
-- _Alternatives:_ A–G above.
-- _Consequences:_ two-column rows mostly two-line at 1477–1912; SC-5's reading; the class-string test
-  replaced; `docs/COMPONENT_LIBRARY.md` / `DESIGN_SYSTEM.md` row guidance updated.
+- _Decision:_ D1 `RowSubject` never truncates (extending ADR-0146 D3 from table columns to list
+  rows); D2 one line when it fits, the context moves under the name when it does not (extending D4),
+  with no vertical gap; D3 the badge belongs to the name group, and may start the name's last line;
+  D4 a wrapped row's trailing fact sits on the name's first baseline (`ListRow align="baseline"`,
+  additive); D5 clipping is measured from `Range.getClientRects()` against the clipping ancestor and
+  the viewport, with a positive control before and after — never from an inline box's `scrollWidth`.
+- _Alternatives:_ A–G above, including the tooltip, popover, box-uniform and middle-ellipsis options.
+- _Consequences:_ two-column rows mostly two-line at 1477–1912; ragged heights in a box; SC-5's
+  reading and its named remedies (floor, rebalance; never clamp); the class-string test replaced by a
+  tripwire, with the journey as the real check; `docs/COMPONENT_LIBRARY.md` / `DESIGN_SYSTEM.md` row
+  guidance updated.
 - One line in CLAUDE.md §16 (`check:adr-coverage`).
 
 ## 5. Links
@@ -419,5 +537,22 @@ is a text target and only grows. The binding height constraint is M9's box budge
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Related docs updated by this change: `docs/TECH_DEBT.md` #472 (closed by M2), ADR-0184 (new),
   CLAUDE.md §16 (one line), `docs/specs/organisation-landing-portfolio/m9-density-design.md` (a dated
-  note under D1 pointing at ADR-0184 — recorded, not edited), `docs/DESIGN_SYSTEM.md` /
-  `docs/COMPONENT_LIBRARY.md` wherever row truncation is described (M2-T2 greps for it).
+  note under D1 pointing at ADR-0184 — recorded, not edited), `docs/DESIGN_SYSTEM.md` and
+  `docs/COMPONENT_LIBRARY.md` (the `RowSubject` / `ListRow` entries and any row-truncation guidance;
+  plan task M1-T3).
+
+## 6. Review record (2026-10-09, folded into this draft)
+
+- **UX:** CQ-1 is answered on photographs of an uncommitted prototype (M0-T3); the second line, gaps
+  and trailing alignment are specified (§4.6); ragged heights accepted; box-uniform, tooltip, popover
+  and middle-ellipsis alternatives added; SC-5 has named remedies; the ADR-0146 relation is stated as
+  an extension; the badge-alone case and the 200-character fallback are decided.
+- **Accessibility:** the probe uses `Range.getClientRects()` against the clipping ancestor and the
+  viewport, with before and after positive controls, and backs SC-7; SC-8 (1.4.12) added; SC-6 says
+  how 200 % and reflow are produced and adds the fill-body and ~12-character clauses; F69 and
+  Understanding 1.4.10 quoted as read; reading order asserted from rects; reorder utilities forbidden;
+  the run-on is fixed with an `sr-only` separator.
+- **Component:** `gap-x-2 gap-y-0`; conditional name-to-badge spacing; the unit test demoted to a
+  tripwire; dead `shrink-0` on two callers and the "Never shrinks" docblock removed; the
+  `data-row-subject` contradiction resolved (an inert attribute in M0, stated as M0's one product
+  edit); the skeleton sentence qualified; COMPONENT_LIBRARY.md and DESIGN_SYSTEM.md in M1-T3.
