@@ -108,6 +108,8 @@ interface ColumnReading {
   canvas: number;
 }
 
+// `parentElement` of the panel is the shell grid's column slot (the panel is its direct child), which
+// is what the stage's gain from folding is measured against.
 async function readColumn(page: Page): Promise<ColumnReading> {
   return page.evaluate(() => {
     const panel = document.querySelector('[data-panel-border]');

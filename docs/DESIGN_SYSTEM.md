@@ -671,7 +671,7 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   out among three floating-panel controls (`docs/TECH_DEBT.md` #153, amending ADR-0100).
   **`icon-sm` (28px, both pointers) is ADR-0118 §D1's second named exception**, for a
   control inside a container whose height is fixed independently of it — a virtualized
-  row, a fixed-width spine. Do not reach for it to make something compact. **The Gantt's
+  row. Do not reach for it to make something compact. **The Gantt's
   grid carries four further named coarse exceptions** (the `⋯`, the summary-row arrow, the sort
   headers, an open cell input — ADR-0177 D4), each marked `data-gantt-coarse-exempt` and swept as
   such by `e2e-workspace-fit`.
