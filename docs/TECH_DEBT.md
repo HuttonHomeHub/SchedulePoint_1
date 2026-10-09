@@ -10346,6 +10346,8 @@ to three sentences and a trailing fact, and at 464 px the trailing fact is takin
 comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
 roughly 768–1400 px wide.
 
+**Fix in review (2026-10-09, `docs/specs/landing-two-columns/`, ADR-0182):** `PageGrid` splits on its own width at 72rem for all three consumers. This row stays open until that lands and M2's after-reading closes it. The subtitle half of this complaint is not a width defect (#471).
+
 ### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
 
 > _Restored by the 2026-10-05 reconciliation pass. #336, #338 and #340 were all deleted by
@@ -11902,3 +11904,39 @@ and its facts outlet is bounded (the facts no longer push Recalculate off the ri
 320 × 720**, taller than the **109 px** body: the canvas row has no height, a dock opened there is 0 px tall, and Expand
 sits 10 px below the viewport (its centre is reachable). The journey reads docks at 320 × 1000 for that reason
 (body 397, canvas row 274).
+
+### 472. A list row's `project · client` subtitle is truncated mid-word at every width, 1912 included
+
+**Status:** open · **Verified:** 2026-10-09 (`docs/specs/landing-two-columns/m0-measurement.md` §3: `Dockside Regeneration · Harbourside Estates` shows 258 of 284 px in "Recently changed" and 267 of 284 in "Where the work stands" at 1912 × 948, 732 px tracks; `list-row.tsx:50-58`)
+**Raised:** 2026-10-09 (landing-two-columns M0) · **Size:** S · **Owner:** web
+
+`RowSubject` puts name, badge and context on one line and the context is `shrink-[3] truncate`, so beside a `Draft` badge and a trailing actor and time the subtitle loses its tail even on the widest
+layout the product owner uses. #333's "subtitle truncates mid-word at 1280" is therefore not a column-width defect: it is the same at 732 px. The split threshold work (ADR-0182) dropped the subtitle clause of its
+SC-6 for that reason. **Next:** its own spec, since `RowSubject` is a shared component's public contract (ADR-0105): give the context more of the line, or move it under the name. Do not widen columns to chase it.
+**Trigger:** the next change to `list-row.tsx`, or a device reading that cannot identify a plan by its subtitle.
+
+### 473. The Explorer's splitter wrapper fails axe `region` in every state
+
+**Status:** open · **Verified:** 2026-10-09 (`overview.spec.ts` step 5b2 with `region` enabled: one node, `div[data-surface="panel"].contents` from `explorer-column.tsx:128-130`)
+**Raised:** 2026-10-09 · **Size:** S · **Owner:** web
+
+The `contents` surface around `PanelResizer` sits outside every landmark, so the separator is "page content not contained by landmarks". `region` is a best-practice rule and is off in the repository's axe runs, so nothing
+has reported it. The overview journey filters exactly that one target and fails on any other `region` finding. **Next:** put the splitter inside the Explorer's landmark or give it one; delete the filter.
+Shared shell keyboard/landmark change, so accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `explorer-column.tsx`.
+
+### 474. `SectionCard fill` body is a tab stop whether or not it scrolls, and has no focus ring
+
+**Status:** open · **Verified:** 2026-10-09 (`section-card.tsx:263` `tabIndex={0}`; `:251` carries no focus ring)
+**Raised:** 2026-10-09 · **Size:** S · **Owner:** web
+
+In one column (below the 72rem split, now reachable across the designed range) the landing's boxes are not height-capped, so each `fill` body is a tab stop that scrolls nothing. Not an AA failure — it is operable and
+inside a named region — but a purposeless stop. **Next:** make `tabIndex` conditional on real overflow and give the body the design-system ring (`focus-visible:ring-ring focus-visible:ring-2`, as `input.tsx:19`).
+A shared-primitive keyboard change: accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `section-card.tsx`.
+
+### 475. Two stale statements found while writing the page-grid spec
+
+**Status:** open · **Verified:** 2026-10-09 (`routes/members.tsx:15-18`; `page-container.tsx:38`; `docs/HANDOFF.md:38`)
+**Raised:** 2026-10-09 · **Size:** S · **Owner:** docs
+
+`routes/members.tsx:15-18` says `PageContainer`'s default is `max-w-6xl`; it is `max-w-screen-2xl` (`page-container.tsx:38`). `docs/HANDOFF.md:38` no longer carries the 1912 × 1114 reading that ADR-0179:53 cites it for
+(the figure survives at `docs/specs/minimum-viewport/feature-spec.md:410`). **Next:** correct both. **Trigger:** the next edit to either file.

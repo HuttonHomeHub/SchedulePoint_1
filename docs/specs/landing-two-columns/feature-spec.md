@@ -18,6 +18,33 @@
 > every viewport breakpoint is blind to the Explorer, which moves the grid's width by up to 386 px at
 > one window size (§3.1). This spec therefore recommends a **container query** instead.
 
+> **Amendment 2026-10-09 — CQ-2 decided: `@6xl` (72rem), for all three consumers.** M0
+> (`m0-measurement.md`) applied SC-6 literally and it could not decide: its second clause (no
+> `project · client` subtitle truncated mid-word) fails at 1912 — the 732 px layout this spec leaves
+> unchanged — so no threshold can satisfy it, and it is **dropped as a threshold test**. The
+> truncation is a pre-existing `RowSubject` defect at every width, filed as `docs/TECH_DEBT.md` #471
+> and not touched here. The clause that does discriminate is the first (a plan name wraps to a second
+> line): it fails at the `@5xl` pair (500/505 px tracks) and passes at 546 and above, so the
+> threshold is **72rem**. Decided by the coordinator under the product owner's delegation ("CQ-2 by
+> the M0 photographs"); he can object. **Wherever this document says `@5xl`, `64rem`, 500 px or 1349,
+> read `@6xl`, `72rem`, 564 px and 1477**, and read the consequences below, which replace §1's
+> outcome table for the landing and Members (Explorer at 276, grid = window − 325):
+>
+> | Window                                                | Landing and Members now                         |
+> | ----------------------------------------------------- | ----------------------------------------------- |
+> | 1024–1476 (incl. 1280, 1366, **1440**)                | **one column**, 699 / 955 / 1033 / 1115 px wide |
+> | 1477 and up (incl. 1646, 1912)                        | two columns, 564 px tracks at the narrowest     |
+> | 1912 (both of the product owner's screens, landscape) | unchanged, 732 px tracks                        |
+>
+> **The honest cost: a 1440 laptop, which `@5xl` would have left in two 546 px columns, now gets one
+> 1115 px column** — the width ADR-0098 narrowed rows away from (ADR-0146:18 names 1104 as rejected).
+> It was accepted because the alternative leaves names wrapping at 500–505 px tracks. The staff
+> console, with no Explorer, splits from a **1200 px** window (grid = window − 48), so it changes in
+> 1024–1199 rather than 1024–1071 (still derived, not measured). The Explorer folded gives two
+> columns again from a 1245 window (grid = window − 93); at 420 a window must reach about 1621. SC-1 asserts four distinct
+> tops at 1280 × 800 and two at 1600 × 1000 (grid 1275, unchanged); SC-3's "1440 × 900 with the
+> Explorer at 420" is one column as before, and its fold case at 1280 is two columns (grid 1187).
+
 ## 1. Business understanding
 
 ### Problem

@@ -357,6 +357,8 @@ None of these is committed by this plan. Each needs its own spec under ADR-0105.
   - **Trigger:** M4 has landed, or the next defect found only in the single-pane layout.
 - **Landing two columns from `xl`, not `md`** (#333). This changes the shared `PageGrid`.
   - **Trigger:** M4 has landed, or the next report that the landing is cramped at 1024–1280.
+  - **Taken 2026-10-09** as `docs/specs/landing-two-columns/` (ADR-0182): a container split at 72rem,
+    not `xl`, because `xl` is 1280 inclusive and does not fix 1280.
 - **Optional:** a Gantt default grid width chosen at 1024 (#437); migrating the
   `ActivityEditorSession.tsx:677` and `plan-workspace-toolbar.tsx:156` literals to the breakpoints
   module; one per-device preference hook unifying `useFirstUseHint`, the Explorer and column-width

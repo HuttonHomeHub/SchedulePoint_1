@@ -110,3 +110,13 @@ Per the brief, **M1 has not started**. Options for the product owner:
 The one conclusion the data supports without choosing: **the container-query mechanism (SC-3) is
 still right** — the Explorer swing is visible in the table (a 1280 window gives a 1187 grid folded
 and an 811 grid at 420; a 1440 window gives 1347 and 971), and a viewport query cannot see it.
+
+## 5. Decision (2026-10-09)
+
+Option (a) was taken by the coordinator under the product owner's delegation ("CQ-2 by M0
+photographs"): the name-wrap clause is the operative test and the threshold is **`@6xl` (72rem) for
+the landing, Members and the staff console**. The subtitle clause fails at the 1912 baseline, so it
+cannot discriminate and is dropped as a threshold test; the truncation is a pre-existing `RowSubject`
+defect at every width (`docs/TECH_DEBT.md` #471, its own spec, `RowSubject` untouched here). The
+product owner can object. Consequence stated without softening: a 1440 laptop gets one 1115 px
+column. The spec carries a dated amendment; ADR-0182 states the amended rule.
