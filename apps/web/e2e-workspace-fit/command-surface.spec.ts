@@ -90,6 +90,73 @@ async function assertExplorerUsableAtFloor(page: Page): Promise<void> {
   });
 }
 
+/**
+ * **The collapsed spine** (dense-row-touch-targets M3; `m0-measurement.md` §3). Its width is a
+ * CSS class that follows what it holds — a destination link, its wrapper's `p-1` and the column's
+ * border — and these are the widths that arithmetic gives: 36 + 8 + 1 for a mouse, 44 + 8 + 1 for
+ * a finger. The mouse figure is a fix, not a feature: the old 34 px spine held 36 px links in a
+ * 44 px wrapper and overflowed by 6 px (`scrollWidth` 39 against `clientWidth` 33, measured with
+ * a mouse), so M3 widens it to the width it needs.
+ */
+const SPINE_FINE_WIDTH = 45;
+const SPINE_COARSE_WIDTH = 53;
+
+interface ColumnReading {
+  /** The column's slot in the shell grid: panel plus splitter when expanded, the spine when not. */
+  column: number;
+  stage: number;
+  canvas: number;
+}
+
+async function readColumn(page: Page): Promise<ColumnReading> {
+  return page.evaluate(() => {
+    const panel = document.querySelector('[data-panel-border]');
+    if (!panel?.parentElement) throw new Error('no Project Explorer column is painted');
+    const main = document.querySelector('main');
+    const canvas = main?.querySelector('canvas');
+    if (!main || !canvas) throw new Error('the stage or its canvas is not painted');
+    return {
+      column: panel.parentElement.getBoundingClientRect().width,
+      stage: main.getBoundingClientRect().width,
+      canvas: canvas.getBoundingClientRect().width,
+    };
+  });
+}
+
+/** Fold the Explorer to its spine and read it; leaves the spine showing. */
+async function foldToSpine(page: Page): Promise<{
+  expanded: ColumnReading;
+  collapsed: ColumnReading;
+  panel: { width: number; scrollWidth: number; clientWidth: number };
+  outside: string[];
+}> {
+  const show = page.getByRole('button', { name: 'Show Project Explorer' });
+  if (await show.isVisible()) await show.click();
+  await page.getByRole('button', { name: 'Hide Project Explorer' }).waitFor();
+  const expanded = await readColumn(page);
+  await page.getByRole('button', { name: 'Hide Project Explorer' }).click();
+  await show.waitFor();
+  const collapsed = await readColumn(page);
+  const reading = await page.evaluate(() => {
+    const panel = document.querySelector('[data-panel-border]') as HTMLElement;
+    const p = panel.getBoundingClientRect();
+    const outside: string[] = [];
+    for (const control of panel.querySelectorAll('button, a')) {
+      const r = control.getBoundingClientRect();
+      // The 1 px border is the panel's own; a control may not reach into it.
+      if (r.left < p.left - 0.5 || r.right > p.right - 1 + 0.5)
+        outside.push(
+          `${control.getAttribute('aria-label') ?? control.tagName}: ${r.left}..${r.right}`,
+        );
+    }
+    return {
+      panel: { width: p.width, scrollWidth: panel.scrollWidth, clientWidth: panel.clientWidth },
+      outside,
+    };
+  });
+  return { expanded, collapsed, ...reading };
+}
+
 /** WCAG 2.2 §2.5.8's floor, in CSS px. */
 const MIN_TARGET = 24;
 
@@ -1640,5 +1707,123 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     await page.evaluate((key) => localStorage.removeItem(key), KEY);
     await page.reload();
     await ensurePen(page);
+  });
+  /**
+   * **The collapsed spine holds its controls at 44 and holds the stage to the spine's growth**
+   * (dense-row-touch-targets M3). Folding the Explorer gains the stage the column's width less the
+   * spine's, so the 19 px a coarse spine costs over the old 34 is the stage's whole loss: the
+   * expanded and collapsed readings are taken in the same state and must differ by exactly
+   * `expanded column − spine`. The overflow check is the same one the fine path is held to.
+   */
+  test('the collapsed spine clears 44 × 44 inside its own box and costs the stage only its width', async () => {
+    test.setTimeout(120_000);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(pointer, 'this context did not report a coarse pointer').toBe('coarse');
+    await showView('tsld');
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const { expanded, collapsed, panel, outside } = await foldToSpine(page);
+      const at = `at ${viewport.width}`;
+      expect(collapsed.column, `the coarse spine's column ${at}`).toBe(SPINE_COARSE_WIDTH);
+      expect(panel.scrollWidth, `the spine overflows its box ${at}`).toBeLessThanOrEqual(
+        panel.clientWidth,
+      );
+      expect(outside, `a spine control lies outside the spine ${at}`).toEqual([]);
+      expect(collapsed.stage - expanded.stage, `the stage's gain from folding ${at}`).toBe(
+        expanded.column - collapsed.column,
+      );
+      expect(collapsed.canvas - expanded.canvas, `the canvas's gain from folding ${at}`).toBe(
+        expanded.column - collapsed.column,
+      );
+      const targets = await sweep(page, '[data-panel-border]');
+      expect(
+        targets.length,
+        `the spine sweeps its button and six links ${at}`,
+      ).toBeGreaterThanOrEqual(7);
+      const belowHouse = targets.filter(
+        (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+      );
+      expect(
+        belowHouse,
+        `the spine: below the house rule ${at}: ${JSON.stringify(belowHouse)}`,
+      ).toEqual([]);
+      const unreachable = targets.filter((t) => !t.visible || !t.reachable);
+      expect(unreachable, `the spine: not reachable ${at}: ${JSON.stringify(unreachable)}`).toEqual(
+        [],
+      );
+      await page.getByRole('button', { name: 'Show Project Explorer' }).click();
+      await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
+    }
+  });
+});
+
+test.describe('The collapsed spine, under a mouse', () => {
+  let page: Page;
+  let context: BrowserContext;
+
+  test.beforeAll(async ({ browser }) => {
+    context = await browser.newContext({ viewport: { width: 1912, height: 948 } });
+    await acknowledgeViewportNotice(context);
+    page = await context.newPage();
+    await onboard(page, Date.now() + 11);
+    await createHierarchy(page);
+    await newPlan(page, 'Riverside Quarter — Mouse');
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  /**
+   * **A mouse's spine holds its links, and the stage changes only by that fix**
+   * (dense-row-touch-targets M3, `m0-measurement.md` P4). The 34 px spine overflowed (`scrollWidth`
+   * 39 against `clientWidth` 33); it is 45 now, the width its 36 px links need. That is the epic's
+   * one mouse-visible change and a defect fix, so the stage's gain from folding is still exactly
+   * the column less the spine, and the controls keep their fine size (36), which proves the touch
+   * rule did not leak onto a mouse.
+   */
+  test('the collapsed spine holds its links and costs the stage only its width', async () => {
+    test.setTimeout(120_000);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(pointer, 'this context reported a coarse pointer').toBe('fine');
+    for (const viewport of [
+      { width: 1912, height: 948 },
+      { width: 1024, height: 600 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const { expanded, collapsed, panel, outside } = await foldToSpine(page);
+      const at = `at ${viewport.width}`;
+      expect(collapsed.column, `the fine spine's column ${at}`).toBe(SPINE_FINE_WIDTH);
+      expect(panel.scrollWidth, `the spine overflows its box ${at}`).toBeLessThanOrEqual(
+        panel.clientWidth,
+      );
+      expect(outside, `a spine control lies outside the spine ${at}`).toEqual([]);
+      expect(collapsed.stage - expanded.stage, `the stage's gain from folding ${at}`).toBe(
+        expanded.column - collapsed.column,
+      );
+      expect(collapsed.canvas - expanded.canvas, `the canvas's gain from folding ${at}`).toBe(
+        expanded.column - collapsed.column,
+      );
+      const links = await page
+        .locator('[data-panel-border] nav[aria-label="Organisation"] a')
+        .evaluateAll((els) =>
+          els.map(
+            (el) =>
+              `${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)}`,
+          ),
+        );
+      expect(links, `a mouse's spine links keep their 36 px size ${at}`).toEqual(
+        Array(6).fill('36x36'),
+      );
+      await page.getByRole('button', { name: 'Show Project Explorer' }).click();
+      await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
+    }
   });
 });

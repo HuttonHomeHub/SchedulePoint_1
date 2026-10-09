@@ -36,3 +36,16 @@ describe('ExplorerColumn splitter', () => {
     expect(explorerCeiling(900)).toBeLessThan(explorerCeiling(1024));
   });
 });
+
+describe('ExplorerColumn spine', () => {
+  it('takes its width from what it holds, and its expand button follows the pointer', () => {
+    localStorage.setItem('schedulepoint-explorer', JSON.stringify({ collapsed: true }));
+    render(<Probe />);
+    const show = screen.getByRole('button', { name: 'Show Project Explorer' });
+    // `w-fit`: the 45 px (mouse) and 53 px (finger) widths are arithmetic over the links, not
+    // constants, so there is nothing to keep in step (measured at e2e-workspace-fit).
+    expect(show.closest('[data-panel-border]')).toHaveClass('w-fit');
+    // `icon-row`, not `icon-sm`: 28 px with a mouse, 44 on touch.
+    expect(show).toHaveClass('pointer-coarse:size-(--control-h)');
+  });
+});
