@@ -1415,6 +1415,10 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       sizes.filter((t) => t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
       `activities table: row menu below ${HOUSE_TARGET} at ${viewport.width} × ${viewport.height} (size only)`,
     ).toEqual([]);
+    // At the floor an expanded panel hides the Gantt ("Gantt hidden. Collapse to return."), and the
+    // next surface in the loop needs it.
+    await page.getByRole('button', { name: 'Collapse activities panel' }).click();
+    await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   }
 
   /**
