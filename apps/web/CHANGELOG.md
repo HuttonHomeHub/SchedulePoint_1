@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.181.0
+
+### Minor Changes
+
+- [#903](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/903) [`2f049d8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2f049d8f11c5ad403c1a80ecad1d7066b3e5b5d3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a touchscreen, the rows in the Project Explorer tree are now 44 px tall, with a 44 px "⋯" button, so they are easier to tap. With a mouse nothing changes. When you attach or detach a keyboard cover the tree keeps the row you were looking at, and keeps focus on the row you were on. The tree shows fewer rows at once on a touch device as a result.
+
+### Patch Changes
+
+- [#901](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/901) [`00708de`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/00708dee76875195df418a161006072029574c6a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a touch screen, the three-dot menu button on each row of the Clients, Projects, Plans, Resources and Calendars tables and of the activities table is now 44 pixels, the same size as the other buttons beside it. Rows in the activities table are a little taller on touch to fit it. With a mouse nothing changes. On a short window, the activities panel now needs a little more height (about 249 pixels, up from 245) before it swaps the diagram out, so it still shows a full row of the taller touch rows.
+
 ## 0.180.0
 
 ### Minor Changes
