@@ -11865,6 +11865,11 @@ reach it. This is **pre-existing** (today's single pane shows 0 rows at 640 × 4
 1024 × 600 design floor (ADR-0179), so retiring the single-pane layout neither causes nor fixes it. The retire-single-pane
 epic **withdrew** its "table keeps a row at 640 × 300 / 360 / 480" criteria for this reason; ADR-0181 records the figures.
 
+**M3 of the toolbar redesign (2026-10-09) shipped the band half on this branch**: below 1024 the deck is one scrolling line
+and a narrow-and-short window scrolls the band away, so Expand and Recalculate are reachable at all five cells on both pointers
+(`docs/specs/toolbar-redesign/m3-measurement.md`). The row stays **open** until that is released and the header's own height at 320
+(184 / 239 px band, 212 / 275 on touch) is decided (M7 closes the band half).
+
 **Needs its own spec** (ADR-0105: a shell layout rule, and a component's public contract if the band or the header
 changes). The levers are the shell's, not the workspace's: let the command band collapse behind a disclosure below a
 height or width, or let the shell scroll as a whole when the window cannot hold its chrome plus the foot row. **Next:**

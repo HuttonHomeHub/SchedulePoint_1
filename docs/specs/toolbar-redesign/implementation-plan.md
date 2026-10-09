@@ -329,6 +329,14 @@ Gantt row menu "Float paths"; "View" at 1024 × 600.
 
 ### Milestone M3: Below 1024, one scrolling line (#471; gate: CQ-3, narrow only)
 
+> **M3 result (2026-10-09), recorded where the plan and the code disagreed** (`m3-measurement.md`). Built as listed, with:
+> `squat` is `(width < 64rem) and (height <= 26rem)` (not `63.99rem`; 26 rem keeps the default 640 × 480 window held);
+> the shell itself scrolls under `squat` (row 3 becomes `100dvh`) rather than the band moving inside `<main>`; the edge
+> fade is a scroll-driven mask, with the half-clipped control as the fallback cue. **Unplanned:** at 320 the M2 "Plan
+> details" toolbar pushed Edit plan details off the window (x = 322), so the app header's section 1 wraps below 26 rem
+> (`xs`); that is why `<main>` starts at 239, not ≤ 200, at 320. **Open for the owner**, and not a stop: SC-5 holds at
+> every cell. Three journeys that assumed a 700 × 900 or 640 × 844 window is a short body were re-sized to 740 px high.
+
 **Outcome:** under `max-lg:` the deck is one line that scrolls sideways. Under `squat` (narrow **and** short) the
 band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 × 768 keep two rows.
 **Entry point:** the "Plan commands" toolbar at 640 × 360.
