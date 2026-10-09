@@ -59,8 +59,8 @@ const EXCEPTIONS = new Map<string, string>([
   [
     'button.tsx::size-7',
     // `Button`'s `icon-sm`, ADR-0118 D1 exception 2: a container whose height is fixed
-    // independently of it — `GanttRowMenu`'s `GANTT_ROW_HEIGHT` is the one meant to stay; the tree
-    // and the spine still sit here until M2/M3 of `docs/specs/dense-row-touch-targets/`. Raising it
+    // independently of it — `GanttRowMenu`'s `GANTT_ROW_HEIGHT` is the one meant to stay; the spine
+    // still sits here until M3 of `docs/specs/dense-row-touch-targets/`. Raising it
     // overflows the row rather than growing it (`docs/TECH_DEBT.md` #215). Tables take `icon-row`.
     "Button's icon-sm — ADR-0118 D1 exception 2, GanttRowMenu's row is fixed elsewhere (GANTT_ROW_HEIGHT)",
   ],
@@ -132,14 +132,13 @@ describe('control heights in the design-system primitives', () => {
     // deleted, because `icon-row`'s string also contains `size-7`. So the variant's consumers are
     // counted at the call sites instead, comments stripped: a new `icon-sm` is a decision made here.
     //
-    // Interim list (dense-row-touch-targets M1). The plan's end state is `GanttRowMenu` alone;
-    // `HierarchyTree` leaves at M2 and `explorer-column` at M3, and each removes its line below.
-    // TODO(M2/M3): `docs/specs/dense-row-touch-targets/implementation-plan.md` — delete those two
-    // entries (and the matching `button.tsx::size-7` wording) when the milestones land.
+    // Interim list (dense-row-touch-targets). The plan's end state is `GanttRowMenu` alone;
+    // `explorer-column` leaves at M3 and removes its line below.
+    // TODO(M3): `docs/specs/dense-row-touch-targets/implementation-plan.md` — delete that entry
+    // (and the matching `button.tsx::size-7` wording) when the milestone lands.
     const EXPECTED = new Map<string, number>([
       ['components/layout/navigator/explorer-column.tsx', 1],
       ['features/gantt/components/GanttRowMenu.tsx', 1],
-      ['features/navigator/components/HierarchyTree.tsx', 1],
     ]);
     const found = new Map<string, number>();
     let definitions = 0;

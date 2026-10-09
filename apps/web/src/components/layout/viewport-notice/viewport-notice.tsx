@@ -8,7 +8,7 @@ import { BrandCard } from '@/components/layout/brand-card';
 import { Button } from '@/components/ui/button';
 import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { useMediaQuery } from '@/components/ui/use-media-query';
+import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { useNativeModal } from '@/components/ui/use-native-modal';
 import { useSession, useSignOut } from '@/features/auth';
 import { useOrganizations } from '@/features/organizations';
@@ -197,7 +197,7 @@ function PageContent({
   onNotNow: () => void;
 }): React.ReactElement {
   const width = useWindowWidth();
-  const coarse = useMediaQuery('(pointer: coarse)', false);
+  const coarse = useCoarsePointer();
   // Read where the width is read, so the stated floor and "Your window is N pixels wide" are in the
   // same units even when the browser's font size is raised (the floor is 64rem, not 1024px).
   const floor = designedMinWidthPx();
