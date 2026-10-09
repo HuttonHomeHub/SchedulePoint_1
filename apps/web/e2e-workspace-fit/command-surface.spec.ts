@@ -1087,8 +1087,9 @@ interface CoarseSurface {
   /**
    * Skipped below this viewport height. At 1024 × 600 the activities panel is 140 px tall and sits
    * at y 497..625 on a 600 px viewport, so no row is painted inside the viewport and the sweep has
-   * nothing to measure (`docs/specs/dense-row-touch-targets/m0-measurement.md` §2) — the table's
-   * floor is covered by the unit tier and the device sheet, not by this projection.
+   * nothing to measure (`docs/specs/dense-row-touch-targets/m0-measurement.md` §2) — the floor is
+   * asked for SIZE ONLY (`assertActivitiesRowMenuSizeOnly`); reachability there is covered by the
+   * device sheet.
    */
   minHeight?: number;
   /**
@@ -1179,7 +1180,13 @@ const GANTT_EXEMPT_KINDS = ['disclosure', 'row-menu', 'sort', 'cell-input'] as c
 /**
  * **The activities table's row checkboxes, a named coarse exception** (`docs/TECH_DEBT.md`, filed
  * with #215). 24 px labels around 16 px boxes: AA under WCAG 2.2 §2.5.8, below the house rule, and
- * outside the row-menu question this surface asks. Excluded by marker, never by size.
+ * outside the row-menu question this surface asks.
+ *
+ * **This marker excludes nothing from the sweep** — that surface is narrowed by
+ * `only: '[aria-haspopup="menu"]'`, which never matches a checkbox. It works as an INVENTORY
+ * assertion (`assertRowSelectExemptionsPresent`): every checkbox in the table carries it, there is
+ * at least one, and the marked labels really are below 44, so the exception is named, counted and
+ * able to go red. It is asserted at the wide viewport only (the floor skips this surface).
  */
 const ROW_SELECT_EXEMPT = '[data-coarse-exempt="row-select"]';
 
@@ -1316,7 +1323,10 @@ test.describe('The plan command surface, under a coarse pointer', () => {
 
       for (const surface of COARSE_SURFACES) {
         if (surface.minWidth !== undefined && viewport.width < surface.minWidth) continue;
-        if (surface.minHeight !== undefined && viewport.height < surface.minHeight) continue;
+        if (surface.minHeight !== undefined && viewport.height < surface.minHeight) {
+          if (surface.activities) await assertActivitiesRowMenuSizeOnly(viewport);
+          continue;
+        }
         // The Gantt grid exists only in its own view; every other surface is swept in the diagram.
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
         if (surface.activities) await showActivities(page);
@@ -1346,6 +1356,11 @@ test.describe('The plan command surface, under a coarse pointer', () => {
             targets.length,
             `no controls swept on ${surface.name} at ${viewport.width}`,
           ).toBeGreaterThan(surface.atLeast);
+          // A row of invisible targets would pass every visible-filtered check below vacuously.
+          expect(
+            targets.some((t) => t.visible),
+            `${surface.name}: nothing swept is actually painted at ${viewport.width}`,
+          ).toBe(true);
         }
 
         const belowHouse = targets.filter(
@@ -1373,6 +1388,34 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       }
     }
   });
+
+  /**
+   * **The floor's share of the activities table, SIZE ONLY.** At 1024 × 600 the panel sits at
+   * y 497..625 on a 600 px viewport, so no row is hit-testable and the reachability half of the
+   * sweep cannot run (`m0-measurement.md` §2). The `⋯` is still laid out, so its box is read and
+   * held to 44; that the row grows to fit (57 → 61) is the layout's doing and is not asserted.
+   */
+  async function assertActivitiesRowMenuSizeOnly(viewport: {
+    width: number;
+    height: number;
+  }): Promise<void> {
+    await showView('tsld');
+    await showActivities(page);
+    const sizes = await page.locator('table [aria-haspopup="menu"]').evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { w: r.width, h: r.height };
+      }),
+    );
+    expect(
+      sizes.length,
+      `no activities row menu is laid out at ${viewport.width} × ${viewport.height}`,
+    ).toBeGreaterThan(0);
+    expect(
+      sizes.filter((t) => t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+      `activities table: row menu below ${HOUSE_TARGET} at ${viewport.width} × ${viewport.height} (size only)`,
+    ).toEqual([]);
+  }
 
   /**
    * **The `row-select` exemption is exercised, so it can fail (ADR-0110 D5).** Every checkbox in the
@@ -1415,6 +1458,10 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         targets.length,
         `no row menu swept in the Clients list at ${viewport.width}`,
       ).toBeGreaterThan(0);
+      expect(
+        targets.some((t) => t.visible),
+        `no Clients row menu is painted at ${viewport.width}: the checks below would pass vacuously`,
+      ).toBe(true);
       const belowHouse = targets.filter(
         (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
       );
@@ -1430,6 +1477,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     }
     await page.goto(planUrl);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+    // A fresh navigation re-acquires the plan lock from scratch; do not leave a later test in the
+    // serial group depending on the pen `beforeAll` took.
+    await ensurePen(page);
   });
 
   /**
