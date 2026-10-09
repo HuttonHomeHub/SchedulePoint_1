@@ -3,6 +3,8 @@
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
 - **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: CQ-1 the Gantt stays 28 px; CQ-2 the activities table's menu button grows to 44 px on touch; CQ-3 `pointer` (not `any-pointer`) stays the gate, the cover-attached finger gap is recorded.
 - **Owner:** builder agent (Sonnet), with the gate-pass reviewers named per milestone
+- **Progress (2026-10-09):** M0 and M1 done (#901). M2 done (#903). M3 done, M3 PR (see TECH_DEBT/changelog).
+  M4 done with ADR-0183 Accepted and #215 closed. M0-M3 task statuses are marked on each task below.
 
 ## Breakdown
 
@@ -24,7 +26,7 @@ exception with device evidence (ADR-0183 D1). The mouse geometry does not change
 
 ---
 
-### Milestone M0: Measure the problem (ADR-0113, ADR-0142)
+### Milestone M0: Measure the problem (ADR-0113, ADR-0142) — done (#901)
 
 **Outcome:** the spec's §4.3 worked-out figures are replaced by readings.
 **Ships dark:** a measurement only, nothing user-facing.
@@ -43,13 +45,14 @@ exception with device evidence (ADR-0183 D1). The mouse geometry does not change
   Take screenshots of the tree at the 200 px minimum width (long names, the 16 px indent and icons).
 
 - **Device pre-reading, about 3 minutes, optional but recommended.** On the Surface in tablet
-  posture: tap a tree row ×10 and a tree `⋯` ×10, at today's 28 px. This gives the tree's 36 % cost
+  posture: tap a tree row ×10 and a tree `⋯` ×10, at today's 28 px. This gives the tree's 40 % cost (M0: 20 → 12 rows)
   the same kind of evidence the Gantt's exception rests on.
 - **Predictions:**
   - P1: list rows are ≥ 44 on coarse.
   - P2: activities rows that have a `⋯` are 45 on both pointers.
-  - P3: tree rows visible at 1912 × 1104 coarse are 19 ± 3.
-  - P4: the fine spine's destinations overflow its content box.
+  - P3: tree rows visible at 1912 × 1104 coarse are 19 ± 3. **Held: 20.**
+  - P4: the fine spine's destinations overflow its content box. **Held** (`scrollWidth` 39 against 33).
+  - P1 held (list rows 60.5 / 61 on touch, 48.5 / 49 fine). P2 held at 1912 (45) and not at the floor (57).
 - **Complexity:** S. **Dependencies:** none.
 - **Risks:** container Chromium is not the device (ADR-0128). → The readings are labelled emulation,
   and the M4 device sheet is the arbiter.
@@ -57,7 +60,7 @@ exception with device evidence (ADR-0183 D1). The mouse geometry does not change
 
 ---
 
-### Milestone M1: The tables' `⋯` reaches 44 on touch
+### Milestone M1: The tables' `⋯` reaches 44 on touch — done (#901)
 
 **Outcome:** on touch, the `⋯` on Clients, Projects, Plans, Resources, both Calendars tables and
 the activities table is 44 px. Mouse is unchanged.
@@ -82,7 +85,7 @@ the activities table is 44 px. Mouse is unchanged.
 >
 > **Testing:** unit, structural and e2e, below.
 
-##### Task 1: Variant, consumers and gates (one PR)
+##### Task 1: Variant, consumers and gates (one PR) — done (#901)
 
 1. **`button.tsx`:**
    - Add `'icon-row': 'size-7 pointer-coarse:size-(--control-h)'`.
@@ -130,7 +133,7 @@ the activities table is 44 px. Mouse is unchanged.
 
 ---
 
-### Milestone M2: The Explorer tree's rows grow on touch
+### Milestone M2: The Explorer tree's rows grow on touch — done (#903)
 
 **Outcome:** under a coarse pointer, tree rows, names and the `⋯` are 44 px. Folding or unfolding
 the cover keeps your place and your focus, in both directions.
@@ -156,9 +159,10 @@ rows and `⋯`, and runs the containment assertion on it.
 > - **The React Compiler lint** (`HierarchyTree.tsx:215-223`). → No `setState` in the layout
 >   effect.
 > - **The Explorer column at 1024 × 600 gets longer** (+16 px per row). Accepted: it already scrolls
->   as a whole, and the tree shows about 0 rows there either way.
+>   as a whole. **Corrected by M0:** the tree shows 4 rows at the floor today, not about 0, and 44 px
+>   rows would show 2 (−50 %). The floor does pay for this change.
 
-##### Task 2: The hook and the tree (one PR)
+##### Task 2: The hook and the tree (one PR) — done (#903)
 
 1. **Hook.** Create `components/ui/use-coarse-pointer.ts`, exporting
    `COARSE_POINTER_QUERY = '(pointer: coarse)'` and `useCoarsePointer()`. Move
@@ -218,7 +222,7 @@ rows and `⋯`, and runs the containment assertion on it.
 
 ---
 
-### Milestone M3: The collapsed spine fits its controls
+### Milestone M3: The collapsed spine fits its controls — done (M3 PR (see TECH_DEBT/changelog))
 
 **Outcome:** with the Explorer collapsed, every spine control sits fully inside the spine, at 44 px
 on touch, and the spine scrolls only vertically.
@@ -226,13 +230,15 @@ on touch, and the spine scrolls only vertically.
 **Journey:** the coarse projection collapses the Explorer and sweeps `[data-panel-border]` at spine
 width, asserting `scrollWidth === clientWidth`.
 
-##### Task 3: The spine's width (one PR)
+##### Task 3: The spine's width (one PR) — done
 
 - **Description:**
   - Replace `SPINE_WIDTH = 34` (`explorer-column.tsx:24`, used only at `:76`, verified) with CSS
     widths taken from M0.
   - The fine width stays 34, unless P4 is confirmed; in that case it becomes the measured fit.
-  - Add a coarse width, expected around 53 (44 + `p-1` + border). M0 decides it.
+  - Add a coarse width, expected around 53 (44 + `p-1` + border). M0 decided it: **53** coarse and
+    **45** fine (36 + 8 + 1). P4 held, so the fine spine overflowed before this change; the changeset
+    says the fine spine is 11 px wider and why.
   - The spine's `icon-sm` becomes `icon-row`.
 - **Complexity:** S. **Dependencies:** M0 (P4), M1.
 - **Risks:**
@@ -247,13 +253,13 @@ width, asserting `scrollWidth === clientWidth`.
 
 ---
 
-### Milestone M4: Close-out and the device
+### Milestone M4: Close-out and the device — done (this PR)
 
 **Outcome:** the record matches the product, and the product owner has a short sheet to confirm it
 on the Surface.
 **Ships dark:** docs and a sheet.
 
-##### Task 4: Docs, register and device sheet (one PR)
+##### Task 4: Docs, register and device sheet (one PR) — done
 
 1. **ADRs.**
    - ADR-0183 becomes Accepted. It contains:
@@ -271,7 +277,9 @@ on the Surface.
    - Close the tables, tree and spine.
    - Restate the Gantt half as **decided** (CQ-1), with its evidence and trigger.
    - Record the four corrections from spec §1 in place.
-4. **New `device-checklist.md` beside this plan** (about 8 minutes, tablet posture unless stated).
+4. **Device steps, added to `docs/specs/gantt-coarse-pointer/device-checklist.md`** as items 13 to 24
+   (that sheet's own rule says a change to a target it covers updates it in the same PR, and a second
+   sheet would split the product owner's one session). About 8 minutes, tablet posture unless stated.
    It must also carry the activities-table row at 1024 × 600 (row 57 → 61, `⋯` 44), which the
    journeys measure for size only and cannot hit-test (M1 exit criteria).
    It opens with: **"With the keyboard cover attached, nothing on this sheet changes, by design."**
@@ -299,10 +307,10 @@ on the Surface.
    - **Activities table:** scroll it and focus a row, then fold. Did your place and focus survive?
    - **Spine:** collapse the Explorer and tap each spine icon. Is any icon clipped?
    - **Revisit trigger:** if the Gantt's `⋯` or arrow ever misses more than 1 in 10, say so.
-5. **`docs/specs/gantt-coarse-pointer/device-checklist.md`:** add a dated line to its "Keep this
-   sheet current" note. It says #215 left the Gantt's targets unchanged, so no step changes, and
-   repeats the same revisit trigger. **If CQ-1 is answered "grow", this is replaced by that epic's
-   own edit of items 6, 7, 8 and 12, in the same PR as the change.**
+5. **`docs/specs/gantt-coarse-pointer/device-checklist.md`:** a dated line in its "Keep this sheet
+   current" note says #215 left the Gantt's targets unchanged, so items 1 to 12 do not change, and
+   carries the revisit trigger (more than 1 miss in 10 on the Gantt's `⋯` or arrow). **If CQ-1 is
+   later answered "grow", that epic edits items 6, 7, 8 and 12 in the same PR as the change.**
 
 - **Complexity:** S. **Dependencies:** M1–M3.
 

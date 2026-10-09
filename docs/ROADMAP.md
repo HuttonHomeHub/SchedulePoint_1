@@ -760,6 +760,12 @@ discriminators. Each becomes a spec/plan before build:
   whole body and hides the diagram, and Collapse brings it back as it was. The three-line deck (Part B)
   was considered and not built; only the Settings… gear icon was kept.
 
+- **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
+  in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
+  [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu
+  buttons in the seven tables, the Explorer tree's rows and the collapsed spine are 44 px; the Gantt stays
+  28 px by named exception, with device evidence and a revisit trigger.
+
 - **Notifications.** **Designed, not built — deferred on a named trigger** ([ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md); spec and plan
   complete at [`docs/specs/notifications/`](specs/notifications/)). The product tells you things only
   while you are looking at the thing it is telling you about: a data-date move, a shared calendar's

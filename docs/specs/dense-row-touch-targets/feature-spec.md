@@ -2,6 +2,9 @@
 
 - **Status:** Approved 2026-10-08 by the product owner, recommendations accepted: CQ-1 the Gantt stays 28 px; CQ-2 the activities table's menu button grows to 44 px on touch; CQ-3 `pointer` (not `any-pointer`) stays the gate, the cover-attached finger gap is recorded.
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
+- **Built:** M0 and M1 in #901, M2 in #903 (both released as web 0.181.0), M3 in review, M4 (this
+  close-out) with ADR-0183 Accepted. Figures below were corrected to the M0 readings on 2026-10-09;
+  where a worked-out figure was wrong the correction says so in place.
 - **Date:** 2026-10-08. Revised the same day after the UX, component and accessibility reviews
   (all "agree with changes"; their blocking findings are folded in below).
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #215
@@ -75,23 +78,27 @@ no change.
   28 px targets. This is a **known gap** that ADR-0183 records (CQ-3).
 - **On a finger, in the list pages** (Clients, Projects, Plans, Resources, Calendars):
   - the `⋯` becomes the same 44 px as the `Edit` button next to it;
-  - rows do not get taller, because they are already 61 px on touch.
+  - rows do not get taller, because they are already 60.5 / 61 px on touch (48.5 / 49 with a
+    mouse, which does not change).
 - **On a finger, in the activities table:**
   - the `⋯` becomes 44 px;
-  - rows with one grow from 45 to 61 px, so 26 % fewer rows fit in the same panel;
+  - rows with one grow from 45 to 61 px at 1912 wide (3 rows in view become 2 in the same 172 px
+    scroller), and from 57 to 61 at 1024 wide, where the row is already width-keyed;
   - CQ-2 offers a free alternative.
 - **On a finger, in the Explorer tree:**
-  - rows grow from 28 to 44 px, which shows 36 % fewer rows;
+  - rows grow from 28 to 44 px. **Measured (M0):** 20 rows fully in view become 12 at 1912 × 1104,
+    which is 40 % fewer. The 36 % figure (1 − 28/44) is continuous; whole-row flooring makes it 40 %;
   - every row, its name and its `⋯` become a full-size target;
   - ADR-0118's own Consequences planned this ("its tree rows are taller on touch", `0118:253-256`).
     M3 had to revert it.
-  - **At the 1024 × 600 floor the trade costs nothing on screen.** The tree already shows about 0
-    rows there without scrolling (`minimum-viewport/m0-measurement.md:113`). The Explorer column
-    scrolls as a whole, and each tree row adds 16 px to that scroll.
+  - **At the 1024 × 600 floor the trade is not free.** This spec first said the tree showed about 0
+    rows there (`minimum-viewport/m0-measurement.md:113`). M0 measured it: the tree's scroller is
+    128 px high and shows **4** rows, all hit-testable, and 44 px rows would show **2** (−50 %).
+    The Explorer column also scrolls as a whole, and each tree row adds 16 px to that scroll.
 - **The Gantt stays at 28 px rows** (recommended, CQ-1). On your Surface the 28 px `⋯` and the 24 px
   arrow scored 0 misses out of 10 in both postures (`device-results.md:34`, `:76`). Growing them
-  would cost 36 % of the rows on the view you read all day. M0 measures the actual count before it
-  is quoted.
+  would cost about 36 % of the rows on the view you read all day. M0 read the body: 656 px high at
+  1912 × 1104, 21 rows fully in view today, about 14 at 44 px (arithmetic).
 
 ### Success criteria
 
@@ -146,13 +153,16 @@ Critical questions are in §6. Defaults for the rest:
 >     44 px `⋯`) — roughly eight characters. No
 >     `title` is added: the name is an inner span with a click handler inside a `treeitem` that
 >     carries the accessible name, and a hover tooltip does nothing on touch, the posture this
->     costs. The full name is one tap away on the detail screen, and the Explorer can be widened.
+>     costs. The full name stays reachable two ways: the `⋯`'s accessible label, "Actions for
+>     <name>", which a screen reader announces in full, and the plan's own detail page, one tap away.
+>     The Explorer can also be widened.
 
 > **US-3** — As a planner on a touch screen, I want the collapsed Explorer's spine to hold 44 px
 > controls without clipping them.
 >
 > - **Given** `pointer: coarse` and a collapsed Explorer **then**:
->   - "Show Project Explorer" and the six destination icons are ≥ 44 × 44;
+>   - "Show Project Explorer" (**28 px today**, not 44 as the premise implied) and the six
+>     destination icons are ≥ 44 × 44;
 >   - all of them sit fully inside the spine;
 >   - the spine does not scroll horizontally;
 >   - the stage loses no more width than the spine gains.
@@ -186,7 +196,10 @@ Critical questions are in §6. Defaults for the rest:
   - they sit inside `p-1` in a 34 px spine with a 1 px border;
   - that leaves 25 px of content for a 36 px link.
 
-  M0 measures it. If it is real, M3 fixes it and records it as a fine-pointer defect.
+  **M0 confirmed it with a mouse** (P4): `scrollWidth` 39 against `clientWidth` 33, the links
+  1.5 px outside the box on the left. M3 fixed it and recorded it as a fine-pointer defect. The fix
+  is the one mouse-visible change in this epic: the fine spine is **45 px wide, 11 px more than 34**,
+  so a mouse user loses 11 px of plan width when the Explorer is folded. The changeset says so.
 
 ### Permissions, validation, errors
 
@@ -270,28 +283,22 @@ table here and of neither fixed-row surface.
 
 ### 4.3 Rows visible per screen
 
-**Worked out, not measured.** The container cannot run a browser here. M0 replaces every figure
-below with a reading (ADR-0113). The percentages do not depend on the panel's height: going from
-28 to 44 shows **36 %** fewer rows (1 − 28/44), and going from 45 to 61 shows **26 %** fewer.
+**Measured in M0 (2026-10-08, container Chromium, layout only: ADR-0128), replacing the spec's
+worked-out figures** ([`m0-measurement.md`](m0-measurement.md) §2). The 44 px columns are
+arithmetic on the measured heights. The continuous percentages are 36 % (1 − 28/44) and 26 %
+(1 − 45/61), but whole rows are what a planner sees, so the real losses are larger.
 
-| Surface (coarse)               | 1912 × 1104 (Surface, tablet)                  | 1024 × 600 (floor)                                                                |
-| ------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| List tables (`RowActionsMenu`) | no change (rows already ~61)                   | no change                                                                         |
-| Activities table (45 → 61)     | **26 %** fewer; e.g. 6 → 4 per 300 px of panel | **0 → 0**: the panel shows no rows at the floor today (`m4-measurement.md:75-78`) |
-| Explorer tree (28 → 44)        | 36 % fewer; e.g. H ≈ 549¹ gives 19 → 12        | **0 → 0** without scrolling; the column scrolls 16 px more per row                |
-| Gantt _if grown_ (28 → 44)     | 36 % fewer; count owed to M0²                  | 36 % fewer; count owed to M0                                                      |
-| Any surface, **fine pointer**  | **no change**                                  | **no change**                                                                     |
+| Surface (coarse)               | 1912 × 1104 (Surface, tablet)                  | 1024 × 600 (floor)                                                                  |
+| ------------------------------ | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| List tables (`RowActionsMenu`) | no change (rows already 60.5 / 61)             | no change                                                                           |
+| Activities table               | row 45 → 61; 3 rows in view become 2 (−33 %)   | row 57 → 61; **0 → 0** hit-testable (the panel sits below the fold, as before)      |
+| Explorer tree (28 → 44)        | **20 → 12 rows (−40 %)**, in a 577 px scroller | **4 → 2 rows (−50 %)**, in a 128 px scroller; the column scrolls 16 px more per row |
+| Gantt _if grown_ (28 → 44)     | 21 → about 14 rows (656 px body)               | 188 px body, 3 rows today; no count quoted                                          |
+| Any surface, **fine pointer**  | **no change**, except the spine (34 → 45)      | **no change**, except the spine                                                     |
 
-¹ How the tree height was worked out:
-
-- The Explorer is grid row 3, under the full-width command band (`app-shell.tsx:132`, `:179`).
-- On a plan page, its column is about 1104 − 44 (header) − 124 (two-line coarse deck, ADR-0118)
-  − 19 ≈ 917 px.
-- Minus the Explorer header (44), the destinations (291) and the footer (33)
-  (`m0-measurement.md:117-119`), the tree gets about 549 px.
-- Pages without the command deck give the tree more height.
-
-² Not quoted as a row count, because the Gantt's body height has not been measured.
+The spec's own worked-out tree height was 549 px; it is 577 (P3 held: 20 rows against 19 ± 3). It
+also said the floor shows "0 → 0" for the tree; it shows 4 → 2. Both are corrected here, not
+silently adjusted.
 
 ### 4.4 Re-anchoring the tree on a posture change
 
@@ -423,7 +430,7 @@ flowchart TD
 
 ### 4.9 Alternatives considered
 
-- **44 px dense rows for everyone.** This costs mouse users 36 % of tree and Gantt rows for no gain.
+- **44 px dense rows for everyone.** This costs mouse users 36 % or more of tree and Gantt rows (40 % of the tree at 1912, by whole rows) for no gain.
   Rejected, because mouse density must stay.
 - **A 44 px hit area on a 28 px visual, in the tree and the Gantt.** Geometrically impossible
   without taking taps from the row above (§4.2). Rejected.
@@ -491,7 +498,7 @@ flowchart TD
 
 1. **CQ-1: Do Gantt rows stay 28 px on touch?** _Recommended: yes._
    - On your Surface they scored 0/10 misses for `⋯` and the arrow in both postures.
-   - Growing them costs 36 % of the rows on the view you read all day (M0 measures the count).
+   - Growing them costs 36 % of the rows on the view you read all day (M0: 21 rows in view become about 14 at 1912 × 1104).
    - It would also reopen ADR-0177's bar, cell and link geometry.
    - If you say "grow", this becomes a separate L-sized epic, and `device-checklist.md` items 6, 7,
      8 and 12 change in that PR.
@@ -514,4 +521,5 @@ flowchart TD
   - ADR-0118 and the new ADR-0183, plus its one line in `CLAUDE.md` §16;
   - `docs/UX_STANDARDS.md` and `docs/DESIGN_SYSTEM.md` (the criterion and the exception list);
   - `docs/COMPONENT_LIBRARY.md` (`icon-row` vs `icon-sm`);
-  - `docs/specs/gantt-coarse-pointer/device-checklist.md` (a dated note plus the revisit trigger).
+  - `docs/specs/gantt-coarse-pointer/device-checklist.md` (items 13 to 24 and the revisit trigger,
+    added in M4; the sheet's own update rule puts them there rather than in a second sheet).
