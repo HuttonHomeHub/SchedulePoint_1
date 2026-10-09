@@ -15,6 +15,7 @@ import {
 } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 
+import { runInPlace, type WithDiagram } from './canvas-directed-commands';
 import { useConflictNavigation } from './commands/use-conflict-navigation';
 import { useDiagramImage } from './commands/use-diagram-image';
 import { useSearchNavigation } from './commands/use-search-navigation';
@@ -92,6 +93,7 @@ export function useTsldToolbarContext({
   barDateSource,
   hoursPerDayFor,
   setPlanView = () => {},
+  withDiagram = runInPlace,
 }: {
   model: PlanWorkspaceModel;
   /**
@@ -168,6 +170,13 @@ export function useTsldToolbarContext({
   barDateSource?: BarDateSource | undefined;
   hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
   setPlanView?: (view: PlanViewMode) => void;
+  /**
+   * The host's rule for a command that acts on the diagram (short-screen swap, ADR-0180): collapse
+   * the activities panel first when the swap has hidden the diagram. Applied HERE, to the context,
+   * so `render` items (View, Go to date, Find) are covered as well as plain buttons — the class of
+   * every command is {@link COMMAND_CLASS}. Defaults to running in place, a host with no swap.
+   */
+  withDiagram?: WithDiagram;
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
@@ -484,7 +493,7 @@ export function useTsldToolbarContext({
       zoomPreset,
       // The three imperative viewport commands live in `commands/use-viewport-commands`
       // (ADR-0078 S11) — see that module for why they had to move.
-      setZoomPreset,
+      setZoomPreset: withDiagram(setZoomPreset),
       // Stepping, fitting and go-to-date are canvas VIEWPORT commands with no Gantt equivalent (its
       // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
       // them with a reason in the Gantt rather than leaving dead buttons.
@@ -493,13 +502,13 @@ export function useTsldToolbarContext({
       // model owns it because only the model knows whether the missing thing is the role or the
       // pen, and who is holding the pen if so.
       scheduleRefusal: model.scheduleRefusal,
-      stepZoom,
-      fit: requestFit,
+      stepZoom: withDiagram(stepZoom),
+      fit: withDiagram(requestFit),
       // The plan's data date (`plannedStart`) is read-only here: it gates Go-to-date visibility and is
       // the canvas day-zero origin. Its persisted value is edited off-toolbar (plan creation / Edit
       // plan), so there's no write seam here (ADR-0031 two-row amendment).
       plannedStart: plan.plannedStart,
-      goToDate,
+      goToDate: withDiagram(goToDate),
 
       // Lens
       viewToggles,
@@ -512,25 +521,27 @@ export function useTsldToolbarContext({
       setPlanView,
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
-      toggleAddActivity: () => setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
+      toggleAddActivity: withDiagram(() =>
+        setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
+      ),
       // The Add split-button's per-type choice (ADR-0032 M4): pick the kind the next draw creates and
       // arm add mode in one gesture (a picked type always means "draw one now").
       createType,
-      setCreateType: (type) => {
+      setCreateType: withDiagram((type) => {
         setCreateType(type);
         setMode('add-activity');
-      },
+      }),
       // Two-click Link tool (ADR-0032 M5): a mode toggle + a persistent FS/SS/FF type. Shown whenever
       // canvas-first authoring is on (shade-don't-hide) and pen-gated as a set with the other tools.
       isLinking: mode === 'link',
-      toggleLinkMode: () => setMode((m) => (m === 'link' ? 'select' : 'link')),
+      toggleLinkMode: withDiagram(() => setMode((m) => (m === 'link' ? 'select' : 'link'))),
       linkType,
       setLinkType,
       // Two-click LOE endpoint-pick tool (Stage D, ADR-0035 §21): a mode toggle mutually exclusive with
       // add/link (a single EditMode). Reachable only when `VITE_CANVAS_ACTIVITY_TYPES` is on (the
       // Add-menu item is flag-gated) and pen-gated as part of the authoring cluster.
       isLoeSpanning: mode === 'loe',
-      toggleLoeSpanMode: () => setMode((m) => (m === 'loe' ? 'select' : 'loe')),
+      toggleLoeSpanMode: withDiagram(() => setMode((m) => (m === 'loe' ? 'select' : 'loe'))),
       // The Add trigger reflects the LOE tool's mid-pick step (B4): once a start driver is picked the
       // label flips to "Pick finish driver". Sourced from the shared `loeStartId` (the single source of
       // truth), so the pointer AND keyboard picks both drive it.
@@ -542,7 +553,9 @@ export function useTsldToolbarContext({
       // arm/disarm contract as the other four (Escape returns to Select, the band states it, the
       // transition is announced). Not pen-gated — selecting is a read.
       isMarqueeSelecting: mode === 'marquee',
-      toggleMarqueeMode: () => setMode((m) => (m === 'marquee' ? 'select' : 'marquee')),
+      toggleMarqueeMode: withDiagram(() =>
+        setMode((m) => (m === 'marquee' ? 'select' : 'marquee')),
+      ),
       canAutoArrange: canEditSchedule,
       requestAutoArrange,
       levelledMoveCount,
@@ -583,10 +596,10 @@ export function useTsldToolbarContext({
       openResourceHistogram: () => openDialog('resource-histogram'),
       // The DCMA health report is a DOCKED COLUMN, not a dialog — the workspace owns its state and
       // the one-dock-at-a-time set (right-docks.ts), so this is a callback the host supplies.
-      toggleHealthCheck,
+      toggleHealthCheck: withDiagram(toggleHealthCheck),
       // The revision comparison is a DOCKED COLUMN too, for the health reason verbatim — the
       // workspace owns its state and the one-dock-at-a-time set, so this is a host callback.
-      toggleRevisionCompare,
+      toggleRevisionCompare: withDiagram(toggleRevisionCompare),
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).
@@ -623,7 +636,7 @@ export function useTsldToolbarContext({
       todayIso,
       selectedActivityId,
       selectedActivity,
-      revealComments,
+      revealComments: withDiagram(revealComments),
       // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
       notesOpen: model.notesOpen,
       canEditSchedule,
@@ -672,13 +685,15 @@ export function useTsldToolbarContext({
       // nothing reads these and `toggleFloatPaths` is never called.
       activityCount: activities.length,
       floatPathsOpen: model.floatPaths?.open ?? false,
-      toggleFloatPaths,
+      toggleFloatPaths: withDiagram(toggleFloatPaths),
       currentConflict,
-      goToNextConflict,
+      goToNextConflict: withDiagram(goToNextConflict),
       searchStatus,
-      goToMatch,
-      escapeSearchField,
-      zoomToSelection,
+      goToMatch: withDiagram(goToMatch),
+      // The first Escape clears the query — text entry, which must not collapse the panel. Only the
+      // second, which hands the planner to the diagram, is a diagram command.
+      escapeSearchField: withDiagram(escapeSearchField, () => lensState.filterQuery.length === 0),
+      zoomToSelection: withDiagram(zoomToSelection),
       matchedIds,
       currentMatchId: canvasUi.lensState.searchCursorId,
 
@@ -1066,5 +1081,6 @@ export function useTsldToolbarContext({
     interchangeExporting,
     exportNotice,
     orgSlug,
+    withDiagram,
   ]);
 }

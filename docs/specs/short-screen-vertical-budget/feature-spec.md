@@ -45,10 +45,13 @@ switches on for the Surface. Both parts are for **short screens**: a 1366 × 768
   - A drawing tool that was armed is put away, and the panel says so.
   - Opening a side panel such as Health or Notes collapses the activities panel. Expanding the
     activities panel closes the side panel. Whatever you asked for last is what you see.
-- **What you get:** at 1024 × 600, about 5 rows with a mouse and 2–3 with a finger. The panel's
-  smallest drag size rises from 140 px to about 207 px, so it always shows a row.
+- **What you get:** at 1024 × 600, about 3 rows with a mouse and about 2–3 with a finger (measured
+  3.3 and 2.5). The panel's smallest drag size rises from 140 px to 245 px, so it always shows a row.
 
-**Part B: dropping three toolbar labels (optional, after A).**
+**Part B: dropping three toolbar labels (optional, after A). NOT BUILT.** The product owner chose
+B0 (keep four lines) on 2026-10-08. Only the Settings… gear icon was kept; the label drop, `deckLabel`,
+`iconOnly` and the tooltip work below are the design as proposed and are recorded in ADR-0180 D9 as
+not built.
 
 - **What it does.** Below 1280 px wide, Summary, Settings… and Share & export show only their icons.
   The toolbar goes from four lines to three, and the diagram gains 44 px at 1024 × 600 (274 → 318).
@@ -106,8 +109,9 @@ under `features/share` (checked with grep).
 - **SC-A4:** Expand → Collapse preserves:
   - the canvas viewport (`originX`, `originY`, `pxPerDay`);
   - the selection;
-  - the canvas listbox's active option (ADR-0026 D7): the same option keeps `tabindex="0"`, and the
-    listbox's `aria-activedescendant` is unchanged.
+  - the canvas listbox's active option (ADR-0026 D7): the **listbox** (`<ul role="listbox"
+tabIndex={0}>`, `TsldPanel.tsx` ~3530-3548) carries `tabindex` and `aria-activedescendant`, not
+    the option, so the listbox keeps `tabindex="0"` and its `aria-activedescendant` is unchanged.
 - **SC-A5:** no focus is ever dropped to `<body>` by the swap, on a press or on a live resize.
 - **SC-B1:** at 1024 × 600 on a hover-and-fine-pointer device, the deck is ≤ 3 lines, the DO row is
   1 line, and the DO row's spare width is ≥ 0 and recorded. At `xl` and above, or on any device
@@ -163,8 +167,9 @@ under `features/share` (checked with grep).
 > **US-A2** — As any user, I want the panel's minimum to show a row.
 >
 > - `PANEL_MIN_OPEN` is the sum of named parts plus one row (§3.2).
-> - A stored height below it, for example a stored 140, is read back clamped to it, and the stored
->   value is not rewritten. This follows `useResizablePanelPrefs`'s `min`; the test pins the
+> - A stored height below it, for example a stored 140, is read back clamped to it. The stored value
+>   **is** rewritten as the clamped one: `readPrefs` clamps in the `useState` initialiser and the hook's
+>   mount effect then writes its state out (`use-resizable-panel-prefs.ts`). The unit test pins the
 >   read-back.
 > - `aria-valuemin` reports it (`plan-workspace-toolbar.tsx:2492`).
 
@@ -297,26 +302,26 @@ request.
 | ✓ `PANEL_MIN_OPEN` 140                    | `use-activity-panel-prefs.ts:18`                                                                                                                                                                                                                                                                   |
 | ✓ 51 px foot                              | `activity-bottom-panel.tsx:472`; `FOOT_MAX_PX = 51` (`command-surface.spec.ts:455`)                                                                                                                                                                                                                |
 | ✗ foot added on top of the panel's 140    | When expanded, the foot is **inside** the panel (`activity-bottom-panel.tsx:359`, within the box at `plan-workspace-toolbar.tsx:2499`)                                                                                                                                                             |
-| ✗ 227 px chrome                           | Not derivable. M4's 274 px collapsed canvas (`m4-measurement.md:11`) plus the 51 px foot gives a body of ≈ 325 px at 1024 × 600 (fine). M0 re-measures                                                                                                                                             |
+| ✗ 227 px chrome                           | Not derivable. M4's 274 px collapsed canvas (`m4-measurement.md:11`) plus the 51 px foot gave ≈ 325 px; M0 measured 365 px (fine) / 329 px (coarse) at 1024 × 600                                                                                                                                  |
 
-**Named parts** (estimated from classes; M0 measures; constants take the larger, coarse value):
+**Named parts** (M0 measured them, 2026-10-08, `m0-measurement.md` §1; the first draft's estimates were low by up to 25 px; constants take the larger value):
 
-| Constant            | Fine estimate | Coarse estimate | Source                                                       |
-| ------------------- | ------------- | --------------- | ------------------------------------------------------------ |
-| `PANEL_HEADER_PX`   | ≈ 48          | ≈ 60            | `activity-bottom-panel.tsx:260` (`py-2` + Create button)     |
-| `PANEL_FOOT_PX`     | 51            | ≈ 55            | `activity-bottom-panel.tsx:472`                              |
-| `PANEL_BODY_PAD_PX` | 16            | 16              | `activity-bottom-panel.tsx:311`                              |
-| `TABLE_HEAD_PX`     | ≈ 32          | ≈ 36            | estimate                                                     |
-| `ROW_PX`            | ≈ 35          | ≈ 44            | `data-table-windowed-body.tsx:65` (37); `data-table.tsx:600` |
+| Constant            | Fine estimate | Coarse estimate | Source                                                   |
+| ------------------- | ------------- | --------------- | -------------------------------------------------------- |
+| `PANEL_HEADER_PX`   | 52            | 60              | `activity-bottom-panel.tsx:260` (`py-2` + Create button) |
+| `PANEL_FOOT_PX`     | 51            | 55              | `activity-bottom-panel.tsx:472`                          |
+| `PANEL_BODY_PAD_PX` | 16            | 16              | `activity-bottom-panel.tsx:311`                          |
+| `TABLE_HEAD_PX`     | 57            | 57              | measured; width-keyed (37 at 1912 wide)                  |
+| `ROW_PX`            | 57            | 57              | measured; width-keyed (45 at 1912 wide)                  |
 
 From these:
 
-- **`PANEL_MIN_OPEN`** = header + foot + pad + head + 1 × row ≈ **207**.
-- **`PANEL_USEFUL_MIN`** = header + foot + pad + head + 3 × row ≈ **299**.
+- **`PANEL_MIN_OPEN`** = header + foot + pad + head + 1 × row = **245**.
+- **`PANEL_USEFUL_MIN`** = header + foot + pad + head + 3 × row = **359**. The swap line is therefore a body under 240 + 359 = **599**.
 - **One constant each, not a fine/coarse pair.** The Surface reports `pointer: fine` with its cover
   attached (`GanttPanel.tsx:200-202`, ADR-0118 D7), so a pointer-keyed size would under-reserve on
-  the one touch device the product owner uses. The cost is that a mouse user's minimum is about 20 px
-  larger than it strictly needs to be.
+  the one touch device the product owner uses. The cost is that a mouse user's header and foot are
+  reserved 12 px taller than they are.
 - **Pinned by measurement, not by jsdom.** The M-A journey measures the real parts at both pointers
   and asserts each is ≤ its constant. A unit test asserts `PANEL_MIN_OPEN` and `PANEL_USEFUL_MIN`
   equal their sums, so the constants cannot drift from their definition.
@@ -332,9 +337,10 @@ split would give three rows, the table's own floor ("the header and about three 
 `data-table.tsx:600`); if not, the panel swaps. SC-A1 states what the swap delivers at the floor,
 the smallest body the design allows:
 
-- **Fine:** 325 − 147 ≈ 178, which is about 5 rows at 35 px (≥ 3 is asserted).
-- **Coarse:** a body of ≈ 289 (canvas 234, `m4-measurement.md:21`, plus the foot) minus ≈ 167 ≈ 122,
-  which is about 2.8 rows at 44 px (≥ 2 is asserted).
+- **Fine:** body 365 − 52 − 51 − 16 − 57 = 189, which is about 3.3 rows at 57 px (≥ 3 is asserted).
+- **Coarse:** body 329 − 60 − 55 − 16 − 57 = 141, which is about 2.5 rows at 57 px (≥ 2 is asserted).
+- The body at 1024 × 600 is 365 / 329, not the first draft's 325 / 289: that estimate left out the
+  40 px view-controls strip above the canvas.
 
 These are consistent. Every body above the floor gives at least as much.
 
@@ -342,14 +348,17 @@ These are consistent. Every body above the floor gives at least as much.
 
 | Option             | Fine     | Coarse     |
 | ------------------ | -------- | ---------- |
-| A1                 | ≈ 5 rows | ≈ 2–3 rows |
+| A1                 | ≈ 3 rows | ≈ 2–3 rows |
 | A2 (diagram ≥ 96)  | ≈ 2      | ≈ 0        |
 | A3 (diagram ≥ 160) | ≈ 0      | 0          |
 
 **What the threshold means in window terms:**
 
-- **1024 wide, fine:** a body under ≈ 539, which is a window under ≈ 814 px tall.
-- **1280 × 800 fine:** body ≈ 613, so no swap. SC-A3 is asserted by Playwright.
+- **1024 wide, fine:** a body under 599, which is a window under about 834 px tall.
+- **1280 × 720 fine:** body 573, so it **swaps**, by 26 px; hence the six default-viewport suites move
+  to 1280 × 800.
+- **1280 × 800 fine:** body 653, so no swap. SC-A3 is asserted by Playwright. **Coarse** 1280 × 800 was
+  not read; its deck is four lines, which puts its body near 525, so it probably swaps.
 - **1912 × 948 and 1912 × 1114:** no swap.
 
 **Precedent, worded correctly.** A1 does **not** reuse the single-pane layout as a standing
@@ -362,13 +371,14 @@ and `:181` (an unmeasured surface never withdraws the minimap).
 **Round trip.** A `display: none` canvas reports a 0 × 0 rect. `measure()` clamps that to 1 × 1 and
 **reallocates both backing bitmaps** (`TsldCanvas.tsx:1590-1605`).
 
-- **Not established:** whether `originX`, `originY` and `pxPerDay` survive the reallocation. Nothing
-  read here proves they do, so it is not assumed.
+- **Measured (M0 §2):** `originX` and `pxPerDay` survive the reallocation; `originY` is not directly
+  observed and is read from code. The guard avoids two reallocations and a 1 × 1 read, and does not
+  itself protect the viewport.
 - **Required change:** `measure()` returns early when the rect is 0 × 0. A hidden surface keeps its
   last applied size and bitmaps, matching the "unmeasured surface" rule at
   `TsldCanvas.hidden-pane.test.tsx:181`.
 - **Tests:**
-  - a unit test: a 0 × 0 measurement leaves `sizeRef` and the canvas `width`/`height` unchanged;
+  - a unit test: a 0 × 0 measurement leaves `sizeRef` and the canvas `width`/`height` unchanged (worded as "no reallocation", not "viewport survives");
   - a journey: SC-A4 reads the viewport through the canvas's existing e2e viewport probe, or, if
     none exists, a read-only `data-viewport` attribute added for it (the builder checks first). It
     also asserts the selected activity and the listbox's active option across Expand → Collapse.
@@ -582,7 +592,7 @@ None.
 
 | Option                                     | Rows at 1024 × 600 (fine / coarse) | Verdict                                         |
 | ------------------------------------------ | ---------------------------------- | ----------------------------------------------- |
-| **A1**                                     | ≈ 5 / ≈ 2–3                        | **Recommended**                                 |
+| **A1**                                     | ≈ 3 / ≈ 2–3                        | **Recommended**                                 |
 | A2                                         | ≈ 2 / ≈ 0                          | Fails coarse                                    |
 | A3                                         | ≈ 0 / 0                            | Does not fix #468                               |
 | A4: fold the header into the foot (−48 px) | +1 row on any option               | Deferred; it restructures the panel for one row |

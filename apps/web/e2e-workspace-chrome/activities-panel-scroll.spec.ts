@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
@@ -387,5 +390,389 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
     expect(scan.violations).toEqual([]);
+  });
+});
+
+/**
+ * **The short-screen swap** (`docs/specs/short-screen-vertical-budget/`, ADR-0180, M-A journey
+ * cases 1-8). On a body too short to give the panel three rows beside the diagram, an expanded
+ * panel takes the whole body and the diagram row is `hidden` — still mounted. Driven at a fine and
+ * a coarse pointer (`hasTouch`), because the panel's fixed parts differ by pointer.
+ */
+const NOTE = 'Diagram hidden. Collapse to return.';
+const TOOL_NOTE = 'Drawing tool put away.';
+
+const expandButton = (page: Page): Locator =>
+  page.getByRole('button', { name: 'Expand activities panel' });
+const collapseButton = (page: Page): Locator =>
+  page.getByRole('button', { name: 'Collapse activities panel' });
+const diagramListbox = (page: Page): Locator =>
+  page.getByRole('listbox', { name: 'Activities in the diagram' });
+const canvasEl = (page: Page): Locator =>
+  page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
+// The split button's primary region: named "Add" idle and "Adding Task" armed, so by registry id.
+const addActivity = (page: Page): Locator => page.locator('[data-toolbar-item="add-activity"]');
+
+/** A twelve-activity plan, built at the config's tall viewport and then brought to `size`. */
+async function shortPlan(
+  page: Page,
+  stamp: number,
+  size: { width: number; height: number },
+): Promise<string> {
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Swap ${String(stamp)}`);
+  await ensurePen(page);
+  await seedActivities(
+    page,
+    orgSlug,
+    Array.from({ length: 12 }, (_, i) => ({ name: `Swap ${String(i + 1)}`, laneIndex: i })),
+  );
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  await page.setViewportSize(size);
+  await expect(expandButton(page)).toBeVisible();
+  return orgSlug;
+}
+
+/** Rows a pointer can actually hit below the pinned header, inside the "Activities" region. */
+async function hittableRows(page: Page): Promise<number> {
+  return activitiesRegion(page).evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const head = el.querySelector('thead')?.getBoundingClientRect();
+    const top = Math.max(box.top, head ? head.bottom : box.top);
+    let rows = 0;
+    for (const tr of el.querySelectorAll('tbody tr')) {
+      const r = tr.getBoundingClientRect();
+      if (r.height === 0 || r.top < top - 1 || r.bottom > box.bottom + 1) continue;
+      const hit = document.elementFromPoint(r.left + 8, (r.top + r.bottom) / 2);
+      if (hit && tr.contains(hit)) rows += 1;
+    }
+    return rows;
+  });
+}
+
+/**
+ * Everything SC-A4 says a hidden round trip must not move, read from the browser: the ruler's
+ * labels and positions (originX, pxPerDay) and the canvas bitmap itself (which also carries
+ * originY and the selection ring — the vertical origin has no DOM twin).
+ */
+async function viewState(page: Page): Promise<{ ruler: string; bitmap: string }> {
+  return page.evaluate(() => {
+    const ruler = document.querySelector('[data-testid="tsld-ruler"]');
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      'section[aria-label="Time-scaled logic diagram"] canvas',
+    );
+    const cells = ruler
+      ? [...ruler.querySelectorAll<HTMLElement>('*')].map(
+          (n) => `${n.textContent ?? ''}|${n.style.transform}|${n.style.left}`,
+        )
+      : [];
+    return { ruler: cells.join(';'), bitmap: canvas?.toDataURL() ?? '' };
+  });
+}
+
+/** Wait for two reads 250 ms apart to agree (the zoom animation has finished), return the second. */
+async function settledView(page: Page): Promise<{ ruler: string; bitmap: string }> {
+  let last = await viewState(page);
+  for (let i = 0; i < 20; i += 1) {
+    await page.waitForTimeout(250);
+    const next = await viewState(page);
+    if (next.ruler === last.ruler && next.bitmap === last.bitmap) return next;
+    last = next;
+  }
+  throw new Error('the canvas never settled');
+}
+
+for (const cell of [
+  { pointer: 'fine', coarse: false, minRows: 3, offset: 1000 },
+  { pointer: 'coarse', coarse: true, minRows: 2, offset: 2000 },
+] as const) {
+  test.describe(`the short-body swap, ${cell.pointer} pointer`, () => {
+    test.use({ hasTouch: cell.coarse });
+    const SIZE = { width: 1024, height: 600 };
+
+    test('case 1: Expand at 1024 x 600 shows rows and hides the diagram without removing it', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await shortPlan(page, STAMP + cell.offset + 1, SIZE);
+      expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(cell.coarse);
+
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await expect(activitiesRegion(page)).toBeVisible();
+      await expect(page.getByText(NOTE)).toBeVisible();
+      await expect.poll(() => hittableRows(page)).toBeGreaterThanOrEqual(cell.minRows);
+
+      const row = await canvasEl(page).evaluate((c) => {
+        const hidden = c.closest('[hidden]');
+        return {
+          hidden: hidden !== null,
+          ariaHidden: hidden?.hasAttribute('aria-hidden') ?? null,
+          inert: hidden instanceof HTMLElement ? hidden.inert : null,
+          mounted: c.isConnected,
+        };
+      });
+      expect(row).toEqual({ hidden: true, ariaHidden: false, inert: false, mounted: true });
+
+      const scan = await new AxeBuilder({ page })
+        .include('[role="region"][aria-label="Activities"]')
+        .include('[aria-label="Collapse activities panel"]')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
+        .analyze();
+      expect(scan.violations).toEqual([]);
+    });
+
+    test('case 2 (SC-A4): a hidden round trip keeps the viewport, selection and listbox focus target', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await shortPlan(page, STAMP + cell.offset + 2, SIZE);
+
+      const initial = await settledView(page);
+      const box = await canvasEl(page).boundingBox();
+      if (!box) throw new Error('the canvas has no box');
+      // Empty ground, bottom-right: zoom there, then drag the ground (pan) both ways.
+      const x = box.x + box.width - 60;
+      const y = box.y + box.height - 20;
+      await page.mouse.move(x, y);
+      await page.mouse.wheel(0, -300);
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x - 140, y - 12, { steps: 8 });
+      await page.mouse.up();
+      await page.mouse.move(2, 2);
+      const panned = await settledView(page);
+      expect(panned.ruler, 'zoom and pan moved the horizontal view').not.toBe(initial.ruler);
+      expect(panned.bitmap).not.toBe(initial.bitmap);
+
+      const listbox = diagramListbox(page);
+      await listbox.focus();
+      await page.keyboard.press('ArrowDown');
+      const before = await settledView(page);
+      const attrs = async () => ({
+        tabindex: await listbox.getAttribute('tabindex'),
+        active: await listbox.getAttribute('aria-activedescendant'),
+        selected: await listbox.locator('[role="option"][aria-selected="true"]').count(),
+      });
+      const attrsBefore = await attrs();
+      expect(attrsBefore.tabindex).toBe('0');
+      expect(attrsBefore.active).not.toBeNull();
+
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await expect(canvasEl(page)).toBeHidden();
+      await collapseButton(page).click();
+      await expect(canvasEl(page)).toBeVisible();
+      await page.mouse.move(2, 2);
+
+      const after = await settledView(page);
+      expect(after.ruler, 'originX and pxPerDay').toBe(before.ruler);
+      expect(after.bitmap, 'the whole picture, so originY and the selection ring too').toBe(
+        before.bitmap,
+      );
+      expect(await attrs()).toEqual(attrsBefore);
+      await expect(listbox).toHaveAttribute('tabindex', '0');
+    });
+
+    test('case 3: commands that act on the diagram collapse first; a tool is put away on entry', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      await shortPlan(page, STAMP + cell.offset + 3, SIZE);
+
+      // Zoom OUT (a small plan already sits at the maximum zoom, which Fit returns to) so Fit has something to undo, then Expand and press Fit.
+      const box = await canvasEl(page).boundingBox();
+      if (!box) throw new Error('the canvas has no box');
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      for (let i = 0; i < 4; i += 1) await page.mouse.wheel(0, 300);
+      const zoomed = await settledView(page);
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: 'Fit to plan' })
+        .click();
+      await expect(expandButton(page)).toBeVisible();
+      await expect(canvasEl(page)).toBeVisible();
+      await page.mouse.move(2, 2);
+      const fitted = await settledView(page);
+      expect(fitted.ruler, 'Fit ran after the collapse, on the visible canvas').not.toBe(
+        zoomed.ruler,
+      );
+
+      // Arm a tool, then Expand: it is put away and the note says so.
+      await expect(addActivity(page)).toHaveAttribute('aria-pressed', 'false');
+      await addActivity(page).click();
+      await expect(addActivity(page)).toHaveAttribute('aria-pressed', 'true');
+      await expandButton(page).click();
+      await expect(page.getByText(`${NOTE} ${TOOL_NOTE}`)).toBeVisible();
+      await expect(addActivity(page)).toHaveAttribute('aria-pressed', 'false');
+
+      // Escape in the table reaches the table (a row menu), never a tool or the canvas.
+      await activitiesRegion(page)
+        .getByRole('button', { name: /^Actions for / })
+        .first()
+        .click();
+      const menu = page.getByRole('menu');
+      await expect(menu).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+      await expect(addActivity(page)).toHaveAttribute('aria-pressed', 'false');
+      await expect(collapseButton(page)).toBeVisible();
+      await collapseButton(page).click();
+      await expect(addActivity(page)).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.getByText(TOOL_NOTE)).toHaveCount(0);
+    });
+
+    test('case 4: a dock and the swapped panel never coexist', async ({ page }) => {
+      test.setTimeout(240_000);
+      await shortPlan(page, STAMP + cell.offset + 4, SIZE);
+      const comments = page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: /^Comments/ });
+
+      // Dock open, then Expand: the dock closes and its toggle says so.
+      await comments.click();
+      await expect(comments).toHaveAttribute('aria-pressed', 'true');
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await expect(comments).toHaveAttribute('aria-pressed', 'false');
+      await collapseButton(page).click();
+
+      // Swap active, then open Health: the panel collapses and the dock is shown.
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await page.locator('[data-toolbar-item="analysis"]').click();
+      await page.getByRole('menuitem', { name: /Health check/ }).click();
+      await expect(expandButton(page)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Health check' })).toBeVisible();
+    });
+
+    test('case 8: the panel constants are at least the parts they stand for', async ({ page }) => {
+      test.setTimeout(240_000);
+      await shortPlan(page, STAMP + cell.offset + 8, SIZE);
+      await expandButton(page).click();
+      await expect(collapseButton(page)).toBeVisible();
+      await expect(activitiesRegion(page)).toBeVisible();
+
+      const source = readFileSync(
+        fileURLToPath(
+          new URL(
+            '../src/components/layout/workspace/use-activity-panel-prefs.ts',
+            import.meta.url,
+          ),
+        ),
+        'utf8',
+      );
+      const constant = (name: string): number => {
+        const m = new RegExp(`export const ${name} = (\\d+);`, 'u').exec(source);
+        if (!m?.[1]) throw new Error(`${name} not found`);
+        return Number(m[1]);
+      };
+      const parts = await page.evaluate(() => {
+        const body = document.querySelector('[data-testid="activities-panel-body"]');
+        const section = body?.closest('section');
+        const kids = section ? [...section.children] : [];
+        const px = (v: string) => Number.parseFloat(v);
+        const cs = body ? getComputedStyle(body) : null;
+        const row = [...document.querySelectorAll('tbody tr')].find(
+          (tr) => tr.getBoundingClientRect().height > 0,
+        );
+        return {
+          header: kids[0]?.getBoundingClientRect().height ?? NaN,
+          foot: kids.at(-1)?.getBoundingClientRect().height ?? NaN,
+          pad: cs ? px(cs.paddingTop) + px(cs.paddingBottom) : NaN,
+          head: document.querySelector('thead')?.getBoundingClientRect().height ?? NaN,
+          row: row?.getBoundingClientRect().height ?? NaN,
+        };
+      });
+      expect(Math.ceil(parts.header), 'header').toBeLessThanOrEqual(constant('PANEL_HEADER_PX'));
+      expect(Math.ceil(parts.foot), 'foot').toBeLessThanOrEqual(constant('PANEL_FOOT_PX'));
+      expect(Math.ceil(parts.pad), 'body padding').toBeLessThanOrEqual(
+        constant('PANEL_BODY_PAD_PX'),
+      );
+      expect(Math.ceil(parts.head), 'table head').toBeLessThanOrEqual(constant('TABLE_HEAD_PX'));
+      expect(Math.ceil(parts.row), 'row').toBeLessThanOrEqual(constant('ROW_PX'));
+    });
+  });
+}
+
+test.describe('the short-body swap, one pointer', () => {
+  test('case 5 (SC-A5): a live resize across the line leaves focus on Collapse, never body', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await shortPlan(page, STAMP + 3001, { width: 1280, height: 800 });
+    await expandButton(page).click();
+    await expect(collapseButton(page)).toBeVisible();
+    await expect(canvasEl(page)).toBeVisible();
+    await diagramListbox(page).focus();
+    await expect(diagramListbox(page)).toBeFocused();
+
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await expect(page.getByText(NOTE)).toBeVisible();
+    await expect(collapseButton(page)).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+  });
+
+  test('case 6 (SC-A3): at 1280 x 800 the fine layout is unchanged', async ({ page }) => {
+    test.setTimeout(240_000);
+    await shortPlan(page, STAMP + 3002, { width: 1280, height: 800 });
+    const height = async (l: Locator): Promise<number> => {
+      const b = await l.boundingBox();
+      if (!b) throw new Error('no box');
+      return Math.round(b.height);
+    };
+    // M0 (m0-measurement.md §1): collapsed canvas 562, panel box 280 at this size.
+    expect(await height(canvasEl(page))).toBe(562);
+    await expandButton(page).click();
+    await expect(collapseButton(page)).toBeVisible();
+    await expect(page.getByText(NOTE)).toHaveCount(0);
+    await expect(canvasEl(page)).toBeVisible();
+    expect(
+      await height(page.getByRole('region', { name: 'Activities', exact: true })),
+    ).toBeLessThan(280);
+    const panel = page.getByTestId('activities-panel-body').locator('xpath=ancestor::section[1]');
+    // The section sits in a 280 px box, minus the splitter, so allow the 4 px it spends.
+    expect(await height(panel)).toBeGreaterThanOrEqual(276);
+    expect(await height(panel)).toBeLessThanOrEqual(280);
+    expect(await height(canvasEl(page))).toBeGreaterThanOrEqual(240);
+  });
+
+  test.describe('below md, after Continue anyway', () => {
+    test.use({ acknowledgeViewportNotice: true });
+
+    for (const size of [
+      { width: 640, height: 480 },
+      { width: 320, height: 256 },
+    ]) {
+      test(`case 7: ${String(size.width)} x ${String(size.height)} keeps the single-pane layout`, async ({
+        page,
+      }) => {
+        test.setTimeout(240_000);
+        await shortPlan(page, STAMP + 3100 + size.width, { width: 1280, height: 800 });
+        await page.setViewportSize(size);
+        await expect(page.getByRole('radio', { name: 'Activities' })).toBeVisible();
+        await expect(expandButton(page)).toHaveCount(0);
+        // At 640 x 480 the chrome leaves the pane no height (m0-measurement.md §4), so "visible"
+        // would fail for a reason that predates the swap; what A1 must not do is hide a pane
+        // other than by the toggle (display:none, tested with checkVisibility) or print its note.
+        // By CSS: a `display:none` region leaves the accessibility tree, so a role query would not find it.
+        const rawRegion = page.locator('[role="region"][aria-label="Activities"]');
+        const hiddenAttr = (l: Locator) => l.evaluate((el) => !el.checkVisibility());
+        // dispatchEvent, not a pointer click: at 320 x 256 the chrome covers the toggle (the same
+        // no-height cost), and reachability there is not this case's subject.
+        await page.getByRole('radio', { name: 'Activities' }).dispatchEvent('click');
+        expect(await hiddenAttr(rawRegion)).toBe(false);
+        expect(await hiddenAttr(canvasEl(page))).toBe(true);
+        await expect(page.getByText(NOTE)).toHaveCount(0);
+        await page.getByRole('radio', { name: 'Diagram' }).dispatchEvent('click');
+        expect(await hiddenAttr(canvasEl(page))).toBe(false);
+        expect(await hiddenAttr(rawRegion)).toBe(true);
+        await expect(page.getByText(NOTE)).toHaveCount(0);
+      });
+    }
   });
 });

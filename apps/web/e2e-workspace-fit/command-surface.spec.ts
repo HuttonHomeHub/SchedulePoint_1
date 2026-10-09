@@ -835,6 +835,10 @@ test.describe('The plan command surface', () => {
     // read; the LINE NUMBERS were not — they said `:155,317` until 2026-09-09, which are two
     // `hostsPlanSlots` props. A citation that is wrong about where it read something is a weaker
     // claim than it reads as, in the comment whose whole subject is not guessing.)
+    // Select BEFORE expanding. The page is left at the previous case's 1024 x 600, where an expanded
+    // panel takes the whole body and hides the diagram (ADR-0180), and a hidden listbox cannot be
+    // focused. The selection survives the swap, which is what the sweep below needs.
+    await selectOnCanvas();
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
 
     // **The pinned positive for the STATE**, not just for the sweep's result. This case runs in
@@ -844,7 +848,6 @@ test.describe('The plan command surface', () => {
     // not rendered at all while collapsed.
     await expect(page.getByRole('table', { name: /activit/i }).first()).toBeVisible();
 
-    await selectOnCanvas();
     await sweepObjectBar('TSLD, panel expanded');
     await page.getByRole('button', { name: 'Collapse activities panel' }).click();
   });

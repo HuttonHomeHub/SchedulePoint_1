@@ -93,6 +93,19 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
   it('sizes the strip backing store at the same DPR as the scene canvas', async () => {
     const original = globalThis.devicePixelRatio;
     globalThis.devicePixelRatio = 2;
+    // jsdom's container is 0 x 0, which `measure()` ignores (a hidden container measures so), so
+    // give it a real box for the sizing to be applied to.
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 900,
+      height: 700,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 700,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     try {
       const { container, getByTestId } = render(
         <TsldCanvas {...baseProps()} resourceStripActive resourceStrip={SNAPSHOT} />,
@@ -106,6 +119,7 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
       expect(strip.height).toBe(Math.round(RESOURCE_STRIP_HEIGHT * 2));
     } finally {
       globalThis.devicePixelRatio = original;
+      vi.restoreAllMocks();
     }
   });
 

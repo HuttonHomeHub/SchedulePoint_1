@@ -753,6 +753,13 @@ discriminators. Each becomes a spec/plan before build:
   screens" page with a way through, because a zoomed laptop is narrow too and WCAG 2.2 AA still
   applies. Phone-width workspace gates retire; the floor itself is gated for the first time.
 
+- **Short screens — the activities panel shows rows at 1024 × 600.** **Approved 2026-10-08; built as
+  `short-screen-vertical-budget` M-A** ([ADR-0180](adr/0180-the-panel-takes-the-body-when-it-cannot-show-rows.md);
+  spec and plan at [`docs/specs/short-screen-vertical-budget/`](specs/short-screen-vertical-budget/)). When
+  the workspace is too short to give both the diagram and three table rows, Expand gives the panel the
+  whole body and hides the diagram, and Collapse brings it back as it was. The three-line deck (Part B)
+  was considered and not built; only the Settings… gear icon was kept.
+
 - **Notifications.** **Designed, not built — deferred on a named trigger** ([ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md); spec and plan
   complete at [`docs/specs/notifications/`](specs/notifications/)). The product tells you things only
   while you are looking at the thing it is telling you about: a data-date move, a shared calendar's

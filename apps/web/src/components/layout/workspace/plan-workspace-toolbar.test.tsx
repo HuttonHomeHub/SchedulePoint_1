@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
@@ -615,5 +615,386 @@ describe('the Late-start overlay announcement (#417)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('announcer')).toHaveTextContent('Placed dates shown.'),
     );
+  });
+});
+
+/**
+ * **The short-body swap** (`docs/specs/short-screen-vertical-budget`, M-A2). jsdom has no layout, so
+ * the workspace body's height is stubbed through the ResizeObserver the host already reads
+ * (`bodyHeight`); everything else is the real host, panel and toolbar.
+ */
+describe('the short-body swap', () => {
+  const NOTE = 'Diagram hidden. Collapse to return.';
+  const PANEL_KEY = 'schedulepoint-activity-panel';
+  let bodyHeight = 0;
+  const observed: { callback: ResizeObserverCallback; element: Element }[] = [];
+
+  const bodyEl = () => screen.getByTestId('workspace-body');
+  /** Move the stubbed body to `height` and let every observer of it hear. */
+  function resizeBody(height: number) {
+    bodyHeight = height;
+    act(() => {
+      for (const { callback, element } of observed) {
+        if (element === bodyEl()) callback([], {} as ResizeObserver);
+      }
+    });
+  }
+  const expand = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
+  const canvasRow = () => screen.getByTestId('tsld-panel').closest('[hidden]');
+  const resizer = () => screen.queryByRole('separator', { name: 'Resize activities panel' });
+  /** The frames `withDiagram` waits for, held so a test can look at the state before the command. */
+  let frames: FrameRequestCallback[] = [];
+  let frameIds: number[] = [];
+  let nextFrameId = 0;
+  const nextFrame = () => {
+    const due = frames;
+    frames = [];
+    frameIds = [];
+    act(() => {
+      for (const callback of due) callback(0);
+    });
+  };
+  const canvasUi = () =>
+    h.tsldProps.current?.['canvasUi'] as { mode: string; fitSignal: number } | undefined;
+
+  beforeEach(() => {
+    bodyHeight = 0;
+    observed.length = 0;
+    frames = [];
+    frameIds = [];
+    nextFrameId = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+      frames.push(callback);
+      frameIds.push(++nextFrameId);
+      return nextFrameId;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number): void => {
+      const at = frameIds.indexOf(id);
+      if (at < 0) return;
+      frames.splice(at, 1);
+      frameIds.splice(at, 1);
+    });
+    localStorage.clear();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe(element: Element) {
+          observed.push({ callback: this.callback, element });
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const real = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset['testid'] === 'workspace-body'
+        ? ({ height: bodyHeight, width: 1000 } as DOMRect)
+        : real.call(this);
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('starts collapsed on a short body, so a hidden diagram can never be restored on load', () => {
+    renderScreen();
+    resizeBody(365);
+    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+    expect(canvasRow()).toBeNull();
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+
+  it('hides the diagram row on expand without unmounting it, and brings it back on collapse', () => {
+    renderScreen();
+    resizeBody(365);
+    const canvas = screen.getByTestId('tsld-panel');
+    expand();
+
+    const row = canvasRow();
+    expect(row).not.toBeNull();
+    // `display: none` already leaves the tree; the attributes would double-hide and lose the node
+    // from the roving walk's reach on the way back.
+    expect(row).not.toHaveAttribute('aria-hidden');
+    expect(row).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('tsld-panel')).toBe(canvas);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+    expect(resizer()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    expect(canvasRow()).toBeNull();
+    expect(screen.getByTestId('tsld-panel')).toBe(canvas);
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+
+  it('keeps today’s DOM when the body is not short, with aria-valuemin at PANEL_MIN_OPEN', async () => {
+    const { PANEL_MIN_OPEN } = await import('./use-activity-panel-prefs');
+    renderScreen();
+    resizeBody(800);
+    expand();
+    expect(canvasRow()).toBeNull();
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(resizer()).toHaveAttribute('aria-valuemin', String(PANEL_MIN_OPEN));
+  });
+
+  it('is not short for an unmeasured body (jsdom, first paint)', () => {
+    renderScreen();
+    expand();
+    expect(canvasRow()).toBeNull();
+    expect(resizer()).not.toBeNull();
+  });
+
+  it('holds the swap through the 24 px hysteresis band and releases beyond it', () => {
+    renderScreen();
+    resizeBody(590);
+    expand();
+    expect(canvasRow()).not.toBeNull();
+    resizeBody(610);
+    expect(canvasRow()).not.toBeNull();
+    resizeBody(624);
+    expect(canvasRow()).toBeNull();
+  });
+
+  it('never writes the panel’s stored size', () => {
+    localStorage.setItem(PANEL_KEY, JSON.stringify({ collapsed: false, size: 300 }));
+    renderScreen();
+    resizeBody(365);
+    expand();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    expect(JSON.parse(localStorage.getItem(PANEL_KEY) ?? '{}')).toMatchObject({ size: 300 });
+  });
+
+  it('mounts the plan’s slot outlets once while swapped', () => {
+    renderScreen();
+    resizeBody(365);
+    expect(document.querySelectorAll('[data-activities-bar]')).toHaveLength(1);
+    expand();
+    expect(document.querySelectorAll('[data-activities-bar]')).toHaveLength(1);
+  });
+
+  it('moves focus to Collapse when a live resize hides the control focus was on', () => {
+    renderScreen();
+    resizeBody(800);
+    expand();
+    const handle = resizer();
+    expect(handle).not.toBeNull();
+    handle?.focus();
+    expect(document.activeElement).toBe(handle);
+
+    resizeBody(365);
+    expect(resizer()).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Collapse activities panel' }),
+    );
+
+    // And from inside the diagram row, which `display: none` is about to hide.
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+    resizeBody(800);
+    expand();
+    const canvas = screen.getByTestId('tsld-panel');
+    canvas.tabIndex = 0;
+    canvas.focus();
+    expect(document.activeElement).toBe(canvas);
+    resizeBody(365);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Collapse activities panel' }),
+    );
+  });
+
+  it('closes an open dock on Expand when the body is too short for both', () => {
+    renderScreen();
+    resizeBody(365);
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
+
+    expand();
+    expect(screen.queryByRole('separator', { name: 'Resize health check panel' })).toBeNull();
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it('keeps a dock open on Expand when the body has room for both', () => {
+    renderScreen();
+    resizeBody(800);
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expand();
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
+    expect(resizer()).not.toBeNull();
+  });
+
+  it('collapses the swapped panel when a dock is opened, and opens the dock a frame later', () => {
+    renderScreen();
+    resizeBody(365);
+    expand();
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator', { name: 'Resize health check panel' })).toBeNull();
+    nextFrame();
+    expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: 'Resize health check panel' }),
+    ).toBeInTheDocument();
+  });
+  describe('commands that act on the diagram (M-A3)', () => {
+    it('runs a viewport command at once when the diagram is showing', () => {
+      renderScreen();
+      resizeBody(800);
+      expand();
+      const before = canvasUi()?.fitSignal;
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(canvasUi()?.fitSignal).toBe((before ?? 0) + 1);
+      expect(frames).toHaveLength(0);
+    });
+
+    it('collapses the panel for Fit while swapped, and fits after the next frame', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      const before = canvasUi()?.fitSignal;
+
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+      expect(canvasUi()?.fitSignal).toBe(before);
+
+      nextFrame();
+      expect(canvasUi()?.fitSignal).toBe((before ?? 0) + 1);
+    });
+
+    it('does not hand focus to the collapsed bar when a command collapses the panel', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      const fit = screen.getByRole('button', { name: 'Fit to plan' });
+      fit.focus();
+      fireEvent.click(fit);
+      expect(document.activeElement).not.toBe(
+        screen.getByRole('button', { name: 'Expand activities panel' }),
+      );
+    });
+
+    it('leaves focus on the toolbar control when a dock forces the panel closed', () => {
+      renderScreen();
+      resizeBody(800);
+      fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+      expand();
+      expect(
+        screen.getByRole('separator', { name: 'Resize health check panel' }),
+      ).toBeInTheDocument();
+      const analysis = screen.getByRole('button', { name: 'Analysis' });
+      analysis.focus();
+
+      // The body shrinks past the line with both open: the later request, the dock, wins.
+      resizeBody(365);
+      expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+      expect(document.activeElement).toBe(analysis);
+    });
+
+    it('hands focus to the collapsed bar when a wrapped command runs from inside the panel', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      const collapse = screen.getByRole('button', { name: 'Collapse activities panel' });
+      collapse.focus();
+      expect(document.activeElement).toBe(collapse);
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Expand activities panel' }),
+      );
+    });
+
+    it('drops the pending command when the workspace unmounts before the frame', () => {
+      const { unmount } = renderScreen();
+      resizeBody(365);
+      expand();
+      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      expect(frames).toHaveLength(1);
+      unmount();
+      expect(frames).toHaveLength(0);
+    });
+
+    it('does not collapse the panel on the Find field’s first Escape, only on the second', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      const find = screen.getByRole('searchbox', { name: 'Search or filter activities' });
+      fireEvent.change(find, { target: { value: 'pile' } });
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+
+      fireEvent.keyDown(find, { key: 'Escape' });
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(frames).toHaveLength(0);
+
+      fireEvent.keyDown(find, { key: 'Escape' });
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    });
+
+    it('collapses first, then arms, a drawing tool', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+      expect(canvasUi()?.mode).toBe('select');
+      nextFrame();
+      expect(canvasUi()?.mode).toBe('add-activity');
+    });
+
+    it('leaves a display toggle alone: the panel stays swapped and nothing waits for a frame', () => {
+      renderScreen();
+      resizeBody(365);
+      expand();
+      fireEvent.click(rowLens('Legend'));
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(frames).toHaveLength(0);
+    });
+
+    it('puts an armed tool away on entering the swap, and says so for that opening only', () => {
+      renderScreen();
+      resizeBody(365);
+      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      expect(canvasUi()?.mode).toBe('add-activity');
+
+      expand();
+      expect(canvasUi()?.mode).toBe('select');
+      expect(screen.getByText(`${NOTE} Drawing tool put away.`)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Collapse activities panel' }));
+      expand();
+      expect(screen.getByText(NOTE)).toBeInTheDocument();
+      expect(screen.queryByText(/Drawing tool put away/)).not.toBeInTheDocument();
+    });
+
+    it('names the Gantt, not the diagram, when the Gantt is the view the swap hid', () => {
+      h.search = { view: 'gantt' };
+      renderScreen();
+      resizeBody(365);
+      expand();
+      expect(screen.getByTestId('gantt-panel').closest('[hidden]')).not.toBeNull();
+      expect(screen.getByText('Gantt hidden. Collapse to return.')).toBeInTheDocument();
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    });
+
+    it('does not disarm a tool when the body is not short', () => {
+      renderScreen();
+      resizeBody(800);
+      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      expand();
+      expect(canvasUi()?.mode).toBe('add-activity');
+    });
   });
 });

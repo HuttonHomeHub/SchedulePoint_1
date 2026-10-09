@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 25 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1575 web
+> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1580 web
 > source files with 47 Playwright suites beside the base journey, and
-> 179 ADRs.
+> 180 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -580,6 +580,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0177** _(Accepted)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
 - **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
+- **ADR-0180** _(Accepted; amends ADR-0030 and ADR-0092)_ — The panel takes the body when it cannot show rows → [`0180-the-panel-takes-the-body-when-it-cannot-show-rows.md`](docs/adr/0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

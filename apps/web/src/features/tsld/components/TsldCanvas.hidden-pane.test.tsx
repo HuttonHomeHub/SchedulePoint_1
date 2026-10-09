@@ -133,6 +133,113 @@ describe('TsldCanvas hidden-pane pause', () => {
   });
 });
 
+/**
+ * **The short-body swap hides the canvas row with `display: none`** (`docs/specs/short-screen-
+ * vertical-budget`, M-A4). The canvas stays mounted, so what it must not do while nobody can see
+ * it is act on a size or a key that belongs to a surface it is not showing.
+ */
+describe('TsldCanvas while the short-body swap hides it', () => {
+  const rect = (width: number, height: number) => ({
+    width,
+    height,
+    top: 0,
+    left: 0,
+    right: width,
+    bottom: height,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  let resizeCallbacks: ResizeObserverCallback[] = [];
+
+  beforeEach(() => {
+    resizeCallbacks = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          resizeCallbacks.push(cb);
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not reallocate the bitmap for the 0 x 0 rectangle a hidden container measures', () => {
+    const measured = vi
+      .spyOn(HTMLDivElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(rect(900, 700));
+    const { container } = render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+      />,
+    );
+    const scene = container.querySelector('canvas');
+    expect(scene).not.toBeNull();
+    const widthShown = scene?.width;
+    const heightShown = scene?.height;
+    expect(widthShown).toBe(900);
+
+    // The swap sets display:none: the container measures 0 x 0 and the observer fires.
+    measured.mockReturnValue(rect(0, 0));
+    act(() => {
+      for (const cb of resizeCallbacks) cb([], {} as ResizeObserver);
+    });
+    expect(scene?.width).toBe(widthShown);
+    expect(scene?.height).toBe(heightShown);
+
+    // And back: the real size is applied again, so the guard is not a stuck state.
+    measured.mockReturnValue(rect(600, 500));
+    act(() => {
+      for (const cb of resizeCallbacks) cb([], {} as ResizeObserver);
+    });
+    expect(scene?.width).toBe(600);
+  });
+
+  it('answers no Escape while hidden, so a tool or the ladder is never reached from the table', () => {
+    const onExitAddMode = vi.fn();
+    render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        editing
+        mode="add-activity"
+        onExitAddMode={onExitAddMode}
+      />,
+    );
+    const escape = () =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+
+    // Visible: Escape leaves the armed tool, as ever.
+    escape();
+    expect(onExitAddMode).toHaveBeenCalledTimes(1);
+
+    setVisible(false);
+    escape();
+    expect(onExitAddMode).toHaveBeenCalledTimes(1);
+
+    setVisible(true);
+    escape();
+    expect(onExitAddMode).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('TsldCanvas minimap responsive withdrawal (M4 ux gate)', () => {
   const withMinimap = (): React.ReactElement => (
     <TsldCanvas

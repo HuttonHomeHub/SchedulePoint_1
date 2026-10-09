@@ -395,6 +395,29 @@ Where labels can be shed at all, prefer **always showing them** over a
 disclosure: a row that hides four facts behind a press has traded a width
 problem for a discoverability one.
 
+### A short body gives the whole workspace to the panel (ADR-0180)
+
+When the workspace body is too short to give the diagram its minimum and the activities panel three
+rows (a body under 599 px with no dock open), **Expand hides the diagram instead of squeezing both**.
+A panel that shows no rows is not an expanded panel.
+
+- **The diagram is hidden, not removed.** `display: none` (the `hidden` attribute), still mounted, and
+  no `aria-hidden` or `inert`. Collapse brings it back with the same position, zoom and selection. The
+  panel's header says "Diagram hidden. Collapse to return."
+- **Commands are classed by what they act on.** A command aimed at the diagram (zoom, fit, presets, go
+  to date and today, next conflict, the find cursor, arming a drawing tool, opening a right dock)
+  **collapses the panel first, then runs**, so it never acts on a diagram you cannot see. Display
+  marks (View ▾ toggles, Legend) and plan, data and output commands (Summary, Settings…, Analysis,
+  Share & export, Print, Undo) are unaffected. A new canvas-directed command chooses a class; a
+  structural test fails if it does not.
+- **A tool armed when the swap begins is put away,** and the note says so.
+- **A right dock and an expanded panel are mutually exclusive on a short body, and the later request
+  wins.** A toggle never claims a dock nobody can see.
+- **Focus is never dropped to the page.** If the swap hides the control you were on, focus moves to
+  the panel's Collapse button.
+- **Size constants are measured, and coarse-sized.** One set for both pointers, because a Surface
+  with its cover on reports a fine pointer (ADR-0118 D7).
+
 ## Perceived performance playbook
 
 - Prefetch route data on link hover/focus (intent).
