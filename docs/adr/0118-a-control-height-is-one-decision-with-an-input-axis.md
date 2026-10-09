@@ -6,6 +6,9 @@
 - **Amended by:** ADR-0179 (2026-10-08) — M4's 390 × 844 coarse width is retired; below 1024 the 24 px
   target floor rests on the narrow-shell journey's axe `target-size` check. The ≥ 44 px coarse rule
   at and above the floor stands.
+- **Amended by:** ADR-0183 (2026-10-09) — D1's coarse exception list keeps `icon-sm` for one consumer (the
+  Gantt's `⋯`); every other dense-row target is `icon-row` and grows with its row. D8's blind spot (a
+  control overflowing its container) gains a containment assertion for row-menu triggers.
 - **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)

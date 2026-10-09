@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1587 web
 > source files with 47 Playwright suites beside the base journey, and
-> 180 ADRs.
+> 181 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -515,7 +515,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0115** _(Accepted)_ — A bound governs what it encloses, and the wrap was measured from one state → [`0115-a-bound-governs-what-it-encloses.md`](docs/adr/0115-a-bound-governs-what-it-encloses.md)
 - **ADR-0116** _(Accepted)_ — A health finding is not a conflict, and a report never omits a check → [`0116-a-health-finding-is-not-a-conflict.md`](docs/adr/0116-a-health-finding-is-not-a-conflict.md)
 - **ADR-0117** _(Accepted)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
-- **ADR-0118** _(Accepted; amended by ADR-0177 and ADR-0179)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
+- **ADR-0118** _(Accepted; amended by ADR-0177, ADR-0179 and ADR-0183)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
 - **ADR-0120** _(Accepted)_ — A documented obligation with no computed observer → [`0120-a-documented-obligation-with-no-computed-observer.md`](docs/adr/0120-a-documented-obligation-with-no-computed-observer.md)
 - **ADR-0121** _(Accepted)_ — One stack derivation, two renderers, and a cap set by height rather than cost → [`0121-one-derivation-two-renderers-and-a-cap-set-by-height.md`](docs/adr/0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)
 - **ADR-0119** _(Accepted)_ — A group of buttons says which of them are alternatives → [`0119-a-group-of-buttons-says-which-of-them-are-alternatives.md`](docs/adr/0119-a-group-of-buttons-says-which-of-them-are-alternatives.md)
@@ -581,6 +581,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
 - **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
 - **ADR-0180** _(Accepted; amends ADR-0030 and ADR-0092)_ — The panel takes the body when it cannot show rows → [`0180-the-panel-takes-the-body-when-it-cannot-show-rows.md`](docs/adr/0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)
+- **ADR-0183** _(Accepted; amends ADR-0118)_ — A row grows with the finger it holds, and the Gantt is the named exception → [`0183-a-row-grows-with-the-finger-it-holds.md`](docs/adr/0183-a-row-grows-with-the-finger-it-holds.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
