@@ -1082,6 +1082,13 @@ interface CoarseSurface {
   view?: 'gantt';
   /** Narrows the sweep to controls matching this selector (see `sweep`'s `only`). */
   only?: string;
+  /**
+   * Also asserts every row-menu trigger lies inside its own row's box (`assertRowTriggersContained`).
+   * A row that is smaller than the control in it is exactly the overflow `icon-sm` was kept at 28 px
+   * to avoid, and the size sweep above cannot see it: it asks whether the control is 44, not
+   * whether the row holds it.
+   */
+  contained?: true;
   /** The surface is the activities panel's table, which is collapsed until it is expanded. */
   activities?: true;
   /**
@@ -1107,15 +1114,27 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
   // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
   // an optional surface silently covers nothing the day its selector changes, which is the hole
   // this file's pinned positives exist to close.
-  // 6, not 8: the tree became a named exception above, so the swept set is the six organisation
-  // destinations plus the rail's two controls. The floor still proves the destinations are there,
-  // which is the class M3 fixed and the reason this surface is swept at all.
+  // 13, so 14 swept: the six organisation destinations, the rail's two controls, and the tree's
+  // three rows with their three `⋯` (dense-row-touch-targets M2 took the tree off the exemption
+  // list). The tree has its own entry below as well, so a tree that sweeps to nothing cannot hide
+  // behind the destinations; this aggregate is what proves the two surfaces are swept together.
   {
     name: 'Project Explorer',
     root: '[data-panel-border]',
-    atLeast: 6,
+    atLeast: 13,
     minWidth: 1024,
     scrollEnds: 'nav[aria-label="Project Explorer"]',
+  },
+  // The virtualized tree on its own: the seeded client, project and plan, each a row with a `⋯`, so
+  // 6 swept and a floor of 5 — measured at both widths, where the tree's scroller still holds all
+  // three rows at 44 px (a row below the fold is skipped by the sweep, so a regression that cost
+  // rows would fall under it). `contained`: a 44 px `⋯` in a row that did not grow overflows it.
+  {
+    name: 'Explorer tree',
+    root: '[role="tree"]',
+    atLeast: 5,
+    minWidth: 1024,
+    contained: true,
   },
   // The activities table (#215): swept for its row-menu triggers only. Its other controls (sort
   // headers, name cells) are a different question, and its 24 px row checkboxes are the named
@@ -1127,6 +1146,7 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     only: '[aria-haspopup="menu"]',
     activities: true,
     minHeight: 700,
+    contained: true,
   },
   // Switched to in the test, not here. `minWidth` is the floor (1024): the pinned grid block is
   // 584 px, so below it the grid overflows its scroller and its controls sit outside the viewport,
@@ -1146,24 +1166,20 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
 ];
 
 /**
- * **Two named exceptions, both excluded by an ANCESTOR SELECTOR rather than by a size threshold**,
- * so each can hide exactly the class it names and never a regression elsewhere.
+ * **One named exception, excluded by an ANCESTOR SELECTOR rather than by a size threshold**, so it
+ * can hide exactly the class it names and never a regression elsewhere.
  *
- * The second is the Project Explorer's virtualized tree — its rows and their row-menu triggers are
- * 28 px on both pointers. That is ADR-0118 D1's `icon-sm` exception plus the row rhythm that
- * constrains it: `HierarchyTree`'s `ROW_HEIGHT` is a **JavaScript constant** feeding both the
- * absolute row style and the virtualizer's `estimateSize`, so growing it under a coarse pointer is
- * a row-rhythm decision with its own design pass rather than a padding change
- * (`docs/TECH_DEBT.md` #215). It is excluded here rather than left unswept, so the class is named
- * in one place with its equivalents: a long-press anywhere on the row opens the same menu on
- * touch, and Menu/Shift+F10 opens it from the keyboard.
+ * It is a breadcrumb crumb. See the projection's docblock — a truncated crumb's width IS the space
+ * left over, so no CSS makes it clear a width floor, and a 44 px box was built, measured at
+ * **16 × 44**, and withdrawn for making the failing axis worse. Compliant under WCAG 2.2 §2.5.8's
+ * Inline exception; `breadcrumbs.tsx` carries the reasoning.
  *
- * The first is a breadcrumb crumb. See the projection's docblock — a truncated crumb's
- * width IS the space left over, so no CSS makes it clear a width floor, and a 44 px box was built,
- * measured at **16 × 44**, and withdrawn for making the failing axis worse. Compliant under WCAG
- * 2.2 §2.5.8's Inline exception; `breadcrumbs.tsx` carries the reasoning.
+ * **There used to be a second: the Project Explorer's virtualized tree**, whose rows and `⋯` were
+ * 28 px on both pointers because `HierarchyTree`'s row height was a JavaScript constant. It follows
+ * the pointer now (`treeRowHeight`, dense-row-touch-targets M2), so the tree is swept like any
+ * other surface and a regression to a fixed 28 goes red here.
  */
-const EXEMPT_WITHIN = ['nav[aria-label="Breadcrumb"]', '[role="tree"]'].join(',');
+const EXEMPT_WITHIN = 'nav[aria-label="Breadcrumb"]';
 
 /**
  * **The Gantt grid's four named coarse exceptions** (ADR-0177 D4, swept entries), each excluded by
@@ -1363,6 +1379,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
           ).toBe(true);
         }
 
+        if (surface.contained)
+          await assertRowTriggersContained(surface.name, surface.root, viewport.width);
+
         const belowHouse = targets.filter(
           (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
         );
@@ -1388,6 +1407,57 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       }
     }
   });
+
+  /**
+   * **Every row-menu trigger lies inside its own row** (border box, ±0.5 px). Scoped to
+   * `[aria-haspopup="menu"]` inside a `treeitem` or a table row, and the row is the nearest one, so a
+   * trigger cannot satisfy it by sitting inside some other, taller row. A positive count is
+   * required: a root with no such trigger would pass vacuously (ADR-0110 D5). Only rows that are
+   * painted in their scroller are asked — a row below the fold is not on screen to overflow.
+   */
+  async function assertRowTriggersContained(
+    name: string,
+    root: string,
+    width: number,
+  ): Promise<void> {
+    const reading = await page.evaluate((rootSelector) => {
+      const surface = document.querySelector(rootSelector);
+      if (!surface) throw new Error(`command-surface: no surface matched ${rootSelector}`);
+      let checked = 0;
+      const outside: string[] = [];
+      for (const trigger of surface.querySelectorAll('[aria-haspopup="menu"]')) {
+        const row = trigger.closest('[role="treeitem"], tr');
+        if (!row || trigger.getClientRects().length === 0) continue;
+        const t = trigger.getBoundingClientRect();
+        const r = row.getBoundingClientRect();
+        let clipped = false;
+        for (let a = row.parentElement; a && !clipped; a = a.parentElement) {
+          if (!/auto|scroll/.test(getComputedStyle(a).overflowY)) continue;
+          const ar = a.getBoundingClientRect();
+          clipped = r.top + r.height / 2 < ar.top || r.top + r.height / 2 > ar.bottom;
+        }
+        if (clipped) continue;
+        checked += 1;
+        const e = 0.5;
+        if (
+          t.top < r.top - e ||
+          t.bottom > r.bottom + e ||
+          t.left < r.left - e ||
+          t.right > r.right + e
+        )
+          outside.push(
+            `${trigger.getAttribute('aria-label') ?? '(unnamed)'}: trigger ${Math.round(t.width)}×${Math.round(t.height)} in row ${Math.round(r.width)}×${Math.round(r.height)}`,
+          );
+      }
+      return { checked, outside };
+    }, root);
+    expect(reading.checked, `${name}: no row-menu trigger was checked at ${width}`).toBeGreaterThan(
+      0,
+    );
+    expect(reading.outside, `${name}: a row-menu trigger overflows its row at ${width}`).toEqual(
+      [],
+    );
+  }
 
   /**
    * **The floor's share of the activities table, SIZE ONLY.** At 1024 × 600 the panel sits at
@@ -1520,5 +1590,55 @@ test.describe('The plan command surface, under a coarse pointer', () => {
 
   test('the Project Explorer is usable at the floor', async () => {
     await assertExplorerUsableAtFloor(page);
+  });
+
+  /**
+   * **A long name still truncates beside the always-visible 44 px `⋯`, at the Explorer's 200 px
+   * minimum** (dense-row-touch-targets M2; `m0-measurement.md` §4 measured the name box at 85 px
+   * there). On a coarse pointer the `⋯` is never hidden and takes 16 px more than it did, so the
+   * name has less room: this holds that it gives way (an ellipsis) rather than running under the
+   * button, and that the button stays inside its row. The plan row is the deepest, so it has the
+   * least room of the three.
+   */
+  test('a long name truncates beside the 44 px ⋯ at the minimum Explorer width', async () => {
+    const KEY = 'schedulepoint-explorer';
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ size: 200 })), KEY);
+    await page.reload();
+    await ensurePen(page);
+    const row = page.getByRole('tree').getByRole('treeitem', { name: /Riverside Quarter/ });
+    await expect(row).toBeVisible();
+    const reading = await row.evaluate((el) => {
+      // The name's clipping box is the parent of the innermost text span; found by its text so a class rename
+      // cannot turn this into a selector failure that reads as the defect.
+      const text = [...el.querySelectorAll('span')].find(
+        (span) => span.childElementCount === 0 && span.textContent?.startsWith('Riverside Quarter'),
+      );
+      const name = text?.parentElement;
+      const more = el.querySelector('[aria-haspopup="menu"]');
+      if (!name || !more) throw new Error('the plan row has no name span or no ⋯ button');
+      const n = name.getBoundingClientRect();
+      const m = more.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return {
+        truncated: name.scrollWidth > name.clientWidth,
+        // Clipped on ONE line, not wrapped: a name that wraps would also overflow a narrow box.
+        singleLine: n.height < 24,
+        nameClearsButton: n.right <= m.left + 0.5,
+        buttonInRow: m.left >= r.left - 0.5 && m.right <= r.right + 0.5,
+        panelWidth: Math.round(r.width),
+        button: `${Math.round(m.width)}×${Math.round(m.height)}`,
+      };
+    });
+    expect(reading, 'the plan row at a 200 px Explorer').toMatchObject({
+      truncated: true,
+      singleLine: true,
+      nameClearsButton: true,
+      buttonInRow: true,
+      button: '44×44',
+    });
+    await page.evaluate((key) => localStorage.removeItem(key), KEY);
+    await page.reload();
+    await ensurePen(page);
   });
 });
