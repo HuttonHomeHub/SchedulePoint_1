@@ -1,8 +1,11 @@
 # Implementation Plan: Toolbar redesign for a laptop, Surface Pro and monitor-first app
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved (the product owner approved the whole plan to run to completion on 2026-10-09; OD-1 and OD-2
+  in spec §0.2 were decided after M0 the same day)
 - **Owner:** web
+- **M0:** done (`m0-measurement.md`, commit `0044ee1`). It returned **no-go for M1 as written**; this revision
+  answers it (spec §0).
 
 ## Breakdown
 
@@ -11,14 +14,13 @@ the free-space requirement were decided on 2026-10-09, and CQ-4 later the same d
 
 ```mermaid
 flowchart LR
-  M0[M0 Measure: ships dark] --> G0{Premises hold? <20px rule}
-  G0 -- no --> STOP[Amend spec, ask the product owner]
-  G0 -- yes --> M1
-  Q2[[CQ-2 decided: 3 compact items]] --> M1[M1 Docs fixes + one label rule + 2 lines at the floor]
-  M1 --> M2[M2 Relocations: identity row, Panels, Float paths, View panel at 1024]
+  M0[M0 Measure: DONE, no-go as written] --> A[Spec revision 4 + OD-1/OD-2]
+  A --> M1
+  Q2[[CQ-2 + OD-1: 4 compact items]] --> M1[M1 Label-only: docs fixes, dead ladder, label API; line count unchanged]
+  M1 --> M2[M2 Relocations: identity row, Panels, Float paths, View panel 3 columns]
   Q3[[CQ-3 decided: narrow only]] --> M3[M3 Below 1024: scrolling line, #471]
   M1 --> M3
-  Q1[[CQ-1 decided: corner cluster]] --> M4[M4 Diagram-corner cluster]
+  Q1[[CQ-1 decided: corner cluster]] --> M4[M4 Diagram-corner cluster: 2 lines at the floor first asserted here]
   M2 --> M4
   QF[[Free-space requirement]] --> M5[M5 Promotion ladder]
   M3 --> M5
@@ -48,9 +50,20 @@ flowchart LR
 
 ---
 
-### Milestone M0: Measure and verify the premises (ships dark)
+### Milestone M0: Measure and verify the premises (ships dark) — DONE
 
-**Outcome:** `docs/specs/toolbar-redesign/m0-measurement.md`, `promotion-widths.fine.json`,
+**Result (commit `0044ee1`):** `m0-measurement.md` and provisional `promotion-widths.{fine,coarse}.json`. **No-go
+for M1 as written**:
+
+- LOOK at the floor misses by 86.9 px without Float paths moved, and by 69.1 with a conflict even with it;
+- coarse 1024 is 4 lines;
+- M1 alone cannot reach two lines.
+
+Answered by spec §0: Float paths moves (D-c), Resource view becomes the fourth compact item (OD-1), touch accepts 4
+lines at 1024 (OD-2), and two lines are claimed only from M4. The task text below is kept as the record of what
+was asked.
+
+**Outcome (as planned):** `docs/specs/toolbar-redesign/m0-measurement.md`, `promotion-widths.fine.json`,
 `promotion-widths.coarse.json` and a go/no-go.
 **Entry point:** `Ships dark: a measurement record and a harness spec.`
 **Journey:** none (a harness, ADR-0081 §3).
@@ -117,22 +130,30 @@ flowchart LR
 
 ---
 
-### Milestone M1: Docs first, one label rule, two lines at the floor (gate: CQ-2)
+### Milestone M1: Docs first, the dead ladder, one label rule — label-only (gate: CQ-2 + OD-1)
 
-**Outcome:** at 1024 × 600 fine the deck is two lines. Baseline overlay, Comments and Settings show their icon
-only, below `--container-roomy`. One resolver and one helper decide every label.
+**Outcome:** M1 is **behaviour-neutral apart from labels**:
+
+- below `--container-roomy` (79 rem), Baseline overlay, Comments, Settings and Resource view show their icon only;
+- Resource view takes the `ChartColumnStacked` glyph and a description tooltip;
+- one resolver and one helper decide every label.
+
+**The deck's line count does not change at M1** (M0 §0.3: LOOK 1146.9 and DO 1119.2 at 1024 after labels alone).
+Two lines at the floor are asserted at M4.
 **Entry point:** the "Plan commands" toolbar at 1024 × 600.
-**Journey:** `e2e-workspace-fit/command-surface.spec.ts`, which asserts:
+**Journey:** `e2e-workspace-fit/command-surface.spec.ts`, which asserts only what holds at M1:
 
-- `LINES[1024] = 2`;
-- a coarse 1024 cell at ≤ 3;
-- a 1024 `BAND_MAX_PX` bar from M0;
-- the three compact items keep their names, show their tooltips on hover and focus, and Escape dismisses them;
+- `LINES[1024]` **stays `{ max: 4 }`** (unchanged), and a coarse 1024 cell at ≤ 4;
+- the 1280 and above LINES bounds are unchanged;
+- the four compact items keep their names, show their description tooltips on hover and focus, and Escape
+  dismisses them;
+- every compact item's label is visible at 1280 (79 rem and up);
 - 2.5.3 label-in-name;
-- no leading seam;
-- 1280 × 800 and 2560 × 1440 text-only 200 % cells (browser default font size via `Page.setFontSizes`, not CSS)
-  where every control is hit-testable. The 1280 cell is 40 rem (below `max-lg`), so it is judged against M3's
-  scroll line once M3 lands; the 2560 cell (80 rem) is judged against the two-row wrap.
+- a 2560 × 1440 text-only 200 % cell (80 rem; browser default font size via `Page.setFontSizes`, not CSS) where
+  every deck control is hit-testable.
+
+The 1280 × 800 text-only cell (40 rem; band 88 % fine / 127 % coarse today, foot row unreachable on coarse, M0 §8)
+is **M3's** assertion, and "no leading seam" (SC-12) is **M6 V2's**: neither holds at M1.
 
 ##### Task M1-T1: the stale lines first (≈ one PR, docs and comments only)
 
@@ -174,10 +195,12 @@ only, below `--container-roomy`. One resolver and one helper decide every label.
   - `Toolbar` treats `'roomy'` as `'always'`;
   - `ICON_ONLY` is deleted: its members become `'never'`, except `apply-levelling`, which becomes `'roomy'`
     (D-l); `print` is dropped;
-  - `--container-roomy` goes in `@theme`, with a docblock citing M0;
-  - the `'roomy'` items always mount a `description`-purpose tooltip, so Baseline overlay and Comments gain a
-    `description`, and Settings' "Schedule settings" (a near name-echo) is replaced by "Calendar, critical path,
-    progress, levelling and earned value";
+  - `--container-roomy: 79rem` goes in `@theme`, with a docblock citing M0 §4.2 (the deck at 1280 is 1264 px);
+  - the compact set is **four**: Baseline overlay, Comments, Settings, and **Resource view** (OD-1);
+  - the `'roomy'` items always mount a `description`-purpose tooltip (texts in spec §4.5). Settings' "Schedule
+    settings" (a near name-echo) is replaced;
+  - Resource view's icon becomes `ChartColumnStacked` (verified in `lucide-react` 1.49.0, `dist/lucide-react.d.ts:4306`),
+    registered in `scripts/dependency-claims.json`;
   - `ToolbarButton.tsx`: delete the native `title` (`:105`) and the tooltip purpose derived from `!showLabel`
     (`:131`), leaving one tooltip path;
   - correct `selection-actions.tsx:934`, which cites `ICON_ONLY`.
@@ -200,8 +223,13 @@ only, below `--container-roomy`. One resolver and one helper decide every label.
 - an `identity` registry row (Plan summary, Edit plan details) rendered by `Toolbar` after the status badge;
 - a Panels deck group (Legend, Resource view, Comments), trailing on LOOK;
 - Plan trailing on DO;
-- Float paths on the selection bar and Gantt row menu (if M0-T2.3 allows);
-- the View panel fitted at 1024.
+- Float paths on the selection bar and Gantt row menu (**decided**, M0 §4.3);
+- the View panel fitted at 1024 (three columns).
+
+Two lines at the floor are **not** asserted at M2: zoom and minimap are still on the deck until M4. M2 records the
+line count and LOOK's free width, including the **cycling** conflict read-out ("Conflict 2 of 7 · reason"), which
+M0 did not measure. If that read-out makes LOOK miss at 1024 by under 20 px once M4's removal is projected, stop
+and ask (spec §4.5 exit rule).
 
 **Entry points:** header "Plan summary" and "Edit plan details"; LOOK group "Panels"; selection bar "Float paths";
 Gantt row menu "Float paths"; "View" at 1024 × 600.
@@ -245,19 +273,33 @@ Gantt row menu "Float paths"; "View" at 1024 × 600.
 ##### M2-T3: the View panel at 1024 (≈ one PR)
 
 - **Description:**
-  - two columns, with collapsible sections;
-  - delete the `panels` `ViewToggleGroupId` fieldset (its sole occupant, Minimap, leaves at M4; if M4 has not landed,
-    Minimap stays until then);
-  - the zoom radios stay.
+  - **three columns** (Zoom and Structure | Markers | Insight overlays and Colour), because two balanced columns
+    measured about 633 px against SC-13's 420 (M0 §0.8);
+  - **secondary sections collapsed by default** (Structure and Markers as disclosures, open state for one opening,
+    ADR-0169), unless three columns alone measure ≤ 420, in which case the collapse is dropped;
+  - measure at 1024 × 600 on both pointers and record it;
+  - the `panels` `ViewToggleGroupId` fieldset stays until M4 removes Minimap (its sole occupant), then goes;
+  - the zoom radios stay until C1 promotes them at M5.
 - **Complexity:** M
-- **Review:** accessibility-reviewer on the reading order.
+- **Review:** accessibility-reviewer on the reading order and the disclosures.
 
-##### M2-T4: Float paths (≈ one PR, only if M0-T2.3 allows)
+##### M2-T4: Float paths to the selection bar and Gantt row menu (≈ one PR, decided)
 
-- **Description:** an object action on the selection bar and in the Gantt row menu; the deck item is deleted.
+- **Description:**
+  - `SelectionActionContext` gains `floatPathsOpen` and `toggleFloatPaths` (today built only for
+    `TsldToolbarContext`, `plan-workspace-toolbar.tsx:436`);
+  - an object action in `selectionActionItems`, which `GanttRowMenu.tsx:147-153` already derives from, so the Gantt
+    row menu mirrors it by construction;
+  - the deck item is deleted.
 - **Complexity:** M
-- **Testing:** `float-paths-view-agnostic.structural.test.ts`, `selection-duplication.structural.test.ts`. Correct
-  `selection-actions.tsx:183-199` and `:206`.
+- **Testing:**
+  - `src/features/float-paths/float-paths-view-agnostic.structural.test.ts`;
+  - `selection-duplication.structural.test.ts`;
+  - `tsld-toolbar-float-paths.test.tsx`;
+  - `e2e-float-paths/float-paths.spec.ts:66`, which locates `data-toolbar-item="float-paths"` in the LOOK row;
+  - `e2e-health-check/health-check.spec.ts:139`.
+
+  Correct `selection-actions.tsx:183-199` and the stale `:206`.
 
 ---
 
@@ -268,8 +310,13 @@ band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 �
 **Entry point:** the "Plan commands" toolbar at 640 × 360.
 **Journey:** `e2e-narrow-shell/narrow-shell.spec.ts`:
 
-- SC-5 at every #471 cell (the band is ≤ 40 % of height or scrolls away; Expand and Recalculate hit-testable);
+- SC-5 at every #471 cell, **on both pointers**: the band is ≤ 40 % of height or scrolls away, and Expand and
+  Recalculate (when stale) are hit-testable. **Coarse Expand is unreachable at all five cells today** (M0 §9), so
+  the coarse half is the acceptance criterion this milestone exists for;
 - SC-6;
+- **text-only 200 % at 1280 × 800** (40 rem, so the scroll line applies). Today the band takes 88 % fine and 127 %
+  coarse, and the foot row is unreachable on coarse (M0 §8). After M3, Expand is hit-testable on both pointers and
+  the band is ≤ 40 % or scrolls away;
 - after every arrow press, the focused control's rect is inside the scroller's visible rect;
 - the overflow cue is visible;
 - a menu opened from a half-scrolled trigger clamps to the viewport;
@@ -281,7 +328,8 @@ band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 �
   - `flex-nowrap overflow-x-auto scroll-px-2` under `max-lg:`, with an edge fade;
   - **`scrollIntoView` on roving focus (required)**;
   - `@custom-variant squat` beside `tall`/`short` (`globals.css:31,36`), with its constant in `lib/breakpoints.ts`,
-    pinned in `breakpoints.test.ts`.
+    pinned in `breakpoints.test.ts`. Its height is set in rem, so the 200 % text cell (25 rem tall at 1280 × 800)
+    triggers it.
 - **Complexity:** M
 - **Review:** accessibility-reviewer **before release** (ADR-0111: `Deck`'s keyboard contract gains scrolling).
 - **Changeset:** minor.
@@ -295,10 +343,15 @@ band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 �
 ### Milestone M4: The diagram-corner cluster (gate: CQ-1, decided yes)
 
 **Outcome:** a "Diagram viewport" toolbar (Zoom out, Zoom in, Fit to plan, Minimap) at the stage's bottom-right, with
-the minimap stacking above it. Gone from the deck and from View ▾.
+the minimap stacking above it. Gone from the deck and from View ▾. **With M2 already landed, this is where the
+two-line floor arrives** (M0 §3: LOOK 980.9 / 886.1 with Resource view compact, DO 967.7, canvas 362).
 **Entry point:** the Diagram view's "Diagram viewport" toolbar, then "Zoom in".
 **Journey:**
 
+- **`command-surface.spec.ts`: `LINES[1024]` becomes `{ max: 2 }` fine** in the base, conflict ("1 conflict" and
+  the cycling read-out), peer-pen, selection, dock, minimap, Gantt and empty-plan states; coarse 1024 stays
+  `{ max: 4 }` (OD-2); a 1024 `BAND_MAX_PX` bar of about 139 fine (M0 §2);
+- SC-1: canvas ≥ 350 at 1024 × 600 fine;
 - press Zoom in and see the scale change;
 - toggle Minimap (`aria-pressed`);
 - Tab order canvas → minimap → cluster;
@@ -319,10 +372,13 @@ the minimap stacking above it. Gone from the deck and from View ▾.
     `useChromeSlot` / `ChromePortal` pattern), and `plan-workspace-toolbar.tsx`, where `TsldToolbarContext` is built,
     portals the `Toolbar` into it, so the context is derived once;
   - `Toolbar` renders that slice; `toolbarCardVariants`; `aria-keyshortcuts` on each item;
-  - geometry: the column sits above the horizontal scrollbar and below the ruler, and covers neither, including
-    with C1 promoted (M5); the reveal margin uses the column's live rect;
+  - geometry: the column sits **above the 14 px axis-marker row** (`tsld-axis-markers`) and **below the 40 px
+    ruler**, and covers neither, including with C1 promoted (M5). There is no scrollbar in the stage (M0 §0.6). The
+    reveal margin uses the column's live rect;
   - one positioned column, cluster fixed at the bottom and minimap above with `gap-2` (spec §4.7);
-  - `minimapRoom` counts the cluster;
+  - `minimapRoom` gains a **height clause** beside its width rule (`TsldCanvas.tsx:1602`): coarse 1024 × 600 leaves
+    about 2 px (M0 §7), so the minimap withdraws there with its reason and the cluster stays. Both the coarse
+    1024 × 600 cell and the 1024 dock-open cell (386 px stage) are journey-tested;
   - the reveal margin.
 - **Complexity:** L
 - **Review:** ui-architect note first; accessibility-reviewer **before release**; performance-reviewer
@@ -342,8 +398,10 @@ the minimap stacking above it. Gone from the deck and from View ▾.
 their spare width with promoted menu commands in the spec's ladder order (§4.11). The search field grows at 2560.
 Promoted entries leave their menus, and **no menu ever empties** (each has an anchor). The header has no ladder this
 epic (D-b).
-**Entry point:** the "Plan commands" toolbar at 1440 × 900, where "Critical only", "Late-start overlay",
-"Health check" and "Share…" are on the bar (if M0 confirms the stages).
+**Entry point:** the "Plan commands" toolbar at 1440 × 900 (fine). By M0's provisional stages, "Critical only",
+"Health check", "Share…" and "Add: Start milestone" are on the bar there.
+**Thresholds:** M0's stage table (spec §4.11) is the **provisional starting point**. M5 recomputes it from the JSON
+re-taken after M4, with the worst-state reserve.
 **Journey:** new `command-surface.spec.ts` cases per stage and pointer:
 
 - SC-17: each deck row's unused width is ≤ 15 % or no remaining entry fits;
@@ -388,8 +446,10 @@ epic (D-b).
   - `PromotableEntry` and `isPromoted`, generalising `LensToggle.promotion`. `defineToolbar` validates `from` and
     asserts every source menu has an anchor;
   - the structural test that a derived item is never `'roomy'` or `'never'`;
-  - the assertion that the deck at the first stage is ≥ `--container-roomy`, **per pointer** (a single token,
-    per-pointer stages);
+  - the assertion that the deck at the first stage is ≥ `--container-roomy` (79 rem), **per pointer, against that
+    pointer's own first stage** (fine 80 rem; coarse LOOK 90 rem, M0 §10.3);
+  - `computePromotionStages` **reserves the worst stress state per row** (a conflict on LOOK, a held pen on DO), with
+    a unit test showing that L1 does not promote at fine 1280;
   - **the focus hand-off target**: `use-focus-handoff.ts` (and its test) gains a target hook, so demotion hands focus
     to the source trigger rather than the container (E-2). ADR-0111 review before release;
   - SC-19's **render-level** jsdom test (stubbed `matchMedia` and pointer, every source menu opened, bar xor menu),
@@ -420,6 +480,21 @@ regardless of state and flags" for every menu. Each PR:
 - changeset patch or minor.
 
 The search-field growth at 2560 lands with the View PR.
+
+**Test updates planned per PR (M0 §11).** Playwright's default viewport is 1280 × 720 = 80 rem, the first stage,
+so once Analysis and Share & export promote, **default-viewport flows find Health check… and Share… on the bar, not
+in the menu**:
+
+- `e2e-health-check/health-check.spec.ts:38`, `:146`;
+- `e2e-workspace-chrome/dock.spec.ts:295`;
+- `activities-panel-scroll.spec.ts:648`;
+- `e2e-interchange/interchange.spec.ts:117`;
+- `e2e-share/share.spec.ts:55`, `:351`.
+
+Each of these is changed in the PR that promotes its command, using a helper that reaches a command "on the bar or
+in its menu" so the flow does not depend on the stage. Entries promoting only from 90–160 rem (Compare revisions,
+Earned value, Late-start overlay, Has conflict) affect no default-viewport journey. They are listed for the
+wide-viewport cases in `command-surface.spec.ts`.
 
 ##### M5-T7: re-measure (same as the last PR)
 
@@ -545,16 +620,18 @@ journeys run locally before pushing.
 
 ## Risks & assumptions (rollup)
 
-| Risk                                                                            | Likelihood | Impact | Mitigation                                                                                      |
-| ------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------- |
-| A row misses one line at 1024 in a stress state                                 | med        | med    | M0 exit rule (< 20 px → stop and ask)                                                           |
-| The promotion ladder brings back width-driven defects                           | med        | high   | Viewport stages, committed thresholds, monotonic, never demotes today's bar; SC-18 verified red |
-| A menu refactor loses a command                                                 | med        | high   | The SC-19 manifest test lands first (M5-T1)                                                     |
-| Promoted widths differ from M0 after M3/M4                                      | high       | low    | Re-run the M0 harness before M5-T2                                                              |
-| Gantt has no Float paths route                                                  | med        | low    | D-c is conditional                                                                              |
-| Keyboard regressions in `Deck` scrolling, the cluster and the organisation menu | med        | high   | ADR-0111 reviews before release; journeys                                                       |
-| Text-only 200 % overflows rows                                                  | med        | low    | `flex-wrap` safety valve (R1), the SC-7 cell                                                    |
-| The cluster covers activities                                                   | med        | low    | The SC-15 reveal margin and its journey                                                         |
-| The organisation menu loses the native select's type-ahead                      | med        | med    | Add type-ahead to `Menu` under an ADR-0111 review, or state the limit (V5)                      |
-| Promoted widths drift from the committed JSON                                   | med        | med    | SC-18 (a): CI re-measures at 3840 × 1440 on both pointers                                       |
-| Demotion under focus at 200 % text                                              | high       | med    | E-2's journey at 200 %; the source trigger is always present                                    |
+| Risk                                                                                                                                                     | Likelihood | Impact | Mitigation                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| A row misses one line at 1024 in a stress state (the cycling conflict read-out is unmeasured; "1 conflict" leaves about 25.7 px with four compact items) | med        | med    | Measured at M2 and M4 before `LINES[1024] = 2` is asserted; < 20 px miss → stop and ask; no fifth compaction without the owner |
+| The two-line floor claimed before it exists                                                                                                              | —          | high   | Resequenced: M1 asserts only label facts; two lines are first asserted at M4                                                   |
+| Promotion stages drift after M2/M4 change the layout                                                                                                     | high       | low    | M0 stages are provisional; the JSON is re-taken after M4; SC-18 (a) and (c)                                                    |
+| The promotion ladder brings back width-driven defects                                                                                                    | med        | high   | Viewport stages, committed thresholds, monotonic, never demotes today's bar; SC-18 verified red                                |
+| A menu refactor loses a command                                                                                                                          | med        | high   | The SC-19 manifest test lands first (M5-T1)                                                                                    |
+| Promoted widths differ from M0 after M3/M4                                                                                                               | high       | low    | Re-run the M0 harness before M5-T2                                                                                             |
+| Gantt has no Float paths route                                                                                                                           | med        | low    | D-c is conditional                                                                                                             |
+| Keyboard regressions in `Deck` scrolling, the cluster and the organisation menu                                                                          | med        | high   | ADR-0111 reviews before release; journeys                                                                                      |
+| Text-only 200 % overflows rows                                                                                                                           | med        | low    | `flex-wrap` safety valve (R1), the SC-7 cell                                                                                   |
+| The cluster covers activities                                                                                                                            | med        | low    | The SC-15 reveal margin and its journey                                                                                        |
+| The organisation menu loses the native select's type-ahead                                                                                               | med        | med    | Add type-ahead to `Menu` under an ADR-0111 review, or state the limit (V5)                                                     |
+| Promoted widths drift from the committed JSON                                                                                                            | med        | med    | SC-18 (a): CI re-measures at 3840 × 1440 on both pointers                                                                      |
+| Demotion under focus at 200 % text                                                                                                                       | high       | med    | E-2's journey at 200 %; the source trigger is always present                                                                   |

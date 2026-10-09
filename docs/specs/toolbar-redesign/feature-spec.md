@@ -1,15 +1,18 @@
 # Feature Spec: Toolbar redesign for a laptop, Surface Pro and monitor-first app
 
-- **Status:** Draft
-- **Author(s):** feature-analyst (for the product owner, james); revision 2 folds in the UX, component and
-  accessibility reviews
+- **Status:** Approved
+- **Author(s):** feature-analyst (for the product owner, james). Revision 2 folds in the UX, component and
+  accessibility reviews. Revision 4 folds in the M0 record (`m0-measurement.md`, commit `0044ee1`) and two later
+  owner decisions.
+- **Approval:** the product owner approved the whole plan to run to completion on 2026-10-09. The two decisions in
+  §0.2 were made later the same day and are additional to that approval.
 - **Date:** 2026-10-09
 - **Tracking issue / epic:** — (none yet)
 - **Roadmap link:** UI consistency / minimum-viewport follow-on (ADR-0179)
 - **Related ADR(s):** a new ADR is required (outline in §4.10). It completes ADR-0109's supersession of ADR-0090 D6 and
   ADR-0091 D3a by deleting their dead code. It amends the **live** parts of ADR-0031 (tier text; the zoom
-  controls in group 1), ADR-0091 D3 (zoom placement), ADR-0100 (minimap toggle location) and ADR-0133 D1 (rows
-  sharing a line, argued in §4.4). It applies ADR-0179 D2, ADR-0093, ADR-0082, ADR-0117 and ADR-0135. It does not
+  controls in group 1), ADR-0091 D3 (zoom placement) and ADR-0100 (minimap toggle location). ADR-0133 D1 is
+  unchanged (rows always stack). It applies ADR-0179 D2, ADR-0093, ADR-0082, ADR-0117 and ADR-0135. It does not
   change ADR-0118/0183.
 - **Folds in:** `docs/TECH_DEBT.md` #471 (first half). It also **overturns** #193's deliberate keep of the
   ladder machinery: ADR-0110 M5 kept it on purpose, and removing it is an ADR-0105 public-contract change, made
@@ -21,6 +24,50 @@
 > these readings and commits a record, including the coarse-pointer and stress-state cells the UX review did not
 > take. Anything still marked **estimate** is replaced by M0. If M0 contradicts a premise, the work stops (the
 > precedent is `docs/specs/retire-single-pane-workspace/m0-measurement.md` §0).
+>
+> **M0 has now been taken** (§0 below). Its readings replace the estimates throughout. Where an older sentence
+> disagrees with §0, §0 wins.
+
+---
+
+## 0. M0 results and the decisions they produced (revision 4)
+
+### 0.1 What M0 measured (`m0-measurement.md`; provisional `promotion-widths.{fine,coarse}.json`)
+
+M0 returned **no-go for M1 as written**. These are its findings and how the spec now answers them:
+
+| #   | Finding (M0 §)                                                                                                                                                                                                                             | Answer in this spec                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | With zoom gone, three compact items, Summary moved and Comments in Panels, **LOOK misses at 1024 fine by 86.9 px**. Moving Float paths as well leaves 27.1 px spare in the base state; **a conflict chip still misses by 69.1** (§0.1, §3) | **Float paths moves (D-c decided yes)**, and **Resource view becomes the fourth compact item** (§0.2). Saving 94.8 px fine, it turns the conflict case into about 25.7 px spare                                      |
+| 2   | **Coarse 1024 is 4 lines** in every composition (LOOK +56.9, DO +143.7)                                                                                                                                                                    | **The owner accepts 4 lines on touch at exactly 1024** (§0.2); SC-3 is rewritten                                                                                                                                     |
+| 3   | M1 changes only labels, so it **cannot** reach two lines (LOOK 1146.9, DO 1119.2, both over 1008)                                                                                                                                          | **Resequenced:** M1 is label-only and behaviour-neutral; two lines at the floor are claimed and asserted only once M2 (the moves, including Float paths) **and** M4 (the cluster takes zoom and minimap) have landed |
+| 4   | The deck at 1280 is **1264 px = 79 rem** on both pointers. Fine holds one line with every label visible only if Float paths moves. **Coarse 1280 misses** with a conflict even then (−83.7)                                                | `--container-roomy: 79rem`. The fine first stage is 80 rem; **coarse's first stage for LOOK is 90 rem**, and the per-pointer "deck at the first stage ≥ roomy" assertion uses each pointer's own first stage         |
+| 5   | LOOK at the floor is **980.9**, not 942. DO is 967.7 (**40.3 spare**, not 66). The three savings reproduce (−107.2, −71.4, −66.3)                                                                                                          | §4.5 corrected                                                                                                                                                                                                       |
+| 6   | **There is no scrollbar in the stage.** The bottom furniture is the 14 px axis-marker row (`tsld-axis-markers`, `bottom-0`); the top is the 40 px ruler (`TsldCanvas.tsx:195`)                                                             | §4.7 and §4.11 geometry rules corrected                                                                                                                                                                              |
+| 7   | An arbitrary `@max-[60rem]/deck:` **compiles** in Tailwind 4.3.3; the spec called it invalid                                                                                                                                               | The claim is withdrawn; the **named-token rule stays** on design-system grounds (no arbitrary values)                                                                                                                |
+| 8   | View ▾ is 584 / 600 px with 1265 px of content; **two balanced columns are still about 633 px** against SC-13's 420                                                                                                                        | D-g changed: **three columns, with secondary sections collapsed by default**, measured to ≤ 420 at M2                                                                                                                |
+| 9   | Promoted widths: P2 169.9, P3 176.7, **P5 501.9**, **C1 430 / 470**, L2 370.3, L6 144                                                                                                                                                      | §4.11 tables replaced by M0's; P5 takes value-only visible labels (§4.11)                                                                                                                                            |
+| 10  | Free width (fine, base, layout B): LOOK 129 / 289 / 689 / 1097; DO 242 / 402 / 874 / 1522                                                                                                                                                  | §4.11 replaced; the **worst-state reserve** (conflict on LOOK, held pen on DO) is a rule of `computePromotionStages`                                                                                                 |
+| 11  | `selection-actions.tsx:206` is **stale**: the Gantt renders the same `SelectionActionsBar` (`plan-workspace-toolbar.tsx:1814`), and `GanttRowMenu.tsx:147-153` derives from `selectionActionItems`                                         | D-c decided yes. Needs `floatPathsOpen` and a toggle on `SelectionActionContext` (a fact, ADR-0133 D6)                                                                                                               |
+| 12  | SC-5 shares are 98.6 % and 235.5 %                                                                                                                                                                                                         | Wording corrected                                                                                                                                                                                                    |
+| 13  | The "1 conflict" chip costs 96.2 px; the longer cycling read-out was not measured                                                                                                                                                          | The conflict budget is a **lower bound**; M2 and M4 measure the cycling read-out before asserting                                                                                                                    |
+| —   | `minimapRoom` checks width only (`3 × MINIMAP_BOX.width`, `TsldCanvas.tsx:1602`); **coarse 1024 × 600 leaves about 2 px** between the ruler and the minimap-plus-cluster column                                                            | `minimapRoom` gains a **height** clause (§4.7)                                                                                                                                                                       |
+| —   | **Expand activities panel is unreachable on coarse at all five #471 cells**                                                                                                                                                                | Added to M3's acceptance                                                                                                                                                                                             |
+| —   | Text-only 200 % at 1280 × 800: band **88 % (fine) / 127 % (coarse)**, foot row unreachable on coarse                                                                                                                                       | M3 must fix it (scroll line + `squat`); a journey asserts it                                                                                                                                                         |
+| —   | Default-viewport (1280 × 720 = 80 rem) journeys will find **Health check… and Share… on the bar** once M5 lands                                                                                                                            | M5 plans the test updates (M0 §11 list)                                                                                                                                                                              |
+
+### 0.2 Owner decisions (2026-10-09, after M0)
+
+- **OD-1: Resource view becomes the fourth icon-only command.** The compact set is **Baseline overlay, Comments,
+  Settings, Resource view**. This supersedes CQ-2's "Resource view stays labelled".
+  - **Glyph:** a clearer, unambiguous icon replaces `Users`, whose people read as "members". The choice is Lucide
+    **`ChartColumnStacked`**: the resource strip is a stacked loading histogram under the diagram (ADR-0049). It is
+    distinct from Analysis's `ChartArea`. The export exists in the installed `lucide-react` 1.49.0
+    (`dist/lucide-react.d.ts:4306`, read 2026-10-09); M1-T3 registers it in `scripts/dependency-claims.json` (the
+    ADR-0091 D5 precedent).
+  - **Description tooltip:** "Show resource loading under the diagram".
+- **OD-2: touch (44 px) at exactly 1024 wide accepts 4 deck lines.** Mouse is two lines at the floor. Touch
+  improves above about 1280. The 44 px targets stay (ADR-0183).
 
 ---
 
@@ -91,24 +138,25 @@ supported hardware: **a 1280 × 800 laptop at 200 % zoom is a 640 × 400 viewpor
 5. Find a tool by its subject: the plan's facts by its name, the viewport on the diagram, the selection on the
    selection's bar.
 
-### User journeys (if M0 confirms)
+### User journeys (after M2 and M4 have landed; M0 measured the composition)
 
 - **1024 × 600 fine:** one header line. Two deck lines:
   - LOOK: View group, Find group, and a trailing Panels group;
   - DO: the pen and Author group, and a trailing Plan group.
 
-  Zoom, Fit and Minimap are in the diagram's corner. Baseline overlay, Comments and Settings show only their
-  icons. Canvas about 362 px.
+  Zoom, Fit and Minimap are in the diagram's corner. Float paths is on the selection bar. Baseline overlay,
+  Comments, Settings and Resource view show only their icons. Canvas 362 px (M0 §3 projection, ±10 px).
 
 - **Monitor (1912):** the same two lines, every command labelled, Panels and Plan on the trailing edge. Menu commands
   promoted into the spare width; no row more than 15 % empty, or nothing promotable left (SC-17).
-- **Surface tablet posture:** the same layout at 44 px. At most three deck lines at 1024.
+- **Surface tablet posture:** the same layout at 44 px. **Four deck lines at exactly 1024 are accepted** (OD-2);
+  two from about 1280 in the base state, and two at ≥ 1440.
 - **Below 1024 wide:** one deck line that scrolls sideways, with a visible edge cue. In very short windows the
   band scrolls away with the page.
 
-### Expected outcomes (if M0 confirms)
+### Expected outcomes
 
-- About 88 px more diagram at the floor.
+- About 88 px more diagram at the floor on a mouse (274 → about 362), **from M4 on**. M1 alone changes labels only.
 - One label API and one class helper, read from one place.
 - Every tool placed with a written reason.
 - #471's band half closed.
@@ -119,27 +167,27 @@ supported hardware: **a 1280 × 800 laptop at 200 % zoom is a 640 × 400 viewpor
 
 Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:564-577` does.
 
-| ID    | Criterion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Today                          | Target                                                         |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------- |
-| SC-1  | 1024 × 600: deck lines; canvas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 4; 274                         | **2; ≥ 350**                                                   |
-| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080: each declared row is one line (measured, not forced)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | holds except LOOK at 1440 (m4) | holds                                                          |
-| SC-3  | Coarse 1024 × 600 / 1440 × 900 / 1912 × 1080: deck lines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 4 / 3 / 2 (m4)                 | **≤ 3 / 2 / 2**                                                |
-| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | holds                          | holds                                                          |
-| SC-5  | Below 1024: at 640 × 360 and 320 × 256 the band is ≤ 40 % of viewport height **or** scrolls away vertically; Expand and Recalculate are hit-testable at 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256                                                                                                                                                                                                                                                                                                                                                     | 99 % / 100 %; unreachable      | met                                                            |
-| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0                              | ≥ 1                                                            |
-| SC-7  | Text-only 200 % at 1280 × 800 **and** 2560 × 1440, set as the browser's **default** font size (Chromium DevTools protocol `Page.setFontSizes`, standard 32), **not** a CSS `html { font-size }`, which rem media queries ignore. Every control is hit-testable; rows may wrap; promotion stages and `roomy` respond as at the equivalent half-width viewport (demotion is correct here). The 1280 cell (40 rem, below `max-lg`) is judged against the scroll line (R6), and the 2560 cell (80 rem) against the two-row wrap; demotion under focus hands off (E-2) | unmeasured                     | holds                                                          |
-| SC-8  | One label decider: `Deck.tsx` and `Toolbar.tsx` hold no label logic of their own; every component calls the one resolver and class helper                                                                                                                                                                                                                                                                                                                                                                                                                         | 3 deciders, 4 implementations  | 1 and 1                                                        |
-| SC-9  | `BAND_MAX_PX` holds (`command-surface.spec.ts:535`); a 1024 bar is added at M0's reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | ≤ 145                          | ≤ 145, plus a 1024 bar                                         |
-| SC-10 | One label size and one control height per surface (`command-surface.spec.ts:500-504`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | holds                          | holds                                                          |
-| SC-11 | Superseded by SC-17 (≤ 15 % at four viewports, with promotion)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                              | see SC-17                                                      |
-| SC-12 | No group seam at the start of any line, in any state (conflicts present, pen held by peer, shaded)                                                                                                                                                                                                                                                                                                                                                                                                                                                                | fails at 1024                  | holds                                                          |
-| SC-13 | View ▾ panel ≤ 70 % of viewport height at 1024 × 600, no inner scroll                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 584 / 600                      | ≤ 420                                                          |
-| SC-14 | **No tool is lost:** a computed test against a committed manifest of registry ids, header controls, selection-bar items and menu item names; every manifest entry resolves in the after state                                                                                                                                                                                                                                                                                                                                                                     | —                              | passes                                                         |
-| SC-15 | Focus not obscured (WCAG 2.4.11): a keyboard reveal scrolls the focused activity clear of the corner cluster and minimap                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                              | journey passes                                                 |
-| SC-17 | **Free space used:** at 1280 × 800, 1440 × 900, 1912 × 1080 and 2560 × 1440, **on both pointers**, each deck row's unused width is ≤ 15 % of the row **or the ladder is exhausted**. "Exhausted" means no remaining ladder entry fits the row's free width; at 2560 that is judged after the search field has grown (§4.11). Recorded per row, per viewport and per pointer in M0 (before) and at close-out (after)                                                                                                                                               | M0 records                     | ≤ 15 %                                                         |
-| SC-18 | **Nothing promotable left in a menu**, as two CI checks on both pointers. (a) **The widths are real:** a journey at 3840 × 1440, past the widest stage, measures every ladder entry's promoted form and fails if it differs from `promotion-widths.<pointer>.json` by more than 2 px, so stale JSON fails. (b) **Nothing fits that is not promoted:** at each stage, a journey fails if an unpromoted entry's verified width fits the row's free gap. A unit test also pins every entry's `at` to `computePromotionStages(promotion-widths.<pointer>.json)`       | —                              | passes; verified red first by raising one threshold (ADR-0110) |
-| SC-19 | SC-14's manifest covers both states. A **render-level** jsdom test per stage and pointer, with a stubbed `matchMedia`, opens every source menu and asserts each manifest name appears on the bar **xor** in its menu. The manifest records each entry's build-flag condition (`EARNED_VALUE_ENABLED`, `RESOURCE_CURVES_ENABLED`, …) and view scope (Diagram-only lenses), and is produced by `pnpm --filter @repo/web manifest:commands`; the test fails when the live set and the committed manifest differ                                                      | —                              | passes                                                         |
-| SC-16 | The visual brief (§4.8): each item signed off by the product owner with before/after screenshots at 1024 × 600, 1280 × 800, 1440 × 900 and 1912 × 1080                                                                                                                                                                                                                                                                                                                                                                                                            | —                              | signed                                                         |
+| ID    | Criterion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Today                                                                             | Target                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| SC-1  | 1024 × 600 fine, in every stress state (conflict chip included; the cycling read-out measured at M2/M4 before asserting): deck lines; canvas. **Asserted from M4**, not at M1                                                                                                                                                                                                                                                                                                                                                                                     | 4; 274                                                                            | **2; ≥ 350** (M0 projection 362)                               |
+| SC-2  | 1280 × 800, 1440 × 900, 1912 × 1080: each declared row is one line (measured, not forced)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | holds except LOOK at 1440 (m4)                                                    | holds                                                          |
+| SC-3  | **Rewritten (OD-2).** Coarse (44 px) deck lines at 1024 × 600 / 1280 × 800 / 1440 × 900 / 1912 × 1080, with 44 px targets kept (ADR-0183)                                                                                                                                                                                                                                                                                                                                                                                                                         | 4 / 4 / 3 / 2 (M0 §2)                                                             | **≤ 4 (accepted) / ≤ 3, expected 2 / 2 / 2**                   |
+| SC-4  | Header is one line at every viewport ≥ 1024, both pointers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | holds                                                                             | holds                                                          |
+| SC-5  | Below 1024: at 640 × 360 and 320 × 256 the band is ≤ 40 % of viewport height **or** scrolls away vertically; Expand and Recalculate (when stale) are hit-testable at 640 × 480, 640 × 360, 640 × 300, 320 × 720, 320 × 256, **on both pointers** (coarse Expand is unreachable at all five today)                                                                                                                                                                                                                                                                 | 98.6 % / 235.5 %; unreachable                                                     | met                                                            |
+| SC-6  | 640 × 480 and 320 × 720, panel expanded: ≥ 1 hit-testable table row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 0                                                                                 | ≥ 1                                                            |
+| SC-7  | Text-only 200 % at 1280 × 800 **and** 2560 × 1440, set as the browser's **default** font size (Chromium DevTools protocol `Page.setFontSizes`, standard 32), **not** a CSS `html { font-size }`, which rem media queries ignore. Every control is hit-testable; rows may wrap; promotion stages and `roomy` respond as at the equivalent half-width viewport (demotion is correct here). The 1280 cell (40 rem, below `max-lg`) is judged against the scroll line (R6), and the 2560 cell (80 rem) against the two-row wrap; demotion under focus hands off (E-2) | 1280 × 800: band 88 % fine / 127 % coarse, foot row unreachable on coarse (M0 §8) | holds (M3 fixes the 1280 cell)                                 |
+| SC-8  | One label decider: `Deck.tsx` and `Toolbar.tsx` hold no label logic of their own; every component calls the one resolver and class helper                                                                                                                                                                                                                                                                                                                                                                                                                         | 3 deciders, 4 implementations                                                     | 1 and 1                                                        |
+| SC-9  | `BAND_MAX_PX` holds (`command-surface.spec.ts:535`); a 1024 bar is added at M0's reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | ≤ 145                                                                             | ≤ 145, plus a 1024 bar                                         |
+| SC-10 | One label size and one control height per surface (`command-surface.spec.ts:500-504`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | holds                                                                             | holds                                                          |
+| SC-11 | Superseded by SC-17 (≤ 15 % at four viewports, with promotion)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                                                                                 | see SC-17                                                      |
+| SC-12 | No group seam at the start of any line, in any state (conflicts present, pen held by peer, shaded)                                                                                                                                                                                                                                                                                                                                                                                                                                                                | fails at 1024                                                                     | holds                                                          |
+| SC-13 | View ▾ panel ≤ 70 % of viewport height at 1024 × 600, both pointers, no inner scroll, in its default (collapsed) state; three columns (D-g). Today 1265 px of content in 582; two columns measured at about 633                                                                                                                                                                                                                                                                                                                                                   | 584 / 600                                                                         | ≤ 420                                                          |
+| SC-14 | **No tool is lost:** a computed test against a committed manifest of registry ids, header controls, selection-bar items and menu item names; every manifest entry resolves in the after state                                                                                                                                                                                                                                                                                                                                                                     | —                                                                                 | passes                                                         |
+| SC-15 | Focus not obscured (WCAG 2.4.11): a keyboard reveal scrolls the focused activity clear of the corner cluster and minimap                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                                                                                 | journey passes                                                 |
+| SC-17 | **Free space used:** at 1280 × 800, 1440 × 900, 1912 × 1080 and 2560 × 1440, **on both pointers**, each deck row's unused width is ≤ 15 % of the row **or the ladder is exhausted**. "Exhausted" means no remaining ladder entry fits the row's free width; at 2560 that is judged after the search field has grown (§4.11). Recorded per row, per viewport and per pointer in M0 (before) and at close-out (after)                                                                                                                                               | M0 records                                                                        | ≤ 15 %                                                         |
+| SC-18 | **Nothing promotable left in a menu**, as two CI checks on both pointers. (a) **The widths are real:** a journey at 3840 × 1440, past the widest stage, measures every ladder entry's promoted form and fails if it differs from `promotion-widths.<pointer>.json` by more than 2 px, so stale JSON fails. (b) **Nothing fits that is not promoted:** at each stage, a journey fails if an unpromoted entry's verified width fits the row's free gap. A unit test also pins every entry's `at` to `computePromotionStages(promotion-widths.<pointer>.json)`       | —                                                                                 | passes; verified red first by raising one threshold (ADR-0110) |
+| SC-19 | SC-14's manifest covers both states. A **render-level** jsdom test per stage and pointer, with a stubbed `matchMedia`, opens every source menu and asserts each manifest name appears on the bar **xor** in its menu. The manifest records each entry's build-flag condition (`EARNED_VALUE_ENABLED`, `RESOURCE_CURVES_ENABLED`, …) and view scope (Diagram-only lenses), and is produced by `pnpm --filter @repo/web manifest:commands`; the test fails when the live set and the committed manifest differ                                                      | —                                                                                 | passes                                                         |
+| SC-16 | The visual brief (§4.8): each item signed off by the product owner with before/after screenshots at 1024 × 600, 1280 × 800, 1440 × 900 and 1912 × 1080                                                                                                                                                                                                                                                                                                                                                                                                            | —                                                                                 | signed                                                         |
 
 ### Open questions
 
@@ -148,10 +196,10 @@ Fine pointer unless stated. Deck lines are counted as `command-surface.spec.ts:5
 - **CQ-1 — DECIDED: yes.** Zoom out, Zoom in, Fit to plan and the Minimap toggle move to a cluster in the diagram's
   corner. They only work on the diagram (shaded in the Gantt today via `canvasViewportReason`), and in the corner they
   cost no height. The geometry against the minimap is **specified in §4.7** and verified at M0.
-- **CQ-2 — DECIDED: yes, exactly three.** Baseline overlay, Comments and Settings show only their icon below the
-  roomy width. Each keeps its name for assistive tech and gets a hover/focus tooltip. This is the measured minimum:
-  −107, −71 and −66 px bring LOOK from about 1120 to about 942, inside 1008 (UX review reading). Resource view and
-  Select stay labelled.
+- **CQ-2 — DECIDED, then extended by OD-1 (§0.2): four.** Baseline overlay, Comments, Settings and **Resource
+  view** show only their icon below the roomy width (79 rem). Each keeps its name for assistive tech and gets a
+  hover/focus description tooltip. Measured (M0 §3, §5) savings: −107.2, −71.4, −66.3 and −94.8 px. LOOK is 980.9
+  at the floor in the base state, and the fourth item is what absorbs a conflict chip. Select stays labelled.
 - **CQ-3 — DECIDED: the scroll line is for narrow windows only (< 1024 wide).** Short-but-wide windows (for example
   1280 × 600, 1366 × 768) keep two rows. ADR-0179 D2 already lets the band scroll below the floor, and WCAG 1.4.10
   Note 2 names "interfaces where it is necessary to keep toolbars in view while manipulating content" (W3C
@@ -184,17 +232,25 @@ measurements against a stated rule.
   review rates it low value, and `?` already opens the sheet. ADR-0091 D6b's reason ("a reference about the
   application, not the plan") argues against the plan's toolbar, not the app header, so a later spec may revisit it.
   The header therefore has no promotion ladder in this epic.
-- **D-c:** **Float paths moves to the selection bar if M0 confirms a Gantt route.** `selection-actions.tsx:206`
-  says the Gantt renders no selection bar, so its Gantt route would be the Gantt row menu (`GanttRowMenu.tsx`).
-  If the row menu does not mirror the bar's object actions, Float paths stays on the deck.
+- **D-c — DECIDED: Float paths moves to the selection bar and the Gantt row menu** (M0 §4.3).
+  - The Gantt renders the same `SelectionActionsBar` (`plan-workspace-toolbar.tsx:1814`), and `GanttRowMenu.tsx:147-153`
+    derives its items from `selectionActionItems`, so one registration reaches both. `selection-actions.tsx:206` is
+    stale and is corrected.
+  - `SelectionActionContext` gains a `floatPathsOpen` fact and a toggle. `toggleFloatPaths` is built today only for
+    `TsldToolbarContext`, at `plan-workspace-toolbar.tsx:436` (ADR-0133 D6).
+  - The move is **required** for the two-line floor (M0 §3).
+  - The structural test lives at `src/features/float-paths/float-paths-view-agnostic.structural.test.ts`.
 - **D-d:** **A fifth deck group, "Panels"**, on the LOOK row, trailing: Legend, Resource view, Comments. It reuses
   the empty registry group **`help`** (ADR-0031 group 7, which first held the legend) through a `DECK_GROUPS`
   remap, so the taxonomy is unchanged.
 - **D-e:** **One trailing group per row: Panels on LOOK, Plan on DO.** Applies when the rows are stacked.
 - **D-f:** cut. Analysis ▾ checkable dock items are out of this epic. (`Menu` already supports `menuitemcheckbox`,
   `menu.tsx:368-432`, so there was never a primitive change in it.)
-- **D-g:** **The View ▾ panel is fixed at 1024**: two columns and collapsible sections (SC-13). The zoom-preset
-  radios stay; they are not duplicates of ±.
+- **D-g (corrected by M0):** two balanced columns are still about 633 px, over SC-13's 420 (M0 §0.8). So the panel
+  is **three columns** (Zoom and Structure | Markers | Insight overlays and Colour), **with secondary sections
+  collapsed by default** (Structure and Markers as disclosures; open state lives for one opening, ADR-0169), until
+  M2-T3 measures ≤ 420 at 1024 × 600 on both pointers. If three columns alone measure ≤ 420, the collapse is dropped.
+  The zoom-preset radios stay in View until C1 promotes them into the corner.
 - **D-h:** Control heights are unchanged (36 / 44). The keyboard-cover gap stays declined (ADR-0183 D3).
 - **D-i:** The organisation switcher stays trailing (it becomes a ghost button and menu, CQ-4, §4.12).
 - **D-j:** #471's second paragraph (the selection bar in the foot row) gets its own row at close-out.
@@ -215,11 +271,12 @@ measurements against a stated rule.
 
 ### User stories & acceptance criteria
 
-> **US-1 — Two lines at the floor.**
+> **US-1 — Two lines at the floor (asserted from M4).**
 >
-> - At 1024 × 600 fine (Explorer 276), the deck's controls sit on two lines (LOOK, DO). This is a **measured**
->   outcome: rows keep `flex-wrap` as a safety valve.
-> - Coarse 1024: ≤ 3 lines.
+> - At 1024 × 600 fine (Explorer 276), once M2 (the moves, Float paths included) and M4 (zoom and minimap into the
+>   corner) have landed, the deck's controls sit on two lines (LOOK, DO). This is a **measured** outcome: rows keep
+>   `flex-wrap` as a safety valve. M1 alone does not change the line count (M0 §0.3).
+> - Coarse 1024: ≤ 4 lines (OD-2, accepted).
 > - The same holds in the stress states M0 defines: conflicts present (chip shown), pen held by a peer, no
 >   computed diagram, Gantt view.
 
@@ -235,7 +292,10 @@ measurements against a stated rule.
 >   trigger. A structural test fails if a component paints a label any other way.
 > - **Inside `Deck`** (the only `@container/deck`), a `'roomy'` label is `sr-only` under the theme container token
 >   `--container-roomy`, using the named variant `@max-roomy/deck:`. It is never an arbitrary `@max-[…]` value,
->   which is invalid in Tailwind v4.
+>   The reason is the design system's "no arbitrary values" rule. (Revision 3 said an arbitrary `@max-[…]` is invalid
+>   in Tailwind v4; M0 compiled `@max-[60rem]/deck:` in the installed 4.3.3 and it works, so that reason is withdrawn
+>   and the named-token rule stands on its own.) The token is `--container-roomy: 79rem`, the deck's measured width
+>   at 1280 (M0 §4.2).
 > - **Inside `Toolbar`** (not a container: mode row, identity row, corner cluster), `'roomy'` resolves to `'always'`,
 >   and a unit test says so.
 > - **Tooltip:** a CSS rule cannot switch the tooltip, because it is portalled to `document.body`
@@ -455,7 +515,7 @@ flowchart TB
       direction TB
       subgraph LOOK["LOOK"]
         direction LR
-        V["View: Go to today ▾ · View ▾ · Baseline overlay*"] --- F["Find: Search · Filter ▾ · Next conflict"] --- P["Panels (trailing): Legend · Resource view · Comments*"]
+        V["View: Go to today ▾ · View ▾ · Baseline overlay*"] --- F["Find: Search · Filter ▾ · Next conflict"] --- P["Panels (trailing): Legend · Resource view* · Comments*"]
       end
       subgraph DO["DO"]
         direction LR
@@ -472,7 +532,7 @@ flowchart TB
   R --> Stage
 ```
 
-`*` marks the three compact items (CQ-2). The shell stays plan-unaware (ADR-0029): the identity row is portalled
+`*` marks the four compact items (CQ-2 + OD-1). The shell stays plan-unaware (ADR-0029): the identity row is portalled
 through the existing `identity` slot.
 
 ### 4.4 Layout rules
@@ -500,19 +560,29 @@ through the existing `identity` slot.
 - **R8. No flag; every milestone names its entry point and lands with a journey.**
 - **R9. Free space is used: menu items promote by a declared ladder** (§4.11).
 
-### 4.5 The compact set (CQ-2, UX review reading)
+### 4.5 The compact set (CQ-2 + OD-1, M0 readings)
 
-| Item             | Row           | Saves  | Glyph         | Why                                                  |
-| ---------------- | ------------- | ------ | ------------- | ---------------------------------------------------- |
-| Baseline overlay | LOOK          | 107 px | Layers        | Its largest saving; a lens with a reason when shaded |
-| Comments         | LOOK (Panels) | 71 px  | speech bubble | Universal                                            |
-| Settings…        | DO            | 66 px  | gear          | Universal                                            |
+| Item             | Row           | Saves (fine, M0 §5) | Glyph                                             | Description tooltip                                             |
+| ---------------- | ------------- | ------------------- | ------------------------------------------------- | --------------------------------------------------------------- |
+| Baseline overlay | LOOK          | 107.2 px            | `Layers`                                          | "Draw the active baseline beside each bar"                      |
+| Comments         | LOOK (Panels) | 71.4 px             | `MessageSquare`                                   | "Open the plan's comments beside the diagram"                   |
+| Settings…        | DO            | 66.3 px             | `Settings` (gear)                                 | "Calendar, critical path, progress, levelling and earned value" |
+| Resource view    | LOOK (Panels) | 94.8 px             | **`ChartColumnStacked`** (replaces `Users`, OD-1) | "Show resource loading under the diagram"                       |
 
-LOOK is about 1120 → about 942 in a 1008 px row. DO is about 1000 and fits "by a hair", so Settings compacting gives
-it about 66 px of margin. **Not compacted:** Resource view (its glyph reads as "members"), Select, and every
-custom trigger (US-2). Apply levelled dates… is `'roomy'`: labelled at roomy widths, icon-only below.
-**M0's exit rule:** if any row misses one line by **less than 20 px** in any stress state, stop and ask rather than
-compacting a fourth item.
+**Floor arithmetic (fine, 1024, row 1008, layout B with Float paths moved; M0 §3):**
+
+- LOOK in the base state is 980.9 (27.1 spare), and 886.1 (121.9 spare) with Resource view compacted.
+- LOOK with a "1 conflict" chip is 1077.1 − 94.8 = about 982.3, so it **fits by about 25.7**. The chip figure is a
+  lower bound: the cycling read-out is longer and is measured at M2 and M4 before SC-1 is asserted.
+- DO is 967.7 (40.3 spare; 38.2 with a peer holding the pen).
+
+**Coarse 1024:** DO misses by 143.7 whatever is compacted on LOOK, so it is at least 3 lines; 4 are accepted (OD-2).
+
+**Not compacted:** Select, Legend, and every custom trigger (US-2). Apply levelled dates… is `'roomy'`: labelled at
+roomy widths, icon-only below.
+
+**Exit rule, still live for M2 and M4:** if a row misses one line at 1024 fine by **less than 20 px** in any stress
+state (including the cycling conflict read-out), stop and ask. There is no fifth compaction without the owner.
 
 ### 4.6 Placement, item by item
 
@@ -530,7 +600,7 @@ compacting a fourth item.
 | D8 Baseline overlay                    | stays in View                        | `'roomy'`                                                                                         | CQ-2                                                 |
 | D9–D12 Find                            | stay                                 | —                                                                                                 | —                                                    |
 | **D13 Float paths**                    | selection bar + Gantt row menu (D-c) | labelled                                                                                          | ADR-0093                                             |
-| **D6/D7 Resource view, Legend**        | Panels (`help`)                      | labelled                                                                                          | they open panels                                     |
+| **D6/D7 Resource view, Legend**        | Panels (`help`)                      | Legend labelled; **Resource view `'roomy'`, glyph `ChartColumnStacked`** (OD-1)                   | they open panels                                     |
 | **D26 Comments**                       | Panels                               | `'roomy'`                                                                                         | opens a panel; rebalances the rows                   |
 | D14–D18, D20–D22                       | stay                                 | as today (`'never'` for undo/redo)                                                                | —                                                    |
 | D19 Apply levelled dates…              | stays                                | `'roomy'`                                                                                         | D-l                                                  |
@@ -546,12 +616,30 @@ View, with the trigger's annotation.
 
 - **Today:** the minimap is `absolute right-3` with `z-10`, a fixed 200 × 120 box (`TsldMinimap.tsx:43,400`), and is
   rendered only when `minimapActive && minimapRoom` (`TsldCanvas.tsx:2685`).
-- **Design:** one positioned column at the stage's bottom-right (inset `3`, 12 px, matching the minimap). The
-  **cluster is fixed at the bottom**; the minimap, when open, stacks **above** it with `gap-2`. Opening or closing
-  the minimap never moves the button the pointer is on. The minimap's own `bottom` offset becomes the column's job
-  (M0 reads its current `bottom`).
-- **Room:** `minimapRoom` also accounts for the cluster's height. When there is no room, the toggle is shaded with a
-  reason and the cluster stays.
+- **Measured today (M0 §7):** the minimap's outer box is 204 × 164 (fine) / 204 × 168 (coarse), at `right: 12`,
+  `bottom: 12` (`TsldMinimap.tsx:399-400`). `minimapRoom` turns false only on **width**, below a 600 px stage
+  (`TsldCanvas.tsx:1602`).
+- **The bounds are the 40 px ruler at the top** (`RULER_HEIGHT`, `TsldCanvas.tsx:195`) **and the 14 px axis-marker
+  row at the bottom** (`tsld-axis-markers`, `bottom-0`). There is no scrollbar in the stage. The column sits above
+  the axis-marker row and below the ruler, and covers neither.
+- **Design:** one positioned column at the stage's bottom-right (12 px inset, matching the minimap), above the
+  axis-marker row. The **cluster is fixed at the bottom**; the minimap, when open, stacks **above** it with
+  `gap-2`. Opening or closing the minimap never moves the button the pointer is on. The minimap's own `bottom`
+  offset becomes the column's job.
+- **Cluster size (M0 §7 arithmetic):**
+  - 4 × 36 + 3 × 8 = 168 px wide fine, 200 px coarse (before card padding);
+  - with the minimap stacked, 208 px tall fine and 220 px coarse;
+  - at 1024 × 600 the stage is 314 (fine) and 274 (coarse) tall, which **leaves 54 px fine and about 2 px coarse**
+    below the ruler.
+- **Room, with a height clause:** `minimapRoom` becomes **width ≥ 600 px and** stage height − ruler − axis-marker
+  row − insets ≥ minimap + `gap-2` + cluster height. When there is no room (coarse 1024 × 600; any 1024 stage with a
+  dock open, 386 px wide), the minimap withdraws, the toggle is shaded with "Not enough room for the minimap", and
+  the cluster stays.
+- **With a dock open at 1024** the stage is 386 px and the cluster takes about 44 % of its width. C1 never promotes
+  there (it is staged on stage width).
+- **C1 (zoom presets) is 430 px fine and 470 px coarse** (M0 §7), so it promotes only when the stage is wide enough
+  for C1 + the cluster + insets. That is a stage-width stage computed at M5 from the re-taken widths (estimate: a
+  stage of about 700 px or more), not the viewport.
 - **Overlaps:**
   - the foot row is outside the stage, so no overlap;
   - a docked panel narrows the stage, and the column moves with the stage's right edge;
@@ -573,7 +661,7 @@ View, with the trigger's annotation.
 | V3  | **Fewer dead-grey controls:** audit every control shaded in an ordinary editing state (5+ today). ADR-0082 keeps shade-with-reason for a state the reader can change (for example Baseline overlay with no baseline), so the remedy is visual (a quieter shaded style) plus omission only where an action does not apply. Recommendation: the Author group reads as one locked unit led by the pen when the pen is not held. The quieter shaded style keeps text ≥ 4.5:1 against the band; accessibility-reviewer signs it off | existing `disabled` state variant                    |
 | V4  | **Share & export is the row's deliberate closing action:** secondary-filled                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `secondary` variant on chrome (`--chrome-secondary`) |
 | V5  | **Organisation switcher as a ghost button** with the org icon and a menu (CQ-4, decided; requirements in §4.12), on every header                                                                                                                                                                                                                                                                                                                                                                                               | `Button` ghost + `Menu`                              |
-| V6  | **View panel at the floor:** two columns, collapsible sections (SC-13)                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `Popover`, `fieldset`                                |
+| V6  | **View panel at the floor:** three columns, with secondary sections collapsed by default (SC-13, D-g; two columns measured about 633 px)                                                                                                                                                                                                                                                                                                                                                                                       | `Popover`, `fieldset`                                |
 | V7  | **Balance:** ≤ 15 % empty per row at 1280 / 1440 / 1912 / 2560 through promotion (SC-17); one trailing group per row                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                    |
 
 If the product owner declines V1–V5, SC-16 drops the word "amazing" and keeps only SC-1 to SC-15.
@@ -719,7 +807,10 @@ has no ladder in this epic (D-b).
   - An `aria-hidden` leading caption "Colour" gives the sighted cue.
   - **Mapping from the menu:** `menuitemradio aria-checked="true"` becomes `aria-pressed="true"` on exactly one
     button. Pressing the pressed one is a no-op. The change is announced through the existing polite announcer.
-  - Estimated width about 340 px, not 250.
+  - Measured width 370.3 px fine and 394.3 coarse (M0 §10.2).
+  - **Visible labels are the value only, inside a set caption** ("Colour", "Link", "Zoom"), while the accessible
+    names carry the set. This keeps 2.5.3 and is what brings P5 down from 501.9 px with a "Link:" prefix on each
+    button (M0 §10.2 notes about 110 px narrower each). M5 re-measures.
 - **Kind presets arm their tool, exactly as the menu pick does.** This covers Link type (P5), Start milestone and
   Finish milestone (P2, P3). Today a Link menu pick **arms** link mode with that type (`LinkControl` docblock,
   `:929-935`: "picking one arms link-mode with that kind"). The Add split does the same for a kind. So:
@@ -763,12 +854,14 @@ has no ladder in this epic (D-b).
   both pointers. With the cover attached the Surface reports `fine` and gets the fine stages, which matches its
   36 px controls.
 - **`roomy` and the stages are one source.** `--container-roomy` is **derived** from the first stage: it is set to
-  the deck width at `PROMOTE_80` minus the deck's insets. An assertion checks that at the first stage the deck is
-  at least `roomy`, so nothing promotes while compact labels are still hidden. M0 computes stage widths with the
-  label state that actually applies at each stage (every label visible from the first stage up).
-  **`--container-roomy` is a single token, while the promotion stages are per pointer.** At 44 px a row may be
-  tighter at the first stage; R1's `flex-wrap` safety valve covers that. The "deck at the first stage ≥ roomy"
-  assertion runs **per pointer**.
+  the deck width at `PROMOTE_80`, measured as **1264 px = 79 rem on both pointers** (M0 §4.2), so
+  **`--container-roomy: 79rem`**. An assertion checks that at each pointer's first stage the deck is at least
+  `roomy`, so nothing promotes while compact labels are still hidden. Stage widths were computed with the label
+  state that actually applies (every label visible from 80 rem up).
+  **`--container-roomy` is a single token, while the promotion stages are per pointer.** On coarse, LOOK's first
+  stage is 90 rem, because at 80 rem a conflict leaves −83.7 px (M0 §10.3). R1's `flex-wrap` safety valve covers a
+  44 px row that is tight at 80 rem with nothing promoted. The "deck at the first stage ≥ roomy" assertion runs
+  **per pointer, against that pointer's own first stage**.
 - **Why the viewport is honest for the deck:** the band spans both grid columns
   (`components/layout/navigator/app-shell.tsx:195-200`, `col-span-2`), so its width is the viewport's, whatever the
   Explorer does.
@@ -819,61 +912,73 @@ publishes a positioned **slot node** for its bottom-right column, the same patte
 into it, so the context is derived once and the canvas owns only geometry (the column, the minimap, the reveal
 margin). Its accessible name is **"Diagram viewport"**.
 
-#### The ladders (estimates: widths are about 7 px per character plus icon and padding; M0 replaces every number)
+#### The ladders (M0 §10; provisional `promotion-widths.{fine,coarse}.json`, re-taken after M4)
 
-Free width per row is the row's inner width minus today's controls after M1–M3. The estimates are:
+**Free width per deck row** (M0 §10.3, layout B; in brackets the worst stress state: a conflict on LOOK, a held pen
+on DO):
 
-| Row    | 1280               | 1440 | 1912 | 2560 |
-| ------ | ------------------ | ---- | ---- | ---- |
-| LOOK   | 144                | 304  | 776  | 1424 |
-| DO     | 114                | 274  | 746  | 1394 |
-| Corner | stage-width driven |      |      |      |
+| Pointer / row | 1280 (80 rem)    | 1440 (90)     | 1912 (119.5)  | 2560 (160)      |
+| ------------- | ---------------- | ------------- | ------------- | --------------- |
+| fine LOOK     | 128.6 (32.3)     | 288.6 (192.3) | 688.6 (592.3) | 1096.6 (1000.3) |
+| fine DO       | 242 (239.9)      | 402 (399.9)   | 874 (871.9)   | 1522 (1519.9)   |
+| coarse LOOK   | 20.6 (**−83.7**) | 180.6 (76.3)  | 580.6 (476.3) | 988.6 (884.3)   |
+| coarse DO     | 46 (43.9)        | 206 (203.9)   | 678 (675.9)   | 1326 (1323.9)   |
 
-At 1280 the rows are already ≤ 15 % empty (11 % and 9 %), so promotion matters most at 1440 and up. The ranking
-folds in the UX review's (s3-4). M0's real widths finalise the stages, and D-n lets the product owner reorder. The
-stages below are fine-pointer estimates from the skip-fill rule; coarse stages are computed separately.
+**`computePromotionStages` reserves the worst stress state per row** (M0 §10.3). Without the reserve, L1 would
+promote at fine 1280 and a conflict chip would then wrap the row. This is a rule of the function, not a free
+choice. The coarse first stage for LOOK is therefore 90 rem, not 80. Resource view's compaction (OD-1) applies only
+below 79 rem, so it does not change these stages.
 
-**LOOK row** (rank = frequency × importance, then glyph clarity):
+**Provisional starting thresholds** (rem stage per pointer; M0 §10.2 widths, fine / coarse). M5 recomputes them from
+the re-taken JSON. D-n lets the owner reorder.
 
-| Rank | Command (bar name)                               | From             | Kind (derived)   | Est. width | Stage (est., fine)                |
-| ---- | ------------------------------------------------ | ---------------- | ---------------- | ---------- | --------------------------------- |
-| L1   | Critical only                                    | Filter ▾         | toggle           | 110        | 1280                              |
-| L2   | Colour by: Criticality / Total float / WBS group | View ▾ › Insight | flat pressed set | 340        | 1912 (does not fit at 1440)       |
-| L3   | Late-start overlay                               | View ▾ › Insight | toggle           | 150        | 1440                              |
-| L4   | Feasible window                                  | View ▾ › Insight | toggle           | 150        | 1912                              |
-| L5   | Levelled placement                               | View ▾ › Insight | toggle           | 170        | 2560                              |
-| L6   | Has conflict only                                | Filter ▾         | toggle           | 135        | 2560                              |
-| —    | Search field grows 240 → about 480 px            | —                | —                | +240       | 2560 (counts toward SC-17's fill) |
+| Rank | Command (bar name)                                        | From             | Kind                           | Width fine / coarse                                                                           | Stage fine | Stage coarse |
+| ---- | --------------------------------------------------------- | ---------------- | ------------------------------ | --------------------------------------------------------------------------------------------- | ---------- | ------------ |
+| L1   | Critical only                                             | Filter ▾         | toggle                         | 113.9 / 121.9                                                                                 | 90 (1440)  | 119.5        |
+| L2   | Colour: Criticality / Total float / WBS group             | View ▾ › Insight | flat pressed set               | 370.3 / 394.3                                                                                 | 119.5      | 160          |
+| L3   | Late-start overlay                                        | View ▾ › Insight | toggle                         | 151.6 / 159.6                                                                                 | 160        | 119.5        |
+| L4   | Feasible window                                           | View ▾ › Insight | toggle                         | 145.3 / 153.3                                                                                 | 160        | 119.5        |
+| L5   | Levelled placement                                        | View ▾ › Insight | toggle                         | 162.9 / 170.9                                                                                 | 160        | never        |
+| L6   | Has conflict only                                         | Filter ▾         | toggle                         | 144 / 152                                                                                     | never      | never        |
+| —    | Search field grows 240 → about 480 px                     | —                | —                              | +240                                                                                          | 160        | 160          |
+| P1   | Health check                                              | Analysis ▾       | toggle (dock open state)       | 121.7 / 129.7                                                                                 | 80         | 90           |
+| P4   | Share…                                                    | Share & export ▾ | button                         | 86.8 / 94.8                                                                                   | 80         | 119.5        |
+| P2   | Add: Start milestone                                      | Add ▾            | kind preset (arms Add)         | 169.9 / 177.9                                                                                 | 90         | 119.5        |
+| P3   | Add: Finish milestone                                     | Add ▾            | kind preset (arms Add)         | 176.7 / 184.7                                                                                 | 119.5      | 119.5        |
+| P6   | Compare revisions                                         | Analysis ▾       | toggle (dock open state)       | 156.8 / 164.8                                                                                 | 119.5      | 160          |
+| P7   | Earned value… (`EARNED_VALUE_ENABLED`)                    | Analysis ▾       | button                         | 133 / 141                                                                                     | 119.5      | never        |
+| P5   | Link: Finish-to-start / Start-to-start / Finish-to-finish | Link ▾           | kind presets, flat pressed set | **501.9 / 525.9** with "Link:" on each; value-only labels (§4.11 Segments) expected about 170 | 160        | 160          |
+| P8   | Resource histogram… (`RESOURCE_CURVES_ENABLED`)           | Analysis ▾       | button                         | 177.2 / 185.2                                                                                 | never      | never        |
 
-LOOK at 2560 after search growth: about 139 px unused (about 5 %), so the ladder is exhausted. **Filter's anchor:**
-Has constraint. **Left in View on purpose (set-once):** Today line, Labels, Data date line, Link gaps.
+**Resulting unused width in the base state** (M0 §10.3):
 
-**DO deck row:**
+| Pointer / row | 1280   | 1440   | 1912   | 2560  |
+| ------------- | ------ | ------ | ------ | ----- |
+| fine LOOK     | 10.2 % | 12.0 % | 10.4 % | 5.2 % |
+| fine DO       | 2.0 %  | 0.8 %  | 0.3 %  | 5.8 % |
+| coarse LOOK   | 1.6 %  | 12.7 % | 7.1 %  | 5.6 % |
+| coarse DO     | 3.6 %  | 5.1 %  | 4.0 %  | 1.0 % |
 
-| Rank | Command (bar name)                                                                                          | From             | Kind (derived)                            | Est. width | Stage (est., fine)             |
-| ---- | ----------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------------- | ---------- | ------------------------------ |
-| P1   | Health check                                                                                                | Analysis ▾       | toggle (dock open state)                  | 120        | 1440 (does not fit at 1280)    |
-| P2   | Add: Start milestone                                                                                        | Add ▾            | kind preset (arms Add)                    | 130        | 1912                           |
-| P3   | Add: Finish milestone                                                                                       | Add ▾            | kind preset (arms Add)                    | 135        | 1912                           |
-| P4   | Share…                                                                                                      | Share & export ▾ | button                                    | 80         | 1280 (fills the gap P1 leaves) |
-| P5   | Link: Finish-to-start / Start-to-start / Finish-to-finish (Start-to-finish stays in the menu as the anchor) | Link ▾           | kind presets (arm Link), flat pressed set | 150        | 1912                           |
-| P6   | Compare revisions                                                                                           | Analysis ▾       | toggle (dock open state)                  | 170        | 2560                           |
-| P7   | Earned value… (`EARNED_VALUE_ENABLED`)                                                                      | Analysis ▾       | button                                    | 130        | 2560                           |
-| P8   | Resource histogram… (`RESOURCE_CURVES_ENABLED`)                                                             | Analysis ▾       | button                                    | 170        | 2560                           |
+All are within SC-17's 15 %. "never" means the ladder is exhausted for the room left, so those entries stay in
+their menus.
 
-**Anchors:** Analysis keeps Baselines…; Share & export keeps the formats **and Print…**. Share… promotes beside
-the closing Share & export (V4), and Print stays with the formats, as the UX review asked (one of the two, not
-both). Schedule (CSV) is **not** promoted: it is an export format, and the formats are Share & export's anchor.
-DO at 2560 sums to about 1085 px against about 1394 free (estimate), so the ladder is exhausted there. **Every DO
-stage is provisional until M0.**
+**Anchors** (never promote, render unconditionally):
+
+- Filter: Has constraint. Has conflict also stays at present stages.
+- Analysis: Baselines….
+- Share & export: the formats and Print…. Share… promotes beside the closing Share & export (V4); Schedule (CSV) is
+  a format and does not promote.
+- Link: Start-to-finish.
+- Add: Task and Level of effort.
+- View: its set-once settings, with Today line, Labels, Data date line and Link gaps left in it on purpose.
 
 **Header:** no ladder this epic (D-b).
 
 **Diagram corner (registry row `canvas`):** C1, the zoom presets "Zoom: Day / Week / Month / Quarter / Year" as a
-flat pressed set in the cluster, about 250 px, staged on stage width (estimate: from about 900 px of stage). When
-promoted, View ▾'s Zoom section is removed. **Geometry rule:** the column, with C1 promoted, must sit above the
-stage's horizontal scrollbar and below the time-axis ruler, and never cover either. The SC-15 reveal margin uses
-the column's **live** rect, including the C1 case. M0 reads both.
+flat pressed set in the cluster, **430 px fine / 470 coarse** (M0 §7), staged on **stage width** (computed at M5).
+When promoted, View ▾'s Zoom section is removed. **Geometry rule:** the column, with C1 promoted, must sit above
+the 14 px axis-marker row and below the 40 px ruler, and never cover either. The SC-15 reveal margin uses the
+column's **live** rect, including the C1 case.
 
 **Never promoted, with the reason** (so SC-17's "ladder exhausted" is a decision, not a gap):
 
