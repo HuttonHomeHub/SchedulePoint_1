@@ -3136,14 +3136,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       description:
         'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
       icon: <Scale className="size-4" />,
-      // Icon-only below `--container-roomy`, labelled above it (toolbar-redesign D-l). It was icon-only
+      // Icon-only below `--container-roomy`, labelled above it for a mouse (toolbar-redesign D-l), and
+      // **icon-only under a coarse pointer at every width** (`'roomy-fine'`, owner decision
+      // 2026-10-09): the M2 reading put touch's DO row over two lines at 1280 with the word, and touch
+      // keeps its two rows without it. It was icon-only
       // at every width, and was **held at `'never'` through M1** on a measurement: labelling it from
       // 79 rem put the DO row over one line at 1280 while Summary and Comments still sat on that row.
-      // Both have left (M2-T1/T2), so the label now fits where the deck is roomy. Its icon fails the
+      // Both have left (M2-T1/T2), so the label now fits where a mouse's deck is roomy. Its icon fails the
       // glyph test (a balance is not a universal sign for "apply levelled dates"), so the name and
       // the tooltip carry the words below that width (ADR-0117). `Scale` (balance) and not
       // `CalendarCheck`, which read as a calendar glyph once the word was gone.
-      labelVisibility: 'roomy',
+      labelVisibility: 'roomy-fine',
       penGated: true,
       disabledReason: (ctx) =>
         ctx.scheduleRefusal('apply levelled dates') ?? applyLevellingPlanReason(ctx),

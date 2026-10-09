@@ -54,6 +54,15 @@
   --container-roomy: 79rem;
 }
 
+/* The two widths a toolbar popover panel may grow to (`usePopoverPanel`'s `panelWidth`): 20 rem for a
+   single-column panel, 44 rem for one laid out in columns (View). Each is capped by the viewport less
+   a 1 rem margin, so a narrow window gets a panel that fits it. Named tokens, never an arbitrary
+   `max-w-[min(…)]` value: the sizing ratchet in `token-architecture.test.ts` counts those. */
+@theme {
+  --container-popover: min(20rem, calc(100vw - 1rem));
+  --container-popover-wide: min(44rem, calc(100vw - 1rem));
+}
+
 /* ------------------------------------------------------------------------- */
 /* The typeface (ADR-0097)                                                    */
 /*                                                                            */

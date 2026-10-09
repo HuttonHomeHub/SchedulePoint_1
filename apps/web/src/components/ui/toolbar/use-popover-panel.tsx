@@ -173,9 +173,7 @@ export function usePopoverPanel({
             style={{ position: 'fixed', left, top, maxHeight }}
             className={cn(
               'border-border bg-popover text-popover-foreground z-50 overflow-y-auto rounded-md border p-3 shadow-md outline-none',
-              panelWidth === 'wide'
-                ? 'max-w-[min(44rem,calc(100vw-1rem))]'
-                : 'max-w-[min(20rem,calc(100vw-1rem))]',
+              panelWidth === 'wide' ? 'max-w-popover-wide' : 'max-w-popover',
             )}
           >
             {children}

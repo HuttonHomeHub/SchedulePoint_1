@@ -16,9 +16,9 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * dropping one is a decision rather than an accident.
  *
  * The set is the compact set CQ-2 + OD-1 named — Baseline overlay, Comments, Settings and Resource
- * view — **plus Apply levelled dates… (D-l)**. That one joined at M2: labelled from 79 rem it put
- * the DO row over one line at 1280 while Summary and Comments still sat there (measured: the deck's
- * line count went 2 → 3), and both have since left it.
+ * view — **plus Apply levelled dates… (D-l)**. That one joined at M2 as `'roomy-fine'`: the word shows
+ * for a mouse from 79 rem, and a coarse pointer keeps the icon at every width, because the word cost
+ * touch a third DO line at 1280 (owner decision, 2026-10-09). The others are plain `'roomy'`.
  *
  * **Its blind spot, stated**: it reads the declarations. That `ToolbarButton` really mounts the
  * tooltip and `Deck` really applies the variant is `ToolbarButton`'s and the journey's to prove.
@@ -32,11 +32,20 @@ const registries: [string, ToolbarItem<never>[]][] = [
 
 describe("the registries' 'roomy' items", () => {
   const roomy = registries.flatMap(([surface, items]) =>
-    items.filter((i) => i.labelVisibility === 'roomy').map((item) => ({ surface, item })),
+    items
+      .filter((i) => i.labelVisibility === 'roomy' || i.labelVisibility === 'roomy-fine')
+      .map((item) => ({ surface, item })),
   );
 
   it('are exactly the five the design names', () => {
     expect(roomy.map(({ item }) => item.id).sort()).toEqual(ROOMY);
+  });
+
+  it('give only Apply levelled dates… the per-pointer form', () => {
+    const fine = roomy
+      .filter(({ item }) => item.labelVisibility === 'roomy-fine')
+      .map(({ item }) => item.id);
+    expect(fine).toEqual(['apply-levelling']);
   });
 
   it('are on the deck, because the selection bar is not a container', () => {

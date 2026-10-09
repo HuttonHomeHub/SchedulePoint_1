@@ -10,8 +10,11 @@ mutated the deck, M2 reads the real one. Zoom, Fit and the Minimap are still on 
    misses by 123.4 px now (zoom is still on it; M4 removes about 190 px, leaving it fitting) and **DO misses by 97.3
    px, entirely the label's 143.3 px** (item 44 → 187.3). M0 §10.3 recorded coarse DO at the first stage as "46 free"; that
    figure had no label on this control. So coarse 1280 is **3 lines after M4** (LOOK 1, DO 2), inside SC-3's "≤ 3" and
-   not its "expected 2". Fine 1280 is unaffected (DO has 98.7 px spare with the label). **One line reverts it**
-   (`labelVisibility: 'never'` on `apply-levelling`); the owner's call, and flagged in the report.
+   not its "expected 2". Fine 1280 is unaffected (DO has 98.7 px spare with the label). **Decided by the owner,
+   2026-10-09: touch does not pay the line.** `apply-levelling` is now `labelVisibility: 'roomy-fine'` — the word
+   shows for a mouse from 79 rem and never under a coarse pointer, so touch keeps its DO row at one line (the
+   143.3 px is no longer spent). The reading above is the one that led to the decision, not the shipped state; coarse
+   1280 should come out at 2 lines after M4 and this note should be re-taken then.
 2. **The cycling conflict read-out is longer than the idle chip by about 132 px** (chip capped at 14 rem), and it
    is what breaks LOOK at the floor. Fine 1024 × 600, LOOK spare/(miss) — base +26.0, "1 conflict" (70.3), cycling
    (202.0). Removing zoom at M4 frees about 146 px, so the idle chip then fits (+75.7) and **cycling still misses by

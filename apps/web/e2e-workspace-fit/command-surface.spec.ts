@@ -1187,9 +1187,10 @@ test.describe('The plan command surface', () => {
    * thing to nothing (`docs/UX_STANDARDS.md`, the container-query trap). jsdom has no layout, so the
    * unit tier cannot ask; this reads the deck's width against the wrapper it sits in, at every cell.
    *
-   * **Apply levelled dates… joined at M2** (D-l), once Summary and Comments had left the DO row: the
-   * M1 build held it at `'never'` because labelling it from 79 rem put DO over one line at 1280
-   * while they were still there. This case asserts no line count; `LINES` above does.
+   * **Apply levelled dates… joined at M2** (D-l) as `'roomy-fine'`: under this fine pointer it
+   * follows the 79 rem rule like the others, and under a coarse pointer it is icon-only at every
+   * width (owner decision, 2026-10-09; asserted in the coarse deck case below). This case asserts
+   * no line count; `LINES` above does.
    *
    * Verified red by making `Deck` resolve against the `'toolbar'` surface (the labels stop going
    * icon-only at 1024) and by removing `@container/deck` (the width assertion fails at every cell).
@@ -2221,18 +2222,32 @@ test.describe('The plan command surface, under a coarse pointer', () => {
           if (t - last > 4) lines += 1;
           last = t;
         }
-        const comments = deck.querySelector('[data-toolbar-item="comments"]');
-        const label = comments
-          ? [...comments.querySelectorAll('span')].find((s) => s.textContent?.trim() === 'Comments')
-          : undefined;
+        const labelOf = (id: string, text: string): number | null => {
+          const control = deck.querySelector(`[data-toolbar-item="${id}"]`);
+          const span = control
+            ? [...control.querySelectorAll('span')].find((s) => s.textContent?.trim() === text)
+            : undefined;
+          return span ? span.getBoundingClientRect().width : null;
+        };
         return {
+          applyLabelWidth: labelOf('apply-levelling', 'Apply levelled dates…'),
           lines,
           controls: tops.length,
           deckWidth: deck.getBoundingClientRect().width,
-          commentsLabelWidth: label ? label.getBoundingClientRect().width : null,
+          commentsLabelWidth: labelOf('comments', 'Comments'),
         };
       });
       const at = String(viewport.width);
+      // Owner decision 2026-10-09: Apply levelled dates… is `'roomy-fine'` — the word never shows
+      // under a touch pointer, so touch keeps its row at 1280. In the tree (the name), 1 px to the eye.
+      expect(
+        reading.applyLabelWidth,
+        `Apply levelled dates… has no label in the tree at ${at}`,
+      ).not.toBeNull();
+      expect(
+        reading.applyLabelWidth!,
+        `Apply levelled dates… shows its word under touch at ${at}`,
+      ).toBeLessThanOrEqual(2);
       expect(reading.controls, `no controls in the deck at ${at}`).toBeGreaterThan(15);
       expect(
         reading.lines,

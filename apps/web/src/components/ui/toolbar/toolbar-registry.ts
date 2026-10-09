@@ -59,19 +59,22 @@ export type ToolbarTier = 1 | 2 | 3;
  * - `'always'` (the default) — labelled at every width. A row that wraps can always afford a label,
  *   so there is no width at which this one is withheld.
  * - `'never'` — icon-only everywhere; the name still reaches AT through `aria-label` and the tooltip.
+ * - `'roomy-fine'` — `'roomy'`, and icon-only under a coarse pointer at every width: a touch deck's
+ *   rows are taller, and a word that fits a mouse's row can cost a finger's one (owner decision,
+ *   2026-10-09, Apply levelled dates…). Same restrictions as `'roomy'`.
  * - `'roomy'` — labelled when the **command deck** is at least `--container-roomy` wide, icon-only
  *   below that. The deck is the only container that carries the query, so on any other surface
  *   (`Toolbar`) `'roomy'` resolves to `'always'`. Because the label can vanish with no JavaScript
  *   involved, the control always mounts a `description` tooltip, and only a plain `onActivate`
  *   item — the one rendered by `ToolbarButton`, which owns that tooltip — may declare it.
  */
-export type ToolbarLabelVisibility = 'always' | 'never' | 'roomy';
+export type ToolbarLabelVisibility = 'always' | 'never' | 'roomy' | 'roomy-fine';
 
 /**
  * What {@link resolveLabelVisibility} hands a control to paint: `'visible'` (a label), `'hidden'`
  * (icon only) or `'roomy'` (a label the deck's container query hides below `--container-roomy`).
  */
-export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy';
+export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy' | 'roomy-fine';
 
 /**
  * Which toolbar an item is rendered by. **`strip`** is the command deck (`Deck`, the default);
@@ -452,16 +455,16 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
   // `ToolbarSplitButton`) have only a native `title`. A bare name-echo would be a tooltip that says
   // the label back to a reader who can see it.
   for (const item of items) {
-    if (item.labelVisibility !== 'roomy') continue;
+    if (item.labelVisibility !== 'roomy' && item.labelVisibility !== 'roomy-fine') continue;
     if (typeof item.onActivate !== 'function') {
       throw new Error(
-        `ToolbarItem "${item.id}": labelVisibility "roomy" is only for a plain onActivate item — ` +
+        `ToolbarItem "${item.id}": labelVisibility "${item.labelVisibility}" is only for a plain onActivate item — ` +
           'a render item has no description tooltip to carry its name when the label goes.',
       );
     }
     if (!item.description) {
       throw new Error(
-        `ToolbarItem "${item.id}": labelVisibility "roomy" needs a description, because the ` +
+        `ToolbarItem "${item.id}": labelVisibility "${item.labelVisibility}" needs a description, because the ` +
           'tooltip it always mounts is the only thing naming the control once the label goes.',
       );
     }

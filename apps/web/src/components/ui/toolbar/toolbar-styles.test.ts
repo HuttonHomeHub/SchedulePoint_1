@@ -28,6 +28,11 @@ describe('resolveLabelVisibility', () => {
     expect(resolveLabelVisibility('roomy', 'deck')).toBe('roomy');
     expect(resolveLabelVisibility('roomy', 'toolbar')).toBe('visible');
   });
+
+  it("adds the coarse pointer to 'roomy-fine' on the deck only", () => {
+    expect(resolveLabelVisibility('roomy-fine', 'deck')).toBe('roomy-fine');
+    expect(resolveLabelVisibility('roomy-fine', 'toolbar')).toBe('visible');
+  });
 });
 
 describe('toolbarLabelClass', () => {
@@ -43,6 +48,9 @@ describe('toolbarLabelClass', () => {
     // The variant is the NAMED token `--container-roomy` against the `deck` container, never an
     // arbitrary `@max-[…]` value. sr-only (not display:none) keeps the name for 2.5.3.
     expect(toolbarLabelClass('roomy')).toBe('truncate @max-roomy/deck:sr-only');
+    expect(toolbarLabelClass('roomy-fine')).toBe(
+      'truncate @max-roomy/deck:sr-only pointer-coarse:sr-only',
+    );
   });
 });
 
@@ -51,5 +59,8 @@ describe('toolbarLabelMinWidthClass', () => {
     expect(toolbarLabelMinWidthClass('hidden')).toBe('min-w-9');
     expect(toolbarLabelMinWidthClass('visible')).toBe('min-w-12');
     expect(toolbarLabelMinWidthClass('roomy')).toBe('min-w-12 @max-roomy/deck:min-w-9');
+    expect(toolbarLabelMinWidthClass('roomy-fine')).toBe(
+      'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-9',
+    );
   });
 });

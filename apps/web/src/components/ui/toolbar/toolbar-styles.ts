@@ -331,6 +331,8 @@ export function resolveLabelVisibility(
       return 'hidden';
     case 'roomy':
       return surface === 'deck' ? 'roomy' : 'visible';
+    case 'roomy-fine':
+      return surface === 'deck' ? 'roomy-fine' : 'visible';
     case 'always':
       return 'visible';
   }
@@ -349,6 +351,7 @@ export function resolveLabelVisibility(
  */
 export function toolbarLabelClass(state: ToolbarLabelState): string | null {
   if (state === 'hidden') return null;
+  if (state === 'roomy-fine') return 'truncate @max-roomy/deck:sr-only pointer-coarse:sr-only';
   return state === 'roomy' ? 'truncate @max-roomy/deck:sr-only' : 'truncate';
 }
 
@@ -359,5 +362,8 @@ export function toolbarLabelClass(state: ToolbarLabelState): string | null {
  */
 export function toolbarLabelMinWidthClass(state: ToolbarLabelState): string {
   if (state === 'hidden') return 'min-w-9';
+  if (state === 'roomy-fine') {
+    return 'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-9';
+  }
   return state === 'roomy' ? 'min-w-12 @max-roomy/deck:min-w-9' : 'min-w-12';
 }
