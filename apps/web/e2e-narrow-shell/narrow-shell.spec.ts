@@ -698,6 +698,14 @@ async function hittableRows(page: Page): Promise<number> {
   });
 }
 
+interface TabStop {
+  name: string;
+  width: number;
+  height: number;
+  /** Where in the workspace body the stop is: a dock, the foot row, or anything else (the stage). */
+  zone: 'dock' | 'foot' | 'stage';
+}
+
 /**
  * Walk the Tab order `steps` times in `direction` and report each stop inside the workspace body.
  * Stops outside it (the skip link, the breadcrumb) are the shell's and are not this block's subject.
@@ -706,8 +714,8 @@ async function tabStopsInBody(
   page: Page,
   direction: 'Tab' | 'Shift+Tab',
   steps: number,
-): Promise<{ name: string; width: number; height: number; inDock: boolean }[]> {
-  const stops: { name: string; width: number; height: number; inDock: boolean }[] = [];
+): Promise<TabStop[]> {
+  const stops: TabStop[] = [];
   for (let i = 0; i < steps; i += 1) {
     await page.keyboard.press(direction);
     const stop = await page.evaluate(() => {
@@ -723,7 +731,11 @@ async function tabStopsInBody(
           el.tagName,
         width: r.width,
         height: r.height,
-        inDock: el.closest('[data-surface="panel"]') !== null,
+        zone: el.closest('[data-surface="panel"]')
+          ? ('dock' as const)
+          : el.closest('[data-activities-bar]')
+            ? ('foot' as const)
+            : ('stage' as const),
       };
     });
     if (stop) stops.push(stop);
@@ -901,9 +913,14 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
         for (const stop of [...forward, ...backward]) {
           expect(stop.width, `${label}: "${stop.name}" has width`).toBeGreaterThan(0);
           expect(stop.height, `${label}: "${stop.name}" has height`).toBeGreaterThan(0);
+          // A squeezed dock has the whole row: the stage beside it is a sliver nobody can see, so
+          // the walk must never stop there.
+          expect(stop.zone, `${label}: "${stop.name}" is not in the invisible stage`).not.toBe(
+            'stage',
+          );
         }
         expect(
-          [...forward, ...backward].some((stop) => stop.inDock),
+          [...forward, ...backward].some((stop) => stop.zone === 'dock'),
           `${label}: the Tab order runs through the dock`,
         ).toBe(true);
 
@@ -928,8 +945,8 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
       }
     }
 
-    // The positive control for the zero-size check (ADR-0110): lift `inert` off a squeezed stage and
-    // the same walk must find a stop in the body with no size — otherwise the loop above would pass
+    // The positive control for the walk above (ADR-0110): lift `inert` off a squeezed stage and the
+    // same walk must find a stop in the stage's sliver or one with no size — otherwise the loop above would pass
     // against a layout that had lost the rule it exists to hold.
     const revisions = DOCKS[1];
     await openDockByKeyboard(page, revisions);
@@ -945,7 +962,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
       ...(await tabStopsInBody(page, 'Shift+Tab', 16)),
     ];
     expect(
-      unguarded.some((stop) => stop.width === 0 || stop.height === 0 || !stop.inDock),
+      unguarded.some((stop) => stop.width === 0 || stop.height === 0 || stop.zone === 'stage'),
       'without inert the walk leaves the dock for the invisible stage',
     ).toBe(true);
   });
