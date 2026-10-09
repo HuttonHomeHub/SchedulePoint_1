@@ -141,6 +141,12 @@ Critical questions are in §6. Defaults for the rest:
 > - Long-press and Menu/Shift+F10 still open the node menu (unchanged).
 > - **Given** a long name at the narrowest Explorer width (200, `m4-measurement.md:33`) **then** it
 >   truncates beside the always-visible 44 px `⋯`, and the `⋯` does not overlap it.
+>   - **Accepted trade-off:** at 200 px a level-3 plan name keeps about 54 px on touch (the
+>     accessibility review's arithmetic: 200 less the 48 px indent, the chevron, the icon and the
+>     44 px `⋯`) — roughly eight characters. No
+>     `title` is added: the name is an inner span with a click handler inside a `treeitem` that
+>     carries the accessible name, and a hover tooltip does nothing on touch, the posture this
+>     costs. The full name is one tap away on the detail screen, and the Explorer can be widened.
 
 > **US-3** — As a planner on a touch screen, I want the collapsed Explorer's spine to hold 44 px
 > controls without clipping them.

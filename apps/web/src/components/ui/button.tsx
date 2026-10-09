@@ -76,17 +76,17 @@ const buttonVariants = cva(
         // See `icon-row` above for which of the two a target takes.
         //
         // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back: a 44 px button
-        // centred in `HierarchyTree`'s 28 px row (`ROW_HEIGHT`, a JavaScript constant feeding both
+        // centred in `HierarchyTree`'s then-fixed 28 px row (a JavaScript constant feeding both
         // the absolute row style and the virtualizer's `estimateSize`) overflows 8 px into the row
         // above and 8 px below, on rows packed edge to edge. The gate of the day asked whether a
         // control's CENTRE hits itself, and a control overflowing its container passes that.
         //
         // The only consumer meant to stay is `GanttRowMenu` (its rows are `GANTT_ROW_HEIGHT`, 28,
-        // and the product owner's device recorded 0 misses in 10 — ADR-0177 D4). The Explorer tree
-        // (`HierarchyTree`) and the collapsed spine (`explorer-column`) still pass it until their
-        // rows and widths follow the pointer (`docs/specs/dense-row-touch-targets/`, M2 and M3);
-        // `control-height.structural.test.ts` lists the call sites, so a new one is a decision.
-        // The tables moved to `icon-row`: a row that is content-sized grows with its button.
+        // and the product owner's device recorded 0 misses in 10 — ADR-0177 D4). The collapsed
+        // spine (`explorer-column`) still passes it until its width follows the pointer
+        // (`docs/specs/dense-row-touch-targets/`, M3); `control-height.structural.test.ts` lists
+        // the call sites, so a new one is a decision. The tables and the Explorer tree moved to
+        // `icon-row`: their rows follow the pointer, so they grow with the button.
         'icon-sm': 'size-7',
       },
     },

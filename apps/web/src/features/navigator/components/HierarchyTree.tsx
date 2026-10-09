@@ -1,18 +1,26 @@
 import { useNavigate } from '@tanstack/react-router';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { Building2, CalendarRange, ChevronRight, Folder, MoreHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { useExpansionState, type UseExpansionState } from '../hooks/use-expansion-state';
 import { useHierarchyTree, type LazyLoadOutcome } from '../hooks/use-hierarchy-tree';
 import { useNavigatorCrud, type NodeActionTarget } from '../lib/navigator-crud-context';
 import { nodeActions } from '../lib/tree-actions';
 import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '../lib/tree-model';
+import {
+  anchorAt,
+  pinnedRange,
+  reanchoredOffset,
+  treeRowHeight,
+  type RowAnchor,
+} from '../lib/tree-row-geometry';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import { useToolbarFocusHandoff } from '@/components/ui/toolbar/use-focus-handoff';
+import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { cn } from '@/lib/utils';
 
 /** Long-press duration (ms) that opens the row-actions menu on touch. */
@@ -23,9 +31,6 @@ const KIND_ICON: Record<NodeKind, typeof Building2> = {
   project: Folder,
   plan: CalendarRange,
 };
-
-/** Fixed row height (px) — rows are single-line, so no per-item measurement is needed. */
-const ROW_HEIGHT = 28;
 
 const STATE_LABEL: Record<'loading' | 'error', string> = {
   loading: 'Loading…',
@@ -50,13 +55,13 @@ function emptyLabel(row: VisibleRow): string {
 }
 
 /** Absolute position + indentation for a virtualized row. */
-function rowStyle(top: number, level: number): React.CSSProperties {
+function rowStyle(top: number, level: number, height: number): React.CSSProperties {
   return {
     position: 'absolute',
     top: 0,
     left: 0,
     width: '100%',
-    height: ROW_HEIGHT,
+    height,
     transform: `translateY(${top}px)`,
     paddingLeft: level * 16,
   };
@@ -200,17 +205,18 @@ export function HierarchyTree({
   );
 
   const rangeExtractor = useCallback(
-    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
-      // Always keep the focused + selected (+ open-menu) rows mounted, so roving-tabindex
-      // focus, deep-link selection, and menu focus-return reach them even when scrolled out.
-      const indices = new Set(defaultRangeExtractor(range));
-      if (activeIndex >= 0) indices.add(activeIndex);
-      if (selectedIndex >= 0) indices.add(selectedIndex);
-      if (menuIndex >= 0) indices.add(menuIndex);
-      return [...indices].sort((a, b) => a - b);
-    },
+    (range: Parameters<typeof defaultRangeExtractor>[0]) =>
+      pinnedRange(defaultRangeExtractor(range), [activeIndex, selectedIndex, menuIndex]),
     [activeIndex, selectedIndex, menuIndex],
   );
+
+  const rowHeight = treeRowHeight(useCoarsePointer());
+  // Where the scroller is, in rows, kept current by `onScroll` and re-based only by the layout
+  // effect below. It is a ref written on every scroll (a state would re-render the tree on every
+  // scroll event) and it is NOT recomputed from `scrollTop` at flip time, so the flip works from
+  // the last position the user actually scrolled to. `height` is the height the DOM currently
+  // lays out with, which is why only that effect, and never a render, may change it.
+  const anchorRef = useRef<RowAnchor>(anchorAt(0, rowHeight));
 
   // `useVirtualizer` returns functions the compiler's analysis cannot prove are safe to memoize, so
   // it skips this WHOLE component's analysis — the `react-hooks/refs`/`set-state-*` diagnostics do
@@ -224,11 +230,45 @@ export function HierarchyTree({
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 10,
     initialRect: { width: 320, height: 600 },
     rangeExtractor,
   });
+
+  // A pointer change resizes every row. The virtualizer caches the sizes it has seen and keys its
+  // measurements on that cache, not on `estimateSize` — so without `measure()` it would keep laying
+  // rows (including the pinned ones) out at the old height. No `setState` here (this component is
+  // outside the React Compiler's analysis, but the rule is the same): `measure()` notifies the
+  // virtualizer, which re-renders on its own.
+  //
+  // **The scroll cannot be restored in the same effect** (ADR-0111; virtual-core `getTotalSize`,
+  // `scrollToOffset`): in this commit the sizer is still the OLD height, `measure()` only schedules
+  // the re-render, and `scrollToOffset` clamps to the DOM's stale `scrollHeight - clientHeight` —
+  // and stores the clamped value as its target, so nothing corrects it later. Fine → coarse past
+  // ~60 % of the list would land on the wrong rows. So this effect stashes the target, and the
+  // effect declared BEFORE it (which therefore runs first within a commit, and so only ever sees a
+  // target stashed by a previous commit) applies it on the re-render `measure()` causes, when the
+  // sizer has the new height. The unchanged-height early return also makes this a no-op on first
+  // mount and under StrictMode's second run.
+  const pendingRestoreRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pendingRestoreRef.current === null) return;
+    const offset = pendingRestoreRef.current;
+    pendingRestoreRef.current = null;
+    virtualizer.scrollToOffset(offset);
+  });
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    if (anchor.height === rowHeight) return;
+    virtualizer.measure();
+    pendingRestoreRef.current = reanchoredOffset(anchor, rowHeight);
+    anchorRef.current = {
+      index: anchor.index,
+      intraOffset: (anchor.intraOffset * rowHeight) / anchor.height,
+      height: rowHeight,
+    };
+  }, [rowHeight, virtualizer]);
 
   /**
    * **The tab stop is not the focus ring, and `#297` only repaired the first.**
@@ -442,6 +482,9 @@ export function HierarchyTree({
       aria-label="Project Explorer"
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      onScroll={(event) => {
+        anchorRef.current = anchorAt(event.currentTarget.scrollTop, anchorRef.current.height);
+      }}
       {...focusHandoff}
       className="h-full overflow-y-auto py-1 outline-none"
     >
@@ -470,7 +513,7 @@ export function HierarchyTree({
                   'flex items-center gap-1.5 pr-2 text-sm italic outline-none',
                   row.type === 'error' ? 'text-destructive-text' : 'text-muted-foreground',
                 )}
-                style={rowStyle(item.start, row.level)}
+                style={rowStyle(item.start, row.level, rowHeight)}
               >
                 {emptyLabel(row)}
               </div>
@@ -537,7 +580,7 @@ export function HierarchyTree({
                 'focus-visible:ring-ring group flex cursor-pointer items-center gap-1.5 pr-1 text-sm outline-none focus-visible:ring-2',
                 isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-accent/50',
               )}
-              style={rowStyle(item.start, row.level)}
+              style={rowStyle(item.start, row.level, rowHeight)}
             >
               {/* A client is the top of the hierarchy; the accent bar marks where each branch
                   begins so the tree reads as grouped rather than as one long list. Drawn
@@ -604,7 +647,7 @@ export function HierarchyTree({
               {showActions ? (
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon-row"
                   // Not a tab stop: the tree is a single tab stop (roving); keyboard users
                   // open the same menu with the Menu/Shift+F10 key on the focused row.
                   tabIndex={-1}
@@ -622,7 +665,7 @@ export function HierarchyTree({
                     // Reveal on hover/focus for fine pointers; stay visible on touch (coarse
                     // pointers have no hover) so the affordance always has a non-hover path.
                     'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
-                    'focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100',
+                    'focus-visible:opacity-100 pointer-coarse:opacity-100',
                     menuOpenHere && 'opacity-100',
                   )}
                 >

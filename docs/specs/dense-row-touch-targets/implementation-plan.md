@@ -288,6 +288,14 @@ on the Surface.
    - **Fold at the end of the list:** scroll the tree to the very end, then attach the cover. The
      end of the list should still be in view. This is the case where the browser limits the scroll
      position, and it is expected.
+   - **Fold fine → coarse past 60 % of the list:** scroll the tree well past 60 % of its length,
+     then attach the cover. The same row should be at the top. This is the case the sizer's stale
+     height used to break (the re-anchor now waits for the re-render `measure()` causes).
+   - **Fold at the end of the list, focus check:** after the end-of-list fold, press an arrow key.
+     Focus must still be on the same row and move from it.
+   - **A possible one-frame stale window:** the virtualizer's `scrollOffset` updates on the async
+     scroll event, so a fold straight after a fast fling may show one frame at the old offset.
+     Note it only if it persists or shows the wrong row.
    - **Activities table:** scroll it and focus a row, then fold. Did your place and focus survive?
    - **Spine:** collapse the Explorer and tap each spine icon. Is any icon clipped?
    - **Revisit trigger:** if the Gantt's `⋯` or arrow ever misses more than 1 in 10, say so.

@@ -12,14 +12,16 @@ import { HierarchyTree } from './HierarchyTree';
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: (range: { startIndex: number; endIndex: number }) =>
     Array.from({ length: range.endIndex - range.startIndex + 1 }, (_, i) => range.startIndex + i),
-  useVirtualizer: ({ count }: { count: number }) => ({
-    getTotalSize: () => count * 28,
+  // The row height is whatever the component asks for (`treeRowHeight`), so these suites follow it
+  // instead of restating the literal.
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+    getTotalSize: () => count * estimateSize(),
     getVirtualItems: () =>
       Array.from({ length: count }, (_, index) => ({
         index,
         key: index,
-        start: index * 28,
-        size: 28,
+        start: index * estimateSize(),
+        size: estimateSize(),
       })),
     scrollToIndex: () => {},
   }),

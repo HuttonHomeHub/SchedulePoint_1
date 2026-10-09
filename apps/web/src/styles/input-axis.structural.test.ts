@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { treeRowHeight } from '@/features/navigator/lib/tree-row-geometry';
 import { declarations, readGlobalsCss } from '@/test/css-blocks';
 import { SRC_DIR, allSourceFiles, stripComments } from '@/test/source-files';
 
@@ -85,17 +86,6 @@ describe('the coarse-pointer input axis', () => {
 const POINTER_QUERY = /\(\s*(?:any-)?pointer\s*:[^)]*\)/g;
 const COARSE_QUERY_DEFINITION = /COARSE_POINTER_QUERY\s*=\s*(['"`])[^'"`]*\1/g;
 
-/**
- * Sites that predate `COARSE_POINTER_QUERY` (created at M2 of the same epic), keyed by file and
- * query text with the number of occurrences allowed — so a second identical literal in the same
- * file fails. Each line is removed by the milestone that moves the site onto the hook; none may be
- * added. TODO(M2): `docs/specs/dense-row-touch-targets/implementation-plan.md`.
- */
-const INTERIM = new Map<string, number>([
-  ['components/layout/viewport-notice/viewport-notice.tsx::(pointer: coarse)', 1],
-  ['features/navigator/components/HierarchyTree.tsx::(pointer:coarse)', 1],
-]);
-
 function pointerQueryCounts(): Map<string, number> {
   const found = new Map<string, number>();
   for (const file of allSourceFiles()) {
@@ -113,25 +103,33 @@ function pointerQueryCounts(): Map<string, number> {
 
 describe('the JS side of the input axis', () => {
   it('writes no pointer media query of its own', () => {
-    const offenders = [...pointerQueryCounts()]
-      .filter(([key, n]) => n > (INTERIM.get(key) ?? 0))
-      .map(([key, n]) => `${key} ×${n}`);
+    const offenders = [...pointerQueryCounts()].map(([key, n]) => `${key} ×${n}`);
     expect(
       offenders,
       'a `(pointer: …)` query written out is a second vocabulary for the axis — use the ' +
-        '`pointer-coarse:` utility in a class, or, in code, the single `COARSE_POINTER_QUERY` ' +
-        'definition (created at M2 of dense-row-touch-targets; until it exists there is no ' +
-        'sanctioned JS form, so a new need is an M2 conversation, not a new literal)',
+        '`pointer-coarse:` utility in a class, or, in code, `useCoarsePointer()` from ' +
+        '`components/ui/use-coarse-pointer.ts`, whose `COARSE_POINTER_QUERY` is the one definition',
     ).toEqual([]);
   });
 
-  it('still finds each interim site exactly, so the allowance cannot outlive the code', () => {
-    const found = pointerQueryCounts();
-    for (const [key, allowed] of INTERIM) {
-      expect(
-        found.get(key) ?? 0,
-        `the interim allowance "${key}" no longer matches ${String(allowed)} occurrence(s)`,
-      ).toBe(allowed);
-    }
+  it('has exactly one definition of COARSE_POINTER_QUERY, and it is the hook module', () => {
+    // The scan above blanks the right-hand side of a `COARSE_POINTER_QUERY = '…'` wherever it
+    // appears, so a second definition elsewhere would be invisible to it.
+    const definers = allSourceFiles().filter((file) =>
+      new RegExp(COARSE_QUERY_DEFINITION.source).test(
+        stripComments(readFileSync(join(SRC_DIR, file), 'utf8')),
+      ),
+    );
+    expect(definers).toEqual(['components/ui/use-coarse-pointer.ts']);
+  });
+
+  it("gives the tree's coarse row height the coarse --control-h, so JS and CSS cannot disagree", () => {
+    // The tree's rows are a number the virtualizer multiplies by, so they are the one control
+    // height that cannot read the token. 2.75rem at the default root size is 44 px — this
+    // assumes the 16 px browser-default root font, which globals.css leaves alone ("never lock the
+    // root size in px"). A user's larger text size scales the token but not the virtualizer's
+    // literal — that is the same limit as the rows' fixed heights, not a defect of this parity check.
+    const rem = Number.parseFloat(declarations(coarseBlockBody()).get('--control-h') ?? '');
+    expect(treeRowHeight(true)).toBe(rem * 16);
   });
 });
