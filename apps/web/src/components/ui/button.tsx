@@ -60,34 +60,34 @@ const buttonVariants = cva(
         // the variant's whole reason had lapsed and its one consumer — the minimap's close — was
         // the odd size out in a family of three. A variant kept for a rule that no longer exists
         // is the drift class this register tracks, in the design system rather than in prose.
-        // Row-height icon button for dense lists. **Stays 28 px on BOTH pointers, and that is
-        // ADR-0118 D1's second named exception rather than an oversight** — see D6a.
+        // Row icon button for a target in a row that GROWS with it. 28 px on a fine pointer, 44 on
+        // a coarse one (ADR-0118 D2), written as a coarse override for the reason `icon` gives
+        // above. The row has to be able to take the extra 16 px: the rows of the six
+        // `RowActionsMenu` tables and the activities table are content-sized, so the button sets
+        // the row and nothing overflows (`docs/TECH_DEBT.md` #215, `docs/specs/dense-row-touch-targets/`).
         //
-        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back. FIVE of its six
-        // consumers sit in a container whose height is fixed independently of it, and the sharpest
-        // is `HierarchyTree.tsx`: `ROW_HEIGHT = 28` is a **JavaScript constant** feeding both the
-        // absolute row style and the virtualizer's `estimateSize`, so a 44 px button centred in a
-        // 28 px row overflows 8 px into the row above and 8 px below — on a list whose rows are
-        // packed edge to edge, and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e.
-        // permanently visible on exactly the device that would see it. Two independent reviews
-        // found it; the epic's own gate could not, because it asks whether a control's CENTRE hits
-        // itself and a control overflowing its container passes that.
+        // A target in a row that grows with it is `icon-row`; a target in a fixed container is
+        // `icon-sm` and is on ADR-0118 D1's list.
+        'icon-row': 'size-7 pointer-coarse:size-(--control-h)',
+        // Icon button for a target in a container whose height is fixed independently of it. **Stays
+        // 28 px on BOTH pointers, and that is ADR-0118 D1's second named exception rather than an
+        // oversight** — see D6a.
         //
-        // The exception's equivalent is stated per consumer rather than claimed for the variant,
-        // because the advice this docblock USED to carry — "pair with a larger non-pointer target
-        // (long-press / keyboard)" — turned out to be honoured by exactly ONE of them
-        // (`HierarchyTree`'s `startLongPress` on the whole row, plus Menu/Shift+F10 on the focused
-        // treeitem). Deleting that advice while introducing the size that needed it was the actual
-        // defect. Growing the dense rows themselves under a coarse pointer is a row-rhythm
-        // decision, not a padding one — `docs/TECH_DEBT.md` #215.
+        // A target in a row that grows with it is `icon-row`; a target in a fixed container is
+        // `icon-sm` and is on ADR-0118 D1's list.
         //
-        // The counts above said "six of its eight" and "one of the eight" until 2026-09-09. #215
-        // recounted to five on 2026-09-01 and swept neither this docblock nor
-        // `control-height.structural.test.ts` — the ADR-0071 shape, noticing and stepping over.
-        // Re-derived: five call sites pass `size="icon-sm"` (`explorer-column`, `GanttRowMenu`,
-        // `HierarchyTree`, `ActivitiesTable`, `CalendarRowMenu`), and a sixth consumer reaches it
-        // as `SheetHeader`'s DEFAULT — which is not a dense row at all, and is `docs/TECH_DEBT.md`
-        // #278.
+        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back: a 44 px button
+        // centred in `HierarchyTree`'s 28 px row (`ROW_HEIGHT`, a JavaScript constant feeding both
+        // the absolute row style and the virtualizer's `estimateSize`) overflows 8 px into the row
+        // above and 8 px below, on rows packed edge to edge. The gate of the day asked whether a
+        // control's CENTRE hits itself, and a control overflowing its container passes that.
+        //
+        // The only consumer meant to stay is `GanttRowMenu` (its rows are `GANTT_ROW_HEIGHT`, 28,
+        // and the product owner's device recorded 0 misses in 10 — ADR-0177 D4). The Explorer tree
+        // (`HierarchyTree`) and the collapsed spine (`explorer-column`) still pass it until their
+        // rows and widths follow the pointer (`docs/specs/dense-row-touch-targets/`, M2 and M3);
+        // `control-height.structural.test.ts` lists the call sites, so a new one is a decision.
+        // The tables moved to `icon-row`: a row that is content-sized grows with its button.
         'icon-sm': 'size-7',
       },
     },
