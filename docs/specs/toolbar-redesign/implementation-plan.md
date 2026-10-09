@@ -163,6 +163,12 @@ is **M3's** assertion, and "no leading seam" (SC-12) is **M6 V2's**: neither hol
 > 1280 bound is unchanged, so the journey wins. D-l is delivered in M2-T1/T2, when those two controls
 > have left DO. The `'roomy'` set at M1 is therefore **four** (the CQ-2 + OD-1 set), and the
 > structural test pins that set.
+>
+> **M1 also records why the native `title` is KEPT on always-labelled buttons** (ADR-0117, the
+> labelled branch of `ToolbarButton`). A labelled button's name is already painted, so its `title`
+> carries only the supplementary clause: a live `description`, or the reason while shaded. Removing
+> it would drop that tip from every labelled button. The Tooltip primitive is used only where the
+> label can be absent (`'hidden'` / `'roomy'`), and exactly one channel is live per button.
 
 ##### Task M1-T1: the stale lines first (≈ one PR, docs and comments only)
 
@@ -547,15 +553,18 @@ wide-viewport cases in `command-surface.spec.ts`.
 
 1. File **ADR-0184** from spec §4.10 (D1–D6). Add its line to `CLAUDE.md` §16. Add amendment notes to ADR-0031,
    ADR-0091 (D3), ADR-0100 and ADR-0179 (D2 use), and record the completion note on ADR-0090 D6 and ADR-0091 D3a.
-2. **Update `CLAUDE.md` §1's counts (`pnpm check:counts`)**: the ADR count, the web source file count, and any suite
+2. **Remove `ToolbarItem.tier` and `ToolbarTier` (`docs/TECH_DEBT.md` #193).** Nothing reads them since
+   ADR-0109 D1; M1 left the field declared and every registration still sets it. Delete the type, the field
+   and the `tier:` lines, and sweep the prose that explains tier 3 as a live mechanism.
+3. **Update `CLAUDE.md` §1's counts (`pnpm check:counts`)**: the ADR count, the web source file count, and any suite
    count.
-3. `DESIGN_SYSTEM.md`: R1–R9, `--container-roomy` (derived from the first stage), the rem `PROMOTE_*` stages, the
+4. `DESIGN_SYSTEM.md`: R1–R9, `--container-roomy` (derived from the first stage), the rem `PROMOTE_*` stages, the
    per-pointer widths, and the amended `:225` rule.
    `UX_STANDARDS.md`: R5 and R9.
-4. `TECH_DEBT.md`: close #471's band half; a new row for its second paragraph (D-j); close #193 with the overturn
+5. `TECH_DEBT.md`: close #471's band half; a new row for its second paragraph (D-j); close #193 with the overturn
    noted.
-5. The SC-14 and SC-19 manifest test green; the SC-17 before and after tables in the record.
-6. Set the spec header to `Accepted — shipped (ADR-0184)` (`check:spec-status`).
+6. The SC-14 and SC-19 manifest test green; the SC-17 before and after tables in the record.
+7. Set the spec header to `Accepted — shipped (ADR-0184)` (`check:spec-status`).
 
 ## Reviewer checklists (each must be ticked in the PR, with `file:line` or a test name)
 

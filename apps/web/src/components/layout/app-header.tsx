@@ -6,7 +6,6 @@ import { BrandLink } from '@/components/layout/brand-mark';
 import { ChromeSlot } from '@/components/layout/chrome/chrome-slot';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
-import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { OrgSwitcher } from '@/features/organizations';
 
 /**
@@ -196,29 +195,14 @@ export function AppHeaderRow({
   modeSlotRef: (node: HTMLDivElement | null) => void;
 }): React.ReactElement {
   return (
-    // **`ToolbarBandProvider` wraps the row, and it is a wrapper now more than a reading.** It was
-    // here so a mode `Toolbar` inside a `shrink-0` row did not resolve its DENSITY from its own
-    // `clientWidth`, which for such a row is its content width and landed it in a narrow band on a
-    // wide screen (`m0-landing-d1-measurement.md`). The density bands are gone (ADR-0109 D1, deleted
-    // in toolbar-redesign M1), so the width it publishes has no reader (`toolbar-band.tsx`) and the
-    // `<div>` is what is left of its job.
-    //
-    // It was never protection against the fit trap — a width-unconstrained row's `clientWidth` is an
-    // *output* of a fit decision, so charging it chrome makes the pass measure itself. That trap is
-    // moot since ADR-0109 D1: the surface wraps, nothing demotes, and the guard this paragraph
-    // once named — `isWidthConstrained` — went with the ladder and exists nowhere
-    // (`docs/TECH_DEBT.md` #193).
-    //
-    // The first answer here was "the mode items are `render`, so they cannot demote", and that was
-    // false even then: `mode-early` had an `onActivate` and a `segment` (ADR-0148 has since
-    // deleted it). Recorded because it was nearly built on.
-    //
-    // `toolbar-band.tsx`'s invariant still reads right if a reader returns: the band width says how
-    // roomy the surface is and never answers whether a row's content fits.
-    <ToolbarBandProvider className="min-h-12 px-4 py-1">
+    // The row is a plain `<div>`. It used to be a `ToolbarBandProvider` so a mode `Toolbar` inside a
+    // `shrink-0` row did not resolve its density from its own `clientWidth`
+    // (`m0-landing-d1-measurement.md`); the density bands went with ADR-0109 D1 and the provider,
+    // which nothing read, was deleted afterwards (`docs/TECH_DEBT.md` #193).
+    <div className="min-h-12 px-4 py-1">
       <header className="flex min-h-full items-center">
         <HeaderContents identitySlotRef={identitySlotRef} modeSlotRef={modeSlotRef} />
       </header>
-    </ToolbarBandProvider>
+    </div>
   );
 }

@@ -54,7 +54,6 @@ import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -2103,15 +2102,10 @@ export function ToolbarPlanWorkspace({
           before the band existed. */}
 
         <ChromePortal>
-          {/* Publishes the BAND's width (`toolbar-band.tsx`). It was read to resolve each row's
-            density, so a row reflected the surface rather than whatever width was left after its
-            siblings — without it the project-finish chip beside Row 1 silently cost the four
-            viewport commands their labels, measured on a 1646 px screen and shipped in web-v0.86.0.
-            The density bands are gone (toolbar-redesign M1), so nothing reads the width now. */}
           {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
               directly on the band's 3 px amber rule with nothing between them — a double seam that
               said the same thing twice, 1 px apart. */}
-          <ToolbarBandProvider className="flex flex-col">
+          <div className="flex flex-col">
             {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
@@ -2136,13 +2130,8 @@ export function ToolbarPlanWorkspace({
           this block reads — `model`, `ctx`, the ADR-0031 registry, the workspace key scope — stays
           exactly where it was and the shell stays plan-unaware (ADR-0029).
 
-          **Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
-          omission.** That provider renders a `<div>` and publishes ITS width as the band width; here
-          that div would be the identity block, which is the header row's one shrinkable item — so
-          the published figure would be "whatever width is left after my siblings", which is
-          precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped once in
-          `web-v0.86.0`. Nothing is lost by leaving it out: no density is resolved from the band any
-          more (`resolveLayoutMode` was deleted in toolbar-redesign M1, `docs/TECH_DEBT.md` #193). */}
+          The band is a plain `<div>` that publishes no width, so there is nothing to wrap this in
+          (`docs/TECH_DEBT.md` #193). */}
             {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
           mode cluster below (2026-08-26): the header places the two in different sections of a
           `justify-between` row, and one slot cannot put its contents in two places.
@@ -2263,12 +2252,8 @@ export function ToolbarPlanWorkspace({
             </ChromePortal>
 
             {/* **The plan's modes and pen — section 2, the middle of the header row.**
-          Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
-          omission. That provider renders a `<div>` and publishes ITS width as the band width; here
-          that div would be this section, whose width is whatever the row's `justify-between` leaves
-          — which is precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped
-          once in `web-v0.86.0`. Nothing is lost: no density is resolved from the band any more
-          (`resolveLayoutMode` was deleted in toolbar-redesign M1, `docs/TECH_DEBT.md` #193). */}
+          Nothing publishes a band width any more, so there is no wrapper to omit
+          (`docs/TECH_DEBT.md` #193). */}
             <ChromePortal name="mode">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {/* **The mode cluster is back on the identity line, beside the pen** (workspace
@@ -2408,7 +2393,7 @@ export function ToolbarPlanWorkspace({
                 authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               />
             </div>
-          </ToolbarBandProvider>
+          </div>
         </ChromePortal>
 
         {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the

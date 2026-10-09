@@ -2042,9 +2042,9 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
  * `api.disabled` carries both pen-gating (the whole authoring cluster) and the empty-stack state
  * (`canUndo`/`canRedo`). `aria-keyshortcuts` advertises the accelerator so AT can discover it.
  *
- * These are `render` items, so they are **pinned inline** and never demoted into the `⋯` overflow
- * (unlike the flag-off placeholder buttons) — an intentional choice: undo/redo must always be one
- * reachable click, not buried behind a narrow-bar overflow menu.
+ * These are `render` items: they spread `itemProps` themselves and carry no registry label.
+ * Undo/redo is always one reachable click — nothing in the toolbar overflows or demotes
+ * (ADR-0109 D1), and a `render` item is no exception.
  */
 function UndoRedoControl({
   direction,
@@ -2339,8 +2339,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *   Export/Print/Share/Comments) that stay live because they don't author. (Plan details + Edit plan
  *   are folded into the Row 1 Summary popover; Keyboard shortcuts rides Row 1 beside Legend.)
  *
- * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping/tiering/overflow are
- * unchanged within each row. Real controls sit alongside **future-feature placeholders** — disabled
+ * The workspace renders one {@link Toolbar} per row (via `splitByRow`); grouping is
+ * unchanged within each row (a row wraps; nothing overflows — ADR-0109 D1). Real controls sit alongside **future-feature placeholders** — disabled
  * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
  * (go-to-today, comments and add-note under
@@ -2356,7 +2356,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  *    not removed, so the bar's silhouette doesn't shift between viewing and editing. Only a
  *    genuinely-absent feature (flag-off) uses `isVisible`.
  * 2. **One consolidated zoom control** — the five scale levels live in a single dropdown so the Frame
- *    group stops overflowing narrow bars (which used to silently demote Year/Quarter into `⋯`).
+ *    group takes one slot (the five levels used to be separate buttons, which silently
+ *    demoted Year/Quarter into the `⋯` while a width ladder existed).
  *
  * NB the persisted **data date** has no toolbar control (it is set at plan creation and changed via
  * *Edit plan*); `today` is a viewport **Go-to-today** jump (today at the left inset, not centred),

@@ -461,14 +461,9 @@ function ConflictRemedyControl({
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
  * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
- * name **is** the affordance, so a label is not something to trade away for width. Every item is also
- * `tier: 1`, but that is now a separate statement (TECH_DEBT #61): it says "demote these last", not
- * "label these". The two used to be the same property, and this file's own comment used to gloss
- * `tier: 1` as "(visible labels)" — which is precisely the conflation the split removed.
- *
- * The tier trade-off stands: under extreme narrow width the primitive demotes trailing items
- * (Edit/Delete) to overflow before the newer ones — accepted, since this floating bar rarely
- * overflows and surfacing the new actions is the goal.
+ * name **is** the affordance, so a label is not something to trade away for width. Every item also
+ * carries `tier: 1`, which nothing reads any more (ADR-0109 D1 deleted the demotion pass; removal is
+ * toolbar-redesign M7, `docs/TECH_DEBT.md` #193). The bar wraps rather than overflowing.
  */
 /**
  * **Which flippable items carry a `lostReason`, decided one at a time** (`use-focus-handoff.ts`).
@@ -911,7 +906,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     //
     // `labelVisibility: 'always'` matches the object actions above rather than the Row-1 registrations
     // these replace, and the reason is the surface: this is a compact bar of a handful of commands
-    // where the name IS the affordance, not a 25-item row rationing width. Same for `tier: 1`.
+    // where the name IS the affordance, not a 25-item row rationing width.
     //
     // **This paragraph was here TWICE**, in near-identical copies, and the deleted one still said
     // "none of the three" after `float-paths` left. A comment that disagrees with its neighbour

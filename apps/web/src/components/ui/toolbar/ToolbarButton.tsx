@@ -128,7 +128,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         : disabledReason
       : liveTitle;
     /**
-     * **The tooltip is the Tooltip primitive, not `title`** (fix-slice M-B — #131/#204(a),
+     * **Where the label can be absent, the tooltip is the Tooltip primitive, not `title`** (fix-slice M-B — #131/#204(a),
      * ADR-0117). `title` is hover-only: no mainstream browser shows it on keyboard focus and touch
      * has no hover at all, so a control with no visible label was unreadable to exactly the users
      * with the least other signal. The content is the SAME string the `title` carried —
