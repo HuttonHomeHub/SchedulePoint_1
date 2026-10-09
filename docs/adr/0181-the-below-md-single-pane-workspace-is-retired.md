@@ -33,7 +33,8 @@ registering inside the pane that is `display: none` by default.
 
 **D1 — The plan workspace has one layout at every width.** The below-`md` branch, `WorkspaceViewToggle` and
 the `hostsPlanSlots` prop on `ActivityBottomPanel`, `PlanActivitiesFootRow` and `ActivityPanelCollapsedBar` are
-deleted. The canvas row above the foot row is unconditional. The Workspace view radiogroup is removed (a
+deleted, and `onCollapse` on `ActivityBottomPanel` is now required (it was optional only for the host that had
+no collapsed state). The canvas row above the foot row is unconditional. The Workspace view radiogroup is removed (a
 user-facing control; no replacement, because Expand / Collapse already is the show / hide mechanism).
 
 **D2 — Short heights are ADR-0180's, at every width.** Its swap (Expand gives the panel the whole body when the
@@ -55,15 +56,33 @@ those three cannot disagree.
   minimum. Wherever it is rendered it is keyboard-resizable and at least 24 px. M0 found the dock's `Resize …
 panel` handle was the only zero-size focusable the retirement produced.
 - It is a render clamp only: a width saved at 1440 is still saved at 1440 after a visit at 640.
+- **A squeezed dock puts an armed drawing tool away**, as the swap does: an armed tool has no target behind an
+  `inert` stage, and Escape, its way out, is a canvas key the stage would never receive. (Journey and unit:
+  `plan-workspace-toolbar.test.tsx`. Not covered: a canvas row merely too short for a bar, whose measurement is the
+  shell's; see the limits below.)
 - At 640 and below every dock is squeezed (minimums 280 to 380 against a 360 floor); the side-by-side layout
   survives from about 700 to 740 px, by dock. That is the rule working, not a defect.
 
 **D4 — A command that acts on the diagram closes a squeezed dock first.** `withDiagram` (the short-body
 wrapper) now applies when `swapActive || squeezed`: its first step closes the open dock through the existing
-close path and runs the command on the next frame. **`WithDiagram` takes an optional third argument, the command
-class.** A command classed `dock` is exempt, because it already replaces the open dock and closing first would
-turn "close this one" into "reopen it". The canvas window `keydown` early-return also applies while the stage is
-`inert`.
+close path and runs the command on the next frame. **`WithDiagram` takes an optional third argument, typed
+`'dock'`**: a command classed `dock` is exempt, because it already replaces the open dock and closing first would
+turn "close this one" into "reopen it". A wrong class cannot hide: `canvas-directed-commands.structural.test.tsx`
+records the argument each wrapped command was given and holds it to `COMMAND_CLASS`, so a fifth dock command that
+omits it, or a viewport command that claims it, fails that test (verified red by dropping it from `revealComments`).
+
+- **Focus and a voice.** If focus was inside the dock being closed, it goes to that dock's toolbar control
+  (`DOCK_TRIGGER_ITEM`, a `Record` over the dock set, so a fifth dock must name one) rather than <body>, and the
+  polite region says "Panel closed to show the diagram." — nothing else on screen says why the panel went.
+- **A restore never aims into `inert`.** `focusPlanSurface`, the Gantt-grid restore and the cell-closed restore go
+  through `focusOutsideInert`: a target inside an `inert` subtree is skipped for the first control of an open
+  dock, then the foot row's toggle.
+- The canvas window `keydown` early-return also applies while the stage is `inert`.
+- **A canvas row too short for a bar** (the collapsed panel on a body that holds the foot row and not the 40 px
+  ruler) makes **the stage** `inert`, and only the stage: the row also holds the four docks, and an inert dock
+  cannot take focus on mount or be closed. Fit and the other diagram commands **run in place** against such a
+  row, by decision: there is no dock to close and no panel to collapse, the canvas keeps its viewport, and the
+  command is harmless on a diagram nobody can see. The cause is the shell's chrome (#471).
 
 **D5 — The foot row wraps, and nothing in it is allowed to leave the screen.** The row takes `flex-wrap` with
 `min-h-9` as a floor only. `PlanFacts` and its outlet are `max-w-full`, so the facts wrap their own items; Expand
@@ -73,9 +92,14 @@ one-line width and, at 320, the row scrolled 270 px sideways with Recalculate of
 this change found that; the unit tier cannot see it.) The collapsed canvas row is `inert` below the 40 px ruler
 band (`RULER_BAND_PX`, measured 40 px in every M0 cell).
 
-**D6 — `CanvasDock` still falls back to rendering in place** for a host with no outlet
-(`TsldPanel.tsx`), and that stays its contract; **no production workspace path exercises it any more.**
-`DataTable`'s contained region keeps `min-h-32` at every width (the `md:` prefix existed only for the single pane).
+**D6 — `CanvasDock` still falls back to rendering in place** for a host with no outlet, and that stays its
+contract. **The workspace no longer takes it, and the guest view still does.** Read with
+`grep -rn "<TsldPanel\b" apps/web/src --include=*.tsx` (excluding tests) on 2026-10-09: two production mounts,
+`plan-workspace-toolbar.tsx` (which mounts `CanvasDockOutlet` through the foot row, in both panel states) and
+`features/share/components/GuestPlanView.tsx`, which has no outlet and so renders in place. The spec's "no
+production path exercises it any more" was therefore wrong about the guest view (read-only, so no authoring strip
+reaches it, but the path is live) and is corrected here. `DataTable`'s contained region keeps `min-h-32` at every
+width (the `md:` prefix existed only for the single pane).
 
 ## Known limits, recorded rather than fixed
 
@@ -97,7 +121,12 @@ sideways scroll, Expand and Recalculate on screen), and docks at 320 × 1000.
 Two more are recorded, not decided here:
 
 - **At 320 × 720 the foot row (123 px once it wraps) is taller than the 109 px body**, so the canvas row has no
-  height and a dock opened there is 0 px tall. Docks are asserted at 320 × 1000 instead.
+  height and **a dock opened there is 0 px tall**. Expand sits 10 px below the viewport, with its centre still
+  hit-testable (asserted: `pointerReachable` at 320 × 720 in the foot-row journey). Docks are asserted at
+  320 × 1000 instead.
+- **A squeezed dock does not say why the diagram is gone.** ADR-0180's swap prints "Diagram hidden. Collapse to
+  return."; a dock that has taken the row prints nothing. Doing it means a note slot in the shared dock chrome of
+  four panels, so it is a follow-up in `docs/TECH_DEBT.md` #471, not built here.
 - **A selected activity docks its action bar in the foot row and grows it to 167–367 px** at 1280 down to 640
   (M0 §5). It was already true at the 1024 floor, and it is why a dock opened with a selection at a narrow width
   is short. The foot row now gives the bar a line of its own but the outlet still asks for no basis; #471 records it.

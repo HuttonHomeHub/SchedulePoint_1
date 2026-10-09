@@ -385,9 +385,9 @@ product got wrong once:
   itself, the component renders into it, and it renders **in place** when no
   outlet is registered. The in-place fallback is not a courtesy — it is what
   makes the three states one mechanism instead of three conditionals to get
-  wrong. With the single-pane layout retired no production workspace path takes the
-  in-place fallback any more (ADR-0181); it stays the contract for a host with no
-  outlet.
+  wrong. With the single-pane layout retired the workspace never takes the in-place
+  fallback (ADR-0181); the read-only guest view still does, and it stays the
+  contract for any host with no outlet.
 - **A collapse is triggered by the row's pressure, not by its own width.** A
   container query on the cluster asks "am I narrow?", and what decides whether
   the cluster should shed its labels is whether the **row** is tight, which

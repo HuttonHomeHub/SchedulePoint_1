@@ -11892,6 +11892,11 @@ block beside the outlet is `shrink-0` and the outlet column is left 0–113 px w
 narrow widths, but the outlet's `flex-1` / zero basis never asks for a line of its own. Give the outlet a content basis
 or its own row when it holds a bar.
 
+**Follow-up from the ADR-0181 reviews:** a dock that has taken the row hides the diagram without saying so (ADR-0180's
+swap prints "Diagram hidden. Collapse to return."). It needs a note slot in the shared dock chrome of the four
+panels, with the note tied to the control that restores the diagram; not built in the retirement, so it is an open
+part of this row.
+
 **Read in a browser while building ADR-0181 (2026-10-09, the container's Chromium):** once the foot row wraps
 and its facts outlet is bounded (the facts no longer push Recalculate off the right edge at 320), the row is **123 px at
 320 × 720**, taller than the **109 px** body: the canvas row has no height, a dock opened there is 0 px tall, and Expand
