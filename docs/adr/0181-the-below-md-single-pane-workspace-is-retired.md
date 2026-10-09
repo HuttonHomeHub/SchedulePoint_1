@@ -89,8 +89,12 @@ omits it, or a viewport command that claims it, fails that test (verified red by
 and Collapse are `shrink-0 ml-auto` at the button's touch size. (Expand was **not** `shrink-0` before: 26 × 40
 at 640 and 16 × 40 at 320. The outlet had no bound of its own, so `PlanFacts`' `max-w-full` resolved against its
 one-line width and, at 320, the row scrolled 270 px sideways with Recalculate off screen. A browser reading in
-this change found that; the unit tier cannot see it.) The collapsed canvas row is `inert` below the 40 px ruler
-band (`RULER_BAND_PX`, measured 40 px in every M0 cell).
+this change found that; the unit tier cannot see it.) **The dock outlet has a floor** (`not-empty:min-w-72`, 288
+px, under the 304 px a 320 px row has): its zero basis let the facts take the line, so a selected activity's
+action bar stacked into a 152 px, 356 px tall column at 700 and painted over them; with the floor a row too narrow
+for both wraps the bar onto its own line (journey, red on the old outlet; a first floor of 320 px was itself an
+8 px sideways scroll at 320 and is why it is 288). The collapsed canvas row's stage is `inert` below the 40 px
+ruler band (`RULER_BAND_PX`, measured 40 px in every M0 cell).
 
 **D6 — `CanvasDock` still falls back to rendering in place** for a host with no outlet, and that stays its
 contract. **The workspace no longer takes it, and the guest view still does.** Read with
@@ -129,7 +133,8 @@ Two more are recorded, not decided here:
   four panels, so it is a follow-up in `docs/TECH_DEBT.md` #471, not built here.
 - **A selected activity docks its action bar in the foot row and grows it to 167–367 px** at 1280 down to 640
   (M0 §5). It was already true at the 1024 floor, and it is why a dock opened with a selection at a narrow width
-  is short. The foot row now gives the bar a line of its own but the outlet still asks for no basis; #471 records it.
+  is short. With the outlet's floor the bar now takes its own line where the facts leave it under 288 px, so it no longer
+  paints over them at 700 and 640 (journey); the height it costs the body is still #471's.
 
 #466 (the row `⋯` under a bar at 320) was **not reproduced** in either layout and is left open and untouched.
 

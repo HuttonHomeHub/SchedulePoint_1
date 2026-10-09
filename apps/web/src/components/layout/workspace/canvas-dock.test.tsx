@@ -27,7 +27,7 @@ describe('CanvasDockOutlet', () => {
     );
     // **Verified red** by the journey, not here: jsdom has no layout. Without the floor the outlet's
     // zero basis lets the facts take the line and the selection bar paints over them at 700 px.
-    expect(container.firstElementChild).toHaveClass('not-empty:min-w-80', 'flex-1');
+    expect(container.firstElementChild).toHaveClass('not-empty:min-w-72', 'flex-1');
   });
 });
 
