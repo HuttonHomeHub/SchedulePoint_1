@@ -49,7 +49,7 @@ export interface RowSubjectProps {
  */
 export function RowSubject({ name, context, badge }: RowSubjectProps): React.ReactElement {
   return (
-    <p className="flex min-w-0 items-center gap-2">
+    <p data-row-subject className="flex min-w-0 items-center gap-2">
       <span className="min-w-0 shrink truncate">{name}</span>
       {badge}
       {context ? (

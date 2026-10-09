@@ -27,11 +27,17 @@
  *   PLAYWRIGHT_CHROMIUM_PATH=… node scripts/measure-overview.mjs > /tmp/m0.md
  */
 /* global document, window, getComputedStyle, NodeFilter */
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
 
-import { assertLandingStates, expireInvitation, seedLandingStates } from './landing-fixture.mjs';
+import {
+  assertLandingStates,
+  expireInvitation,
+  seedLandingStates,
+  seedLongNames,
+} from './landing-fixture.mjs';
+import { probeRowSubjects, summariseProbe } from './row-subject-probe.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 // 1920 is the width the product owner's own screenshot was taken at (2026-09-16) — the screen
@@ -596,6 +602,196 @@ if (process.env.SP_SPLIT_MATRIX !== '0') {
   p('### Region heights, per cell');
   p();
   for (const d of detail) p(`- ${d.label}: ${d.heights.join('; ')}`);
+  p();
+}
+
+/**
+ * **The row-subject matrix** (docs/specs/row-subject-truncation M0-T1/T2, spec SC-1..SC-8).
+ *
+ * Runs with `SP_ROW_SUBJECT=1` (and, to skip the older sections, `SP_SPLIT_ONLY=1
+ * SP_SPLIT_MATRIX=0`). `SP_ROW_SUBJECT_MAXIMA=1` adds the 200 + 200 + 200 plan. Each cell takes
+ * the NEW probe (`row-subject-probe.mjs`) and, beside it, the OLD instrument's truncated-run count
+ * for the same page, so the record shows what the old one could not see.
+ */
+const ROW_CELLS = [
+  { w: 1024, h: 600 },
+  { w: 1280, h: 800 },
+  { w: 1465, h: 900 },
+  { w: 1477, h: 900 },
+  { w: 1646, h: 1000 },
+  { w: 1912, h: 948 },
+  { w: 1912, h: 1114 },
+  { w: 320, h: 800 },
+  { w: 1280, h: 800, inject: 'font200' },
+  { w: 1912, h: 948, inject: 'font200' },
+  { w: 1280, h: 800, inject: 'spacing' },
+  { w: 1477, h: 900, inject: 'spacing' },
+  { w: 1912, h: 948, inject: 'spacing' },
+];
+const INJECT_CSS = {
+  font200: 'html { font-size: 200% }',
+  spacing:
+    '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important } p { margin-bottom: 2em !important }',
+};
+
+/** Runs in the page: per named box, whole rows in view, region height, and the name column's width in characters. */
+function readBoxes() {
+  const nameOfSection = (el) => {
+    const labelled = el.getAttribute('aria-labelledby');
+    return (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '').trim();
+  };
+  const scroller = (el) => {
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      if (getComputedStyle(n).overflowY !== 'visible') return n;
+    }
+    return document.documentElement;
+  };
+  const canvas = document.createElement('canvas').getContext('2d');
+  const boxes = [];
+  let minNameChars = Infinity;
+  for (const sec of document.querySelectorAll('section[aria-labelledby]')) {
+    const subjects = [...sec.querySelectorAll('[data-row-subject]')];
+    if (subjects.length === 0) continue;
+    const first = subjects[0];
+    const sc = scroller(first);
+    const sr = sc.getBoundingClientRect();
+    let whole = 0;
+    let boxMin = Infinity;
+    for (const subj of subjects) {
+      const row = subj.closest('.border-b');
+      const r = row.getBoundingClientRect();
+      if (r.top >= sr.top - 0.5 && r.bottom <= sr.bottom + 0.5) whole += 1;
+      const nameEl = subj.firstElementChild;
+      const cs = getComputedStyle(nameEl);
+      canvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const adv = canvas.measureText('0').width;
+      const primary = row.firstElementChild.getBoundingClientRect().width;
+      minNameChars = Math.min(minNameChars, primary / adv);
+      boxMin = Math.min(boxMin, primary / adv);
+    }
+    boxes.push({
+      region: nameOfSection(sec),
+      rows: subjects.length,
+      wholeRows: whole,
+      minNameChars: Math.round(boxMin),
+      boxHeight: Math.round(sec.getBoundingClientRect().height),
+      bodyScroll: `${String(sc.scrollHeight)}/${String(sc.clientHeight)}`,
+      bodyScrollsX: sc.scrollWidth > sc.clientWidth,
+    });
+  }
+  const main = document.querySelector('main');
+  return {
+    mainScroll: main ? `${String(main.scrollHeight)}/${String(main.clientHeight)}` : 'n/a',
+    boxes,
+    minNameChars: Number.isFinite(minNameChars) ? Math.round(minNameChars) : null,
+  };
+}
+
+if (process.env.SP_ROW_SUBJECT === '1') {
+  const shotDir = process.env.SP_ROW_SHOT_DIR ?? '/tmp/row-subject-shots';
+  mkdirSync(shotDir, { recursive: true });
+  const maxima = process.env.SP_ROW_SUBJECT_MAXIMA === '1';
+  await seedLongNames(page, slug, { maxima });
+  // Open one long plan so "Jump back in" has a row (it is a per-user store of plans opened).
+  const jb = await page.evaluate(async (org) => {
+    const r = await fetch(`/api/v1/organizations/${org}/overview`, { credentials: 'include' });
+    return (await r.json()).data;
+  }, slug);
+  void jb;
+  p(`## Row-subject matrix (maxima plan: ${maxima ? 'YES' : 'no'})`);
+  p();
+  p(
+    '| Cell | Rows | Names clipped | Contexts clipped | Old instrument truncated runs | Name shown px / chars (median) | Context shown px / chars (median) | Median row h | Rows >1 line | min name col (chars) | doc overflow-x |',
+  );
+  p('| --- | --: | --: | --: | --: | --- | --- | --: | --: | --: | --: |');
+  const details = [];
+  for (const cell of ROW_CELLS) {
+    await page.setViewportSize({ width: cell.w, height: cell.h });
+    await page.goto(`${BASE}/orgs/${slug}`);
+    await setExplorer('default');
+    await page.reload();
+    await page.getByRole('heading', { level: 1 }).first().waitFor();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(400);
+    if (cell.inject) await page.addStyleTag({ content: INJECT_CSS[cell.inject] });
+    await page.waitForTimeout(200);
+    const label = `${String(cell.w)}x${String(cell.h)}${cell.inject ? ` ${cell.inject}` : ''}`;
+    const result = await page.evaluate(probeRowSubjects);
+    if (result.found === 0) throw new Error(`${label}: no [data-row-subject] found — vacuous`);
+    const sum = summariseProbe(result);
+    const old = await page.evaluate(readSplit, { sel: REGION_SELECTOR });
+    const boxes = await page.evaluate(readBoxes);
+    const multi = result.subjects.filter((x) => x.lines > 1).length;
+    p(
+      `| ${label} | ${String(sum.rows)} | ${String(sum.namesClipped)} | ${String(sum.contextsClipped)} | ${String(old.truncated.length)} | ${String(sum.medianNameShownPx)} px / ${String(sum.medianNameShownChars)} | ${String(sum.medianContextShownPx)} px / ${String(sum.medianContextShownChars)} | ${String(sum.medianRowHeight)} | ${String(multi)} | ${String(boxes.minNameChars)} | ${String(sum.docOverflowX)} |`,
+    );
+    details.push({ label, result, boxes, old, tracks: old.tracks, gridWidth: old.gridWidth });
+    await page.screenshot({
+      path: `${shotDir}/landing-${label.replace(' ', '-')}${maxima ? '-maxima' : ''}.png`,
+    });
+    if (!cell.inject && (cell.w === 1912 || cell.w === 1646) && cell.h < 1100 && cell.h !== 1114) {
+      // The page as a whole: `main` scrolls inside the window, so the fold hides every ordinary row.
+      await page.setViewportSize({ width: cell.w, height: 1900 });
+      await page.waitForTimeout(300);
+      await page.screenshot({
+        path: `${shotDir}/landing-${label}-tall${maxima ? '-maxima' : ''}.png`,
+      });
+    }
+  }
+  if (process.env.SP_ROW_JSON) writeFileSync(process.env.SP_ROW_JSON, JSON.stringify(details));
+  p();
+  p('### Per-cell detail: clipped subjects, whole rows per box');
+  p();
+  for (const d of details) {
+    p(`- **${d.label}** (grid ${String(d.gridWidth)}, tracks ${d.tracks.join(' + ')})`);
+    p(
+      `  - main scroll ${d.boxes.mainScroll}; boxes: ${d.boxes.boxes.map((b) => `${b.region}: ${String(b.wholeRows)}/${String(b.rows)} whole, box ${String(b.boxHeight)} px, body ${b.bodyScroll}, min name col ${String(b.minNameChars)} ch${b.bodyScrollsX ? ' SCROLLS-X' : ''}`).join('; ')}`,
+    );
+    for (const x of d.result.subjects) {
+      const nameBad = x.name.clipped;
+      const ctxBad = x.context.clipped;
+      if (!nameBad && !ctxBad) continue;
+      p(
+        `  - ${x.region}: ${JSON.stringify(x.text.slice(0, 60))} name ${nameBad ? `CLIPPED ${String(x.name.shownChars)}/${String(x.name.chars)} ch (${String(x.name.shownPx)}/${String(x.name.needsPx)} px)` : 'whole'}; context ${ctxBad ? `CLIPPED ${String(x.context.shownChars)}/${String(x.context.chars)} ch (${String(x.context.shownPx)}/${String(x.context.needsPx)} px)` : x.hasContext ? 'whole' : 'none'}`,
+      );
+    }
+  }
+  p();
+
+  // SC-2 positive control: a token wider than 300 px injected into one context must be reported by
+  // the probe. On today's tree every row at 320 x 800 is ALREADY clipped, so a count could not rise
+  // there; the control therefore runs at 1280 x 800, on the first subject whose context is whole
+  // beforehand, and compares THAT subject before and after. (The M1 journey runs the 320 x 800
+  // version, where nothing is clipped beforehand.) Silent means the instrument is wrong.
+  const controlWidth = Number(process.env.SP_CONTROL_W ?? 1280);
+  await page.setViewportSize({ width: controlWidth, height: 800 });
+  await page.goto(`${BASE}/orgs/${slug}`);
+  await page.reload();
+  await page.getByRole('heading', { level: 1 }).first().waitFor();
+  await page.waitForLoadState('networkidle');
+  const beforeAll = await page.evaluate(probeRowSubjects);
+  const target = beforeAll.subjects.findIndex((x) => x.hasContext && !x.context.clipped);
+  if (target < 0) throw new Error('SC-2 control: no unclipped context to inject into');
+  await page.evaluate((i) => {
+    const subj = document.querySelectorAll('[data-row-subject]')[i];
+    const host = subj.lastElementChild;
+    const token = document.createElement('span');
+    token.style.cssText = 'display:inline-block;white-space:nowrap';
+    // Text wider than 300 px (32 x "W" at 14 px is ~400 px): the probe reads glyph rects, so a bare
+    // 300 px box with one letter in it would not overflow anything it can see.
+    token.textContent = 'W'.repeat(32);
+    host.appendChild(token);
+  }, target);
+  const afterAll = await page.evaluate(probeRowSubjects);
+  const b4 = beforeAll.subjects[target];
+  const af = afterAll.subjects[target];
+  p(
+    `### SC-2 positive control (token wider than 300 px injected into one context, ${String(controlWidth)} x 800)`,
+  );
+  p();
+  p(
+    `- subject #${String(target)} (${JSON.stringify(b4.text.slice(0, 50))}): context clipped before = ${String(b4.context.clipped)}, after = ${String(af.context.clipped)} (${String(af.context.shownChars)}/${String(af.context.chars)} ch shown). Verdict: ${!b4.context.clipped && af.context.clipped ? 'PASS (the probe saw the injected overflow)' : 'FAIL (probe silent)'}`,
+  );
   p();
 }
 
