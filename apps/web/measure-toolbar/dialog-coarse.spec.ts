@@ -116,7 +116,7 @@ test('F3b — a form at 390 under a coarse pointer', async ({ page }) => {
   await page.waitForTimeout(400);
 
   // **The dialog is OPENED and the open is asserted** — the whole reason F3b was unmeasurable.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 

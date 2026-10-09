@@ -183,7 +183,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await useAllDaysCalendar(page, orgSlug);
 
   // Schedule the plan: a start date + one activity, then recalculate.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)

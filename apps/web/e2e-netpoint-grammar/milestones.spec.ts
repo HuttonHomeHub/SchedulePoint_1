@@ -9,6 +9,7 @@ import {
   recalculate,
 } from '../e2e-arrange/support';
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
  * **NetPoint grammar M5 — the milestone is a downward triangle, on the real canvas** (spec §4.2 G8).
@@ -52,6 +53,7 @@ test.describe('NetPoint grammar — milestones', () => {
 
     const view = page.getByRole('button', { name: 'View', exact: true });
     await view.click();
+    await unfoldViewSections(page);
     await page.getByRole('checkbox', { name: 'Today line', exact: true }).uncheck();
     await page.keyboard.press('Escape');
 

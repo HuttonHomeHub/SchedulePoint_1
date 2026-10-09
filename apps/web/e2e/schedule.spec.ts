@@ -70,7 +70,7 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   await openNewPlan(page);
 
   // Give the plan a start date so it can be scheduled.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)
@@ -131,7 +131,7 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await openNewPlan(page);
 
   // Give the plan a start date so it can be scheduled.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)

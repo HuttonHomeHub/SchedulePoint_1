@@ -13,7 +13,7 @@ import {
   syncClient,
 } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
-import { recalculate } from '../e2e-support/toolbar';
+import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
  * **M5 — the chart comes back the way it was left, and can be restructured.**
@@ -95,6 +95,7 @@ test('a column choice survives a reload, and Activity can never be hidden', asyn
   // `tsld-toolbar-columns.test.tsx` rather than assumed, because a locator invented from the shape
   // a menu "ought" to have is how a journey fails for a reason that is not its subject.
   await page.getByRole('button', { name: 'View', exact: true }).click();
+  await unfoldViewSections(page);
   await page.getByRole('checkbox', { name: 'Predecessors' }).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('columnheader', { name: 'Predecessors' })).toBeVisible();

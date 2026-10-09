@@ -155,3 +155,27 @@ export async function recalculate(page: Page): Promise<void> {
   }
   await expect(bar).toHaveAttribute('data-schedule-state', 'current');
 }
+
+/**
+ * Unfold every folded section of the open **View ▾** panel.
+ *
+ * Structure, Markers and — in the Gantt — Columns start folded (toolbar-redesign M2-T3): they are
+ * the sections a planner opens least, and folding them is what brings the panel inside SC-13's
+ * 420 px at 1024 × 600. A folded section is **unmounted**, not clipped, so a journey that reaches
+ * for one of its checkboxes finds nothing until it is opened — and says "not found" rather than
+ * "folded". Call this after opening the panel and before the first such checkbox.
+ *
+ * Opens all of them rather than one by name: the journeys that need it are about the toggle, not
+ * about which section holds it, and a name list here would be a second copy of the registry's
+ * section list to keep in step.
+ */
+export async function unfoldViewSections(page: Page): Promise<void> {
+  const panel = page.getByRole('dialog', { name: /^View/ });
+  await expect(panel).toBeVisible();
+  // Always the FIRST remaining fold: `.all()` would hand back `nth` locators that re-resolve against
+  // the shrinking set, so the second click waits forever on a button the first one already opened.
+  const folded = panel.getByRole('button', { expanded: false });
+  while ((await folded.count()) > 0) {
+    await folded.first().click();
+  }
+}

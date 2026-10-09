@@ -12,6 +12,7 @@ import {
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
  * **NetPoint grammar M3 — the link language on the real canvas** (spec §4.2 G5, G6, G12).
@@ -377,6 +378,7 @@ test.describe('NetPoint grammar — links', () => {
     // The data-date line is a dark vertical through every row: off, so it is not read as text.
     const view = page.getByRole('button', { name: 'View', exact: true });
     if ((await view.getAttribute('aria-expanded')) !== 'true') await view.click();
+    await unfoldViewSections(page);
     await page.getByRole('checkbox', { name: 'Data date line', exact: true }).uncheck();
     await page.keyboard.press('Escape');
 

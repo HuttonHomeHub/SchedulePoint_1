@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 import {
   canvasInk,
@@ -37,6 +38,7 @@ async function inkUnderTheBar(page: Page): Promise<number> {
 
 async function setView(page: Page, name: 'Dates' | 'Labels', on: boolean): Promise<void> {
   await page.getByRole('button', { name: 'View', exact: true }).click();
+  await unfoldViewSections(page);
   const box = page.getByRole('checkbox', { name });
   if (on) await box.check();
   else await box.uncheck();

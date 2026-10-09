@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 import {
   createHierarchy,
   ensurePen,
@@ -221,6 +222,7 @@ test.describe('The exported diagram', () => {
      * journey turns the band on and keeps asking the harder question.
      */
     await page.getByRole('button', { name: 'View', exact: true }).click();
+    await unfoldViewSections(page);
     // `checkbox`, NOT `menuitemcheckbox`: the View surface is a disclosure popover of grouped
     // checkboxes rather than a menu, which the page snapshot settled after the first attempt spent
     // four minutes timing out on the wrong role. `exact: true` on the trigger matters too — the

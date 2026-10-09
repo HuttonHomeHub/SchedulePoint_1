@@ -165,6 +165,56 @@ test('a planner reaches an activity’s notes from a Gantt selection', async ({ 
   await expect(editor).toBeHidden();
 });
 
+/**
+ * **Float paths is reachable from a Gantt selection, from the docked bar and from a row menu**
+ * (toolbar-redesign M2-T4, D-c).
+ *
+ * It left the command deck because its subject is the selected activity (ADR-0093). The Gantt
+ * renders the same `SelectionActionsBar` and its row menu is derived from the same registry, so the
+ * item arrives in both by construction — and a browser is the only thing that can say the panel the
+ * button opens is the same one, hosted above both views, and that closing it hands focus back to the
+ * control that opened it rather than to `<body>`.
+ *
+ * `coverage.structural.test.ts` requires this suite to name every action the Gantt can reach.
+ */
+test('a planner opens Float paths from the Gantt bar and from a row menu', async ({ page }) => {
+  test.setTimeout(120_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+  await ganttRow(page, 'Seeded 0').click();
+
+  const bar = page.getByRole('toolbar', { name: /Actions for/ });
+  const floatPaths = bar.getByRole('button', { name: 'Float paths', exact: true });
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
+
+  // By keyboard from the bar: Enter opens the panel, and closing it returns focus to the button.
+  await floatPaths.focus();
+  await page.keyboard.press('Enter');
+  const panel = page.getByRole('region', { name: 'Float paths' });
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Seeded 0');
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'true');
+  await panel.getByRole('button', { name: 'Close float paths' }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(floatPaths).toBeFocused();
+
+  // From another row's menu: the menu acts on ITS row, not on the selection, so the panel opens
+  // into Seeded 1 while Seeded 0 stays selected.
+  await ganttRow(page, 'Seeded 1').getByRole('button', { name: 'Actions for Seeded 1' }).click();
+  await page.getByRole('menuitem', { name: 'Float paths' }).click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Seeded 1');
+  await panel.getByRole('button', { name: 'Close float paths' }).click();
+  await expect(panel).toHaveCount(0);
+});
+
 test('the docked bar in the Gantt is accessible', async ({ page }) => {
   test.setTimeout(120_000);
   const stamp = Date.now();

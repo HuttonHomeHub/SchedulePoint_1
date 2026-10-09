@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 import {
   chartMeetsGrid,
@@ -63,6 +64,8 @@ async function headerWidth(page: Page, name: string): Promise<number> {
 
 async function openView(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'View', exact: true }).click();
+  // Columns starts folded (toolbar-redesign M2-T3).
+  await unfoldViewSections(page);
 }
 
 const field = (page: Page, name: string) => page.getByRole('spinbutton', { name });
@@ -152,6 +155,13 @@ test('the same sequence works with the keyboard alone', async ({ page }) => {
 
   // No mouse: the View trigger is reached and opened by key.
   await page.getByRole('button', { name: 'View', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  // Columns starts folded (toolbar-redesign M2-T3), and it is opened by key too: a disclosure
+  // button is focusable and Enter toggles it (APG), so no pointer is needed anywhere in this case.
+  await page
+    .getByRole('dialog', { name: /^View/ })
+    .getByRole('button', { name: 'Columns' })
+    .focus();
   await page.keyboard.press('Enter');
 
   await field(page, 'Code width').focus();
@@ -280,7 +290,7 @@ test('the pinned columns still end where the chart begins at every width, with a
   await page.keyboard.press('Home');
   await chartMeetsGrid(page, 'with a baseline, every column at the maximum, at the floor');
 
-  await page.getByRole('button', { name: 'View', exact: true }).click();
+  await openView(page);
   await page.getByRole('button', { name: 'Reset widths' }).click();
   await expect.poll(() => headerWidth(page, 'Code')).toBe(80);
   await chartMeetsGrid(page, 'with a baseline, after Reset widths');

@@ -134,8 +134,9 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   // (The three-way exclusivity is pinned at the unit tier; the journey proves ONE real pair in
   // the shipped layout so the wiring — not just the helper — is exercised.)
   await canvasListbox(page).focus(); // select an activity so Float paths has a target
+  // Float paths is on the selection bar since toolbar-redesign M2-T4, not on the deck.
   await page
-    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('toolbar', { name: /^Actions for/ })
     .locator('[data-toolbar-item="float-paths"]')
     .click();
   await expect(page.getByRole('region', { name: 'Float paths' })).toBeVisible();

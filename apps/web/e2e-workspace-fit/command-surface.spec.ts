@@ -403,6 +403,85 @@ async function openGanttExpanded(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/**
+ * **View ▾ at the floor, on either pointer** (toolbar-redesign M2-T3, SC-13).
+ *
+ * Opens the panel at 1024 × 600 in the Diagram and asserts (1) it is at most 70 % of the viewport
+ * high, (2) it has no inner scroll in its default state, and (3) once every folded section is
+ * opened, every checkbox and radio in it can be scrolled to and pressed — an inner scroll is allowed
+ * there, because it is the planner who asked for the long form. The 420 bar is the spec's number
+ * (70 % of 600), not a measured one: a bound with slack in it cannot report what a row is worth.
+ */
+async function assertViewPanelFitsTheFloor(
+  page: Page,
+  view: 'Diagram' | 'Gantt' = 'Diagram',
+): Promise<void> {
+  // This serial page is left in whichever view an earlier case used, so the view is chosen here.
+  // The Gantt's View ▾ holds a third folded section (Columns, 681 px of chooser and width fields on
+  // its own) and is held to the same bar.
+  await page
+    .getByRole('toolbar', { name: 'Plan view' })
+    .getByRole('button', { name: view, exact: true })
+    .click();
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await page.waitForTimeout(500);
+  const trigger = page
+    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('button', { name: /^View/ });
+  await trigger.click();
+  const panel = page.getByRole('dialog', { name: /^View/ });
+  await expect(panel).toBeVisible();
+  const folded = await panel.getByRole('button', { expanded: false }).count();
+  // The pinned positive: a panel with nothing folded would meet the bar by being short for another
+  // reason, and the disclosures are what this milestone built.
+  expect(folded, 'no section starts folded').toBeGreaterThan(0);
+
+  const reading = await panel.evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    scrollable: el.scrollHeight - el.clientHeight,
+    viewport: window.innerHeight,
+  }));
+  expect(
+    reading.height,
+    `View ▾ is ${String(reading.height)} px of ${String(reading.viewport)} at the floor`,
+  ).toBeLessThanOrEqual(420);
+  expect(
+    reading.scrollable,
+    'View ▾ scrolls inside itself in its default state',
+  ).toBeLessThanOrEqual(1);
+
+  // The first remaining fold each time: `.all()` re-resolves `nth` against a set that shrinks.
+  const folds = panel.getByRole('button', { expanded: false });
+  while ((await folds.count()) > 0) await folds.first().click();
+  const controls = panel.locator('input[type="checkbox"], input[type="radio"]');
+  const total = await controls.count();
+  expect(total, 'the unfolded panel offers almost nothing').toBeGreaterThan(15);
+  for (let i = 0; i < total; i += 1) {
+    const control = controls.nth(i);
+    await control.scrollIntoViewIfNeeded();
+    const hit = await control.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return {
+        ok:
+          top !== null &&
+          (top === el || el.contains(top) || top.closest('label')?.contains(el) === true),
+        found:
+          top === null
+            ? 'nothing'
+            : `${top.tagName.toLowerCase()} ${top.textContent ?? ''}`.slice(0, 60),
+        box: `${String(Math.round(box.top))}-${String(Math.round(box.bottom))} of ${String(window.innerHeight)}`,
+      };
+    });
+    expect(
+      hit.ok,
+      `toggle ${String(i)} in View ▾ cannot be reached by a pointer: ${hit.found} at ${hit.box}`,
+    ).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('The plan command surface', () => {
@@ -795,7 +874,8 @@ test.describe('The plan command surface', () => {
     await expect(page.locator('[data-toolbar-item^="caption:"]')).toHaveCount(0);
     await expect(deck.getByRole('button', { name: /commands$/ })).toHaveCount(0);
     // The pinned positive: the groups themselves survive, named for AT.
-    for (const name of ['View', 'Find', 'Author', 'Plan']) {
+    // 'Panels' joined at toolbar-redesign M2-T2: ADR-0031 group 7 (`help`) is its own deck group.
+    for (const name of ['View', 'Find', 'Panels', 'Author', 'Plan']) {
       await expect(deck.getByRole('group', { name, exact: true })).toBeVisible();
     }
 
@@ -1096,8 +1176,8 @@ test.describe('The plan command surface', () => {
   /**
    * **The label rule on the deck** (toolbar-redesign M1, `docs/specs/toolbar-redesign/`).
    *
-   * Four controls — Baseline overlay, Resource view, Comments and Settings… — are
-   * `labelVisibility: 'roomy'`: labelled when the deck is at least `--container-roomy`
+   * Five controls — Baseline overlay, Resource view, Comments, Settings… and, since M2, Apply
+   * levelled dates… — are `labelVisibility: 'roomy'`: labelled when the deck is at least `--container-roomy`
    * (79 rem, the deck's own width in a 1280 px window) and icon-only below it. Both halves are
    * asserted, because a rule that only ever shows its label and one that only ever hides it are
    * each green against half of this.
@@ -1107,8 +1187,9 @@ test.describe('The plan command surface', () => {
    * thing to nothing (`docs/UX_STANDARDS.md`, the container-query trap). jsdom has no layout, so the
    * unit tier cannot ask; this reads the deck's width against the wrapper it sits in, at every cell.
    *
-   * **M1 is label-only: it asserts no new line count.** `LINES[1024]` stays 4 (above) and this case
-   * says nothing about two lines at the floor, which M0 measured as unreachable before M2 and M4.
+   * **Apply levelled dates… joined at M2** (D-l), once Summary and Comments had left the DO row: the
+   * M1 build held it at `'never'` because labelling it from 79 rem put DO over one line at 1280
+   * while they were still there. This case asserts no line count; `LINES` above does.
    *
    * Verified red by making `Deck` resolve against the `'toolbar'` surface (the labels stop going
    * icon-only at 1024) and by removing `@container/deck` (the width assertion fails at every cell).
@@ -1127,12 +1208,18 @@ test.describe('The plan command surface', () => {
     {
       id: 'comments',
       label: 'Comments',
-      description: "Open the plan's comments beside the diagram",
+      description: "Show the plan's comments beside the diagram",
     },
     {
       id: 'calendar',
       label: 'Settings…',
       description: 'Calendar, critical path, progress, levelling and earned value',
+    },
+    {
+      id: 'apply-levelling',
+      label: 'Apply levelled dates…',
+      description:
+        'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
     },
   ];
 
@@ -1253,6 +1340,236 @@ test.describe('The plan command surface', () => {
         await expect(control, `Escape moved focus: ${at}`).toBeFocused();
         await control.blur();
       }
+    }
+  });
+
+  /**
+   * **The plan's identity row** (toolbar-redesign M2-T1): Plan summary and Edit plan details, one
+   * named toolbar beside the plan's name in the header.
+   *
+   * What only a browser can say: that the popover's focus really comes back to an icon button across
+   * a portal, that the native `<dialog>` Edit plan opens hands focus back to the control that opened
+   * it, and that the row is ONE Tab stop. The unit tier asserts the ARIA state; none of those three
+   * exist in jsdom.
+   *
+   * Verified red by restoring the deck's `summary` item (the role lookup then finds no "Plan
+   * details" toolbar) and by removing the popover's focus return (the focus assertion fails).
+   */
+  test('the identity row: Plan summary and Edit plan details open, close and give focus back', async () => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const details = page.getByRole('toolbar', { name: 'Plan details', exact: true });
+    await expect(details).toBeVisible();
+
+    // One Tab stop: the roving model leaves exactly one of the two controls tabbable.
+    await expect(details.locator('[data-toolbar-focusable][tabindex="0"]')).toHaveCount(1);
+
+    const summary = details.getByRole('button', { name: 'Plan summary', exact: true });
+    await expect(summary).toHaveAttribute('aria-haspopup', 'dialog');
+    await expect(summary).toHaveAttribute('aria-expanded', 'false');
+    await summary.click();
+    await expect(summary).toHaveAttribute('aria-expanded', 'true');
+    const panel = page.getByRole('dialog', { name: 'Plan summary', exact: true });
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(summary).toBeFocused();
+
+    // By keyboard alone: Enter opens it and Escape gives it back, as the APG disclosure says.
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(summary).toBeFocused();
+
+    const edit = details.getByRole('button', { name: 'Edit plan details', exact: true });
+    await expect(edit).toBeVisible();
+    await edit.click();
+    const dialog = page.getByRole('dialog', { name: 'Edit plan' });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(edit).toBeFocused();
+  });
+
+  /**
+   * **Panels** (toolbar-redesign M2-T2): Legend, Resource view and Comments, each a toggle that
+   * reports `aria-pressed`, and none of which may leave focus on `<body>` — a revealed panel that
+   * takes focus (the resource strip does, ADR-0049) and a closed one that unmounts what had it are
+   * the two ways a keyboard planner is left nowhere (WCAG 2.4.3).
+   */
+  test('the Panels group: each toggle reports aria-pressed and focus is never left on the body', async () => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const panels = deck.getByRole('group', { name: 'Panels', exact: true });
+    await expect(panels).toBeVisible();
+    const onBody = (): Promise<boolean> =>
+      page.evaluate(() => document.activeElement === document.body);
+
+    for (const id of ['legend', 'resource-view', 'comments']) {
+      const toggle = panels.locator(`[data-toolbar-item="${id}"]`);
+      await expect(toggle, `${id} is not in the Panels group`).toBeVisible();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(await onBody(), `focus was left on <body> after opening ${id}`).toBe(false);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(await onBody(), `focus was left on <body> after closing ${id}`).toBe(false);
+    }
+  });
+
+  /**
+   * **One trailing group per line, and DOM order is visual order** (R4, US-5 at ≥ 1280).
+   *
+   * Panels closes the LOOK line and Plan closes the DO line, each pushed there by a single
+   * `ml-auto`. Asserted as geometry — the group's right edge meets its row's — because a class
+   * string cannot say the margin is doing anything. And the walk a keyboard takes (document order)
+   * is compared with the order the eye reads (left to right within a line), because a flex item
+   * moved with `order` or an absolutely positioned one would pass every other assertion here.
+   */
+  test('Panels trails LOOK and Plan trails DO from 1280 up, and the DOM order is the reading order', async () => {
+    test.setTimeout(180_000);
+    for (const viewport of WIDTHS.filter((v) => v.width >= 1280)) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(400);
+      const reading = await page.evaluate(() => {
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!deck) throw new Error('the deck was not found — nothing to assert about');
+        return ['look', 'do'].map((row) => {
+          const rowEl = deck.querySelector(`[data-deck-row="${row}"]`)!;
+          const rowRight = rowEl.getBoundingClientRect().right;
+          const groups = [...rowEl.querySelectorAll(':scope > [role="group"]')];
+          const last = groups[groups.length - 1]!;
+          const items = [...rowEl.querySelectorAll('[data-toolbar-item]')].map((el) => {
+            const box = el.getBoundingClientRect();
+            return { id: el.getAttribute('data-toolbar-item') ?? '', top: box.top, left: box.left };
+          });
+          // Reading order: line by line (4 px tolerance, as the line counter does), then leftwards.
+          const read = [...items].sort((a, b) =>
+            Math.abs(a.top - b.top) > 4 ? a.top - b.top : a.left - b.left,
+          );
+          return {
+            row,
+            lastGroup: last.getAttribute('aria-label'),
+            gapToRowEnd: rowRight - last.getBoundingClientRect().right,
+            dom: items.map((i) => i.id),
+            visual: read.map((i) => i.id),
+          };
+        });
+      });
+      for (const r of reading) {
+        const at = `${r.row} at ${String(viewport.width)}`;
+        expect(r.lastGroup, `${at}: the closing group`).toBe(r.row === 'look' ? 'Panels' : 'Plan');
+        expect(
+          Math.abs(r.gapToRowEnd),
+          `${at}: ${String(r.lastGroup)} is ${String(r.gapToRowEnd)} px short of the row's end`,
+        ).toBeLessThanOrEqual(1);
+        expect(r.visual, `${at}: DOM order is not the reading order`).toEqual(r.dom);
+      }
+    }
+  });
+
+  /**
+   * **View ▾ fits the floor** (toolbar-redesign M2-T3, SC-13): at 1024 × 600 the panel is at most
+   * 420 px (70 % of the viewport) with no inner scroll in its default, folded state, and every
+   * toggle is still reachable once the folded sections are open.
+   *
+   * It measured 584 of 600 with 617 px of content before M2 — an inner scroll with controls below
+   * the fold. Verified red against that panel by restoring the single column (the height assertion
+   * fails at 584) and by removing the disclosures (the 420 bar fails at about 480).
+   */
+  test('View ▾ is at most 420 px at the floor with no inner scroll, and every toggle is reachable', async () => {
+    test.setTimeout(120_000);
+    await assertViewPanelFitsTheFloor(page);
+  });
+
+  test('View ▾ holds the same bar in the Gantt, where Columns starts folded too', async () => {
+    test.setTimeout(120_000);
+    await assertViewPanelFitsTheFloor(page, 'Gantt');
+  });
+
+  /**
+   * **A roomy control's tooltip follows focus and never traps it** (toolbar-redesign M2, the
+   * accessibility reviewer's suggestion at M1): Tab into the deck, arrow across the controls, and
+   * at every stop the tooltip belongs to the focused control, at most one is open, Escape dismisses
+   * it with focus unmoved, blur closes it, and Tab leaves the deck.
+   *
+   * Run at a narrow deck (1024, labels hidden: the tooltip is the only name on screen) and a roomy
+   * one (1280, labels showing: it must still mount). jsdom has no focus ring and no portal
+   * stacking, which is the whole of this case.
+   */
+  test('Tab into the deck and arrow across a roomy control: the tooltip follows focus and nothing traps it', async () => {
+    test.setTimeout(240_000);
+    const tooltip = page.locator('[data-tooltip]');
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    for (const viewport of [WIDTHS[4]!, WIDTHS[3]!]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const at = String(viewport.width);
+
+      // Tab in from the control before the deck: the "Plan view" switch.
+      await page
+        .getByRole('toolbar', { name: 'Plan view' })
+        .getByRole('button', { name: 'Gantt', exact: true })
+        .focus();
+      let entered = false;
+      for (let i = 0; i < 4 && !entered; i += 1) {
+        await page.keyboard.press('Tab');
+        entered = await page.evaluate(
+          () =>
+            document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label') ===
+            'Plan commands',
+        );
+      }
+      expect(entered, `Tab never entered the deck at ${at}`).toBe(true);
+      await page.keyboard.press('Home');
+
+      const visited: string[] = [];
+      for (let i = 0; i < 60; i += 1) {
+        const here = await page.evaluate(() => {
+          const active = document.activeElement;
+          return {
+            id: active?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item') ?? null,
+            isField: active?.tagName === 'INPUT',
+          };
+        });
+        if (here.id !== null && !visited.includes(here.id)) visited.push(here.id);
+        // A tooltip is only ever the focused control's, and at most one is open application-wide.
+        expect(
+          await tooltip.count(),
+          `more than one tooltip is open on ${String(here.id)}`,
+        ).toBeLessThanOrEqual(1);
+        if (here.id === 'resource-view' || here.id === 'comments') {
+          await expect(tooltip, `no tooltip on focus of ${here.id} at ${at}`).toBeVisible();
+          await expect(tooltip).toContainText(
+            here.id === 'comments' ? 'Comments —' : 'Resource view —',
+          );
+          // Escape dismisses it; focus does not move.
+          await page.keyboard.press('Escape');
+          await expect(tooltip, `Escape did not dismiss the tooltip on ${here.id}`).toHaveCount(0);
+          await expect(deck.locator(`[data-toolbar-item="${here.id}"]`)).toBeFocused();
+        }
+        await page.keyboard.press(here.isField ? 'ArrowDown' : 'ArrowRight');
+      }
+      expect(visited, `the walk never reached Resource view at ${at}`).toContain('resource-view');
+      expect(visited, `the walk never reached Comments at ${at}`).toContain('comments');
+
+      // Blur closes it: land on a roomy control, then leave the deck with Tab.
+      await deck.locator('[data-toolbar-item="comments"]').focus();
+      await expect(tooltip).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(tooltip, `the tooltip outlived its control's focus at ${at}`).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () =>
+            document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label') ===
+            'Plan commands',
+        ),
+        `Tab did not leave the deck at ${at}: it is a focus trap`,
+      ).toBe(false);
     }
   });
 
@@ -1934,6 +2251,13 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         ).toBeLessThanOrEqual(2);
       }
     }
+  });
+
+  /** **View ▾ at the floor under a finger too** — 44 px rows cost it height, and SC-13 holds on both. */
+  test('View ▾ is at most 420 px at the floor with no inner scroll, under a coarse pointer', async () => {
+    test.setTimeout(120_000);
+    await showView('tsld');
+    await assertViewPanelFitsTheFloor(page);
   });
 
   /**

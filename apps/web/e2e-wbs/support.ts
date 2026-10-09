@@ -1,5 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
+import { unfoldViewSections } from '../e2e-support/toolbar';
+
 /**
  * Journey helpers for the flag-ON **WBS improvements** suite (`VITE_WBS_IMPROVEMENTS`, ADR-0063,
  * `docs/specs/wbs-improvements/`). The onboarding + client/project/plan helpers mirror
@@ -232,6 +234,7 @@ export async function toggleView(page: Page, label: string): Promise<void> {
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
   await lookRow.getByRole('button', { name: 'View', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'View' });
+  await unfoldViewSections(page);
   await panel.getByLabel(label).click();
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();

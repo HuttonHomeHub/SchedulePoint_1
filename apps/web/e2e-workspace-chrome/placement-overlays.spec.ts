@@ -303,8 +303,8 @@ test.describe('the feasible window and the levelled lens', () => {
     expect(isoDay(slab.visualEffectiveStart)).toBe('2026-03-02');
     expect(isoDay(slab.earlyStart)).not.toBe('2026-03-02');
 
-    await page.getByRole('button', { name: /Summary/ }).click();
-    const summary = page.getByRole('dialog', { name: 'Summary' });
+    await page.getByRole('button', { name: 'Plan summary' }).click();
+    const summary = page.getByRole('dialog', { name: 'Plan summary' });
     const statValue = (label: string) =>
       summary
         .locator('dt', { hasText: new RegExp(`^${label}$`) })
@@ -506,8 +506,8 @@ test.describe('the feasible window and the levelled lens', () => {
     expect(Number(/(\d+) activit/.exec((await moved.textContent()) ?? '')?.[1])).toBe(movedByApi);
 
     // ── 2 · The strip's Levelled finish is the slab's levelled finish, not the lift's ─────────────
-    await page.getByRole('button', { name: /Summary/ }).click();
-    const summary = page.getByRole('dialog', { name: 'Summary' });
+    await page.getByRole('button', { name: 'Plan summary' }).click();
+    const summary = page.getByRole('dialog', { name: 'Plan summary' });
     const levelledFinish = summary
       .locator('dt', { hasText: /^Levelled finish$/ })
       .locator('xpath=following-sibling::dd');

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
-import { recalculate } from '../e2e-support/toolbar';
+import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
 
@@ -39,8 +39,8 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
 
   // Plan-details facts (status + data date) are folded into the Row 1 Summary popover (ADR-0031
   // amendment) — a read surface reachable to any role, no standalone Plan-details button.
-  await page.getByRole('button', { name: /Summary/ }).click();
-  const summary = page.getByRole('dialog', { name: 'Summary' });
+  await page.getByRole('button', { name: 'Plan summary' }).click();
+  const summary = page.getByRole('dialog', { name: 'Plan summary' });
   await expect(summary.getByText('Status')).toBeVisible();
   // "Data date" appears twice in the popover by design (PlanSummaryPanel folds the plan-details
   // facts AND the computed ScheduleSummaryStrip together, ADR-0031) — assert the first is visible.
@@ -91,6 +91,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // whose trigger is a roving toolbar member. Toggling a layer and closing keeps the canvas mounted.
   await lookRow.getByRole('button', { name: 'View', exact: true }).click();
   const viewPanel = page.getByRole('dialog', { name: 'View' });
+  await unfoldViewSections(page);
   await viewPanel.getByLabel('Labels').click();
   await page.keyboard.press('Escape');
   await expect(viewPanel).toBeHidden();

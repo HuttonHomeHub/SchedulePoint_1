@@ -413,7 +413,7 @@ A panel that shows no rows is not an expanded panel.
 - **Commands are classed by what they act on.** A command aimed at the diagram (zoom, fit, presets, go
   to date and today, next conflict, the find cursor, arming a drawing tool, opening a right dock)
   **collapses the panel first, then runs**, so it never acts on a diagram you cannot see. Display
-  marks (View ▾ toggles, Legend) and plan, data and output commands (Summary, Settings…, Analysis,
+  marks (View ▾ toggles, Legend) and plan, data and output commands (Plan summary, Settings…, Analysis,
   Share & export, Print, Undo) are unaffected. A new canvas-directed command chooses a class; a
   structural test fails if it does not.
 - **A tool armed when the swap begins is put away,** and the note says so.

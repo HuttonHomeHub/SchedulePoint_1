@@ -70,7 +70,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
 
   // Before scheduling there is nothing to plot: the diagram prompts a recalculation.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)

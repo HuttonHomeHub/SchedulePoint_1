@@ -47,7 +47,7 @@ export async function openNewPlan(page: Page): Promise<void> {
 
 /** Set the plan's planned start (needed before the schedule can compute). */
 export async function setPlannedStart(page: Page, isoDate: string): Promise<void> {
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)

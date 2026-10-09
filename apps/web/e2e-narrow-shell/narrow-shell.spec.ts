@@ -595,6 +595,13 @@ const NARROW_DOCK_SIZES = [
 ] as const;
 
 const commandBand = (page: Page) => page.getByRole('toolbar', { name: 'Plan commands' });
+/** The selection bar, which holds Float paths since toolbar-redesign M2-T4 (it left the deck). */
+const selectionBar = (page: Page) => page.getByRole('toolbar', { name: /^Actions for/ });
+/** The control that opens a dock, on whichever surface holds it. */
+const dockTrigger = (page: Page, dock: DockSpec) =>
+  (dock.key === 'float paths' ? selectionBar(page) : commandBand(page)).locator(
+    `[data-toolbar-item="${dock.trigger}"]`,
+  );
 const expandPanel = (page: Page) => page.getByRole('button', { name: 'Expand activities panel' });
 const collapsePanel = (page: Page) =>
   page.getByRole('button', { name: 'Collapse activities panel' });
@@ -606,7 +613,7 @@ const dockSurface = (page: Page, dock: DockSpec) =>
 
 /** Open a dock the way a pointer does. */
 async function openDock(page: Page, dock: DockSpec): Promise<void> {
-  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  const trigger = dockTrigger(page, dock);
   await trigger.click();
   if (dock.menuItem !== null) await page.getByRole('menuitem', { name: dock.menuItem }).click();
   await expect(dockRegion(page, dock)).toBeVisible();
@@ -614,7 +621,7 @@ async function openDock(page: Page, dock: DockSpec): Promise<void> {
 
 /** Open a dock from the keyboard alone: focus the trigger, Enter, and Enter on the menu item if any. */
 async function openDockByKeyboard(page: Page, dock: DockSpec): Promise<void> {
-  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  const trigger = dockTrigger(page, dock);
   await trigger.focus();
   await page.keyboard.press('Enter');
   if (dock.menuItem !== null) {
