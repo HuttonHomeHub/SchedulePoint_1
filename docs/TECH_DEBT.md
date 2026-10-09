@@ -11902,6 +11902,8 @@ The body was a tab stop because it scrolled (WCAG 2.2 §2.1.1), and it did scrol
 inside a named region. The row said the body "has no focus ring"; that was wrong in the version first filed: the body removes no outline, so the browser's own focus indicator applies (not photographed).
 **Next:** make `tabIndex` conditional on real overflow. A shared-primitive keyboard change: accessibility-reviewer first (CLAUDE.md §19.13). **Trigger:** any change to `section-card.tsx`.
 
+**Built 2026-10-09 (awaiting merge, so still `open`):** `SectionCard`'s private `useOverflowTabStop` sets the filled body to `tabIndex` 0 while `scrollHeight > clientHeight + 1` and to `-1` otherwise (never removed: removing it from a focused body drops focus to `<body>`), observing the body and a content wrapper with a `ResizeObserver`, and failing open to 0 when unmeasured (jsdom, `display: none`, no observer). Run: `vitest run src/components/ui/page src/features/overview` (221 pass, including eight new cases in `page-archetypes.test.tsx` with an injected observer and geometry) and `pnpm test:e2e:overview` (9 pass). The journey now asserts `-1` in one column, and at 1600 x 1000 that an overflowing body is `0` and takes PageDown while a non-overflowing one is `-1`; the old always-`0` body fails both. Delete this row, and add 474 to Closed numbers, when it merges.
+
 ### 475. Two stale statements found while writing the page-grid spec
 
 **Status:** open · **Verified:** 2026-10-09 (`page-container.tsx:38`; `docs/HANDOFF.md:38`)

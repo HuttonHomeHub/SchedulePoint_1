@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { HeadingLevelContext, deeper, useHeadingLevel } from './heading-level';
 
@@ -69,6 +69,8 @@ export interface SectionCardProps {
    * overflow rather than the page. A caller that turns this on owes its reader a count — content
    * below the fold of a card is content nobody can tell from content that does not exist — which
    * is the `action` slot's job and not this prop's, because the count is a fact about the data.
+   *
+   * The body is a tab stop only while it overflows (see `useOverflowTabStop`).
    */
   fill?: boolean | undefined;
   /**
@@ -103,6 +105,46 @@ export interface SectionCardProps {
    * every other consumer's DOM is unchanged.
    */
   busy?: boolean;
+}
+
+/**
+ * Rounded integers: `scrollHeight` and `clientHeight` are rounded separately, so a fractional layout
+ * reports a spurious 1 px of overflow on a body that scrolls nothing.
+ */
+const OVERFLOW_SLACK_PX = 1;
+
+/**
+ * Whether a `fill` body is worth a tab stop, which is only while it overflows (`docs/TECH_DEBT.md`
+ * #474). The body scrolls only from the `PageGrid` split, so in one column it is a purposeless stop.
+ *
+ * **It answers `0` until it has measured, and wherever it cannot** (jsdom, `display: none`): an
+ * unreachable scroller is a level-A failure (WCAG 2.2 §2.1.1) and a spare stop is not.
+ * The content wrapper is observed as well as the body, because a body that does not resize still
+ * overflows the moment its rows grow.
+ */
+function useOverflowTabStop(enabled: boolean) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(true);
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    const body = content?.parentElement;
+    if (!enabled || !content || !body || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      if (body.clientHeight === 0) {
+        setOverflows(true);
+        return;
+      }
+      setOverflows(body.scrollHeight > body.clientHeight + OVERFLOW_SLACK_PX);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+    };
+  }, [enabled]);
+  return { contentRef, tabIndex: overflows ? 0 : -1 };
 }
 
 /**
@@ -145,6 +187,10 @@ export function SectionCard({
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
   const level = useHeadingLevel();
+  const { contentRef, tabIndex } = useOverflowTabStop(fill === true);
+  const content = (
+    <HeadingLevelContext.Provider value={deeper(level)}>{children}</HeadingLevelContext.Provider>
+  );
   return (
     <Card
       as="section"
@@ -258,22 +304,24 @@ export function SectionCard({
           fill === true && '@6xl:min-h-0 @6xl:flex-1 @6xl:overflow-y-auto',
         )}
         /**
-         * **`tabIndex={0}` is what makes a scrollable body operable from the keyboard** (WCAG 2.2
-         * §2.1.1, level A). A scroll container that cannot take focus cannot be scrolled by
-         * anything but a pointer; browsers have been inconsistent about focusing them implicitly
-         * and it is not a behaviour to rely on.
+         * **A scrollable body must be keyboard-reachable, and only a body that scrolls needs to be**
+         * (WCAG 2.2 §2.1.1, level A). A scroll container that cannot take focus cannot be scrolled by
+         * anything but a pointer; browsers have been inconsistent about focusing them implicitly and
+         * it is not a behaviour to rely on. So the body is `0` while it overflows and `-1` while it
+         * does not: out of the tab sequence, but **never without the attribute**, because removing
+         * `tabindex` from a focused element that stops being focusable drops focus to `<body>`.
+         * Unmeasured counts as overflowing, because an unreachable scroller is the failure and a
+         * spare stop is not.
          *
          * It carries no role and no name of its own on purpose. It already sits inside a named
          * `region` (this card's `<section aria-labelledby>`), so a second name would be announced
          * twice, and a `role="group"` here would put an unnamed group between the region and its
          * content for no gain.
          */
-        {...(fill === true ? { tabIndex: 0 } : {})}
+        {...(fill === true ? { tabIndex } : {})}
       >
         {/* The body's own headings (`SubSection`) sit one rank below this card's. */}
-        <HeadingLevelContext.Provider value={deeper(level)}>
-          {children}
-        </HeadingLevelContext.Provider>
+        {fill === true ? <div ref={contentRef}>{content}</div> : content}
       </CardContent>
     </Card>
   );

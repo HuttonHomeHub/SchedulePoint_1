@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
   EmptyState,
@@ -396,9 +396,10 @@ describe('RowSubject', () => {
 });
 
 describe('SectionCard fill', () => {
-  it('makes the body a keyboard-operable scroll region', () => {
+  it('makes an unmeasured body a keyboard-operable scroll region', () => {
     // WCAG 2.2 §2.1.1: a scroll container that cannot take focus cannot be scrolled without a
-    // pointer. Browsers have been inconsistent about focusing them implicitly.
+    // pointer. jsdom lays out nothing, so this is the fail-open state: an unmeasured body keeps its
+    // stop. The measured states are pinned in `SectionCard fill tab stop` below.
     const { container } = render(
       <SectionCard title="Recently changed" fill>
         <p>row</p>
@@ -487,6 +488,130 @@ describe('SectionCard fill', () => {
     // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
     const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/\bflex-row\b/);
+  });
+});
+
+/**
+ * `docs/TECH_DEBT.md` #474: a filled body is a tab stop only while it overflows. jsdom lays out
+ * nothing, so the geometry is injected and the observer is a recorder whose callback the test fires.
+ */
+describe('SectionCard fill tab stop', () => {
+  interface FakeObserver {
+    callback: () => void;
+    observed: Element[];
+    disconnect: Mock<() => void>;
+  }
+  const observers: FakeObserver[] = [];
+
+  const install = () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        readonly record: FakeObserver;
+        constructor(callback: () => void) {
+          this.record = { callback, observed: [], disconnect: vi.fn() };
+          observers.push(this.record);
+        }
+        observe(target: Element) {
+          this.record.observed.push(target);
+        }
+        unobserve() {}
+        disconnect() {
+          this.record.disconnect();
+        }
+      },
+    );
+  };
+  const size = (el: HTMLElement, client: number, scroll: number) => {
+    Object.defineProperty(el, 'clientHeight', { configurable: true, value: client });
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scroll });
+  };
+  /** Renders a filled card whose body reports the given geometry from its first measurement. */
+  const renderWith = (client: number, scroll: number) => {
+    const clientSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(client);
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(scroll);
+    const view = render(
+      <SectionCard title="Recently changed" fill>
+        <p>row</p>
+      </SectionCard>,
+    );
+    clientSpy.mockRestore();
+    scrollSpy.mockRestore();
+    const body = view.container.querySelector('section')?.lastElementChild as HTMLElement;
+    return { ...view, body };
+  };
+
+  afterEach(() => {
+    observers.length = 0;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('watches the body and the content wrapper', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    const wrapper = body.firstElementChild;
+    expect(observers).toHaveLength(1);
+    expect(observers[0]?.observed).toEqual([body, wrapper]);
+  });
+
+  it('is out of the tab sequence, but never without the attribute, when nothing overflows', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('is a tab stop when the content is taller than the body', () => {
+    install();
+    const { body } = renderWith(200, 202);
+    expect(body).toHaveAttribute('tabindex', '0');
+  });
+
+  it('ignores the 1 px that fractional layout invents', () => {
+    install();
+    const { body } = renderWith(200, 201);
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('keeps the stop when the body has no height to measure', () => {
+    install();
+    const { body } = renderWith(0, 0);
+    expect(body).toHaveAttribute('tabindex', '0');
+  });
+
+  it('follows the body as it starts and stops overflowing', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    size(body, 200, 400);
+    act(() => observers[0]?.callback());
+    expect(body).toHaveAttribute('tabindex', '0');
+    size(body, 200, 200);
+    act(() => observers[0]?.callback());
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('disconnects the observer on unmount', () => {
+    install();
+    const { unmount } = renderWith(200, 200);
+    unmount();
+    expect(observers[0]?.disconnect).toHaveBeenCalled();
+  });
+
+  it('builds no observer and no wrapper when it is not filling', () => {
+    install();
+    const { container } = render(
+      <SectionCard title="Recently changed">
+        <p>row</p>
+      </SectionCard>,
+    );
+    expect(observers).toHaveLength(0);
+    const body = container.querySelector('section')?.lastElementChild;
+    expect(body?.firstElementChild?.tagName).toBe('P');
+    expect(body).not.toHaveAttribute('tabindex');
   });
 });
 

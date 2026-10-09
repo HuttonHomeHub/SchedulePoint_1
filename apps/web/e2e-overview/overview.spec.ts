@@ -211,7 +211,9 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     ).toBe(true);
   };
 
-  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows. With one
+  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows, and (#474) more
+  // than the two-column box can show (the API returns at most 8), so one body overflows while the
+  // shorter boxes do not. With one
   // plan every box is shorter than its floor, so a clamp to the floor and a box sized by its content
   // read the same and the assertion below would pass against the defect it names.
   await overviewPage.evaluate(async (org) => {
@@ -227,7 +229,7 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     };
     const client = await call('/clients', { name: 'Filler Estates' });
     const project = await call(`/clients/${client.id}/projects`, { name: 'Filler Works' });
-    for (let i = 1; i <= 6; i += 1) {
+    for (let i = 1; i <= 7; i += 1) {
       await call(`/projects/${project.id}/plans`, {
         name: `Filler plan ${String(i)}`,
         plannedStart: '2026-03-02',
@@ -262,11 +264,13 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
         document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ===
         'Recently changed',
     );
-    const body = recent?.querySelector('[tabindex="0"]');
+    // Structural, not `[tabindex="0"]`: the body's tab stop is conditional now (#474).
+    const body = recent?.lastElementChild;
     const main = document.querySelector('main');
     return {
       boxHeight: Math.round(recent?.getBoundingClientRect().height ?? 0),
       bodyClipped: body ? body.scrollHeight - body.clientHeight : -1,
+      bodyTabindex: body?.getAttribute('tabindex') ?? null,
       mainScrolls: main ? main.scrollHeight > main.clientHeight : false,
     };
   });
@@ -277,6 +281,9 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   expect(stacked.bodyClipped, 'the box body scrolls on its own in one column').toBeLessThanOrEqual(
     0,
   );
+  // #474: nothing scrolls in one column, so the body is out of the tab sequence — as `-1`, never
+  // without the attribute, which would drop focus to `<body>` if it were focused when this applied.
+  expect(stacked.bodyTabindex, 'a body that scrolls nothing is still a tab stop').toBe('-1');
   expect(stacked.mainScrolls, 'the page does not scroll').toBe(true);
   await expectSameSequence('one column at 1280');
   await axeBoth('one column at 1280');
@@ -325,9 +332,12 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   //
   // **What this asserts, and what it deliberately does not.** The density work caps each box and
   // lets its body scroll, so the body is a scroll container — and a scroll container that cannot
-  // take focus cannot be scrolled without a pointer (WCAG 2.2 §2.1.1, level A). Browsers have been
-  // inconsistent about focusing them implicitly, so `SectionCard fill` sets `tabIndex={0}` and this
-  // proves focus really lands there in a real browser, which jsdom structurally cannot.
+  // take focus cannot be scrolled without a pointer (WCAG 2.2 §2.1.1, level A). `SectionCard fill`
+  // gives the body `tabIndex` 0 while it overflows and -1 while it does not (`docs/TECH_DEBT.md`
+  // #474: -1 and not removal, because removing the attribute from a focused element drops focus to
+  // `<body>`; and it fails open to 0 when unmeasured, because an unreachable scroller is the level-A
+  // failure and a spare stop is not). This proves, in a real browser jsdom cannot stand in for,
+  // that the two states match the real overflow and that the overflowing one scrolls from the keys.
   //
   // It does NOT assert that the workspace stops scrolling, which is the claim the whole milestone
   // is about. That was written, run, and **found to be vacuous**: this organisation holds one plan,
@@ -335,13 +345,44 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   // assertion green. A test that passes against the defect it names is worse than no test, so the
   // claim stays where a fixture can exhibit it: `measure-landing-density.mjs`, on twelve plans,
   // reported in `m9-density-design.md` §5. The blind spot is stated rather than papered over.
-  const scrollable = overviewPage.locator('section [tabindex="0"]').first();
-  await expect(scrollable).toHaveCount(1);
+  const bodies = await overviewPage.evaluate(() =>
+    [...document.querySelectorAll('main section[aria-labelledby]')].map((el, index) => {
+      const body = el.lastElementChild;
+      return {
+        index,
+        overflowing: body ? body.scrollHeight > body.clientHeight + 1 : false,
+        tabindex: body?.getAttribute('tabindex') ?? null,
+      };
+    }),
+  );
+  expect(
+    bodies.filter((b) => b.overflowing && b.tabindex === '0'),
+    'no box overflows at 1600 x 1000, so the keyboard path below has nothing to drive',
+  ).not.toHaveLength(0);
+  expect(
+    bodies.filter((b) => !b.overflowing && b.tabindex === '-1'),
+    'every box overflows at 1600 x 1000, so the spare-stop state is never exercised',
+  ).not.toHaveLength(0);
+  expect(
+    bodies.filter((b) => b.overflowing !== (b.tabindex === '0')),
+    "a body's tab stop disagrees with whether it overflows",
+  ).toEqual([]);
+
+  const scrollIndex = bodies.find((b) => b.overflowing)?.index ?? 0;
+  const scrollable = overviewPage
+    .locator('main section[aria-labelledby]')
+    .nth(scrollIndex)
+    .locator('> :last-child');
   await scrollable.focus();
   expect(
     await overviewPage.evaluate(() => document.activeElement?.getAttribute('tabindex')),
     'the capped box body did not take focus, so it cannot be scrolled from the keyboard',
   ).toBe('0');
+  await overviewPage.keyboard.press('PageDown');
+  expect(
+    await scrollable.evaluate((el) => el.scrollTop),
+    'PageDown did not scroll the focused box body',
+  ).toBeGreaterThan(0);
 
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
