@@ -528,12 +528,14 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     expect(within(cluster, stage)).toBe(true);
   });
 
-  test('where even that leaves no room the cluster is withdrawn from the Tab order, focus on it moves to the diagram, and View ▾ still fits the plan', async () => {
+  test('where even that leaves no room the cluster is withdrawn from the Tab order, focus on it moves to View, and View ▾ still fits the plan', async () => {
     // Standing on Zoom in when the stage shrinks: the column is hidden under the reader's focus.
     await clusterOf(page).getByRole('button', { name: 'Zoom in' }).focus();
     await page.setViewportSize({ width: 1024, height: 500 });
     await page.waitForTimeout(600);
-    await expect(diagramList(page)).toBeFocused();
+    // The stage is a sliver and `inert` here (TECH_DEBT #480), so the diagram's list cannot take
+    // focus: it goes to View, the route the sentence names.
+    await expect(page.locator('[data-toolbar-item="view"]')).toBeFocused();
     await expect(page.getByTestId('announcer')).toHaveText(
       'Diagram viewport controls hidden: not enough room. Use View, Zoom.',
     );

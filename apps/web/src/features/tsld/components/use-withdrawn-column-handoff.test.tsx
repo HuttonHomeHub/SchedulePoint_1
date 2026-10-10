@@ -11,9 +11,11 @@ const SAID = 'Controls hidden: not enough room.';
 function Host({
   withdrawn,
   withTarget = true,
+  targetFocusable = true,
 }: {
   withdrawn: boolean;
   withTarget?: boolean;
+  targetFocusable?: boolean;
 }): React.ReactElement {
   const columnRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
@@ -21,11 +23,15 @@ function Host({
     columnRef,
     withdrawn,
     target: withTarget ? targetRef : undefined,
+    fallbackSelector: '[data-fallback]',
     message: SAID,
   });
   return (
     <>
-      <div ref={targetRef} tabIndex={-1} data-testid="target" />
+      <div ref={targetRef} {...(targetFocusable ? { tabIndex: -1 } : {})} data-testid="target" />
+      <button type="button" data-fallback="">
+        View
+      </button>
       <button type="button">elsewhere</button>
       <div ref={columnRef} className={withdrawn ? 'invisible' : undefined}>
         <button type="button">Zoom in</button>
@@ -61,16 +67,27 @@ describe('useWithdrawnColumnHandoff', () => {
     expect(screen.getByTestId('announcer')).toBeEmptyDOMElement();
   });
 
-  it('does nothing when the host offers no target', () => {
+  it('falls back to the control outside the stage when the target cannot take focus', async () => {
+    const { rerender } = mount(<Host withdrawn={false} targetFocusable={false} />);
+    screen.getByRole('button', { name: 'Zoom in' }).focus();
+    rerender(
+      <AnnouncerProvider>
+        <Host withdrawn targetFocusable={false} />
+      </AnnouncerProvider>,
+    );
+    expect(screen.getByRole('button', { name: 'View' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByTestId('announcer')).toHaveTextContent(SAID));
+  });
+
+  it('uses the fallback alone when the host offers no target', () => {
     const { rerender } = mount(<Host withdrawn={false} withTarget={false} />);
-    const zoom = screen.getByRole('button', { name: 'Zoom in' });
-    zoom.focus();
+    screen.getByRole('button', { name: 'Zoom in' }).focus();
     rerender(
       <AnnouncerProvider>
         <Host withdrawn withTarget={false} />
       </AnnouncerProvider>,
     );
-    expect(zoom).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'View' })).toHaveFocus();
   });
 
   it('does not act on mount when the column starts withdrawn', () => {

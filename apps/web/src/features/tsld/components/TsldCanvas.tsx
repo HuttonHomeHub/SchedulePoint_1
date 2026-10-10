@@ -210,6 +210,9 @@ export const RULER_HEIGHT = 40;
  * the top; when inactive it reserves nothing, so the scene is byte-for-byte today's (the parity gate). */
 export const RESOURCE_STRIP_HEIGHT = 72;
 
+/** Where focus goes when the stage is squeezed inert and the list cannot take it: the View control. */
+const CLUSTER_WITHDRAWN_FALLBACK = '[data-toolbar-item="view"]';
+
 /** Said when the stage is too short for the viewport cluster and focus was on it. */
 const CLUSTER_WITHDRAWN_MESSAGE =
   'Diagram viewport controls hidden: not enough room. Use View, Zoom.';
@@ -956,6 +959,7 @@ export function TsldCanvas({
     columnRef,
     withdrawn: !clusterRoom,
     target: minimapDismissFocusRef,
+    fallbackSelector: CLUSTER_WITHDRAWN_FALLBACK,
     message: CLUSTER_WITHDRAWN_MESSAGE,
   });
   const coarse = useCoarsePointer();
