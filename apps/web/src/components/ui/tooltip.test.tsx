@@ -407,6 +407,17 @@ describe('useTooltip', () => {
       expect(tip()).toBeNull();
     });
 
+    it('keeps the tip a long-press just opened, although the lift fires a click (red: not skipped)', () => {
+      render(<Host dismissOnPress />);
+      const button = screen.getByRole('button');
+      fireEvent.pointerDown(button, { pointerType: 'touch', clientX: 5, clientY: 5 });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS));
+      expect(tip()).not.toBeNull();
+      fireEvent.pointerUp(button, { pointerType: 'touch' });
+      fireEvent.click(button);
+      expect(tip()).not.toBeNull();
+    });
+
     it('stays open on a press by default', () => {
       render(<Host />);
       const button = screen.getByRole('button');

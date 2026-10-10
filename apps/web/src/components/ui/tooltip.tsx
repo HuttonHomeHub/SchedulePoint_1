@@ -312,6 +312,9 @@ export function useTooltip({
     // A press on the trigger itself, after the focus it caused has already opened (and been
     // allowed to open) the tip — closing on `pointerdown` would be undone by that focus.
     const onClick = (event: MouseEvent): void => {
+      // The click a released long-press fires is swallowed by the trigger and is not a press: the
+      // long-press just opened this tip on purpose.
+      if (suppressNextClick.current) return;
       if (triggerRef.current?.contains(event.target as Node)) close();
     };
     document.addEventListener('keydown', onKey, true);
