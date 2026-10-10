@@ -519,7 +519,9 @@ p();
 p(`## §7 · M0-T5 — what the organisation switcher paints`);
 p();
 const t5 = await page.evaluate(() => {
-  const s = document.getElementById('org-switcher');
+  const s = document.querySelector(
+    'header [aria-label^="Active organisation"], header [aria-label^="Select organisation"]',
+  );
   if (!s) return null;
   const cs = getComputedStyle(s);
   return {
@@ -541,7 +543,8 @@ try {
   const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
   const { nodeId } = await cdp.send('DOM.querySelector', {
     nodeId: root.nodeId,
-    selector: '#org-switcher',
+    selector:
+      'header [aria-label^="Active organisation"], header [aria-label^="Select organisation"]',
   });
   const m = await cdp.send('CSS.getMatchedStylesForNode', { nodeId });
   const bgRules = (m.matchedCSSRules ?? [])

@@ -170,7 +170,7 @@ function HeaderContents({
           three sections at once, and ADR-0091 M7 records a flex line splitting free space *equally*
           between every auto margin — which is what we now want, and want the row to own. */}
       <div className="flex shrink-0 items-center gap-3">
-        <OrgSwitcher className="max-w-[12rem] truncate" />
+        <OrgSwitcher />
         <AccountChip />
       </div>
     </div>

@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type * as NavigatorModule from '@/features/navigator';
 import { NavigatorCrudProvider } from '@/features/navigator/lib/navigator-crud-context';
-import type * as OrganizationsModule from '@/features/organizations';
 
 // The rail's bottom zone renders router `Link`s (ADR-0097 Landing D1) and, since Graphite M3, its
 // top zone renders the brand link — which reads the pathname to decide whether it is the current
@@ -34,9 +33,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ),
 }));
 
-// The identity and account zones Graphite M3 moved into the rail have suites of their own
-// (`account-chip.test.tsx`, `OrgSwitcher`'s), and the chip alone reaches a session query, a staff
-// query and a `Menu` portal. Stubbed to their landmarks so this suite stays about WHERE the rail
+// The account zone Graphite M3 moved into the rail has a suite of its own (`account-chip.test.tsx`),
+// and the chip alone reaches a session query, a staff query and a `Menu` portal. (The organisation
+// switcher was mocked here too, and the rail renders none: that mock was dead and is gone.) Stubbed to their landmarks so this suite stays about WHERE the rail
 // puts them.
 vi.mock('@/components/layout/account-chip', () => ({
   AccountChip: () => (
@@ -45,15 +44,6 @@ vi.mock('@/components/layout/account-chip', () => ({
     </button>
   ),
 }));
-vi.mock('@/features/organizations', async (importOriginal) => ({
-  ...(await importOriginal<typeof OrganizationsModule>()),
-  OrgSwitcher: ({ title }: { title?: string }) => (
-    <select aria-label="Active organisation" title={title}>
-      <option>Acme</option>
-    </select>
-  ),
-}));
-
 // The tree reads route params, so it needs a router this suite has no reason to mount — the
 // subject here is the rail's own header chrome. Everything else from the barrel is real.
 vi.mock('@/features/navigator', async (importOriginal) => ({

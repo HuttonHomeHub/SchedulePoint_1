@@ -66,6 +66,14 @@
   --container-roomy: 79rem;
 }
 
+/* The widest the header's organisation switcher grows before its name truncates (`max-w-org-switcher`,
+   `OrgSwitcher.tsx`; toolbar-redesign M6 V5). It is the 12rem the native select carried as an
+   arbitrary `max-w-[12rem]`, promoted to a name because the design system has no arbitrary values.
+   rem, so text-only 200 % zoom grows it with the text. */
+@theme {
+  --container-org-switcher: 12rem;
+}
+
 /* The command deck's edge fade below `lg` (`Deck.tsx`, `max-lg:deck-edge-fade`; toolbar-redesign M3,
    US-6). The deck is one line that scrolls sideways there, and a macOS overlay scrollbar is invisible
    until a gesture, so the line has to say it goes on. A mask fades 2rem of whichever edge has more

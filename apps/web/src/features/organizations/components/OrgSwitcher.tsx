@@ -1,77 +1,135 @@
 import { useNavigate, useParams } from '@tanstack/react-router';
+import { Building, Check, ChevronDown } from 'lucide-react';
 
 import { useOrganizations } from '../api/use-organizations';
 
+import { Button } from '@/components/ui/button';
+import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
- * Header control to switch the active organisation. The URL is authoritative:
- * changing the selection navigates to `/orgs/$orgSlug`. Rendered as a native
- * select for full keyboard/screen-reader support. Hidden until the user has orgs.
+ * Header control to switch the active organisation. The URL is authoritative: choosing an
+ * organisation navigates to `/orgs/$orgSlug`. **Hidden until the user has organisations**, and it
+ * is a ghost button that opens a {@link Menu} of `menuitemradio` rows (toolbar-redesign M6 V5,
+ * CQ-4).
+ *
+ * **It was a native `<select>` "for full keyboard/screen-reader support", and the replacement keeps
+ * what that argument was protecting.** The menu is the APG menu button on the hand-rolled `Menu`
+ * primitive — ArrowUp/ArrowDown/Home/End, Escape and Tab returning focus to the trigger — and the
+ * current organisation is `aria-checked`, so a screen reader hears which one is active. What the
+ * native control had and this does not is **type-ahead**: `Menu` has none, and adding it would
+ * change a shared primitive's keyboard contract, which ADR-0111 reviews before release rather than
+ * inside a visual milestone. The limit is stated here and in `docs/UX_STANDARDS.md`; the list is the
+ * reader's own organisations, which is a handful, not a directory.
+ *
+ * **Why it is no longer a select.** A bordered `<select>` was the one control in the header that
+ * drew a field, a native chevron and a user-agent popup in a band whose every other control is a
+ * ghost on the navy; it also could not show its name and its purpose at once, and the closed popup
+ * was painted by the platform, outside the design system and outside its contrast gates.
+ *
+ * **A single organisation is a plain label, not a menu** (ADR-0104: no control whose action cannot
+ * apply). A one-row menu whose only row is already checked does nothing, so offering it is a
+ * button that opens to a refusal. The exception is the route with no organisation in the path
+ * (`/account`, `/me/activity`): there the one organisation is not current, choosing it **is** the
+ * reader's route back, so the menu stays — which `e2e-shell/org-less-screens.spec.ts` asserts.
+ *
+ * **The visible name is the current organisation's, and the CONTROL is capped at
+ * {@link ORG_SWITCHER_MAX}** (`--container-org-switcher`, a named sizing token rather than an
+ * arbitrary `max-w-[12rem]`) with the name truncating inside it. The cap is on the control and not on
+ * the name: the first build capped the name, which left the glyph, the chevron and the padding on top
+ * of 12 rem, and the header wrapped to two lines at 1024 with two organisations (measured, M6 §5).
+ * And
+ * the accessible name carries the whole of it: "Active organisation: ‹Name›". That contains the
+ * visible text, so 2.5.3 holds even when the visible text is cut. The tooltip carries the whole
+ * name too — a `name-echo`, because the name is already in the control's own name.
  */
-export function OrgSwitcher({
-  className,
-  title,
-}: { className?: string; title?: string | undefined } = {}): React.ReactElement | null {
+const ORG_SWITCHER_MAX = 'max-w-org-switcher';
+
+export function OrgSwitcher({ className }: { className?: string } = {}): React.ReactElement | null {
   const { data: organizations } = useOrganizations();
   const params = useParams({ strict: false });
   const navigate = useNavigate();
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const current = 'orgSlug' in params ? params.orgSlug : undefined;
+  const currentOrganization = organizations?.find((organization) => organization.slug === current);
+  const tip = useTooltip({
+    content: currentOrganization?.name,
+    purpose: 'name-echo',
+    disabled: open,
+  });
 
   if (!organizations || organizations.length === 0) {
     return null;
   }
 
-  const current = 'orgSlug' in params ? params.orgSlug : '';
-
-  return (
-    <>
-      <label htmlFor="org-switcher" className="sr-only">
-        Active organisation
-      </label>
-      <select
-        id="org-switcher"
-        // Carries the current organisation for a pointer user where the control is too narrow to
-        // show it — the collapsed rail at 36 px (Graphite M3). Never a substitute for the label:
-        // `title` is unreliable for assistive technology, which is why the `sr-only <label>` above
-        // is the accessible name in every presentation.
-        {...(title === undefined ? {} : { title })}
-        value={current}
-        onChange={(event) =>
-          void navigate({ to: '/orgs/$orgSlug', params: { orgSlug: event.target.value } })
-        }
+  if (organizations.length === 1 && currentOrganization) {
+    return (
+      <span
         className={cn(
-          // `h-(--control-h)`, not the literal `h-9` this carried (ADR-0118 M4). It sits in
-          // `<header>` — a surface the coarse gate names as swept — and was invisible to it,
-          // because the sweep queried `button,a,[role=button],input` and a `<select>` is none of
-          // those. Found by the architecture review reading the query rather than the result: the
-          // gate reported the header clean, and it was clean of everything it could see.
-          // **`bg-field`, not `bg-background`** (console epic M2-T2). It read the SURFACE family,
-          // so it painted whatever ground it sat on — navy in the chrome band, where every other
-          // control that takes typed or chosen input reads the FIELD family. S4's rebind alone
-          // could not have reached it, which is the finding that made this its own task: the brief
-          // proposed the rebind as the whole fix.
-          //
-          // `color-scheme: dark` is not set and is not an oversight: M0-T5 read this control's
-          // computed style in Chromium through CDP and `.bg-background` already won the cascade
-          // over all four user-agent `select` rules, so the paint follows the class. What a
-          // different platform's user agent does to a closed `<select>` is unmeasured here, and a
-          // guess dressed as a fix would be worse than the honest gap.
-          'border-input bg-field text-field-foreground h-(--control-h) min-w-0 rounded-md border px-2 text-sm',
-          'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+          'text-foreground inline-flex h-(--control-h) items-center gap-1.5 px-2 text-sm font-medium',
+          ORG_SWITCHER_MAX,
           className,
         )}
       >
-        {current === '' ? (
-          <option value="" disabled>
-            Select organisation
-          </option>
-        ) : null}
-        {organizations.map((organization) => (
-          <option key={organization.id} value={organization.slug}>
-            {organization.name}
-          </option>
-        ))}
-      </select>
+        <Building aria-hidden="true" className="size-4 shrink-0" />
+        <span className="sr-only">Active organisation: </span>
+        <span className="min-w-0 truncate" title={currentOrganization.name}>
+          {currentOrganization.name}
+        </span>
+      </span>
+    );
+  }
+
+  const visibleName = currentOrganization?.name ?? 'Select organisation';
+
+  return (
+    <>
+      <Button
+        {...tip.triggerProps}
+        ref={(el) => {
+          tip.triggerProps.ref(el);
+          triggerRef.current = el;
+        }}
+        variant="ghost"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={
+          currentOrganization
+            ? `Active organisation: ${currentOrganization.name}`
+            : 'Select organisation (active organisation: none)'
+        }
+        onClick={toggle}
+        className={cn('gap-1.5 px-2', ORG_SWITCHER_MAX, className)}
+      >
+        <Building aria-hidden="true" className="size-4 shrink-0" />
+        <span className="min-w-0 truncate">{visibleName}</span>
+        <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+        {tip.tooltip}
+      </Button>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label="Organisations"
+        restoreFocusRef={triggerRef}
+      >
+        {organizations.map((organization) => {
+          const isCurrent = organization.slug === current;
+          return (
+            <MenuItem
+              key={organization.id}
+              selected={isCurrent}
+              onSelect={() =>
+                void navigate({ to: '/orgs/$orgSlug', params: { orgSlug: organization.slug } })
+              }
+            >
+              <Check aria-hidden="true" className={cn('size-4', isCurrent ? '' : 'opacity-0')} />
+              {organization.name}
+            </MenuItem>
+          );
+        })}
+      </Menu>
     </>
   );
 }
