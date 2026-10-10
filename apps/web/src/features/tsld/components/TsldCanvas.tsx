@@ -937,6 +937,10 @@ export function TsldCanvas({
   // How far the canvas root's bottom edge is below the edge that is on screen (see `visibleBoxRef`).
   const [clipShift, setClipShift] = useState(0);
   const clipShiftRef = useRef(0);
+  // Bumped whenever the visible stage or the canvas root changes size, so the keyboard reveal runs
+  // again against the stage as it now is (a selection docks its bar a frame before the stage settles).
+  const [stageTick, setStageTick] = useState(0);
+  const stageKeyRef = useRef('');
   const clusterRoomRef = useRef(true);
   // The column the minimap and the viewport cluster share (toolbar-redesign M4). Its LIVE rect is
   // what the keyboard reveal clears, so the margin follows whatever is actually open.
@@ -1487,6 +1491,11 @@ export function TsldCanvas({
         0,
         Math.round(root.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom),
       );
+      const key = `${String(shift)}|${String(Math.round(root.getBoundingClientRect().height))}`;
+      if (key !== stageKeyRef.current) {
+        stageKeyRef.current = key;
+        setStageTick((tick) => tick + 1);
+      }
       if (shift === clipShiftRef.current) return;
       clipShiftRef.current = shift;
       setClipShift(shift);
@@ -1571,9 +1580,9 @@ export function TsldCanvas({
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
     }
-    // `clipShift` is a trigger and not a read: a selection docks its bar in the same commit that
+    // `stageTick` is a trigger and not a read: a selection docks its bar in the same commit that
     // selects, and the stage shrinks a frame later, so the first run sees the old, taller stage.
-  }, [selectedId, activities, dataDate, wbsBandHeightPx, clipShift]);
+  }, [selectedId, activities, dataDate, wbsBandHeightPx, stageTick]);
 
   // Publish the held ghost to the loop. The create ghost and the write ghost share the one overlay
   // slot (they are mutually exclusive — see the prop docs), so the in-flight write keeps its

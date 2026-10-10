@@ -591,8 +591,14 @@ for (const cell of [
       const zoomed = await settledView(page);
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
+      // The swap hides the diagram row, cluster and all, so the route to Fit is View ▾ — the same
+      // wrapped command (`docs/TECH_DEBT.md` #480).
       await page
-        .getByRole('toolbar', { name: 'Diagram viewport' })
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: /^View/ })
+        .click();
+      await page
+        .getByRole('dialog', { name: 'View' })
         .getByRole('button', { name: 'Fit to plan' })
         .click();
       await expect(expandButton(page)).toBeVisible();

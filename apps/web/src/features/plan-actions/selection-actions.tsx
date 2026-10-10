@@ -1049,7 +1049,14 @@ function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React
         aria-label="Clear selection"
         aria-keyshortcuts="Escape"
         onClick={onActivate}
-        className={toolbarControlVariants({ state: 'rest' })}
+        // Finger-sized windows only. With a mouse the bar's twelve actions already fill the foot row
+        // (`dock.spec.ts` holds a selection to zero canvas cost), the diagram is tall enough that
+        // Escape and a click on empty canvas are no hardship, and one more 36 px control wrapped the bar.
+        className={cn(
+          toolbarControlVariants({ state: 'rest' }),
+          // After the variants, which declare `inline-flex`: a merge keeps the later display.
+          'hidden pointer-coarse:inline-flex',
+        )}
       >
         <X aria-hidden="true" className="size-4" />
       </button>

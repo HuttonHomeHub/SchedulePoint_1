@@ -339,9 +339,13 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
       cornerIsUnder(corner, await box(clusterOf(page))),
       `the bar's corner ${JSON.stringify(corner)} is under the cluster`,
     ).toBe(false);
-    // At the floor a selection docks its bar and the stage then has no room for the minimap, so the
-    // panel has withdrawn by now (its reason is asserted below): the cluster is the only occupant.
-    await expect(panel).toHaveCount(0);
+    // With a mouse the docked bar leaves the stage 246 px, which still holds the minimap, so the
+    // panel is on screen beside the cluster and must be cleared too.
+    await expect(panel).toBeVisible();
+    expect(
+      cornerIsUnder(corner, await box(panel)),
+      `the bar's corner ${JSON.stringify(corner)} is under the minimap`,
+    ).toBe(false);
     await page.keyboard.press('Escape');
     // The selection is gone, so the stage is tall again and the panel returns: close it.
     await expect(panel).toBeVisible();
