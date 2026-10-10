@@ -61,6 +61,7 @@ const rowContext = (): SelectionBarContext => ({
   isSummary: false,
   hasPlacement: false,
   conflictKey: null,
+  conflictKeys: [],
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
   // Visible unless a case says otherwise — the fixtures' status quo (M1).
   onOpenLogic: vi.fn(),

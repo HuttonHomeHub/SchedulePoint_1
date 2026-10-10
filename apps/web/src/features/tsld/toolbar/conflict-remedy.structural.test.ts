@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { CONFLICT_FLAGS, type ConflictKey } from '../render/conflicts';
@@ -131,5 +134,29 @@ describe('leadingConflictKey', () => {
     expect(
       leadingConflictKey({ ...clean, constraintViolated: true, levelingWindowExceeded: true }),
     ).toBe('constraintViolated');
+  });
+});
+
+describe('the lead and the reason line are one match (conflict-reason-on-object)', () => {
+  // `conflictKey` (the remedy's lead) and `conflictKeys` (the reason line) must be two views of one
+  // `matchingConflictFlags` call. A second walk of `CONFLICT_FLAGS` in either would let the sentence
+  // on the bar and the remedy beside it disagree about which conflict leads.
+  it('leadingConflictKey is derived from matchingConflictFlags, not from CONFLICT_FLAGS directly', () => {
+    const source = readFileSync(
+      join(__dirname, '..', '..', 'plan-actions', 'conflict-remedy.ts'),
+      'utf8',
+    );
+    const body = /export function leadingConflictKey[\s\S]*?\n}\n/.exec(source)?.[0] ?? '';
+    expect(body).toContain('matchingConflictFlags(');
+    expect(body).not.toMatch(/CONFLICT_FLAGS\s*\./);
+  });
+
+  it('the builder derives conflictKey and conflictKeys from one call', () => {
+    const source = readFileSync(
+      join(__dirname, '..', '..', 'plan-actions', 'build-selection-context.ts'),
+      'utf8',
+    );
+    expect(source.match(/matchingConflictFlags\(/g)).toHaveLength(1);
+    expect(source).toContain('conflictKey: conflictKeys[0] ?? null');
   });
 });

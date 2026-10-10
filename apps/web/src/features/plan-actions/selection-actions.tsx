@@ -17,8 +17,9 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef } from 'react';
 
+import { CONFLICT_READOUT_ICON, CONFLICT_READOUT_TEXT } from './conflict-readout';
 import { CONFLICT_REMEDIES } from './conflict-remedy';
 import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-gate';
 
@@ -48,7 +49,11 @@ import {
 } from '@/config/env';
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
-import type { ConflictKey } from '@/features/tsld/render/conflicts';
+import {
+  CONFLICT_FLAGS,
+  joinConflictReasons,
+  type ConflictKey,
+} from '@/features/tsld/render/conflicts';
 import type { LogicPathMode } from '@/features/tsld/render/logic-path';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +101,13 @@ export interface SelectionActionContext {
    * attached to the OBJECT means (ADR-0093's discriminator).
    */
   conflictKey: ConflictKey | null;
+  /**
+   * **Every** conflict the selected activity matches, in `CONFLICT_FLAGS` order; `[]` when it is not
+   * flagged. `conflictKey` is exactly `conflictKeys[0] ?? null` — the builder sets both from one
+   * `matchingConflictFlags` call. The bar's reason line names all of them; the remedy answers the
+   * leading one only (ADR-0094 D5).
+   */
+  conflictKeys: readonly ConflictKey[];
   /** Whether clearing a hand-placed placement is actionable now, and why not — from the shared
    * `clearVisualPlacementGate`, so this and the command surface cannot drift. The SAME
    * `BulkActionGate` type the plural bar uses, imported rather than re-typed: a third structurally
@@ -400,6 +412,38 @@ function IsolateControl({
  * Collapsing the two into one would make the read-out say a position the planner has not reached.
  */
 
+/** The label of one conflict key, from the same table the announcer and the reason line read. */
+function leadingConflictReason(key: ConflictKey): string | undefined {
+  return CONFLICT_FLAGS.find((flag) => flag.key === key)?.label;
+}
+
+/**
+ * **The reason, as a line above the bar's controls** (conflict-reason-on-object, ADR-0186).
+ *
+ * Shown whenever the selected activity is flagged, however the planner arrived. It is a caption on
+ * the object, not a toolbar item: it takes no roving stop and no Tab stop (no `tabindex`, no role),
+ * is not a live region (a conflict is a standing condition; ADR-0132), and never truncates
+ * (ADR-0184). It sits on its OWN line so the controls below it never reflow — an inline item cost a
+ * line at 1912 x 1080 (`m0-measurement.md`), which is why this is not one.
+ *
+ * Every reason is named, joined as the announcer joins them; the remedy beside it answers the
+ * leading one only. Not `aria-hidden`: where no described control exists (no placement, quick wins
+ * off, a second flag behind a leading `barAction`) this text is the only channel.
+ */
+function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.ReactElement | null {
+  if (keys.length === 0) return null;
+  const labels = keys.flatMap((key) => leadingConflictReason(key) ?? []);
+  return (
+    <p
+      data-conflict-reason=""
+      className={cn('flex items-start gap-1.5 px-2 text-sm leading-5', CONFLICT_READOUT_TEXT)}
+    >
+      <TriangleAlert aria-hidden="true" className={cn('mt-0.5 size-4', CONFLICT_READOUT_ICON)} />
+      <span>{joinConflictReasons(labels, 'start')}</span>
+    </p>
+  );
+}
+
 /**
  * The conflict remedy, rendered from {@link CONFLICT_REMEDIES} (ADR-0094 M4).
  *
@@ -429,6 +473,7 @@ function ConflictRemedyControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement | null {
   const key = ctx.conflictKey;
+  const reasonId = useId();
   // `barAction` renders nothing: that remedy is an item the bar already carries, and a second copy
   // of it would be ADR-0093's defect inside one surface. `isVisible` on the registry item says the
   // same thing, so this is a belt-and-braces guard rather than the rule's only home — and it is the
@@ -438,17 +483,28 @@ function ConflictRemedyControl({
   const remedy = CONFLICT_REMEDIES[key];
   if (remedy.kind !== 'openEditorAt') return null;
   return (
-    <button
-      // `api.itemProps` already carries the focusable marker for a non-presentational render item;
-      // repeating it was harmless duplication the accessibility gate asked to remove.
-      {...api.itemProps}
-      type="button"
-      onClick={() => ctx.onOpenEditorAt(remedy.at)}
-      className={cn(toolbarControlVariants({}), 'gap-1.5')}
-    >
-      <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-      <span className="truncate">{remedy.label}</span>
-    </button>
+    <>
+      <button
+        // `api.itemProps` already carries the focusable marker for a non-presentational render item;
+        // repeating it was harmless duplication the accessibility gate asked to remove.
+        {...api.itemProps}
+        type="button"
+        // The remedy's DESCRIPTION is the reason it answers, so a keyboard or screen-reader user
+        // who Tabs here hears why before acting. A description, never part of the name.
+        aria-describedby={reasonId}
+        onClick={() => ctx.onOpenEditorAt(remedy.at)}
+        className={cn(toolbarControlVariants({}), 'gap-1.5')}
+      >
+        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+        <span className="truncate">{remedy.label}</span>
+      </button>
+      {/* A SIBLING of the button, and `hidden`: an `aria-describedby` reference is still computed
+          from a hidden node, whereas text inside the button would be content and so become part of
+          its accessible name ("Review the constraint…Constraint not met"). */}
+      <span id={reasonId} hidden>
+        {leadingConflictReason(key)}
+      </span>
+    </>
   );
 }
 
@@ -893,6 +949,17 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
                 <Eraser className="size-4" />
               );
             },
+            // When this IS the conflict's remedy it carries the reason as its description, so a
+            // Viewer reaching the shaded button hears why it is there. Asked of the remedy map, not
+            // a key literal, like the icon above; `visualLaterThanBound`'s route carries its own.
+            srDescription: (ctx: SelectionActionContext) => {
+              const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+              return remedy?.kind === 'barAction' &&
+                remedy.itemId === 'clear-visual-placement' &&
+                ctx.conflictKey !== null
+                ? leadingConflictReason(ctx.conflictKey)
+                : undefined;
+            },
             penGated: true,
             // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
             // in — never re-derived here. Two independent copies of a four-condition ladder is how
@@ -1241,23 +1308,32 @@ export function SelectionActionsBar({
           subject, and names it more precisely than the word SELECTION did. The plural bar already
           had none, so the two bars now agree rather than differing by an accident of when each
           was written. */}
-      <Toolbar
-        items={selectionActionItems}
-        context={actionContext}
-        label={`Actions for ${actionContext.targetName}`}
-        groupLabels={{ object: 'Activity actions' }}
-        authoringEnabled={actionContext.canEditSchedule}
-      />
-      {onClear ? (
-        <ClearSelectionButton
-          onActivate={() => {
-            // The press removes the bar that holds it, so focus goes to the restore target first —
-            // the same order `onMakeMilestone` uses, and for the same reason.
-            restoreFocus?.();
-            onClear();
-          }}
-        />
-      ) : null}
+      {/* The reason sits on its own line ABOVE a row that is the same row the bar has always been, so
+          flagging an activity never reflows a control. The row wrapper is always there (the caption
+          is the only thing that comes and goes), so a conflict resolving while focus is on a control
+          does not remount it. */}
+      <div className="flex min-w-0 flex-col">
+        <ConflictReasonLine keys={actionContext.conflictKeys} />
+        <div className="flex min-w-0 items-center gap-2">
+          <Toolbar
+            items={selectionActionItems}
+            context={actionContext}
+            label={`Actions for ${actionContext.targetName}`}
+            groupLabels={{ object: 'Activity actions' }}
+            authoringEnabled={actionContext.canEditSchedule}
+          />
+          {onClear ? (
+            <ClearSelectionButton
+              onActivate={() => {
+                // The press removes the bar that holds it, so focus goes to the restore target first —
+                // the same order `onMakeMilestone` uses, and for the same reason.
+                restoreFocus?.();
+                onClear();
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -56,6 +56,7 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     isSummary: false,
     hasPlacement: false,
     conflictKey: null,
+    conflictKeys: [],
     clearPlacement: { enabled: true, reason: null },
     onClearVisualPlacement: vi.fn(),
     onOpenEditorAt: vi.fn(),

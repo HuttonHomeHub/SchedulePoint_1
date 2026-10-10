@@ -133,6 +133,10 @@ import {
 } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
+import {
+  CONFLICT_READOUT_ICON,
+  CONFLICT_READOUT_TEXT,
+} from '@/features/plan-actions/conflict-readout';
 import { PlanPenControl } from '@/features/plan-lock';
 import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
 import { undoRedoHints } from '@/features/undo-redo';
@@ -2049,9 +2053,9 @@ function CurrentConflictStatus({
       title={label}
       // A read-out, not a shaded command: normal-weight foreground text and a warning-tinted icon, so
       // beside the bright Next conflict it reads as information rather than as a disabled control.
-      className={cn(toolbarControlVariants({ tone: 'info' }), 'text-foreground gap-1 font-normal')}
+      className={cn(toolbarControlVariants({ tone: 'info' }), CONFLICT_READOUT_TEXT, 'gap-1')}
     >
-      <TriangleAlert aria-hidden="true" className="text-warning-text size-3.5 shrink-0" />
+      <TriangleAlert aria-hidden="true" className={cn(CONFLICT_READOUT_ICON, 'size-3.5')} />
       <span className="shrink-0 whitespace-nowrap">{label}</span>
     </span>
   );

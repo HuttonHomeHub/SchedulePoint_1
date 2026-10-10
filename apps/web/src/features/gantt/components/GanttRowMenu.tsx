@@ -144,11 +144,17 @@ export function GanttRowMenu({
 
   // The same classification the coverage gate makes: an item gated on the canvas is not reachable
   // here, and the two canvas-only actions answer false with `canvas: null`.
+  //
+  // **A menu item needs an activation path** (ADR-0186 D5). The conflict remedy is a `render` item
+  // with no `onActivate`, so it used to list as a live "Fix this conflict" that did nothing when
+  // chosen; the remedy is on the docked bar. An item that renders but cannot activate is not a
+  // menu item.
   const items =
     resolved === null
       ? []
       : selectionActionItems
           .filter((item) => (item.isVisible ? item.isVisible(resolved) : true))
+          .filter((item) => item.onActivate !== undefined)
           .sort((a, b) => rowMenuRank(a) - rowMenuRank(b));
 
   return (

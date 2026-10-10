@@ -106,7 +106,7 @@ export interface ConflictFlag {
 export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
   {
     key: 'constraintViolated',
-    label: 'constraint conflict',
+    label: 'Constraint not met',
     matches: (a) => a.constraintViolated,
   },
   // The two placement members are MUTUALLY EXCLUSIVE by construction — the engine returns one
@@ -114,20 +114,48 @@ export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
   // activity leads with. Earliest-first reads as a timeline.
   {
     key: 'visualEarlierThanLogic',
-    label: 'placed before its earliest start',
+    label: 'Placed before its logic allows',
     matches: (a) => a.visualConflictReason === 'EARLIER_THAN_LOGIC',
   },
   {
     key: 'visualLaterThanBound',
-    label: 'placed past a constraint',
+    label: 'Placed after its constraint date',
     matches: (a) => a.visualConflictReason === 'LATER_THAN_BOUND',
   },
   {
     key: 'levelingWindowExceeded',
-    label: 'levelling window exceeded',
+    label: "Can't be levelled within its window",
     matches: (a) => a.levelingWindowExceeded,
   },
 ];
+
+/**
+ * Every flag an activity matches, in {@link CONFLICT_FLAGS} order; `[]` when it is not flagged.
+ *
+ * **The one derivation** (conflict-reason-on-object). The announcer's reasons, the Next-conflict
+ * keys, the remedy's leading key and the selection bar's reason line all read this, so the sentence
+ * a planner is told and the sentence they read cannot be two matches of the same activity.
+ */
+export function matchingConflictFlags(activity: ConflictFlagFields): readonly ConflictFlag[] {
+  return CONFLICT_FLAGS.filter((flag) => flag.matches(activity));
+}
+
+/**
+ * Join reason labels into one line. The labels are sentence case so each stands alone on the bar;
+ * a reason that follows other words (the announcer's "Pour slab — …", or the second reason of a
+ * pair) takes a lower-case first letter. A string function rather than CSS `::first-letter`, so a
+ * screen reader, a test and the announcer all see the same text.
+ *
+ * @param at `'start'` keeps the first label's capital; `'mid'` lower-cases every label's first
+ * character because something precedes the line.
+ */
+export function joinConflictReasons(labels: readonly string[], at: 'start' | 'mid'): string {
+  return labels
+    .map((label, index) =>
+      index === 0 && at === 'start' ? label : label.charAt(0).toLowerCase() + label.slice(1),
+    )
+    .join(', ');
+}
 
 /**
  * A flagged activity to visit — its id, name, the human reason(s) it matched (for the announcement)
@@ -159,7 +187,7 @@ export function orderedConflicts(activities: readonly ConflictableActivity[]): C
   for (const activity of activities) {
     // Matched ONCE and projected twice: the display copy and the keys the remedy is chosen by are
     // two views of the same match, so they cannot fall out of step (ADR-0094 M1-T3).
-    const matched = CONFLICT_FLAGS.filter((flag) => flag.matches(activity));
+    const matched = matchingConflictFlags(activity);
     if (matched.length === 0) continue;
     hits.push({
       id: activity.id,

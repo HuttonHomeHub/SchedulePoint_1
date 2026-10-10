@@ -8,7 +8,10 @@ import {
   type GanttRowStructureActions,
 } from './GanttRowMenu';
 
-import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
+import {
+  selectionActionItems,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 /**
  * **M5-T3's menu, actually driven.**
@@ -40,6 +43,7 @@ const context = (over: Partial<SelectionBarContext> = {}): SelectionBarContext =
   isSummary: false,
   hasPlacement: false,
   conflictKey: null,
+  conflictKeys: [],
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
   // Visible unless a case says otherwise — the fixtures' status quo (M1).
   onOpenLogic: vi.fn(),
@@ -97,6 +101,38 @@ describe('the trigger', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('a menu item needs an activation path', () => {
+  const flagged = () =>
+    context({
+      conflictKey: 'constraintViolated',
+      conflictKeys: ['constraintViolated'],
+      hasPlacement: true,
+    });
+
+  it('lists no inert "Fix this conflict" for a flagged row — the remedy is on the docked bar', () => {
+    // `conflict-remedy` is a `render` item with no `onActivate`; it used to list as a live menu item
+    // that did nothing when chosen (ADR-0186 D5). Red without the filter in `GanttRowMenu`.
+    openMenu(flagged());
+    expect(screen.queryByRole('menuitem', { name: /Fix this conflict/ })).toBeNull();
+  });
+
+  it('every item the menu renders can be activated', () => {
+    openMenu(flagged());
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThan(0);
+    // The registry's own statement of it: each rendered item is a registry item with `onActivate`.
+    for (const item of selectionActionItems.filter((i) => i.isVisible?.(flagged()) ?? true)) {
+      const listed = items.some((el) => el.textContent?.includes(item.label));
+      if (listed) expect(item.onActivate, `${item.id} lists in the menu`).toBeDefined();
+    }
+  });
+
+  it('offers no menu item for the unlabelled conflict reason either', () => {
+    openMenu(flagged());
+    expect(screen.queryByRole('menuitem', { name: /Conflict reason/ })).toBeNull();
   });
 });
 

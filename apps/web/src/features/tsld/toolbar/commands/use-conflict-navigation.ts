@@ -4,7 +4,11 @@ import type { TsldToolbarContext } from '../tsld-toolbar-context';
 
 import { CANVAS_NAV_ENABLED } from '@/config/env';
 import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
-import { nextConflictIndex, orderedConflicts } from '@/features/tsld/render/conflicts';
+import {
+  joinConflictReasons,
+  nextConflictIndex,
+  orderedConflicts,
+} from '@/features/tsld/render/conflicts';
 
 /**
  * Next-conflict navigation (ADR-0078 S11, `VITE_CANVAS_NAV`).
@@ -95,7 +99,7 @@ export function useConflictNavigation(args: {
       if (activity?.earlyStart) canvasControlRef.current?.centerOnDate(activity.earlyStart);
       requestSelectActivity(hit.id);
       announce(
-        `Conflict ${index + 1} of ${orderedConflictHits.length}: ${hit.name} — ${hit.reasons.join(', ')}.`,
+        `Conflict ${index + 1} of ${orderedConflictHits.length}: ${hit.name} — ${joinConflictReasons(hit.reasons, 'mid')}.`,
       );
     },
     [

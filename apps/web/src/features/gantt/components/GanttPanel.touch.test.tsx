@@ -74,6 +74,7 @@ const rowContext = (): SelectionBarContext => ({
   isSummary: false,
   hasPlacement: false,
   conflictKey: null,
+  conflictKeys: [],
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
   onOpenLogic: vi.fn(),
   onEdit: vi.fn(),

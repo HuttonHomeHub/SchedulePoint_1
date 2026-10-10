@@ -1,10 +1,10 @@
 import type { ActivitySummary } from '@repo/types';
 
-import { leadingConflictKey } from './conflict-remedy';
 import { deriveMakeMilestoneGate } from './make-milestone-gate';
 import type { SelectionBarContext, SelectionCanvasContext } from './selection-actions';
 
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
+import { matchingConflictFlags } from '@/features/tsld/render/conflicts';
 
 /**
  * **One builder, two hosts.**
@@ -98,6 +98,9 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     ? input.activities.find((a) => a.id === input.selectedId)
     : undefined;
   if (!activity) return null;
+  // Matched ONCE: `conflictKey` is the lead and `conflictKeys` the whole list, so the remedy and the
+  // reason line are two views of one match and cannot disagree.
+  const conflictKeys = matchingConflictFlags(activity).map((flag) => flag.key);
 
   return {
     canvas: input.canvas,
@@ -125,7 +128,8 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     // Derived through the SAME `CONFLICT_FLAGS` the count and the filter run (ADR-0094 D2), so a
     // planner who arrived by pressing Next conflict and one who simply clicked the bar meet the
     // same remedy.
-    conflictKey: leadingConflictKey(activity),
+    conflictKey: conflictKeys[0] ?? null,
+    conflictKeys,
     // Shut with a reason when the host did not wire it — never enabled-but-inert.
     clearPlacement: input.clearPlacement ?? {
       enabled: false,

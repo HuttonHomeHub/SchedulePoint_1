@@ -1,5 +1,5 @@
 import {
-  CONFLICT_FLAGS,
+  matchingConflictFlags,
   type ConflictFlagFields,
   type ConflictKey,
 } from '@/features/tsld/render/conflicts';
@@ -104,10 +104,11 @@ export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = 
  * Derived from `CONFLICT_FLAGS` against the activity itself rather than read off the cycle's
  * cursor — so the remedy appears whether a planner arrived by pressing Next conflict or simply
  * clicked the bar, and so there is still exactly ONE definition of what a conflict is. `keys[0]`
- * order is the set's own order, which is what "leads with" means for a multi-flag activity.
+ * order is the set's own order, which is what "leads with" means for a multi-flag activity. Reads
+ * `matchingConflictFlags`, so the lead and the reason line on the bar are one match.
  */
 export function leadingConflictKey(activity: ConflictFlagFields): ConflictKey | null {
-  return CONFLICT_FLAGS.find((flag) => flag.matches(activity))?.key ?? null;
+  return matchingConflictFlags(activity)[0]?.key ?? null;
 }
 
 /** The inputs `clearVisualPlacementGate` needs. Named so both call sites pass the same thing. */

@@ -156,7 +156,7 @@ describe('useTsldToolbarContext — canvas nav (flag on)', () => {
     expect(spies.centerOnDate).toHaveBeenCalledWith('2026-02-10');
     expect(spies.requestSelectActivity).toHaveBeenCalledWith('c1');
     expect(spies.setConflictCursorId).toHaveBeenCalledWith('c1');
-    expect(announceSpy).toHaveBeenCalledWith('Conflict 1 of 1: Excavate — constraint conflict.');
+    expect(announceSpy).toHaveBeenCalledWith('Conflict 1 of 1: Excavate — constraint not met.');
   });
 
   it('exposes hasConflicts / conflictCount from the flagged set', () => {
@@ -171,7 +171,7 @@ describe('useTsldToolbarContext — canvas nav (flag on)', () => {
       index: 1,
       total: 1,
       name: 'Excavate',
-      reasons: ['constraint conflict'],
+      reasons: ['Constraint not met'],
     });
   });
 
