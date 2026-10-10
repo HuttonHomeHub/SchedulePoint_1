@@ -236,7 +236,7 @@ So, for any command surface:
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
   taxonomy as named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
   `aria-label`, no visible caption and no fold, and — since toolbar-redesign M6 V2 — **it is a pill**:
-  `DECK_GROUP_PILL`, a `before:` pseudo-element hung 2 px past the group's box in `--muted` at 40 %, with
+  `DECK_GROUP_PILL`, a `before:` pseudo-element filling the group's box in `--muted` at 40 %, with
   `rounded-md` to match the `Diagram | Gantt` segment's container. It takes **no layout width**, which is
   the constraint (the LOOK row at 1024 has about 28 px to spare with a conflict showing), and it has no
   leading edge, so a group that wraps onto a line of its own cannot open that line with a rule pointing at

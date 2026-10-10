@@ -59,11 +59,11 @@ describe('the deck draws a container around a group, never a seam beside it', ()
     }
   });
 
-  it('is a pseudo-element hung past the box, so it spends no layout width', () => {
+  it('is a pseudo-element filling the box, so it spends no layout width and cannot overflow the deck', () => {
     // Read from the constant, not from a class on a rendered node: what matters is the SHAPE of the
     // pill, and a padded or bordered box would show up here as a `p-`/`px-`/`border` on the group.
     expect(DECK_GROUP_PILL).toMatch(/before:absolute/);
-    expect(DECK_GROUP_PILL).toMatch(/before:-inset-x-/);
+    expect(DECK_GROUP_PILL).toMatch(/before:inset-x-0/);
     expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)(p|px|py|pl|pr|m|mx)-/);
     expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)border(\s|$)/);
   });

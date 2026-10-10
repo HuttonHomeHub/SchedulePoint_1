@@ -107,6 +107,12 @@ const criticalOnlyPx = (pointer: 'fine' | 'coarse'): number => {
   if (at === 'never') throw new Error('Critical only never promotes');
   return stagePx(at);
 };
+/**
+ * A window one step under the first stage (79.5 rem): nothing has been promoted, and Critical only is
+ * a row of Filter. It was 1280 until the M6 re-take, when icon-only Baseline overlay, Comments and
+ * Settings freed LOOK enough for Critical only to promote AT 80 rem.
+ */
+const NARROW = { w: 1272, h: 800 } as const;
 const WIDE = { w: 3840, h: 1440 } as const;
 /**
  * The range the SC-17 sweep walks, in CSS px at the default root: 1192 (where touch's LOOK row stops
@@ -585,7 +591,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await critical.click();
       await expect(critical).toHaveAttribute('aria-pressed', 'true');
       // Narrow past its stage: the command is a row of Filter again, and it is checked.
-      await settle(page, { w: 1280, h: 800 });
+      await settle(page, NARROW);
       await expect(item(page, 'critical-only')).toHaveCount(0);
       await item(page, 'filter').click();
       await expect(
@@ -625,7 +631,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     });
 
     test('E-1: a resize promotes the command a reader is on in a menu, and focus follows it', async () => {
-      const before = { w: 1280, h: 800 };
+      const before = NARROW;
       const after = { w: criticalOnlyPx(pointer), h: 900 };
       await settle(page, before);
       await item(page, 'filter').click();
@@ -673,7 +679,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     test('E-2: a resize demotes the command a reader is on, and focus lands on its source trigger', async () => {
       await settle(page, { w: criticalOnlyPx(pointer), h: 900 });
       await item(page, 'critical-only').focus();
-      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.setViewportSize({ width: NARROW.w, height: NARROW.h });
       await expect(item(page, 'filter')).toBeFocused();
       await expect(page.getByTestId('announcer')).toHaveText(
         'Critical only is no longer on the toolbar. Moved into the Filter menu. Focus moved to Filter.',
@@ -695,7 +701,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       };
       try {
         await setFonts(2);
-        // At a 32 px root, 2880 px is 90 rem (Critical only's stage) and 2560 px is 80 rem.
+        // At a 32 px root, 2560 px is 80 rem (Critical only's stage) and 2544 px is 79.5 rem.
         await page.setViewportSize({ width: criticalOnlyPx(pointer) * 2, height: 1440 });
         await page.goto(planUrl);
         await expect(deck(page)).toBeVisible({ timeout: 30_000 });
@@ -705,7 +711,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         );
         await expect(item(page, 'critical-only')).toBeVisible();
         await item(page, 'critical-only').focus();
-        await page.setViewportSize({ width: 2560, height: 1440 });
+        await page.setViewportSize({ width: NARROW.w * 2, height: 1440 });
         await expect(item(page, 'filter')).toBeFocused();
         await expect(page.getByTestId('announcer')).toContainText('Moved into the Filter menu.');
       } finally {

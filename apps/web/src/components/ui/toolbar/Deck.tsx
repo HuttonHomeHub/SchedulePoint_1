@@ -432,7 +432,7 @@ export function Deck<Ctx>({
                     // another, drawn at `-left-1` — so a group that wrapped onto a line of its own opened
                     // that line with a rule pointing at nothing (SC-12, the leading-seam defect, found at
                     // 1024). A container has no leading edge to misplace: it surrounds its own group
-                    // wherever the group lands. The pill is a pseudo-element hung 2 px past the box, so
+                    // wherever the group lands. The pill is a pseudo-element filling the box exactly, so
                     // it costs the row **no width** — the LOOK row at 1024 has about 28 px to spare with
                     // a conflict showing, and `DECK_GROUP_PILL` spends none of it.
                     //

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
-import { openHealthCheck, revealToolbarCommand } from '../e2e-support/toolbar';
+import { openHealthCheck, pressPromotable } from '../e2e-support/toolbar';
 
 import { createAndOpenPlan, onboard, openProject, seedRevision } from './support';
 
@@ -41,12 +41,12 @@ test('a planner compares a revision against live and reads what entered the crit
   // ── 1 · The entry point, in the shipped layout ─────────────────────────────────────────────
   // Located by `[data-toolbar-item]` and by role+name, never by copy: every layout epic here has
   // broken a copy-based locator, and the deck's labels change with width.
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Compare revisions…' }).click();
+  // Its own button where the viewport has promoted it (toolbar-redesign M5/M6), else the Analysis row.
+  await pressPromotable(page, {
+    id: 'compare-revisions',
+    via: 'analysis',
+    menuItem: 'Compare revisions…',
+  });
 
   const panel = page.getByRole('region', { name: 'Compare revisions' });
   await expect(panel).toBeVisible();
@@ -183,12 +183,12 @@ test('a planner compares a revision against live and reads what entered the crit
   // it proves BOXES and not reachability — ADR-0114 M1 shipped a foot-row control that was painted
   // and pointer-unreachable while every height assertion passed. So this sweeps the dock's own
   // controls with `elementFromPoint` at the width where the dock is squeezed hardest.
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Compare revisions…' }).click();
+  // Its own button where the viewport has promoted it (toolbar-redesign M5/M6), else the Analysis row.
+  await pressPromotable(page, {
+    id: 'compare-revisions',
+    via: 'analysis',
+    menuItem: 'Compare revisions…',
+  });
   await expect(panel).toBeVisible();
 
   await page.setViewportSize({ width: 1024, height: 900 });

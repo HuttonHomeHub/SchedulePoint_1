@@ -1236,6 +1236,20 @@ test.describe('The plan command surface', () => {
    */
   const ROOMY_ITEMS: readonly { id: string; label: string; description: string }[] = [
     {
+      id: 'apply-levelling',
+      label: 'Apply levelled dates…',
+      description:
+        'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
+    },
+  ];
+
+  /**
+   * **Icon-only at every width** (`'never'`): Resource view (the M5 review) and Baseline overlay,
+   * Comments and Settings… (M6, owner decisions 2026-10-10). Each keeps its name in `aria-label` and
+   * its tooltip says what it does; none paints a word.
+   */
+  const ICON_ONLY_ITEMS = [
+    {
       id: 'baseline-overlay',
       label: 'Baseline overlay',
       description: 'Draw the active baseline beside each bar',
@@ -1251,25 +1265,17 @@ test.describe('The plan command surface', () => {
       description: 'Calendar, critical path, progress, levelling and earned value',
     },
     {
-      id: 'apply-levelling',
-      label: 'Apply levelled dates…',
-      description:
-        'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
-    },
-  ];
-
-  /**
-   * Resource view's tooltip is the only thing naming it at any width (`'never'`), so the tooltip
-   * cases below walk it with the roomy controls even though its label never shows.
-   */
-  const TIPPED_ITEMS = [
-    ...ROOMY_ITEMS,
-    {
       id: 'resource-view',
       label: 'Resource view',
       description: 'Show resource loading under the diagram',
     },
   ] as const;
+
+  /**
+   * Resource view's tooltip is the only thing naming it at any width (`'never'`), so the tooltip
+   * cases below walk it with the roomy controls even though its label never shows.
+   */
+  const TIPPED_ITEMS = [...ROOMY_ITEMS, ...ICON_ONLY_ITEMS] as const;
 
   const escapeForRegExp = (text: string): string => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
 
@@ -1309,7 +1315,7 @@ test.describe('The plan command surface', () => {
       };
     }, ROOMY_ITEMS);
 
-  test('the roomy controls are labelled from 79 rem and icon-only below it, and keep their names (Resource view is icon-only at every width)', async () => {
+  test('the roomy control is labelled from 79 rem and icon-only below it, and the icon-only four never paint a word', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
@@ -1331,23 +1337,24 @@ test.describe('The plan command surface', () => {
       expect(roomy, `${at} should be ${viewport.width >= 1280 ? 'roomy' : 'narrow'}`).toBe(
         viewport.width >= 1280,
       );
-      // Resource view is icon-only at every width (`'never'`, the M5 review): its word would cost the
-      // promotion ladder ~95 px of LOOK. The name is still there, `sr-only` and in `aria-label`.
-      const resourceView = page
-        .getByRole('toolbar', { name: 'Plan commands' })
-        .locator('[data-toolbar-item="resource-view"]');
-      await expect(resourceView, `Resource view lost its name at ${at}`).toHaveAccessibleName(
-        'Resource view',
-      );
-      expect(
-        await resourceView.evaluate(
-          (el) =>
-            [...el.querySelectorAll('span')].filter(
-              (s) => s.textContent?.trim() === 'Resource view',
-            ).length,
-        ),
-        `Resource view paints its label at ${at}`,
-      ).toBe(0);
+      // The icon-only four never paint a word (`'never'`): their names are `aria-label` and `sr-only`.
+      for (const spec of ICON_ONLY_ITEMS) {
+        const control = page
+          .getByRole('toolbar', { name: 'Plan commands' })
+          .locator(`[data-toolbar-item="${spec.id}"]`);
+        await expect(control, `${spec.label} lost its name at ${at}`).toHaveAccessibleName(
+          spec.label,
+        );
+        expect(
+          await control.evaluate(
+            (el, label) =>
+              [...el.querySelectorAll('span')].filter((s) => s.textContent?.trim() === label)
+                .length,
+            spec.label,
+          ),
+          `${spec.label} paints its label at ${at}`,
+        ).toBe(0);
+      }
       for (const spec of ROOMY_ITEMS) {
         const item = reading.items.find((i) => i.id === spec.id)!;
         expect(item.labelWidth, `${spec.id} has no label in the tree at ${at}`).not.toBeNull();
@@ -2290,7 +2297,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
    * Two lines on touch is **not** asserted anywhere in M1: M0 measured DO 143.7 px over at this
    * cell whatever is compacted, so that is a later milestone's claim, if ever.
    */
-  test('a coarse 1024 cell stays within four deck lines and goes icon-only below 79 rem', async () => {
+  test('a coarse 1024 cell stays within four deck lines, Apply levelled dates… is icon-only, and Comments never paints a word', async () => {
     test.setTimeout(120_000);
     const pointer = await page.evaluate(() =>
       window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
@@ -2346,18 +2353,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         reading.lines,
         `the coarse deck sits on ${String(reading.lines)} lines at ${at}`,
       ).toBeLessThanOrEqual(viewport.width >= 1646 ? 2 : 4);
-      expect(
-        reading.commentsLabelWidth,
-        `Comments has no label in the tree at ${at}`,
-      ).not.toBeNull();
-      if (reading.deckWidth >= 79 * 16) {
-        expect(reading.commentsLabelWidth!, `Comments lost its label at ${at}`).toBeGreaterThan(8);
-      } else {
-        expect(
-          reading.commentsLabelWidth!,
-          `Comments shows its label at ${at}`,
-        ).toBeLessThanOrEqual(2);
-      }
+      // Comments is icon-only at every width (`'never'`, M6): no painted label in the tree at all, at
+      // either side of 79 rem. Its name is the `aria-label`, asserted by the fine-pointer case above.
+      expect(reading.commentsLabelWidth, `Comments paints a label under touch at ${at}`).toBeNull();
     }
   });
 

@@ -147,9 +147,13 @@ export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 /**
- * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element hung 2 px past the
- * group's box on each side, `--muted` at 40 % with a transparent border, behind the controls: it takes
- * **no layout width** (`Deck.tsx` says why that is the constraint), and `rounded-md` matches the
+ * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element that fills the
+ * group's box exactly, `--muted` at 40 % with a transparent border, behind the controls: it takes
+ * **no layout width** (`Deck.tsx` says why that is the constraint) and, filling the box rather than
+ * hanging past it, **cannot overflow the deck** — a first build hung it 2 px out and the deck's
+ * `scrollWidth` exceeded its `clientWidth` by that much at every width, which `Deck`'s own
+ * `deckScrolls` reads as "the line scrolls" (found by `narrow-shell.spec.ts`: "1280 x 600 does not
+ * scroll sideways"). And `rounded-md` matches the
  * `Diagram | Gantt` segment's container, which is the same statement made elsewhere in the band.
  * `isolate` keeps its `-z-10` inside the group, so it can never fall behind the band.
  *
@@ -158,7 +162,7 @@ export const TOOLBAR_CARET_TARGET =
  * on the pill is 14.1:1 (foreground) and 7.33:1 (muted), `m6-measurement.md` §3.
  */
 export const DECK_GROUP_PILL =
-  'relative isolate before:absolute before:-inset-x-0.5 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-transparent before:bg-muted/40';
+  'relative isolate before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-transparent before:bg-muted/40';
 
 /** The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3). */
 export const DECK_GROUP_PILL_LOCKED =
