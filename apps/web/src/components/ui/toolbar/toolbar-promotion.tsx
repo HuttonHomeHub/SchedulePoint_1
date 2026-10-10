@@ -102,7 +102,7 @@ export interface PromotableEntry<Ctx> {
    * visible labels would otherwise lack.
    */
   captionBefore?: string;
-  /** The source menu's name in prose — the tooltip says "Also in ‹menu›" and the hand-off says where it went. */
+  /** The source menu's name in prose — the tooltip says it "moves into the ‹menu› menu" and the hand-off says where it went. */
   menuName: string;
   icon: ReactNode;
   /** The id of the source menu's trigger (`ToolbarItem.id`). It is always on the bar, so it is the hand-off target. */
@@ -121,7 +121,7 @@ export interface PromotableEntry<Ctx> {
   disabledReason?: (ctx: Ctx) => string | undefined;
   /** A pen-gated command shades with the rest of the authoring cluster. */
   penGated?: boolean;
-  /** Supplementary tooltip clause; absent ⇒ "Also in ‹menuName›". */
+  /** Supplementary tooltip clause; absent ⇒ "Moves into the ‹menuName› menu in a narrower window". */
   description?: string;
   onActivate: (ctx: Ctx) => void;
 }
@@ -162,6 +162,8 @@ export function derivePromotedItems<Ctx>(
     }
     const visible = (ctx: Ctx): boolean =>
       visibleAt(entry, ctx) && (entry.isVisible?.(ctx) ?? true);
+    const description =
+      entry.description ?? `Moves into the ${entry.menuName} menu in a narrower window`;
     const caption: ToolbarItem<Ctx>[] =
       entry.captionBefore === undefined
         ? []
@@ -201,7 +203,14 @@ export function derivePromotedItems<Ctx>(
         order: trigger.order + entry.rank / 100,
         label: entry.label,
         ...(entry.visibleLabel === undefined ? {} : { visibleLabel: entry.visibleLabel }),
-        description: entry.description ?? `Also in ${entry.menuName}`,
+        // **Not "Also in ‹menu›"**: once the command is on the bar its row has left that menu, so the
+        // clause said the opposite of what the menu showed. What is true of a promoted command is where
+        // it goes when the window narrows, and that is also what a reader needs to learn the menu route.
+        description,
+        // The same bare clause, linked as the button's description: the native `title` above is
+        // hover-only, and a labelled button has no tooltip primitive, so a screen reader would
+        // otherwise never hear it. The bare clause (not "name — clause") so the name is not read twice.
+        srDescription: () => description,
         icon: entry.icon,
         // Where focus goes if the window narrows while it is here (ADR-0135): the trigger, never gone.
         successorId: entry.from,

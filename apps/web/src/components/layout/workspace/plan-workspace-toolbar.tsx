@@ -2535,8 +2535,8 @@ export function ToolbarPlanWorkspace({
               role="status"
               className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
             >
-              The Late-start overlay is on — editing is paused. Turn it off in{' '}
-              <span className="font-medium">View</span> to edit.
+              The Late-start overlay is on — editing is paused. Turn off{' '}
+              <span className="font-medium">Late-start overlay</span> to edit.
             </p>
           </div>
         ) : null}

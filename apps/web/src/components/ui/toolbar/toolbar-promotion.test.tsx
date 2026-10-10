@@ -187,7 +187,12 @@ describe('derivePromotedItems', () => {
     expect(item?.labelVisibility).toBe('always');
     expect(item?.successorId).toBe('menu');
     expect(item?.lostReason).toBe('Moved into the Menu menu.');
-    expect(item?.description).toBe('Also in Menu');
+    // True of a command that has left the menu: where it goes when the window narrows.
+    expect(item?.description).toBe('Moves into the Menu menu in a narrower window');
+    // Linked to the button on focus too — a labelled button's native title is hover-only.
+    expect(item?.srDescription?.({ promotion: NO_PROMOTION, armed: false })).toBe(
+      item?.description,
+    );
   });
 
   it('a kind preset that arms a tool takes the armed picture; a toggle takes the default', () => {
