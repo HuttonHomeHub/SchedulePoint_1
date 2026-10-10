@@ -393,12 +393,16 @@ DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on sc
 deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
 **Three optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6).
-`toolbarControlVariants` gains `closing` (the row's deliberate last action, secondary-filled; Share & export is
-the one consumer) and a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none`, no longer
-`opacity-50`); `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner whose
+`toolbarControlVariants` gains a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none` and
+`forced-colors:[color:GrayText]`, no longer `opacity-50`; a shaded `selected` lens keeps an underline).
+The row's closing action has **no variant**: `DECK_CLOSING_SECTION` outlines every button in the deck's `output`
+section by descendant selector, because Export is a hand-written `render` item and Share… a derived
+`ToolbarButton`, and a `closing` prop would have widened three contracts for a decoration. A shut
+`ToolbarSplitButton` caret is `cursor-default` with no hover wash (a live one has `hover:bg-muted`), not
+`opacity-50`. `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner (capped at `9+`) whose
 sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on). `toolbar-styles.ts` exports
-`DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED` and `DECK_ROW_MARK`, which `Deck` applies; nothing outside `Deck`
-should.
+`DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`, `DECK_ROW_MARK` and `DECK_CLOSING_SECTION`, which `Deck` applies;
+nothing outside `Deck` should.
 
 **Promotion: a menu command comes out onto the deck when the viewport has room** (toolbar-redesign M5, spec
 §4.11). A source menu's promotable rows are declared as `PromotableEntry` records (`toolbar-promotion.tsx`)
@@ -507,9 +511,10 @@ name truncated inside a control capped at `max-w-org-switcher` (`--container-org
 token), and a chevron. Its accessible name is "Active organisation: ‹Name›" (which contains the visible text,
 2.5.3) and its tooltip carries the whole name; the current row is `aria-checked`, Escape and selection return
 focus to the trigger. **Four states:** none (renders nothing), one organisation that is current (a plain label,
-not a menu — ADR-0104), one or more with no organisation in the route (a menu reading "Select organisation",
+not a menu — ADR-0104 — with no glyph, no native `title` and no tab stop; the design-system tooltip carries the
+full name and the tree carries it whole), one or more with no organisation in the route (a menu reading "Select organisation",
 because choosing one is the way back from `/account`), and several (the menu). The old `title` prop is gone: it
-existed for a 36 px rail that no longer exists. **No type-ahead** — `Menu` has none (see above).
+existed for a 36 px rail that no longer exists, and so is the `className` prop, which no call site passed. **No type-ahead** — `Menu` has none (see above).
 
 `AccountChip` (`components/layout/account-chip.tsx`) is an initials avatar opening a portalled
 `Menu` with the signed-in email, the account screen, keyboard shortcuts and Sign out. It replaced

@@ -12011,3 +12011,17 @@ state; SC-17 is met without it (11.6 % empty). **What users see:** zoom presets 
 240 px wide on a monitor. **Next:** decide whether a wide stage should host the presets (a stage-width stage, its own geometry rule
 against the 40 px ruler and the minimap) and whether search should outrank Late-start overlay/Feasible window/Levelled placement
 (a ladder reorder). **Trigger:** a product-owner call after seeing the 2560 deck.
+
+### 483. At 200 % text size the breadcrumb collapses to a few pixels and is not readable or hittable
+
+**Status:** open · **Verified:** 2026-10-10 (Chromium, a 1440 × 900 window with `document.documentElement.style.fontSize = '200%'`, a plan named "Riverside Quarter — Phase 2 Substructure": the breadcrumb's project link measures 10 px wide and the plan name 47 px, both `truncate`d and clipped; the header is 168 px high; found by the toolbar-redesign M6 UX review at a 44 px link, and re-measured here)
+**Raised:** 2026-10-10 (toolbar redesign M6 review) · **Size:** S · **Owner:** web
+
+WCAG 2.2 §1.4.4 (Resize text) and §2.5.8: at 200 % text the header's controls keep their rem widths and the breadcrumb, which is the only `min-w-0` item in the row, takes all the shrink and renders as "R… / P" with a link too small to press. **Not caused by M6**: the width is the same with the organisation switcher removed, so the switcher is not what is taking the room. **What users see:** a breadcrumb that names nothing at 200 % text on a laptop. **Next:** give the breadcrumb a floor (`min-w-24`) and let the header wrap its trailing controls to a second line instead, or collapse the breadcrumb to its last segment at that scale, measured at 200 % text on 1024, 1280 and 1440 (ADR-0113). **Trigger:** the next change to `app-header.tsx` or any 200 %-text sweep.
+
+### 484. On a touch pointer at 1024 × 600 the DO row wraps its trailing group onto a second line with an empty left side
+
+**Status:** open · **Verified:** 2026-10-10 (`docs/specs/toolbar-redesign/m6-measurement.md` §1, coarse `pen` cell 1024x600: DO row free gap -135.7 px, 2 lines, and the LOOK row 46 px free; `photos/m6-after-coarse-1024x600-pen.png`)
+**Raised:** 2026-10-10 (toolbar redesign M6 review) · **Size:** S · **Owner:** web
+
+Unchanged by M6 (the same -135.7 px before and after). The Author group fills the DO row's first line and the Plan group (Analysis, Settings, Share & export) is pushed whole onto a second line, right-aligned, with nothing to its left, while the LOOK row above keeps about 46 px free. The band is two lines tall at 1024 on a mouse and three on touch, which SC-1 accepts. **What users see:** a third line that looks like a layout accident. **Next:** candidates, each to be measured on the M5 harness before choosing: promote less at the coarse 1024 floor so the Plan group fits beside Author, or move the Plan group's trailing slot to LOOK's free ~46 px (which holds only an icon). **Trigger:** a touch-device reading at 1024 × 600, or the next change to the promotion ladder's coarse stages.

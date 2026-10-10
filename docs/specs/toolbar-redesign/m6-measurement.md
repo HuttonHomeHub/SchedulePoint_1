@@ -5,7 +5,8 @@ ADR-0081 §3), fine and coarse pointers, the container's Chromium 1194, the M5 f
 three activities, one link, a peer who can hold the pen). `M6_TAG=before` was taken on `7578110`, `M6_TAG=after` on
 this build. Photos: `photos/m6-before-*` and `photos/m6-after-*` — `<pointer>-<cell>-<state>`, states `pen` (the pen
 held), `filtered` (Has constraint on), `shaded` (a peer holds the pen), `conflict` (a cycling conflict read-out),
-`header-plan`, `header-org`, `header-multi` and the open organisation menu. Cells: 1024 × 600, 1280 × 800, 1440 × 900,
+`nopen` (the pen not held, fine and coarse, at 1280 and 1912 only), `header-plan`, `header-org`, `header-multi` and the
+open organisation menu. Cells: 1024 × 600, 1280 × 800, 1440 × 900,
 1912 × 1080 for the band; 320 × 720, 640 × 480, 1024 × 600, 1280 × 800, 1646 × 1097 for the header. Readings:
 `apps/web/measure-output/toolbar-redesign-m6-{before,after}.{fine,coarse}.json` (not committed; the tables below are
 the record).
@@ -14,6 +15,13 @@ the record).
 claims it has been given.
 
 ## 0. What the brief or the plan got wrong, or left open
+
+**Revised after the M6 review (2026-10-10).** Sections 2, 3, 4, 6 and 7 below describe the build **as revised**: the
+review's findings changed the closing action, the pill, the Author dash, the DO row mark, the filter badge and the
+single-organisation label, and `photos/m6-after-*` were all re-taken on the revised build. The table in §1 is
+**unchanged to the pixel** by the revision (re-read from the re-taken JSON: every cell matches), because nothing in it
+spends width — a ring, a hairline and a smaller badge are painted inside or outside the box, and a wrench is the same
+14 px as the pencil-and-rule it replaced. The ladder (`promotion-widths.*.json`) was therefore **not** re-taken.
 
 1. **V1 has no form beyond "a quiet leading row mark".** Built as a 14 px glyph (eye for LOOK, pencil-and-rule for
    DO) in `--muted-foreground`, `aria-hidden`, **only from 79 rem** (`@roomy/deck:`). It costs 18 px of a row, and
@@ -135,16 +143,16 @@ because Baseline overlay, Comments and Settings… lost their words and the ladd
 
 ## 2. The visual brief, item by item
 
-| V   | Built                                                                                | Where                                                         | Gate                                                               |
-| --- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| V1  | Quiet leading row mark, `roomy` only                                                 | `Deck.tsx`, `DECK_ROW_MARK`                                   | `Deck.test.tsx`; the ladder re-taken with it present               |
-| V2  | Group pills (`DECK_GROUP_PILL`); the group seam and its leading-seam defect are gone | `Deck.tsx`, `toolbar-styles.ts`                               | `deck-seams.structural.test.tsx` (rewritten)                       |
-| V3  | Quiet shaded ink; the Author pill is hollow and dashed while the pen is not held     | `toolbarControlVariants` `disabled`, `DECK_GROUP_PILL_LOCKED` | `ToolbarSplitButton.test.tsx`, `deck-seams.structural.test.tsx`    |
-| V4  | Share & export secondary-filled (`closing`); Share… promoted beside it already (M5)  | `toolbarControlVariants` `closing`                            | `command-surface.spec.ts`, the photos                              |
-| V4a | `Filter ▾` count on the glyph, "n filters on" as the description                     | `ToolbarPopover` `badge`                                      | `ToolbarPopover` suite, `filtered` photos                          |
-| V5  | Organisation switcher: ghost button + menu                                           | `OrgSwitcher.tsx`                                             | `OrgSwitcher.test.tsx`, `org-less-screens.spec.ts`, `auth.spec.ts` |
-| V6  | Covered by M2-T3                                                                     | —                                                             | —                                                                  |
-| V7  | Balance, covered by M5 and the re-take (§1; `promotion.spec.ts` SC-17/18 pass)       | —                                                             | `promotion.spec.ts`                                                |
+| V   | Built                                                                                                                                                               | Where                                                         | Gate                                                                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| V1  | Quiet leading row mark (an eye; a wrench, not a pencil), `roomy` only                                                                                               | `Deck.tsx`, `DECK_ROW_MARK`                                   | `Deck.test.tsx`; the ladder re-taken with it present                                      |
+| V2  | Group pills (`DECK_GROUP_PILL`); the group seam and its leading-seam defect are gone                                                                                | `Deck.tsx`, `toolbar-styles.ts`                               | `deck-seams.structural.test.tsx` (rewritten)                                              |
+| V3  | Quiet shaded ink; a shaded lens that is on keeps an underline; `GrayText` in forced colours; the Author pill is hollow with a 3.04:1 dash while the pen is not held | `toolbarControlVariants` `disabled`, `DECK_GROUP_PILL_LOCKED` | `toolbar-styles.test.ts`, `ToolbarSplitButton.test.tsx`, `deck-seams.structural.test.tsx` |
+| V4  | Export and Share… outlined together, never filled (`DECK_CLOSING_SECTION`)                                                                                          | `Deck.tsx`, `toolbar-styles.ts`                               | `deck-seams.structural.test.tsx`, `command-surface.spec.ts`, the photos                   |
+| V4a | `Filter ▾` count on the glyph, "n filters on" as the description                                                                                                    | `ToolbarPopover` `badge`                                      | `ToolbarPopover` suite, `filtered` photos                                                 |
+| V5  | Organisation switcher: ghost button + menu                                                                                                                          | `OrgSwitcher.tsx`                                             | `OrgSwitcher.test.tsx`, `org-less-screens.spec.ts`, `auth.spec.ts`                        |
+| V6  | Covered by M2-T3                                                                                                                                                    | —                                                             | —                                                                                         |
+| V7  | Balance, covered by M5 and the re-take (§1; `promotion.spec.ts` SC-17/18 pass)                                                                                      | —                                                             | `promotion.spec.ts`                                                                       |
 
 ### 2.1 The shaded-control audit (V3)
 
@@ -166,25 +174,31 @@ hiding. The remedy is the quieter style (§3), not fewer controls.
 Computed from the `--chrome-*` tokens in `globals.css` (OKLCH → linear sRGB → WCAG luminance; the pill composited as
 `color-mix` in sRGB), not read from a screenshot:
 
-| Pair                                                             | Ratio                                                                   |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Foreground on the band                                           | 15.31:1                                                                 |
-| Foreground on a pill (`--muted` at 40 %)                         | 14.06:1                                                                 |
-| **Shaded ink (`--muted-foreground`) on the band**                | **7.98:1**                                                              |
-| **Shaded ink on a pill**                                         | **7.33:1**                                                              |
-| Old shaded ink (`opacity-50` of the foreground) on the band      | 4.83:1 (and an alpha, so it moved with whatever sat behind it)          |
-| Share & export label (`--secondary-foreground` on `--secondary`) | 4.85:1                                                                  |
-| Same label on `--secondary-hover`                                | 3.94:1 — **below 4.5, which is why hover is a ring and not that token** |
-| Filter badge (`--background` digit on `--foreground`)            | the foreground/band pair above, 15.31:1                                 |
-| Pill against the band                                            | 1.09:1 — a decoration, not a state, and never the only mark of anything |
+| Pair                                                               | Ratio                                                                                         |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Foreground on the band                                             | 15.31:1                                                                                       |
+| Foreground on a pill (`--muted` at 50 %)                           | 13.74:1                                                                                       |
+| **Shaded ink (`--muted-foreground`) on the band**                  | **7.98:1**                                                                                    |
+| **Shaded ink on a pill**                                           | **7.17:1**                                                                                    |
+| Old shaded ink (`opacity-50` of the foreground) on the band        | 4.83:1 (and an alpha, so it moved with whatever sat behind it)                                |
+| **Closing ring (`--muted-foreground` at 60 %) on a pill**          | **3.56:1** — over the 3:1 a component boundary needs (1.4.11)                                 |
+| Foreground label on the hover wash (`--muted`)                     | 12.19:1; the wash is 1.13:1 against the pill, as any idle hover is                            |
+| **Locked Author dash (`--muted-foreground` at 50 %) on the band**  | **3.04:1** (at 40 % it was 2.43:1, under 3; the first build's hairline was 1.53:1)            |
+| Share & export label on `--secondary-hover`                        | 3.94:1 — no longer reachable: the closing action has no fill and no hover ring                |
+| Filter badge (`--background` digit on `--foreground`)              | the foreground/band pair above, 15.31:1                                                       |
+| Pill against the band / its hairline (`--border`) against the band | 1.11:1 / 1.53:1 — a decoration, not a state, and never the only mark of anything              |
+| Raising the pill to 60 % instead                                   | hover wash against it falls from 1.13:1 to 1.10:1, which is why the hairline carries the rest |
 
 A shaded control's contrast is exempt from 1.4.3 (inactive component); it is held ≥ 4.5 anyway because the plan asked.
 
 ## 4. Photographs for sign-off
 
 `photos/m6-before-*` and `photos/m6-after-*` at the four cells, both pointers, in the states named above. Notes for the
-reader: the leading row mark appears from 1280; at 1024 the rows are as they were. The Author pill's dashed outline is
-visible in every `shaded` photo and absent in every `pen` photo.
+reader: the leading row mark appears from 1280 (79 rem, 1264 px, deliberately); at 1024 the rows are as they were. The
+Author pill's dashed outline is visible in every `shaded` photo and absent in every `pen` photo. **The pen-not-held
+state, the one a reader meets first, is `photos/m6-after-{fine,coarse}-{1280x800,1912x1080}-nopen.png`** (taken at two
+cells because the other two add no information: the rows are the same shape). All `m6-after-*` photos were re-taken on
+the revised build; the `m6-before-*` set is unchanged.
 
 ## 5. The header (V5)
 
@@ -206,19 +220,23 @@ Updated for the re-taken ladder and the new icon-only items: `e2e-workspace-fit/
 of 1272 where 1280 meant "unpromoted", and its text-only 200 % twin), `e2e-workspace-fit/command-surface.spec.ts` (the
 icon-only four are asserted never to paint a word; `'roomy'` is Apply levelled dates… alone),
 `e2e-revision-compare` (Compare revisions through `pressPromotable`), `e2e/auth.spec.ts` and
-`e2e-shell/org-less-screens.spec.ts` (the switcher). Serial run, each suite with its own flags and API env, on this
-build: promotion 32, workspace-fit 38, workspace-chrome 36 of 37, narrow-shell 22, minimap 15, float-paths 1, gantt
-16, health-check 1, revision-compare 2, share 2, resource-view 3, shell 4, designed-chrome 4, designed-ui 9, `e2e`
-16 of 23. **Red, and not caused by M6** (each also fails on `7578110`, run with the same flags and API environment): `toolbar`
-(the empty-canvas message is not found), `workspace-chrome` `placement-overlays` ("Feasible window" is not in View),
-and the `e2e` journeys that cannot find "New activity" (base-checked on `activities.spec.ts`; the other six fail at the
-same locator and were not each run against the base). `account` fails on a password-reset mail that never reaches
-the sink in this container; nothing in that flow is touched by M6, and it was not run against the base.
+`e2e-shell/org-less-screens.spec.ts` (the switcher).
+
+**Re-run in full on the revised build (2026-10-10), serially, each suite on its own fresh random ports with its own
+config's API and `VITE_` environment, against the real database — all green:** promotion 32, workspace-chrome 44
+(the whole suite, including `placement-overlays`, which `fa10873` repaired for Feasible window being promoted to
+the bar at 1646), workspace-fit 38, toolbar 3, narrow-shell 22 (the deck-overflow guard), minimap 15, float-paths 1,
+gantt 16, shell 4, designed-chrome 4, designed-ui 9, share 2, revision-compare 2, resource-view 3, health-check 1, the
+base `e2e` suite 23, account 2. The earlier record of this section listed `toolbar`, `placement-overlays`, seven `e2e`
+journeys and `account` as red on `7578110` as well; none is red now, and this run did not establish why (the
+placement journey was repaired by `fa10873`; the others were not investigated).
 
 ## 7. Bundle
 
-CSS 17.41 KiB gzip against the 18.00 KiB ceiling (17.20 before M6; +0.21 KiB). The ceiling is not raised. Entry graph
-176.99 KiB of 185.00.
+CSS **17.48 KiB** gzip against the 18.00 KiB (18,432 B) ceiling, entry graph **177.00 KiB** of 185.00 (`vite build` then
+`check:bundle-size`, on the revised build). The first record of this section said 17.41 and 176.99, and the review
+measured 17.40 and 177.00; the revision adds 0.08 KiB of CSS (the ring, the hairline, the forced-colour branches). The
+ceiling is not raised.
 
 ## 8. For the reviewers to execute
 
@@ -228,6 +246,26 @@ CSS 17.41 KiB gzip against the 18.00 KiB ceiling (17.20 before M6; +0.21 KiB). T
   hover ring; focus on a shaded pen (amber ring, not navy).
 - **ux-reviewer:** the photos; whether the glyph row mark is the mark intended (V1); whether `Diff` reads as
   "compare with the baseline"; the loss of the visible word on Baseline overlay, Comments and Settings; Share &
-  export's fill against the Diagram | Gantt segment's `--secondary` (the same fill means selected there).
-- **component-reviewer:** `ToolbarPopover`'s `badge`, `toolbarControlVariants`' `closing` and quieter `disabled`
-  (the selection bar is a consumer and quiets too), and that nothing outside `Deck` reads the three new constants.
+  export's outline against the Diagram | Gantt segment's `--secondary` fill (resolved: the closing action is no longer
+  filled).
+- **component-reviewer:** `ToolbarPopover`'s `badge`, `toolbarControlVariants`' quieter `disabled` (the selection
+  bar is a consumer and quiets too), the descendant selector `DECK_CLOSING_SECTION` (the alternative was a `closing`
+  prop on three contracts), and that nothing outside `Deck` reads the four constants.
+
+## 9. The review's findings, and what was done about each
+
+| Finding | Done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U1      | `closing` variant **removed**. Export and a promoted Share… are outlined together by `DECK_CLOSING_SECTION` (§3: 3.56:1); no fill, so nothing collides with the selected segment or a pressed toggle. Hover is the idle wash; focus is the amber ring (read in Chromium: rest `inset 1px` ring, hover adds `--muted`, focus shows `2px inset --ring`). The 3.94:1 hover token is no longer used.                                                                                                           |
+| U2      | The Author dash is `--muted-foreground` at 50 % (3.04:1, was 1.53:1). A shaded lens that is on keeps a 2 px underline. **`Start editing` was NOT made the filled primary while the pen is not held**: `primary` is the held state and the amber slab (ADR-0133 D3/D4, and the ladder's own docblock), making the other half amber means a `ToolbarButton` prop (a public contract, ADR-0105), and it would leave the pen looking the same held and not held.                                               |
+| U3      | The DO mark is `Wrench`. The mark's 79 rem floor is documented in `DESIGN_SYSTEM.md`, `UX_STANDARDS.md` and `DECK_ROW_MARK`'s docblock.                                                                                                                                                                                                                                                                                                                                                                    |
+| U4      | Pill `--muted` 40 → 50 % plus a hairline `--border`. Not 60 %: that lowers the idle hover wash to 1.10:1 (§3). Zero width; the §1 tables re-read identical, and `narrow-shell.spec.ts` (the overflow guard) passes.                                                                                                                                                                                                                                                                                        |
+| U5      | **Nothing changed, and that is the finding.** Baseline overlay stays icon-only on a touch pointer: it is a `ToolbarButton`, whose tooltip is the `Tooltip` primitive and opens on a **long-press** (500 ms) without firing the command (`tooltip.test.tsx` "long-press opens the tip and swallows the click"). A `'description'` tip is `role="tooltip"` and linked by `aria-describedby`; the accessible name is the control's own. So the ladder was not re-taken. Not exercised on a real touch device. |
+| U6      | Badge `h-3.5 min-w-3.5 px-0.5` at `-top-2.5 -right-2`, count capped at `9+` (the description keeps the exact number). It still touches the funnel's top-right rim by about 2 px; fully clearing the glyph would put it over the label or outside the button.                                                                                                                                                                                                                                               |
+| U7      | The single-organisation label has no glyph, no native `title` and no tab stop; the design-system tooltip carries the full name, the tree carries it whole. The truncated name is therefore not reachable by a **sighted keyboard-only** reader, accepted over a do-nothing tab stop. `className` deleted.                                                                                                                                                                                                  |
+| A1      | `forced-colors:[color:GrayText]` on the `disabled` branch, on a shut split caret, and a `GrayText` dash on the locked pill. Read with CDP forced-colors emulation: a shaded `Add activity` computes `rgb(96, 0, 0)` against `rgb(0, 0, 0)` for a live control, and the locked pill's dash is `rgb(96, 0, 0)` and dashed. In forced colours the box-shadow outline of the closing action is dropped by the mode (`box-shadow: none`), so Export is then an ordinary control.                                |
+| C1      | Shut caret: `cursor-default`, no `opacity-*`, no hover wash (a live one gains `hover:bg-muted`). The search field's exemption: a field is not a button; `opacity-50` there is its own, unchanged.                                                                                                                                                                                                                                                                                                          |
+| C2      | `deck-seams.structural.test.tsx` refuses `before:-inset` (verified red by hanging the pill 2 px out).                                                                                                                                                                                                                                                                                                                                                                                                      |
+| C3      | `OrgSwitcher`'s `className` prop deleted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| C4      | §7 corrected; `nopen` photos added; all `m6-after-*` re-taken.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| C6      | `docs/TECH_DEBT.md` #483 (200 % text breadcrumb) and #484 (touch 1024 × 600 DO row).                                                                                                                                                                                                                                                                                                                                                                                                                       |

@@ -236,8 +236,9 @@ So, for any command surface:
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
   taxonomy as named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
   `aria-label`, no visible caption and no fold, and — since toolbar-redesign M6 V2 — **it is a pill**:
-  `DECK_GROUP_PILL`, a `before:` pseudo-element filling the group's box in `--muted` at 40 %, with
-  `rounded-md` to match the `Diagram | Gantt` segment's container. It takes **no layout width**, which is
+  `DECK_GROUP_PILL`, a `before:` pseudo-element filling the group's box in `--muted` at 50 % with a
+  hairline `--border` (40 % and no edge read as nothing at a tablet's distance; 60 % would have thinned the
+  idle hover wash to 1.10:1), and with `rounded-md` to match the `Diagram | Gantt` segment's container. It takes **no layout width**, which is
   the constraint (the LOOK row at 1024 has about 28 px to spare with a conflict showing), and it has no
   leading edge, so a group that wraps onto a line of its own cannot open that line with a rule pointing at
   nothing (SC-12, the defect the group seam it replaced had). Inside a group the registry's sections are
@@ -245,21 +246,31 @@ So, for any command surface:
   steps (the fold on 2026-08-28, the caption itself at the console epic's M6), so nothing here is a
   decision a reader makes for their screen.
 - **A row has a quiet leading mark, and only where there is room** (M6 V1). `DECK_ROW_MARK` is a 14 px
-  glyph in `--muted-foreground` — an eye for LOOK, a pencil and rule for DO — `aria-hidden`, never a stop,
-  with no stripe, no tint band and no new colour. It is `@roomy/deck:` only, because it costs 18 px of a row
-  and the rows under 79 rem have none to spare (SC-1 asserts two lines at 1024); the ladder's free widths
-  are read with it present.
+  glyph in `--muted-foreground` — an eye for LOOK, a wrench for DO (not a pencil: `Start editing` leads that
+  row, and a second pencil read as its twin) — `aria-hidden`, never a stop, with no stripe, no tint band and
+  no new colour. It is `@roomy/deck:` only — **from 79 rem (1264 px), deliberately** — because it costs 18 px
+  of a row and the rows under that width have none to spare (SC-1 asserts two lines at 1024); the ladder's
+  free widths are read with it present.
 - **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
-  `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: the
+  `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: a lens
+  that is on but shaded keeps a 2 px underline in the same ink, and `forced-colors:[color:GrayText]` keeps
+  a shut control distinguishable where the mode overrides `color` to `CanvasText` on everything. The
   ink is 7.98:1 on the band and 7.33:1 on a pill, where an alpha composites against whatever sits behind
   it and was a figure nobody gated. ADR-0082's shading stays — a state the reader can change is shaded
   with its reason, never hidden. While the pen is not held the **Author pill goes hollow and dashed**
-  (`DECK_GROUP_PILL_LOCKED`), so the pen and the commands it unlocks read as one locked unit.
-- **The row's last action is secondary-filled** (M6 V4). `toolbarControlVariants({ closing: true })` fills
-  Share & export with `--secondary`; hover is a 1 px inset ring in the ink, not `--secondary-hover`
-  (3.94:1 under that label). A shaded closing control drops the fill.
+  (`DECK_GROUP_PILL_LOCKED`: a `--muted-foreground` dash at 50 %, 3.04:1, where the hairline it first wore was
+  1.5:1; `GrayText` in forced colours), so the pen and the commands it unlocks read as one locked unit.
+  **`Start editing` is not given the pen's amber fill while the pen is not held**: `primary` is the held
+  state (ADR-0133 D3/D4), and a fill for the other half would need a new prop on `ToolbarButton`.
+- **The row's last action is outlined, not filled** (M6 V4, reworked after review). Share & export was
+  `--secondary`-filled, the exact fill of the selected `Diagram | Gantt` segment and of a pressed toggle.
+  `DECK_CLOSING_SECTION` puts a 1 px inset `--muted-foreground` ring at 60 % (3.6:1 on a pill) on every
+  button of the deck's `output` section, so `Export` and a promoted `Share…` are outlined together by
+  construction; there is no `closing` variant, and so no hover token to keep above 4.5:1 (the 3.94:1 of
+  `--secondary-hover` under that label is moot). The ring is inside the box: no width.
 - **`Filter ▾` shows how many attributes are on** (M6 V4a): `ToolbarPopover`'s `badge` draws a count on the
-  glyph's corner — no width — with the sentence ("2 filters on") as its `aria-describedby`.
+  glyph's corner (`h-3.5`, out past the funnel at `-top-2.5 -right-2`, capped at `9+`) — no width — with the
+  sentence ("2 filters on") as its `aria-describedby`.
 - **Whether a label shows is declared on the item and decided in one place.** Every registry item
   carries `labelVisibility: 'always' | 'never' | 'roomy' | 'roomy-fine'` (default `'always'`; the old `'auto'` and
   the `{ atLeast }` band form are gone). One resolver, `resolveLabelVisibility`, and one class helper,
