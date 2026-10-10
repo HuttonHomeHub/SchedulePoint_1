@@ -145,3 +145,12 @@ the dock toggles' pressed state against a dock closed from its own button.
 through `e2e-support/toolbar.ts` (`pressPromotable`, `openHealthCheck`, `openShare`, `pickAddKind`), which presses the
 button when the viewport has promoted it and the menu row when not. Closing the Health check or Compare revisions dock
 returns focus to its toolbar button when it is on the bar (`right-docks.ts` `DOCK_TRIGGER_ITEMS`), else to Analysis.
+
+## 7. Cells between the stages (not SC-17 cells; recorded because the owner works at 1646)
+
+Base state, unused width: **1646 × 1097** fine LOOK 304.6 px (18.7 %), DO 248.2 px (15.2 %); coarse LOOK 314.6 px, DO 278.3 px
+(stage 2 only: Critical only, Health check, Share… on a mouse). That is over 15 %, by construction: stages are the four
+widths SC-17 names, and 1646 sits 266 px short of the next one (1912). A wider ladder (a stage at about 1600) is a ladder
+change for the owner, not a defect. **1024 × 600** is unchanged by M5 (nothing promotes): fine one line per row; coarse DO
+two lines (−143.7 px), the accepted four-line touch floor. **1280 × 720** equals 1280 × 800 on every width. Screenshots:
+`photos/m5-<pointer>-<cell>-base.png`.
