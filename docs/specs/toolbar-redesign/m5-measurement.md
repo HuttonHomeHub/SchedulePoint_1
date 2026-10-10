@@ -221,8 +221,8 @@ next one. **1024 × 600** is unchanged by M5 (nothing promotes): fine one line p
 the accepted four-line touch floor. **1280 × 720** equals 1280 × 800 on every width. Screenshots:
 `photos/m5-<pointer>-<cell>-base.png`, now including 1600 × 900 and 2160 × 1200.
 
-**Touch wraps between the floor and 1192.** Recorded because OD-2 said "four lines at 1024" and nothing says where
-that stops: see §9, measured with a probe across 1024–1200.
+**Touch wraps between the floor and 1168.** Recorded because OD-2 said "four lines at 1024" and nothing said where
+that stops: §9.
 
 ## 8. What the 2026-10-10 review changed, in one place
 
@@ -259,4 +259,9 @@ names, rems and queries derive from one table, `PROMOTION_STAGES`; the optional 
 
 ## 9. Touch below 1192
 
-(see the probe record, appended below once taken)
+The review said touch's DO row wraps to two lines at roughly 1064–1130 and clears at about 1192. Measured (a throwaway
+probe on the built deck, coarse pointer, base state, 800 px high, every 8 px from 1024 to 1200, counting the distinct
+control lines per row): **LOOK is one line throughout; DO is two lines at every width from 1024 through 1160 and one
+line from 1168.** So the wrap is not a band inside that range but the whole of it up to 1168, which is what OD-2
+accepted at 1024 ("four lines" counting the identity and facts rows) extended 144 px upward. The sweep gate starts at
+1192, past it, so it does not claim the band; nothing is promoted in it (nothing promotes under 1280).
