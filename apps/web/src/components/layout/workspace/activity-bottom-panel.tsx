@@ -502,7 +502,7 @@ export function PlanActivitiesFootRow({
        * `dock.spec.ts`'s guarantees are deltas (a docked strip costs the canvas nothing), which a
        * constant applied to both states cannot move.
        */
-      className="border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1"
+      className="border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1 pointer-coarse:py-0.5"
     >
       {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the
           order moved, and why the reason originally given for facts-leading did not hold). This row said "Activities" and the status bar said

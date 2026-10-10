@@ -432,13 +432,23 @@ function leadingConflictReason(key: ConflictKey): string | undefined {
  */
 function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.ReactElement | null {
   if (keys.length === 0) return null;
+  // `pointer-coarse:leading-4` (and the foot row's `pointer-coarse:py-0.5`) give back the 8 px that
+  // keep the stage at 122 px with a conflict selected on a finger-sized 1024 x 600 window, over the
+  // 120 px floor `e2e-minimap/viewport-cluster.spec.ts` holds. Coarse only: a finger-sized column is
+  // wide enough that the line stays on one line, so the tighter leading never meets a wrapped line.
   const labels = keys.flatMap((key) => leadingConflictReason(key) ?? []);
   return (
     <p
       data-conflict-reason=""
-      className={cn('flex items-start gap-1.5 px-2 text-sm leading-5', CONFLICT_READOUT_TEXT)}
+      className={cn(
+        'flex items-start gap-1.5 px-2 text-sm leading-5 pointer-coarse:leading-4',
+        CONFLICT_READOUT_TEXT,
+      )}
     >
-      <TriangleAlert aria-hidden="true" className={cn('mt-0.5 size-4', CONFLICT_READOUT_ICON)} />
+      <TriangleAlert
+        aria-hidden="true"
+        className={cn('mt-0.5 size-4 pointer-coarse:mt-0', CONFLICT_READOUT_ICON)}
+      />
       <span>{joinConflictReasons(labels, 'start')}</span>
     </p>
   );

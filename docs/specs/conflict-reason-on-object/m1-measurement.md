@@ -27,6 +27,22 @@ pointer a placed, flagged selection leaves the diagram **about 166 px of visible
 `photos/m1-1024x600-Frame.png`), against 206 px with no caption. This is spec Q1's trade, accepted by the owner, now
 at 20 px (40 for the two-flag text) rather than the inline item's 40 px. Structural relief is `#471`.
 
+## 1b. The 120 px stage floor on a finger-sized window, and what gave it back
+
+`e2e-minimap/viewport-cluster.spec.ts` ("with a conflict selected the diagram keeps at least 120 px of stage",
+1024 x 600, touch) is a standing guard. Measured on the same cell: **134 px before the caption (the tree
+before `a96f571`), 114 px with it** — 6 px under. Two coarse-pointer-only changes recover it, with no change
+to the caption's text, semantics or visibility, and none on a fine pointer:
+
+- the caption's line height is `leading-4` (16 px) rather than 20 px under `pointer-coarse:` (the icon loses
+  its 2 px nudge there too), because a finger-sized column is wide enough that the line is one line; and
+- the foot row's vertical padding is `pointer-coarse:py-0.5` (2 px a side) rather than `py-1`, which gives back
+  4 px on a touch screen in every state, flagged or not.
+
+The stage then reads **122 px** (2 px of margin). The deck, the controls and the fine-pointer readings above
+are unchanged; the fine-pointer rows in section 2 still stand, and a coarse flagged selection's caption is now
+16 px, not 20.
+
 ## 2. Full readings
 
 "Before" is M0's baseline for the same selection: the bar with no reason shown. The rows column is
