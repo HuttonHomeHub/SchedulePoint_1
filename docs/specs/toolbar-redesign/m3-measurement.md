@@ -15,7 +15,7 @@ So none is M2's, and none was M3's: all three came with M1. The cause of the fir
 labels shortened the wrapped deck, the body grew, and 700 × 900 stopped being a short body, so nothing swaps. M3 makes the
 band one line (body 757 px at 700 × 900) and the premise is gone for good, so those journeys now read the heights where the
 body is short (740 px: 597 fine / 577 coarse, under the 611 px `isShortBody` line). `plan-switch` "opening another plan with
-the pen held recalculates nothing" and `zero-duration` "converts from the selection bar" (foot row 87, expected 51, at 1646) also fail at `fe0afcd`, before M3: not M3's.
+the pen held recalculates nothing" and `zero-duration` "converts from the selection bar" (foot row 87, expected 51, at 1646) also fail at `fe0afcd`, before M3: not M3's. **Corrected 2026-10-10: the `zero-duration` failure is M2's.** Bisected between the pre-toolbar merge-base `8d2c1d5` (passes) and `ae2fb74`: `34357bb` passes and `dddb5bb` (Float paths icon-only on the selection bar) is the first to fail. Float paths' 32 px icon left the ordinary selection 34 px of slack in the foot row's 958 px dock at 1646 and Make milestone… needed 36, so it fell 2 px short and wrapped (51 → 87 px). The facts block's `px-3 gap-x-4` → `px-2 gap-x-3` hands back 12 px (`plan-facts.tsx`).
 
 **Reproduced by** running the journeys in two clean `git worktree`s (no stash), one at `0c26cb2` and one at `6949c10`, in the
 container's Chromium on 2026-10-09: `pnpm exec playwright test -c playwright.narrow-shell.config.ts --project=chromium` and
