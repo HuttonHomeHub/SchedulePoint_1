@@ -169,7 +169,7 @@ describe('ToolbarPopover — the count badge', () => {
       (el) => el.textContent === '3',
     );
     expect(badge, 'no badge was drawn').toBeDefined();
-    expect(badge?.className).toMatch(/-top-2/);
+    expect(badge?.className).toMatch(/-top-2\.5/);
     expect(badge?.className).toMatch(/-right-2/);
     expect(badge?.className).toMatch(/h-3\.5/);
     expect(badge?.className).toMatch(/min-w-3\.5/);

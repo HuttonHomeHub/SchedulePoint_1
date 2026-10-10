@@ -232,10 +232,10 @@ export function ToolbarPopover({
           <span aria-hidden="true" className="relative inline-flex shrink-0 items-center">
             {icon}
             {badged ? (
-              // Out past the glyph's corner (`-top-2 -right-2`) and smaller (`h-3.5`), so it no longer
+              // Out past the glyph's corner (`-top-2.5 -right-2`) and smaller (`h-3.5`), so it no longer
               // covers the funnel; `min-w-3.5 px-0.5` lets two characters ("9+") widen it into a pill
               // instead of spilling, and the count stops at 9+ (the sentence says the exact number).
-              <span className="bg-foreground text-background text-micro absolute -top-2 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5">
+              <span className="bg-foreground text-background text-micro absolute -top-2.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5">
                 {badge.count > 9 ? '9+' : badge.count}
               </span>
             ) : null}

@@ -304,6 +304,20 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await shoot(c.label, 'pen');
       }
 
+      // The pen NOT held: the state a reader meets first (review U2) — a hollow dashed Author pill and
+      // `Start editing` leading it. Two cells are enough to judge it; the others add no information.
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await page.getByRole('button', { name: 'Stop editing' }).click();
+      await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+      for (const c of PHOTO_CELLS.filter((cell) => cell.w === 1280 || cell.w === 1912)) {
+        await page.setViewportSize({ width: c.w, height: c.h });
+        await page.waitForTimeout(550);
+        (record.rows as Reading)[`nopen ${c.label}`] = await page.evaluate(readRows);
+        await shoot(c.label, 'nopen');
+      }
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await ensurePen(page);
+
       // A Filter applied: V4a's count, and the pressed state beside it.
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.getByRole('button', { name: /^Filter/ }).click();
