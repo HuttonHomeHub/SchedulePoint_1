@@ -1553,6 +1553,9 @@ function LiveSearchControl({
           // this file, which is why that gate exists.
           SEARCH_FIELD_CLASS,
           SEARCH_FIELD_WIDTH_CLASS,
+          // **Deliberately exempt from the quiet-ink rule** (toolbar-redesign M6): a shaded button
+          // takes `--muted-foreground` and drops its fill, but this is a field — its box and caret are
+          // the affordance, and there is no fill to drop — so it keeps the dimming.
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
           // absent, so the native glyph is exactly where it is today.
