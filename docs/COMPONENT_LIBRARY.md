@@ -376,15 +376,19 @@ named tokens. `ToolbarRow` has five values: `strip` (the deck, the default), `mo
 `canvas` (the "Diagram viewport" cluster at the diagram's corner: Zoom out, Zoom in, Fit to plan,
 Minimap), each its own `role="toolbar"` and Tab stop.
 
-**Three optional props added with the cluster (toolbar-redesign M4 review), none of which changes a key set,
-the roving order or any focus rule.** `Toolbar` takes `ungrouped` (groups render as plain wrappers with no
+**Three optional props added with the cluster (toolbar-redesign M4 review). `Toolbar`, `ToolbarButton` and
+`useTooltip` change no key set and no focus rule; `Deck`'s roving order does change below 1024, by design (see
+the last sentence of this paragraph).** `Toolbar` takes `ungrouped` (groups render as plain wrappers with no
 `role="group"` and no name, for a one-group toolbar whose group name only repeats the toolbar's) and
-`tooltip` (`{ placement, dismissOnPress }`, forwarded to each icon-only control). `useTooltip` takes
+`tooltip` (`TooltipPlacementOptions`, `{ placement, dismissOnPress }`, forwarded to each `ToolbarButton` item
+and not to a popover or split-button trigger). `useTooltip` takes
 `placement: 'below' | 'above'` (default `'below'`, every existing caller) and `dismissOnPress` (default
-off). `useContainerUnmountHandoff({ target, message })` is the one hook for "this container goes away
-under focus" (the cluster; `HistoryResultStrip` and the selection bar keep their own copies for now).
+off). `useContainerUnmountHandoff({ target, message })` is the hook for "this container goes away
+under focus"; only the cluster uses it, and `HistoryResultStrip` and the selection bar keep their own copies
+(`docs/TECH_DEBT.md` #481).
 `Deck` renders its two rows in the order `use-deck-row-order.ts` gives: LOOK then DO at 1024 and wider,
-DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen.
+DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
+deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
 **Three rules for a consumer:**
 

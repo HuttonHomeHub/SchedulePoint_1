@@ -4,8 +4,11 @@ import { useAnnounce } from '@/components/ui/announcer';
 
 /**
  * **A container that goes away hands focus on, and says so** (ADR-0135 for a container, where
- * `useToolbarFocusHandoff` is for an item). One hook for the three places that need it, replacing the
- * hand-written copies the toolbar-redesign M4 review counted.
+ * `useToolbarFocusHandoff` is for an item). **Only the diagram viewport cluster uses it today.** The
+ * toolbar-redesign M4 review counted three hand-written copies of this rule; `HistoryResultStrip`
+ * (a `restoreFocus` callback, also run on its own buttons' presses) and `SelectionActionsBar` (a
+ * boolean and a caller-supplied destination) still keep theirs, because neither takes a selector
+ * and a sentence (`docs/TECH_DEBT.md` #481).
  *
  * It cannot be an effect on the toolbar's own item list: when the container itself unmounts no effect
  * body runs in that commit (`use-focus-handoff.ts` records this). So the **wrapper** the caller puts

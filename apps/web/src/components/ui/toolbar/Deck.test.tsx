@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Deck } from './Deck';
@@ -593,6 +593,34 @@ describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
     expect(focusedItemId()).toBe('export');
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
     expect(focusedItemId()).toBe('today');
+  });
+
+  it('keeps focus on the same item when the window crosses the floor and the rows trade places', () => {
+    let wide = true;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return query.includes('min-width') ? wide : false;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    }));
+    renderDeck();
+    // The LOOK row is the one React moves when the rows swap (the DO row keeps its place).
+    const today = screen.getByRole('button', { name: 'Today' });
+    today.focus();
+    const refocus = vi.spyOn(HTMLElement.prototype, 'focus');
+    act(() => {
+      wide = false;
+      for (const listener of listeners) listener();
+    });
+    expect(rowsInDocumentOrder()).toEqual(['do', 'look']);
+    // React restores the focused element after moving its row; a browser would otherwise have
+    // dropped it. The spy shows the restore happened, which jsdom alone would not (it keeps focus).
+    expect(refocus).toHaveBeenCalled();
+    expect(today).toHaveFocus();
+    refocus.mockRestore();
   });
 
   it('puts the row seam before the second row on the scrolling line, whichever row that is', () => {

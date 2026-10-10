@@ -72,9 +72,18 @@ export interface TooltipOptions {
    * a press is the reader dismissing it). For a control whose press puts something where the tip
    * is: the Minimap toggle opens its panel directly above itself, and the tip used to linger over it.
    * Default off — a tip beside a control that changes nothing near it has no reason to go.
+   *
+   * "Press" is a `click` on the trigger, so a keyboard activation (Enter or Space) closes the tip
+   * as well as a pointer press. **The close is transient by design**: the tip opens again the next
+   * time focus leaves and returns, or the pointer leaves and re-enters. A tip placed `'above'` a
+   * trigger whose press opens a panel there can therefore sit over that panel again on a later
+   * focus; the Minimap toggle's panel is the case, and it is accepted rather than designed around.
    */
   dismissOnPress?: boolean;
 }
+
+/** The two options a container forwards to every tooltip it owns (`Toolbar`, `ToolbarButton`). */
+export type TooltipPlacementOptions = Pick<TooltipOptions, 'placement' | 'dismissOnPress'>;
 
 export interface TooltipApi {
   /** Spread onto the trigger element. Never contains `title`. */

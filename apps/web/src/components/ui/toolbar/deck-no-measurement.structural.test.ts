@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest';
  *
  * **One media-query read exists, and it decides an ORDER, not a size**: `use-deck-row-order.ts` (the
  * editing row leads below `lg`, owner decision 2026-10-10). It is in its own file so `Deck.tsx` keeps
- * none, and the last case below pins that it is the only one.
+ * none, and the last case below pins that none of the four files it names reads one itself (the
+ * claim is about those files, not the directory: a new file here is not scanned).
  *
  * Comments are stripped first (the repository has recorded four gates matching their own prose).
  */
@@ -56,7 +57,7 @@ describe('Deck and Toolbar measure no width to decide a layout', () => {
     const hook = code('use-deck-row-order.ts');
     expect(hook).toMatch(/useMediaQuery\(DESIGNED_MIN_WIDTH_QUERY/);
     expect(code('Deck.tsx')).toMatch(/useDeckRowOrder\(DECK_ROWS\)/);
-    // Nothing else in the toolbar folder reads a media query by itself.
+    // None of the other three source files reads a media query by itself.
     for (const file of ['Deck.tsx', 'Toolbar.tsx', 'ToolbarButton.tsx', 'ToolbarPopover.tsx']) {
       expect(code(file), `${file} reads a media query`).not.toMatch(/useMediaQuery|matchMedia/);
     }

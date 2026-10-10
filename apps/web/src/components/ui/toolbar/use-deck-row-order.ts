@@ -15,7 +15,15 @@ import { DESIGNED_MIN_WIDTH_QUERY } from '@/lib/breakpoints';
  * itself still contains none (`deck-no-measurement.structural.test.ts`). It decides an order, never
  * a size, and `DESIGNED_MIN_WIDTH_QUERY` is the same query Tailwind's `lg` and the shell use.
  *
- * Unmeasured (jsdom, the first frame) is the wide order, which is every existing test's.
+ * The first frame is already correct in a browser: `useMediaQuery` seeds its state from `matchMedia`
+ * synchronously, so a narrow window never paints the wide order first. Only where there is no
+ * `matchMedia` at all (jsdom) does the wide order stand in, which is every existing test's.
+ *
+ * **Focus survives the reorder without help from this file.** Crossing the floor moves a row's DOM
+ * node, which a browser answers by dropping focus to `<body>`; React's commit saves the focused
+ * element before its mutations and focuses it again afterwards (a stack trace of the `focus()` call
+ * in the `Deck` test that pins it ends in React's commit), so no restore is written here. If a React upgrade stops
+ * doing that, that test is the one that fails.
  */
 export function useDeckRowOrder<Row extends string>(rows: readonly Row[]): readonly Row[] {
   const wide = useMediaQuery(DESIGNED_MIN_WIDTH_QUERY, true);

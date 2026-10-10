@@ -3,7 +3,7 @@ import { forwardRef, useId } from 'react';
 import type { ToolbarLabelState } from './toolbar-registry';
 import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
 
-import { useTooltip, type TooltipOptions } from '@/components/ui/tooltip';
+import { useTooltip, type TooltipPlacementOptions } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -63,7 +63,7 @@ export interface ToolbarButtonProps {
    * Where the tooltip sits and whether a press dismisses it — see `TooltipOptions`. Only a control
    * whose tip has the tooltip primitive (`labelState` other than `'visible'`) can use it.
    */
-  tooltip?: Pick<TooltipOptions, 'placement' | 'dismissOnPress'>;
+  tooltip?: TooltipPlacementOptions;
   tabIndex: number;
   onActivate: () => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
@@ -85,7 +85,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       disabled,
       disabledReason,
       srDescription,
-      tooltip: tipOptions,
+      tooltip: tooltipOptions,
       tabIndex,
       onActivate,
       onKeyDown,
@@ -152,7 +152,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       content: tipped ? title : undefined,
       purpose: tipPurpose,
       disabled: !tipped,
-      ...tipOptions,
+      ...tooltipOptions,
     });
     // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr
     // chain — the explicit `aria-describedby` below would otherwise overwrite the spread's.

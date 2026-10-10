@@ -702,7 +702,7 @@ If the product owner declines V1–V5, SC-16 drops the word "amazing" and keeps 
 | `command-manifest.json`, `promotion-widths.{fine,coarse}.json` (new, committed)                                                               | SC-14/18/19 inputs                                                                                                                                                             | —                   |
 | Every `isVisible` call site using `env`                                                                                                       | typecheck-driven                                                                                                                                                               | —                   |
 
-### 4.10 ADR outline (ADR-0184, proposed)
+### 4.10 ADR outline (ADR-0185, proposed)
 
 **"A command surface is designed from the floor up: two declared rows, labels that give way by declaration, tools on
 their subject's surface, and one scrolling line below the floor."**

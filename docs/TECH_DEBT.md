@@ -11985,3 +11985,15 @@ what a browser shows). **The route that stays** is `View ▾` ▸ Zoom ▸ **Fit
 dock squeezing the stage it closes the dock and fits a frame later. Hosting the cluster outside the inert region was tried on
 paper and refused: it would draw a card over the dock that has filled the row. **Left open** only for the Zoom steps, which have
 no equivalent there (the presets in `View ▾` do). **Trigger:** a user reading that loses the diagram behind a dock at 1024.
+
+### 481. Three components keep their own copy of "this container goes away under focus"
+
+**Status:** open · **Verified:** 2026-10-10 (`use-container-unmount-handoff.ts` is imported by `diagram-viewport-cluster.tsx` only; `HistoryResultStrip.tsx` runs a `restoreFocus` callback from a layout-effect cleanup and from its own buttons; `selection-actions.tsx` keeps a boolean and a caller-supplied destination)
+**Raised:** 2026-10-10 (toolbar redesign M4 confirmation review) · **Size:** S · **Owner:** web
+
+The M4 review counted three hand-written copies of the ADR-0135 container hand-off and extracted one hook, but only the
+cluster adopted it. `HistoryResultStrip` cannot adopt it as it stands: its destination is a callback the workspace
+supplies (`restoreFocus`), it announces nothing (the workspace says the sentence once, per ADR-0132), and the same
+callback also runs on the strip's own button presses. **Next:** make the hook's `message` optional and let `target` be
+`string | (() => HTMLElement | null)`, then move `HistoryResultStrip` over with its focus-inside tests unchanged, and decide
+whether the selection bar's variant is the same rule. **Trigger:** the next change to either copy.

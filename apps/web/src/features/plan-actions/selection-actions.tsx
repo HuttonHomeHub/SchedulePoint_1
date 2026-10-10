@@ -1038,6 +1038,11 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
  * (`docs/specs/toolbar-redesign/m4-measurement.md` §6), where "press Escape" is no help to someone
  * without a keyboard. Icon-only, because the bar is already the tallest thing in the foot row; the
  * tip says the key.
+ *
+ * **A separate Tab stop outside the roving toolbar, and touch-only by design** (product owner,
+ * accepted at the M4 review). It is rendered beside `Toolbar`, not as one of its items, so it is not
+ * part of that toolbar's arrow-key walk and costs a keyboard planner one extra Tab; and it is shown
+ * only on a finger-sized pointer, because Escape already does this for everyone with a keyboard.
  */
 function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React.ReactElement {
   const tip = useTooltip({ content: 'Clear selection (Esc)', purpose: 'name-echo' });

@@ -14,7 +14,7 @@ import { resolveLabelVisibility } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
-import type { TooltipOptions } from '@/components/ui/tooltip';
+import type { TooltipPlacementOptions } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface ToolbarProps<Ctx> {
@@ -72,10 +72,11 @@ export interface ToolbarProps<Ctx> {
    */
   ungrouped?: boolean;
   /**
-   * Tooltip placement for every icon-only control in this toolbar — see `TooltipOptions`. Absent ⇒
-   * the primitive's own default, which is every toolbar's behaviour today.
+   * Tooltip placement for every `ToolbarButton` item in this toolbar — see `TooltipOptions`. It does
+   * **not** reach a popover or split-button trigger, which own their tips. Absent ⇒ the primitive's
+   * own default, which is every toolbar's behaviour today.
    */
-  tooltip?: Pick<TooltipOptions, 'placement' | 'dismissOnPress'>;
+  tooltip?: TooltipPlacementOptions;
   className?: string;
 }
 

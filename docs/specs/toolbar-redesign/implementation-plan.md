@@ -584,7 +584,7 @@ wide-viewport cases in `command-surface.spec.ts`.
 
 ### Milestone M7: Close-out (ships dark)
 
-1. File **ADR-0184** from spec §4.10 (D1–D6). Add its line to `CLAUDE.md` §16. Add amendment notes to ADR-0031,
+1. File **ADR-0185** from spec §4.10 (D1–D6). Add its line to `CLAUDE.md` §16. Add amendment notes to ADR-0031,
    ADR-0091 (D3), ADR-0100 and ADR-0179 (D2 use), and record the completion note on ADR-0090 D6 and ADR-0091 D3a.
 2. **Remove `ToolbarItem.tier` and `ToolbarTier` (`docs/TECH_DEBT.md` #193).** Nothing reads them since
    ADR-0109 D1; M1 left the field declared and every registration still sets it. Delete the type, the field
@@ -597,7 +597,7 @@ wide-viewport cases in `command-surface.spec.ts`.
 5. `TECH_DEBT.md`: close #471's band half; a new row for its second paragraph (D-j); close #193 with the overturn
    noted.
 6. The SC-14 and SC-19 manifest test green; the SC-17 before and after tables in the record.
-7. Set the spec header to `Accepted — shipped (ADR-0184)` (`check:spec-status`).
+7. Set the spec header to `Accepted — shipped (ADR-0185)` (`check:spec-status`).
 
 ## Reviewer checklists (each must be ticked in the PR, with `file:line` or a test name)
 
