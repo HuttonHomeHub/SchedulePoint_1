@@ -374,6 +374,17 @@ band scrolls away vertically. Wide windows are untouched: 1280 × 600 and 1366 �
 
 ### Milestone M4: The diagram-corner cluster (gate: CQ-1, decided yes)
 
+> **M4 result (2026-10-10), recorded where the plan and the code disagreed** (`m4-measurement.md`). Built as listed, with:
+> **the deck is two lines at 1024 × 600 on a mouse in every state measured** (LOOK 1, DO 1; the cycling read-out leaves LOOK
+> 20.7 px spare) and `LINES[1024]` is `{ max: 2 }`; **the cycling read-out is count-only** (owner decision 2026-10-10, so the
+> reason left the toolbar: it is announced in full, and the remedy stays on the selection bar; a sentence on the object is
+> `docs/TECH_DEBT.md` #479 and needs a spec); **the axis-marker row is inside the ruler, not at the stage's bottom** (the
+> column is bounded by the ruler and the resource strip); **no `aria-keyshortcuts`, because Zoom and Fit have no keyboard
+> shortcut** to advertise; **`TsldCanvas` draws the column into a host `TsldPanel` places after the activity list**, so Tab is
+> list, minimap, cluster; **Fit no longer closes a dock** (#480). SC-1's canvas is 362 px in every state without a selection
+> bar and 246 with one (the bar's own foot row). `ToolbarRow` gained `'canvas'`; `Deck`, `Toolbar`, `Menu`, `ToolbarPopover`
+> are untouched.
+
 **Outcome:** a "Diagram viewport" toolbar (Zoom out, Zoom in, Fit to plan, Minimap) at the stage's bottom-right, with
 the minimap stacking above it. Gone from the deck and from View ▾. **With M2 already landed, this is where the
 two-line floor arrives** (M0 §3: LOOK 980.9 / 886.1 with Resource view compact, DO 967.7, canvas 362).

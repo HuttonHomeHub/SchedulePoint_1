@@ -339,7 +339,7 @@ test('a guest reads the SAME placed span the member does — the picture and the
   // lane 1 (Pour, `barExtentsByRow`'s own docblock), so the topmost two bands are, in order,
   // Excavate's and Pour's.
   await page
-    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('toolbar', { name: 'Diagram viewport' })
     .getByRole('button', { name: 'Fit to plan' })
     .click();
   const memberR = await fitRatio(page);

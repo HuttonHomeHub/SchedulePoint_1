@@ -11957,3 +11957,30 @@ At the browser's default font size of 200 % the canvas ruler's day-number labels
 rem). This is the canvas ruler, not the command band: M3's SC-7 cell passes (every deck control is hit-testable) and the
 ruler is outside its scope. **Next:** measure it (ADR-0113) at that cell and decide whether the ruler tier should thin its
 labels by pitch, as ADR-0141 does for the thumbnail. **Trigger:** the next pass over the ruler, or a 200 % text report.
+
+### 479. The reason a conflict is flagged is spoken but no longer shown anywhere a sighted keyboard user reads
+
+**Status:** open · **Verified:** 2026-10-10 (`tsld-toolbar-items.tsx` `CurrentConflictStatus`; `use-conflict-navigation.ts:97` announces the full reason list; `plan-actions/conflict-remedy.ts` `CONFLICT_REMEDIES`; `m4-measurement.md` §5)
+**Raised:** 2026-10-10 (toolbar redesign M4, product-owner decision) · **Size:** M · **Owner:** web · **Needs a spec** (ADR-0105: a new surface)
+
+The cycling read-out is count-only ("Conflict 2 of 7") because its reason was unreadable at the floor anyway. The full reason
+("<name> — constraint conflict, placed past a constraint") is still spoken on every step by the polite announcer, and the
+selection bar the step selects carries the remedy button for three of the four conflict types ("Review the constraint…",
+"Review resources…"; "Clear visual start" is always on the bar). What a sighted planner no longer has is **the sentence saying
+what is wrong with this activity**; four of the five flag types have no on-canvas badge. **Next:** a spec for one place on the
+object that states it — preferred: the selection bar's conflict-remedy item rendering the flag's label as visible text beside the
+action (for the `barAction` remedy too, which renders nothing today), so the sentence and its fix are one thing; otherwise a
+canvas callout anchored to the selected bar. **Tests it needs:** the reason visible after each step; reachable by keyboard and
+AT without hover; the selection bar still one line at 1024. **Trigger:** the next planner report of "why is this flagged".
+
+### 480. The Diagram viewport cluster is unreachable while a dock or the expanded panel has taken the stage
+
+**Status:** open · **Verified:** 2026-10-10 (`plan-workspace-toolbar.test.tsx` "a dock that has taken the row": the stage is `inert`, and "the short-body swap": the canvas row is `hidden`; the cluster is inside both)
+**Raised:** 2026-10-10 (toolbar redesign M4) · **Size:** S · **Owner:** web
+
+Zoom, Fit and the Minimap used to live on the deck, so pressing Fit while a dock had squeezed the stage inert closed the dock
+and fitted a frame later (ADR-0180's wrapped viewport command). They live in the stage now; while the stage is inert or hidden
+they are not reachable, which is consistent (a viewport control of a diagram you cannot see) but loses that one shortcut back
+to the diagram. The wrapper still serves the deck's other viewport commands (Go to today, Next conflict, Find). **Next:**
+decide with the owner whether that matters; if so, a "Show diagram" affordance on the dock, not the cluster. **Trigger:** a
+user reading that loses the diagram behind a dock at 1024.

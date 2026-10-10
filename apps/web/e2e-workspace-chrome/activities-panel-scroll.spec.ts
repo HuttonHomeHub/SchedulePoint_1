@@ -591,7 +591,7 @@ for (const cell of [
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
       await page
-        .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('toolbar', { name: 'Diagram viewport' })
         .getByRole('button', { name: 'Fit to plan' })
         .click();
       await expect(expandButton(page)).toBeVisible();

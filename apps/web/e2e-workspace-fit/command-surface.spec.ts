@@ -622,15 +622,22 @@ test.describe('The plan command surface', () => {
       // Two since M4: the search field is 168 px below 1600, so LOOK is 1254 px in a 1264 px row
       // (`docs/specs/minimum-viewport/m4-measurement.md`). It was 3 with the 240 px field.
       1280: { max: 2 },
-      // The floor, measured at M0 (`docs/specs/minimum-viewport/m0-measurement.md` §1): four lines,
-      // each declared row wrapping once. M4 measured that this is arithmetic, not a defect: the four
-      // groups are 733, 513, 627 and 622 px in a 1008 px row, so no two share a line without a
-      // command losing its label (`m4-measurement.md`). The bound stays at the reading.
-      1024: { max: 4 },
+      // The floor, a **mouse**: two lines since toolbar-redesign M4 (SC-1). It was four
+      // (`docs/specs/minimum-viewport/m0-measurement.md` §1: the four groups were 733, 513, 627 and
+      // 622 px in a 1008 px row, so no two shared a line without losing a label) until M1 made four
+      // controls icon-only, M2 moved Summary, Float paths and Comments off the rows, and M4 moved
+      // Zoom, Fit and the Minimap to the diagram's corner: LOOK is 862 px and DO 955.7 in 1008
+      // (`m4-measurement.md`). Touch keeps four (OD-2), asserted in the coarse suite below.
+      1024: { max: 2 },
     };
-    // The DO row is one line at every width the epic is judged on. The floor is the exception M4
-    // owns (see above), so it is named here rather than passed by loosening the others.
-    const DO_ROW_MAX_LINES = (width: number): number => (width <= 1024 ? 2 : 1);
+    // Each declared row is one line at every width, the floor included (M4: two lines in total at
+    // 1024 is one for each row, so the old exception for the floor is gone).
+    const DO_ROW_MAX_LINES = 1;
+    // The 1024 bar: M0 §2 read a band of about 139 px at the floor; the bar is that reading plus the
+    // two pixels of sub-pixel rounding the other bars carry, not a round number above it.
+    const BAND_1024_MAX_PX = 141;
+    // SC-1: the diagram keeps at least this much canvas at 1024 × 600 on a mouse (M0 projection 362).
+    const CANVAS_1024_MIN_PX = 350;
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(400);
@@ -664,6 +671,7 @@ test.describe('The plan command surface', () => {
         const foot = document.querySelector('[data-activities-bar]');
         if (!foot) throw new Error('the activities row was not found — nothing to assert about');
         return {
+          canvas: document.querySelector('main canvas')?.getBoundingClientRect().height ?? 0,
           foot: foot.getBoundingClientRect().height,
           band: band.getBoundingClientRect().height,
           ...linesIn(deck),
@@ -689,17 +697,17 @@ test.describe('The plan command surface', () => {
         `the deck's controls sit on ${reading.lines} rows at ${viewport.width}`,
       ).toBeLessThanOrEqual(LINES[viewport.width]!.max);
 
-      // **Per row, since M4 declared them.** Each row is one line at every width the epic is judged
-      // on; below that the LOOK row is allowed a second line and the DO row is not, because a wrap
-      // inside a row is local — it can never move a command to the other row.
+      // **Per row, since M4 declared them.** Each row is one line at every width, the floor
+      // included (a wrap inside a row is local — it can never move a command to the other row, which
+      // is why the rows are asserted separately as well as in total).
       expect(
         reading.look.lines,
         `the LOOK row wraps to ${reading.look.lines} lines at ${viewport.width}`,
-      ).toBeLessThanOrEqual(viewport.width >= 1280 ? 1 : 2);
+      ).toBeLessThanOrEqual(1);
       expect(
         reading.do.lines,
         `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,
-      ).toBeLessThanOrEqual(DO_ROW_MAX_LINES(viewport.width));
+      ).toBeLessThanOrEqual(DO_ROW_MAX_LINES);
 
       // **Membership, and it is the assertion that carries M4's argument.** Line counts alone pass
       // against a build where a command has moved rows — which is exactly what flex wrapping did
@@ -717,6 +725,13 @@ test.describe('The plan command surface', () => {
       ).toBe(true);
       expect(reading.doIds, 'the authoring tools left the DO row').toContain('add-activity');
       expect(reading.lookIds, 'the search field left the LOOK row').toContain('search');
+      // Zoom, Fit and the Minimap live in the diagram's corner cluster (M4), not on the deck.
+      for (const moved of ['zoom-out', 'zoom-in', 'fit', 'minimap']) {
+        expect(
+          [...reading.lookIds, ...reading.doIds],
+          `${moved} is back on the deck at ${viewport.width}`,
+        ).not.toContain(moved);
+      }
       // **1920 and 1646 only, by design.** F1 names those two widths; at 1440 the header itself
       // wraps to two lines today (ADR-0112 D4's accepted state) because the pen cluster sits on
       // it, and `m0-measurement.md` §1 shows that row un-wrapping to one line at 1440 the moment
@@ -727,6 +742,17 @@ test.describe('The plan command surface', () => {
           reading.band,
           `the command band is ${reading.band} px at ${viewport.width} against a bar of ${BAND_MAX_PX}`,
         ).toBeLessThanOrEqual(BAND_MAX_PX);
+      }
+
+      if (viewport.width === 1024) {
+        expect(
+          reading.band,
+          `the command band is ${reading.band} px at the floor against a bar of ${BAND_1024_MAX_PX}`,
+        ).toBeLessThanOrEqual(BAND_1024_MAX_PX);
+        expect(
+          reading.canvas,
+          `the diagram has ${reading.canvas} px at the floor against a floor of ${CANVAS_1024_MIN_PX}`,
+        ).toBeGreaterThanOrEqual(CANVAS_1024_MIN_PX);
       }
 
       // **F7, the foot row, which had no gate until M7.** It was measured once by hand at M6 (51 px
@@ -847,6 +873,18 @@ test.describe('The plan command surface', () => {
       expect(
         unreachable,
         `controls a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+      ).toEqual([]);
+
+      // The cluster at the diagram's corner (M4) is not under the deck's root, so it is swept on
+      // its own: four buttons, each a real target a pointer can reach over the canvas.
+      const cluster = await sweep(page, '[role="toolbar"][aria-label="Diagram viewport"]');
+      expect(
+        cluster.length,
+        `the cluster swept ${cluster.length} controls at ${viewport.width}`,
+      ).toBe(4);
+      expect(
+        cluster.filter((t) => !t.visible || t.w < MIN_TARGET || t.h < MIN_TARGET || !t.reachable),
+        `cluster controls below ${MIN_TARGET}×${MIN_TARGET} or unreachable at ${viewport.width}`,
       ).toEqual([]);
     }
   });
@@ -1792,6 +1830,12 @@ interface CoarseSurface {
 
 const COARSE_SURFACES: readonly CoarseSurface[] = [
   { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
+  // The cluster at the diagram's corner (toolbar-redesign M4): four buttons, swept where they live.
+  {
+    name: 'Diagram viewport cluster',
+    root: '[role="toolbar"][aria-label="Diagram viewport"]',
+    atLeast: 3,
+  },
   { name: 'plan header', root: 'header', atLeast: 5 },
   // `minWidth` because below `lg` the pinned Explorer is not rendered at all — it becomes the
   // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
@@ -1954,10 +1998,18 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       if (!(await grid.isVisible())) await openGanttExpanded(page);
       return;
     }
-    if (await grid.isVisible()) {
+    // By the view switch's own pressed state, not by the grid being visible: at the floor an
+    // expanded activities panel hides the Gantt behind "Gantt hidden. Collapse to return.", the grid
+    // reads as not visible, and the view is still the Gantt — which left the diagram (and so the
+    // viewport cluster, toolbar-redesign M4) unmounted for the surfaces swept after it.
+    const ganttSegment = page.locator('[data-toolbar-item="view-gantt"]').first();
+    if ((await ganttSegment.getAttribute('aria-pressed')) === 'true') {
       await page.getByRole('button', { name: 'Diagram', exact: true }).click();
       await expect(grid).toBeHidden();
     }
+    // And a panel left expanded takes the stage's place at the floor; the diagram is what is swept.
+    const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+    if (await collapse.isVisible()) await collapse.click();
   }
 
   /**
@@ -2030,6 +2082,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
         if (surface.activities) await showActivities(page);
         const exempt = surface.view === 'gantt' ? ganttExempt() : EXEMPT_WITHIN;
+        // A surface that mounts on a view switch (the cluster appears when the diagram does, through a
+        // portal slot published a commit later) is awaited rather than raced.
+        await page.locator(surface.root).first().waitFor({ state: 'attached' });
         let targets = await sweep(
           page,
           surface.root,
