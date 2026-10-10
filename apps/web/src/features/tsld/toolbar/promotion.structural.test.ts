@@ -50,7 +50,12 @@ describe('promoted items', () => {
     const [entry] = ALL_PROMOTION_ENTRIES;
     if (!entry) throw new Error('no entries');
     expect(() =>
-      derivePromotedItems([{ ...entry, from: 'no-such-trigger' }], items, () => true),
+      derivePromotedItems(
+        [{ ...entry, from: 'no-such-trigger' }],
+        // The authored items only: a derived one sorts at a fractional order by design.
+        items.filter((i) => Number.isInteger(i.order)),
+        () => true,
+      ),
     ).toThrow(/no-such-trigger/);
   });
 

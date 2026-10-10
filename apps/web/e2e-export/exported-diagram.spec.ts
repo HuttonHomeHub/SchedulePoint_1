@@ -69,7 +69,8 @@ const RESERVED_PX = EXPORT_TOP_BAND + EXPORT_MARKER_ROW;
  * **Verified red before the fix**: both returned a list beginning `Inter`.
  */
 /**
- * Open `Share & export ▾ → Print…` and wait for the print document to mount.
+ * Open `Share & export ▾ → Print…` (the trigger reads `Export` once Share… is on the bar) and
+ * wait for the print document to mount.
  *
  * **It asserts the item is not shaded before clicking, and that is the whole point of the helper.**
  * `Print…` is `disabled={!ctx.hasDiagram}`, and `hasDiagram` reads the activities query — so it is
@@ -103,7 +104,8 @@ async function openPrintDocument(page: Page): Promise<void> {
     globalThis.print = () => {};
   });
   await page
-    .getByRole('button', { name: /share.*export/i })
+    // "Export" while Share… is promoted onto the bar beside it, "Share & export" otherwise.
+    .getByRole('button', { name: /^(share & )?export$/i })
     .first()
     .click();
   const print = page.getByRole('menuitem', { name: 'Print…', exact: true });
@@ -235,7 +237,7 @@ test.describe('The exported diagram', () => {
     // ── The entry point IS the subject (ADR-0081). By role and accessible name, never by copy or
     // a CSS selector — ADR-0091 M7's rule, after three journeys broke on a label change.
     await page
-      .getByRole('button', { name: /share.*export/i })
+      .getByRole('button', { name: /^(share & )?export$/i })
       .first()
       .click();
     const download = page.waitForEvent('download', { timeout: 30_000 });
@@ -464,7 +466,7 @@ test.describe('The exported diagram', () => {
     ).toBeGreaterThanOrEqual(8);
 
     await page
-      .getByRole('button', { name: /share.*export/i })
+      .getByRole('button', { name: /^(share & )?export$/i })
       .first()
       .click();
     const download = page.waitForEvent('download', { timeout: 30_000 });

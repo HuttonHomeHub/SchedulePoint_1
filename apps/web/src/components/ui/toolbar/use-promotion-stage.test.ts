@@ -45,11 +45,16 @@ describe('usePromotionStage', () => {
     [1280, 1],
     [1439, 1],
     [1440, 2],
-    [1911, 2],
-    [1912, 3],
-    [2559, 3],
-    [2560, 4],
-    [3840, 4],
+    [1599, 2],
+    [1600, 3],
+    [1646, 3],
+    [1911, 3],
+    [1912, 4],
+    [2159, 4],
+    [2160, 5],
+    [2559, 5],
+    [2560, 6],
+    [3840, 6],
   ])('a %i px viewport has reached stage %i', (px, stage) => {
     stubViewport(px);
     const { result } = renderHook(() => usePromotionStage());
@@ -69,13 +74,13 @@ describe('usePromotionStage', () => {
     const { result } = renderHook(() => usePromotionStage());
     expect(result.current.stage).toBe(1);
     act(() => viewport.set({ px: 2560 }));
-    expect(result.current.stage).toBe(4);
+    expect(result.current.stage).toBe(6);
     act(() => viewport.set({ px: 1100 }));
     expect(result.current.stage).toBe(0);
   });
 
   it('never renders the stage between two thresholds that a single resize crosses', () => {
-    // Verified red against one `useMediaQuery` per threshold: 1280 → 1912 rendered stage 2 first.
+    // Verified red against one `useMediaQuery` per threshold: 1280 → 1912 rendered stages 2 and 3 first.
     const viewport = stubViewport(1280);
     const seen: number[] = [];
     renderHook(() => {
@@ -86,7 +91,8 @@ describe('usePromotionStage', () => {
     // Each listener in its own act: the browser delivers the queries' events one at a time.
     viewport.each(1912);
     expect(seen).not.toContain(2);
-    expect(seen.at(-1)).toBe(3);
+    expect(seen).not.toContain(3);
+    expect(seen.at(-1)).toBe(4);
   });
 
   it('a raised default font size moves the thresholds with the text: rem, not pixels', () => {

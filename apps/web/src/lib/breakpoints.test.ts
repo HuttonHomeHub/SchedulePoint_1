@@ -8,11 +8,8 @@ import {
   DESIGNED_MIN_WIDTH_PX,
   DESIGNED_MIN_WIDTH_QUERY,
   designedMinWidthPx,
-  PROMOTE_119_5,
-  PROMOTE_160,
-  PROMOTE_80,
-  PROMOTE_90,
   PROMOTION_STAGE_REMS,
+  PROMOTION_STAGES,
   promotionStageQuery,
   SQUAT_MAX_HEIGHT_REM,
   SQUAT_QUERY,
@@ -77,12 +74,19 @@ describe('SQUAT_QUERY', () => {
 });
 
 describe('the promotion stages', () => {
-  it('are the four widths the product is judged at, in rem', () => {
-    // 1280, 1440, 1912 and 2560 px at the default 16 px font size.
-    expect([PROMOTE_80, PROMOTE_90, PROMOTE_119_5, PROMOTE_160].map((rem) => rem * 16)).toEqual([
-      1280, 1440, 1912, 2560,
+  it('are the widths the product is judged at, in rem', () => {
+    // 1280, 1440, 1600 (the owner's 1646 sits just over it), 1912, 2160 and 2560 px at the default
+    // 16 px font size.
+    expect(PROMOTION_STAGES.map(({ rem }) => rem * 16)).toEqual([
+      1280, 1440, 1600, 1912, 2160, 2560,
     ]);
-    expect(PROMOTION_STAGE_REMS).toEqual([80, 90, 119.5, 160]);
+    expect([...PROMOTION_STAGE_REMS]).toEqual([80, 90, 100, 119.5, 135, 160]);
+  });
+
+  it('are named for their rem value, so a name cannot drift from the width it stands for', () => {
+    for (const { name, rem } of PROMOTION_STAGES) {
+      expect(name).toBe(`PROMOTE_${String(rem).replace('.', '_')}`);
+    }
   });
 
   it('ascend, so a stage index counts the thresholds the viewport has reached', () => {
@@ -94,10 +98,10 @@ describe('the promotion stages', () => {
     const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
     const roomy = /--container-roomy:\s*([\d.]+)rem/.exec(globals)?.[1];
     expect(roomy).toBe('79');
-    expect(PROMOTE_80).toBeGreaterThan(Number(roomy));
+    expect(PROMOTION_STAGES[0].rem).toBeGreaterThan(Number(roomy));
   });
 
   it('are spelled as min-width rem queries', () => {
-    expect(promotionStageQuery(PROMOTE_119_5)).toBe('(min-width: 119.5rem)');
+    expect(promotionStageQuery(119.5)).toBe('(min-width: 119.5rem)');
   });
 });

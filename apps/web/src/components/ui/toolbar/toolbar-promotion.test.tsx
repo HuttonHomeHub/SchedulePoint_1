@@ -6,8 +6,10 @@ import {
   derivePromotedItems,
   isPromoted,
   NO_PROMOTION,
+  PROMOTION_STAGE_NAMES,
   stageOf,
   type PromotableEntry,
+  type PromotionStageName,
   type PromotionWidths,
   type PromotionState,
 } from './toolbar-promotion';
@@ -29,13 +31,17 @@ function widths(over: Partial<PromotionWidths> = {}): PromotionWidths {
       look: {
         PROMOTE_80: free(120, 60),
         PROMOTE_90: free(300, 250),
+        PROMOTE_100: free(300, 250),
         PROMOTE_119_5: free(600, 560),
+        PROMOTE_135: free(600, 560),
         PROMOTE_160: free(900, 860),
       },
       do: {
         PROMOTE_80: free(90, 90),
         PROMOTE_90: free(90, 90),
+        PROMOTE_100: free(90, 90),
         PROMOTE_119_5: free(400, 400),
+        PROMOTE_135: free(400, 400),
         PROMOTE_160: free(400, 400),
       },
     },
@@ -50,7 +56,7 @@ describe('isPromoted', () => {
   });
 
   it("an 'always' record is on the bar at every stage, including none", () => {
-    for (const stage of [0, 1, 2, 3, 4] as const) {
+    for (const stage of [0, 1, 2, 3, 4, 5, 6] as const) {
       expect(isPromoted('always', state(stage))).toBe(true);
     }
   });
@@ -58,25 +64,26 @@ describe('isPromoted', () => {
   it('is on the bar from its stage and never below it (monotonic)', () => {
     const at = { fine: 'PROMOTE_90', coarse: 'PROMOTE_160' } as const;
     expect(
-      [0, 1, 2, 3, 4].map((stage) => isPromoted(at, state(stage as 0 | 1 | 2 | 3 | 4))),
-    ).toEqual([false, false, true, true, true]);
+      [0, 1, 2, 3, 4, 5, 6].map((stage) => isPromoted(at, state(stage as PromotionState['stage']))),
+    ).toEqual([false, false, true, true, true, true, true]);
   });
 
   it('reads the threshold of the pointer in use', () => {
     const at = { fine: 'PROMOTE_80', coarse: 'PROMOTE_160' } as const;
     expect(isPromoted(at, state(2, 'fine'))).toBe(true);
     expect(isPromoted(at, state(2, 'coarse'))).toBe(false);
-    expect(isPromoted(at, state(4, 'coarse'))).toBe(true);
+    expect(isPromoted(at, state(6, 'coarse'))).toBe(true);
   });
 
   it("'never' is never on the bar, however wide", () => {
-    expect(isPromoted({ fine: 'never', coarse: 'never' }, state(4))).toBe(false);
+    expect(isPromoted({ fine: 'never', coarse: 'never' }, state(6))).toBe(false);
   });
 
   it('a viewport that has reached no stage promotes nothing but the permanent records', () => {
     expect(isPromoted({ fine: 'PROMOTE_80', coarse: 'PROMOTE_80' }, NO_PROMOTION)).toBe(false);
     expect(stageOf('PROMOTE_80')).toBe(1);
-    expect(stageOf('PROMOTE_160')).toBe(4);
+    expect(stageOf('PROMOTE_100')).toBe(3);
+    expect(stageOf('PROMOTE_160')).toBe(6);
   });
 });
 
@@ -104,11 +111,11 @@ describe('computePromotionStages', () => {
 
   it('is monotonic: a promoted entry stays promoted at every wider stage', () => {
     const stages = computePromotionStages(widths());
-    const order = ['PROMOTE_80', 'PROMOTE_90', 'PROMOTE_119_5', 'PROMOTE_160'];
+    const order = PROMOTION_STAGE_NAMES;
     for (const rank of ['A', 'B', 'C', 'D']) {
       const at = stages[rank];
       expect(at, rank).not.toBe('never');
-      expect(order.indexOf(at as string)).toBeGreaterThanOrEqual(0);
+      expect(order.indexOf(at as PromotionStageName)).toBeGreaterThanOrEqual(0);
     }
   });
 
@@ -180,6 +187,12 @@ describe('derivePromotedItems', () => {
     const at = (stage: PromotionState['stage']): number =>
       resolveItems(items, { promotion: { stage, pointer: 'fine' }, armed: false }, true).length;
     expect([at(0), at(1), at(2), at(4)]).toEqual([0, 0, 1, 1]);
+  });
+
+  it('refuses a trigger whose order is not an integer: the derived orders would tie with it', () => {
+    expect(() => derivePromotedItems([entry()], [{ ...trigger, order: 2.5 }], visibleAt)).toThrow(
+      /fractional order/,
+    );
   });
 
   it('is always labelled, and names its menu as the focus successor and the reason it left', () => {

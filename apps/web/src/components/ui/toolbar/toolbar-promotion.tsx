@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import type { ToolbarGroupId, ToolbarItem, ToolbarRow } from './toolbar-registry';
 
+import { PROMOTION_STAGES } from '@/lib/breakpoints';
+
 /**
  * **Promotion: a command that lives in a menu comes out onto the bar when there is room for it**
  * (toolbar-redesign M5, spec §4.11 — the product owner's requirement that free space be used by
@@ -22,21 +24,19 @@ import type { ToolbarGroupId, ToolbarItem, ToolbarRow } from './toolbar-registry
 /** Which pointer set the widths and thresholds belong to (ADR-0183: `useCoarsePointer` is the reader). */
 export type PromotionPointer = 'fine' | 'coarse';
 
-/** The four viewport thresholds, narrowest first (`PROMOTE_80` … `PROMOTE_160` in `lib/breakpoints.ts`). */
-export const PROMOTION_STAGE_NAMES = [
-  'PROMOTE_80',
-  'PROMOTE_90',
-  'PROMOTE_119_5',
-  'PROMOTE_160',
-] as const;
+/** A stage's name, from the one table in `lib/breakpoints.ts` (`PROMOTE_80` … `PROMOTE_160`). */
+export type PromotionStageName = (typeof PROMOTION_STAGES)[number]['name'];
 
-export type PromotionStageName = (typeof PROMOTION_STAGE_NAMES)[number];
+/** The stage names, narrowest first — derived from the table, never restated. */
+export const PROMOTION_STAGE_NAMES: readonly PromotionStageName[] = PROMOTION_STAGES.map(
+  (stage) => stage.name,
+);
 
 /**
- * How many of the four thresholds the viewport has reached: `0` below the first (nothing promotes —
- * the floor, the scroll line and every jsdom test), `4` at 160 rem and wider.
+ * How many of the thresholds the viewport has reached: `0` below the first (nothing promotes — the
+ * floor, the scroll line and every jsdom test), `6` at 160 rem and wider.
  */
-export type PromotionStage = 0 | 1 | 2 | 3 | 4;
+export type PromotionStage = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** What a component asks: the viewport's stage, and which pointer set applies at it. */
 export interface PromotionState {
@@ -126,6 +126,11 @@ export interface PromotableEntry<Ctx> {
   onActivate: (ctx: Ctx) => void;
 }
 
+/** `{ [key]: value }` when there is a value, else nothing — `exactOptionalPropertyTypes` forbids `undefined`. */
+function present<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
+  return (value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
+}
+
 /** What the derivation needs to know about a source trigger to place the item after it. */
 interface TriggerPlacement {
   group: ToolbarGroupId;
@@ -140,13 +145,22 @@ interface TriggerPlacement {
  * integers, so it cannot collide with a neighbour.
  *
  * Throws on an entry whose `from` is not in `items` — a ladder entry that names a trigger which does
- * not exist would otherwise render nowhere and read as "promoted" in the tests.
+ * not exist would otherwise render nowhere and read as "promoted" in the tests — and on a trigger
+ * whose `order` is not an integer, because the formula above is only collision-free between whole
+ * numbers: an authored `order: 3.5` would sort among the derived items and could tie with one.
  */
 export function derivePromotedItems<Ctx>(
   entries: readonly PromotableEntry<Ctx>[],
   items: readonly ToolbarItem<Ctx>[],
   visibleAt: (entry: PromotableEntry<Ctx>, ctx: Ctx) => boolean,
 ): ToolbarItem<Ctx>[] {
+  const fractional = items.find((item) => !Number.isInteger(item.order));
+  if (fractional !== undefined) {
+    throw new Error(
+      `derivePromotedItems: "${fractional.id}" has a fractional order (${String(fractional.order)}) — ` +
+        "a promoted item sorts at its trigger's order + rank / 100, which is only unambiguous between integers.",
+    );
+  }
   const placements = new Map<string, TriggerPlacement>(
     items.map((item) => [
       item.id,
@@ -202,7 +216,6 @@ export function derivePromotedItems<Ctx>(
         labelVisibility: 'always',
         order: trigger.order + entry.rank / 100,
         label: entry.label,
-        ...(entry.visibleLabel === undefined ? {} : { visibleLabel: entry.visibleLabel }),
         // **Not "Also in ‹menu›"**: once the command is on the bar its row has left that menu, so the
         // clause said the opposite of what the menu showed. What is true of a promoted command is where
         // it goes when the window narrows, and that is also what a reader needs to learn the menu route.
@@ -215,18 +228,18 @@ export function derivePromotedItems<Ctx>(
         // Where focus goes if the window narrows while it is here (ADR-0135): the trigger, never gone.
         successorId: entry.from,
         lostReason: `Moved into the ${entry.menuName} menu.`,
-        ...(entry.penGated ? { penGated: true } : {}),
         isVisible: visible,
-        ...(entry.isActive === undefined
-          ? {}
-          : {
-              isActive: entry.isActive,
-              // Absent ⇒ `'selected'`, the registry's default: only a modal tool's preset says more.
-              ...(entry.activeKind === 'armed' ? { activeKind: 'armed' as const } : {}),
-            }),
-        ...(entry.isEnabled === undefined ? {} : { isEnabled: entry.isEnabled }),
-        ...(entry.disabledReason === undefined ? {} : { disabledReason: entry.disabledReason }),
         onActivate: entry.onActivate,
+        ...present('visibleLabel', entry.visibleLabel),
+        ...present('isEnabled', entry.isEnabled),
+        ...present('disabledReason', entry.disabledReason),
+        ...(entry.penGated ? { penGated: true } : {}),
+        // Absent ⇒ not a toggle. A toggle's kind defaults to `'selected'`, the registry's default:
+        // only a modal tool's preset says more.
+        ...present('isActive', entry.isActive),
+        ...(entry.isActive !== undefined && entry.activeKind === 'armed'
+          ? { activeKind: 'armed' as const }
+          : {}),
       },
     ];
   });

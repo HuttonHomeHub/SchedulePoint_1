@@ -1,7 +1,7 @@
 {
   "pointer": "fine",
   "provisional": false,
-  "note": "Re-taken after M4 (toolbar-redesign M5). entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them. freeWidthByStage is the real unpromoted M4 deck (measure-toolbar/toolbar-redesign-m4.spec.ts): the row width less the natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst. The provisional M0 file projected DO 143 px narrower than the real deck (Apply levelled dates was projected icon-only) and sized the P5 and L2 sets with a prefix on every member. safetyPx is the spare width every row keeps in the worst state, so a sub-pixel difference in a font cannot wrap a row that the ladder had filled to the pixel (coarse LOOK at 1912 with Feasible window promoted had 0.4 px).",
+  "note": "Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns \"Share & export\" into \"Export\"). A form whose stage is never is not on the bar at 3840, so its committed width stands. freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.",
   "itemGapPx": 4,
   "safetyPx": 2,
   "ladderOrder": {
@@ -110,7 +110,8 @@
       "memberWidths": {
         "share": 86.8
       },
-      "width": 86.8
+      "width": 33.8,
+      "triggerShrinkPx": 53
     },
     {
       "rank": "P5",
@@ -118,12 +119,12 @@
       "name": "Link: Finish → Start / Start → Start / Finish → Finish",
       "from": "Link",
       "memberWidths": {
-        "link-fs-caption": 30.2,
+        "link-fs-caption": 33.9,
         "link-fs": 106.2,
         "link-ss": 99.3,
         "link-ff": 113.1
       },
-      "width": 360.8
+      "width": 364.5
     },
     {
       "rank": "P6",
@@ -161,38 +162,56 @@
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1135.4,
-        "freeBase": 128.6,
+        "naturalBase": 1040.6,
+        "freeBase": 223.4,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1260.7,
-        "freeWorst": 3.3
+        "naturalWorst": 1165.9,
+        "freeWorst": 98.1
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1135.4,
-        "freeBase": 288.6,
+        "naturalBase": 1040.6,
+        "freeBase": 383.4,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1260.7,
-        "freeWorst": 163.3
+        "naturalWorst": 1165.9,
+        "freeWorst": 258.1
+      },
+      "PROMOTE_100": {
+        "cell": "1600x900",
+        "avail": 1584,
+        "naturalBase": 1112.6,
+        "freeBase": 471.4,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1237.9,
+        "freeWorst": 346.1
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1207.4,
-        "freeBase": 688.6,
+        "naturalBase": 1112.6,
+        "freeBase": 783.4,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1332.7,
-        "freeWorst": 563.3
+        "naturalWorst": 1237.9,
+        "freeWorst": 658.1
+      },
+      "PROMOTE_135": {
+        "cell": "2160x1200",
+        "avail": 2144,
+        "naturalBase": 1112.6,
+        "freeBase": 1031.4,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1237.9,
+        "freeWorst": 906.1
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1207.4,
-        "freeBase": 1336.6,
+        "naturalBase": 1112.6,
+        "freeBase": 1431.4,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1332.7,
-        "freeWorst": 1211.3
+        "naturalWorst": 1237.9,
+        "freeWorst": 1306.1
       }
     },
     "do": {
@@ -214,6 +233,15 @@
         "naturalWorst": 1167.4,
         "freeWorst": 256.6
       },
+      "PROMOTE_100": {
+        "cell": "1600x900",
+        "avail": 1584,
+        "naturalBase": 1165.3,
+        "freeBase": 418.7,
+        "worstState": "peer-pen",
+        "naturalWorst": 1167.4,
+        "freeWorst": 416.6
+      },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
@@ -223,6 +251,15 @@
         "naturalWorst": 1167.4,
         "freeWorst": 728.6
       },
+      "PROMOTE_135": {
+        "cell": "2160x1200",
+        "avail": 2144,
+        "naturalBase": 1165.3,
+        "freeBase": 978.7,
+        "worstState": "peer-pen",
+        "naturalWorst": 1167.4,
+        "freeWorst": 976.6
+      },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
@@ -231,68 +268,6 @@
         "worstState": "peer-pen",
         "naturalWorst": 1167.4,
         "freeWorst": 1376.6
-      }
-    }
-  },
-  "unusedBeforeToday": {
-    "PROMOTE_80": {
-      "cell": "1280x800",
-      "look": {
-        "linesToday": 1,
-        "avail": 1264,
-        "natural": 1254.1,
-        "unusedPct": 0.8
-      },
-      "do": {
-        "linesToday": 1,
-        "avail": 1264,
-        "natural": 1256.9,
-        "unusedPct": 0.6
-      }
-    },
-    "PROMOTE_90": {
-      "cell": "1440x900",
-      "look": {
-        "linesToday": 1,
-        "avail": 1424,
-        "natural": 1254.1,
-        "unusedPct": 11.9
-      },
-      "do": {
-        "linesToday": 1,
-        "avail": 1424,
-        "natural": 1256.9,
-        "unusedPct": 11.7
-      }
-    },
-    "PROMOTE_119_5": {
-      "cell": "1912x1080",
-      "look": {
-        "linesToday": 1,
-        "avail": 1896,
-        "natural": 1326.1,
-        "unusedPct": 30.1
-      },
-      "do": {
-        "linesToday": 1,
-        "avail": 1896,
-        "natural": 1256.9,
-        "unusedPct": 33.7
-      }
-    },
-    "PROMOTE_160": {
-      "cell": "2560x1440",
-      "look": {
-        "linesToday": 1,
-        "avail": 2544,
-        "natural": 1326.1,
-        "unusedPct": 47.9
-      },
-      "do": {
-        "linesToday": 1,
-        "avail": 2544,
-        "natural": 1256.9,
-        "unusedPct": 50.6
       }
     }
   },

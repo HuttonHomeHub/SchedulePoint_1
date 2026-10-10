@@ -19,7 +19,7 @@ export const MENUS: ReadonlyArray<{
   { from: 'filter', open: () => screen.getByRole('button', { name: 'Filter' }) },
   { from: 'view', open: () => screen.getByRole('button', { name: /^View/ }) },
   { from: 'analysis', open: () => screen.getByRole('button', { name: 'Analysis' }) },
-  { from: 'export', open: () => screen.getByRole('button', { name: 'Share & export' }) },
+  { from: 'export', open: () => screen.getByRole('button', { name: /^(Share & export|Export)$/ }) },
   {
     from: 'add-activity',
     open: () => screen.getByRole('button', { name: /^Activity type/ }),

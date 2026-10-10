@@ -288,6 +288,12 @@ export const LINK_PROMOTABLE_KINDS: readonly DependencyType[] = DEPENDENCY_TYPES
   (type) => type !== 'SF',
 );
 
+/**
+ * The caption over the promoted link kinds. "Link" would repeat the split button beside it — two
+ * adjacent "Link" labels read as one control — so it says what the buttons choose.
+ */
+const LINK_KIND_CAPTION = 'Type';
+
 export const LINK_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] =
   LINK_PROMOTABLE_KINDS.map((type, index) => ({
     id: `link-${type.toLowerCase()}`,
@@ -299,7 +305,7 @@ export const LINK_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] =
     from: 'link-tool',
     rank: 5 + index / 10,
     at: at('P5'),
-    ...(index === 0 ? { captionBefore: 'Link' } : {}),
+    ...(index === 0 ? { captionBefore: LINK_KIND_CAPTION } : {}),
     isVisible: () => CANVAS_AUTHORING_ENABLED,
     penGated: true,
     activeKind: 'armed' as const,

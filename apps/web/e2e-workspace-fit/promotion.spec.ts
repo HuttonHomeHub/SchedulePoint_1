@@ -18,6 +18,7 @@ import {
   seedActivities,
 } from '../e2e-workspace-chrome/support';
 import { PROMOTION_LADDER, type LadderRank } from '../src/features/tsld/toolbar/promotion-ladder';
+import { PROMOTION_STAGES } from '../src/lib/breakpoints';
 
 /**
  * **Free space is used** (toolbar-redesign M5; spec §4.11; SC-17, SC-18, E-1..E-3).
@@ -56,6 +57,8 @@ interface WidthEntry {
   name: string;
   from: string;
   memberWidths: Record<string, number>;
+  /** Set where promoting the entry also shortens its trigger's name; `width` is net of it. */
+  triggerShrinkPx?: number;
   width: number;
 }
 interface WidthsFile {
@@ -77,12 +80,9 @@ function widthsFor(pointer: 'fine' | 'coarse'): WidthsFile {
   ) as WidthsFile;
 }
 
-const STAGE_REM = {
-  PROMOTE_80: 80,
-  PROMOTE_90: 90,
-  PROMOTE_119_5: 119.5,
-  PROMOTE_160: 160,
-} as const;
+const STAGE_REM = Object.fromEntries(
+  PROMOTION_STAGES.map(({ name, rem }) => [name, rem]),
+) as Record<(typeof PROMOTION_STAGES)[number]['name'], number>;
 
 /** Is `rank` on the bar at a viewport `px` wide (16 px root)? The committed ladder, not a guess. */
 function promotedAt(rank: LadderRank, pointer: 'fine' | 'coarse', px: number): boolean {
@@ -93,10 +93,34 @@ function promotedAt(rank: LadderRank, pointer: 'fine' | 'coarse', px: number): b
 const CELLS = [
   { w: 1280, h: 800 },
   { w: 1440, h: 900 },
+  { w: 1600, h: 900 },
   { w: 1912, h: 1080 },
+  { w: 2160, h: 1200 },
   { w: 2560, h: 1440 },
 ] as const;
+
+/** The viewport width a stage starts at, at the default 16 px root. */
+const stagePx = (name: keyof typeof STAGE_REM): number => STAGE_REM[name] * 16;
+/** The first width Critical only is on the bar at, on either pointer. */
+const criticalOnlyPx = (pointer: 'fine' | 'coarse'): number => {
+  const at = PROMOTION_LADDER.L1[pointer];
+  if (at === 'never') throw new Error('Critical only never promotes');
+  return stagePx(at);
+};
 const WIDE = { w: 3840, h: 1440 } as const;
+/**
+ * The range the SC-17 sweep walks, in CSS px at the default root: 1192 (where touch's LOOK row stops
+ * wrapping) to just over the last stage; `ladderFrom` is the first stage, 80 rem.
+ */
+const SWEEP = { from: 1192, ladderFrom: 1280, to: 2600, step: 40 } as const;
+/**
+ * The most any row may be empty at a width between the stage cells — see `m5-measurement.md` §3,
+ * which records the peaks these are set just over (fine 31.4 % / 26.5 %, coarse 22.8 % / 27.4 %).
+ * Not the 15 % of the stage cells: a window can be any width, and the room only grows until the
+ * next stage spends it. `compact` is the band under 80 rem, where labels are still icon-only and
+ * nothing promotes by design.
+ */
+const CEILING_PCT = { compact: 33, ladder: 30 } as const;
 
 const PASSWORD = 'correct-horse-battery';
 const DECK = 'Plan commands';
@@ -326,6 +350,40 @@ for (const pointer of ['fine', 'coarse'] as const) {
       }
     });
 
+    test('SC-17, swept: across 1192-2600 no row is more than the documented share empty, and none wraps', async () => {
+      test.setTimeout(240_000);
+      // The stage cells above are the widths the ladder is *filled* at. Between them the window is
+      // free to be any width, and the free room only grows until the next stage spends it — so the
+      // honest claim is a ceiling over the whole range, not "15 % at six widths". Two ranges, two
+      // ceilings (`m5-measurement.md` §3 records the peaks): below 80 rem the compact labels are
+      // still hidden and nothing promotes (the ladder starts one rem over `--container-roomy`), so
+      // that range has the unpromoted deck's gap; from 80 rem the ladder is at work.
+      const peak = { compact: { w: 0, row: '', pct: -1 }, ladder: { w: 0, row: '', pct: -1 } };
+      for (let w = SWEEP.from; w <= SWEEP.to; w += SWEEP.step) {
+        await settle(page, { w, h: 1000 });
+        const rows = await readRows(page);
+        const range = w < SWEEP.ladderFrom ? 'compact' : 'ladder';
+        for (const row of ['look', 'do'] as const) {
+          const r = rows[row];
+          const pct = ((r.available - r.natural) / r.available) * 100;
+          if (pct > peak[range].pct) peak[range] = { w, row, pct };
+          expect(r.lines, `${pointer} ${String(w)} ${row}: wraps`).toBe(1);
+        }
+      }
+      test.info().annotations.push({
+        type: 'sc-17 sweep peaks',
+        description: `${pointer}: compact ${peak.compact.pct.toFixed(1)} % at ${String(peak.compact.w)} (${peak.compact.row}); ladder ${peak.ladder.pct.toFixed(1)} % at ${String(peak.ladder.w)} (${peak.ladder.row})`,
+      });
+      expect(
+        peak.ladder.pct,
+        `${pointer} ${String(peak.ladder.w)} ${peak.ladder.row}: ${peak.ladder.pct.toFixed(1)} % empty, ladder ceiling ${String(CEILING_PCT.ladder)} %`,
+      ).toBeLessThanOrEqual(CEILING_PCT.ladder);
+      expect(
+        peak.compact.pct,
+        `${pointer} ${String(peak.compact.w)} ${peak.compact.row}: ${peak.compact.pct.toFixed(1)} % empty, compact ceiling ${String(CEILING_PCT.compact)} %`,
+      ).toBeLessThanOrEqual(CEILING_PCT.compact);
+    });
+
     test('SC-18 (a): at 3840 × 1440 every promoted form is the width the committed file says', async () => {
       await settle(page, WIDE);
       const measured = await deck(page)
@@ -360,7 +418,9 @@ for (const pointer of ['fine', 'coarse'] as const) {
           ).toBeLessThanOrEqual(2);
           sum += got ?? 0;
         }
-        const total = sum + widths.itemGapPx * (membersOf(entry).length - 1);
+        // Net of the trigger it renames (Share… turns "Share & export" into "Export").
+        const total =
+          sum + widths.itemGapPx * (membersOf(entry).length - 1) - (entry.triggerShrinkPx ?? 0);
         expect(
           Math.abs(total - entry.width),
           `${pointer} ${entry.rank} (${entry.name}): ${total.toFixed(1)} px, file says ${String(entry.width)}`,
@@ -430,7 +490,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     });
 
     test('a promoted command is absent from its menu, not shaded', async () => {
-      await settle(page, CELLS[3]);
+      await settle(page, CELLS[CELLS.length - 1] ?? WIDE);
       const menus: Array<{
         trigger: string;
         open: () => Promise<void>;
@@ -482,7 +542,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     });
 
     test('the roving order is the visual order: ArrowRight, Home and End visit promoted items in place', async () => {
-      await settle(page, CELLS[3]);
+      await settle(page, CELLS[CELLS.length - 1] ?? WIDE);
       const dom = await barIds(page);
       const focusables = await deck(page)
         .locator('[data-toolbar-focusable]')
@@ -519,8 +579,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     });
 
     test('Critical only and Filter agree, and the state survives the window narrowing', async () => {
-      const px = pointer === 'fine' ? 1440 : 1912;
-      await settle(page, { w: px, h: 900 });
+      await settle(page, { w: criticalOnlyPx(pointer), h: 900 });
       const critical = item(page, 'critical-only');
       await expect(critical).toHaveAttribute('aria-pressed', 'false');
       await critical.click();
@@ -567,7 +626,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
 
     test('E-1: a resize promotes the command a reader is on in a menu, and focus follows it', async () => {
       const before = { w: 1280, h: 800 };
-      const after = pointer === 'fine' ? { w: 1440, h: 900 } : { w: 1912, h: 1080 };
+      const after = { w: criticalOnlyPx(pointer), h: 900 };
       await settle(page, before);
       await item(page, 'filter').click();
       const critical = page
@@ -612,8 +671,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
     });
 
     test('E-2: a resize demotes the command a reader is on, and focus lands on its source trigger', async () => {
-      const wide = pointer === 'fine' ? { w: 1440, h: 900 } : { w: 1912, h: 1080 };
-      await settle(page, wide);
+      await settle(page, { w: criticalOnlyPx(pointer), h: 900 });
       await item(page, 'critical-only').focus();
       await page.setViewportSize({ width: 1280, height: 800 });
       await expect(item(page, 'filter')).toBeFocused();
@@ -637,9 +695,8 @@ for (const pointer of ['fine', 'coarse'] as const) {
       };
       try {
         await setFonts(2);
-        // At a 32 px root, 2880 px is 90 rem (Critical only's fine stage) and 2560 px is 80 rem.
-        const wide = pointer === 'fine' ? 2880 : 3840;
-        await page.setViewportSize({ width: wide, height: 1440 });
+        // At a 32 px root, 2880 px is 90 rem (Critical only's stage) and 2560 px is 80 rem.
+        await page.setViewportSize({ width: criticalOnlyPx(pointer) * 2, height: 1440 });
         await page.goto(planUrl);
         await expect(deck(page)).toBeVisible({ timeout: 30_000 });
         await page.waitForTimeout(700);

@@ -450,16 +450,18 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // thrown out. On a toolbar button, pressing a control and landing in the panel it opened is
     // ordinary. The surprise the sentence existed to remove is not there to remove.
     //
-    // **Icon `ChartColumnStacked`, label `'roomy'`** (toolbar-redesign OD-1). `Users` read as
+    // **Icon `ChartColumnStacked`, icon-only at every width** (toolbar-redesign OD-1, then the
+    // product owner's M5 review: `'roomy'` showed the word from 79 rem, and the ~95 px it cost
+    // there is what the promotion ladder spends on a command from a menu). `Users` read as
     // "members", which is a different feature; the resource strip this opens is a stacked loading
-    // histogram under the diagram (ADR-0049), and that is the glyph. It is the fourth control that
-    // goes icon-only below the roomy width, and the one the conflict case at 1024 needs.
+    // histogram under the diagram (ADR-0049), and that is the glyph. Its tooltip names it and says
+    // what it does, and it is pressed while the strip is showing.
     promotion: {
       at: 'always',
       icon: <ChartColumnStacked className="size-4" />,
       group: 'help',
       order: 1,
-      labelVisibility: 'roomy',
+      labelVisibility: 'never',
       description: 'Show resource loading under the diagram',
     },
   },
@@ -1776,6 +1778,8 @@ function FilterMenuControl({
 
 /** The one name for the deliverables trigger, its menu and its tooltip (ADR-0090 M2-T4). */
 const SHARE_EXPORT_LABEL = 'Share & export';
+/** The same trigger's name while Share… is promoted onto the bar next to it. */
+const EXPORT_LABEL = 'Export';
 /** The one name for the analysis trigger, its menu and its tooltip (ADR-0090 M2-T5). */
 const ANALYSIS_LABEL = 'Analysis';
 
@@ -1811,6 +1815,10 @@ function ExportMenuControl({
   // unconditionally in that state rather than only when shaded, or the button would be announced as
   // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
+  // **"Export" while Share… is on the bar beside it, "Share & export" otherwise.** Two adjacent
+  // "Share" labels read as one control or a duplicate; the name follows the content, so a reader who
+  // has to open this menu to share (a narrower window) is still told it holds Share.
+  const name = entryOnBar(SHARE_ENTRY, ctx) ? EXPORT_LABEL : SHARE_EXPORT_LABEL;
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   useCloseOnPromotionChange(ctx.promotion, open, close, triggerRef);
   const disabled = api.disabled;
@@ -1824,10 +1832,8 @@ function ExportMenuControl({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
-        title={disabled ? (api.disabledReason ?? SHARE_EXPORT_LABEL) : SHARE_EXPORT_LABEL}
-        {...(labelClass === null || (disabled && api.disabledReason)
-          ? { 'aria-label': SHARE_EXPORT_LABEL }
-          : {})}
+        title={disabled ? (api.disabledReason ?? name) : name}
+        {...(labelClass === null || (disabled && api.disabledReason) ? { 'aria-label': name } : {})}
         {...(disabled && api.disabledReason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!disabled) toggle();
@@ -1835,7 +1841,7 @@ function ExportMenuControl({
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
-        {labelClass ? <span className={labelClass}>{SHARE_EXPORT_LABEL}</span> : null}
+        {labelClass ? <span className={labelClass}>{name}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
@@ -1843,13 +1849,7 @@ function ExportMenuControl({
           </span>
         ) : null}
       </button>
-      <Menu
-        open={open}
-        onClose={close}
-        anchor={anchor}
-        label={SHARE_EXPORT_LABEL}
-        restoreFocusRef={triggerRef}
-      >
+      <Menu open={open} onClose={close} anchor={anchor} label={name} restoreFocusRef={triggerRef}>
         {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
         <MenuSection label="Schedule" />
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>

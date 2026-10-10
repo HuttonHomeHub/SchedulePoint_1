@@ -12,6 +12,7 @@ import {
   seedActivities,
 } from '../e2e-workspace-chrome/support';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
+import { PROMOTION_STAGE_REMS } from '../src/lib/breakpoints';
 
 import { clearMeasurement, writeMeasurement } from './output';
 /**
@@ -39,16 +40,29 @@ interface Cell {
 }
 
 const CELLS: readonly Cell[] = [
-  // The floor, Playwright's default window and the product owner's 1646: nothing, one command, and
-  // three commands have been promoted there (stages 0, 1 and 2).
+  // The floor, Playwright's default window and the product owner's 1646 beside the six stage cells
+  // (1280, 1440, 1600, 1912, 2160, 2560): nothing, one command, and three commands have been
+  // promoted at the first three.
   { label: '1024x600', w: 1024, h: 600 },
   { label: '1280x720', w: 1280, h: 720 },
-  { label: '1646x1097', w: 1646, h: 1097 },
   { label: '1280x800', w: 1280, h: 800 },
   { label: '1440x900', w: 1440, h: 900 },
+  { label: '1600x900', w: 1600, h: 900 },
+  { label: '1646x1097', w: 1646, h: 1097 },
   { label: '1912x1080', w: 1912, h: 1080 },
+  { label: '2160x1200', w: 2160, h: 1200 },
   { label: '2560x1440', w: 2560, h: 1440 },
 ];
+
+/**
+ * `M5_UNPROMOTED=1` takes the same readings of the deck **as it was before the ladder**: the stage
+ * media queries answer "not reached", so `usePromotionStage` reports stage 0 at every width and
+ * every menu command stays in its menu, while the stylesheet's own container queries (which decide
+ * the compact labels) are untouched. Those readings are the `freeWidthByStage` inputs of
+ * `promotion-widths.<pointer>.json` — the room a stage has to spend — and the promoted readings are
+ * its `entries`. `promotion-widths.mjs` turns the pair into the committed files.
+ */
+const UNPROMOTED = process.env.M5_UNPROMOTED === '1';
 
 /** Past the widest stage (160 rem = 2560 px), where every entry with a stage is on the bar. */
 const WIDE: Cell = { label: '3840x1440', w: 3840, h: 1440 };
@@ -275,7 +289,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
 
     test(`M5 readings, ${pointer} pointer`, async ({ page, browser }) => {
       test.setTimeout(7_200_000);
-      const name = `toolbar-redesign-m5.${pointer}`;
+      const name = `toolbar-redesign-m5${UNPROMOTED ? '-unpromoted' : ''}.${pointer}`;
       clearMeasurement(name);
       const stamp = Date.now() + (pointer === 'coarse' ? 1 : 0);
       const record: Reading = { pointer, wide: null as Reading | null, cells: [] as Reading[] };
@@ -287,6 +301,24 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await page.addInitScript((key: string) => {
         window.localStorage.setItem(key, '1');
       }, VIEWPORT_NOTICE_ACK_KEY);
+      if (UNPROMOTED) {
+        await page.addInitScript(
+          (rems: number[]) => {
+            const real = window.matchMedia.bind(window);
+            const stageQueries = new Set(rems.map((rem) => `(min-width: ${String(rem)}rem)`));
+            window.matchMedia = (query: string): MediaQueryList =>
+              stageQueries.has(query)
+                ? ({
+                    matches: false,
+                    media: query,
+                    addEventListener: () => undefined,
+                    removeEventListener: () => undefined,
+                  } as unknown as MediaQueryList)
+                : real(query);
+          },
+          [...PROMOTION_STAGE_REMS],
+        );
+      }
 
       // ---- fixture (as M4) ----------------------------------------------------------------
       await page.setViewportSize({ width: 1646, height: 1097 });
@@ -338,7 +370,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
           const markers = await page.evaluate(readMarkers);
           cells.push({ state, cell: c.label, markers, ...reading });
           // The command band, for the record: what the ladder looks like at the stage.
-          if (state === 'base') {
+          if (state === 'base' && !UNPROMOTED) {
             await page
               .locator('[data-surface="chrome"]:not([data-activities-bar])')
               .first()

@@ -51,23 +51,29 @@ export const SQUAT_QUERY = '(width < 64rem) and (height <= 26rem)';
 
 /**
  * **The promotion stages** (toolbar-redesign M5, spec §4.11): the viewport widths, in rem, at which
- * a menu command may come out onto the command deck. `80` is 1280 px at the default font size, `90`
- * is 1440, `119.5` is 1912 and `160` is 2560 — the four widths the product is judged at. They are
- * rem, like {@link DESIGNED_MIN_WIDTH_QUERY}, so a reader who raised the browser's default font size
- * gets the room in text terms (a 1280 px window at a 32 px default is 40 rem and promotes nothing).
+ * a menu command may come out onto the command deck, narrowest first — **the one list**: the stage
+ * names, the rem values, the media queries and the stage count all derive from it, so adding a stage
+ * is one row. `80` is 1280 px at the default font size, `90` is 1440, `100` is 1600 (the product
+ * owner's 1646 sits just over it), `119.5` is 1912, `135` is 2160 and `160` is 2560. They are rem,
+ * like {@link DESIGNED_MIN_WIDTH_QUERY}, so a reader who raised the browser's default font size gets
+ * the room in text terms (a 1280 px window at a 32 px default is 40 rem and promotes nothing).
  *
  * **Viewport stages, not a measured row** (ADR-0109 D1): the ladder is a committed table indexed by
- * these four constants, which is what keeps it from being a width mechanism that measures itself
- * and gets it wrong. `breakpoints.test.ts` pins them; `promotion-ladder.test.ts` pins every entry's
- * stage to `computePromotionStages` over the committed widths.
+ * these constants, which is what keeps it from being a width mechanism that measures itself and gets
+ * it wrong. `breakpoints.test.ts` pins them; `promotion-ladder.test.ts` pins every entry's stage to
+ * `computePromotionStages` over the committed widths.
  */
-export const PROMOTE_80 = 80;
-export const PROMOTE_90 = 90;
-export const PROMOTE_119_5 = 119.5;
-export const PROMOTE_160 = 160;
+export const PROMOTION_STAGES = [
+  { name: 'PROMOTE_80', rem: 80 },
+  { name: 'PROMOTE_90', rem: 90 },
+  { name: 'PROMOTE_100', rem: 100 },
+  { name: 'PROMOTE_119_5', rem: 119.5 },
+  { name: 'PROMOTE_135', rem: 135 },
+  { name: 'PROMOTE_160', rem: 160 },
+] as const;
 
-/** The stages in ascending order. A stage's index + 1 is how many of them the viewport has reached. */
-export const PROMOTION_STAGE_REMS = [PROMOTE_80, PROMOTE_90, PROMOTE_119_5, PROMOTE_160] as const;
+/** The stages' rem thresholds in ascending order. A stage's index + 1 is how many the viewport has reached. */
+export const PROMOTION_STAGE_REMS: readonly number[] = PROMOTION_STAGES.map((stage) => stage.rem);
 
 /** The media query for one stage's threshold. */
 export function promotionStageQuery(rem: number): string {

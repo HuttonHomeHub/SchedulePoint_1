@@ -213,7 +213,7 @@ describe('useTsldToolbarContext — the promotion ladder (toolbar-redesign M5)',
     viewport(1440);
     expect(build().current.promotion).toEqual({ stage: 2, pointer: 'fine' });
     viewport(2560, true);
-    expect(build().current.promotion).toEqual({ stage: 4, pointer: 'coarse' });
+    expect(build().current.promotion).toEqual({ stage: 6, pointer: 'coarse' });
   });
 
   it('is stage 0 with no matchMedia: every unit test sees the unpromoted deck', () => {

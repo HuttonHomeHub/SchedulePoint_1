@@ -15,15 +15,16 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * same thing against the **real** registries, and pins which items are `'roomy'` so adding or
  * dropping one is a decision rather than an accident.
  *
- * The set is the compact set CQ-2 + OD-1 named — Baseline overlay, Comments, Settings and Resource
- * view — **plus Apply levelled dates… (D-l)**. That one joined at M2 as `'roomy-fine'`: the word shows
+ * The set is the compact set CQ-2 named — Baseline overlay, Comments and Settings — **plus Apply
+ * levelled dates… (D-l)**. (Resource view was the fifth until the M5 review made it icon-only at every
+ * width, `'never'`, to free the room the promotion ladder spends.) That one joined at M2 as `'roomy-fine'`: the word shows
  * for a mouse from 79 rem, and a coarse pointer keeps the icon at every width, because the word cost
  * touch a third DO line at 1280 (owner decision, 2026-10-09). The others are plain `'roomy'`.
  *
  * **Its blind spot, stated**: it reads the declarations. That `ToolbarButton` really mounts the
  * tooltip and `Deck` really applies the variant is `ToolbarButton`'s and the journey's to prove.
  */
-const ROOMY = ['apply-levelling', 'baseline-overlay', 'calendar', 'comments', 'resource-view'];
+const ROOMY = ['apply-levelling', 'baseline-overlay', 'calendar', 'comments'];
 
 const registries: [string, ToolbarItem<never>[]][] = [
   ['the command deck', buildTsldToolbarItems()],
@@ -37,7 +38,7 @@ describe("the registries' 'roomy' items", () => {
       .map((item) => ({ surface, item })),
   );
 
-  it('are exactly the five the design names', () => {
+  it('are exactly the four the design names', () => {
     expect(roomy.map(({ item }) => item.id).sort()).toEqual(ROOMY);
   });
 
