@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { renderHook } from '@testing-library/react';
 import { createRef } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
@@ -35,6 +35,8 @@ vi.mock('@/features/schedule/api/use-schedule', () => ({
   useScheduleSummary: () => ({ isPending: true, data: undefined }),
 }));
 vi.mock('./plan-summary-panel', () => ({ PlanSummaryPanel: () => null }));
+const announce = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
 
 const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as ActivitySummary;
 
@@ -124,17 +126,22 @@ const PLAN = {
   version: 1,
 } as unknown as LoadedPlan;
 
-function build(lateOverlay = false) {
+function build(
+  lateOverlay = false,
+  extra: Partial<Parameters<typeof useTsldToolbarContext>[0]> = {},
+  canvasUi: TsldCanvasUiState = makeCanvasUi(lateOverlay),
+) {
   const model = makeModel();
   const { result } = renderHook(() =>
     useTsldToolbarContext({
       model,
       plan: PLAN,
-      canvasUi: makeCanvasUi(lateOverlay),
+      canvasUi,
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
       minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
+      ...extra,
     }),
   );
   return result;
@@ -181,5 +188,56 @@ describe('useTsldToolbarContext — quick-wins glue', () => {
     expect(result.current.conflictCount).toBe(0);
     expect(result.current.hasConflicts).toBe(false);
     expect(result.current.currentConflict).toBeNull();
+  });
+});
+
+describe('useTsldToolbarContext — the promotion ladder (toolbar-redesign M5)', () => {
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  /** A viewport of `px` pixels at a 16 px root, with a mouse or a finger. */
+  function viewport(px: number, coarse = false): void {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => {
+      const rem = /min-width:\s*([\d.]+)rem/.exec(query)?.[1];
+      return {
+        matches: rem === undefined ? coarse : px >= Number(rem) * 16,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      };
+    });
+  }
+
+  it('reads the viewport stage and the pointer once, onto the context both the bar and the menus read', () => {
+    viewport(1440);
+    expect(build().current.promotion).toEqual({ stage: 2, pointer: 'fine' });
+    viewport(2560, true);
+    expect(build().current.promotion).toEqual({ stage: 4, pointer: 'coarse' });
+  });
+
+  it('is stage 0 with no matchMedia: every unit test sees the unpromoted deck', () => {
+    expect(build().current.promotion).toEqual({ stage: 0, pointer: 'fine' });
+  });
+
+  it('carries the two dock facts the promoted toggles are pressed from', () => {
+    expect(build().current.healthOpen).toBe(false);
+    expect(build(false, { healthOpen: true, revisionsOpen: true }).current).toMatchObject({
+      healthOpen: true,
+      revisionsOpen: true,
+    });
+  });
+
+  it('says a colour change as well as showing it, and says nothing for the mode already chosen', () => {
+    const canvasUi = makeCanvasUi();
+    const result = build(false, {}, canvasUi);
+    result.current.setColourMode('totalFloat');
+    expect(canvasUi.setColourMode).toHaveBeenCalledWith('totalFloat');
+    expect(announce).toHaveBeenCalledWith('Bars coloured by total float.');
+    announce.mockClear();
+    vi.mocked(canvasUi.setColourMode).mockClear();
+    result.current.setColourMode('criticality');
+    expect(canvasUi.setColourMode).not.toHaveBeenCalled();
+    expect(announce).not.toHaveBeenCalled();
   });
 });

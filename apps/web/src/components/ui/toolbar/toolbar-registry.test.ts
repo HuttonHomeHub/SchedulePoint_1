@@ -328,3 +328,28 @@ describe('splitByRow — every row is a key, and the default is `strip`', () => 
     expect(splitByRow([])).toEqual({ identity: [], mode: [], strip: [], canvas: [] });
   });
 });
+
+describe('defineToolbar — a visibleLabel is contained in the name (WCAG 2.5.3)', () => {
+  it('accepts a printed value that is inside the accessible name', () => {
+    const items = [
+      base({ id: 'colour', label: 'Colour by: Total float', visibleLabel: 'Total float' }),
+    ];
+    expect(defineToolbar(items)).toBe(items);
+  });
+
+  it('refuses a printed text the name does not contain: a speech-recognition user would say it and fail', () => {
+    expect(() =>
+      defineToolbar([
+        base({ id: 'colour', label: 'Colour by: Total float', visibleLabel: 'Slack' }),
+      ]),
+    ).toThrow(/label in name/);
+  });
+
+  it('is only for a plain onActivate item', () => {
+    expect(() =>
+      defineToolbar([
+        base({ id: 'menu', label: 'Menu', visibleLabel: 'Menu', render: () => null }),
+      ]),
+    ).toThrow(/plain onActivate/);
+  });
+});

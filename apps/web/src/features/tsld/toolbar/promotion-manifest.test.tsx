@@ -1,15 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MENUS, readDeck, type Reading } from './promotion-test-support';
 import { selectionActionItems } from './selection-actions';
 import { makeTsldToolbarContext } from './test-helpers';
-import type { TsldToolbarContext } from './tsld-toolbar-context';
-import { ALL_PROMOTION_ENTRIES, buildTsldToolbarItems } from './tsld-toolbar-items';
+import { ALL_PROMOTION_ENTRIES } from './tsld-toolbar-items';
 
-import { Deck } from '@/components/ui/toolbar/Deck';
 import {
   isPromoted,
   type PromotionPointer,
@@ -61,72 +60,6 @@ const MANIFEST_PATH = resolve(import.meta.dirname, 'command-manifest.json');
 const STAGES: readonly PromotionStage[] = [0, 1, 2, 3, 4];
 const POINTERS: readonly PromotionPointer[] = ['fine', 'coarse'];
 
-/** The source menus, by the registry id of the trigger that opens each and the name that opens it. */
-const MENUS: ReadonlyArray<{ from: string; open: (ctx: TsldToolbarContext) => HTMLElement }> = [
-  { from: 'filter', open: () => screen.getByRole('button', { name: 'Filter' }) },
-  { from: 'view', open: () => screen.getByRole('button', { name: /^View/ }) },
-  { from: 'analysis', open: () => screen.getByRole('button', { name: 'Analysis' }) },
-  { from: 'export', open: () => screen.getByRole('button', { name: 'Share & export' }) },
-  {
-    from: 'add-activity',
-    open: () => screen.getByRole('button', { name: /^Activity type/ }),
-  },
-  { from: 'link-tool', open: () => screen.getByRole('button', { name: /^Link type/ }) },
-];
-
-function nameOf(el: Element): string {
-  const labelled = el instanceof HTMLInputElement ? (el.labels?.[0]?.textContent ?? null) : null;
-  return (el.getAttribute('aria-label') ?? labelled ?? el.textContent ?? '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/** The rows of whatever panel is open: menu rows, and the checkboxes and radios of a popover. */
-function openPanelRows(): string[] {
-  const panel = screen.queryByRole('menu') ?? screen.queryByRole('dialog');
-  if (!panel) return [];
-  return [
-    ...panel.querySelectorAll(
-      '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],input[type="checkbox"],input[type="radio"]',
-    ),
-  ]
-    .map(nameOf)
-    .filter((name) => name !== '')
-    .sort();
-}
-
-interface Reading {
-  /** `data-toolbar-item` ids on the deck, in document order. */
-  bar: string[];
-  /** Accessible names of the deck's focusable controls. */
-  names: string[];
-  /** Each source menu's rows. */
-  menus: Record<string, string[]>;
-}
-
-function read(pointer: PromotionPointer, stage: PromotionStage): Reading {
-  const ctx = makeTsldToolbarContext({ promotion: { stage, pointer } });
-  const { unmount } = render(
-    <Deck items={buildTsldToolbarItems()} context={ctx} label="Plan commands" />,
-  );
-  const bar = [...document.querySelectorAll('[data-toolbar-item]')].map(
-    (el) => el.getAttribute('data-toolbar-item') ?? '',
-  );
-  const names = [...document.querySelectorAll('[data-toolbar-focusable]')].map(nameOf);
-  const menus: Record<string, string[]> = {};
-  for (const { from, open } of MENUS) {
-    const trigger = open(ctx);
-    fireEvent.click(trigger);
-    menus[from] = openPanelRows();
-    fireEvent.click(trigger);
-    // A popover leaves with a second press; a menu needs Escape. Either way the next one starts shut.
-    fireEvent.keyDown(document, { key: 'Escape' });
-  }
-  unmount();
-  cleanup();
-  return { bar, names, menus };
-}
-
 afterEach(cleanup);
 
 describe('no tool is lost (SC-14, SC-19)', () => {
@@ -136,7 +69,7 @@ describe('no tool is lost (SC-14, SC-19)', () => {
     const key = `${pointer}:${String(stage)}`;
     let reading = readings.get(key);
     if (!reading) {
-      reading = read(pointer, stage);
+      reading = readDeck(makeTsldToolbarContext({ promotion: { stage, pointer } }));
       readings.set(key, reading);
     }
     return reading;

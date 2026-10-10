@@ -11997,3 +11997,17 @@ supplies (`restoreFocus`), it announces nothing (the workspace says the sentence
 callback also runs on the strip's own button presses. **Next:** make the hook's `message` optional and let `target` be
 `string | (() => HTMLElement | null)`, then move `HistoryResultStrip` over with its focus-inside tests unchanged, and decide
 whether the selection bar's variant is the same rule. **Trigger:** the next change to either copy.
+
+### 482. The zoom presets are not promoted into the diagram's corner, and the search field does not grow at 2560
+
+**Status:** open · **Verified:** 2026-10-10 (`docs/specs/toolbar-redesign/m5-measurement.md` §0.5-0.6: LOOK has 294 px free at 2560 on a mouse after L1-L6, 169 px with a cycling conflict read-out, against the +240 px the spec's ladder asks of the search field; `PROMOTION_LADDER` has no `canvas`-row entry and `computePromotionStages` takes none)
+**Raised:** 2026-10-10 (toolbar redesign M5) · **Size:** M · **Owner:** web · **Needs a spec** if the answer is a new surface (ADR-0105)
+
+Two parts of the spec's free-space ladder (§4.11) were not built, each for a measured reason. **C1**, the zoom presets as a flat
+pressed set in the "Diagram viewport" cluster (430 px mouse / 470 px touch), stages on the **stage's** width, not the deck's, and
+the cluster's column has nowhere to put a row that wide (M4 fits a 204 px card); the deck's own ladder excludes the `canvas` row
+by design. **The search field's +240 px** at 160 rem does not fit after the six LOOK commands and would wrap the row in the worst
+state; SC-17 is met without it (11.6 % empty). **What users see:** zoom presets stay in `View ▾` ▸ Zoom, and the search field stays
+240 px wide on a monitor. **Next:** decide whether a wide stage should host the presets (a stage-width stage, its own geometry rule
+against the 40 px ruler and the minimap) and whether search should outrank Late-start overlay/Feasible window/Levelled placement
+(a ladder reorder). **Trigger:** a product-owner call after seeing the 2560 deck.

@@ -12,6 +12,7 @@ import {
   isFilterActive,
   isOverAllocated,
   matchesActivityFilter,
+  type ColourMode,
 } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 
@@ -21,6 +22,7 @@ import { useDiagramImage } from './commands/use-diagram-image';
 import { useSearchNavigation } from './commands/use-search-navigation';
 import { useViewportCommands } from './commands/use-viewport-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
+import { COLOUR_MODE_LABELS } from './promotion-entries';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { UseMinimapPanelPrefs } from './use-minimap-panel-prefs';
@@ -660,7 +662,14 @@ export function useTsldToolbarContext({
       filterAttrs: lensState.filterAttrs,
       toggleFilterAttr,
       colourMode: lensState.colourMode,
-      setColourMode,
+      // Said as well as shown: the colour choice is a flat run of pressed buttons on a wide bar, and a
+      // screen reader hears only the one it is standing on change, not its sibling letting go
+      // (toolbar-redesign M5). A press on the mode already chosen is a no-op and says nothing.
+      setColourMode: (mode: ColourMode) => {
+        if (mode === lensState.colourMode) return;
+        setColourMode(mode);
+        announce(`Bars coloured by ${COLOUR_MODE_LABELS[mode].toLowerCase()}.`);
+      },
       baselineOverlay: lensState.baselineOverlay,
       toggleBaselineOverlay,
       compareOverlay: lensState.compareOverlay,
