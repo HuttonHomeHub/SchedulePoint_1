@@ -1,38 +1,29 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * End-to-end configuration for the **command surface's fit and target sizes**
- * (`docs/specs/workspace-chrome-fit/`, M1).
+ * End-to-end configuration for **the promotion ladder** (`docs/specs/toolbar-redesign/`, M5): the
+ * journey that drives the real deck at the six stages the product is judged at, on both pointers,
+ * and sweeps 1192-2600 for the SC-17 gap (`e2e-workspace-fit/promotion.spec.ts`).
  *
- * **This exists because a gate was deleted correctly and left a hole.** ADR-0109 D1 removed
- * `e2e-toolbar-fit` along with the width ladder it tested — the right call, since it asserted a row
- * that no longer exists, and a gate whose subject is gone does not become a safety net by continuing
- * to pass. But that journey's `elementFromPoint` sweep was **the only automated cover WCAG 2.2
- * §2.5.8 Target Size had in this repository**, and `docs/TECH_DEBT.md` #186 has recorded the gap
- * since.
+ * **Its own config because it is two minutes of a suite that was one.** The spec lives beside the
+ * target-size sweep it grew out of, and `playwright.workspace-fit.config.ts` ignores it, but running
+ * it as part of that step put ~125 s on a shard already at its budget (`scripts/e2e-durations.json`,
+ * `pnpm check:e2e-roster` prints the packing). A separate script is a separate CI step, and a step is
+ * what the roster places on a shard.
  *
- * **axe cannot stand in for it, and "the axe scan is green" is true and meaningless here.**
- * ADR-0090 M5 established this by running axe-core directly: `target-size` is tagged `wcag22aa`
- * while every scan in this estate requests `wcag2a`/`wcag2aa`, **and** the rule ships
- * `enabled: false`. Two independent reasons it can never fire.
- *
- * Unlike its predecessor this suite has **no width ladder to drive**. A wrapping surface has no
- * demotion to model, so the question collapses to "does every command clear 24 × 24 and can a
- * pointer actually reach it", at each width, in both plan views.
- *
- * Chromium only (TECH_DEBT #25a), serial, and **run at four widths inside the spec** rather than as
- * four projects — the fixture is expensive to build and the sweep is cheap.
+ * No `VITE_` pins, for `playwright.workspace-chrome.config.ts`'s reason: a published image carries
+ * every flag at its default, so the shipped surface IS the default surface. Chromium only (TECH_DEBT
+ * #25a), serial: the fixture is expensive to build and the sweep is cheap.
  */
 export default defineConfig({
   testDir: './e2e-workspace-fit',
-  // The promotion ladder's journey has its own config and CI step (`playwright.promotion.config.ts`).
-  testIgnore: 'promotion.spec.ts',
+  testMatch: 'promotion.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: process.env.CI
-    ? [['github'], ['html', { open: 'never', outputFolder: 'playwright-report-workspace-fit' }]]
+    ? [['github'], ['html', { open: 'never', outputFolder: 'playwright-report-promotion' }]]
     : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
