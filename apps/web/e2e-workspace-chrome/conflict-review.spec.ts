@@ -4,6 +4,7 @@ import { expect, test } from '../e2e-support/test';
 
 import {
   createHierarchy,
+  diagramList,
   ensurePen,
   findBar,
   findBarWide,
@@ -57,6 +58,35 @@ function lookRow(page: Page) {
 /** The canvas dock's selection bar, whatever activity it currently names. */
 function dock(page: Page) {
   return page.getByRole('toolbar', { name: /^Actions for / });
+}
+
+/**
+ * Tab into the selection bar from the diagram's list and arrow along it until `target` holds focus.
+ * Asserts the entry stop is the canvas's first item (Zoom to selection) and that the reason line
+ * is never what holds focus. The bar is one roving Tab stop, so this is the keyboard's whole path.
+ */
+async function walkBar(page: Page, target: string): Promise<void> {
+  await diagramList(page).focus();
+  await page.keyboard.press('Tab');
+  const here = async (): Promise<string> =>
+    page.evaluate(() =>
+      document.activeElement?.hasAttribute('data-conflict-reason')
+        ? 'REASON LINE'
+        : (document.activeElement?.getAttribute('data-toolbar-item') ?? ''),
+    );
+  // The viewport cluster sits between the list and the bar in the Tab order, so step until the bar.
+  let at = await here();
+  for (let i = 0; i < 6 && at !== 'zoom-to-selection'; i += 1) {
+    await page.keyboard.press('Tab');
+    at = await here();
+  }
+  expect(at, 'the bar’s first roving stop on the canvas').toBe('zoom-to-selection');
+  for (let i = 0; i < 20 && at !== target; i += 1) {
+    await page.keyboard.press('ArrowRight');
+    at = await here();
+    expect(at).not.toBe('REASON LINE');
+  }
+  expect(at, `the walk reaches ${target}`).toBe(target);
 }
 
 test.describe('Conflict review', () => {
@@ -215,6 +245,33 @@ test.describe('Conflict review', () => {
       'and the command surface no longer carries it at all (ADR-0094 M4-T1)',
     ).toHaveCount(0);
 
+    // ── 6b · The bar SAYS why, in words, on its own line (ADR-0186) ───────────────────────────
+    // The copy IS the assertion. Before this, the reason was spoken and shown to nobody, and for this
+    // type the bar carried no conflict-flavoured control at all.
+    const reason = page.locator('[data-conflict-reason]');
+    await expect(reason).toHaveText('Placed before its logic allows');
+    await expect(
+      clearOnBar,
+      'the control that answers the conflict carries the same sentence as its description',
+    ).toHaveAccessibleDescription('Placed before its logic allows');
+    await expect(clearOnBar).toHaveAccessibleName('Clear visual start');
+    await expect(
+      page.locator('[data-conflict-reason]'),
+      'the line is not a toolbar item and is no stop on the keyboard',
+    ).toHaveCount(1);
+    expect(
+      await reason.evaluate((el) => ({
+        tabindex: el.getAttribute('tabindex'),
+        role: el.getAttribute('role'),
+        live: el.getAttribute('aria-live'),
+        inToolbar: el.closest('[role="toolbar"]') !== null,
+      })),
+    ).toEqual({ tabindex: null, role: null, live: null, inToolbar: false });
+    // The bar is ONE Tab stop (roving). Tab from the diagram's list enters it at its first item,
+    // which on the canvas is Zoom to selection, and the arrow keys walk it. The reason line is never
+    // a stop on that walk, and Clear visual start (which carries the reason) is reachable by it.
+    await walkBar(page, 'clear-visual-placement');
+
     // ── 7 · Using it resolves the conflict the toolbar was describing ────────────────────────
     await clearOnBar.click();
     await expect
@@ -225,6 +282,10 @@ test.describe('Conflict review', () => {
       .toBe('true');
     await expect(nextConflict).toHaveAccessibleDescription('No conflicts to review');
     await expect(status, 'and the read-out withdraws with the last conflict').toHaveCount(0);
+    await expect(
+      page.locator('[data-conflict-reason]'),
+      'and so does the reason on the bar: it follows the object, and the object is clear',
+    ).toHaveCount(0);
   });
 
   test('offers a route rather than a one-click fix when the fix is a judgement', async ({
@@ -277,6 +338,13 @@ test.describe('Conflict review', () => {
     // identical, so calling one a fix promised a single-click resolution neither can give (the ux
     // gate found the pair disagreeing).
     await expect(remedy).toContainText('Review the constraint…');
+    // The reason, in words, above the controls — and the remedy carries it as a DESCRIPTION while its
+    // NAME stays the command (a name with the reason glued on is the leak this pair exists to catch).
+    await expect(page.locator('[data-conflict-reason]')).toHaveText('Constraint not met');
+    await expect(remedy).toHaveAccessibleName('Review the constraint…');
+    await expect(remedy).toHaveAccessibleDescription('Constraint not met');
+    // The bar's roving walk reaches the remedy, and never lands on the reason line.
+    await walkBar(page, 'conflict-remedy');
 
     await remedy.click();
     // **The editor lands in the context drawer, not a modal** (Graphite M10). This read
@@ -294,5 +362,63 @@ test.describe('Conflict review', () => {
       'send someone to fix a constraint and they should arrive where the constraint is — the ' +
         'General tab would be the editor opening, not the route working',
     ).toBeVisible();
+  });
+
+  test('shows one reason at a time while stepping, and it is the selected activity’s', async ({
+    page,
+  }) => {
+    // SC-9: nothing queued, stacked or timed. Two conflicts of DIFFERENT types so the text says which
+    // activity it belongs to; neither needs a drag.
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Conflict stepping');
+    await ensurePen(page);
+
+    const [beam, roof] = await seedActivities(page, orgSlug, [
+      { name: 'Steel beam', laneIndex: 0 },
+      { name: 'Roof', laneIndex: 1 },
+    ]);
+    if (!beam || !roof) throw new Error('seeding returned too few activities');
+    const patch = async (id: string, body: Record<string, unknown>): Promise<void> => {
+      const failure = await page.evaluate(
+        async ({ org, id: target, patchBody }: { org: string; id: string; patchBody: object }) => {
+          const response = await fetch(`/api/v1/organizations/${org}/activities/${target}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ...patchBody, version: 1 }),
+          });
+          return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+        },
+        { org: orgSlug, id, patchBody: body },
+      );
+      if (failure !== null) throw new Error(`patch failed: ${failure}`);
+    };
+    // A mandatory start before the data date, and a start-no-later-than ceiling the placement passes.
+    await patch(beam.id, { constraintType: 'MANDATORY_START', constraintDate: '2025-12-22' });
+    await patch(roof.id, {
+      constraintType: 'SNLT',
+      constraintDate: '2026-01-06',
+      visualStart: '2026-01-19',
+    });
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    const nextConflict = lookRow(page).locator('[data-toolbar-item="next-conflict"]');
+    await expect(nextConflict).not.toHaveAttribute('aria-disabled', 'true', { timeout: 20_000 });
+    const expectedReason: Record<string, string> = {
+      'Steel beam': 'Constraint not met',
+      Roof: 'Placed after its constraint date',
+    };
+    for (let press = 0; press < 3; press += 1) {
+      await nextConflict.click();
+      await expect(dock(page)).toBeVisible();
+      const name = (await dock(page).getAttribute('aria-label')) ?? '';
+      const activity = name.replace(/^Actions for /, '');
+      await expect(page.locator('[data-conflict-reason]')).toHaveCount(1);
+      await expect(page.locator('[data-conflict-reason]')).toHaveText(
+        expectedReason[activity] ?? 'NO SUCH ACTIVITY',
+      );
+    }
   });
 });

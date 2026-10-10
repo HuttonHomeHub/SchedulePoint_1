@@ -157,6 +157,66 @@ test('Fix this conflict is absent when the selected activity has none', async ({
   await expect(bar.getByRole('button', { name: 'Fix this conflict' })).toHaveCount(0);
 });
 
+test('a flagged row states its reason on the docked bar, and its menu offers nothing inert', async ({
+  page,
+}) => {
+  // The positive case the test above names as a gap (ADR-0186): a plan seeded into conflict, with
+  // the Gantt as the host. The conflict is a mandatory start before the data date, which needs no
+  // drag and so works in a view with no canvas (`conflict-review.spec.ts` seeds it the same way).
+  test.setTimeout(120_000);
+  const orgSlug = await ganttPlanWithSelection(page, Date.now());
+  const failure = await page.evaluate(
+    async ({ org, planId }: { org: string; planId: string }) => {
+      const base = `/api/v1/organizations/${org}`;
+      const list = await fetch(`${base}/plans/${planId}/activities?limit=100`, {
+        credentials: 'include',
+      });
+      const rows = (
+        (await list.json()) as { data: Array<{ id: string; name: string; version: number }> }
+      ).data;
+      const row = rows.find((r) => r.name === 'Seeded 0');
+      if (!row) return 'no Seeded 0';
+      const res = await fetch(`${base}/activities/${row.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          constraintType: 'MANDATORY_START',
+          constraintDate: '2025-12-22',
+          version: row.version,
+        }),
+      });
+      return res.ok ? null : `${String(res.status)} ${await res.text()}`;
+    },
+    { org: orgSlug, planId: openPlanId(page) },
+  );
+  if (failure !== null) throw new Error(`pinning the constraint failed: ${failure}`);
+  await syncClient(page);
+  await recalculate(page);
+  await ganttRow(page, 'Seeded 0').click();
+
+  const bar = page.getByRole('toolbar', { name: 'Actions for Seeded 0' });
+  await expect(bar).toBeVisible();
+  // The copy IS the assertion: the reason, in words, on the docked bar.
+  const reason = page.locator('[data-conflict-reason]');
+  await expect(reason).toHaveText('Constraint not met');
+  await expect(
+    reason.locator('xpath=ancestor::*[@data-surface][1]'),
+    'the same chrome surface the Diagram’s bar sits on, so the contrast gate’s composite applies here too',
+  ).toHaveAttribute('data-surface', 'chrome');
+  const remedy = bar.getByRole('button', { name: 'Review the constraint…' });
+  await expect(remedy).toHaveAccessibleDescription('Constraint not met');
+
+  // The row's `⋯` menu: no 'Conflict reason' item and no inert 'Fix this conflict' — the remedy is
+  // on the bar, and a menu item needs an activation path.
+  await page.getByRole('button', { name: 'Actions for Seeded 0' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Conflict reason' })).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Fix this conflict' })).toHaveCount(0);
+  await expect(menu.getByRole('menuitem').first()).toBeVisible();
+});
+
 test('Make milestone… converts from a Gantt selection and returns focus to its row', async ({
   page,
 }) => {
