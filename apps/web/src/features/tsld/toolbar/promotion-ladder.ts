@@ -24,20 +24,20 @@ export type LadderRank =
 
 export const PROMOTION_LADDER: Readonly<Record<LadderRank, Exclude<PromotionAt, 'always'>>> = {
   // LOOK
-  L1: { fine: 'never', coarse: 'never' },
-  L2: { fine: 'never', coarse: 'never' },
-  L3: { fine: 'never', coarse: 'never' },
-  L4: { fine: 'never', coarse: 'never' },
-  L5: { fine: 'never', coarse: 'never' },
-  L6: { fine: 'never', coarse: 'never' },
+  L1: { fine: 'PROMOTE_90', coarse: 'PROMOTE_119_5' },
+  L2: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_160' },
+  L3: { fine: 'PROMOTE_160', coarse: 'PROMOTE_119_5' },
+  L4: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
+  L5: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
+  L6: { fine: 'PROMOTE_160', coarse: 'never' },
   // DO
-  P1: { fine: 'never', coarse: 'never' },
-  P2: { fine: 'never', coarse: 'never' },
-  P3: { fine: 'never', coarse: 'never' },
-  P4: { fine: 'never', coarse: 'never' },
-  P5: { fine: 'never', coarse: 'never' },
-  P6: { fine: 'never', coarse: 'never' },
-  P7: { fine: 'never', coarse: 'never' },
+  P1: { fine: 'PROMOTE_90', coarse: 'PROMOTE_90' },
+  P2: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_119_5' },
+  P3: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_119_5' },
+  P4: { fine: 'PROMOTE_80', coarse: 'PROMOTE_119_5' },
+  P5: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
+  P6: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
+  P7: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_160' },
   P8: { fine: 'never', coarse: 'never' },
 };
 

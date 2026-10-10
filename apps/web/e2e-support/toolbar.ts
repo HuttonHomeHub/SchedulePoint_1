@@ -83,6 +83,72 @@ export async function clickToolbarCommand(page: Page, id: string): Promise<void>
 }
 
 /**
+ * Press a command that **lives in a menu and comes out onto the bar when there is room**
+ * (toolbar-redesign M5, the promotion ladder): its own button when the viewport has promoted it,
+ * else the row in the menu it left. A journey is about the command, not about the stage the
+ * viewport happens to be at, so it asks for the command by `id` and menu row.
+ *
+ * `id` is the promoted button's registry id (`health-check`, `share`, `add-start-milestone`);
+ * `via` is the menu trigger's (`analysis`, `export`, `add-activity`) and `menuItem` the row's name.
+ * An Add or Link preset opens no menu at all: pressing it arms the tool with that kind, exactly as
+ * picking the row does.
+ */
+export async function pressPromotable(
+  page: Page,
+  { id, via, menuItem }: { id: string; via: string; menuItem: string | RegExp },
+): Promise<void> {
+  const row = planCommands(page);
+  await expect(row).toBeVisible();
+  const promoted = row.locator(`[data-toolbar-item="${id}"]`);
+  if ((await promoted.count()) > 0) {
+    await promoted.click();
+    return;
+  }
+  await (await revealToolbarCommand(page, via)).click();
+  await page.getByRole('menuitem', { name: menuItem }).click();
+}
+
+/**
+ * Arm the Add tool on `kind`: the milestone kinds are buttons of their own on the bar once the
+ * viewport has promoted them (toolbar-redesign M5) and arm the tool exactly as picking the row from
+ * the `Activity type` menu does; Task is that menu's anchor and is always a row.
+ */
+export async function pickAddKind(
+  page: Page,
+  kind: 'Task' | 'Start milestone' | 'Finish milestone',
+): Promise<void> {
+  const preset =
+    kind === 'Start milestone'
+      ? 'add-start-milestone'
+      : kind === 'Finish milestone'
+        ? 'add-finish-milestone'
+        : null;
+  if (preset !== null) {
+    const button = planCommands(page).locator(`[data-toolbar-item="${preset}"]`);
+    if ((await button.count()) > 0) {
+      await button.click();
+      return;
+    }
+  }
+  await page.getByRole('button', { name: /^Activity type:/ }).click();
+  await page.getByRole('menuitemradio', { name: kind }).click();
+}
+
+/** Open the Health check dock: its button when the viewport has promoted it, else the Analysis row. */
+export async function openHealthCheck(page: Page): Promise<void> {
+  await pressPromotable(page, {
+    id: 'health-check',
+    via: 'analysis',
+    menuItem: 'Health check…',
+  });
+}
+
+/** Open the Share links dialog: its button when promoted, else the Share & export row. */
+export async function openShare(page: Page): Promise<void> {
+  await pressPromotable(page, { id: 'share', via: 'export', menuItem: 'Share…' });
+}
+
+/**
  * Is `id` offered by the command surface at all?
  *
  * The negative form matters as much as the positive one. Under the ladder this had to look in two

@@ -19,7 +19,7 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
-import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
+import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -504,10 +504,7 @@ export function ToolbarPlanWorkspace({
   const closeHealthAndFocus = useCallback(() => {
     setHealthOpen(false);
     setHealthRevealId(null);
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
+    focusDockTrigger('health');
   }, []);
 
   const toggleHealthCheck = useCallback(() => {
@@ -525,10 +522,7 @@ export function ToolbarPlanWorkspace({
   const closeRevisionsAndFocus = useCallback(() => {
     setRevisionsOpen(false);
     setRevisionRevealId(null);
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
+    focusDockTrigger('revisions');
   }, []);
 
   const toggleRevisionCompare = useCallback(() => {
@@ -828,13 +822,7 @@ export function ToolbarPlanWorkspace({
       ?.closest('[data-right-dock]')
       ?.getAttribute('data-right-dock');
     for (const closeDock of Object.values(closeDockOf)) closeDock();
-    if (held !== null && held !== undefined) {
-      const item = DOCK_TRIGGER_ITEM[held as RightDock];
-      (
-        document.querySelector<HTMLElement>(`[data-toolbar-item="${item}"]`) ??
-        document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]')
-      )?.focus();
-    }
+    if (held !== null && held !== undefined) focusDockTrigger(held as RightDock);
     ganttAnnounce('Panel closed to show the diagram.');
   }, [closeDockOf, ganttAnnounce]);
   const withDiagram = useCallback(

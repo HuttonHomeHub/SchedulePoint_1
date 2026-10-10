@@ -12,6 +12,7 @@
     "lint": "eslint . --cache --cache-strategy content --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "manifest:commands": "UPDATE_COMMAND_MANIFEST=1 vitest run src/features/tsld/toolbar/promotion-manifest.test.tsx",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test --pass-with-no-tests",

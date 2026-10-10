@@ -366,6 +366,23 @@ entry stops being needed.
   two-dimensional surface under 1.4.10), and every canvas affordance keeps its
   keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
+### Free space is used by commands that were in a menu (toolbar-redesign M5, R9)
+
+When a deck row has spare width, a command that lives in a menu and could sit on the bar is promoted out of
+that menu; it falls back into the menu when the width runs out. Seven rules follow. **A promoted command
+leaves its menu; it is not shaded there** — one accessible name exists once in the tree. **A menu never
+empties**: each keeps an anchor row that renders in every state, so its trigger is on the bar at every width
+(commands stay in place). **Nothing on today's bar is ever demoted**: promotion only adds. **A promoted
+command is the same command**: a kind preset ("Add: Start milestone", "Link: Start → Start") arms its tool
+exactly as the menu pick does and is pen-gated with the same reason; a dock toggle is pressed from the dock
+itself, so it stays in step when the dock is closed from its own close button; Critical only and Filter read
+one set. **Focus follows the command** (ADR-0135): a resize that promotes the command a reader is on in a
+menu moves focus to its button and announces "‹name› is now on the toolbar."; one that demotes the command
+a reader is on lands focus on the menu's trigger with "Moved into the ‹menu› menu." **Group names do not
+change as items promote** (View, Find, Panels, Author, Plan), and a promoted item sits immediately after its
+trigger in the same group. **The ladder's order is the product owner's ranking** (D-n), by frequency and
+importance, and each threshold is computed from measured widths, never judged.
+
 ### The diagram's own viewport controls (toolbar-redesign M4)
 
 Zoom, Fit and the Minimap live on the diagram's corner, not the command deck: a control belongs on its

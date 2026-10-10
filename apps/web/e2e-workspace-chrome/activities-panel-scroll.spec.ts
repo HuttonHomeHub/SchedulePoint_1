@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   createHierarchy,
@@ -651,8 +652,7 @@ for (const cell of [
       // Swap active, then open Health: the panel collapses and the dock is shown.
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
-      await page.locator('[data-toolbar-item="analysis"]').click();
-      await page.getByRole('menuitem', { name: /Health check/ }).click();
+      await openHealthCheck(page);
       await expect(expandButton(page)).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Health check' })).toBeVisible();
     });

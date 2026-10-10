@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { drawnSpanDays } from '@repo/layout';
 
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   layoutXerFile,
@@ -109,12 +109,7 @@ test('an imported zero-duration task is advised in the report and listed by the 
   await dialog.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  await openHealthCheck(page);
   const panel = page.getByRole('region', { name: 'Health check' });
   const advisory = panel.getByRole('region', { name: 'Beyond the DCMA assessment' });
   const toggle = advisory.getByRole('button', { name: /Zero-duration tasks/ });

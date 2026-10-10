@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { openShare } from '../e2e-support/toolbar';
 
 import {
   barExtentsByRow,
@@ -49,10 +50,9 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
 
   // (1) Open the Share… toolbar item (Row 2 · Do deliverables cluster) — the member management dialog.
-  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
-  // Share is a row inside the `Share & export` menu since ADR-0090 M2-T4.
-  await toolbar.getByRole('button', { name: /Share & export/ }).click();
-  await page.getByRole('menuitem', { name: 'Share…' }).click();
+  // Share is a row inside the `Share & export` menu since ADR-0090 M2-T4, and a button of its own
+  // beside it when the viewport has room (toolbar-redesign M5) — this suite runs at 1920.
+  await openShare(page);
   const dialog = page.getByRole('dialog', { name: 'Share links' });
   await expect(dialog).toBeVisible();
 
@@ -346,9 +346,7 @@ test('a guest reads the SAME placed span the member does — the picture and the
   expect(memberR).toBeGreaterThan(0.4);
 
   // (1) Share the plan and read the guest link — same flow as the base journey.
-  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
-  await toolbar.getByRole('button', { name: /Share & export/ }).click();
-  await page.getByRole('menuitem', { name: 'Share…' }).click();
+  await openShare(page);
   const dialog = page.getByRole('dialog', { name: 'Share links' });
   await dialog.getByLabel('Label').fill('Placed-bars check');
   await dialog.getByRole('button', { name: 'Create link' }).click();

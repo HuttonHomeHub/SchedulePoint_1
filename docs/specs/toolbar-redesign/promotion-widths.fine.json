@@ -1,13 +1,13 @@
 {
   "pointer": "fine",
-  "provisional": true,
-  "note": "M0 provisional. Re-taken after M4 and before M5, then checked by CI (SC-18 a). Widths are clones of a real labelled deck button with its label replaced, read at 3840x1440 (Playwright 1.63 / Chromium 1194); NOT a build with every entry at: always, because the promoted forms do not exist yet. Stage proposals use the worst stress state per row (conflicts + peer pen) so a late-arriving conflict chip cannot wrap a row; projected layout B (zoom, Summary, Float paths and Comments moved; compact labels below roomy).",
-  "donor": {
-    "id": "marquee-select",
-    "width": 78.2,
-    "height": 36
-  },
+  "provisional": false,
+  "note": "Re-taken after M4 (toolbar-redesign M5). entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them. freeWidthByStage is the real unpromoted M4 deck (measure-toolbar/toolbar-redesign-m4.spec.ts): the row width less the natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst. The provisional M0 file projected DO 143 px narrower than the real deck (Apply levelled dates was projected icon-only) and sized the P5 and L2 sets with a prefix on every member. safetyPx is the spare width every row keeps in the worst state, so a sub-pixel difference in a font cannot wrap a row that the ladder had filled to the pixel (coarse LOOK at 1912 with Feasible window promoted had 0.4 px).",
   "itemGapPx": 4,
+  "safetyPx": 2,
+  "ladderOrder": {
+    "look": ["L1", "L2", "L3", "L4", "L5", "L6"],
+    "do": ["P1", "P4", "P2", "P3", "P6", "P7", "P5", "P8"]
+  },
   "entries": [
     {
       "rank": "L1",
@@ -15,7 +15,7 @@
       "name": "Critical only",
       "from": "Filter",
       "memberWidths": {
-        "L1 Critical only": 113.9
+        "critical-only": 113.9
       },
       "width": 113.9
     },
@@ -23,22 +23,22 @@
       "rank": "L2",
       "row": "look",
       "name": "Colour by: Criticality / Total float / WBS group",
-      "from": "View > Insight",
+      "from": "View",
       "memberWidths": {
-        "L2a Colour: Criticality": 99.6,
-        "L2b Colour: Total float": 102.5,
-        "L2c Colour: WBS group": 109
+        "colour-by-criticality-caption": 43.4,
+        "colour-by-criticality": 77.6,
+        "colour-by-totalFloat": 80.5,
+        "colour-by-wbs": 87
       },
-      "captionWidth": 47.2,
-      "width": 370.3
+      "width": 300.5
     },
     {
       "rank": "L3",
       "row": "look",
       "name": "Late-start overlay",
-      "from": "View > Insight",
+      "from": "View",
       "memberWidths": {
-        "L3 Late-start overlay": 151.6
+        "late-start-overlay": 151.6
       },
       "width": 151.6
     },
@@ -46,9 +46,9 @@
       "rank": "L4",
       "row": "look",
       "name": "Feasible window",
-      "from": "View > Insight",
+      "from": "View",
       "memberWidths": {
-        "L4 Feasible window": 145.3
+        "feasible-window": 145.3
       },
       "width": 145.3
     },
@@ -56,9 +56,9 @@
       "rank": "L5",
       "row": "look",
       "name": "Levelled placement",
-      "from": "View > Insight",
+      "from": "View",
       "memberWidths": {
-        "L5 Levelled placement": 162.9
+        "levelled-overlay": 162.9
       },
       "width": 162.9
     },
@@ -68,7 +68,7 @@
       "name": "Has conflict only",
       "from": "Filter",
       "memberWidths": {
-        "L6 Has conflict only": 144
+        "has-conflict-only": 144
       },
       "width": 144
     },
@@ -78,7 +78,7 @@
       "name": "Health check",
       "from": "Analysis",
       "memberWidths": {
-        "P1 Health check": 121.7
+        "health-check": 121.7
       },
       "width": 121.7
     },
@@ -88,7 +88,7 @@
       "name": "Add: Start milestone",
       "from": "Add",
       "memberWidths": {
-        "P2 Add: Start milestone": 169.9
+        "add-start-milestone": 169.9
       },
       "width": 169.9
     },
@@ -98,7 +98,7 @@
       "name": "Add: Finish milestone",
       "from": "Add",
       "memberWidths": {
-        "P3 Add: Finish milestone": 176.7
+        "add-finish-milestone": 176.7
       },
       "width": 176.7
     },
@@ -108,21 +108,22 @@
       "name": "Share…",
       "from": "Share & export",
       "memberWidths": {
-        "P4 Share…": 86.8
+        "share": 86.8
       },
       "width": 86.8
     },
     {
       "rank": "P5",
       "row": "do",
-      "name": "Link: Finish-to-start / Start-to-start / Finish-to-finish",
+      "name": "Link: Finish → Start / Start → Start / Finish → Finish",
       "from": "Link",
       "memberWidths": {
-        "P5a Link: Finish-to-start": 165.3,
-        "P5b Link: Start-to-start": 158.2,
-        "P5c Link: Finish-to-finish": 170.4
+        "link-fs-caption": 30.2,
+        "link-fs": 106.2,
+        "link-ss": 99.3,
+        "link-ff": 113.1
       },
-      "width": 501.9
+      "width": 360.8
     },
     {
       "rank": "P6",
@@ -130,7 +131,7 @@
       "name": "Compare revisions",
       "from": "Analysis",
       "memberWidths": {
-        "P6 Compare revisions": 156.8
+        "compare-revisions": 156.8
       },
       "width": 156.8
     },
@@ -140,7 +141,7 @@
       "name": "Earned value…",
       "from": "Analysis",
       "memberWidths": {
-        "P7 Earned value…": 133
+        "earned-value": 133
       },
       "width": 133
     },
@@ -150,7 +151,7 @@
       "name": "Resource histogram…",
       "from": "Analysis",
       "memberWidths": {
-        "P8 Resource histogram…": 177.2
+        "resource-histogram": 177.2
       },
       "width": 177.2
     }
@@ -162,156 +163,74 @@
         "avail": 1264,
         "naturalBase": 1135.4,
         "freeBase": 128.6,
-        "worstState": "conflicts",
-        "naturalWorst": 1231.7,
-        "freeWorst": 32.3
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1260.7,
+        "freeWorst": 3.3
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
         "naturalBase": 1135.4,
         "freeBase": 288.6,
-        "worstState": "conflicts",
-        "naturalWorst": 1231.7,
-        "freeWorst": 192.3
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1260.7,
+        "freeWorst": 163.3
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
         "naturalBase": 1207.4,
         "freeBase": 688.6,
-        "worstState": "conflicts",
-        "naturalWorst": 1303.7,
-        "freeWorst": 592.3
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1332.7,
+        "freeWorst": 563.3
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1447.4,
-        "freeBase": 1096.6,
-        "worstState": "conflicts",
-        "naturalWorst": 1543.7,
-        "freeWorst": 1000.3
+        "naturalBase": 1207.4,
+        "freeBase": 1336.6,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1332.7,
+        "freeWorst": 1211.3
       }
     },
     "do": {
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1022,
-        "freeBase": 242,
+        "naturalBase": 1165.3,
+        "freeBase": 98.7,
         "worstState": "peer-pen",
-        "naturalWorst": 1024.1,
-        "freeWorst": 239.9
+        "naturalWorst": 1167.4,
+        "freeWorst": 96.6
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1022,
-        "freeBase": 402,
+        "naturalBase": 1165.3,
+        "freeBase": 258.7,
         "worstState": "peer-pen",
-        "naturalWorst": 1024.1,
-        "freeWorst": 399.9
+        "naturalWorst": 1167.4,
+        "freeWorst": 256.6
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1022,
-        "freeBase": 874,
+        "naturalBase": 1165.3,
+        "freeBase": 730.7,
         "worstState": "peer-pen",
-        "naturalWorst": 1024.1,
-        "freeWorst": 871.9
+        "naturalWorst": 1167.4,
+        "freeWorst": 728.6
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1022,
-        "freeBase": 1522,
+        "naturalBase": 1165.3,
+        "freeBase": 1378.7,
         "worstState": "peer-pen",
-        "naturalWorst": 1024.1,
-        "freeWorst": 1519.9
-      }
-    }
-  },
-  "proposedStagesWorstStateReserve": {
-    "look": {
-      "L1": "PROMOTE_90",
-      "L2": "PROMOTE_119_5",
-      "L3": "PROMOTE_160",
-      "L4": "PROMOTE_160",
-      "L5": "PROMOTE_160"
-    },
-    "do": {
-      "P1": "PROMOTE_80",
-      "P4": "PROMOTE_80",
-      "P2": "PROMOTE_90",
-      "P3": "PROMOTE_119_5",
-      "P6": "PROMOTE_119_5",
-      "P7": "PROMOTE_119_5",
-      "P5": "PROMOTE_160"
-    }
-  },
-  "proposedStagesBaseStateOnly": {
-    "look": {
-      "L1": "PROMOTE_80",
-      "L3": "PROMOTE_90",
-      "L2": "PROMOTE_119_5",
-      "L4": "PROMOTE_160",
-      "L5": "PROMOTE_160"
-    },
-    "do": {
-      "P1": "PROMOTE_80",
-      "P4": "PROMOTE_80",
-      "P2": "PROMOTE_90",
-      "P3": "PROMOTE_119_5",
-      "P6": "PROMOTE_119_5",
-      "P7": "PROMOTE_119_5",
-      "P5": "PROMOTE_160"
-    }
-  },
-  "unusedAfterPromotionBaseState": {
-    "look": {
-      "PROMOTE_80": {
-        "unusedPxBase": 128.6,
-        "unusedPctBase": 10.2,
-        "entriesPromoted": []
-      },
-      "PROMOTE_90": {
-        "unusedPxBase": 170.7,
-        "unusedPctBase": 12,
-        "entriesPromoted": ["L1"]
-      },
-      "PROMOTE_119_5": {
-        "unusedPxBase": 196.4,
-        "unusedPctBase": 10.4,
-        "entriesPromoted": ["L1", "L2"]
-      },
-      "PROMOTE_160": {
-        "unusedPxBase": 132.6,
-        "unusedPctBase": 5.2,
-        "entriesPromoted": ["L1", "L2", "L3", "L4", "L5"]
-      }
-    },
-    "do": {
-      "PROMOTE_80": {
-        "unusedPxBase": 25.5,
-        "unusedPctBase": 2,
-        "entriesPromoted": ["P1", "P4"]
-      },
-      "PROMOTE_90": {
-        "unusedPxBase": 11.6,
-        "unusedPctBase": 0.8,
-        "entriesPromoted": ["P1", "P2", "P4"]
-      },
-      "PROMOTE_119_5": {
-        "unusedPxBase": 5.1,
-        "unusedPctBase": 0.3,
-        "entriesPromoted": ["P1", "P2", "P3", "P4", "P6", "P7"]
-      },
-      "PROMOTE_160": {
-        "unusedPxBase": 147.2,
-        "unusedPctBase": 5.8,
-        "entriesPromoted": ["P1", "P2", "P3", "P4", "P5", "P6", "P7"]
+        "naturalWorst": 1167.4,
+        "freeWorst": 1376.6
       }
     }
   },

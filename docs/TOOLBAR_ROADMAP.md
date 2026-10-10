@@ -103,6 +103,14 @@ tooltip copy differentiates them.
   pad would need a composite widget with its own internal roving focus (one toolbar stop, four buttons),
   which the flat one-control-per-stop registry can't express. Revisit if the compact geometry is worth a
   bespoke primitive.
+- **Commands promote out of menus when the viewport has room** (toolbar-redesign M5,
+  `docs/specs/toolbar-redesign/m5-measurement.md`): at 1280, 1440, 1912 and 2560 wide the LOOK and DO rows
+  fill their spare width with the commands that live in Filter, View, Analysis, Share & export, Add and Link,
+  by the committed ladder `promotion-ladder.ts`. A promoted command is a plain registry item derived from a
+  `PromotableEntry`, not a new placeholder; a menu keeps its anchor row at every width. Not promoted by
+  decision, with the reason: Recent edits (a dynamic list), Go to date (needs a field), the export formats
+  (variants of one act), View's set-once settings, and each menu's anchor. The zoom presets into the
+  diagram's corner (C1) are deferred: they stage on the stage's width, not the deck's.
 - **Below 1024 the deck is one scrolling line** (toolbar-redesign M3, `docs/specs/toolbar-redesign/m3-measurement.md`):
   every item above stays on it in LOOK-then-DO order, none is demoted, and a narrow-and-short window scrolls the shell so
   the band scrolls away. At 1024 and up the two declared rows are unchanged.

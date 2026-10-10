@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { openHealthCheck, revealToolbarCommand } from '../e2e-support/toolbar';
 
 import { createAndOpenPlan, onboard, openProject, seedRevision } from './support';
 
@@ -174,12 +174,7 @@ test('a planner compares a revision against live and reads what entered the crit
   await expect(page.getByRole('list', { name: 'Removed in this revision' })).toHaveCount(0);
 
   // ── 5 · One dock at a time, against the REAL sibling rather than a stub ────────────────────
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  await openHealthCheck(page);
   await expect(page.getByRole('region', { name: 'Health check' })).toBeVisible();
   await expect(panel).toHaveCount(0);
 

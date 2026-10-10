@@ -390,3 +390,10 @@ the two questions in the report, amend the plan's sequencing, then start M1-T1/T
 
 Reproduce: `PLAYWRIGHT_CHROMIUM_PATH=... DATABASE_URL=... pnpm --filter @repo/web measure:toolbar toolbar-redesign-m0`
 (about 3.5 minutes per pointer; both write `apps/web/measure-output/toolbar-redesign-m0.<pointer>.json`).
+
+## Appendix: SC-17 "after" (added at M5)
+
+The "after" table the plan owes here is `m5-measurement.md` §3: unused width per deck row at 1280, 1440, 1912 and 2560,
+fine and coarse, before the ladder (the real M4 deck) and after it, with the worst-state free width beside it. Every
+cell is at most 15 % empty except coarse LOOK at 1912 (15.3 %, explained there). M0's own figures in §10 above were
+projections over a deck that has since changed (the DO row is 143 px wider than M0 projected); read M5's.

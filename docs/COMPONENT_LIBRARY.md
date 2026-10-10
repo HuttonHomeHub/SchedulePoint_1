@@ -390,6 +390,31 @@ under focus"; only the cluster uses it, and `HistoryResultStrip` and the selecti
 DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
 deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
+**Promotion: a menu command comes out onto the deck when the viewport has room** (toolbar-redesign M5, spec
+§4.11). A source menu's promotable rows are declared as `PromotableEntry` records (`toolbar-promotion.tsx`)
+and `derivePromotedItems` turns each into a registry item that takes its trigger's group and row and sorts at
+`trigger.order + rank / 100`, i.e. immediately after it. `isPromoted(at, { stage, pointer })` is the one
+predicate: the bar's `isVisible` and the menu that lost the row both read it, so a command is on the bar
+**xor** in its menu. The viewport's stage is `usePromotionStage()` (four rem media queries,
+`PROMOTE_80/90/119_5/160` in `lib/breakpoints.ts`, plus `useCoarsePointer`), read once by
+`useTsldToolbarContext` into `ctx.promotion`; it is stage `0` where there is no `matchMedia`, so every
+unit test sees the unpromoted deck. `at` is `'always'` (Legend, Resource view, Baseline overlay, the Minimap:
+the ladder never demotes them) or a stage per pointer from the committed table `promotion-ladder.ts`, which
+`computePromotionStages` derives from `docs/specs/toolbar-redesign/promotion-widths.<pointer>.json`
+(a unit test pins every `at` to it). **No menu ever empties**: each keeps an anchor row that renders
+unconditionally (Filter's Has constraint, Analysis's Baselines…, Share & export's formats and Print…, Link's
+Start → Finish, Add's Task and Level of effort).
+**Two optional fields on `ToolbarItem` and one on `ToolbarButton`, no key or focus-rule change.**
+`visibleLabel` is the text painted when it is shorter than the accessible name: a member of a flat pressed set
+("Colour by: Total float") prints its value under an `aria-hidden` caption, and `defineToolbar` refuses a
+`visibleLabel` that is not contained in the name (WCAG 2.5.3). `successorId` names the item that takes focus
+when this one leaves while a reader is standing on it: `useToolbarFocusHandoff` gains a `successorFor` option,
+and a promoted command that falls back into its menu hands focus to the menu's trigger with its static
+`lostReason` ("Moved into the Filter menu.") instead of to the container (ADR-0135 with a destination).
+A command that arrives under a reader's focus in a menu is followed by `usePromotionFocusFollow` (host-side,
+`use-promotion-focus.ts`), which moves focus to the new button and announces it; a resize that crosses a stage
+closes an open menu (`useCloseOnPromotionChange`).
+
 **Three rules for a consumer:**
 
 1. **Still pass `groupLabels`.** It is defence in depth, not decoration. If the precondition ever

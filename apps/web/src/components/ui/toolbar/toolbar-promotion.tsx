@@ -176,11 +176,13 @@ export function derivePromotedItems<Ctx>(
               label: entry.captionBefore,
               presentational: true,
               isVisible: visible,
+              // The control's own height, so the caption shares its line's top: a 16 px caption
+              // centred in a 36 px line sits 10 px lower and every line counter reads a second line.
               render: (_ctx, api) => (
                 <span
                   {...api.itemProps}
                   aria-hidden="true"
-                  className="text-muted-foreground inline-flex items-center px-1 text-xs whitespace-nowrap"
+                  className="text-muted-foreground inline-flex h-(--control-h) items-center px-1 text-xs whitespace-nowrap"
                 >
                   {entry.captionBefore}
                 </span>
@@ -237,6 +239,11 @@ export interface PromotionFreeWidth {
 /** The committed record `computePromotionStages` reads — the shape of `promotion-widths.<pointer>.json`. */
 export interface PromotionWidths {
   itemGapPx: number;
+  /**
+   * Spare width every row keeps in the worst stress state. A ladder that fills a row to the pixel
+   * wraps it the first time a font renders a tenth of a pixel wider; absent ⇒ none.
+   */
+  safetyPx?: number;
   entries: readonly PromotionWidthEntry[];
   /** Ladder order within each row, first promoted first — the product owner's ranking (D-n). */
   ladderOrder: Readonly<Record<'look' | 'do', readonly string[]>>;
@@ -251,8 +258,9 @@ export interface PromotionWidths {
  *
  * - **carry every promoted entry forward** — monotonic by construction, so widening a window never
  *   takes anything off the bar;
- * - **reserve the worst stress state**: the room is `freeWorst`, not `freeBase`, so a late-arriving
- *   conflict chip (LOOK) or a peer's pen (DO) cannot wrap a row that the ladder had filled;
+ * - **reserve the worst stress state**: the room is `freeWorst` less `safetyPx`, not `freeBase`, so a
+ *   late-arriving conflict chip (LOOK) or a peer's pen (DO) cannot wrap a row that the ladder had
+ *   filled, and a font a tenth of a pixel wider cannot either;
  * - **fill the remainder in rank order, skipping an entry that does not fit** — a wide entry early in
  *   the ladder does not block a narrow one behind it.
  *
@@ -274,7 +282,7 @@ export function computePromotionStages(
     }
     let carried = 0;
     for (const stage of PROMOTION_STAGE_NAMES) {
-      let room = widths.freeWidthByStage[row][stage].freeWorst - carried;
+      let room = widths.freeWidthByStage[row][stage].freeWorst - carried - (widths.safetyPx ?? 0);
       for (const rank of ladder) {
         if (result[rank] !== 'never') continue;
         const cost = (byRank.get(rank)?.width ?? Infinity) + widths.itemGapPx;

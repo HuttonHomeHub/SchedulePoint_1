@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   canvas,
@@ -291,8 +292,7 @@ test('an expanded activities panel leaves an open dock a usable height', async (
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
 
   // Open the Health dock — a scrolling review panel, the content the squeeze hurts most.
-  await page.locator('[data-toolbar-item="analysis"]').click();
-  await page.getByRole('menuitem', { name: /Health check/ }).click();
+  await openHealthCheck(page);
   const dock = page
     .locator('[data-surface="panel"]')
     .filter({ has: page.getByRole('heading', { name: 'Health check' }) });

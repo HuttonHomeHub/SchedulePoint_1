@@ -1,0 +1,7 @@
+---
+'@repo/web': minor
+---
+
+On a wider screen the commands that lived in menus come out onto the toolbar, so free space is used instead of left empty. At 1280 wide Share… is a button beside Share & export; at 1440 Critical only (from Filter) and Health check (from Analysis) join it; at 1912 the Colour by choice, Add: Start milestone and Add: Finish milestone, Earned value… and more; at 2560 the Late-start overlay, Feasible window, Levelled placement, Compare revisions and the Link kinds. Touch screens get the same, a stage later where the 44 px controls need the room. A command that has come out of a menu is no longer listed in it, and no menu is ever empty: Filter keeps Has constraint, Analysis keeps Baselines…, Share & export keeps its file formats and Print…, Link keeps Start → Finish, and Add keeps Task and Level of effort. Narrow the window and each command goes back into its menu.
+
+If you are standing on a command in a menu when the window widens, focus moves to its new button and it is announced ("Critical only is now on the toolbar."). If you are on a promoted button when the window narrows, focus lands on the menu that now holds it and the move is announced ("Moved into the Filter menu."). Closing the Health check or Compare revisions panel returns focus to its toolbar button when it has one. Assistive-technology names are unchanged ("Health check", "Share…", "Critical only") and a button in a set is named with the set ("Colour by: Total float").
