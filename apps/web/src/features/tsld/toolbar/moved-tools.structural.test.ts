@@ -7,8 +7,8 @@ import type { ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
 import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**
- * **No tool is lost: every control M2 moved resolves in its new home, and only there**
- * (toolbar-redesign M2, SC-14's M2 slice; the full manifest is M5-T1's).
+ * **No tool is lost: every control M2 and M4 moved resolves in its new home, and only there**
+ * (toolbar-redesign M2 and M4, SC-14's slices; the full manifest is M5-T1's).
  *
  * A relocation is a deletion in one file and an addition in another, and nothing makes the two
  * agree: `Share` was lost this way once (`tsld-toolbar-items.tsx`'s own history). So the before and
@@ -16,7 +16,7 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * list of ids kept in step by hand, which is the ADR-0073 C4 shape — and a control that is missing
  * from its new home, or still present in its old one, fails by name.
  *
- * The table is the whole of what M2 moved:
+ * The table is the whole of what M2 and M4 moved:
  *
  * | tool                  | before                   | after                                   |
  * | --------------------- | ------------------------ | --------------------------------------- |
@@ -26,9 +26,12 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * | Legend                | deck, View group         | deck, Panels group                      |
  * | Resource view         | deck, View group         | deck, Panels group                      |
  * | Comments              | deck, Plan group         | deck, Panels group                      |
+ * | Zoom out / Zoom in    | deck, View group         | "Diagram viewport" cluster (`canvas`)   |
+ * | Fit to plan           | deck, View group         | "Diagram viewport" cluster (`canvas`)   |
+ * | Minimap               | View ▾ ▸ Navigation      | "Diagram viewport" cluster (`canvas`)   |
  *
- * **Its blind spot, stated**: it reads declarations. That the identity row, the Panels group and the
- * bar are actually rendered, in order, in a browser is `command-surface.spec.ts`'s.
+ * **Its blind spot, stated**: it reads declarations. That the identity row, the Panels group, the
+ * cluster and the bar are actually rendered, in order, in a browser is `command-surface.spec.ts`'s.
  */
 const deck = buildTsldToolbarItems();
 const rows = splitByRow(deck);
@@ -70,5 +73,13 @@ describe('the controls M2 moved resolve in their new home and nowhere else', () 
       expect.arrayContaining(['analysis', 'calendar']),
     );
     expect(rows.strip.filter((item) => item.row === 'identity')).toEqual([]);
+  });
+
+  it('puts Zoom out, Zoom in, Fit and Minimap in the Diagram viewport cluster, and not on the deck', () => {
+    expect(rows.canvas.map((item) => item.id)).toEqual(['zoom-out', 'zoom-in', 'fit', 'minimap']);
+    for (const id of ['zoom-out', 'zoom-in', 'fit', 'minimap']) {
+      expect(find(rows.strip, id), `${id} is still on the deck`).toBeUndefined();
+      expect(find(rows.identity, id)).toBeUndefined();
+    }
   });
 });

@@ -82,6 +82,7 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   minimap,
+  minimapRoom = true,
   revealComments,
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
@@ -123,6 +124,8 @@ export function useTsldToolbarContext({
   legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
   /** The minimap panel's open/toggle pair (ADR-0100) — passed in for the `legend` reason. */
   minimap: Pick<UseMinimapPanelPrefs, 'open' | 'toggle'>;
+  /** The canvas's `minimapRoom` measurement, when a canvas is mounted (default: room). */
+  minimapRoom?: boolean;
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
@@ -614,6 +617,7 @@ export function useTsldToolbarContext({
       toggleLegend,
       minimapOpen,
       toggleMinimap,
+      minimapRoom,
 
       // Summary popover + pinned finish chip
       summaryContent,
@@ -975,6 +979,7 @@ export function useTsldToolbarContext({
     toggleLegend,
     minimapOpen,
     toggleMinimap,
+    minimapRoom,
     // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
     // toggle is a stable model callback).
     model.resourceViewOpen,

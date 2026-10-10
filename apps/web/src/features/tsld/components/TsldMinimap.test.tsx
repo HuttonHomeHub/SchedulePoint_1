@@ -33,7 +33,6 @@ function mount(props: Partial<React.ComponentProps<typeof TsldMinimap>> = {}) {
       activities={[activity()]}
       dataDate="2026-01-01"
       selectedId={null}
-      bottomOffsetPx={0}
       onClose={onClose}
       bitmapCanvasRef={createRef<HTMLCanvasElement>()}
       rectRef={createRef<HTMLDivElement>()}
@@ -101,12 +100,6 @@ describe('TsldMinimap', () => {
     expect(screen.queryByTestId('tsld-minimap-rect')).not.toBeInTheDocument();
   });
 
-  it('offsets above the resource strip when told to', () => {
-    mount({ bottomOffsetPx: 72 });
-    const group = screen.getByRole('group', { name: 'Diagram overview' });
-    expect(group.style.bottom).toBe(`${12 + 72}px`);
-  });
-
   it('renders the selection marker at ≥3×3px for a placed selection, and not otherwise', () => {
     const { rerender, onClose } = mount({
       activities: [
@@ -137,7 +130,6 @@ describe('TsldMinimap', () => {
         activities={[activity()]}
         dataDate="2026-01-01"
         selectedId={null}
-        bottomOffsetPx={0}
         onClose={onClose}
         bitmapCanvasRef={createRef<HTMLCanvasElement>()}
         rectRef={createRef<HTMLDivElement>()}
@@ -156,7 +148,6 @@ describe('TsldMinimap', () => {
         activities={[activity()]}
         dataDate="2026-01-01"
         selectedId={null}
-        bottomOffsetPx={0}
         onClose={onClose}
         bitmapCanvasRef={createRef<HTMLCanvasElement>()}
         rectRef={createRef<HTMLDivElement>()}

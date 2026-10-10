@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,12 +26,15 @@ const h = vi.hoisted<{
   migrationCount: number;
   // The `?view=` search the route mock answers, so a case can open the Gantt (ADR-0059).
   search: Record<string, string>;
+  // The canvas handle the stubbed panel publishes, so a viewport command's effect is observable.
+  canvasControl: { goToDate: ReturnType<typeof vi.fn> };
 }>(() => ({
   role: 'PLANNER',
   plannedStart: '2026-01-01',
   tsldProps: { current: null },
   migrationCount: 0,
   search: {},
+  canvasControl: { goToDate: vi.fn() },
 }));
 
 vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
@@ -214,7 +217,15 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
 vi.mock('@/features/tsld', () => ({
   TsldPanel: (props: Record<string, unknown>) => {
     h.tsldProps.current = props;
-    return <div data-testid="tsld-panel" />;
+    (props['canvasUi'] as { canvasControlRef: { current: unknown } }).canvasControlRef.current =
+      h.canvasControl;
+    // The real canvas publishes the node the "Diagram viewport" cluster is portalled into
+    // (toolbar-redesign M4); the stub publishes one too, so the cluster is in the document.
+    return (
+      <div data-testid="tsld-panel">
+        <div ref={props.onViewportSlot as (node: HTMLDivElement | null) => void} />
+      </div>
+    );
   },
   // **`'visual'`, because that is what the real function now returns for every plan** (M-F-T1).
   // Left at `'early'` this mock would describe a world no shipped bundle can produce — the shape
@@ -266,6 +277,15 @@ vi.mock('@/features/schedule/api/use-schedule', () => ({
 
 const { formatCalendarDate } = await import('@/lib/format-date');
 const { AnnouncerProvider } = await import('@/components/ui/announcer');
+
+/**
+ * The viewport command these host cases drive is **Go to today**, not Fit. Fit moved into the
+ * "Diagram viewport" cluster inside the stage (toolbar-redesign M4), and a stage that is hidden or
+ * inert is exactly the state these cases are about — so Fit can no longer be pressed in it. Go to
+ * today is still a deck command of the same `viewport` class, wrapped by the same `withDiagram`,
+ * and its effect is observable on the canvas handle the stubbed panel publishes.
+ */
+const goToday = (): HTMLElement => screen.getByRole('button', { name: 'Go to today' });
 const { TestChromeHost } = await import('@/components/layout/chrome/test-chrome-host');
 const { PlanDetailScreen } = await import('@/routes/plan-detail');
 
@@ -318,8 +338,17 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(screen.getByRole('toolbar', { name: 'Plan commands' })).toBeInTheDocument();
     expect(screen.queryByRole('toolbar', { name: 'Build and manage' })).toBeNull();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
-    // Row 1 · Look hosts Fit; Row 2 · Do hosts Add activity.
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
+    // The "Diagram viewport" cluster hosts Fit (M4); Row 2 · Do hosts Add activity.
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Diagram viewport' })).getByRole('button', {
+        name: 'Fit to plan',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Plan commands' })).queryByRole('button', {
+        name: 'Fit to plan',
+      }),
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
   });
 
@@ -657,8 +686,8 @@ describe('the short-body swap', () => {
       for (const callback of due) callback(0);
     });
   };
-  const canvasUi = () =>
-    h.tsldProps.current?.['canvasUi'] as { mode: string; fitSignal: number } | undefined;
+  const canvasUi = () => h.tsldProps.current?.['canvasUi'] as { mode: string } | undefined;
+  const arrivals = () => h.canvasControl.goToDate.mock.calls.length;
 
   beforeEach(() => {
     bodyHeight = 0;
@@ -855,32 +884,31 @@ describe('the short-body swap', () => {
       renderScreen();
       resizeBody(800);
       expand();
-      const before = canvasUi()?.fitSignal;
-      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
-      expect(canvasUi()?.fitSignal).toBe((before ?? 0) + 1);
-      expect(frames).toHaveLength(0);
+      const before = arrivals();
+      fireEvent.click(goToday());
+      expect(arrivals()).toBe((before ?? 0) + 1);
     });
 
-    it('collapses the panel for Fit while swapped, and fits after the next frame', () => {
+    it('collapses the panel for a viewport command while swapped, and runs it after the next frame', () => {
       renderScreen();
       resizeBody(365);
       expand();
       expect(screen.getByText(NOTE)).toBeInTheDocument();
-      const before = canvasUi()?.fitSignal;
+      const before = arrivals();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      fireEvent.click(goToday());
       expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
-      expect(canvasUi()?.fitSignal).toBe(before);
+      expect(arrivals()).toBe(before);
 
       nextFrame();
-      expect(canvasUi()?.fitSignal).toBe((before ?? 0) + 1);
+      expect(arrivals()).toBe((before ?? 0) + 1);
     });
 
     it('does not hand focus to the collapsed bar when a command collapses the panel', () => {
       renderScreen();
       resizeBody(365);
       expand();
-      const fit = screen.getByRole('button', { name: 'Fit to plan' });
+      const fit = goToday();
       fit.focus();
       fireEvent.click(fit);
       expect(document.activeElement).not.toBe(
@@ -913,7 +941,7 @@ describe('the short-body swap', () => {
       const collapse = screen.getByRole('button', { name: 'Collapse activities panel' });
       collapse.focus();
       expect(document.activeElement).toBe(collapse);
-      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      fireEvent.click(goToday());
       expect(document.activeElement).toBe(
         screen.getByRole('button', { name: 'Expand activities panel' }),
       );
@@ -923,7 +951,7 @@ describe('the short-body swap', () => {
       const { unmount } = renderScreen();
       resizeBody(365);
       expand();
-      fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+      fireEvent.click(goToday());
       expect(frames).toHaveLength(1);
       unmount();
       expect(frames).toHaveLength(0);
@@ -1039,8 +1067,7 @@ describe('a dock that has taken the row', () => {
       for (const callback of due) callback(0);
     });
   };
-  const fitSignal = () =>
-    (h.tsldProps.current?.['canvasUi'] as { fitSignal: number } | undefined)?.fitSignal;
+  const arrivals = () => h.canvasControl.goToDate.mock.calls.length;
 
   beforeEach(() => {
     bodyWidth = 0;
@@ -1120,22 +1147,22 @@ describe('a dock that has taken the row', () => {
     expect(stageEl()).not.toHaveAttribute('inert');
   });
 
-  it('closes the dock for Fit and fits a frame later, with the stage reachable again', () => {
+  it('closes the dock for a viewport command and runs it a frame later, with the stage reachable again', () => {
     renderScreen();
     measure(640);
     openHealth();
-    const before = fitSignal();
+    const before = arrivals();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+    fireEvent.click(goToday());
     expect(screen.queryByRole('region', { name: /health/i })).toBeNull();
     expect(stageEl()).not.toHaveAttribute('inert');
-    expect(fitSignal()).toBe(before);
+    expect(arrivals()).toBe(before);
 
     nextFrame();
-    expect(fitSignal()).toBe((before ?? 0) + 1);
+    expect(arrivals()).toBe((before ?? 0) + 1);
   });
 
-  it('hands focus to the dock’s toolbar control, and says so, when Fit closes the dock it was in', () => {
+  it('hands focus to the dock’s toolbar control, and says so, when a viewport command closes the dock it was in', () => {
     renderScreen();
     measure(640);
     openHealth();
@@ -1143,21 +1170,25 @@ describe('a dock that has taken the row', () => {
     close.focus();
     expect(close).toHaveFocus();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
+    fireEvent.click(goToday());
     // **Verified red** against the raw closers: the focused Close button unmounted and focus fell
     // to <body> (WCAG 2.4.3).
     expect(
       document.activeElement?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item'),
     ).toBe('analysis');
-    nextFrame();
+    // Go to today announces its own jump in the same frame it runs, and the announcer keeps one
+    // message — so read it after the handoff's frame and before the command's.
+    const [handoff] = frames;
+    frames = frames.slice(1);
+    act(() => handoff?.(0));
     expect(screen.getByTestId('announcer')).toHaveTextContent('Panel closed to show the diagram.');
   });
 
-  it('leaves focus alone when the dock closed for Fit did not hold it', () => {
+  it('leaves focus alone when the dock closed for a viewport command did not hold it', () => {
     renderScreen();
     measure(640);
     openHealth();
-    const fit = screen.getByRole('button', { name: 'Fit to plan' });
+    const fit = goToday();
     fit.focus();
     fireEvent.click(fit);
     expect(document.activeElement).toBe(fit);
@@ -1188,13 +1219,13 @@ describe('a dock that has taken the row', () => {
     expect(screen.queryByRole('region', { name: /health/i })).toBeNull();
   });
 
-  it('runs Fit at once when no dock has taken the row', () => {
+  it('runs a viewport command at once when no dock has taken the row', () => {
     renderScreen();
     measure(1024);
     openHealth();
-    const before = fitSignal();
-    fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
-    expect(fitSignal()).toBe((before ?? 0) + 1);
+    const before = arrivals();
+    fireEvent.click(goToday());
+    expect(arrivals()).toBe((before ?? 0) + 1);
     expect(screen.getByRole('region', { name: /health/i })).toBeInTheDocument();
   });
 

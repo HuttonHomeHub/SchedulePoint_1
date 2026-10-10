@@ -313,16 +313,18 @@ describe('splitByRow — every row is a key, and the default is `strip`', () => 
       base({ id: 'i', tier: 1, row: 'identity' }),
       base({ id: 'm', tier: 1, row: 'mode' }),
       base({ id: 's', tier: 1, row: 'strip' }),
+      base({ id: 'c', tier: 1, row: 'canvas' }),
       base({ id: 'bare', tier: 1 }),
     ]);
     expect(rows.identity.map((i) => i.id)).toEqual(['i']);
     expect(rows.mode.map((i) => i.id)).toEqual(['m']);
+    expect(rows.canvas.map((i) => i.id)).toEqual(['c']);
     expect(rows.strip.map((i) => i.id)).toEqual(['s', 'bare']);
   });
 
   it('returns an entry for every row even when the registry is empty', () => {
     // The mode row must exist as an empty array rather than `undefined`: the workspace renders
     // `rows.mode` unconditionally, and a missing key is a crash rather than an empty toolbar.
-    expect(splitByRow([])).toEqual({ identity: [], mode: [], strip: [] });
+    expect(splitByRow([])).toEqual({ identity: [], mode: [], strip: [], canvas: [] });
   });
 });

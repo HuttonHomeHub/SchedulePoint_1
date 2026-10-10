@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   ActivityBottomPanel,
@@ -133,6 +134,7 @@ import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-stri
 import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
 import type { CommandClass } from '@/features/tsld/toolbar/canvas-directed-commands';
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
+import { DiagramViewportCluster } from '@/features/tsld/toolbar/diagram-viewport-cluster';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
@@ -237,6 +239,11 @@ export function ToolbarPlanWorkspace({
   // toggled from the toolbar's Legend control and rendered over the canvas below.
   const legend = useLegendPanelPrefs();
   const minimap = useMinimapPanelPrefs();
+  // The "Diagram viewport" cluster (toolbar-redesign M4): the node the canvas publishes for it and
+  // the canvas's own answer to "is there room for the minimap", both held as state because a ref
+  // would not re-render the portal or the toggle's reason when they arrive.
+  const [viewportSlot, setViewportSlot] = useState<HTMLDivElement | null>(null);
+  const [minimapRoom, setMinimapRoom] = useState(true);
   // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
   // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
   // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
@@ -869,6 +876,7 @@ export function ToolbarPlanWorkspace({
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },
+    minimapRoom,
     revealComments,
     hasRevisionPair,
     /**
@@ -1499,6 +1507,8 @@ export function ToolbarPlanWorkspace({
       resourceStrip={stripSnapshot}
       minimapActive={minimap.open}
       onMinimapClose={minimap.close}
+      onViewportSlot={setViewportSlot}
+      onMinimapRoomChange={setMinimapRoom}
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
       // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
       overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
@@ -2447,6 +2457,15 @@ export function ToolbarPlanWorkspace({
         {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
           toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders
           nothing until an export/print fails; `null` when the flag is off. */}
+        {/* **The "Diagram viewport" cluster** (toolbar-redesign M4) — portalled into the slot the canvas
+            publishes at its bottom-right, so the context stays derived once, here. The slot exists
+            only while the diagram is mounted: in the Gantt it is `null` and the cluster is absent
+            rather than shaded (CQ-1, owner decision), which is also what hands focus on
+            (`DiagramViewportCluster`). */}
+        {viewportSlot
+          ? createPortal(<DiagramViewportCluster items={rows.canvas} context={ctx} />, viewportSlot)
+          : null}
+
         {ctx.exportError ? (
           <div className="px-4 pt-2">
             <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />

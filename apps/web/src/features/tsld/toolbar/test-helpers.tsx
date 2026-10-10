@@ -92,6 +92,7 @@ export function makeTsldToolbarContext(
 
     minimapOpen: false,
     toggleMinimap: vi.fn(),
+    minimapRoom: true,
     // Summary + finish chip
     summaryContent: <div data-testid="summary-body">summary</div>,
     // Visibility gates

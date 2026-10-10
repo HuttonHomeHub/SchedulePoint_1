@@ -277,6 +277,12 @@ export interface TsldToolbarContext {
   minimapOpen: boolean;
   /** Show/hide the minimap panel. */
   toggleMinimap: () => void;
+  /**
+   * Whether the stage has room to draw the minimap beside the viewport cluster — the canvas's own
+   * measurement (`TsldCanvas`'s `minimapRoom`), published up so the toggle can say why it is shut
+   * (toolbar-redesign M4). True before the canvas has measured anything.
+   */
+  minimapRoom: boolean;
 
   // --- Summary popover + pinned Project-finish chip -----------------------------------------
   /** The schedule-summary body for the `Summary▾` popover (`ScheduleSummaryStrip`). */

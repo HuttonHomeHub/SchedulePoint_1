@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
@@ -93,17 +93,30 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   );
 }
 
+/** The "Diagram viewport" cluster: the `canvas` slice of the same registry (toolbar-redesign M4). */
+function renderCluster(context: TsldToolbarContext) {
+  const rows = splitByRow(buildTsldToolbarItems());
+  return render(<Toolbar items={rows.canvas} context={context} label="Diagram viewport" />);
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar registry (two-row)', () => {
   it('renders the frame controls and drives the canvas seam', () => {
+    // The presets left the bar for the `View ▾` panel (ADR-0091 D3); −/+ and Fit left the deck for
+    // the "Diagram viewport" cluster at the diagram's corner (toolbar-redesign M4).
     renderRows(ctx());
-    // The presets left the bar for the `View ▾` panel (ADR-0091 D3); −/+ and Fit stayed inline.
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'View' })).getByRole('radio', { name: /Month/ }),
     );
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
+    expect(screen.queryByRole('button', { name: 'Zoom in' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fit to plan' })).not.toBeInTheDocument();
+    cleanup();
+    renderCluster(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(spies.stepZoom).toHaveBeenCalledWith(0.5);
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(spies.stepZoom).toHaveBeenCalledWith(2);
     fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
@@ -305,13 +318,15 @@ describe('TSLD toolbar registry (two-row)', () => {
   });
 
   it('shades — not hides — the frame controls on an empty plan (stable shape)', () => {
-    renderRows(ctx({ hasDiagram: false }));
-    // Zoom + Fit stay on the bar but disabled, so the toolbar's silhouette doesn't shift as the plan
+    renderCluster(ctx({ hasDiagram: false }));
+    // Zoom + Fit stay in the cluster but disabled, so the toolbar's silhouette doesn't shift as the plan
     // gains a computed diagram (ADR-0031 "shade, don't hide").
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
+    cleanup();
+    renderRows(ctx({ hasDiagram: false }));
     // The zoom PRESETS are no longer a bar control to shade (ADR-0091 D3) — they live in `View ▾`,
     // which stays available on an empty plan for the same reason the other display toggles do.
     // What the silhouette argument still covers is the −/+ and Fit cluster, asserted above.

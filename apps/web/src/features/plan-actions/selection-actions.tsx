@@ -385,17 +385,6 @@ function IsolateControl({
 }
 
 /**
- * The **Next-conflict status chip** (canvas nav, U2) — a compact, VISIBLE `role="status"` read-out
- * pinned beside the Next-conflict button that names the conflict being reviewed ("Conflict 2 of 5 ·
- * constraint conflict"), so a sighted planner gets the reason on screen (4 of the 5 flag types have no
- * on-canvas badge), not only in the polite announcement. Presentational (spreads `itemProps`, never a
- * roving-tabindex stop, mirrors the Project-finish chip); it renders nothing — and the registry item
- * hides — unless a conflict is being cycled (`ctx.currentConflict != null`, i.e. not while isolating /
- * before the first press / with no conflicts / flag-off). The reason truncates at narrow widths; the
- * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
- * so this doubles as its visible half rather than replacing it.
- */
-/**
  * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
  * which one the planner is standing on.
  *

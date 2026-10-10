@@ -79,8 +79,9 @@ export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy' | 'roomy-fine';
 /**
  * Which toolbar an item is rendered by. **`strip`** is the command deck (`Deck`, the default);
  * **`mode`** is the plan's `Diagram | Gantt` switch; **`identity`** is the plan's facts beside its
- * name in the header — Plan summary and Edit plan details (toolbar-redesign M2). They are three
- * `Toolbar`/`Deck` instances, each its own `role="toolbar"` and its own Tab stop, and this field only
+ * name in the header — Plan summary and Edit plan details (toolbar-redesign M2); **`canvas`** is the
+ * "Diagram viewport" cluster in the diagram's bottom-right corner — Zoom out, Zoom in, Fit to plan
+ * and the Minimap toggle (toolbar-redesign M4). They are four `Toolbar`/`Deck` instances, each its own `role="toolbar"` and its own Tab stop, and this field only
  * partitions the registry between them; grouping, gating and the keyboard model are unchanged
  * within each. **Absent ⇒ `strip`.**
  *
@@ -95,7 +96,7 @@ export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy' | 'roomy-fine';
  * already a menu structure — `frame · lens · find · tools · object · output · help` — so the merge
  * was a deletion of the split rather than a re-grouping.
  */
-export type ToolbarRow = 'identity' | 'mode' | 'strip';
+export type ToolbarRow = 'identity' | 'mode' | 'strip' | 'canvas';
 
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
 export interface ToolbarItemRenderApi {
@@ -520,7 +521,12 @@ export function partitionBySegment<T extends { item: { segment?: string } }>(
 }
 
 export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
-  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { identity: [], mode: [], strip: [] };
+  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = {
+    identity: [],
+    mode: [],
+    strip: [],
+    canvas: [],
+  };
   for (const item of items) rows[item.row ?? 'strip'].push(item);
   return rows;
 }

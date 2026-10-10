@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   IDLE,
@@ -107,7 +108,9 @@ import {
 } from '../render/wbs-band';
 
 import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
+import { clearOfObstacle, COLUMN_INSET_PX, minimapHasRoom } from './viewport-column';
 
+import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -412,6 +415,26 @@ export interface TsldCanvasProps {
   onMinimapClose?: () => void;
   /** Fallback focus target for the panel's × when its captured opener is unusable (reload). */
   minimapDismissFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Publishes the node the host portals the **"Diagram viewport" cluster** into (toolbar-redesign
+   * M4). The canvas owns the corner — the column, its inset, the minimap above it, and the reveal
+   * margin — and the host owns the cluster's contents, because `TsldToolbarContext` is derived in
+   * the workspace (the `useChromeSlot` pattern). Absent ⇒ no slot is rendered and the column holds
+   * only the minimap.
+   */
+  onViewportSlot?: (node: HTMLDivElement | null) => void;
+  /**
+   * Where to draw the column, when the host wants it elsewhere in the DOM than the canvas's own box.
+   * `TsldPanel` puts a host node **after** the parallel activity list, because Tab order is DOM
+   * order and the column is inside the canvas box, which is *before* the list: the minimap and the
+   * cluster would otherwise be tabbed to before the diagram's own keyboard surface, the opposite of
+   * canvas, then minimap, then cluster (US-3). `undefined` draws the column in place (the canvas
+   * mounted alone); `null` is a host that has not mounted yet and draws nothing for that commit.
+   */
+  columnHost?: HTMLElement | null;
+  /** Reports whether the stage has room for the minimap, so the host's toggle can say why it is
+   * shut. Fires on change only. */
+  onMinimapRoomChange?: (room: boolean) => void;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
   controlRef?: React.Ref<TsldCanvasHandle>;
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
@@ -831,6 +854,9 @@ export function TsldCanvas({
   minimapActive = false,
   onMinimapClose,
   minimapDismissFocusRef,
+  onViewportSlot,
+  columnHost,
+  onMinimapRoomChange,
   resourceStrip = null,
   controlRef,
   onZoomStopChange,
@@ -887,6 +913,12 @@ export function TsldCanvas({
   // surface (jsdom, first frame) never suppresses the panel; only a real measure (> 1px wide)
   // may withdraw it.
   const [minimapRoom, setMinimapRoom] = useState(true);
+  // The column the minimap and the viewport cluster share (toolbar-redesign M4). Its LIVE rect is
+  // what the keyboard reveal clears, so the margin follows whatever is actually open.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const coarse = useCoarsePointer();
+  const coarseRef = useRef(coarse);
+  const republishRoomRef = useRef<() => void>(() => {});
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
@@ -1413,6 +1445,19 @@ export function TsldCanvas({
     [minimapCenterOnWorld, minimapPanPages],
   );
 
+  // A pointer change (a cover folded back) changes the cluster's height, hence the minimap's room.
+  useEffect(() => {
+    coarseRef.current = coarse;
+    republishRoomRef.current();
+  }, [coarse]);
+
+  // Tell the host, so the Minimap toggle can state why it is shut instead of lighting and drawing
+  // nothing. On change only: the first run reports the optimistic default, which is what the host
+  // starts with.
+  useEffect(() => {
+    onMinimapRoomChange?.(minimapRoom);
+  }, [minimapRoom, onMinimapRoomChange]);
+
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
   // navigation or chain-nav to an off-screen bar — pan the minimum distance so the selected bar's
   // ring is fully on-screen, kept off the edges by a margin so nothing obscures it. A no-op when
@@ -1442,9 +1487,32 @@ export function TsldCanvas({
     const margin = LANE_HEIGHT;
     // The shared `revealOffset` (render/viewport.ts) — extracted for #152 so `zoomToActivity`
     // repairs the lane axis with the SAME arithmetic rather than a second opinion.
-    const dx = revealOffset(rect.x, rect.w, size.width, margin);
+    let dx = revealOffset(rect.x, rect.w, size.width, margin);
     // A band bar has no vertical position in the scene, so only the horizontal pan applies.
-    const dy = bandBar ? 0 : revealOffset(rect.y, rect.h, size.height, margin);
+    let dy = bandBar ? 0 : revealOffset(rect.y, rect.h, size.height, margin);
+    // **The reveal margin for the corner column** (SC-15, WCAG 2.4.11). The column's LIVE rect, in
+    // scene coordinates, is an obstacle: a bar revealed into the bottom-right would otherwise land
+    // under the cluster or the minimap. Measured here, in the effect, because the column's size
+    // changes with the minimap and the pointer and nothing should be cached that can go stale. A
+    // band bar is pinned above the scene, so it has nothing to clear.
+    const column = columnRef.current;
+    const container = containerRef.current;
+    if (column && container && !bandBar) {
+      const c = column.getBoundingClientRect();
+      const o = container.getBoundingClientRect();
+      const extra = clearOfObstacle(
+        { x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h },
+        {
+          x: c.left - o.left,
+          y: c.top - o.top - sceneTopOffset(wbsBandHeightPx),
+          w: c.width,
+          h: c.height,
+        },
+        margin,
+      );
+      dx += extra.dx;
+      dy += extra.dy;
+    }
     if (dx !== 0 || dy !== 0) {
       viewRef.current = pan(viewRef.current, dx, dy);
       dirtyRef.current = true;
@@ -1577,6 +1645,14 @@ export function TsldCanvas({
     // Resetting per init makes the first measure after any (re-)mount always apply.
     let applied: Size = { width: 0, height: 0 };
 
+    // The minimap's room is a function of the stage AND the pointer (the cluster's buttons are
+    // taller under a finger), so it is recomputed from both: here when the stage resizes, and in the
+    // effect below when the pointer changes.
+    const publishMinimapRoom = (): void => {
+      setMinimapRoom(minimapHasRoom(sizeRef.current, MINIMAP_BOX, coarseRef.current));
+    };
+    republishRoomRef.current = publishMinimapRoom;
+
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
       // A hidden container (the short-body swap sets `display: none` on the canvas row) measures
@@ -1599,7 +1675,7 @@ export function TsldCanvas({
       if (size.width !== applied.width || size.height !== applied.height) {
         applied = size;
         sizeRef.current = size;
-        if (size.width > 1) setMinimapRoom(size.width >= MINIMAP_BOX.width * 3);
+        publishMinimapRoom();
         const dpr = getDpr();
         for (const c of [canvas, interactionCanvasRef.current]) {
           if (!c) continue;
@@ -2247,6 +2323,38 @@ export function TsldCanvas({
     return classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate, options);
   };
 
+  const column = (
+    <div
+      ref={columnRef}
+      data-testid="tsld-viewport-column"
+      className="pointer-events-none absolute right-3 z-10 flex flex-col items-end gap-2"
+      style={{ bottom: COLUMN_INSET_PX + (resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0) }}
+    >
+      {minimapActive && minimapRoom ? (
+        <TsldMinimap
+          activities={activities}
+          dataDate={dataDate}
+          selectedId={selectedId}
+          onClose={onMinimapClose ?? (() => {})}
+          bitmapCanvasRef={minimapCanvasRef}
+          rectRef={minimapRectRef}
+          onCenterWorld={minimapCenterOnWorld}
+          onPanPages={minimapPanPages}
+          readCentre={minimapViewportCentre}
+          todayDay={todayOffset === null ? null : todayOffset + (todayFraction ?? 0)}
+          {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
+        />
+      ) : null}
+      {onViewportSlot ? (
+        <div
+          ref={onViewportSlot}
+          data-testid="tsld-viewport-slot"
+          className="pointer-events-auto"
+        />
+      ) : null}
+    </div>
+  );
+
   return (
     // `aria-busy` states the in-flight write to AT (plan test: present while the write is pending,
     // absent after EVERY settle path incl. `.catch`). Deliberately not set for the create popover —
@@ -2678,26 +2786,17 @@ export function TsldCanvas({
           className="pointer-events-none absolute inset-x-0 bottom-0 block"
         />
       ) : null}
-      {/* Layer 5 — the minimap panel (ADR-0100): bottom-right, offset above the resource strip
-          when it is active (the minimap does NOT inherit the Legend's over-the-strip liberty —
-          M0-T3's recorded policy). The loop above owns the picture and the rectangle; the panel
-          owns the selection marker and Today (the marks that move without a scene change). */}
-      {minimapActive && minimapRoom ? (
-        <TsldMinimap
-          activities={activities}
-          dataDate={dataDate}
-          selectedId={selectedId}
-          bottomOffsetPx={resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0}
-          onClose={onMinimapClose ?? (() => {})}
-          bitmapCanvasRef={minimapCanvasRef}
-          rectRef={minimapRectRef}
-          onCenterWorld={minimapCenterOnWorld}
-          onPanPages={minimapPanPages}
-          readCentre={minimapViewportCentre}
-          todayDay={todayOffset === null ? null : todayOffset + (todayFraction ?? 0)}
-          {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
-        />
-      ) : null}
+      {/* Layer 5 — the bottom-right column (ADR-0100, toolbar-redesign M4): the minimap panel above
+          the "Diagram viewport" cluster, one stack in the corner. **The cluster is the bottom
+          item and the minimap stacks above it**, so opening or closing the minimap never moves the
+          button the pointer is on. The column sits above the resource strip when it is active (the
+          minimap does NOT inherit the Legend's over-the-strip liberty — M0-T3's recorded policy)
+          and below the ruler, which `minimapHasRoom` guarantees by withdrawing the minimap when
+          both do not fit. It is `pointer-events-none` so the empty strip beside the cluster still
+          pans; only its two occupants take events. DOM order is Tab order: canvas, minimap, cluster.
+          The loop above owns the picture and the rectangle; the panel owns the selection marker and
+          Today (the marks that move without a scene change). */}
+      {columnHost === undefined ? column : columnHost ? createPortal(column, columnHost) : null}
     </div>
   );
 }

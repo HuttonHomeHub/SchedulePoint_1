@@ -573,6 +573,9 @@ export interface TsldPanelProps {
   /** Minimap panel (ADR-0100): mounted by the canvas when true; closing is host-owned. */
   minimapActive?: boolean;
   onMinimapClose?: () => void;
+  /** The "Diagram viewport" cluster's slot and the minimap-room fact — see `TsldCanvas`. */
+  onViewportSlot?: (node: HTMLDivElement | null) => void;
+  onMinimapRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
@@ -695,6 +698,8 @@ export function TsldPanel({
   resourceStrip = null,
   minimapActive = false,
   onMinimapClose,
+  onViewportSlot,
+  onMinimapRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
   selectionCanvas,
@@ -809,6 +814,9 @@ export function TsldPanel({
   const canvasSurface = useCanvasSurface();
   const registerCanvasSurface = useRegisterCanvasSurface();
   const listboxRef = useRef<HTMLUListElement>(null);
+  // The node the canvas draws its bottom-right column into — after the activity list, so Tab
+  // reaches the diagram's keyboard surface before the minimap and the cluster (see `TsldCanvas`).
+  const [columnHost, setColumnHost] = useState<HTMLDivElement | null>(null);
   // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
@@ -3340,6 +3348,9 @@ export function TsldPanel({
               resourceStrip={resourceStrip}
               minimapActive={minimapActive}
               {...(onMinimapClose ? { onMinimapClose } : {})}
+              columnHost={columnHost}
+              {...(onViewportSlot ? { onViewportSlot } : {})}
+              {...(onMinimapRoomChange ? { onMinimapRoomChange } : {})}
               minimapDismissFocusRef={listboxRef}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
@@ -3593,6 +3604,15 @@ export function TsldPanel({
                 </li>
               ))}
             </ul>
+            {/* The canvas's bottom-right column (minimap above the "Diagram viewport" cluster) is
+                drawn here, after the list above, so Tab order is the diagram's keyboard surface,
+                then the minimap, then the cluster. A full-surface overlay that takes no pointer
+                events itself; its two occupants do. */}
+            <div
+              ref={setColumnHost}
+              data-testid="tsld-column-host"
+              className="pointer-events-none absolute inset-0 z-10"
+            />
           </>
         ) : (
           <div className="text-muted-foreground flex h-full items-center justify-center p-8 text-center text-sm">

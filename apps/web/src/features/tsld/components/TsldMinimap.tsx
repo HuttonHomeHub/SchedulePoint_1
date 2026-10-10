@@ -18,8 +18,9 @@ export type { MinimapWindow } from '../render/minimap';
 
 /**
  * **The minimap panel** (ADR-0100, minimap M2-T2): a fixed 200×120 picture of the whole
- * programme in the canvas container's bottom-right, with the live viewport as a DOM
- * rectangle on top.
+ * programme, with the live viewport as a DOM rectangle on top. It is a block in the canvas's
+ * bottom-right **column** (`TsldCanvas`), above the Diagram viewport cluster, and positions itself
+ * nowhere: the column owns the corner, the inset and the resource-strip offset (toolbar-redesign M4).
  *
  * The split of responsibilities is the design (ADR-0100 decisions 1–2):
  *
@@ -46,9 +47,6 @@ export interface TsldMinimapProps {
   activities: readonly RenderActivity[];
   dataDate: string;
   selectedId: string | null;
-  /** Offset the panel above the resource strip when it is active — the minimap does NOT
-   * inherit the Legend's over-the-strip liberty (M0-T3's recorded policy). */
-  bottomOffsetPx: number;
   onClose: () => void;
   /** The host's refs: the picture canvas it blits into, and the rectangle it transforms. */
   bitmapCanvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -78,7 +76,6 @@ export function TsldMinimap({
   activities,
   dataDate,
   selectedId,
-  bottomOffsetPx,
   onClose,
   bitmapCanvasRef,
   rectRef,
@@ -397,8 +394,7 @@ export function TsldMinimap({
       // so copying it exactly would have collided the panel border with the viewport rectangle
       // beside it (that app paired navy with an AMBER viewport band; ours is dark), and no blue
       // clears 3:1 from both the near-white ground and the bar ink at once.
-      className="border-primary bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border p-px shadow-md focus-visible:ring-2 focus-visible:outline-none"
-      style={{ bottom: 12 + bottomOffsetPx }}
+      className="border-primary bg-canvas focus-visible:ring-ring pointer-events-auto rounded-md border p-px shadow-md focus-visible:ring-2 focus-visible:outline-none"
     >
       {/* The keyboard contract, spoken once on focus (M4 a11y gate): role="group" carries no
           implied interaction model, so a keyboard user tabbing onto the widget is otherwise

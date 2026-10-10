@@ -23,6 +23,7 @@ import {
   Layers,
   Loader2,
   LocateFixed,
+  Map as MapIcon,
   Maximize2,
   MessageSquare,
   Minus,
@@ -128,7 +129,7 @@ const ZOOM_LABELS: Record<string, string> = {
  * indicators), and insight overlays (the flag-gated ADR-0054 lenses + the Late-start overlay,
  * which stops being a special case set apart by an incidental border and becomes an ordinary
  * member here). */
-type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels' | 'columns';
+type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'columns';
 
 /**
  * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
@@ -169,17 +170,6 @@ const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: str
   { id: 'structure', label: 'Structure' },
   { id: 'markers', label: 'Markers' },
   { id: 'insight', label: 'Insight overlays' },
-  // Added by ADR-0090 M2-T2 for the Legend, answering the product owner's Q2 directly. A section of
-  // its own rather than a fourth "overlay", because a panel is a surface you read *beside* the
-  // diagram, not a mark drawn *on* it — the distinction the other group names already make.
-  //
-  // **Labelled "Navigation", not "Panels", since toolbar-redesign M2-T2.** The Legend left it for the
-  // deck, and the deck's own group is now named "Panels"; with `View ▾` open both are in the
-  // accessibility tree, and two groups of one name is a locator and a screen-reader collision
-  // (`getByRole('group', { name: 'Panels' })` must resolve to exactly one element). Its only
-  // occupant is the Minimap, which is what the new name says, and M4 moves the Minimap to the
-  // diagram's corner and deletes this section. The id stays until then.
-  { id: 'panels', label: 'Navigation' },
   // The Gantt's grid columns (ADR-0095 M5-T1). Here rather than as a `Columns ▾` button above the
   // grid, which is what the plan's entry-point line named: that button is a new horizontal band,
   // and ADR-0092 spent a whole milestone reclaiming 249 px of chrome from above the diagram on the
@@ -210,7 +200,12 @@ const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: str
  */
 interface LensToggle {
   id: string;
-  group: ViewToggleGroupId;
+  /**
+   * The `View ▾` section the row lives in. **Absent for a record that is always promoted** (Legend,
+   * Minimap): it never has a menu section, and the `panels` section that used to hold them went with
+   * the Minimap's move to the diagram's corner (toolbar-redesign M4).
+   */
+  group?: ViewToggleGroupId;
   label: string;
   /** Offered at all — the feature's build-time flag. */
   enabled: boolean;
@@ -256,6 +251,12 @@ interface LensToggle {
      * below is.
      */
     group?: ToolbarGroupId;
+    /**
+     * Which toolbar renders the promoted item. Absent ⇒ `'strip'`, the command deck. The Minimap
+     * declares `'canvas'`: it navigates the diagram's own viewport, so it sits in the cluster at the
+     * diagram's corner beside Zoom and Fit rather than on the deck (toolbar-redesign M4).
+     */
+    row?: ToolbarRow;
     /**
      * How the promoted control's label behaves (`ToolbarLabelVisibility`). Absent ⇒ `'always'`.
      * Declared per record because the promoted lenses are not one policy: Legend names itself, and
@@ -429,7 +430,6 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // panel is a surface you read *beside* the diagram, not a mark drawn *on* it — which is the
     // distinction the other group names already make.
     id: 'legend',
-    group: 'panels',
     label: 'Legend',
     enabled: true,
     checked: (ctx) => ctx.legendOpen,
@@ -438,20 +438,33 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     promotion: { icon: <BookOpen className="size-4" />, group: 'help', order: 0 },
   },
   {
-    // The minimap panel (ADR-0100, minimap M2-T3). `panels` for the legend's reason — a surface
-    // read BESIDE the diagram — and deliberately NOT promoted in v1 (product owner Q2): the row
-    // lives in `View ▾`, which re-creates the Panels fieldset as its sole occupant (the legend,
-    // its only other member, is promoted out). No `TsldViewToggles` key — that type means "which
-    // optional canvas layers the PAINTER draws", is read by the pure painter and the Gantt, and
-    // both existing panels sit outside it. Shade-with-a-reason when there is no diagram
-    // (ADR-0082), exactly as the lenses above do.
+    // The minimap panel (ADR-0100, minimap M2-T3). A surface read BESIDE the diagram, like the
+    // legend, and **promoted to the diagram-corner cluster** (toolbar-redesign M4): it navigates the
+    // viewport, so it sits with Zoom and Fit, and `View ▾` no longer has a Navigation section for
+    // it. No `TsldViewToggles` key — that type means "which optional canvas layers the PAINTER
+    // draws", is read by the pure painter and the Gantt, and both existing panels sit outside it.
+    // Shade-with-a-reason when there is no diagram (ADR-0082), exactly as the lenses above do, and
+    // when the stage is too small to hold the panel (`minimapRoom`): the toggle states the reason
+    // instead of switching on something the canvas will not draw.
     id: 'minimap',
-    group: 'panels',
     label: 'Minimap',
     enabled: true,
     checked: (ctx) => ctx.minimapOpen,
     toggle: (ctx) => ctx.toggleMinimap(),
-    reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.minimapRoom
+          ? undefined
+          : MINIMAP_NO_ROOM_REASON,
+    promotion: {
+      icon: <MapIcon className="size-4" />,
+      order: 13,
+      group: 'frame',
+      row: 'canvas',
+      labelVisibility: 'never',
+      description: 'Show an overview of the whole plan beside the diagram',
+    },
   },
 ];
 
@@ -476,7 +489,7 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
     return {
       id: t.id,
       group: promotion.group ?? 'lens',
-      row: 'strip',
+      row: promotion.row ?? 'strip',
       tier: 2,
       labelVisibility: promotion.labelVisibility ?? 'always',
       order: promotion.order,
@@ -1086,6 +1099,12 @@ const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
 const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
+
+/** The minimap needs a stage at least three of its own widths across (`TsldCanvas`'s `minimapRoom`),
+ * and, since the cluster shares its corner, a stage tall enough for both. Stated, not hidden: a
+ * toggle that switched on and drew nothing would be the lit-but-inert shape ADR-0059 M6 records. */
+export const MINIMAP_NO_ROOM_REASON = 'Not enough room for the minimap';
+
 /**
  * Why Baseline overlay is shut when the plan has no active baseline. It **teaches the way out**
  * (toolbar-redesign UX review): "No active baseline" named the condition and left a planner who had
@@ -1871,7 +1890,6 @@ function CurrentConflictStatus({
   const label = current
     ? `Conflict ${current.index} of ${current.total}`
     : `${ctx.conflictCount} ${ctx.conflictCount === 1 ? 'conflict' : 'conflicts'}`;
-  const reason = current ? (current.reasons[0] ?? 'conflict') : null;
   return (
     <span
       {...itemProps}
@@ -1882,23 +1900,11 @@ function CurrentConflictStatus({
       // Being hidden is why the BUTTON carries `srDescription`: an AT user has to reach the same fact
       // some other way, and a description read on focus is that way without a second announcement.
       aria-hidden="true"
-      title={
-        current
-          ? `Conflict ${current.index} of ${current.total}: ${current.reasons.join(', ')}`
-          : label
-      }
-      className={cn(toolbarControlVariants({ tone: 'info' }), 'max-w-[14rem] gap-1')}
+      title={label}
+      className={cn(toolbarControlVariants({ tone: 'info' }), 'gap-1')}
     >
       <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="shrink-0 whitespace-nowrap">{label}</span>
-      {reason ? (
-        <>
-          <span aria-hidden="true" className="shrink-0">
-            ·
-          </span>
-          <span className="truncate">{reason}</span>
-        </>
-      ) : null}
     </span>
   );
 }
@@ -1949,8 +1955,8 @@ function viewTriggerLabel(ctx: TsldToolbarContext): string {
  * which wrap to several lines in a 213 px column. No assignment of whole sections can bring that
  * under the budget, so Insight spans **two** columns and splits inside: what changes how the bars are
  * drawn (colour-by and the four toggles) on the left, the three lenses with their sentences on the
- * right. The first column holds everything else — Zoom, the two folded sections, the Minimap's
- * fieldset and, in the Gantt, its columns.
+ * right. The first column holds everything else — Zoom, the two folded sections and, in the Gantt,
+ * its columns.
  *
  * DOM order is visual order: left column top to bottom, then Insight's two halves, so a keyboard
  * reader meets the controls in the order a sighted one reads them. Below `sm:` it is one column.
@@ -1959,7 +1965,6 @@ const VIEW_FIRST_COLUMN: ReadonlyArray<ViewToggleGroupId> = [
   'zoom',
   'structure',
   'markers',
-  'panels',
   'columns',
 ];
 
@@ -2634,8 +2639,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // plan creation and changed via *Edit plan* (and will become the status date under *Update
     // progress*), so navigation and the data anchor can no longer be confused as adjacent date fields.
 
-    // Zoom — −/+ and Fit, a compact cluster in the Frame group (ADR-0031). Shaded (not hidden) until
-    // a diagram exists, so the bar keeps a stable shape from the empty canvas onward.
+    // Zoom — −/+ and Fit, with the Minimap toggle: the **"Diagram viewport" cluster** at the
+    // diagram's bottom-right corner (`row: 'canvas'`, toolbar-redesign M4, CQ-1), not the deck. They
+    // act on the diagram's own viewport and cost the deck no height there. Shaded (not hidden)
+    // until a diagram exists, so the cluster keeps a stable shape from the empty canvas onward.
+    // They carry no `aria-keyshortcuts`: the diagram has no zoom accelerator (wheel and pinch are
+    // pointer gestures), and advertising a key that does nothing would be a false claim.
     //
     // The `zoom-preset` dropdown that used to lead this cluster is GONE (ADR-0091 D3): the presets
     // are a radio group inside `View ▾`, which is where a planner hunting for a framing looks. Its
@@ -2646,7 +2655,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-out',
       group: 'frame',
-      row: 'strip',
+      row: 'canvas',
       tier: 2,
       // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
       // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
@@ -2658,8 +2667,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       order: 10,
       label: 'Zoom out',
       icon: <Minus className="size-4" />,
-      // Below 1280 px this command lives inside `Zoom ▾` instead (M3-T2) — one predicate shared with
-      // the fold itself, so it can never be in both places or neither.
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
       disabledReason: (ctx) => canvasViewportReason(ctx, ZOOM_DISABLED_REASON),
       onActivate: (ctx) => ctx.stepZoom(0.5),
@@ -2667,7 +2674,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-in',
       group: 'frame',
-      row: 'strip',
+      row: 'canvas',
       tier: 2,
       // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
       // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
@@ -2686,7 +2693,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'fit',
       group: 'frame',
-      row: 'strip',
+      row: 'canvas',
       tier: 2,
       // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
       // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
@@ -2870,9 +2877,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `float-paths` MOVED to the SELECTION BAR and the Gantt row menu (toolbar-redesign M2-T4,
     // D-c): its subject is the selected activity (ADR-0093), and on this row it spent most of its
     // life shaded with "Select an activity first". See `features/plan-actions/selection-actions.tsx`.
-    // Next-conflict VISIBLE status chip (U2) — a presentational `role="status"` read-out pinned next to
-    // the Next-conflict button while a conflict is being cycled, so the reason is on screen and not only
-    // announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
+    // Next-conflict VISIBLE status chip (U2) — a presentational read-out pinned next to the
+    // Next-conflict button, so the count and position are on screen and not only announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
     // is never the case when the flag is off (the ordered set is empty then) — so it is inert + adds no
     // DOM flag-off, keeping the byte-for-byte parity. Presentational ⇒ never a roving-tabindex stop.
     // **The plan said to fold this into `next-conflict`'s label. Measurement says do not.**
