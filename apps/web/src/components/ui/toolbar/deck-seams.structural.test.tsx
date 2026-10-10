@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
-import { DECK_GROUP_PILL, DECK_GROUP_PILL_LOCKED } from './toolbar-styles';
+import { DECK_CLOSING_SECTION, DECK_GROUP_PILL, DECK_GROUP_PILL_LOCKED } from './toolbar-styles';
 
 /**
  * **A deck group is a pill, and no group draws a seam of its own** (toolbar-redesign M6 V2).
@@ -66,6 +66,24 @@ describe('the deck draws a container around a group, never a seam beside it', ()
     expect(DECK_GROUP_PILL).toMatch(/before:inset-x-0/);
     expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)(p|px|py|pl|pr|m|mx)-/);
     expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)border(\s|$)/);
+    // Hung past the box, the pill grew the deck's `scrollWidth` by its overhang at every width and
+    // `deckScrolls` read that as "the line scrolls". It fills the box exactly; no negative inset.
+    expect(DECK_GROUP_PILL).not.toMatch(/before:-inset/);
+    expect(DECK_GROUP_PILL).not.toMatch(/before:-(top|bottom|left|right)-/);
+  });
+
+  it('outlines the closing section (Export, Share…) and no other, never filling it', () => {
+    render(<Deck items={ITEMS} context={{}} label="Plan commands" />);
+
+    const closing = (name: string): Element | null =>
+      screen.getByRole('button', { name }).parentElement;
+    expect(has(closing('D')!, DECK_CLOSING_SECTION), 'the output section is not outlined').toBe(
+      true,
+    );
+    expect(has(closing('C')!, DECK_CLOSING_SECTION), 'the object section is outlined').toBe(false);
+    // An outline, not a fill: the fill collided with the selected segment's and a pressed toggle's.
+    expect(DECK_CLOSING_SECTION).toMatch(/ring-1/);
+    expect(DECK_CLOSING_SECTION).not.toMatch(/bg-/);
   });
 
   it('keeps the finer hairline between the sections inside a group', () => {

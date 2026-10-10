@@ -81,7 +81,14 @@ describe('ToolbarSplitButton — per-half gating', () => {
     // The wrapper's wash only fires when BOTH halves are shut, so a caret shaded beside a live
     // primary rendered identically to a live one.
     const { caret } = renderSplit({ caretDisabled: true });
-    expect(caret.className).toMatch(/opacity-50/);
+    expect(caret.className).toMatch(/cursor-default/);
+    expect(caret.className).not.toMatch(/hover:bg-muted/);
+    // The quiet ink, not an alpha (M6): `opacity-*` is a value nobody gated.
+    expect(caret.className).not.toMatch(/opacity-/);
+    expect(caret.className).toMatch(/forced-colors:\[color:GrayText\]/);
+    cleanup();
+    const live = renderSplit({});
+    expect(live.caret.className).toMatch(/hover:bg-muted/);
   });
 
   it('keeps the arrow-key route to the menu open when only the primary is shaded', () => {

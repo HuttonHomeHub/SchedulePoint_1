@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DECK_GROUP_PILL_LOCKED,
   resolveLabelVisibility,
   toolbarLabelClass,
+  toolbarControlVariants,
   toolbarLabelMinWidthClass,
 } from './toolbar-styles';
 
@@ -62,5 +64,27 @@ describe('toolbarLabelMinWidthClass', () => {
     expect(toolbarLabelMinWidthClass('roomy-fine')).toBe(
       'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-(--control-h)',
     );
+  });
+});
+
+/**
+ * **A shaded control survives forced colours, and a shaded lens still says it is on** (M6 review A1,
+ * U2). The mode overrides `color` to `CanvasText` on every control, and `opacity-50` — which survived
+ * it — was replaced by quiet ink, so without a `forced-colors:` branch a shut control was
+ * indistinguishable from a live one. Verified red by deleting `forced-colors:[color:GrayText]` from the
+ * `disabled` branch (the first case fails) and the `selected` compound (the second).
+ */
+describe('a shaded control', () => {
+  it('takes GrayText in forced colours, and so does the hollow Author pill', () => {
+    expect(toolbarControlVariants({ disabled: true })).toMatch(/forced-colors:\[color:GrayText\]/);
+    expect(toolbarControlVariants({ disabled: false })).not.toMatch(/GrayText/);
+    expect(DECK_GROUP_PILL_LOCKED).toMatch(/forced-colors:before:border-\[GrayText\]/);
+  });
+
+  it('keeps an underline when it is a lens that is on, and no other shaded state does', () => {
+    expect(toolbarControlVariants({ state: 'selected', disabled: true })).toMatch(
+      /shadow-\[inset_0_-2px_0_0_var\(--muted-foreground\)\]/,
+    );
+    expect(toolbarControlVariants({ state: 'rest', disabled: true })).not.toMatch(/shadow-\[inset/);
   });
 });

@@ -142,3 +142,50 @@ describe('ToolbarPopover — closeOnChangeOf', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
+
+/**
+ * **The count badge stays on the glyph's corner and never spills** (M6 review U6). It covered the
+ * funnel at `size-4`/`-top-1.5`, and a two-digit count overflowed its circle. Verified red by
+ * restoring `{badge.count}` (the "9+" case fails) and `size-4` (the geometry case fails).
+ */
+describe('ToolbarPopover — the count badge', () => {
+  const renderBadge = (count: number): HTMLElement => {
+    render(
+      <ToolbarPopover
+        label="Filter"
+        icon={<svg data-testid="glyph" />}
+        itemProps={ITEM_PROPS}
+        badge={{ count, description: `${count} filters on` }}
+      >
+        <p>panel</p>
+      </ToolbarPopover>,
+    );
+    return screen.getByRole('button');
+  };
+
+  it('draws a single digit as it is, smaller than the glyph and outside its corner', () => {
+    const trigger = renderBadge(3);
+    const badge = [...trigger.querySelectorAll('span[aria-hidden] > span')].find(
+      (el) => el.textContent === '3',
+    );
+    expect(badge, 'no badge was drawn').toBeDefined();
+    expect(badge?.className).toMatch(/-top-2/);
+    expect(badge?.className).toMatch(/-right-2/);
+    expect(badge?.className).toMatch(/h-3\.5/);
+    expect(badge?.className).toMatch(/min-w-3\.5/);
+  });
+
+  it('caps the display at 9+, and the description still carries the exact number', () => {
+    const trigger = renderBadge(12);
+    const drawn = [...trigger.querySelectorAll('span[aria-hidden] > span')].map(
+      (el) => el.textContent,
+    );
+    expect(drawn).toEqual(['9+']);
+    expect(trigger).toHaveAccessibleDescription('12 filters on');
+  });
+
+  it('draws nothing for zero', () => {
+    const trigger = renderBadge(0);
+    expect(trigger.querySelector('span[aria-hidden] > span')).toBeNull();
+  });
+});

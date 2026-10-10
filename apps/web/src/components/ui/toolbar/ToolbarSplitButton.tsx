@@ -249,9 +249,12 @@ export function ToolbarSplitButton({
         className={cn(
           toolbarSplitCaretVariants(),
           'rounded-r-md px-1 outline-none',
-          // Its own dimming: the wrapper's wash only fires when BOTH halves are shut, so a caret
-          // shaded beside a live primary looked identical to a live one.
-          caretOff && 'cursor-default opacity-50',
+          // Its own quiet treatment: the wrapper's wash only fires when BOTH halves are shut, so a
+          // caret shaded beside a live primary looked identical to a live one. It is the shaded ink
+          // every other control wears (the glyph is already `--muted-foreground`, so no `opacity-50`,
+          // an ungated alpha), and what separates it from a live caret is what a shaded control
+          // never has: the hover wash, and a pointer that says "go". Forced colours take `GrayText`.
+          caretOff ? 'cursor-default forced-colors:[color:GrayText]' : 'hover:bg-muted',
         )}
       >
         <ChevronDown aria-hidden="true" className="size-3.5" />

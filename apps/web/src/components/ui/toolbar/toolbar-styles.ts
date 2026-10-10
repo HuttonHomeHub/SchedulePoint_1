@@ -21,7 +21,6 @@ import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-regist
  *   see the variant's own docblock for the ladder and why each state looks as it does.
  * - `disabled` — quiet ink + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
- * - `closing` — the row's deliberate closing action (Share & export), secondary-filled.
  */
 /**
  * The **split-button caret** treatment: a hairline divider before the caret, so a control that
@@ -148,7 +147,7 @@ export const TOOLBAR_CARET_TARGET =
 
 /**
  * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element that fills the
- * group's box exactly, `--muted` at 40 % with a transparent border, behind the controls: it takes
+ * group's box exactly, `--muted` at 50 % with a hairline `--border`, behind the controls: it takes
  * **no layout width** (`Deck.tsx` says why that is the constraint) and, filling the box rather than
  * hanging past it, **cannot overflow the deck** — a first build hung it 2 px out and the deck's
  * `scrollWidth` exceeded its `clientWidth` by that much at every width, which `Deck`'s own
@@ -157,19 +156,46 @@ export const TOOLBAR_CARET_TARGET =
  * `Diagram | Gantt` segment's container, which is the same statement made elsewhere in the band.
  * `isolate` keeps its `-z-10` inside the group, so it can never fall behind the band.
  *
- * The idle hover wash is `--muted`, the pill's own hue at full strength, so a hovered control inside
- * a pill is 1.2:1 against it rather than the 1.14:1 it was against the band: visible, not loud. Text
- * on the pill is 14.1:1 (foreground) and 7.33:1 (muted), `m6-measurement.md` §3.
+ * **Why 50 % and a hairline, not 60 %.** The first build was 40 % and the review found it too faint
+ * to read as a container at a tablet's distance. Raising the fill alone also lowers the idle hover
+ * wash (`--muted`, the pill's own hue) against it — 1.15:1 at 40 %, 1.10:1 at 60 % — so the fill
+ * goes only to 50 % (1.13:1) and the rest of the edge comes from the hairline, which is a border and
+ * so costs no width. Text on the pill is 13.74:1 (foreground) and 7.17:1 (muted); the numbers are in
+ * `m6-measurement.md` §3.
  */
 export const DECK_GROUP_PILL =
-  'relative isolate before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-transparent before:bg-muted/40';
-
-/** The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3). */
-export const DECK_GROUP_PILL_LOCKED =
-  'before:border-dashed before:border-border before:bg-transparent';
+  'relative isolate before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-border before:bg-muted/50';
 
 /**
- * A deck row's leading mark (M6 V1): hidden until the deck is `roomy`, then 14 px of glyph with the
+ * The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3).
+ * The dash is `--muted-foreground` at 50 % — 3.04:1 against the band, over the 3:1 a boundary needs
+ * (1.4.11) — where the hairline `--border` it replaced was 1.5:1 and vanished beside the filled
+ * pills. In forced colours the dash takes `GrayText`, the one colour the mode leaves for "unavailable".
+ */
+export const DECK_GROUP_PILL_LOCKED =
+  'before:border-dashed before:border-muted-foreground/50 before:bg-transparent forced-colors:before:border-[GrayText]';
+
+/**
+ * **The row's closing action, drawn as an outline** (M6 V4, reworked after the review). Share & export
+ * was `--secondary`-filled, which is the exact fill of the selected `Diagram | Gantt` segment and of a
+ * pressed toggle, so a reader could not tell "chosen" from "the row's last action". It is now an
+ * inset 1 px ring in `--muted-foreground` at 60 % (3.6:1 on a pill): a shape no state in the ladder
+ * uses, with no fill, so nothing it sits beside can be mistaken for it, and **no width** (a ring is
+ * painted inside the box).
+ *
+ * It is a class on the **section** and reaches its buttons by descendant selector, because the pair
+ * is `Export` (a hand-written `render` item) beside `Share…` (a plain button derived from a
+ * `PromotableEntry`) and neither takes a `closing` prop: adding one to `ToolbarButton`, the registry
+ * item and the entry would widen three public contracts for a decoration. The selector means the pair
+ * is outlined together by construction, so "both or neither" cannot drift. A keyboard focus ring is
+ * `ring-2` in `--ring` on the control itself and is more specific than this, so focus still wins.
+ */
+export const DECK_CLOSING_SECTION =
+  '[&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-muted-foreground/60';
+
+/**
+ * A deck row's leading mark (M6 V1): hidden until the deck is `roomy` (79 rem, 1264 px — deliberately:
+ * below it the rows have no 18 px to spend, `m6-measurement.md` §0), then 14 px of glyph with the
  * row's 8 px gap pulled in by `-mr-1`, so its net width is 18 px. Height is the control's so the glyph
  * sits on the controls' midline in a row whose items align to the top.
  */
@@ -337,35 +363,29 @@ export const toolbarControlVariants = cva(
        * shaded selected lens all fall back to the same bare picture. What still says "shut" is that
        * picture, `cursor-default`, no hover wash, and the reason a reader can reach by keyboard
        * (ADR-0082) — not a lower contrast.
+       *
+       * **Two things the quiet style must still say.** A lens that is ON but shaded (`selected`) keeps
+       * a 2 px underline in the same ink (compound variant below): the fill is gone, and without a
+       * mark a reader could not tell an engaged lens from a free one. And **forced colours**: the mode
+       * overrides `color` to `CanvasText` for every control, so `opacity-50` used to be the only thing
+       * that survived to say "shut"; `GrayText` is the system colour for exactly that, and an author-
+       * specified system colour is kept (the same device `viewport-notice.tsx` uses).
        */
       disabled: {
-        true: 'cursor-default bg-transparent text-muted-foreground shadow-none',
+        true: 'cursor-default bg-transparent text-muted-foreground shadow-none forced-colors:[color:GrayText]',
         false: '',
       },
-      /**
-       * **The row's deliberate closing action** (M6 V4): Share & export is filled with `--secondary`, so
-       * the one control that ends a row of tools reads as the row's destination and not as one more
-       * command. It reuses the `open` / `selected` fill on purpose rather than minting a colour, and
-       * keeps the two readable apart with what each adds: `selected` carries an underline, `closing`
-       * carries neither that nor a state — it is the same at rest and open (its menu says it is open,
-       * and so does `aria-expanded`).
-       *
-       * Hover is a 1 px inset ring in the ink, not `--secondary-hover`: that token is 3.94:1 under this
-       * label, below 4.5. A shaded closing control drops the fill (`disabled` above) because its
-       * muted ink on `--secondary` would be about 2.2:1.
-       */
-      closing: { true: '', false: '' },
     },
     compoundVariants: [
       // A shaded pen has no amber fill left, so the navy ring `primary` draws for itself would be navy
       // on the navy band: the shared amber ring takes over (WCAG 2.4.7; it is a shaded control a
       // keyboard reader still lands on, ADR-0082).
       { state: 'primary', disabled: true, class: 'focus-visible:ring-ring' },
+      // A shaded lens that is ON keeps a quiet underline (see `disabled` above).
       {
-        closing: true,
-        disabled: false,
-        class:
-          'bg-secondary text-secondary-foreground hover:ring-1 hover:ring-inset hover:ring-secondary-foreground',
+        state: 'selected',
+        disabled: true,
+        class: 'shadow-[inset_0_-2px_0_0_var(--muted-foreground)]',
       },
       // Idle interactive control gets the hover wash; a control in any other state, or a disabled
       // one, does not — a hover wash over a state fill would say two things at once, and hover is
@@ -377,9 +397,9 @@ export const toolbarControlVariants = cva(
       // becomes a token this file's new state-ladder block reports by name. An alpha over a state
       // fill would also composite differently per state, which is how one wash came to mean three
       // things in the first place.
-      { tone: 'control', state: 'rest', disabled: false, closing: false, class: 'hover:bg-muted' },
+      { tone: 'control', state: 'rest', disabled: false, class: 'hover:bg-muted' },
     ],
-    defaultVariants: { tone: 'control', state: 'rest', disabled: false, closing: false },
+    defaultVariants: { tone: 'control', state: 'rest', disabled: false },
   },
 );
 

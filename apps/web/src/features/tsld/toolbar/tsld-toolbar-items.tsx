@@ -1856,10 +1856,8 @@ function ExportMenuControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        // `closing` (M6 V4): this trigger is the DO row's deliberate last action, secondary-filled.
-        className={cn(
-          toolbarControlVariants({ state: open ? 'open' : 'rest', disabled, closing: true }),
-        )}
+        // The DO row's closing action is outlined by its section (`DECK_CLOSING_SECTION`), not here.
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
         {labelClass ? <span className={labelClass}>{name}</span> : null}

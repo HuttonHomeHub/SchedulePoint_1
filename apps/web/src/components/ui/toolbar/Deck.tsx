@@ -1,4 +1,4 @@
-import { Eye, PencilRuler } from 'lucide-react';
+import { Eye, Wrench } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -14,6 +14,7 @@ import {
   type ToolbarItem,
 } from './toolbar-registry';
 import {
+  DECK_CLOSING_SECTION,
   DECK_GROUP_PILL,
   DECK_GROUP_PILL_LOCKED,
   DECK_ROW_MARK,
@@ -384,14 +385,15 @@ export function Deck<Ctx>({
           className="flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap"
         >
           {/* **The row's identity is a quiet leading mark** (toolbar-redesign M6 V1): an eye for LOOK, a
-              pencil and rule for DO, in the muted ink, `aria-hidden` and never a stop. No stripe, no
+              wrench for DO (not a pencil: `Start editing` leads this row, and a second pencil beside it
+              read as a duplicate of the pen), in the muted ink, `aria-hidden` and never a stop. No stripe, no
               tint band and no new colour — the pills carry the grouping and this carries only which
-              row you are on. **Roomy only** (`@roomy/deck:`), because it costs 18 px of the row and the
+              row you are on. **Roomy only** (`@roomy/deck:`, 79 rem = 1264 px, a deliberate floor), because it costs 18 px of the row and the
               rows below that width have none to spare: at 1024 the LOOK row keeps about 28 px with a
               conflict showing, and SC-1 asserts two lines there. Above it, the ladder's free widths are
               read with the mark present (`promotion-widths.*.json`). */}
           <span aria-hidden="true" data-deck-row-mark={row} className={DECK_ROW_MARK}>
-            {row === 'look' ? <Eye className="size-3.5" /> : <PencilRuler className="size-3.5" />}
+            {row === 'look' ? <Eye className="size-3.5" /> : <Wrench className="size-3.5" />}
           </span>
           {groups
             .filter((group) => group.row === row)
@@ -484,6 +486,9 @@ export function Deck<Ctx>({
                           // rather than as a caption above them — the ONE seam treatment the three
                           // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.
                           sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
+                          // The output section (Export, and Share… once promoted) is the row's closing
+                          // action: outlined together, never filled (`DECK_CLOSING_SECTION`).
+                          section[0]?.item.group === 'output' && DECK_CLOSING_SECTION,
                         )}
                       >
                         {section.map((r) => {
