@@ -139,7 +139,9 @@ the container unmounts). Roving, Tab stops and key sets are the shared ones.
   conflict selected 89 → **134** (floor 120). The cause was the selection bar's five 44 px lines in a 320 px outlet beside
   the facts; a marked strip (`data-dock-wide`) now takes 36 rem on a finger-sized window, which wraps the bar onto the
   line below the facts: three lines, 140 px. Fine pointer unchanged (246 / 286). A visible **Clear selection** button
-  joins the bar (icon-only, 36 / 44 px; Escape does the same).
+  joins the bar **on a finger-sized pointer only** (icon-only, 44 px; Escape does the same). With a mouse it wrapped the
+  bar at 1646 and broke `dock.spec.ts`'s zero-canvas-cost equality, so it is `hidden pointer-coarse:inline-flex`. (On a
+  mouse at the 1024 floor the bar is 246 px of stage and the minimap still has room beside a selection.)
 - **Exactly what changed in the shared primitives** (ADR-0111 review): `Toolbar.tsx` gains optional `ungrouped` (groups
   render as plain wrappers: no `role="group"`, no name) and `tooltip` (forwarded to `ToolbarButton`); `ToolbarButton.tsx`
   gains an optional `tooltip` prop spread into `useTooltip`; `tooltip.tsx` gains `placement` (`'below'` default, `'above'`

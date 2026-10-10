@@ -373,7 +373,7 @@ subject (R5). Three rules follow from the review. **A control that cannot be see
 the cluster is withdrawn (hidden, not clipped) when the visible stage cannot hold it, and `View ▾` carries
 Fit to plan as the route that stays. **A finger-sized window gives the selection bar a line of its own**
 (`data-dock-wide`) so the diagram keeps at least 120 px of stage with a conflict selected, and the bar has a
-visible **Clear selection** (Escape does the same) as its way out. **Below 1024 the editing row leads** the
+visible **Clear selection** on a finger-sized pointer (Escape does the same) as its way out. **Below 1024 the editing row leads** the
 one scrolling line, in the DOM as on screen.
 
 ### Give-way order in a fixed-height chrome row (ADR-0110)
