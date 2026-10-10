@@ -3,11 +3,13 @@ import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
+  DATA_DATE,
   diagramList,
   ensurePen,
   linkActivities,
   newPlan,
   onboard,
+  placeViaApi,
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
@@ -36,10 +38,120 @@ async function box(locator: Locator): Promise<{ x: number; y: number; w: number;
   return { x: b.x, y: b.y, w: b.width, h: b.height };
 }
 
-const intersects = (
-  a: { x: number; y: number; w: number; h: number },
-  b: { x: number; y: number; w: number; h: number },
-): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+/** The box that is actually on screen for the diagram: the section, which the stage clips to. */
+const stageOf = (page: Page): Locator =>
+  page.locator('section[aria-label="Time-scaled logic diagram"]');
+
+const within = (
+  inner: { x: number; y: number; w: number; h: number },
+  outer: { x: number; y: number; w: number; h: number },
+): boolean =>
+  inner.x >= outer.x - 0.5 &&
+  inner.y >= outer.y - 0.5 &&
+  inner.x + inner.w <= outer.x + outer.w + 0.5 &&
+  inner.y + inner.h <= outer.y + outer.h + 0.5;
+
+/**
+ * **The right and bottom edges of the selected bar, read from the canvas's own pixels.**
+ *
+ * The first version of this probe clicked its way to the bar, and a click SELECTS: once the keyboard
+ * reveal also clears the column, a click on a bar near the corner pans it, so the bar being measured
+ * moved under the probe. This reads nothing it can disturb. The scene canvas is copied with the bar
+ * selected and again with the selection cleared (Escape on the list, which does not pan); what
+ * differs is the selection ring and the bar's own highlighted links, and the bounding box of the
+ * difference gives the bar's **right and bottom** edges exactly. Those are the two edges that matter
+ * against a column at the stage's bottom-right: a bar is under it only if it reaches past the
+ * column's left AND its top, and the box's left and top (which may include a link's elbow) are
+ * always short of both. The selection is put back before returning.
+ */
+async function selectedBarCorner(page: Page): Promise<{ right: number; bottom: number }> {
+  // The canvas repaints on a frame, so a capture can land before the ring is drawn: retry, which is
+  // safe because each attempt leaves the bar selected again.
+  let last = { right: -1, x: 0, y: 0, scaleX: 1, scaleY: 1, bottom: -1 };
+  for (let attempt = 0; attempt < 3 && last.right <= 0; attempt += 1) {
+    last = await readCorner(page);
+    await page.keyboard.press('End');
+    await page.waitForTimeout(600);
+  }
+  expect(
+    last.right,
+    'selecting the last activity changed no pixel: the probe saw no ring',
+  ).toBeGreaterThan(0);
+  return {
+    right: last.x + (last.right + 1) / last.scaleX,
+    bottom: last.y + (last.bottom + 1) / last.scaleY,
+  };
+}
+
+async function readCorner(page: Page): Promise<{
+  right: number;
+  bottom: number;
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+}> {
+  // Two reads of the same canvas; the first stays in the page, so no pixel crosses the protocol.
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const canvas = document.querySelector('main canvas') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    (window as unknown as { __selected: ImageData }).__selected = ctx.getImageData(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  const corner = await page.evaluate(() => {
+    const canvas = document.querySelector('main canvas') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    const cleared = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const selected = (window as unknown as { __selected: ImageData }).__selected;
+    let right = -1;
+    let bottom = -1;
+    // The two images differ in height: the selection bar docks in the foot row and the stage
+    // shrinks while the bar is selected. They share a top-left origin (a resize does not pan), so
+    // the rows both have are the ones compared.
+    const width = Math.min(selected.width, cleared.width);
+    const height = Math.min(selected.height, cleared.height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const a = (y * selected.width + x) * 4;
+        const b = (y * cleared.width + x) * 4;
+        const delta =
+          Math.abs(selected.data[a]! - cleared.data[b]!) +
+          Math.abs(selected.data[a + 1]! - cleared.data[b + 1]!) +
+          Math.abs(selected.data[a + 2]! - cleared.data[b + 2]!);
+        if (delta < 60) continue;
+        // The ring and the bar's highlighted links are the diagram's blue; a stripe or a wash that
+        // also changes with the selection is not, and must not stretch the box.
+        const blue = selected.data[a + 2]! - selected.data[a]!;
+        if (blue < 40) continue;
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+      }
+    }
+    const rect = canvas.getBoundingClientRect();
+    return {
+      right,
+      bottom,
+      x: rect.x,
+      y: rect.y,
+      scaleX: canvas.width / rect.width,
+      scaleY: canvas.height / rect.height,
+    };
+  });
+  return corner;
+}
+
+/** Whether a bar whose bottom-right corner is `corner` reaches into `obstacle` from its top-left. */
+const cornerIsUnder = (
+  corner: { right: number; bottom: number },
+  obstacle: { x: number; y: number; w: number; h: number },
+): boolean => corner.right > obstacle.x && corner.bottom > obstacle.y;
 
 test.describe('The Diagram viewport cluster, under a mouse', () => {
   let page: Page;
@@ -155,6 +267,56 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
     await minimapToggle(page).click();
   });
 
+  test('the cluster is one tab stop with no group inside it: the arrows rove and never leave, Tab does', async () => {
+    // One toolbar, one name: a screen reader would otherwise hear "Diagram viewport" and then a
+    // "Navigate" group wrapped round the same four buttons.
+    await expect(clusterOf(page).getByRole('group')).toHaveCount(0);
+    await clusterOf(page).getByRole('button', { name: 'Zoom out' }).focus();
+    for (const name of ['Zoom in', 'Fit to plan', 'Minimap', 'Zoom out']) {
+      await page.keyboard.press('ArrowRight');
+      // Past the last control the arrow wraps to the first: focus is still inside the cluster.
+      await expect(clusterOf(page).getByRole('button', { name })).toBeFocused();
+    }
+    await page.keyboard.press('ArrowLeft');
+    await expect(minimapToggle(page)).toBeFocused();
+    // Exactly one control carries the tab stop, and it is the one the arrows left focus on.
+    const stops = await clusterOf(page)
+      .locator('[data-toolbar-item][tabindex="0"]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-toolbar-item')));
+    expect(stops).toEqual(['minimap']);
+    // Shift+Tab leaves backwards and Tab comes back to that same one stop, not to another.
+    await page.keyboard.press('Shift+Tab');
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label') ?? '',
+      ),
+    ).not.toBe('Diagram viewport');
+    await page.keyboard.press('Tab');
+    await expect(minimapToggle(page)).toBeFocused();
+    // Landing on the diagram's list selected an activity, and a selection docks its bar in the foot
+    // row, which takes the stage the next cases need: put the diagram back as it was.
+    await diagramList(page).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
+  });
+
+  test('a cluster tooltip opens above the cluster, not over the foot row, and pressing the Minimap dismisses it', async () => {
+    const zoomIn = clusterOf(page).getByRole('button', { name: 'Zoom in' });
+    await zoomIn.focus();
+    const tip = page.locator('[data-tooltip]');
+    await expect(tip).toBeVisible();
+    const cluster = await box(clusterOf(page));
+    const tipBox = await box(tip);
+    expect(tipBox.y + tipBox.h, 'the tip opened over the cluster or below it').toBeLessThanOrEqual(
+      cluster.y,
+    );
+    // The press opens a panel directly above the button; the tip must not stay over it.
+    await minimapToggle(page).click();
+    await expect(page.getByRole('group', { name: 'Diagram overview' })).toBeVisible();
+    await expect(page.locator('[data-tooltip]')).toHaveCount(0);
+    await minimapToggle(page).click();
+  });
+
   test('a keyboard reveal keeps the bottom-right-most activity out from under the cluster and the minimap (SC-15)', async () => {
     test.setTimeout(180_000);
     // The floor (1024 x 600): the stage is short enough that the corner is where a bar ends up. At
@@ -172,62 +334,17 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
     await page.keyboard.press('End');
     await page.waitForTimeout(500);
 
-    // The column is a pointer-events layer; let the probe click through it, so a bar that IS under
-    // the cluster is measured at its true extent and not clipped to the part that peeks out.
-    const style = await page.addStyleTag({
-      content:
-        '[data-testid="tsld-viewport-column"], [data-testid="tsld-viewport-column"] * { pointer-events: none !important; }',
-    });
-    const canvas = page.locator('main canvas').first();
-    const cbox = await box(canvas);
-    const target = ids[ids.length - 1]!;
-    const selected = async (): Promise<string | null> => {
-      const active = await diagramList(page).getAttribute('aria-activedescendant');
-      return /-opt-([0-9a-f-]{36})$/.exec(active ?? '')?.[1] ?? null;
-    };
-    // Find any point of the target by sweeping the canvas.
-    let seed: { x: number; y: number } | null = null;
-    for (let y = 16; y < cbox.h && !seed; y += 12) {
-      for (let x = 12; x < cbox.w - 4; x += 24) {
-        await page.mouse.click(cbox.x + x, cbox.y + y);
-        if ((await selected()) === target) {
-          seed = { x, y };
-          break;
-        }
-      }
-    }
-    expect(seed, 'the last activity is not drawn anywhere on the canvas').not.toBeNull();
-    const probe = async (x: number, y: number): Promise<boolean> => {
-      if (x < 0 || y < 0 || x >= cbox.w || y >= cbox.h) return false;
-      await page.mouse.click(cbox.x + x, cbox.y + y);
-      return (await selected()) === target;
-    };
-    const walk = async (dx: number, dy: number): Promise<number> => {
-      let n = 0;
-      while (await probe(seed!.x + dx * (n + 1) * 3, seed!.y + dy * (n + 1) * 3)) n += 1;
-      return n * 3;
-    };
-    const left = await walk(-1, 0);
-    const right = await walk(1, 0);
-    const up = await walk(0, -1);
-    const down = await walk(0, 1);
-    await style.evaluate((el) => (el as Element).remove());
-
-    const bar = {
-      x: cbox.x + seed!.x - left,
-      y: cbox.y + seed!.y - up,
-      w: left + right + 1,
-      h: up + down + 1,
-    };
-    expect(bar.w, 'the probe found a degenerate bar').toBeGreaterThan(10);
+    const corner = await selectedBarCorner(page);
     expect(
-      intersects(bar, await box(clusterOf(page))),
-      `the bar ${JSON.stringify(bar)} is under the cluster`,
+      cornerIsUnder(corner, await box(clusterOf(page))),
+      `the bar's corner ${JSON.stringify(corner)} is under the cluster`,
     ).toBe(false);
-    expect(
-      intersects(bar, await box(panel)),
-      `the bar ${JSON.stringify(bar)} is under the minimap`,
-    ).toBe(false);
+    // At the floor a selection docks its bar and the stage then has no room for the minimap, so the
+    // panel has withdrawn by now (its reason is asserted below): the cluster is the only occupant.
+    await expect(panel).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // The selection is gone, so the stage is tall again and the panel returns: close it.
+    await expect(panel).toBeVisible();
     await minimapToggle(page).click();
     await page.setViewportSize({ width: 1646, height: 1097 });
   });
@@ -268,11 +385,33 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
     await page.locator('[data-toolbar-item="comments"]').click();
     await page.setViewportSize({ width: 1646, height: 1097 });
   });
+
+  test('with a dock open the cluster still keeps the bottom-right-most activity clear of it (2.4.11)', async () => {
+    test.setTimeout(180_000);
+    // The dock narrows the stage to 386 px, so the cluster is 44 % of its width: the corner a
+    // revealed bar lands in is smaller and the column is the biggest thing in it.
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await page.locator('[data-toolbar-item="comments"]').click();
+    await expect(page.getByTestId('tsld-viewport-slot')).toBeVisible();
+    await clusterOf(page).getByRole('button', { name: 'Fit to plan' }).click();
+    await diagramList(page).focus();
+    await page.keyboard.press('End');
+    await page.waitForTimeout(500);
+    const corner = await selectedBarCorner(page);
+    expect(
+      cornerIsUnder(corner, await box(clusterOf(page))),
+      `the bar's corner ${JSON.stringify(corner)} is under the cluster with a dock open`,
+    ).toBe(false);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-toolbar-item="comments"]').click();
+    await page.setViewportSize({ width: 1646, height: 1097 });
+  });
 });
 
 test.describe('The Diagram viewport cluster, under a finger', () => {
   let page: Page;
   let context: BrowserContext;
+  let orgSlug: string;
 
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext({
@@ -281,14 +420,15 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     });
     await acknowledgeViewportNotice(context);
     page = await context.newPage();
-    const orgSlug = await onboard(page, Date.now() + 5300);
+    orgSlug = await onboard(page, Date.now() + 5300);
     await createHierarchy(page);
     await newPlan(page, 'Cluster touch');
     await ensurePen(page);
-    await seedActivities(page, orgSlug, [
+    const seeded = await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate', laneIndex: 1, durationDays: 18 },
     ]);
+    await linkActivities(page, orgSlug, seeded[0]!.id, seeded[1]!.id);
     await recalculate(page, orgSlug);
   });
 
@@ -296,7 +436,19 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     await context.close();
   });
 
-  test('at 1024 x 600 a selection leaves the stage too short for the minimap: it steps aside, the cluster stays', async () => {
+  /** The reading every case below states: the visible stage, the cluster, and where each sits. */
+  async function reading(): Promise<{
+    stage: { x: number; y: number; w: number; h: number };
+    cluster: { x: number; y: number; w: number; h: number };
+    clusterVisible: boolean;
+  }> {
+    const stage = await box(stageOf(page));
+    const clusterVisible = await clusterOf(page).isVisible();
+    const cluster = clusterVisible ? await box(clusterOf(page)) : { x: 0, y: 0, w: 0, h: 0 };
+    return { stage, cluster, clusterVisible };
+  }
+
+  test('at 1024 x 600 a selection leaves the stage too short for the minimap: it steps aside, the cluster stays and is on screen', async () => {
     const pointer = await page.evaluate(() =>
       window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
     );
@@ -304,14 +456,20 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     // Selecting an activity docks its bar in the foot row, which takes the height the column needs.
     await diagramList(page).focus();
     await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
     await page.waitForTimeout(600);
     const toggle = minimapToggle(page);
     await expect(toggle).toHaveAttribute('aria-disabled', 'true');
     await expect(toggle).toHaveAccessibleDescription('Not enough room for the minimap');
     await expect(page.getByRole('group', { name: 'Diagram overview' })).toHaveCount(0);
-    // The cluster is whole: four 44 px targets, below the ruler.
-    const cluster = await box(clusterOf(page));
+    // The cluster is whole — four 44 px targets — and inside the box that is on screen. (It used to
+    // be anchored to the canvas's own bottom, which a short stage clips: drawn off screen and still
+    // a Tab stop.)
+    const { stage, cluster, clusterVisible } = await reading();
+    expect(clusterVisible, 'the cluster is withdrawn although the stage can hold it').toBe(true);
+    expect(
+      within(cluster, stage),
+      `the cluster ${JSON.stringify(cluster)} is outside the visible stage ${JSON.stringify(stage)}`,
+    ).toBe(true);
     const ruler = await box(page.getByTestId('tsld-ruler'));
     expect(cluster.y).toBeGreaterThanOrEqual(ruler.y + ruler.h);
     for (const name of ['Zoom out', 'Zoom in', 'Fit to plan', 'Minimap']) {
@@ -319,5 +477,52 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
       expect(b.w, `${name} is under 44 px wide`).toBeGreaterThanOrEqual(44);
       expect(b.h, `${name} is under 44 px tall`).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  test('the selection bar has a visible Clear selection, and it is the way out', async () => {
+    const clear = page.getByRole('button', { name: 'Clear selection' });
+    await expect(clear).toBeVisible();
+    const b = await box(clear);
+    expect(b.w).toBeGreaterThanOrEqual(44);
+    expect(b.h).toBeGreaterThanOrEqual(44);
+    await expect(clear).toHaveAttribute('aria-keyshortcuts', 'Escape');
+    await clear.click();
+    await expect(clear).toHaveCount(0);
+    await expect(page.getByTestId('announcer')).toHaveText('Selection cleared.');
+    // Focus is not dropped to <body>: the diagram's list takes it back.
+    await expect(diagramList(page)).toBeFocused();
+  });
+
+  test('with a conflict selected the diagram keeps at least 120 px of stage and the cluster stays on screen', async () => {
+    await ensurePen(page);
+    await placeViaApi(page, orgSlug, 'Excavate', DATA_DATE);
+    await recalculate(page, orgSlug);
+    await page.reload();
+    await expect(clusterOf(page)).toBeVisible();
+    await page.getByRole('button', { name: 'Next conflict' }).click();
+    await expect(page.getByRole('button', { name: 'Clear selection' })).toBeVisible();
+    await page.waitForTimeout(600);
+    const { stage, cluster, clusterVisible } = await reading();
+    // The foot bar used to leave 89 px here (five lines in a 320 px column beside the facts).
+    expect(stage.h, `the stage is ${String(stage.h)} px`).toBeGreaterThanOrEqual(120);
+    expect(clusterVisible).toBe(true);
+    expect(within(cluster, stage)).toBe(true);
+  });
+
+  test('where even that leaves no room the cluster is withdrawn from the Tab order, and View ▾ still fits the plan', async () => {
+    await page.setViewportSize({ width: 1024, height: 500 });
+    await page.waitForTimeout(600);
+    // Withdrawn means hidden and out of the tab order, not drawn clipped.
+    await expect(clusterOf(page)).toBeHidden();
+    await expect(page.getByTestId('tsld-viewport-slot').locator('button:visible')).toHaveCount(0);
+    // The route that stays: View ▾ carries Fit to plan.
+    await page.getByRole('button', { name: /^View/ }).click();
+    const fit = page
+      .getByRole('dialog', { name: 'View' })
+      .getByRole('button', { name: 'Fit to plan' });
+    await expect(fit).toBeVisible();
+    await fit.click();
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1024, height: 600 });
   });
 });

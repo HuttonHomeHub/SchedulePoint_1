@@ -1538,7 +1538,11 @@ export function TsldCanvas({
     // repairs the lane axis with the SAME arithmetic rather than a second opinion.
     let dx = revealOffset(rect.x, rect.w, size.width, margin);
     // A band bar has no vertical position in the scene, so only the horizontal pan applies.
-    let dy = bandBar ? 0 : revealOffset(rect.y, rect.h, size.height, margin);
+    // The visible height, not the canvas's own: with a selection bar docked the stage is clipped
+    // below the canvas root's minimum, and a bar revealed to "inside the canvas" was under the foot.
+    let dy = bandBar
+      ? 0
+      : revealOffset(rect.y, rect.h, Math.max(1, size.height - clipShiftRef.current), margin);
     // **The reveal margin for the corner column** (SC-15, WCAG 2.4.11). The column's LIVE rect, in
     // scene coordinates, is an obstacle: a bar revealed into the bottom-right would otherwise land
     // under the cluster or the minimap. Measured here, in the effect, because the column's size
@@ -1567,7 +1571,9 @@ export function TsldCanvas({
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
     }
-  }, [selectedId, activities, dataDate, wbsBandHeightPx]);
+    // `clipShift` is a trigger and not a read: a selection docks its bar in the same commit that
+    // selects, and the stage shrinks a frame later, so the first run sees the old, taller stage.
+  }, [selectedId, activities, dataDate, wbsBandHeightPx, clipShift]);
 
   // Publish the held ghost to the loop. The create ghost and the write ghost share the one overlay
   // slot (they are mutually exclusive — see the prop docs), so the in-flight write keeps its
