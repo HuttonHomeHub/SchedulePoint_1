@@ -66,6 +66,18 @@ export function minimapHasRoom(
 }
 
 /**
+ * Whether the visible stage can hold the **cluster alone**, with its bottom inset. Below this the
+ * column is withdrawn (`TsldCanvas`): the stage's visible scene is shorter than the card, so drawing
+ * it paints over the ruler or is clipped by the foot row, and either way a Tab stop nobody can see.
+ * The measured case is the coarse 1024 × 600 stage with a conflict selected: 89 px visible, 49 of
+ * them scene, against a 54 px card. Unmeasured (width ≤ 1) has room, as `minimapHasRoom` does.
+ */
+export function clusterHasRoom(stage: { width: number; height: number }, coarse: boolean): boolean {
+  if (stage.width <= 1) return true;
+  return stage.height - COLUMN_INSET_PX >= clusterOuterHeight(coarse);
+}
+
+/**
  * The extra pan (on top of the ordinary reveal) that takes a bar clear of the column, or `{0, 0}`.
  *
  * WCAG 2.4.11: a focused bar must not be hidden by author-created content. The ordinary reveal keeps
@@ -73,7 +85,7 @@ export function minimapHasRoom(
  * into the bottom-right corner lands under it. The column is an obstacle with a `margin` of its own
  * (the same one the edges get, so "clear" means the same distance everywhere), and the bar moves the
  * **shorter** way out of it — left or up — because those are the two directions the corner opens
- * onto. A degenerate obstacle (an unmeasured column) asks for nothing.
+ * onto, unless the shorter way would leave the stage's own left or top margin. A degenerate obstacle (an unmeasured column) asks for nothing.
  */
 export function clearOfObstacle(
   bar: Rect,
@@ -92,5 +104,15 @@ export function clearOfObstacle(
   if (!rectsIntersect(bar, keepOut)) return { dx: 0, dy: 0 };
   const left = bar.x + bar.w - (obstacle.x - margin);
   const up = bar.y + bar.h - (obstacle.y - margin);
-  return left < up ? { dx: -left, dy: 0 } : { dx: 0, dy: -up };
+  // The two ways out, shorter first. A way out that would take the bar past the stage's own left or
+  // top margin trades one hidden bar for another (a very narrow stage, where the column spans nearly
+  // the whole width and "left" runs off the edge), so a way that stays inside is taken ahead of a
+  // shorter one that does not; if neither stays inside, the shorter wins, as before.
+  // `up` is listed first: on a tie it wins, as the unconditional shorter-way rule always had it.
+  const options = [
+    { dx: 0, dy: -up, inside: bar.y - up >= margin, cost: up },
+    { dx: -left, dy: 0, inside: bar.x - left >= margin, cost: left },
+  ].sort((a, b) => Number(b.inside) - Number(a.inside) || a.cost - b.cost);
+  const best = options[0];
+  return best ? { dx: best.dx, dy: best.dy } : { dx: 0, dy: 0 };
 }

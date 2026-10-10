@@ -18,13 +18,13 @@ import {
   FileText,
   FileType,
   Filter,
+  Fullscreen,
   ImageDown,
   Info,
   Layers,
   Loader2,
   LocateFixed,
   Map as MapIcon,
-  Maximize2,
   MessageSquare,
   Minus,
   Plus,
@@ -58,6 +58,7 @@ import { GanttColumnsGroup } from './gantt-columns-group';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
 
+import { Button } from '@/components/ui/button';
 import { Disclosure } from '@/components/ui/disclosure';
 import { CheckboxField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -198,14 +199,8 @@ const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: str
  * are the part of these controls most worth preserving through a relocation — they are what
  * ADR-0082 is about.
  */
-interface LensToggle {
+interface LensToggleBase {
   id: string;
-  /**
-   * The `View ▾` section the row lives in. **Absent for a record that is always promoted** (Legend,
-   * Minimap): it never has a menu section, and the `panels` section that used to hold them went with
-   * the Minimap's move to the diagram's corner (toolbar-redesign M4).
-   */
-  group?: ViewToggleGroupId;
   label: string;
   /** Offered at all — the feature's build-time flag. */
   enabled: boolean;
@@ -229,47 +224,79 @@ interface LensToggle {
    * it is about to do, and the surprise goes rather than the behaviour.
    */
   note?: string;
+}
+
+/**
+ * How a lens toggle is **promoted** out of `View ▾` onto a toolbar of its own (workspace-chrome M4;
+ * toolbar-redesign M2 and M4). The record that carries one is still the one definition of the
+ * control — see {@link LensToggle}.
+ *
+ * The product owner asked for the Legend and the Resource view back on the row now that ADR-0090
+ * M2 and ADR-0091 M7 had bought it the width. They are still defined HERE, once — the promotion
+ * derives a registry item from the record rather than restating it — because two definitions of
+ * `checked`/`toggle`/`reason` would drift, and the drift would be invisible: each surface looks
+ * right alone, and only a planner who reaches the same control two ways would ever see one is a
+ * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
+ * promoted, so a control is on the row **or** in the popover and never in both.
+ */
+interface LensPromotion {
+  icon: React.ReactNode;
+  order: number;
   /**
-   * **Promoted to Row 1** (workspace-chrome M4), instead of living inside `View ▾`.
-   *
-   * The product owner asked for the Legend and the Resource view back on the row now that ADR-0090
-   * M2 and ADR-0091 M7 have bought it the width. They are still defined HERE, once — the promotion
-   * derives a registry item from this record rather than restating it — because two definitions of
-   * `checked`/`toggle`/`reason` would drift, and the drift would be invisible: each surface looks
-   * right alone, and only a planner who reaches the same control two ways would ever see one is a
-   * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
-   * promoted, so a control is on the row **or** in the popover and never in both.
+   * The registry group the promoted item sits in. Absent ⇒ `'lens'`, which the Baseline overlay
+   * keeps. Legend and Resource view declare `'help'`: they open a panel beside the diagram rather
+   * than draw on it, and `Deck` renders that group as **Panels** (toolbar-redesign M2-T2). Declared
+   * per record because the promoted lenses are not one group — the same reason the label policy
+   * below is.
    */
-  promotion?: {
-    icon: React.ReactNode;
-    order: number;
-    /**
-     * The registry group the promoted item sits in. Absent ⇒ `'lens'`, which the Baseline overlay
-     * keeps. Legend and Resource view declare `'help'`: they open a panel beside the diagram rather
-     * than draw on it, and `Deck` renders that group as **Panels** (toolbar-redesign M2-T2). Declared
-     * per record because the promoted lenses are not one group — the same reason the label policy
-     * below is.
-     */
-    group?: ToolbarGroupId;
-    /**
-     * Which toolbar renders the promoted item. Absent ⇒ `'strip'`, the command deck. The Minimap
-     * declares `'canvas'`: it navigates the diagram's own viewport, so it sits in the cluster at the
-     * diagram's corner beside Zoom and Fit rather than on the deck (toolbar-redesign M4).
-     */
-    row?: ToolbarRow;
-    /**
-     * How the promoted control's label behaves (`ToolbarLabelVisibility`). Absent ⇒ `'always'`.
-     * Declared per record because the promoted lenses are not one policy: Legend names itself, and
-     * Baseline overlay and Resource view go icon-only below `--container-roomy`.
-     */
-    labelVisibility?: ToolbarLabelVisibility;
-    /**
-     * The tooltip sentence. **Required for `'roomy'`**, because the tooltip a `'roomy'` control
-     * always mounts is the only thing naming it once its label goes (`defineToolbar` refuses a
-     * `'roomy'` item without one).
-     */
-    description?: string;
-  };
+  group?: ToolbarGroupId;
+  /**
+   * Which toolbar renders the promoted item. Absent ⇒ `'strip'`, the command deck. The Minimap
+   * declares `'canvas'`: it navigates the diagram's own viewport, so it sits in the cluster at the
+   * diagram's corner beside Zoom and Fit rather than on the deck (toolbar-redesign M4).
+   */
+  row?: ToolbarRow;
+  /**
+   * How the promoted control's label behaves (`ToolbarLabelVisibility`). Absent ⇒ `'always'`.
+   * Declared per record because the promoted lenses are not one policy: Legend names itself, and
+   * Baseline overlay and Resource view go icon-only below `--container-roomy`.
+   */
+  labelVisibility?: ToolbarLabelVisibility;
+  /**
+   * The tooltip sentence. **Required for `'roomy'`**, because the tooltip a `'roomy'` control
+   * always mounts is the only thing naming it once its label goes (`defineToolbar` refuses a
+   * `'roomy'` item without one).
+   */
+  description?: string;
+}
+
+/**
+ * **Either a `View ▾` section, or always promoted — never neither.** The union is the statement: a
+ * record with no `group` has no menu section to live in, so the type refuses one that is not also
+ * promoted (Legend and Minimap, the two that never had a section after the `panels` section went
+ * with the Minimap's move to the diagram's corner). `lensTogglesIn` and `promotedLensItems` then
+ * cannot both skip it, which is what a bare optional `group` allowed.
+ *
+ * `promotion` on a record that HAS a group is the Baseline overlay's and Resource view's case: they
+ * leave the menu for the deck by being promoted, and the group says where they sat before.
+ */
+type LensToggle = LensToggleBase &
+  (
+    | {
+        /** The `View ▾` section the row lives in. */
+        group: ViewToggleGroupId;
+        promotion?: LensPromotion;
+      }
+    | {
+        group?: undefined;
+        promotion: LensPromotion;
+      }
+  );
+
+/** Why the Minimap toggle is shaded right now, or `undefined` when it can be pressed. */
+function minimapShutReason(ctx: TsldToolbarContext): string | undefined {
+  if (!ctx.hasDiagram) return LENS_NO_DIAGRAM_REASON;
+  return ctx.minimapRoom ? undefined : MINIMAP_NO_ROOM_REASON;
 }
 
 /**
@@ -449,14 +476,12 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     id: 'minimap',
     label: 'Minimap',
     enabled: true,
-    checked: (ctx) => ctx.minimapOpen,
+    // **Pressed only while it is actually drawn.** The persisted preference can be on while the
+    // toggle is shaded (no diagram, or a stage too small for the panel); `aria-pressed="true"` on a
+    // shaded control would say a panel is open that nobody can see.
+    checked: (ctx) => ctx.minimapOpen && minimapShutReason(ctx) === undefined,
     toggle: (ctx) => ctx.toggleMinimap(),
-    reason: (ctx) =>
-      !ctx.hasDiagram
-        ? LENS_NO_DIAGRAM_REASON
-        : ctx.minimapRoom
-          ? undefined
-          : MINIMAP_NO_ROOM_REASON,
+    reason: minimapShutReason,
     promotion: {
       icon: <MapIcon className="size-4" />,
       order: 13,
@@ -1096,6 +1121,7 @@ function LinkControl({
  */
 const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
+const FIT_NO_DIAGRAM_REASON = 'Add an activity to fit the view';
 
 /** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
 const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
@@ -1901,9 +1927,11 @@ function CurrentConflictStatus({
       // some other way, and a description read on focus is that way without a second announcement.
       aria-hidden="true"
       title={label}
-      className={cn(toolbarControlVariants({ tone: 'info' }), 'gap-1')}
+      // A read-out, not a shaded command: normal-weight foreground text and a warning-tinted icon, so
+      // beside the bright Next conflict it reads as information rather than as a disabled control.
+      className={cn(toolbarControlVariants({ tone: 'info' }), 'text-foreground gap-1 font-normal')}
     >
-      <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
+      <TriangleAlert aria-hidden="true" className="text-warning-text size-3.5 shrink-0" />
       <span className="shrink-0 whitespace-nowrap">{label}</span>
     </span>
   );
@@ -1986,6 +2014,7 @@ const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
 ]);
 
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
+  const fitReasonId = useId();
   const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
     const keys = viewToggleKeysFor(id, ctx.planView);
     const lenses = lensTogglesIn(id);
@@ -2025,6 +2054,36 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
                 : (ZOOM_LABELS[level] ?? level)}
             </label>
           ))}
+        </div>
+      ) : null;
+    // **Fit to plan, here as well as in the cluster.** The cluster is in the diagram's corner, and
+    // while a dock has taken the stage (or a foot row has left it too short to hold the card) it is
+    // withdrawn — this is the keyboard and pointer route that stays. It is `ctx.fit`, the same
+    // wrapped command: with a dock squeezing the stage it closes the dock and fits a frame later, as
+    // the deck's Fit did before the cluster existed (`docs/TECH_DEBT.md` #480).
+    const fitReason = id === 'zoom' ? canvasViewportReason(ctx, FIT_NO_DIAGRAM_REASON) : undefined;
+    const fitRow =
+      id === 'zoom' ? (
+        <div className="flex flex-col gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-disabled={fitReason !== undefined || undefined}
+            aria-describedby={fitReason !== undefined ? fitReasonId : undefined}
+            onClick={() => {
+              if (fitReason === undefined) ctx.fit();
+            }}
+            className="justify-start"
+          >
+            <Fullscreen aria-hidden="true" className="size-4" />
+            Fit to plan
+          </Button>
+          {fitReason !== undefined ? (
+            <p id={fitReasonId} className="text-muted-foreground text-xs">
+              {fitReason}
+            </p>
+          ) : null}
         </div>
       ) : null;
     const columnsRows =
@@ -2110,6 +2169,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
       ) : (
         <>
           {zoomRows}
+          {fitRow}
           {columnsRows}
           {toggleRows}
           {lensRows}
@@ -2645,6 +2705,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // until a diagram exists, so the cluster keeps a stable shape from the empty canvas onward.
     // They carry no `aria-keyshortcuts`: the diagram has no zoom accelerator (wheel and pinch are
     // pointer gestures), and advertising a key that does nothing would be a false claim.
+    // All three are icon-only at every width (`labelVisibility: 'never'`): a plus, a minus and a
+    // frame glyph need no word, and the cluster is a corner card with no row to spend on labels. The
+    // tooltip names each one.
     //
     // The `zoom-preset` dropdown that used to lead this cluster is GONE (ADR-0091 D3): the presets
     // are a radio group inside `View ▾`, which is where a planner hunting for a framing looks. Its
@@ -2657,12 +2720,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'canvas',
       tier: 2,
-      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
-      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
-      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
-      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
-      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
-      // one thing and the screen another. The declaration now says what the screen does.
       labelVisibility: 'never',
       order: 10,
       label: 'Zoom out',
@@ -2676,12 +2733,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'canvas',
       tier: 2,
-      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
-      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
-      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
-      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
-      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
-      // one thing and the screen another. The declaration now says what the screen does.
       labelVisibility: 'never',
       order: 11,
       label: 'Zoom in',
@@ -2695,18 +2746,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'frame',
       row: 'canvas',
       tier: 2,
-      // Icon-only at every width: a plus, a minus and a fit-arrows glyph are about as standard as
-      // icons get, and labelling the three costs 430 px of a row that overflows at 1440 on its own
-      // (ADR-0091 D3a's measurement; icon-only costs 128 px). They were `{ atLeast: 'comfortable' }`
-      // until toolbar-redesign M1, a band rule that labelled them at every width once the ladder
-      // went — while `Deck` withheld the label from its own `ICON_ONLY` list, so the registry said
-      // one thing and the screen another. The declaration now says what the screen does.
       labelVisibility: 'never',
       order: 12,
       label: 'Fit to plan',
-      icon: <Maximize2 className="size-4" />,
+      icon: <Fullscreen className="size-4" />,
       isEnabled: (ctx) => ctx.hasDiagram && ctx.canvasActive,
-      disabledReason: (ctx) => canvasViewportReason(ctx, 'Add an activity to fit the view'),
+      disabledReason: (ctx) => canvasViewportReason(ctx, FIT_NO_DIAGRAM_REASON),
       onActivate: (ctx) => ctx.fit(),
     },
     // `zoom-to-selection` moved to the SELECTION BAR in ADR-0090 M2-T1 (`selection-actions.tsx`),
@@ -2715,8 +2760,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // plan and did not move then; it followed in toolbar-redesign M2-T4 (below).
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
-    // day at the 12px left inset, it does not centre (label-honesty nit). Shown inline (tier 2 icon) with
-    // the zoom/nav cluster. Flag-on it reuses the `goToDate` view jump (toolbar quick-wins F1) — view-only,
+    // day at the 12px left inset, it does not centre (label-honesty nit). It stays on the deck, leading the
+    // Look row, while Zoom and Fit are in the diagram's corner cluster. Flag-on it reuses the `goToDate` view jump (toolbar quick-wins F1) — view-only,
     // so a Viewer can use it; flag-off it is the "Coming soon" placeholder, byte-for-byte.
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
@@ -2877,30 +2922,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `float-paths` MOVED to the SELECTION BAR and the Gantt row menu (toolbar-redesign M2-T4,
     // D-c): its subject is the selected activity (ADR-0093), and on this row it spent most of its
     // life shaded with "Select an activity first". See `features/plan-actions/selection-actions.tsx`.
-    // Next-conflict VISIBLE status chip (U2) — a presentational read-out pinned next to the
-    // Next-conflict button, so the count and position are on screen and not only announced. Always registered but self-hides (`isVisible`) unless `currentConflict != null`, which
-    // is never the case when the flag is off (the ordered set is empty then) — so it is inert + adds no
-    // DOM flag-off, keeping the byte-for-byte parity. Presentational ⇒ never a roving-tabindex stop.
-    // **The plan said to fold this into `next-conflict`'s label. Measurement says do not.**
-    //
-    // `design.md` §4.1 item 20/21 folds the "Conflict 2 of 7 · reason" read-out into the button's
-    // label, on the same reasoning that moved `search-status` into the search field a few lines up:
-    // a read-out is not a command and does not belong in a `role="toolbar"`.
-    //
-    // The two destinations are not comparable. The search field is a `render` item — pinned,
-    // painted at every width.
-    //
-    // **The measurement that used to finish this argument has lapsed.** It read: a label paints
-    // only when `autoLabelsFit` is true, and `m2-item-widths.md` records that at 1920 it is false,
-    // so folding the count into the label would hide it at the width the epic exists to fix.
-    // ADR-0109 D1 deleted the ladder and `autoLabelsFit` with it; labels now always paint, so the
-    // fold would no longer hide anything. What still refuses it is ADR-0094's other half, which
-    // was never about width: a live count folded into a label reduces the control's accessible
-    // name to a status, re-read on every cycle.
-    //
-    // The chip costs nothing to keep: `isVisible` is false unless a conflict is being cycled, so it
-    // occupies no width at rest and none of the M2 arithmetic depends on it. It stays, and
-    // `presentational` keeps one honest consumer on this surface rather than none.
+    // The conflict chip: a presentational, `aria-hidden` read-out beside Next conflict — "3 conflicts"
+    // idle, "Conflict 2 of 3" while stepping. Count only: the reason is spoken on every step and the
+    // remedy sits on the selection bar (`docs/TECH_DEBT.md` #479). Not folded into the button's label,
+    // which would make its accessible name a status re-read on every step (ADR-0094); AT reaches the
+    // same fact through the button's `srDescription`. It is never a roving stop (`presentational`).
     {
       id: 'next-conflict-status',
       group: 'find',

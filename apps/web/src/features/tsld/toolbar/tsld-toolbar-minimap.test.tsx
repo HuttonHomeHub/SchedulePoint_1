@@ -41,6 +41,23 @@ describe('TSLD toolbar — the Minimap toggle', () => {
     expect(screen.getByRole('button', { name: 'Minimap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('is NOT pressed while it is shaded, even when the stored preference is on', () => {
+    // `aria-pressed="true"` on a shaded control says a panel is open that nobody can see.
+    renderCluster(ctx({ minimapOpen: true, minimapRoom: false }));
+    expect(screen.getByRole('button', { name: 'Minimap' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('is NOT pressed with no diagram either, whatever the stored preference', () => {
+    renderCluster(ctx({ minimapOpen: true, hasDiagram: false }));
+    expect(screen.getByRole('button', { name: 'Minimap' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('is gone from View ▾ and from the deck: one home, not two', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     expect(rows.strip.map((item) => item.id)).not.toContain('minimap');

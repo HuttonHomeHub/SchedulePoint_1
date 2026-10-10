@@ -15,6 +15,7 @@ import {
   Ungroup,
   Users,
   Waypoints,
+  X,
 } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 
@@ -33,6 +34,7 @@ import {
   toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
+import { useTooltip } from '@/components/ui/tooltip';
 import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -1030,6 +1032,33 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   ]);
 
 /**
+ * **The way out of a selection, on the bar that a selection opens.** Escape clears it from the
+ * diagram's list and the Clear control of the plural bar does the same, but the singular bar had no
+ * visible exit — and on a short, finger-sized window its own height leaves the diagram only a sliver
+ * (`docs/specs/toolbar-redesign/m4-measurement.md` §6), where "press Escape" is no help to someone
+ * without a keyboard. Icon-only, because the bar is already the tallest thing in the foot row; the
+ * tip says the key.
+ */
+function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React.ReactElement {
+  const tip = useTooltip({ content: 'Clear selection (Esc)', purpose: 'name-echo' });
+  return (
+    <>
+      <button
+        {...tip.triggerProps}
+        type="button"
+        aria-label="Clear selection"
+        aria-keyshortcuts="Escape"
+        onClick={onActivate}
+        className={toolbarControlVariants({ state: 'rest' })}
+      >
+        <X aria-hidden="true" className="size-4" />
+      </button>
+      {tip.tooltip}
+    </>
+  );
+}
+
+/**
  * The **selection-actions toolbar** (ADR-0031, Fork-2) — the object actions for the selected
  * activity, in the reserved chrome **below** the scene beside the plural bar, never over it.
  *
@@ -1058,8 +1087,11 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
 export function SelectionActionsBar({
   context,
   restoreFocus,
+  onClear,
 }: {
   context: SelectionBarContext | null;
+  /** Clear the selection. Present ⇒ the bar shows a visible Clear control after its actions. */
+  onClear?: () => void;
   /** Called when the bar unmounts **while it holds focus**, to hand focus back (e.g. to the canvas
    * listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
   restoreFocus?: () => void;
@@ -1129,6 +1161,8 @@ export function SelectionActionsBar({
 
   return (
     <div
+      // Asks the dock outlet for a line of its own on a finger-sized window — see `CanvasDockOutlet`.
+      data-dock-wide=""
       onFocus={() => {
         heldFocusRef.current = true;
       }}
@@ -1202,6 +1236,16 @@ export function SelectionActionsBar({
         groupLabels={{ object: 'Activity actions' }}
         authoringEnabled={actionContext.canEditSchedule}
       />
+      {onClear ? (
+        <ClearSelectionButton
+          onActivate={() => {
+            // The press removes the bar that holds it, so focus goes to the restore target first —
+            // the same order `onMakeMilestone` uses, and for the same reason.
+            restoreFocus?.();
+            onClear();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

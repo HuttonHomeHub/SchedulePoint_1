@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clearOfObstacle,
+  clusterHasRoom,
   clusterOuterHeight,
   COLUMN_GAP_PX,
   COLUMN_INSET_PX,
@@ -48,6 +49,21 @@ describe('minimapHasRoom', () => {
   });
 });
 
+describe('clusterHasRoom', () => {
+  // The measured case behind it: coarse 1024 x 600 with a conflict selected leaves 49 px of scene
+  // against a 54 px card (`m4-measurement.md`), so the card is withdrawn rather than drawn clipped.
+  it('needs the card plus its inset', () => {
+    expect(clusterHasRoom({ width: 747, height: COLUMN_INSET_PX + 46 }, false)).toBe(true);
+    expect(clusterHasRoom({ width: 747, height: COLUMN_INSET_PX + 45 }, false)).toBe(false);
+    expect(clusterHasRoom({ width: 747, height: COLUMN_INSET_PX + 54 }, true)).toBe(true);
+    expect(clusterHasRoom({ width: 747, height: 49 }, true)).toBe(false);
+  });
+
+  it('never withdraws on an unmeasured stage', () => {
+    expect(clusterHasRoom({ width: 1, height: 0 }, true)).toBe(true);
+  });
+});
+
 describe('clearOfObstacle: the keyboard reveal margin (SC-15)', () => {
   const obstacle = { x: 800, y: 300, w: 200, h: 200 };
 
@@ -82,5 +98,32 @@ describe('clearOfObstacle: the keyboard reveal margin (SC-15)', () => {
     const moved = { ...bar, x: bar.x + dx, y: bar.y + dy };
     const clear = moved.x + moved.w <= obstacle.x - 28 || moved.y + moved.h <= obstacle.y - 28;
     expect(clear).toBe(true);
+  });
+
+  describe('on a very narrow stage, where the column spans nearly the whole width', () => {
+    // The obstacle starts 40 px in from the left, so the shorter way out is LEFT (a 30 px bar at
+    // x = 60 needs 60 + 30 - (40 - 28) = 78) — and that takes the bar to x = -18, past the stage's own
+    // left margin. Up is 140 and stays inside. Verified red against the unconditional shorter-way rule.
+    const narrow = { x: 40, y: 200, w: 120, h: 120 };
+    const bar = { x: 60, y: 260, w: 30, h: 20 };
+
+    it('prefers the way out that stays inside the stage over a shorter one that leaves it', () => {
+      expect(clearOfObstacle(bar, narrow, 28)).toEqual({ dx: 0, dy: -(260 + 20 - (200 - 28)) });
+    });
+
+    it('never moves the bar past the left or top margin when a way out stays inside', () => {
+      const { dx, dy } = clearOfObstacle(bar, narrow, 28);
+      expect(bar.x + dx).toBeGreaterThanOrEqual(28);
+      expect(bar.y + dy).toBeGreaterThanOrEqual(28);
+    });
+
+    it('falls back to the shorter way when neither stays inside', () => {
+      // Both exits leave the stage; the old rule's answer stands rather than inventing a third.
+      const tiny = { x: 20, y: 20, w: 200, h: 200 };
+      const near = { x: 24, y: 24, w: 30, h: 20 };
+      const { dx, dy } = clearOfObstacle(near, tiny, 28);
+      expect(dx !== 0 || dy !== 0).toBe(true);
+      expect(dx === 0 || dy === 0).toBe(true);
+    });
   });
 });

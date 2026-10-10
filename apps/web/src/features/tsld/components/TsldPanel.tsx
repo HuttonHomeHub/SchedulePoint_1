@@ -817,9 +817,19 @@ export function TsldPanel({
   // The node the canvas draws its bottom-right column into — after the activity list, so Tab
   // reaches the diagram's keyboard surface before the minimap and the cluster (see `TsldCanvas`).
   const [columnHost, setColumnHost] = useState<HTMLDivElement | null>(null);
+  // The section is the box that is on screen: `h-full min-h-0` inside the stage, while the surface
+  // inside it keeps a 240 px minimum that the stage then clips (`TsldCanvas`'s `visibleBoxRef`).
+  const visibleBoxRef = useRef<HTMLElement>(null);
   // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
+  // The docked bar's visible Clear control: the plural bar's own `onClear`, and Escape's, in one
+  // spelling, so the three exits leave the same state and say the same sentence.
+  const clearSelectionFromBar = useCallback(() => {
+    setSelection(EMPTY_SELECTION);
+    setActiveIdRaw(null);
+    announce('Selection cleared.');
+  }, [announce]);
   /**
    * Focus the listbox **after** a closing modal has released it.
    *
@@ -2933,6 +2943,7 @@ export function TsldPanel({
 
   return (
     <section
+      ref={visibleBoxRef}
       aria-label="Time-scaled logic diagram"
       className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}
     >
@@ -3076,7 +3087,11 @@ export function TsldPanel({
           selected, and only when the host wired the object actions.
         */}
         {showDiagram && selectionActionsWired ? (
-          <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
+          <SelectionActionsBar
+            context={selectionCtx}
+            restoreFocus={restoreSelectionFocus}
+            onClear={clearSelectionFromBar}
+          />
         ) : null}
 
         {/*
@@ -3349,6 +3364,7 @@ export function TsldPanel({
               minimapActive={minimapActive}
               {...(onMinimapClose ? { onMinimapClose } : {})}
               columnHost={columnHost}
+              visibleBoxRef={visibleBoxRef}
               {...(onViewportSlot ? { onViewportSlot } : {})}
               {...(onMinimapRoomChange ? { onMinimapRoomChange } : {})}
               minimapDismissFocusRef={listboxRef}

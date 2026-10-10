@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +49,12 @@ describe('DiagramViewportCluster', () => {
         el.getAttribute('data-toolbar-item'),
       ),
     ).toEqual(['zoom-out', 'zoom-in', 'fit', 'minimap']);
+  });
+
+  it('has no group of its own: a screen reader hears the toolbar, not a "Navigate" group in it', () => {
+    render(<Harness />);
+    const toolbar = screen.getByRole('toolbar', { name: 'Diagram viewport' });
+    expect(within(toolbar).queryAllByRole('group')).toHaveLength(0);
   });
 
   it('hands focus to the Gantt segment, and says so, when it unmounts under focus', () => {

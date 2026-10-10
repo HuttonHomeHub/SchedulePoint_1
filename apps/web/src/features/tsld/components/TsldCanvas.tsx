@@ -108,7 +108,12 @@ import {
 } from '../render/wbs-band';
 
 import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
-import { clearOfObstacle, COLUMN_INSET_PX, minimapHasRoom } from './viewport-column';
+import {
+  clearOfObstacle,
+  clusterHasRoom,
+  COLUMN_INSET_PX,
+  minimapHasRoom,
+} from './viewport-column';
 
 import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import {
@@ -122,6 +127,7 @@ import {
 } from '@/config/env';
 import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 import { formatCalendarDate } from '@/lib/format-date';
+import { cn } from '@/lib/utils';
 
 /** Imperative commands the toolbar issues to the canvas (kept ref-authoritative — ADR-0026 D3). */
 export interface TsldCanvasHandle {
@@ -432,6 +438,15 @@ export interface TsldCanvasProps {
    * mounted alone); `null` is a host that has not mounted yet and draws nothing for that commit.
    */
   columnHost?: HTMLElement | null;
+  /**
+   * The box that is actually on screen for this canvas. The canvas root keeps a minimum height
+   * (`TsldPanel`'s `min-h-[240px]`) and the stage clips what overflows it, so below a short foot
+   * row's worth of height the root's own bottom is **below** the visible edge — and a column
+   * anchored to the root's bottom is anchored to a place nobody can see, with its buttons still in
+   * the Tab order. This element's bottom is the real one; the column is lifted by the difference.
+   * Absent ⇒ the root is the visible box.
+   */
+  visibleBoxRef?: React.RefObject<HTMLElement | null>;
   /** Reports whether the stage has room for the minimap, so the host's toggle can say why it is
    * shut. Fires on change only. */
   onMinimapRoomChange?: (room: boolean) => void;
@@ -856,6 +871,7 @@ export function TsldCanvas({
   minimapDismissFocusRef,
   onViewportSlot,
   columnHost,
+  visibleBoxRef,
   onMinimapRoomChange,
   resourceStrip = null,
   controlRef,
@@ -913,6 +929,15 @@ export function TsldCanvas({
   // surface (jsdom, first frame) never suppresses the panel; only a real measure (> 1px wide)
   // may withdraw it.
   const [minimapRoom, setMinimapRoom] = useState(true);
+  // Whether the visible stage can hold the cluster at all. When it cannot (a short stage under a tall
+  // foot row) the column is withdrawn rather than drawn clipped, because clipped is invisible and
+  // still focusable — a Tab stop nobody can see (WCAG 2.4.7). Zoom and Fit stay one press away in
+  // `View ▾`.
+  const [clusterRoom, setClusterRoom] = useState(true);
+  // How far the canvas root's bottom edge is below the edge that is on screen (see `visibleBoxRef`).
+  const [clipShift, setClipShift] = useState(0);
+  const clipShiftRef = useRef(0);
+  const clusterRoomRef = useRef(true);
   // The column the minimap and the viewport cluster share (toolbar-redesign M4). Its LIVE rect is
   // what the keyboard reveal clears, so the margin follows whatever is actually open.
   const columnRef = useRef<HTMLDivElement>(null);
@@ -1451,6 +1476,30 @@ export function TsldCanvas({
     republishRoomRef.current();
   }, [coarse]);
 
+  // Follow the edge that is on screen. Observing both boxes is what catches a foot row growing (the
+  // box shrinks, the canvas root does not), which no resize of the root would report.
+  useEffect(() => {
+    const box = visibleBoxRef?.current;
+    const root = containerRef.current;
+    if (!box || !root) return;
+    const read = (): void => {
+      const shift = Math.max(
+        0,
+        Math.round(root.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom),
+      );
+      if (shift === clipShiftRef.current) return;
+      clipShiftRef.current = shift;
+      setClipShift(shift);
+      republishRoomRef.current();
+    };
+    read();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(read);
+    ro.observe(box);
+    ro.observe(root);
+    return () => ro.disconnect();
+  }, [visibleBoxRef]);
+
   // Tell the host, so the Minimap toggle can state why it is shut instead of lighting and drawing
   // nothing. On change only: the first run reports the optimistic default, which is what the host
   // starts with.
@@ -1497,7 +1546,7 @@ export function TsldCanvas({
     // band bar is pinned above the scene, so it has nothing to clear.
     const column = columnRef.current;
     const container = containerRef.current;
-    if (column && container && !bandBar) {
+    if (column && container && !bandBar && clusterRoomRef.current) {
       const c = column.getBoundingClientRect();
       const o = container.getBoundingClientRect();
       const extra = clearOfObstacle(
@@ -1649,7 +1698,14 @@ export function TsldCanvas({
     // taller under a finger), so it is recomputed from both: here when the stage resizes, and in the
     // effect below when the pointer changes.
     const publishMinimapRoom = (): void => {
-      setMinimapRoom(minimapHasRoom(sizeRef.current, MINIMAP_BOX, coarseRef.current));
+      const stage = {
+        width: sizeRef.current.width,
+        height: Math.max(0, sizeRef.current.height - clipShiftRef.current),
+      };
+      setMinimapRoom(minimapHasRoom(stage, MINIMAP_BOX, coarseRef.current));
+      const fits = clusterHasRoom(stage, coarseRef.current);
+      clusterRoomRef.current = fits;
+      setClusterRoom(fits);
     };
     republishRoomRef.current = publishMinimapRoom;
 
@@ -2327,8 +2383,15 @@ export function TsldCanvas({
     <div
       ref={columnRef}
       data-testid="tsld-viewport-column"
-      className="pointer-events-none absolute right-3 z-10 flex flex-col items-end gap-2"
-      style={{ bottom: COLUMN_INSET_PX + (resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0) }}
+      className={cn(
+        'pointer-events-none absolute right-3 z-10 flex flex-col items-end gap-2',
+        // Withdrawn, not drawn clipped: `visibility: hidden` takes the buttons out of the Tab order
+        // and the accessibility tree with the picture, which `opacity` or an overflow clip would not.
+        !clusterRoom && 'invisible',
+      )}
+      style={{
+        bottom: COLUMN_INSET_PX + clipShift + (resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0),
+      }}
     >
       {minimapActive && minimapRoom ? (
         <TsldMinimap

@@ -108,10 +108,18 @@ export function CanvasDockOutlet(): React.ReactElement {
   // wraps the outlet onto its own full-width line instead. Empty it asks for nothing, so the row's
   // height and the wide layouts are unchanged. 18 rem, not 20: the foot row's content at the 320 px
   // reflow width is 304 px, and a floor above that is a sideways scroll of its own.
+  //
+  // **A strip that marks itself `data-dock-wide` asks for 36 rem on a finger-sized window**
+  // (toolbar-redesign M4 review). The selection bar's twelve 44 px actions wrapped into a 320 px
+  // column beside the facts — five lines, 236 px, leaving the diagram 89 px with a conflict selected
+  // (`m4-measurement.md` §6). At 36 rem a row too narrow for both wraps the bar onto the line below
+  // the facts' own, where the same actions take three lines and 140 px. Only a marked strip asks, so
+  // an armed-tool statement or a history result keeps sharing the line with the facts; where the row
+  // is wide enough for both (1280 and up) nothing wraps and nothing changes.
   return (
     <div
       ref={ref}
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72"
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72 pointer-coarse:has-[[data-dock-wide]]:min-w-144"
     />
   );
 }

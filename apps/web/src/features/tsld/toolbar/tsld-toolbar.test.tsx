@@ -112,7 +112,13 @@ describe('TSLD toolbar registry (two-row)', () => {
     );
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
     expect(screen.queryByRole('button', { name: 'Zoom in' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Fit to plan' })).not.toBeInTheDocument();
+    // Fit to plan is in the panel (the route that stays when the cluster is withdrawn) and not on
+    // the deck itself.
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Plan commands' })).queryByRole('button', {
+        name: 'Fit to plan',
+      }),
+    ).not.toBeInTheDocument();
     cleanup();
     renderCluster(ctx());
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
@@ -121,6 +127,28 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(spies.stepZoom).toHaveBeenCalledWith(2);
     fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
     expect(spies.fit).toHaveBeenCalledOnce();
+  });
+
+  it('puts Fit to plan in the View panel as the route that stays when the cluster is withdrawn', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Fit to plan' }));
+    expect(spies.fit).toHaveBeenCalledOnce();
+  });
+
+  it('shades the panel\u2019s Fit to plan with its reason when there is no diagram, and does nothing', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const fit = within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+      name: 'Fit to plan',
+    });
+    expect(fit).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(fit.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Add an activity to fit the view',
+    );
+    fireEvent.click(fit);
+    expect(spies.fit).not.toHaveBeenCalled();
   });
 
   it('reflects the active scale preset in the View panel', () => {
