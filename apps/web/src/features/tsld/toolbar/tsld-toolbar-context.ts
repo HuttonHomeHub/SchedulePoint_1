@@ -8,6 +8,7 @@ import type { LogicPathMode } from '../render/logic-path';
 import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
+import type { PromotionState } from '@/components/ui/toolbar/toolbar-promotion';
 import type { PlanViewMode } from '@/features/gantt';
 import type { ResizableColumnKey } from '@/features/gantt/layout/column-widths';
 import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
@@ -228,6 +229,21 @@ export interface TsldToolbarContext {
    * critical path between two revisions, beside the plan. A toggle for the same reason the
    * health item is one: a second select while the dock is open CLOSES it. */
   toggleRevisionCompare: () => void;
+  /**
+   * Whether the Health check dock is open (toolbar-redesign M5). A fact the host already owns, added
+   * so a promoted **Health check** toggle on the bar reads `aria-pressed` from the dock itself and
+   * stays in step when the dock is closed from its own close button (ADR-0133 D6: a fact, not a
+   * second copy of the state).
+   */
+  healthOpen: boolean;
+  /** As {@link healthOpen}, for the revision-comparison dock — the promoted **Compare revisions** toggle. */
+  revisionsOpen: boolean;
+  /**
+   * The promotion stage this viewport has reached and the pointer set that applies (M5, spec
+   * §4.11). One fact read by the bar's derived items and by the menus they came out of, so the two
+   * cannot disagree about where a command is.
+   */
+  promotion: PromotionState;
   /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
    * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
    * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on

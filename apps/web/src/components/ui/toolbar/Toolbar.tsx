@@ -198,6 +198,7 @@ export function Toolbar<Ctx>({
     resolvedIds: focusableIds,
     toolbarLabel: label,
     lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+    successorFor: (id) => items.find((item) => item.id === id)?.successorId,
   });
 
   // Derived, not repaired in an effect: an `activeId` naming an item a predicate has since hidden
@@ -300,6 +301,7 @@ export function Toolbar<Ctx>({
         key={r.item.id}
         itemId={r.item.id}
         label={r.item.label}
+        {...(r.item.visibleLabel ? { visibleLabel: r.item.visibleLabel } : {})}
         {...(r.item.description ? { description: r.item.description } : {})}
         icon={r.icon}
         {...(r.busy ? { busy: true } : {})}

@@ -135,9 +135,13 @@ import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
 import type { CommandClass } from '@/features/tsld/toolbar/canvas-directed-commands';
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { DiagramViewportCluster } from '@/features/tsld/toolbar/diagram-viewport-cluster';
-import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
+import {
+  ALL_PROMOTION_ENTRIES,
+  buildTsldToolbarItems,
+} from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
+import { usePromotionFocusFollow } from '@/features/tsld/toolbar/use-promotion-focus';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
@@ -891,6 +895,8 @@ export function ToolbarPlanWorkspace({
         : undefined,
     toggleHealthCheck,
     toggleRevisionCompare,
+    healthOpen,
+    revisionsOpen,
     planView,
     setPlanView,
     barDateSource,
@@ -926,6 +932,9 @@ export function ToolbarPlanWorkspace({
         : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
+  // Focus follows a command a resize moves between its menu and the bar (toolbar-redesign M5, E-1).
+  // The demotion half (E-2) is the toolbar primitives' own hand-off.
+  usePromotionFocusFollow(ctx.promotion, ALL_PROMOTION_ENTRIES);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
   // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
   // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.

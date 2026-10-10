@@ -68,6 +68,17 @@ describe('toolbar labels — the `…` convention', () => {
     //
     // `apply-levelling` joined it with `docs/specs/apply-levelled-dates/` T2.1: activating it opens a
     // dialog that lists what will move and waits for a confirmation, which is the rule's own case.
-    expect(withEllipsis).toEqual(['apply-levelling', 'calendar']);
+    //
+    // `earned-value`, `resource-histogram` and `share` joined it with the promotion ladder
+    // (toolbar-redesign M5): each is the menu row of the same name, brought out onto the bar with
+    // its ellipsis, because it opens a dialog that needs input. Health check and Compare revisions
+    // carry none on the bar — they toggle a dock, and the menu's ellipsis was the menu's.
+    expect(withEllipsis).toEqual([
+      'apply-levelling',
+      'calendar',
+      'earned-value',
+      'resource-histogram',
+      'share',
+    ]);
   });
 });

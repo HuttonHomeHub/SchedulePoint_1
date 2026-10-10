@@ -8,6 +8,12 @@ import {
   DESIGNED_MIN_WIDTH_PX,
   DESIGNED_MIN_WIDTH_QUERY,
   designedMinWidthPx,
+  PROMOTE_119_5,
+  PROMOTE_160,
+  PROMOTE_80,
+  PROMOTE_90,
+  PROMOTION_STAGE_REMS,
+  promotionStageQuery,
   SQUAT_MAX_HEIGHT_REM,
   SQUAT_QUERY,
 } from './breakpoints';
@@ -67,5 +73,31 @@ describe('SQUAT_QUERY', () => {
   it('sits under the default narrow-shell window (640 x 480 is 30 rem) and over a 200 % text window (25 rem)', () => {
     expect(SQUAT_MAX_HEIGHT_REM).toBeLessThan(30);
     expect(SQUAT_MAX_HEIGHT_REM).toBeGreaterThanOrEqual(25);
+  });
+});
+
+describe('the promotion stages', () => {
+  it('are the four widths the product is judged at, in rem', () => {
+    // 1280, 1440, 1912 and 2560 px at the default 16 px font size.
+    expect([PROMOTE_80, PROMOTE_90, PROMOTE_119_5, PROMOTE_160].map((rem) => rem * 16)).toEqual([
+      1280, 1440, 1912, 2560,
+    ]);
+    expect(PROMOTION_STAGE_REMS).toEqual([80, 90, 119.5, 160]);
+  });
+
+  it('ascend, so a stage index counts the thresholds the viewport has reached', () => {
+    const sorted = [...PROMOTION_STAGE_REMS].sort((a, b) => a - b);
+    expect([...PROMOTION_STAGE_REMS]).toEqual(sorted);
+  });
+
+  it('start at the first width that is not compact: --container-roomy (79rem) is below it', () => {
+    const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+    const roomy = /--container-roomy:\s*([\d.]+)rem/.exec(globals)?.[1];
+    expect(roomy).toBe('79');
+    expect(PROMOTE_80).toBeGreaterThan(Number(roomy));
+  });
+
+  it('are spelled as min-width rem queries', () => {
+    expect(promotionStageQuery(PROMOTE_119_5)).toBe('(min-width: 119.5rem)');
   });
 });

@@ -84,6 +84,13 @@ export interface ToolbarFocusHandoffOptions {
    * sentence is worse than a generic one. A development-only warning marks the gaps.
    */
   lostReasonFor?: (itemId: string) => string | undefined;
+  /**
+   * The id of the item that should take focus instead of the container when `itemId` leaves
+   * (`ToolbarItem.successorId`, toolbar-redesign M5 E-2). Used only if that item's control is in the
+   * container when the frame runs; otherwise the container takes focus exactly as before, so a
+   * successor that has left too degrades to the original rule rather than to `<body>`.
+   */
+  successorFor?: (itemId: string) => string | undefined;
 }
 
 /**
@@ -102,6 +109,8 @@ interface FocusRecord {
   itemId: string | null;
   itemLabel: string | null;
   lostReason: string | undefined;
+  /** The item that takes focus in place of the container, captured at focus time like the strings. */
+  successorId: string | undefined;
 }
 
 const warnedMissingReason = new Set<string>();
@@ -168,13 +177,18 @@ export function composeHandoffMessage({
   itemLabel,
   lostReason,
   toolbarLabel,
+  destinationLabel,
 }: {
   itemLabel: string | null;
   lostReason: string | undefined;
   toolbarLabel: string;
+  /** The control that took focus in place of the container, when the item named a successor. */
+  destinationLabel?: string | null;
 }): string {
   const subject = itemLabel === null ? 'The control you were on' : itemLabel;
   const why = lostReason === undefined ? '' : ` ${lostReason}`;
+  if (destinationLabel)
+    return `${subject} is no longer on the toolbar.${why} Focus moved to ${destinationLabel}.`;
   return `${subject} is no longer available.${why} Focus moved to ${toolbarLabel}.`;
 }
 
@@ -183,6 +197,7 @@ export function useToolbarFocusHandoff({
   resolvedIds,
   toolbarLabel,
   lostReasonFor,
+  successorFor,
 }: ToolbarFocusHandoffOptions): ToolbarFocusHandoffHandlers {
   const announce = useAnnounce();
   const recordRef = useRef<FocusRecord | null>(null);
@@ -202,9 +217,10 @@ export function useToolbarFocusHandoff({
         itemId,
         itemLabel: labelOf(target),
         lostReason: itemId === null ? undefined : lostReasonFor?.(itemId),
+        successorId: itemId === null ? undefined : successorFor?.(itemId),
       };
     },
-    [containerRef, lostReasonFor],
+    [containerRef, lostReasonFor, successorFor],
   );
 
   const onBlurCapture = useCallback((event: React.FocusEvent<HTMLElement>) => {
@@ -225,7 +241,7 @@ export function useToolbarFocusHandoff({
     // The record is consumed here, whatever happens next, so one removal produces at most one
     // handoff even when two items leave in the same commit.
     recordRef.current = null;
-    const { itemId, itemLabel, lostReason } = record;
+    const { itemId, itemLabel, lostReason, successorId } = record;
 
     // **No cleanup cancels this frame, deliberately.** A cleanup would fire on every change to
     // `resolvedIds`, so two commits landing back to back would cancel the first one's handoff and
@@ -238,15 +254,31 @@ export function useToolbarFocusHandoff({
       const active = document.activeElement;
       if (active !== null && active !== document.body) return;
 
-      const target = containerRef.current;
-      if (!target) return;
+      const container = containerRef.current;
+      if (!container) return;
+      // **A named successor beats the container** (E-2): a command that fell back into its menu
+      // leaves the reader on the menu's trigger, which is on the bar at every width. Looked up in the
+      // container as the frame runs, so a successor that went in the same commit degrades to the
+      // container rather than to nothing.
+      const successor =
+        successorId === undefined
+          ? null
+          : container.querySelector<HTMLElement>(`[data-toolbar-item="${successorId}"]`);
+      const target = successor ?? container;
       target.focus();
       // Only if focus actually landed. A sentence describing a move that did not happen is worse
       // than silence.
       if (document.activeElement !== target) return;
 
       if (itemId !== null && lostReason === undefined) warnMissingLostReason(itemId);
-      announce(composeHandoffMessage({ itemLabel, lostReason, toolbarLabel }));
+      announce(
+        composeHandoffMessage({
+          itemLabel,
+          lostReason,
+          toolbarLabel,
+          destinationLabel: successor === null ? null : labelOf(successor),
+        }),
+      );
     });
     // `resolvedIds` is the TRIGGER, not an input: the commit in which an item could have left is
     // the commit in which this list changed, and nothing in the body reads it. It must therefore be

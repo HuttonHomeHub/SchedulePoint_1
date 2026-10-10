@@ -48,3 +48,28 @@ export const SQUAT_MAX_HEIGHT_REM = 26;
 
 /** The media query `@custom-variant squat` is declared with. */
 export const SQUAT_QUERY = '(width < 64rem) and (height <= 26rem)';
+
+/**
+ * **The promotion stages** (toolbar-redesign M5, spec §4.11): the viewport widths, in rem, at which
+ * a menu command may come out onto the command deck. `80` is 1280 px at the default font size, `90`
+ * is 1440, `119.5` is 1912 and `160` is 2560 — the four widths the product is judged at. They are
+ * rem, like {@link DESIGNED_MIN_WIDTH_QUERY}, so a reader who raised the browser's default font size
+ * gets the room in text terms (a 1280 px window at a 32 px default is 40 rem and promotes nothing).
+ *
+ * **Viewport stages, not a measured row** (ADR-0109 D1): the ladder is a committed table indexed by
+ * these four constants, which is what keeps it from being a width mechanism that measures itself
+ * and gets it wrong. `breakpoints.test.ts` pins them; `promotion-ladder.test.ts` pins every entry's
+ * stage to `computePromotionStages` over the committed widths.
+ */
+export const PROMOTE_80 = 80;
+export const PROMOTE_90 = 90;
+export const PROMOTE_119_5 = 119.5;
+export const PROMOTE_160 = 160;
+
+/** The stages in ascending order. A stage's index + 1 is how many of them the viewport has reached. */
+export const PROMOTION_STAGE_REMS = [PROMOTE_80, PROMOTE_90, PROMOTE_119_5, PROMOTE_160] as const;
+
+/** The media query for one stage's threshold. */
+export function promotionStageQuery(rem: number): string {
+  return `(min-width: ${String(rem)}rem)`;
+}

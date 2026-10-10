@@ -32,6 +32,7 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
+import { usePromotionStage } from '@/components/ui/toolbar/use-promotion-stage';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
@@ -86,6 +87,8 @@ export function useTsldToolbarContext({
   revealComments,
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
+  healthOpen = false,
+  revisionsOpen = false,
   hasRevisionPair = false,
   comparedWithPlanName,
   planView = DEFAULT_PLAN_VIEW_MODE,
@@ -133,6 +136,10 @@ export function useTsldToolbarContext({
   toggleHealthCheck?: () => void;
   /** Toggle the docked revision comparison (revision M2). Defaults to a no-op for standalone hosts. */
   toggleRevisionCompare?: () => void;
+  /** Whether the Health check dock is open — the promoted toggle's pressed state (M5). Default: closed. */
+  healthOpen?: boolean;
+  /** Whether the revision-comparison dock is open — the promoted toggle's pressed state (M5). Default: closed. */
+  revisionsOpen?: boolean;
   /**
    * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
    *
@@ -173,6 +180,7 @@ export function useTsldToolbarContext({
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
+  const promotion = usePromotionStage();
   // Schedule interchange export (ADR-0050 M4d): the caller's `interchange:export` PERMISSION — every
   // member holds it (Viewer upward), so most users see it. Derived in the model (`canExportSchedule`,
   // role-only) like the other capabilities. This context field is the permission ONLY (mirroring the
@@ -592,6 +600,11 @@ export function useTsldToolbarContext({
       // The revision comparison is a DOCKED COLUMN too, for the health reason verbatim — the
       // workspace owns its state and the one-dock-at-a-time set, so this is a host callback.
       toggleRevisionCompare: withDiagram(toggleRevisionCompare, undefined, 'dock'),
+      healthOpen,
+      revisionsOpen,
+      // Read here, once, so the bar's derived items and the menus they came out of share one answer
+      // (spec §4.11). Stage 0 where there is no `matchMedia`, which is every unit test's.
+      promotion,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).
@@ -1029,6 +1042,9 @@ export function useTsldToolbarContext({
     setIsolateMode,
     toggleHealthCheck,
     toggleRevisionCompare,
+    healthOpen,
+    revisionsOpen,
+    promotion,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

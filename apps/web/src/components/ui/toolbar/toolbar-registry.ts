@@ -190,6 +190,14 @@ export interface ToolbarItem<Ctx> {
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
   /**
+   * The text painted on a plain button when it is shorter than the accessible name
+   * (toolbar-redesign M5). Only a member of a promoted flat pressed set has one: "Total float" is
+   * printed under a "Colour" caption while the name is "Colour by: Total float", so a reader hears
+   * the set and a sighted one is not read it twice. The visible text must be contained in
+   * {@link label} (WCAG 2.5.3, label in name) — `defineToolbar` refuses one that is not.
+   */
+  visibleLabel?: string;
+  /**
    * Optional supplementary tooltip clause — appended to the native hover `title` (never replaces the
    * accessible {@link label}). Use it to make a terse command discoverable (e.g. "Add note" →
    * "…— Opens the Logic panel (links & notes)") without lengthening the visible/announced name.
@@ -302,6 +310,15 @@ export interface ToolbarItem<Ctx> {
    * about why.
    */
   lostReason?: string;
+  /**
+   * The item whose control takes focus when THIS one leaves while a reader is standing on it and
+   * the other is still there (ADR-0135 with a destination, toolbar-redesign M5 E-2). A promoted
+   * command that falls back into its menu as the window narrows names its menu's trigger, which
+   * stays on the bar at every width: the reader lands on the control that now holds the command
+   * instead of on the toolbar's container. Absent ⇒ the container, as before. Pair it with a
+   * {@link lostReason}, which is what the announcement says about where the command went.
+   */
+  successorId?: string;
   /**
    * A description read to assistive tech **on focus**, when the item's own name does not carry a
    * fact a sighted user can already see beside it (ADR-0094 M3-T2).
@@ -447,6 +464,22 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       throw new Error(
         `defineToolbar: segment "${item.segment}" spans rows "${seen}" and "${row}" — ` +
           'the members of one switch must share a row.',
+      );
+    }
+  }
+
+  // **A visible label that is not in the name breaks WCAG 2.5.3** (label in name). A set member prints
+  // its value and is named with its set, so the value must be a substring of the name — checked here,
+  // at the point of declaration, rather than discovered by a speech-recognition user.
+  for (const item of items) {
+    if (item.visibleLabel === undefined) continue;
+    if (typeof item.onActivate !== 'function') {
+      throw new Error(`ToolbarItem "${item.id}": visibleLabel is only for a plain onActivate item`);
+    }
+    if (!item.label.includes(item.visibleLabel)) {
+      throw new Error(
+        `ToolbarItem "${item.id}": visibleLabel "${item.visibleLabel}" is not contained in its name ` +
+          `"${item.label}" (WCAG 2.5.3, label in name)`,
       );
     }
   }

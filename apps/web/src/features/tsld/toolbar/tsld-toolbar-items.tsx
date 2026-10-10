@@ -38,6 +38,7 @@ import {
   SlidersHorizontal,
   Spline,
   SquareDashedMousePointer,
+  SquareStack,
   SquarePen,
   TriangleAlert,
   Undo2,
@@ -55,14 +56,45 @@ import { ZOOM_RANGE_LABELS } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import { GanttColumnsGroup } from './gantt-columns-group';
+import {
+  ADD_ACTION,
+  ADD_ENTRY_FOR,
+  COLOUR_ENTRIES,
+  COLOUR_MODE_LABELS,
+  COLOUR_MODE_ORDER,
+  COMPARE_REVISIONS_ENTRY,
+  EARNED_VALUE_ENTRY,
+  entryOnBar,
+  FILTER_ATTR_ENTRIES,
+  HEALTH_CHECK_ENTRY,
+  LENS_NO_DIAGRAM_REASON,
+  LINK_ACTION,
+  LINK_ENTRY_FOR,
+  PROMOTION_ENTRIES,
+  pickAddKind,
+  pickLinkKind,
+  reachedStage,
+  RESOURCE_HISTOGRAM_ENTRY,
+  SHARE_ENTRY,
+  SHARE_NO_PERMISSION_REASON,
+  VIEW_TOGGLE_ENTRIES,
+} from './promotion-entries';
+import { PROMOTION_LADDER } from './promotion-ladder';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { useFirstUseHint } from './use-first-use-hint';
+import { useCloseOnPromotionChange } from './use-promotion-focus';
 
 import { Button } from '@/components/ui/button';
 import { Disclosure } from '@/components/ui/disclosure';
 import { CheckboxField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
+import {
+  isPromoted,
+  derivePromotedItems,
+  type PromotableEntry,
+  type PromotionAt,
+} from '@/components/ui/toolbar/toolbar-promotion';
 import type {
   ToolbarGroupId,
   ToolbarItemRenderApi,
@@ -239,9 +271,34 @@ interface LensToggleBase {
  * version behind (the ADR-0065 `routeOrthogonal` argument). `lensTogglesIn` excludes anything
  * promoted, so a control is on the row **or** in the popover and never in both.
  */
-interface LensPromotion {
+type LensPromotion = LensPromotionBase &
+  (
+    | {
+        /**
+         * A permanent promotion (Legend, Resource view, Baseline overlay, the Minimap): the ladder
+         * never demotes it, whatever the width, and it has no stage to compute.
+         */
+        at: 'always';
+        /** Sort order within the group. A laddered promotion has none: it sorts after its trigger. */
+        order: number;
+      }
+    | {
+        /**
+         * Promoted by the ladder (toolbar-redesign M5): on the bar from the stage `at` names for the
+         * pointer, in `View ▾` below it. `from` is the trigger it sorts after and `menuName` is the
+         * name the hand-off gives for where it went.
+         */
+        at: Exclude<PromotionAt, 'always'>;
+        from: string;
+        menuName: string;
+        rank: number;
+        /** The row's name in the menu it left (the focus-follow match, as `PromotableEntry.menuLabel`). */
+        menuLabel: string;
+      }
+  );
+
+interface LensPromotionBase {
   icon: React.ReactNode;
-  order: number;
   /**
    * The registry group the promoted item sits in. Absent ⇒ `'lens'`, which the Baseline overlay
    * keeps. Legend and Resource view declare `'help'`: they open a panel beside the diagram rather
@@ -289,7 +346,8 @@ type LensToggle = LensToggleBase &
       }
     | {
         group?: undefined;
-        promotion: LensPromotion;
+        /** No menu section to fall back to, so the only promotion there can be is a permanent one. */
+        promotion: LensPromotion & { at: 'always' };
       }
   );
 
@@ -325,6 +383,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     //
     // `lensTogglesIn` drops it from `View ▾` by construction, so it cannot appear in both.
     promotion: {
+      at: 'always',
       icon: <Layers className="size-4" />,
       order: 23,
       labelVisibility: 'roomy',
@@ -396,6 +455,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // histogram under the diagram (ADR-0049), and that is the glyph. It is the fourth control that
     // goes icon-only below the roomy width, and the one the conflict case at 1024 needs.
     promotion: {
+      at: 'always',
       icon: <ChartColumnStacked className="size-4" />,
       group: 'help',
       order: 1,
@@ -418,12 +478,22 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
      * working overlay is broken. What those two owe the reader is the M-E-T6 undrawn sentence, on
      * the surface that can say which of them it is, not a shut control here.
      *
-     * Not promoted onto the deck, for `compare-overlay`'s measured reason: one promoted toggle
-     * keeps the deck at two lines at 1920 and 1646, three take it to three at 1646 as well as 1440.
+     * **Promoted by the ladder** (toolbar-redesign M5, L5): it leaves `View ▾` for the bar when the
+     * LOOK row has the room, and the old measured reason against promoting it ("three take the deck
+     * to three lines") no longer holds, because the stage is computed from the row's free width
+     * with the worst stress state reserved rather than judged per toggle.
      */
     id: 'levelled-overlay',
     group: 'insight',
     label: 'Levelled placement',
+    promotion: {
+      at: PROMOTION_LADDER.L5,
+      from: 'view',
+      menuName: 'View',
+      menuLabel: 'Levelled placement',
+      rank: 5,
+      icon: <SquareStack className="size-4" />,
+    },
     enabled: CANVAS_LENSES_ENABLED,
     checked: (ctx) => ctx.levelledOverlay,
     toggle: (ctx) => ctx.toggleLevelledOverlay(),
@@ -462,7 +532,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.legendOpen,
     toggle: (ctx) => ctx.toggleLegend(),
     reason: () => undefined,
-    promotion: { icon: <BookOpen className="size-4" />, group: 'help', order: 0 },
+    promotion: { at: 'always', icon: <BookOpen className="size-4" />, group: 'help', order: 0 },
   },
   {
     // The minimap panel (ADR-0100, minimap M2-T3). A surface read BESIDE the diagram, like the
@@ -483,6 +553,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     toggle: (ctx) => ctx.toggleMinimap(),
     reason: minimapShutReason,
     promotion: {
+      at: 'always',
       icon: <MapIcon className="size-4" />,
       order: 13,
       group: 'frame',
@@ -493,15 +564,21 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
   },
 ];
 
-function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
-  // `!t.promotion` is the on-the-row-or-in-the-popover invariant, held in one place: a promoted
-  // control leaves `View ▾` by construction rather than by someone remembering to delete its row.
-  return LENS_TOGGLES.filter((t) => t.group === group && t.enabled && !t.promotion);
+function lensTogglesIn(group: ViewToggleGroupId, ctx: TsldToolbarContext): readonly LensToggle[] {
+  // The on-the-row-or-in-the-popover invariant, held in one place: a control on the bar leaves
+  // `View ▾` by construction rather than by someone remembering to delete its row. A permanent
+  // promotion is on the bar at every width; a laddered one only from its stage, so below it the row
+  // is back in the menu and the command is reachable at every width (SC-19).
+  return LENS_TOGGLES.filter(
+    (t) =>
+      t.group === group && t.enabled && !(t.promotion && isPromoted(t.promotion.at, ctx.promotion)),
+  );
 }
 
 /**
- * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
- * the same `LensToggle` records `View ▾` reads, never restated.
+ * The registry items for the **permanently** promoted lens toggles (workspace-chrome M4) —
+ * **derived** from the same `LensToggle` records `View ▾` reads, never restated. The laddered ones
+ * are {@link lensLadderEntries}.
  *
  * **Each record declares its own label policy** (`LensToggle.promotion.labelVisibility`), where this
  * hard-coded `{ atLeast: 'comfortable' }` for all of them until toolbar-redesign M1. That band form
@@ -509,23 +586,54 @@ function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
  * policy is now a real one: `'roomy'` where a record says so, `'always'` where it does not.
  */
 function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
-  return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
-    const promotion = t.promotion as NonNullable<LensToggle['promotion']>;
-    return {
-      id: t.id,
-      group: promotion.group ?? 'lens',
-      row: promotion.row ?? 'strip',
-      tier: 2,
-      labelVisibility: promotion.labelVisibility ?? 'always',
-      order: promotion.order,
-      label: t.label,
-      ...(promotion.description ? { description: promotion.description } : {}),
-      icon: promotion.icon,
-      isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
-      isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
-      disabledReason: (ctx: TsldToolbarContext) => t.reason(ctx),
-      onActivate: (ctx: TsldToolbarContext) => t.toggle(ctx),
-    } satisfies ToolbarItem<TsldToolbarContext>;
+  return LENS_TOGGLES.flatMap((t) => {
+    const promotion = t.promotion;
+    if (!t.enabled || promotion?.at !== 'always') return [];
+    return [
+      {
+        id: t.id,
+        group: promotion.group ?? 'lens',
+        row: promotion.row ?? 'strip',
+        tier: 2,
+        labelVisibility: promotion.labelVisibility ?? 'always',
+        order: promotion.order,
+        label: t.label,
+        ...(promotion.description ? { description: promotion.description } : {}),
+        icon: promotion.icon,
+        isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
+        isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
+        disabledReason: (ctx: TsldToolbarContext) => t.reason(ctx),
+        onActivate: (ctx: TsldToolbarContext) => t.toggle(ctx),
+      } satisfies ToolbarItem<TsldToolbarContext>,
+    ];
+  });
+}
+
+/**
+ * The lens toggles the **ladder** promotes (Levelled placement, L5), as {@link PromotableEntry}s —
+ * built from the `LensToggle` record so `checked`, `toggle` and the shut `reason` exist once, in the
+ * place `View ▾` reads them.
+ */
+function lensLadderEntries(): readonly PromotableEntry<TsldToolbarContext>[] {
+  return LENS_TOGGLES.flatMap((t) => {
+    const promotion = t.promotion;
+    if (!t.enabled || promotion === undefined || promotion.at === 'always') return [];
+    return [
+      {
+        id: t.id,
+        label: t.label,
+        menuLabel: promotion.menuLabel,
+        menuName: promotion.menuName,
+        icon: promotion.icon,
+        from: promotion.from,
+        rank: promotion.rank,
+        at: promotion.at,
+        isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
+        isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
+        disabledReason: (ctx: TsldToolbarContext) => t.reason(ctx),
+        onActivate: (ctx: TsldToolbarContext) => t.toggle(ctx),
+      } satisfies PromotableEntry<TsldToolbarContext>,
+    ];
   });
 }
 
@@ -777,14 +885,6 @@ const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as co
  * drawn to decide what to tell a planner.
  */
 const MILESTONE_ADD_TYPES = new Set<string>(['START_MILESTONE', 'FINISH_MILESTONE']);
-/**
- * The phrase this command completes: "…to add activities". Passed to `ctx.scheduleRefusal`, which
- * decides the FRAME around it — "Start editing to …" when the pen is free, "<Name> is editing this
- * plan. Request control to …" when a peer holds it, "Your role cannot …" for a Viewer. The literal
- * sentence lived here until `docs/TECH_DEBT.md` #115: it named **Start editing** to readers whose
- * screen shows **Request control** and no Start-editing button at all.
- */
-const ADD_ACTION = 'add activities';
 /** The LOE span hangs off two existing driver activities; with fewer than two present the Add-menu's
  * Level-of-Effort item shades with this reason (Stage D spec §Edge cases). */
 const LOE_TOO_FEW_REASON = 'Add activities to span between them';
@@ -822,6 +922,7 @@ function AddActivityControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  useCloseOnPromotionChange(ctx.promotion, open, close);
   /**
    * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
    *
@@ -911,11 +1012,13 @@ function AddActivityControl({
         restoreFocusRef={mainButtonRef}
       >
         <MenuSection label="Draw on the canvas" />
-        {ADD_ACTIVITY_TYPES.map((type) => (
+        {/* Task is this menu's anchor and never promotes; the milestone kinds leave it for the bar
+            (toolbar-redesign M5) while the viewport has room, and are back here below that. */}
+        {ADD_ACTIVITY_TYPES.filter((type) => !entryOnBar(ADD_ENTRY_FOR[type], ctx)).map((type) => (
           <MenuItem
             key={type}
             selected={ctx.createType === type}
-            onSelect={() => ctx.setCreateType(type)}
+            onSelect={() => pickAddKind(ctx, type)}
           >
             <Check
               aria-hidden="true"
@@ -1000,10 +1103,6 @@ const LINK_TYPES: ReadonlyArray<{ type: DependencyType; label: string }> = DEPEN
 /** Long names for accessible labels (the compact button shows the FS/SS/FF/SF code only). */
 const LINK_TYPE_LABELS: Record<string, string> = DEPENDENCY_TYPE_LABELS;
 
-/** As {@link ADD_ACTION} — the verb is what differs between these nine, which is why a shared
- * constant could not have fixed #115 and a shared *builder* could. */
-const LINK_ACTION = 'link activities';
-
 /**
  * The **Link split-button** (ADR-0032 M5, ADR-0031 amendment) — the canvas-first two-click dependency
  * tool, now a single APG menu-button that mirrors the {@link AddActivityControl} Add split-button
@@ -1021,6 +1120,7 @@ function LinkControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  useCloseOnPromotionChange(ctx.promotion, open, close);
   /**
    * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
    *
@@ -1085,24 +1185,26 @@ function LinkControl({
         label="Link type"
         restoreFocusRef={mainButtonRef}
       >
-        {LINK_TYPES.map(({ type, label }) => (
-          <MenuItem
-            key={type}
-            selected={ctx.linkType === type}
-            onSelect={() => {
+        {/* Start → Finish is this menu's anchor and never promotes: "Stop linking" renders only while
+            linking, so it cannot keep the menu from emptying. The other three leave for the bar
+            (toolbar-redesign M5) while the viewport has room. */}
+        {LINK_TYPES.filter(({ type }) => !entryOnBar(LINK_ENTRY_FOR[type], ctx)).map(
+          ({ type, label }) => (
+            <MenuItem
+              key={type}
+              selected={ctx.linkType === type}
               // Pick the kind and arm link-mode in one gesture (a pick always means "link now"),
               // mirroring the Add split-button. Changing the kind while already linking just re-arms.
-              ctx.setLinkType(type);
-              if (!ctx.isLinking) ctx.toggleLinkMode();
-            }}
-          >
-            <Check
-              aria-hidden="true"
-              className={cn('size-4', ctx.linkType === type ? 'opacity-100' : 'opacity-0')}
-            />
-            {type} — {label}
-          </MenuItem>
-        ))}
+              onSelect={() => pickLinkKind(ctx, type)}
+            >
+              <Check
+                aria-hidden="true"
+                className={cn('size-4', ctx.linkType === type ? 'opacity-100' : 'opacity-0')}
+              />
+              {type} — {label}
+            </MenuItem>
+          ),
+        )}
         {ctx.isLinking ? (
           <MenuItem onSelect={() => ctx.toggleLinkMode()}>
             <span aria-hidden="true" className="size-4" />
@@ -1122,9 +1224,6 @@ function LinkControl({
 const CANVAS_ONLY_REASON = 'Only in the diagram view';
 const ZOOM_DISABLED_REASON = 'Add an activity to enable zoom';
 const FIT_NO_DIAGRAM_REASON = 'Add an activity to fit the view';
-
-/** Shared disabled reason for the insight lenses on an empty/uncomputed canvas (spec `docs/specs/canvas-lenses/`). */
-const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
 
 /** The minimap needs a stage at least three of its own widths across (`TsldCanvas`'s `minimapRoom`),
  * and, since the cluster shares its corner, a stage tall enough for both. Stated, not hidden: a
@@ -1533,6 +1632,7 @@ function PlanAnalysisControl({
   // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  useCloseOnPromotionChange(ctx.promotion, open, close);
   const disabled = api.disabled;
   const labelClass = toolbarLabelClass(api.labelState);
   return (
@@ -1574,13 +1674,16 @@ function PlanAnalysisControl({
           <Layers aria-hidden="true" className="size-4" />
           Baselines…
         </MenuItem>
-        {EARNED_VALUE_ENABLED ? (
+        {/* Baselines… is this menu's anchor: flag-independent, so the menu never empties and its
+            trigger is on the bar at every width. Every row below leaves for the bar while the
+            viewport has room for it (toolbar-redesign M5) and is back here below that. */}
+        {EARNED_VALUE_ENABLED && !entryOnBar(EARNED_VALUE_ENTRY, ctx) ? (
           <MenuItem onSelect={() => ctx.openEarnedValue()}>
             <DollarSign aria-hidden="true" className="size-4" />
             Earned value…
           </MenuItem>
         ) : null}
-        {RESOURCE_CURVES_ENABLED ? (
+        {RESOURCE_CURVES_ENABLED && !entryOnBar(RESOURCE_HISTOGRAM_ENTRY, ctx) ? (
           <MenuItem onSelect={() => ctx.openResourceHistogram()}>
             <ChartArea aria-hidden="true" className="size-4" />
             Resource histogram…
@@ -1589,10 +1692,12 @@ function PlanAnalysisControl({
         {/* The DCMA 14-point report (health M2) — a docked column, not a dialog, so the report is
             read BESIDE the plan with jump-to-offender. Unflagged (ADR-0088 D1): the rollback is a
             commit boundary, and a VITE_ constant was never an operator rollback. */}
-        <MenuItem onSelect={() => ctx.toggleHealthCheck()}>
-          <HeartPulse aria-hidden="true" className="size-4" />
-          Health check…
-        </MenuItem>
+        {entryOnBar(HEALTH_CHECK_ENTRY, ctx) ? null : (
+          <MenuItem onSelect={() => ctx.toggleHealthCheck()}>
+            <HeartPulse aria-hidden="true" className="size-4" />
+            Health check…
+          </MenuItem>
+        )}
         {/* The revision comparison (ADR-0125, revision M2) — a docked column beside Health check,
             for the same reason: it is read WITH the plan, naming bars the planner wants to look at.
 
@@ -1606,10 +1711,12 @@ function PlanAnalysisControl({
             payload's shape was settled. The panel owns its own empty states, and they are two
             distinct ones ("no revisions yet" and "nothing entered or left"), which a shaded trigger
             would collapse into "unavailable". */}
-        <MenuItem onSelect={() => ctx.toggleRevisionCompare()}>
-          <GitCompareArrows aria-hidden="true" className="size-4" />
-          Compare revisions…
-        </MenuItem>
+        {entryOnBar(COMPARE_REVISIONS_ENTRY, ctx) ? null : (
+          <MenuItem onSelect={() => ctx.toggleRevisionCompare()}>
+            <GitCompareArrows aria-hidden="true" className="size-4" />
+            Compare revisions…
+          </MenuItem>
+        )}
       </Menu>
     </>
   );
@@ -1648,41 +1755,28 @@ function FilterMenuControl({
     >
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Show only</legend>
-        {FILTER_ATTRS.map(({ attr, label }) => (
-          <CheckboxField
-            key={attr}
-            label={label}
-            density="compact"
-            checked={ctx.filterAttrs.has(attr)}
-            onChange={() => ctx.toggleFilterAttr(attr)}
-          />
-        ))}
+        {/* Has constraint is this menu's anchor and never promotes. Critical and Has conflict leave
+            for the bar while the viewport has room (toolbar-redesign M5). */}
+        {FILTER_ATTRS.filter(({ attr }) => !entryOnBar(FILTER_ATTR_ENTRIES[attr], ctx)).map(
+          ({ attr, label }) => (
+            <CheckboxField
+              key={attr}
+              label={label}
+              density="compact"
+              checked={ctx.filterAttrs.has(attr)}
+              onChange={() => ctx.toggleFilterAttr(attr)}
+            />
+          ),
+        )}
       </fieldset>
     </ToolbarPopover>
   );
 }
 
-/**
- * Presentation order for the colour modes — default first, then the two analytical lenses.
- * (Driving-resource is a deferred fast-follow, CQ-1.)
- *
- * This replaced a `COLOUR_MODES` array that carried **both** the order and the labels, duplicating
- * `COLOUR_MODE_LABELS` right below it — two answers to "what is this mode called", which had been
- * sitting in the file since the picker shipped. Order and labels are now one each.
- */
-const COLOUR_MODE_ORDER: readonly ColourMode[] = ['criticality', 'totalFloat', 'wbs'];
-
-const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
-  criticality: 'Criticality',
-  totalFloat: 'Total float',
-  wbs: 'WBS group',
-};
-
 /** The one name for the deliverables trigger, its menu and its tooltip (ADR-0090 M2-T4). */
 const SHARE_EXPORT_LABEL = 'Share & export';
 /** The one name for the analysis trigger, its menu and its tooltip (ADR-0090 M2-T5). */
 const ANALYSIS_LABEL = 'Analysis';
-const SHARE_NO_PERMISSION_REASON = 'You don’t have permission to share this plan';
 
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
 
@@ -1717,6 +1811,7 @@ function ExportMenuControl({
   // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  useCloseOnPromotionChange(ctx.promotion, open, close);
   const disabled = api.disabled;
   const labelClass = toolbarLabelClass(api.labelState);
   return (
@@ -1865,7 +1960,9 @@ function ExportMenuControl({
         {/* Behind `VITE_GUEST_SHARE_LINKS`, exactly as its Row-2 registration was — flag-off the row
           is absent rather than a "Coming soon" stub, following the M2-T2 precedent. The unused-flag
           error from the compiler is what caught this being dropped in the first version. */}
-        {GUEST_SHARE_LINKS_ENABLED ? (
+        {/* Share… promotes beside this trigger while the viewport has room (toolbar-redesign M5); the
+            formats and Print… above are the anchor and never move. */}
+        {GUEST_SHARE_LINKS_ENABLED && !entryOnBar(SHARE_ENTRY, ctx) ? (
           <MenuItem
             disabled={!ctx.canShare}
             {...(ctx.canShare ? {} : { disabledReason: SHARE_NO_PERMISSION_REASON })}
@@ -2016,8 +2113,11 @@ const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   const fitReasonId = useId();
   const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
-    const keys = viewToggleKeysFor(id, ctx.planView);
-    const lenses = lensTogglesIn(id);
+    // A toggle on the bar is not also a row here (toolbar-redesign M5); the entry says which.
+    const keys = viewToggleKeysFor(id, ctx.planView).filter(
+      (key) => !entryOnBar(VIEW_TOGGLE_ENTRIES[key], ctx),
+    );
+    const lenses = lensTogglesIn(id, ctx);
     // `zoom` and `insight` render content that is not a toggle or a lens (the two radio
     // groups), so an emptiness test that only counts those would drop them. Without this the
     // zoom group is registered, ordered, typed — and never rendered: a milestone with no entry
@@ -2095,7 +2195,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     // checkboxes — the three modes are exclusive, which the old menu-button expressed with
     // `menuitemradio` and this expresses natively.
     const colourRows =
-      id === 'insight' && CANVAS_LENSES_ENABLED ? (
+      id === 'insight' && CANVAS_LENSES_ENABLED && !entryOnBar(COLOUR_ENTRIES[0], ctx) ? (
         <div
           role="radiogroup"
           aria-label="Colour bars by"
@@ -2692,7 +2792,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: SHARE_EXPORT_LABEL,
     icon: <FileDown className="size-4" />,
   };
-  return defineToolbar<TsldToolbarContext>([
+  const registered: ToolbarItem<TsldToolbarContext>[] = [
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
     // "Go to date" is a pure view pan (ADR-0033 M2) offered to every role — navigating never mutates.
     // The persisted **data date** no longer lives on the bar (ADR-0031 two-row amendment): it is set at
@@ -3435,5 +3535,23 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // sheet, its state and the `?` binding did not move, only the entry point. Deleted rather than
     // hidden behind `isVisible: () => false`, which would still be resolved, still be partitioned,
     // and still have to be reasoned about by the next reader.
+  ];
+  // The ladder's promoted forms (toolbar-redesign M5, spec §4.11) — **derived** from the entries the
+  // menus read, after the triggers they sort behind are registered. Each is visible only while the
+  // viewport has reached its stage, so below the first stage the registry resolves exactly as it did
+  // before the ladder and every command is in its menu.
+  return defineToolbar<TsldToolbarContext>([
+    ...registered,
+    ...derivePromotedItems(ALL_PROMOTION_ENTRIES, registered, reachedStage),
   ]);
 }
+
+/**
+ * Every entry the ladder promotes: the menu rows declared in `promotion-entries.tsx` and the lens
+ * toggles that carry a stage. Exported for the host's focus-follow hook, the manifest test and the
+ * structural gates, which all read the one list.
+ */
+export const ALL_PROMOTION_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] = [
+  ...PROMOTION_ENTRIES,
+  ...lensLadderEntries(),
+];

@@ -312,6 +312,7 @@ export function Deck<Ctx>({
     resolvedIds: stopIds,
     toolbarLabel: label,
     lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+    successorFor: (id) => items.find((item) => item.id === id)?.successorId,
   });
 
   return (
@@ -507,6 +508,9 @@ export function Deck<Ctx>({
                               key={r.item.id}
                               itemId={r.item.id}
                               label={r.item.label}
+                              {...(r.item.visibleLabel
+                                ? { visibleLabel: r.item.visibleLabel }
+                                : {})}
                               {...(r.item.description ? { description: r.item.description } : {})}
                               icon={r.icon}
                               {...(r.busy ? { busy: true } : {})}

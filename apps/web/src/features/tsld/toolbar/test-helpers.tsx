@@ -4,6 +4,8 @@ import { DEFAULT_VIEW_TOGGLES } from '../render/paint';
 
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
+import { NO_PROMOTION } from '@/components/ui/toolbar/toolbar-promotion';
+
 /**
  * A complete {@link TsldToolbarContext} with every callback a fresh `vi.fn()` and sensible default
  * data, so the seven TSLD-toolbar test suites don't each duplicate the ~60-line context literal
@@ -75,6 +77,9 @@ export function makeTsldToolbarContext(
     openResourceHistogram: vi.fn(),
     toggleHealthCheck: vi.fn(),
     toggleRevisionCompare: vi.fn(),
+    healthOpen: false,
+    revisionsOpen: false,
+    promotion: NO_PROMOTION,
     canShare: true,
     openShare: vi.fn(),
     editPlan: vi.fn(),

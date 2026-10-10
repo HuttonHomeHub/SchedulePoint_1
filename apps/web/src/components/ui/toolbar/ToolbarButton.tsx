@@ -28,6 +28,12 @@ export interface ToolbarButtonProps {
   itemId: string;
   label: string;
   /**
+   * The text painted when it is shorter than the accessible {@link label} — a promoted set member
+   * prints its value and is named with its set. The name is pinned to `label` by `aria-label`
+   * whenever this is present, and the registry guarantees the text is contained in it (WCAG 2.5.3).
+   */
+  visibleLabel?: string;
+  /**
    * Supplementary tooltip clause (`<name> — <description>`), never the accessible name. Required in
    * practice for a `'roomy'` item, whose tooltip is the only thing naming it once the label goes —
    * `defineToolbar` refuses one without.
@@ -76,6 +82,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     {
       itemId,
       label,
+      visibleLabel,
       description,
       icon,
       labelState = 'visible',
@@ -180,7 +187,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         aria-disabled={disabled || undefined}
         {...(busy ? { 'aria-busy': true } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
-        {...(!tipped && !describedBy ? {} : { 'aria-label': label })}
+        {...(!tipped && !describedBy && visibleLabel === undefined ? {} : { 'aria-label': label })}
         {...(!tipped && title ? { title } : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         tabIndex={tabIndex}
@@ -205,7 +212,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
             {icon}
           </span>
         ) : null}
-        {labelClass ? <span className={labelClass}>{label}</span> : null}
+        {labelClass ? <span className={labelClass}>{visibleLabel ?? label}</span> : null}
         {reasonRef ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}
