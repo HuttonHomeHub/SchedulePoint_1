@@ -1006,7 +1006,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     });
   }
 
-  test('a squeezed dock gives way to Fit, and the panel and a dock never coexist', async ({
+  test('a squeezed dock gives way to a viewport command, and the panel and a dock never coexist', async ({
     page,
   }) => {
     test.setTimeout(300_000);
@@ -1018,15 +1018,17 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     await page.goto(planUrl);
     const health = DOCKS[0];
 
-    // Fit acts on the diagram, so a dock that has taken the row closes first and the stage is back.
-    // Fit is shaded until the schedule is calculated, and calculating needs the pen.
+    // A viewport command acts on the diagram, so a dock that has taken the row closes first and the
+    // stage is back. It is Go to today, not Fit: Fit moved into the cluster inside the stage
+    // (toolbar-redesign M4), which is inert in exactly this state (`docs/TECH_DEBT.md` #480). Go to
+    // today is shaded until the schedule is calculated, and calculating needs the pen.
     await ensurePen(page);
     await recalculate(page);
     await openDock(page, health);
     expect(await stageInert(page), 'the squeezed dock made the stage inert').toBe(true);
-    await commandBand(page).getByRole('button', { name: 'Fit to plan' }).click();
+    await commandBand(page).getByRole('button', { name: 'Go to today' }).click();
     await expect(dockRegion(page, health)).toBeHidden();
-    expect(await stageInert(page), 'Fit freed the stage').toBe(false);
+    expect(await stageInert(page), 'the viewport command freed the stage').toBe(false);
 
     // ADR-0180's exclusivity, now at this width: Expand closes an open dock, and opening a dock over
     // the swapped panel collapses the panel.

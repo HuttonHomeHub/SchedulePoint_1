@@ -533,8 +533,9 @@ for (const cell of [
       const initial = await settledView(page);
       const box = await canvasEl(page).boundingBox();
       if (!box) throw new Error('the canvas has no box');
-      // Empty ground, bottom-right: zoom there, then drag the ground (pan) both ways.
-      const x = box.x + box.width - 60;
+      // Empty ground along the bottom, left of the viewport cluster that now fills the corner
+      // (toolbar-redesign M4): zoom there, then drag the ground (pan) both ways.
+      const x = box.x + 220;
       const y = box.y + box.height - 20;
       await page.mouse.move(x, y);
       await page.mouse.wheel(0, -300);
