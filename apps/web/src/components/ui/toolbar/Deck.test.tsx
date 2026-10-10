@@ -532,3 +532,76 @@ describe('Deck — a focused control is scrolled into the line below lg', () => 
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
+
+describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
+  /** Stub `matchMedia` so the one query the deck reads answers `wide`. */
+  function viewport(wide: boolean): void {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('min-width') ? wide : false,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  const rowsInDocumentOrder = (): string[] =>
+    [...document.querySelectorAll('[data-deck-row]')].map(
+      (row) => row.getAttribute('data-deck-row') ?? '',
+    );
+  const stopsInDocumentOrder = (): string[] =>
+    [...document.querySelectorAll('[data-toolbar-focusable]')].map(
+      (el) => el.getAttribute('data-toolbar-item') ?? '',
+    );
+
+  it('stacks LOOK above DO at the floor and wider, as it always did', () => {
+    viewport(true);
+    renderDeck();
+    expect(rowsInDocumentOrder()).toEqual(['look', 'do']);
+    expect(stopsInDocumentOrder()).toEqual([
+      'today',
+      'fit',
+      'search',
+      'filter',
+      'add-activity',
+      'export',
+    ]);
+  });
+
+  it('leads with DO below the floor, and the DOM order IS the new reading order (red: rows not reordered)', () => {
+    viewport(false);
+    renderDeck();
+    expect(rowsInDocumentOrder()).toEqual(['do', 'look']);
+    // The roving walk reads the document, so the Tab and arrow sequence is DO's then LOOK's.
+    expect(stopsInDocumentOrder()).toEqual([
+      'add-activity',
+      'export',
+      'today',
+      'fit',
+      'search',
+      'filter',
+    ]);
+  });
+
+  it('makes the first Tab stop the first control on screen, and the arrows walk the same order', () => {
+    viewport(false);
+    renderDeck();
+    const first = screen.getByRole('button', { name: 'Add activity' });
+    expect(first).toHaveAttribute('tabindex', '0');
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(focusedItemId()).toBe('export');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+    expect(focusedItemId()).toBe('today');
+  });
+
+  it('puts the row seam before the second row on the scrolling line, whichever row that is', () => {
+    viewport(false);
+    renderDeck();
+    const seamed = [...document.querySelectorAll('[data-deck-row] > [role="group"]')].filter((g) =>
+      g.className.includes('max-lg:before:absolute'),
+    );
+    expect(seamed).toHaveLength(1);
+    expect(seamed[0]?.closest('[data-deck-row]')?.getAttribute('data-deck-row')).toBe('look');
+  });
+});

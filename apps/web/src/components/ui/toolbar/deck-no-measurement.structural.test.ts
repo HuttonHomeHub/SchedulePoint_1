@@ -12,6 +12,10 @@ import { describe, expect, it } from 'vitest';
  * trusts either version is misled. This pins the truth: no observer, no media-query read in script,
  * no viewport width, and the two layout reads confined to the one function that names them.
  *
+ * **One media-query read exists, and it decides an ORDER, not a size**: `use-deck-row-order.ts` (the
+ * editing row leads below `lg`, owner decision 2026-10-10). It is in its own file so `Deck.tsx` keeps
+ * none, and the last case below pins that it is the only one.
+ *
  * Comments are stripped first (the repository has recorded four gates matching their own prose).
  */
 const DIR = join(process.cwd(), 'src/components/ui/toolbar');
@@ -46,5 +50,15 @@ describe('Deck and Toolbar measure no width to decide a layout', () => {
     expect(outside, 'a width read outside deckScrolls is a second ladder').not.toMatch(
       /scrollWidth|clientWidth/,
     );
+  });
+
+  it('the one media-query read is the row-order hook, on the shared floor query, and Deck imports it', () => {
+    const hook = code('use-deck-row-order.ts');
+    expect(hook).toMatch(/useMediaQuery\(DESIGNED_MIN_WIDTH_QUERY/);
+    expect(code('Deck.tsx')).toMatch(/useDeckRowOrder\(DECK_ROWS\)/);
+    // Nothing else in the toolbar folder reads a media query by itself.
+    for (const file of ['Deck.tsx', 'Toolbar.tsx', 'ToolbarButton.tsx', 'ToolbarPopover.tsx']) {
+      expect(code(file), `${file} reads a media query`).not.toMatch(/useMediaQuery|matchMedia/);
+    }
   });
 });

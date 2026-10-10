@@ -1030,6 +1030,18 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     await expect(dockRegion(page, health)).toBeHidden();
     expect(await stageInert(page), 'the viewport command freed the stage').toBe(false);
 
+    // Fit to plan is in View ▾ as well (`docs/TECH_DEBT.md` #480): the same wrapped command, so with
+    // a dock squeezing the stage it closes the dock and fits, from the deck, by keyboard or pointer.
+    await openDock(page, health);
+    expect(await stageInert(page), 'the squeezed dock made the stage inert again').toBe(true);
+    await commandBand(page).getByRole('button', { name: /^View/ }).click();
+    await page
+      .getByRole('dialog', { name: 'View' })
+      .getByRole('button', { name: 'Fit to plan' })
+      .click();
+    await expect(dockRegion(page, health)).toBeHidden();
+    expect(await stageInert(page), 'View ▾ Fit to plan freed the stage').toBe(false);
+
     // ADR-0180's exclusivity, now at this width: Expand closes an open dock, and opening a dock over
     // the swapped panel collapses the panel.
     await openDock(page, health);
@@ -1432,7 +1444,7 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
     expect(
       (await focusReading(page))?.id,
       'the lap reached the last control, so no stop was skipped or stuck',
-    ).toBe('export');
+    ).toBe('comments');
 
     // End after a lap lands where the lap ended; Home returns to the start of the line.
     await page.keyboard.press('Home');
@@ -1498,10 +1510,20 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
     expect(atStart.mask, 'the deck is masked').not.toBe('none');
     expect(atStart.start, 'nothing fades at the start: the first control is whole').toBe(0);
     expect(atStart.end, 'the far edge fades: there is more').toBe(2 * atStart.remPx);
-    expect(
-      atStart.cut,
-      'a control is cut at the edge, the cue where a mask is unavailable',
-    ).toBeGreaterThanOrEqual(1);
+    // Which control straddles the edge depends on where the line happens to start, and the editing
+    // row now leads it (owner decision, 2026-10-10), so the cue is asserted along the scroll: at some
+    // position a control is cut, which is what tells a reader the line goes on where a mask is unavailable.
+    const max = await deck.evaluate((el) => el.scrollWidth - el.clientWidth);
+    let cutSomewhere = false;
+    for (let x = 0; x <= max && !cutSomewhere; x += 24) {
+      await deck.evaluate((el, left) => {
+        el.scrollLeft = left;
+      }, x);
+      cutSomewhere = (await read()).cut >= 1;
+    }
+    expect(cutSomewhere, 'a control is cut at the edge, the cue where a mask is unavailable').toBe(
+      true,
+    );
 
     await deck.evaluate((el) => {
       el.scrollLeft = el.scrollWidth;
@@ -1678,4 +1700,79 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
       });
     });
   }
+});
+
+test.describe('the editing row leads on the scrolling line (owner decision, 2026-10-10)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  /**
+   * Every deck control in document order with where it is drawn. The Tab and arrow sequence is the
+   * document's (`[data-toolbar-focusable]`), so "the order on screen is the order of the keys" is
+   * this list being sorted by its own position — which is what WCAG 1.3.2 and 2.4.3 ask.
+   */
+  async function deckStops(
+    page: Page,
+  ): Promise<{ id: string; row: string; x: number; y: number }[]> {
+    return page.evaluate(() =>
+      [
+        ...document.querySelectorAll(
+          '[role="toolbar"][aria-label="Plan commands"] [data-toolbar-focusable]',
+        ),
+      ].map((el) => {
+        const b = el.getBoundingClientRect();
+        return {
+          id: el.getAttribute('data-toolbar-item') ?? '',
+          row: el.closest('[data-deck-row]')?.getAttribute('data-deck-row') ?? '',
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+        };
+      }),
+    );
+  }
+
+  test('below 1024 the pen leads, DO comes before LOOK, and the DOM order is the order on screen; at 1024 and up LOOK is above DO as before', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 800, height: 760 });
+    await page.goto(planUrl);
+    await expect(commandBand(page).getByRole('button', { name: 'Go to today' })).toBeAttached();
+
+    const narrow = await deckStops(page);
+    expect(narrow.length).toBeGreaterThan(10);
+    // Rows in the order the document renders them: every DO control before every LOOK control.
+    const rowsSeen = narrow.map((s) => s.row).filter((r, i, all) => i === 0 || r !== all[i - 1]);
+    expect(rowsSeen, 'DO then LOOK, each row contiguous').toEqual(['do', 'look']);
+    // The first control is the pen, on screen as in the document.
+    expect(narrow[0]?.id).toBe('pen');
+    // One line: no control sits left of the one before it, so the document order is the reading
+    // order on screen (a CSS `order` would have made this list jump backwards).
+    for (let i = 1; i < narrow.length; i += 1) {
+      expect(
+        narrow[i]!.x,
+        `${narrow[i]!.id} is drawn left of ${narrow[i - 1]!.id}, so the keys would jump backwards`,
+      ).toBeGreaterThanOrEqual(narrow[i - 1]!.x);
+    }
+    // And the keys really do walk that order: focus the first stop and arrow along.
+    await page.locator('[data-toolbar-item="pen"]').focus();
+    for (let i = 1; i < 6; i += 1) {
+      await page.keyboard.press('ArrowRight');
+      expect(
+        await page.evaluate(() => document.activeElement?.getAttribute('data-toolbar-item') ?? ''),
+        `arrow ${String(i)} lands on the next control on screen`,
+      ).toBe(narrow[i]?.id);
+    }
+
+    // At the floor and wider the rows stack LOOK above DO, unchanged.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(commandBand(page)).toBeVisible();
+    const wide = await deckStops(page);
+    const rowsWide = wide.map((s) => s.row).filter((r, i, all) => i === 0 || r !== all[i - 1]);
+    expect(rowsWide, 'LOOK then DO at 1280').toEqual(['look', 'do']);
+    const lookY = Math.max(...wide.filter((s) => s.row === 'look').map((s) => s.y));
+    const doY = Math.min(...wide.filter((s) => s.row === 'do').map((s) => s.y));
+    expect(doY, 'DO is drawn below LOOK at 1280').toBeGreaterThan(lookY);
+  });
 });

@@ -18,6 +18,7 @@ import {
   toolbarLabelMinWidthClass,
 } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
+import { useDeckRowOrder } from './use-deck-row-order';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
@@ -184,6 +185,9 @@ export function Deck<Ctx>({
     () => resolveItems(items, context, authoringEnabled),
     [items, context, authoringEnabled],
   );
+  // LOOK then DO at the floor and wider; DO then LOOK on the scrolling line below it, rendered in
+  // that order so the Tab and arrow sequence is the order on screen (`use-deck-row-order.ts`).
+  const rowOrder = useDeckRowOrder(DECK_ROWS);
 
   /** Deck group → its registry sub-groups → the items in each, preserving registry order. */
   const groups = useMemo(() => {
@@ -193,15 +197,20 @@ export function Deck<Ctx>({
       if (list) list.push(r);
       else byRegistryGroup.set(r.item.group, [r]);
     }
-    return DECK_GROUPS.map((group) => ({
-      ...group,
-      // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
-      // section is entirely hidden by predicates draws a rule with nothing on one side of it.
-      sections: group.members
-        .map((member) => byRegistryGroup.get(member) ?? [])
-        .filter((section) => section.length > 0),
-    })).filter((group) => group.sections.length > 0);
-  }, [resolved]);
+    return (
+      DECK_GROUPS.map((group) => ({
+        ...group,
+        // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
+        // section is entirely hidden by predicates draws a rule with nothing on one side of it.
+        sections: group.members
+          .map((member) => byRegistryGroup.get(member) ?? [])
+          .filter((section) => section.length > 0),
+      }))
+        .filter((group) => group.sections.length > 0)
+        // The groups follow the row order too, so the first roving stop is the first thing on screen.
+        .sort((a, b) => rowOrder.indexOf(a.row) - rowOrder.indexOf(b.row))
+    );
+  }, [resolved, rowOrder]);
 
   /**
    * One roving tab stop across the whole deck — the COMMANDS only, since the fold's removal
@@ -363,7 +372,7 @@ export function Deck<Ctx>({
         className,
       )}
     >
-      {DECK_ROWS.map((row) => (
+      {rowOrder.map((row, rowIndex) => (
         <div
           key={row}
           data-deck-row={row}
@@ -424,11 +433,12 @@ export function Deck<Ctx>({
                     // makes the two readable as a hierarchy rather than as two of the same thing.
                     groupIndex > 0 &&
                       'before:bg-border relative before:absolute before:inset-y-1/5 before:-left-1 before:w-px',
-                    // The seam between the two rows on the scrolling line: below `lg` DO's first group
-                    // follows LOOK's last on the same line, and nothing else would say a row ended.
+                    // The seam between the two rows on the scrolling line: below `lg` the second row's
+                    // first group follows the first row's last on the same line, and nothing else
+                    // would say a row ended.
                     // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap.
                     groupIndex === 0 &&
-                      row === 'do' &&
+                      rowIndex > 0 &&
                       'max-lg:before:bg-border max-lg:relative max-lg:before:absolute max-lg:before:inset-y-1/5 max-lg:before:-left-2 max-lg:before:w-px',
                   )}
                 >
