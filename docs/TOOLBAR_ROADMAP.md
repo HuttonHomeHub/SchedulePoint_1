@@ -104,8 +104,8 @@ tooltip copy differentiates them.
   which the flat one-control-per-stop registry can't express. Revisit if the compact geometry is worth a
   bespoke primitive.
 - **Commands promote out of menus when the viewport has room** (toolbar-redesign M5,
-  `docs/specs/toolbar-redesign/m5-measurement.md`): at 1280, 1440, 1912 and 2560 wide the LOOK and DO rows
-  fill their spare width with the commands that live in Filter, View, Analysis, Share & export, Add and Link,
+  `docs/specs/toolbar-redesign/m5-measurement.md`): from 1280 wide, at 1280, 1440, 1600, 1912, 2160 and 2560, the
+  LOOK and DO rows fill their spare width with the commands that live in Filter, View, Analysis, Share & export, Add and Link,
   by the committed ladder `promotion-ladder.ts`. A promoted command is a plain registry item derived from a
   `PromotableEntry`, not a new placeholder; a menu keeps its anchor row at every width. Not promoted by
   decision, with the reason: Recent edits (a dynamic list), Go to date (needs a field), the export formats

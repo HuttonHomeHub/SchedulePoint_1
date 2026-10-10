@@ -252,13 +252,13 @@ So, for any command surface:
   there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
   a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
   kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
-  rest). The five today: Baseline overlay, Resource view, Comments, Settings… and Apply levelled
-  dates…. The last is `'roomy-fine'`: the same rule for a mouse, and icon-only under a coarse pointer
+  rest). The four today: Baseline overlay, Comments, Settings… and Apply levelled
+  dates… (Resource view was the fifth until the M5 review made it icon-only at every width). The last is `'roomy-fine'`: the same rule for a mouse, and icon-only under a coarse pointer
   at every width (`pointer-coarse:`), because the word cost touch a deck line at 1280 (owner
   decision, 2026-10-09).
 - **Free space is used: a menu command promotes onto the deck by a declared ladder** (toolbar-redesign M5,
-  R9, spec §4.11). The stages are rem viewport thresholds — `PROMOTE_80` (1280 px), `PROMOTE_90` (1440),
-  `PROMOTE_119_5` (1912), `PROMOTE_160` (2560) — so a reader who raised the default font size gets the room
+  R9, spec §4.11). The stages are six rem viewport thresholds — `PROMOTE_80` (1280 px), `PROMOTE_90` (1440),
+  `PROMOTE_100` (1600), `PROMOTE_119_5` (1912), `PROMOTE_135` (2160), `PROMOTE_160` (2560) — so a reader who raised the default font size gets the room
   in text terms (a 1280 px window at a 32 px root is 40 rem and promotes nothing). Each entry has a stage
   **per pointer**, because the same command is wider under a finger: the thresholds are committed in
   `promotion-ladder.ts` and derived from the measured widths in `promotion-widths.{fine,coarse}.json` by
@@ -266,11 +266,14 @@ So, for any command surface:
   fit, carries every promoted entry forward and **reserves the worst stress state** (a cycling conflict
   read-out on LOOK, a peer's pen on DO) and 2 px more. `--container-roomy` stays 79 rem, one rem under the
   first stage, so nothing promotes while compact labels are still hidden. A promoted item is always
-  labelled, its tooltip says "Also in ‹menu›", and a set of alternatives (Colour by, Link kind) is a flat run
+  labelled, its tooltip says where it goes in a narrower window ("Moves into the ‹menu› menu in a narrower window"),
+  and a set of alternatives (Colour by, Link kind) is a flat run
   of `aria-pressed` buttons under an `aria-hidden` caption — never a nested `role="group"`. The ladder is
   **not a width mechanism**: nothing measures the deck, and `deck-no-measurement.structural.test.ts` still
-  holds. Free width per row is ≤ 15 % at every stage on both pointers, or no command left in a menu would
-  fit (SC-17, `e2e-workspace-fit/promotion.spec.ts`).
+  holds. At each stage cell a row is ≤ 15 % empty on both pointers, or no command left in a menu would
+  fit; between the cells a sweep every 40 px holds a ceiling (30 % from 80 rem, 33 % under it where nothing
+  promotes) — SC-17, restated honestly in `docs/specs/toolbar-redesign/m5-measurement.md` §3 and asserted by
+  `e2e-workspace-fit/promotion.spec.ts`, which has its own config and CI step.
 - **A popover panel's width is a named token.** `ToolbarPopover` takes `panelWidth: 'default' | 'wide'`
   and `usePopoverPanel` maps them to `--container-popover` (20 rem) and `--container-popover-wide`
   (44 rem, View ▾'s three columns), each capped at the viewport less 1 rem — tokens in `globals.css`,

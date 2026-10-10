@@ -395,15 +395,20 @@ deliberate change to `Deck`'s roving order at the 1024 line; React restores the 
 and `derivePromotedItems` turns each into a registry item that takes its trigger's group and row and sorts at
 `trigger.order + rank / 100`, i.e. immediately after it. `isPromoted(at, { stage, pointer })` is the one
 predicate: the bar's `isVisible` and the menu that lost the row both read it, so a command is on the bar
-**xor** in its menu. The viewport's stage is `usePromotionStage()` (four rem media queries,
-`PROMOTE_80/90/119_5/160` in `lib/breakpoints.ts`, plus `useCoarsePointer`), read once by
+**xor** in its menu. The viewport's stage is `usePromotionStage()` (one `useSyncExternalStore` over six rem
+media queries, `PROMOTION_STAGES` in `lib/breakpoints.ts` — `PROMOTE_80/90/100/119_5/135/160`, the one list the
+names, rems and queries derive from — plus `useCoarsePointer`; one subscription so a resize across two
+thresholds never renders the stage between them), read once by
 `useTsldToolbarContext` into `ctx.promotion`; it is stage `0` where there is no `matchMedia`, so every
 unit test sees the unpromoted deck. `at` is `'always'` (Legend, Resource view, Baseline overlay, the Minimap:
 the ladder never demotes them) or a stage per pointer from the committed table `promotion-ladder.ts`, which
 `computePromotionStages` derives from `docs/specs/toolbar-redesign/promotion-widths.<pointer>.json`
 (a unit test pins every `at` to it). **No menu ever empties**: each keeps an anchor row that renders
 unconditionally (Filter's Has constraint, Analysis's Baselines…, Share & export's formats and Print…, Link's
-Start → Finish, Add's Task and Level of effort).
+Start → Finish, Add's Task and Level of effort). A promoted button's tooltip and description say where it goes in a
+narrower window ("Moves into the Filter menu in a narrower window"), `derivePromotedItems` refuses a trigger whose
+`order` is not an integer (it sorts a promoted item at `order + rank / 100`), and the Share & export trigger reads
+"Export" while Share… is on the bar beside it.
 **Two optional fields on `ToolbarItem` and one on `ToolbarButton`, no key or focus-rule change.**
 `visibleLabel` is the text painted when it is shorter than the accessible name: a member of a flat pressed set
 ("Colour by: Total float") prints its value under an `aria-hidden` caption, and `defineToolbar` refuses a
@@ -413,7 +418,9 @@ and a promoted command that falls back into its menu hands focus to the menu's t
 `lostReason` ("Moved into the Filter menu.") instead of to the container (ADR-0135 with a destination).
 A command that arrives under a reader's focus in a menu is followed by `usePromotionFocusFollow` (host-side,
 `use-promotion-focus.ts`), which moves focus to the new button and announces it; a resize that crosses a stage
-closes an open menu (`useCloseOnPromotionChange`).
+closes an open menu or popover (`useCloseOnPromotionChange`, and `ToolbarPopover`'s optional `closeOnChangeOf`,
+both over `useCloseWhenChanged`) — and when focus was inside it, hands focus to the control that opened it and
+announces "Menu closed because the toolbar changed." (a row that left under the reader is the follower's, not this).
 
 **Three rules for a consumer:**
 

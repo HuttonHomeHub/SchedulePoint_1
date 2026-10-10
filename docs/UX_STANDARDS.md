@@ -378,7 +378,10 @@ exactly as the menu pick does and is pen-gated with the same reason; a dock togg
 itself, so it stays in step when the dock is closed from its own close button; Critical only and Filter read
 one set. **Focus follows the command** (ADR-0135): a resize that promotes the command a reader is on in a
 menu moves focus to its button and announces "‹name› is now on the toolbar."; one that demotes the command
-a reader is on lands focus on the menu's trigger with "Moved into the ‹menu› menu." **Group names do not
+a reader is on lands focus on the menu's trigger with "Moved into the ‹menu› menu."; a resize that closes the
+menu a reader is in (the stage changed under it) hands focus to its trigger with "Menu closed because the toolbar
+changed." — never to the page. **Copy does not point at a row that can move**: a banner says "Turn off Late-start
+overlay", not "Turn it off in View". **Group names do not
 change as items promote** (View, Find, Panels, Author, Plan), and a promoted item sits immediately after its
 trigger in the same group. **The ladder's order is the product owner's ranking** (D-n), by frequency and
 importance, and each threshold is computed from measured widths, never judged.

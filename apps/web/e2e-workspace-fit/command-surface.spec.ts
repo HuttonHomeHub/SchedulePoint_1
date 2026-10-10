@@ -1214,8 +1214,9 @@ test.describe('The plan command surface', () => {
   /**
    * **The label rule on the deck** (toolbar-redesign M1, `docs/specs/toolbar-redesign/`).
    *
-   * Five controls — Baseline overlay, Resource view, Comments, Settings… and, since M2, Apply
-   * levelled dates… — are `labelVisibility: 'roomy'`: labelled when the deck is at least `--container-roomy`
+   * Four controls — Baseline overlay, Comments, Settings… and, since M2, Apply
+   * levelled dates… — are `labelVisibility: 'roomy'` (Resource view was the fifth until the M5
+   * review made it icon-only at every width, asserted below beside them): labelled when the deck is at least `--container-roomy`
    * (79 rem, the deck's own width in a 1280 px window) and icon-only below it. Both halves are
    * asserted, because a rule that only ever shows its label and one that only ever hides it are
    * each green against half of this.
@@ -1240,11 +1241,6 @@ test.describe('The plan command surface', () => {
       description: 'Draw the active baseline beside each bar',
     },
     {
-      id: 'resource-view',
-      label: 'Resource view',
-      description: 'Show resource loading under the diagram',
-    },
-    {
       id: 'comments',
       label: 'Comments',
       description: "Show the plan's comments beside the diagram",
@@ -1261,6 +1257,19 @@ test.describe('The plan command surface', () => {
         'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
     },
   ];
+
+  /**
+   * Resource view's tooltip is the only thing naming it at any width (`'never'`), so the tooltip
+   * cases below walk it with the roomy controls even though its label never shows.
+   */
+  const TIPPED_ITEMS = [
+    ...ROOMY_ITEMS,
+    {
+      id: 'resource-view',
+      label: 'Resource view',
+      description: 'Show resource loading under the diagram',
+    },
+  ] as const;
 
   const escapeForRegExp = (text: string): string => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
 
@@ -1300,7 +1309,7 @@ test.describe('The plan command surface', () => {
       };
     }, ROOMY_ITEMS);
 
-  test('the roomy controls are labelled from 79 rem and icon-only below it, and keep their names', async () => {
+  test('the roomy controls are labelled from 79 rem and icon-only below it, and keep their names (Resource view is icon-only at every width)', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
@@ -1322,6 +1331,23 @@ test.describe('The plan command surface', () => {
       expect(roomy, `${at} should be ${viewport.width >= 1280 ? 'roomy' : 'narrow'}`).toBe(
         viewport.width >= 1280,
       );
+      // Resource view is icon-only at every width (`'never'`, the M5 review): its word would cost the
+      // promotion ladder ~95 px of LOOK. The name is still there, `sr-only` and in `aria-label`.
+      const resourceView = page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .locator('[data-toolbar-item="resource-view"]');
+      await expect(resourceView, `Resource view lost its name at ${at}`).toHaveAccessibleName(
+        'Resource view',
+      );
+      expect(
+        await resourceView.evaluate(
+          (el) =>
+            [...el.querySelectorAll('span')].filter(
+              (s) => s.textContent?.trim() === 'Resource view',
+            ).length,
+        ),
+        `Resource view paints its label at ${at}`,
+      ).toBe(0);
       for (const spec of ROOMY_ITEMS) {
         const item = reading.items.find((i) => i.id === spec.id)!;
         expect(item.labelWidth, `${spec.id} has no label in the tree at ${at}`).not.toBeNull();
@@ -1351,7 +1377,7 @@ test.describe('The plan command surface', () => {
     for (const viewport of [WIDTHS[4]!, WIDTHS[1]!]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(500);
-      for (const spec of ROOMY_ITEMS) {
+      for (const spec of TIPPED_ITEMS) {
         const control = deck.locator(`[data-toolbar-item="${spec.id}"]`);
         const shaded = (await control.getAttribute('aria-disabled')) === 'true';
         // A shaded control's tooltip leads with its reason; a live one carries the description.
@@ -1581,7 +1607,7 @@ test.describe('The plan command surface', () => {
           await tooltip.count(),
           `more than one tooltip is open on ${String(here.id)}`,
         ).toBeLessThanOrEqual(1);
-        const tipped = here.id === null ? undefined : ROOMY_ITEMS.find((i) => i.id === here.id);
+        const tipped = here.id === null ? undefined : TIPPED_ITEMS.find((i) => i.id === here.id);
         if (tipped !== undefined) {
           await expect(tooltip, `no tooltip on focus of ${here.id} at ${at}`).toBeVisible();
           await expect(tooltip).toContainText(`${tipped.label} —`);
@@ -1595,7 +1621,7 @@ test.describe('The plan command surface', () => {
       expect(visited, `the walk never reached Resource view at ${at}`).toContain('resource-view');
       expect(visited, `the walk never reached Comments at ${at}`).toContain('comments');
       // Every roomy control the deck carries is walked and tipped, not the two that were first.
-      for (const spec of ROOMY_ITEMS) {
+      for (const spec of TIPPED_ITEMS) {
         expect(visited, `the walk never reached ${spec.id} at ${at}`).toContain(spec.id);
       }
 
