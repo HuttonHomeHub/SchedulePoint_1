@@ -498,6 +498,11 @@ re-taken after M4, with the worst-state reserve.
   - SC-19's **render-level** jsdom test (stubbed `matchMedia` and pointer, every source menu opened, bar xor menu),
     green against today;
   - SC-18 (c)'s unit test (`at` equals `computePromotionStages(json)`).
+  - **Two M4 findings M5 must carry** (`m4-measurement.md` §8). **Legend and Minimap are always-promoted records**
+    (`LensToggle` with no `group` and a `promotion`): they have no `View ▾` section, so the ladder must never
+    treat one as demotable into a menu — there is nowhere for it to go. And `computePromotionStages` and
+    `promotion-widths.json` **exclude the `canvas` row**: the cluster is staged on stage width at the diagram, not
+    on the deck, and its four buttons are never promoted or demoted.
 
 ##### M5-T2 … T6: one menu per PR
 

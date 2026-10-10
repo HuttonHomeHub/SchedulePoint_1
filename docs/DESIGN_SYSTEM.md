@@ -271,8 +271,10 @@ So, for any command surface:
 **The one exception: below `lg` the deck is a single scrolling line** (toolbar-redesign M3, R6/US-6,
 `docs/TECH_DEBT.md` #471). The wrap above is budgeted from the 1024 × 600 floor up; under 64 rem it cost
 355 px (640 wide) to 603 px (320 wide) of the window, so the body had no height and the foot row was
-below the window with nothing to scroll. `max-lg:` therefore puts LOOK then DO on one `flex-nowrap
-overflow-x-auto` line, and **reachability is still structural**, now by three things rather than by
+below the window with nothing to scroll. `max-lg:` therefore puts DO then LOOK on one `flex-nowrap
+overflow-x-auto` line (the editing row leads below the floor, owner decision 2026-10-10; the rows are
+**rendered** in that order by `use-deck-row-order.ts`, never reordered with CSS `order`, so the Tab and
+arrow sequence is the order on screen — WCAG 1.3.2, 2.4.3 — and LOOK above DO at 1024 and wider is untouched), and **reachability is still structural**, now by three things rather than by
 the wrap: `scroll-px-8` and a focus handler that calls `scrollIntoView({ block: 'nearest', inline:
 'nearest' })` (keyboard focus only, and only where the deck overflows), so a focused control is never
 flush with the edge or under the fade; `max-lg:deck-edge-fade`, a mask whose two widths are driven
@@ -284,6 +286,13 @@ opened from a half-scrolled trigger. A short-but-wide window (1280 × 600) keeps
 a 640 × 360 or 320 × 256 window (or a 1280 × 800 window at text-only 200 %, which is 40 × 25 rem)
 reaches the foot row by scrolling to it. `xs` (26 rem) is the narrower step the app header uses to
 drop its plan identity under the brand.
+
+**The "Diagram viewport" cluster** (toolbar-redesign M4) is a `toolbarCardVariants` card at the diagram's
+bottom-right: Zoom out, Zoom in, Fit to plan (a frame glyph) and the Minimap toggle, `shadow-sm`, inside the
+canvas surface scope, tooltips opening **above** it and closing when pressed. It is anchored to the
+**visible** stage, not the canvas's own box (which a short stage clips), and where the visible stage cannot
+hold the 46 px (fine) or 54 px (coarse) card plus its 12 px inset it is withdrawn with `visibility: hidden`
+rather than drawn clipped; Fit to plan is then still in `View ▾`.
 
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the

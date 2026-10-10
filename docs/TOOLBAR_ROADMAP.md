@@ -8,7 +8,9 @@ as fully designed and the roadmap is visible in-product. They are defined via `p
 in `apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx`.
 
 **A wrapping deck and a mode row (ADR-0109 D1/D2).** Each item carries a
-`row: 'mode' | 'strip'`. The **mode row** is the four segments — `Early | Visual` and
+`row: 'mode' | 'strip' | 'identity' | 'canvas'` (`identity` and `canvas` arrived with toolbar-redesign
+M2 and M4: the plan's facts beside its name, and the "Diagram viewport" cluster at the diagram's corner).
+The **mode row** is the four segments — `Early | Visual` and
 `Diagram | Gantt` — which sit on the **identity line in the header**, because a mode is not a
 command (ADR-0091 D1); the **strip** is every command, rendered by `Deck` as four captioned groups
 that **wrap**. Placeholders render **inline** (tier 2 icon buttons), and every command is visible at

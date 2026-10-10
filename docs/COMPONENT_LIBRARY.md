@@ -371,9 +371,20 @@ regresses with nothing saying so.
 `description` is the trigger's tooltip sentence (`<label> — <description>`), which an icon-only
 trigger needs to be named by purpose and not only by its label. `panelWidth` is `'default'` (one
 column, 20 rem) or `'wide'` (44 rem, for a panel that lays out in columns); both are viewport-capped
-named tokens. `ToolbarRow` has a third value, `identity`: the plan's facts beside its name in the
-header (Plan summary, Edit plan details) — its own `role="toolbar"` and Tab stop, like `strip` and
-`mode`.
+named tokens. `ToolbarRow` has five values: `strip` (the deck, the default), `mode` (Diagram | Gantt),
+`identity` (the plan's facts beside its name in the header: Plan summary, Edit plan details) and
+`canvas` (the "Diagram viewport" cluster at the diagram's corner: Zoom out, Zoom in, Fit to plan,
+Minimap), each its own `role="toolbar"` and Tab stop.
+
+**Three optional props added with the cluster (toolbar-redesign M4 review), none of which changes a key set,
+the roving order or any focus rule.** `Toolbar` takes `ungrouped` (groups render as plain wrappers with no
+`role="group"` and no name, for a one-group toolbar whose group name only repeats the toolbar's) and
+`tooltip` (`{ placement, dismissOnPress }`, forwarded to each icon-only control). `useTooltip` takes
+`placement: 'below' | 'above'` (default `'below'`, every existing caller) and `dismissOnPress` (default
+off). `useContainerUnmountHandoff({ target, message })` is the one hook for "this container goes away
+under focus" (the cluster; `HistoryResultStrip` and the selection bar keep their own copies for now).
+`Deck` renders its two rows in the order `use-deck-row-order.ts` gives: LOOK then DO at 1024 and wider,
+DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen.
 
 **Three rules for a consumer:**
 

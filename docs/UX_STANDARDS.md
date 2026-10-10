@@ -366,6 +366,16 @@ entry stops being needed.
   two-dimensional surface under 1.4.10), and every canvas affordance keeps its
   keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
+### The diagram's own viewport controls (toolbar-redesign M4)
+
+Zoom, Fit and the Minimap live on the diagram's corner, not the command deck: a control belongs on its
+subject (R5). Three rules follow from the review. **A control that cannot be seen is not in the Tab order**:
+the cluster is withdrawn (hidden, not clipped) when the visible stage cannot hold it, and `View ▾` carries
+Fit to plan as the route that stays. **A finger-sized window gives the selection bar a line of its own**
+(`data-dock-wide`) so the diagram keeps at least 120 px of stage with a conflict selected, and the bar has a
+visible **Clear selection** (Escape does the same) as its way out. **Below 1024 the editing row leads** the
+one scrolling line, in the DOM as on screen.
+
 ### Give-way order in a fixed-height chrome row (ADR-0110)
 
 A chrome row whose height is fixed — the workspace foot, the command band, the

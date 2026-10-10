@@ -24,10 +24,12 @@ without them. Lines are "LOOK/DO". Readings: `apps/web/measure-output/toolbar-re
    listbox, which `TsldPanel` renders **after** `TsldCanvas`; a column inside the canvas box therefore tabbed minimap,
    cluster, _then_ the diagram. `TsldCanvas` now draws the column into a host node `TsldPanel` places after the list
    (`columnHost`, a portal), so Tab is list → minimap → × → cluster, asserted by `viewport-cluster.spec.ts`.
-4. **Fit no longer closes a dock.** The deck's Fit used to close a squeezing dock and fit a frame later (ADR-0180's wrapped
-   viewport command). The cluster is in the stage, which is inert or hidden in exactly those states, so it cannot be
-   pressed there. The wrapper still serves the deck's other viewport commands; the host cases that used Fit as their
-   example now drive Go to today. Recorded as `docs/TECH_DEBT.md` #480.
+4. **Fit in the cluster no longer closes a dock** (corrected after review, §8). The deck's Fit used to close a squeezing
+   dock and fit a frame later (ADR-0180's wrapped viewport command). The cluster is in the stage, which is `inert` in
+   exactly those states. The review called the cluster "visible but dead" there; **measured, it is not visible at all**
+   (the stage is a 1 px sliver, or under 40 px tall, and the cluster is clipped out of it). Hosting it outside the
+   inert region would draw a card over the dock that has taken the row, so the route is `View ▾` ▸ Zoom ▸ **Fit to
+   plan** (the same wrapped command). `docs/TECH_DEBT.md` #480.
 5. **The coarse 1024 × 600 "no room" cell is the selection state, not the base state.** M0 measured the coarse stage at
    274 px; the real coarse base at M4 is **286 px of canvas** (the band is 211, three lines), which holds the 230 px column
    (44 px spare under the ruler). The minimap withdraws on coarse when a selection docks its bar (canvas 200) and with a
@@ -118,8 +120,35 @@ restoring a truncated reason clause makes the deck three lines in the cycling st
 
 ## 7. Shared keyboard/focus change (ADR-0111), exactly
 
-**None to `Deck`, `Toolbar`, `Menu`, `ToolbarPopover` or `usePopoverPanel`.** The cluster is one new `Toolbar` instance
+**As first built: none to `Deck`, `Toolbar`, `Menu`, `ToolbarPopover` or `usePopoverPanel`; the review round added optional props, listed in §8.** The cluster is one new `Toolbar` instance
 (`diagram-viewport-cluster.tsx`) over `rows.canvas`, a fifth value of `ToolbarRow` (`'canvas'`) and a fifth key of
 `splitByRow`. The container-unmount hand-off is a wrapper around that instance (focus/blur capture and a layout-effect
 cleanup), in the cluster's own file; `useToolbarFocusHandoff` is untouched (its docblock already says it cannot fire when
 the container unmounts). Roving, Tab stops and key sets are the shared ones.
+
+## 8. After the review (the same day)
+
+- **The cluster was anchored to a box nobody can see.** `TsldPanel`'s surface keeps a 240 px minimum and the stage
+  clips it, so with a selection bar docked the canvas root's bottom is below the stage's visible bottom. Measured at
+  coarse 1024 × 600 with a conflict selected: the stage was **89 px** visible (not the 200 this record gave: 200 was the
+  canvas element, 40 px of ruler short of the surface and clipped), the cluster drawn off screen and still a Tab stop.
+  The column is now lifted by the clipped amount (`TsldCanvas` `visibleBoxRef`, `clipShift`) and **withdrawn with
+  `visibility: hidden`** where the visible scene cannot hold the card (`clusterHasRoom`). The keyboard reveal measures
+  the visible stage too, and re-runs when it shrinks.
+- **Coarse selection stage, before and after** (visible stage incl. the 40 px ruler, 1024 × 600): selected 141 → **186**;
+  conflict selected 89 → **134** (floor 120). The cause was the selection bar's five 44 px lines in a 320 px outlet beside
+  the facts; a marked strip (`data-dock-wide`) now takes 36 rem on a finger-sized window, which wraps the bar onto the
+  line below the facts: three lines, 140 px. Fine pointer unchanged (246 / 286). A visible **Clear selection** button
+  joins the bar (icon-only, 36 / 44 px; Escape does the same).
+- **Exactly what changed in the shared primitives** (ADR-0111 review): `Toolbar.tsx` gains optional `ungrouped` (groups
+  render as plain wrappers: no `role="group"`, no name) and `tooltip` (forwarded to `ToolbarButton`); `ToolbarButton.tsx`
+  gains an optional `tooltip` prop spread into `useTooltip`; `tooltip.tsx` gains `placement` (`'below'` default, `'above'`
+  tries above first) and `dismissOnPress` (a document click on the trigger closes the tip; default off). **No key
+  handling, roving order, Tab stop or focus rule changed.** New: `use-container-unmount-handoff.ts`; `Deck.tsx` renders
+  its two rows in `use-deck-row-order.ts`'s order (DO first below 1024), the one media-query read, so the first roving
+  stop and the arrow order follow the screen.
+- **Not done / observed:** a pointer-selected bar near the foot row used to be revealed against the canvas's own height
+  (under the docked bar); the reveal now uses the visible height. `HistoryResultStrip` and `SelectionActionsBar` keep
+  their own hand-off copies (adopting the hook was optional and not trivially safe: the second hands focus to a caller's
+  function, not a selector). Crossing 1024 with focus inside the deck re-orders its rows in the DOM; Chromium drops focus
+  on a moved node, so a reader resizing across the floor mid-keystroke lands on `<body>` (not handled).

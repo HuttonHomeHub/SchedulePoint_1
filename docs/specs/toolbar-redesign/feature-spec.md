@@ -68,6 +68,11 @@ M0 returned **no-go for M1 as written**. These are its findings and how the spec
   - **Description tooltip:** "Show resource loading under the diagram".
 - **OD-2: touch (44 px) at exactly 1024 wide accepts 4 deck lines.** Mouse is two lines at the floor. Touch
   improves above about 1280. The 44 px targets stay (ADR-0183).
+- **OD-3 (2026-10-10, after M4): below 1024 wide the editing row leads the scrolling line.** The pen, Add, Link,
+  Select and Undo come first, then the viewing tools. At 1024 and wider the rows stay LOOK above DO. Done by
+  **rendering** the rows in the order for the width (`use-deck-row-order.ts`), not by CSS `order`, so the Tab and
+  arrow sequence is the order on screen (WCAG 1.3.2, 2.4.3). This amends §4.3's diagram (LOOK, then DO) for the
+  narrow line only.
 
 ---
 

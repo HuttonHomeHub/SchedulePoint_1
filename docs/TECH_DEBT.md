@@ -11973,14 +11973,15 @@ action (for the `barAction` remedy too, which renders nothing today), so the sen
 canvas callout anchored to the selected bar. **Tests it needs:** the reason visible after each step; reachable by keyboard and
 AT without hover; the selection bar still one line at 1024. **Trigger:** the next planner report of "why is this flagged".
 
-### 480. The Diagram viewport cluster is unreachable while a dock or the expanded panel has taken the stage
+### 480. The Diagram viewport cluster is not reachable while a dock has taken the stage, so Fit no longer closes the dock from it
 
-**Status:** open · **Verified:** 2026-10-10 (`plan-workspace-toolbar.test.tsx` "a dock that has taken the row": the stage is `inert`, and "the short-body swap": the canvas row is `hidden`; the cluster is inside both)
-**Raised:** 2026-10-10 (toolbar redesign M4) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-10 (measured in Chromium: at 640 × 740 with a dock open the stage is 1 px wide and the cluster is clipped out of it; below a 40 px row the stage is `inert` and the cluster is below its visible bottom; `plan-workspace-toolbar.test.tsx` "a dock that has taken the row")
+**Raised:** 2026-10-10 (toolbar redesign M4, corrected after review) · **Size:** S · **Owner:** web
 
-Zoom, Fit and the Minimap used to live on the deck, so pressing Fit while a dock had squeezed the stage inert closed the dock
-and fitted a frame later (ADR-0180's wrapped viewport command). They live in the stage now; while the stage is inert or hidden
-they are not reachable, which is consistent (a viewport control of a diagram you cannot see) but loses that one shortcut back
-to the diagram. The wrapper still serves the deck's other viewport commands (Go to today, Next conflict, Find). **Next:**
-decide with the owner whether that matters; if so, a "Show diagram" affordance on the dock, not the cluster. **Trigger:** a
-user reading that loses the diagram behind a dock at 1024.
+Zoom, Fit and the Minimap used to live on the deck, so pressing Fit while a dock had squeezed the stage inert closed the dock and
+fitted a frame later (ADR-0180's wrapped viewport command). They live in the stage now, and in those states the stage is a sliver
+nobody can see. **What users see:** nothing of the cluster (an earlier version of this row said "visible but dead"; that was not
+what a browser shows). **The route that stays** is `View ▾` ▸ Zoom ▸ **Fit to plan**, which is the same wrapped command: with a
+dock squeezing the stage it closes the dock and fits a frame later. Hosting the cluster outside the inert region was tried on
+paper and refused: it would draw a card over the dock that has filled the row. **Left open** only for the Zoom steps, which have
+no equivalent there (the presets in `View ▾` do). **Trigger:** a user reading that loses the diagram behind a dock at 1024.

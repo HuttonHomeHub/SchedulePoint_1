@@ -220,7 +220,7 @@ keep `main` releasable.
 - **The diagram can say where you are** (ADR-0100, the TSLD minimap). The last unbuilt
   Should-have on the primary surface: a 200×120 overview panel in the canvas's bottom-right —
   an invariant cached picture of the whole programme (critical path surviving 1 px decimation)
-  with the live viewport as a DOM rectangle — reached from `View ▾ ▸ Panels ▸ Minimap`, off by
+  with the live viewport as a DOM rectangle — reached from the Minimap button in the diagram's corner cluster, off by
   default. Drag the rectangle, click to jump, or drive it from the keyboard: the canvas's first
   **unanchored** pan that does not need a pointer. Built measure-first — the falsification
   condition was committed before the prototype and passed on both fixtures and again against

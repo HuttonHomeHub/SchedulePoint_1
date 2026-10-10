@@ -81,7 +81,9 @@ export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy' | 'roomy-fine';
  * **`mode`** is the plan's `Diagram | Gantt` switch; **`identity`** is the plan's facts beside its
  * name in the header — Plan summary and Edit plan details (toolbar-redesign M2); **`canvas`** is the
  * "Diagram viewport" cluster in the diagram's bottom-right corner — Zoom out, Zoom in, Fit to plan
- * and the Minimap toggle (toolbar-redesign M4). They are four `Toolbar`/`Deck` instances, each its own `role="toolbar"` and its own Tab stop, and this field only
+ * and the Minimap toggle (toolbar-redesign M4). They are four `Toolbar`/`Deck` instances — the deck, the mode switch, the identity row and the cluster,
+ * each its own `role="toolbar"` and its own Tab stop (`ToolbarRow` has those four values plus the implied
+ * default) — and this field only
  * partitions the registry between them; grouping, gating and the keyboard model are unchanged
  * within each. **Absent ⇒ `strip`.**
  *
