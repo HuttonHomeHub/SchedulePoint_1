@@ -423,6 +423,20 @@ Fit to plan as the route that stays. **A finger-sized window gives the selection
 visible **Clear selection** on a finger-sized pointer (Escape does the same) as its way out. **Below 1024 the editing row leads** the
 one scrolling line, in the DOM as on screen.
 
+### A flagged object states its reason beside its remedy (conflict-reason-on-object)
+
+When the selected activity is flagged, the selection bar leads with a **reason line** naming every
+conflict it matches, in words, in the one wording the announcer also speaks (`CONFLICT_FLAGS` labels,
+sentence case, no full stop). Four rules. **It is a caption on the object, not a toolbar item**: on its
+own line above the controls, so flagging an activity never reflows a control (an inline item cost a line
+at 1912 x 1080, `docs/specs/conflict-reason-on-object/m0-measurement.md`), and it takes no roving stop, no
+Tab stop and no role. **It is a standing condition, not an event**: never a live region, never a toast,
+replaced in place as the selection moves, gone when the selection or the conflict goes (ADR-0132).
+**It never truncates** (ADR-0184); it wraps. **The control that answers the leading conflict carries the
+same reason as its accessible description**, never its name. A status read-out in a toolbar or bar is
+foreground text with a warning-coloured icon: no fill, border or hover, so it cannot be read as a control.
+The deck's count chip stays count-only; the reason lives on the object.
+
 ### Give-way order in a fixed-height chrome row (ADR-0110)
 
 A chrome row whose height is fixed — the workspace foot, the command band, the

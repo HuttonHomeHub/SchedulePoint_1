@@ -4,6 +4,11 @@
 - **Status:** Draft — awaiting approval before implementation.
 - **Owner:** web
 
+> **Revision 3 (2026-10-10).** M0 ran (`m0-measurement.md`); the owner chose B′ (a caption line above the
+> controls). M1 was built to that: no registry item, no CVA-metrics extraction (the caption takes no control
+> metrics), the chip's look shared by two class constants, and `e2e-workspace-fit/conflict-reason.spec.ts` in
+> place of the 1912 equality. See the spec's Revision 3 note. M2's row 4 is dropped.
+
 ## Breakdown
 
 ```mermaid

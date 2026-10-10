@@ -11,6 +11,22 @@
   It applies ADR-0093, ADR-0132, ADR-0082, ADR-0088 D1 and ADR-0184. It changes no shared primitive's keyboard
   contract (§4.6), so ADR-0111 is not engaged. The accessibility review is still mandatory (§3).
 
+> **Revision 3 (2026-10-10, after M0): the design is B′, and four statements below are superseded.**
+> M0 (`m0-measurement.md`) measured the inline read-out and found it costs a line at 1912 x 1080 for two of
+> the four types, so the product owner chose option (b): **the reason is a caption line above the selection
+> bar's controls** (§4.7's B′), measured at 20 px (`m1-measurement.md`). Consequences for the text below:
+> (1) there is **no registry item, no `presentational` use and no `ConflictReasonReadout`**: the caption is
+> `ConflictReasonLine`, rendered by `SelectionActionsBar` above the `Toolbar`, so §4.6's item table, SC-3's
+> `data-toolbar-item` wording and the label-collision and Gantt-coverage notes do not apply; (2) **SC-6**
+> (foot row equal at 1912 x 1080) is replaced by "the controls never reflow, and the line is one line (at most
+> 24 px) there", asserted in `e2e-workspace-fit/conflict-reason.spec.ts`; (3) **the Tab claims are wrong
+> in the Diagram**: the bar is one roving Tab stop whose first item on the canvas is **Zoom to selection**
+> for every type (Logic and the remedy are reached by the arrow keys), so US-2's "focus lands on the remedy"
+> and "the first roving stop is Logic" hold only in the Gantt, where the canvas-only items are absent;
+> (4) the **chip already wears the read-out look** (foreground text, warning-coloured triangle), so M1-T5's
+> chip restyle reduced to sharing the two class constants. Plan M2's row 4 (a truncating remedy label) is
+> dropped: M0 found none.
+
 > **About the measurements.** This spec was written without a browser: the analyst had only read and write tools, so
 > **no figure here was taken for this spec.** Every number is either quoted from a committed record (with its path) or
 > marked **estimate**. M0 takes the real readings in the container's Chromium before anything is built (ADR-0113,

@@ -463,6 +463,18 @@ Two invariants in `defineToolbar` guard the field: a segment may not span a `tie
 row one is live (each row renders its own `<Toolbar>`, so a split segment becomes two disconnected
 one-item switches); the tier one is speculative and forward-only, and its comment says so.
 
+## Pattern: the conflict reason line (`features/plan-actions/selection-actions.tsx`)
+
+`ConflictReasonLine` is the selection bar's caption for a flagged activity: a `<p>` above the bar's
+controls holding a warning icon (`aria-hidden`) and `joinConflictReasons(labels, 'start')`. It is
+**not** a registry item and not part of the `Toolbar` — a toolbar item cannot sit on a line above its own
+toolbar, and an inline one wrapped the bar at 1912 x 1080. Its look is `features/plan-actions/conflict-readout.ts`
+(`CONFLICT_READOUT_TEXT`, `CONFLICT_READOUT_ICON`), shared with the deck's count chip so the two cannot drift.
+Contract: no `tabindex`, `role`, `aria-live` or `truncate`; not `aria-hidden` (where no described control
+exists it is the only channel); one derivation (`matchingConflictFlags`) with the announcer and the remedy.
+`ConflictRemedyControl` and Clear visual start (when it is the remedy) carry the leading reason as
+`aria-describedby`/`srDescription`. The Gantt row menu lists only items with an activation path.
+
 ## Primitive: `Tabs` (`components/ui/tabs.tsx`)
 
 The WAI-ARIA APG `tablist` pattern, hand-rolled like `Menu` and `Combobox`. Controlled:
