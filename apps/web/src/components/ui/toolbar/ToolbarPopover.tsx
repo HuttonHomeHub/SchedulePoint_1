@@ -232,7 +232,7 @@ export function ToolbarPopover({
           <span aria-hidden="true" className="relative inline-flex shrink-0 items-center">
             {icon}
             {badged ? (
-              <span className="bg-foreground text-background text-micro absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full font-semibold">
+              <span className="bg-foreground text-background text-micro absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full">
                 {badge.count}
               </span>
             ) : null}

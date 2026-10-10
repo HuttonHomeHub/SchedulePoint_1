@@ -217,8 +217,8 @@ for (const pointer of ['fine', 'coarse'] as const) {
       const record: Reading = {
         pointer,
         tag: TAG,
-        header: {} as Reading,
-        rows: {} as Reading,
+        header: {},
+        rows: {},
         photos: [] as string[],
       };
       const header = record.header as Reading;
