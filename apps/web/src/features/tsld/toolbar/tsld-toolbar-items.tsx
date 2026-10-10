@@ -922,7 +922,6 @@ function AddActivityControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  useCloseOnPromotionChange(ctx.promotion, open, close);
   /**
    * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
    *
@@ -933,6 +932,7 @@ function AddActivityControl({
    * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
    */
   const mainButtonRef = useRef<HTMLButtonElement>(null);
+  useCloseOnPromotionChange(ctx.promotion, open, close, mainButtonRef);
 
   const disabled = api.disabled;
   const activeLabel = ACTIVITY_TYPE_LABELS[ctx.createType];
@@ -1120,7 +1120,6 @@ function LinkControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement {
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  useCloseOnPromotionChange(ctx.promotion, open, close);
   /**
    * The **primary** half's ref, separate from `triggerRef` (which belongs to the caret).
    *
@@ -1131,6 +1130,7 @@ function LinkControl({
    * (WCAG 2.4.3). `IsolateControl` below has always done this correctly; these two did not.
    */
   const mainButtonRef = useRef<HTMLButtonElement>(null);
+  useCloseOnPromotionChange(ctx.promotion, open, close, mainButtonRef);
 
   const disabled = api.disabled;
   return (
@@ -1632,7 +1632,7 @@ function PlanAnalysisControl({
   // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  useCloseOnPromotionChange(ctx.promotion, open, close);
+  useCloseOnPromotionChange(ctx.promotion, open, close, triggerRef);
   const disabled = api.disabled;
   const labelClass = toolbarLabelClass(api.labelState);
   return (
@@ -1742,6 +1742,7 @@ function FilterMenuControl({
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
       labelState={api.labelState}
+      closeOnChangeOf={ctx.promotion}
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
@@ -1811,7 +1812,7 @@ function ExportMenuControl({
   // nothing at all — which is the defect this repair exists to avoid, one layer down.
   const reasonId = useId();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
-  useCloseOnPromotionChange(ctx.promotion, open, close);
+  useCloseOnPromotionChange(ctx.promotion, open, close, triggerRef);
   const disabled = api.disabled;
   const labelClass = toolbarLabelClass(api.labelState);
   return (
@@ -2903,6 +2904,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
+          closeOnChangeOf={ctx.promotion}
           // Three columns (`VIEW_FIRST_COLUMN` and Insight), which a 20 rem panel cannot hold.
           panelWidth="wide"
         >

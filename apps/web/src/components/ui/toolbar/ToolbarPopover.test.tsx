@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ToolbarPopover } from './ToolbarPopover';
@@ -113,5 +113,32 @@ describe('ToolbarPopover — the shut trigger', () => {
     const describedBy = trigger.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveTextContent('Add an activity first');
+  });
+});
+
+describe('ToolbarPopover — closeOnChangeOf', () => {
+  const panel = (key: number): React.ReactElement => (
+    <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} closeOnChangeOf={key}>
+      <button type="button">Has constraint</button>
+    </ToolbarPopover>
+  );
+
+  it('closes the panel and hands focus to the trigger when the key changes under a focused row', () => {
+    // Verified red by removing the `useCloseWhenChanged` call: the panel stays open.
+    const { rerender } = render(panel(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    screen.getByRole('button', { name: 'Has constraint' }).focus();
+
+    rerender(panel(1));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Filter' }));
+  });
+
+  it('leaves the panel open when the key is unchanged', () => {
+    const { rerender } = render(panel(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    rerender(panel(0));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

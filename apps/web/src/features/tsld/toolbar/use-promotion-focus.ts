@@ -8,6 +8,7 @@ import {
   type PromotableEntry,
   type PromotionState,
 } from '@/components/ui/toolbar/toolbar-promotion';
+import { useCloseWhenChanged } from '@/components/ui/toolbar/use-close-when-changed';
 
 /**
  * **Focus follows the command when a resize moves it between the bar and its menu**
@@ -35,20 +36,20 @@ function nameOf(el: HTMLElement): string {
 
 /**
  * Close a menu that is open when the viewport crosses a stage: the row a reader may be standing on
- * could have left it, and the menu is portalled, so nothing else will tell it. A menu that is shut
- * costs nothing.
+ * could have left it, and the menu is portalled, so nothing else will tell it. A reader whose focus
+ * is still inside the menu as it closes is handed the control that opened it, and told why
+ * ({@link useCloseWhenChanged}); a menu that is shut costs nothing.
+ *
+ * `restoreTo` is the control the menu returns focus to on Escape — the trigger, or a split button's
+ * primary half, never its `tabIndex={-1}` caret.
  */
 export function useCloseOnPromotionChange(
   promotion: PromotionState,
   open: boolean,
   close: () => void,
+  restoreTo: React.RefObject<HTMLElement | null>,
 ): void {
-  const seen = useRef(promotion);
-  useLayoutEffect(() => {
-    if (seen.current === promotion) return;
-    seen.current = promotion;
-    if (open) close();
-  });
+  useCloseWhenChanged(promotion, open, close, restoreTo);
 }
 
 /**

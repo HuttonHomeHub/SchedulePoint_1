@@ -26,6 +26,10 @@ function stubViewport(initialPx: number, initialCoarse = false) {
     removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
   }));
   return {
+    each(nextPx: number) {
+      px = nextPx;
+      for (const cb of [...listeners]) act(() => cb());
+    },
     set(next: { px?: number; coarse?: boolean }) {
       px = next.px ?? px;
       coarse = next.coarse ?? coarse;
@@ -68,6 +72,21 @@ describe('usePromotionStage', () => {
     expect(result.current.stage).toBe(4);
     act(() => viewport.set({ px: 1100 }));
     expect(result.current.stage).toBe(0);
+  });
+
+  it('never renders the stage between two thresholds that a single resize crosses', () => {
+    // Verified red against one `useMediaQuery` per threshold: 1280 → 1912 rendered stage 2 first.
+    const viewport = stubViewport(1280);
+    const seen: number[] = [];
+    renderHook(() => {
+      const state = usePromotionStage();
+      seen.push(state.stage);
+      return state;
+    });
+    // Each listener in its own act: the browser delivers the queries' events one at a time.
+    viewport.each(1912);
+    expect(seen).not.toContain(2);
+    expect(seen.at(-1)).toBe(3);
   });
 
   it('a raised default font size moves the thresholds with the text: rem, not pixels', () => {

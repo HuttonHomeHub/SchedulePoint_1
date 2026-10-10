@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PROMOTION_LADDER } from './promotion-ladder';
@@ -176,8 +176,24 @@ describe('usePromotionFocusFollow', () => {
 describe('useCloseOnPromotionChange', () => {
   function Menu({ promotion }: { promotion: PromotionState }): React.ReactElement {
     const [open, setOpen] = useState(true);
-    useCloseOnPromotionChange(promotion, open, () => setOpen(false));
-    return open ? <div role="menu">rows</div> : <span>shut</span>;
+    const trigger = useRef<HTMLButtonElement>(null);
+    useCloseOnPromotionChange(promotion, open, () => setOpen(false), trigger);
+    return (
+      <>
+        <button type="button" ref={trigger}>
+          Analysis
+        </button>
+        {open ? (
+          <div role="menu">
+            <button type="button" role="menuitem">
+              Baselines…
+            </button>
+          </div>
+        ) : (
+          <span>shut</span>
+        )}
+      </>
+    );
   }
 
   it('closes an open menu when the viewport crosses a stage', () => {
@@ -186,6 +202,30 @@ describe('useCloseOnPromotionChange', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
     rerender(<Menu promotion={WIDE} />);
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('hands focus to the trigger, and says why, when focus was inside the menu it closed', () => {
+    // Verified red by deleting the `restoreTo.current?.focus()` line: focus lands on <body>.
+    const { rerender } = render(<Menu promotion={NARROW} />);
+    screen.getByRole('menuitem', { name: 'Baselines…' }).focus();
+
+    rerender(<Menu promotion={WIDE} />);
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Analysis' }));
+    expect(announceSpy).toHaveBeenCalledWith('Menu closed because the toolbar changed.');
+  });
+
+  it('leaves focus alone when it was not inside the menu', () => {
+    const { rerender } = render(<Menu promotion={NARROW} />);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+
+    rerender(<Menu promotion={WIDE} />);
+
+    expect(document.activeElement).toBe(outside);
+    expect(announceSpy).not.toHaveBeenCalled();
+    outside.remove();
   });
 
   it('leaves a menu alone when the state is unchanged (a re-render is not a resize)', () => {

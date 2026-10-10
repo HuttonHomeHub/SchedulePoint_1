@@ -583,6 +583,34 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await expect(page.getByRole('dialog', { name: 'Filter' })).toBeHidden();
     });
 
+    test('E-1b: a resize closes a menu the reader is in, and focus lands on its trigger, not on the page', async () => {
+      // Baselines… is the Analysis menu's anchor and never promotes, so the row survives the resize
+      // and only the menu's closing could strand the reader. Verified red with the focus hand-off
+      // removed from `useCloseWhenChanged`: focus is on <body>.
+      const after = pointer === 'fine' ? { w: 1912, h: 1080 } : { w: 2560, h: 1440 };
+      await settle(page, { w: 1280, h: 800 });
+      await item(page, 'analysis').click();
+      const menu = page.getByRole('menu', { name: 'Analysis' });
+      await menu.getByRole('menuitem', { name: 'Baselines…' }).focus();
+      await page.setViewportSize({ width: after.w, height: after.h });
+      await expect(menu).toBeHidden();
+      await expect(item(page, 'analysis')).toBeFocused();
+      await expect(page.getByTestId('announcer')).toHaveText(
+        'Menu closed because the toolbar changed.',
+      );
+    });
+
+    test('E-1b: the same for a popover (Filter), on a row that does not move', async () => {
+      const after = pointer === 'fine' ? { w: 1912, h: 1080 } : { w: 2560, h: 1440 };
+      await settle(page, { w: 1280, h: 800 });
+      await item(page, 'filter').click();
+      const panel = page.getByRole('dialog', { name: 'Filter' });
+      await panel.getByRole('checkbox', { name: 'Has constraint' }).focus();
+      await page.setViewportSize({ width: after.w, height: after.h });
+      await expect(panel).toBeHidden();
+      await expect(item(page, 'filter')).toBeFocused();
+    });
+
     test('E-2: a resize demotes the command a reader is on, and focus lands on its source trigger', async () => {
       const wide = pointer === 'fine' ? { w: 1440, h: 900 } : { w: 1912, h: 1080 };
       await settle(page, wide);

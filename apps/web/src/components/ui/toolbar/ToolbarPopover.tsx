@@ -3,6 +3,7 @@ import { useId, useRef } from 'react';
 
 import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry';
 import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
+import { useCloseWhenChanged } from './use-close-when-changed';
 import { usePopoverPanel } from './use-popover-panel';
 
 import { useTooltip } from '@/components/ui/tooltip';
@@ -29,6 +30,7 @@ export function ToolbarPopover({
   align = 'start',
   panelWidth = 'default',
   labelState = 'visible',
+  closeOnChangeOf,
   children,
 }: {
   label: string;
@@ -98,6 +100,13 @@ export function ToolbarPopover({
    * `title`, and `defineToolbar` refuses the declaration.
    */
   labelState?: ToolbarLabelState;
+  /**
+   * Close the panel when this value changes (compared with `Object.is`). The promotion ladder passes
+   * its stage: a resize can move a row out of the panel, and the panel is portalled where nothing
+   * inside it sees that. Focus inside the panel as it closes goes to the trigger, announced
+   * ({@link useCloseWhenChanged}). Absent ⇒ the panel is never closed by a prop.
+   */
+  closeOnChangeOf?: unknown;
   children: React.ReactNode;
 }): React.ReactElement {
   const reasonId = useId();
@@ -116,6 +125,7 @@ export function ToolbarPopover({
     align,
     panelWidth,
   });
+  useCloseWhenChanged(closeOnChangeOf, open, () => close(false), triggerRef);
   // Purpose is derived exactly as `ToolbarButton` derives it: a tip carrying a `description` says
   // MORE than the name, so it is linked to the control; one that restates the name is not, or a
   // screen reader says the name twice. A shaded trigger's reason already rides `aria-describedby`.
