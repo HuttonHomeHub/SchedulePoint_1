@@ -39,6 +39,11 @@ interface Cell {
 }
 
 const CELLS: readonly Cell[] = [
+  // The floor, Playwright's default window and the product owner's 1646: nothing, one command, and
+  // three commands have been promoted there (stages 0, 1 and 2).
+  { label: '1024x600', w: 1024, h: 600 },
+  { label: '1280x720', w: 1280, h: 720 },
+  { label: '1646x1097', w: 1646, h: 1097 },
   { label: '1280x800', w: 1280, h: 800 },
   { label: '1440x900', w: 1440, h: 900 },
   { label: '1912x1080', w: 1912, h: 1080 },
@@ -332,6 +337,15 @@ for (const pointer of ['fine', 'coarse'] as const) {
           const reading = await page.evaluate(readPage);
           const markers = await page.evaluate(readMarkers);
           cells.push({ state, cell: c.label, markers, ...reading });
+          // The command band, for the record: what the ladder looks like at the stage.
+          if (state === 'base') {
+            await page
+              .locator('[data-surface="chrome"]:not([data-activities-bar])')
+              .first()
+              .screenshot({
+                path: `../../docs/specs/toolbar-redesign/photos/m5-${pointer}-${c.label}-base.png`,
+              });
+          }
         }
         save();
       };
