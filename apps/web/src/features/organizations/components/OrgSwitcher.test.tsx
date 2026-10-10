@@ -117,6 +117,21 @@ describe('OrgSwitcher', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('reads as a label: no building glyph, no native title, no tab stop, and the whole name in the tree', () => {
+    state.organizations = [{ ...NORTHGATE, name: 'Northgate Developments (Northern Region) Ltd' }];
+    const { container } = render(<OrgSwitcher />);
+
+    // The glyph and the button metrics made it look like a dead button (M6 review U7).
+    expect(container.querySelector('svg')).toBeNull();
+    // One tooltip mechanism: the design-system one, not a second native `title` on the same text.
+    expect(container.querySelector('[title]')).toBeNull();
+    expect(container.querySelector('[tabindex]')).toBeNull();
+    // CSS truncation shortens what is painted, never what a screen reader is given.
+    expect(container).toHaveTextContent(
+      'Active organisation: Northgate Developments (Northern Region) Ltd',
+    );
+  });
+
   it('stays a menu on a route with no organisation, because choosing one is the way back', () => {
     state.organizations = [NORTHGATE];
     state.slug = undefined;

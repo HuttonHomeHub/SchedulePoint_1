@@ -46,7 +46,7 @@ import { cn } from '@/lib/utils';
  */
 const ORG_SWITCHER_MAX = 'max-w-org-switcher';
 
-export function OrgSwitcher({ className }: { className?: string } = {}): React.ReactElement | null {
+export function OrgSwitcher(): React.ReactElement | null {
   const { data: organizations } = useOrganizations();
   const params = useParams({ strict: false });
   const navigate = useNavigate();
@@ -64,19 +64,28 @@ export function OrgSwitcher({ className }: { className?: string } = {}): React.R
   }
 
   if (organizations.length === 1 && currentOrganization) {
+    // **Plain text, with no glyph and no button metrics** (M6 review U7): the building beside it and the
+    // identical padding made it read as a button that had gone dead. One tooltip mechanism — the
+    // design-system one, which also opens on touch — carries the full name for the truncated case;
+    // the native `title` it had was a second mechanism, hover-only, on the same text.
+    //
+    // **It is deliberately not a tab stop**, so a keyboard reader is not asked to stop on something
+    // that does nothing (ADR-0104). Nothing is lost to them: the name is real text in the tree, and
+    // CSS truncation shortens what is painted, not what is read, so a screen reader announces
+    // "Active organisation: ‹the whole name›" in reading order. A sighted keyboard-only reader gets
+    // the cut text — the one reader the tooltip does not reach — and that is accepted over a
+    // do-nothing tab stop.
     return (
       <span
+        {...tip.triggerProps}
         className={cn(
-          'text-foreground inline-flex h-(--control-h) items-center gap-1.5 px-2 text-sm font-medium',
+          'text-foreground inline-flex h-(--control-h) items-center px-2 text-sm font-medium',
           ORG_SWITCHER_MAX,
-          className,
         )}
       >
-        <Building aria-hidden="true" className="size-4 shrink-0" />
         <span className="sr-only">Active organisation: </span>
-        <span className="min-w-0 truncate" title={currentOrganization.name}>
-          {currentOrganization.name}
-        </span>
+        <span className="min-w-0 truncate">{currentOrganization.name}</span>
+        {tip.tooltip}
       </span>
     );
   }
@@ -100,7 +109,7 @@ export function OrgSwitcher({ className }: { className?: string } = {}): React.R
             : 'Select organisation (active organisation: none)'
         }
         onClick={toggle}
-        className={cn('gap-1.5 px-2', ORG_SWITCHER_MAX, className)}
+        className={cn('gap-1.5 px-2', ORG_SWITCHER_MAX)}
       >
         <Building aria-hidden="true" className="size-4 shrink-0" />
         <span className="min-w-0 truncate">{visibleName}</span>
