@@ -19,8 +19,9 @@ import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-regist
  *   `active` at
  *   the console epic's M3, because that boolean painted ONE 1.34:1 wash for three different facts;
  *   see the variant's own docblock for the ladder and why each state looks as it does.
- * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
+ * - `disabled` — quiet ink + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
+ * - `closing` — the row's deliberate closing action (Share & export), secondary-filled.
  */
 /**
  * The **split-button caret** treatment: a hairline divider before the caret, so a control that
@@ -144,6 +145,32 @@ export const TOOLBAR_INSET_RULE =
  */
 export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
+
+/**
+ * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element hung 2 px past the
+ * group's box on each side, `--muted` at 40 % with a transparent border, behind the controls: it takes
+ * **no layout width** (`Deck.tsx` says why that is the constraint), and `rounded-md` matches the
+ * `Diagram | Gantt` segment's container, which is the same statement made elsewhere in the band.
+ * `isolate` keeps its `-z-10` inside the group, so it can never fall behind the band.
+ *
+ * The idle hover wash is `--muted`, the pill's own hue at full strength, so a hovered control inside
+ * a pill is 1.2:1 against it rather than the 1.14:1 it was against the band: visible, not loud. Text
+ * on the pill is 14.1:1 (foreground) and 7.33:1 (muted), `m6-measurement.md` §3.
+ */
+export const DECK_GROUP_PILL =
+  'relative isolate before:absolute before:-inset-x-0.5 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-transparent before:bg-muted/40';
+
+/** The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3). */
+export const DECK_GROUP_PILL_LOCKED =
+  'before:border-dashed before:border-border before:bg-transparent';
+
+/**
+ * A deck row's leading mark (M6 V1): hidden until the deck is `roomy`, then 14 px of glyph with the
+ * row's 8 px gap pulled in by `-mr-1`, so its net width is 18 px. Height is the control's so the glyph
+ * sits on the controls' midline in a row whose items align to the top.
+ */
+export const DECK_ROW_MARK =
+  'text-muted-foreground -mr-1 hidden h-(--control-h) shrink-0 items-center @roomy/deck:inline-flex';
 
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
@@ -292,9 +319,50 @@ export const toolbarControlVariants = cva(
         // gap between two controls is 4 px, which a 2 px offset plus a 2 px ring consumes exactly.
         primary: 'bg-primary text-primary-foreground focus-visible:ring-primary-foreground',
       },
-      disabled: { true: 'cursor-default opacity-50', false: '' },
+      /**
+       * **A shaded control is quiet, not dimmed** (toolbar-redesign M6 V3). It was `opacity-50`, which
+       * halves the whole control: label, glyph, a state fill and an underline together. That read as
+       * a dead grey and — worse — was a number nobody had gated, since an alpha composites against
+       * whatever is behind it (the pill, the band, the amber of the pen). It is now the same
+       * `--muted-foreground` the chevrons and captions already wear, **7.98:1 on the band and 7.33:1
+       * on a deck pill** (`m6-measurement.md` §3), so the text clears 1.4.3's 4.5:1 although 1.4.3
+       * exempts an inactive control.
+       *
+       * The fill and the underline go too (`bg-transparent shadow-none`): ink in `--muted-foreground`
+       * on a `--secondary` or amber fill is unreadable, so a shaded pen, a shaded open trigger and a
+       * shaded selected lens all fall back to the same bare picture. What still says "shut" is that
+       * picture, `cursor-default`, no hover wash, and the reason a reader can reach by keyboard
+       * (ADR-0082) — not a lower contrast.
+       */
+      disabled: {
+        true: 'cursor-default bg-transparent text-muted-foreground shadow-none',
+        false: '',
+      },
+      /**
+       * **The row's deliberate closing action** (M6 V4): Share & export is filled with `--secondary`, so
+       * the one control that ends a row of tools reads as the row's destination and not as one more
+       * command. It reuses the `open` / `selected` fill on purpose rather than minting a colour, and
+       * keeps the two readable apart with what each adds: `selected` carries an underline, `closing`
+       * carries neither that nor a state — it is the same at rest and open (its menu says it is open,
+       * and so does `aria-expanded`).
+       *
+       * Hover is a 1 px inset ring in the ink, not `--secondary-hover`: that token is 3.94:1 under this
+       * label, below 4.5. A shaded closing control drops the fill (`disabled` above) because its
+       * muted ink on `--secondary` would be about 2.2:1.
+       */
+      closing: { true: '', false: '' },
     },
     compoundVariants: [
+      // A shaded pen has no amber fill left, so the navy ring `primary` draws for itself would be navy
+      // on the navy band: the shared amber ring takes over (WCAG 2.4.7; it is a shaded control a
+      // keyboard reader still lands on, ADR-0082).
+      { state: 'primary', disabled: true, class: 'focus-visible:ring-ring' },
+      {
+        closing: true,
+        disabled: false,
+        class:
+          'bg-secondary text-secondary-foreground hover:ring-1 hover:ring-inset hover:ring-secondary-foreground',
+      },
       // Idle interactive control gets the hover wash; a control in any other state, or a disabled
       // one, does not — a hover wash over a state fill would say two things at once, and hover is
       // the one state a reader never has to FIND (their pointer is already on it).
@@ -305,9 +373,9 @@ export const toolbarControlVariants = cva(
       // becomes a token this file's new state-ladder block reports by name. An alpha over a state
       // fill would also composite differently per state, which is how one wash came to mean three
       // things in the first place.
-      { tone: 'control', state: 'rest', disabled: false, class: 'hover:bg-muted' },
+      { tone: 'control', state: 'rest', disabled: false, closing: false, class: 'hover:bg-muted' },
     ],
-    defaultVariants: { tone: 'control', state: 'rest', disabled: false },
+    defaultVariants: { tone: 'control', state: 'rest', disabled: false, closing: false },
   },
 );
 

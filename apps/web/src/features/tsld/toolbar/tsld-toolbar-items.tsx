@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Crop,
   DollarSign,
+  Diff,
   FileCode,
   FileDown,
   FileSpreadsheet,
@@ -384,9 +385,15 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // `lensTogglesIn` drops it from `View ▾` by construction, so it cannot appear in both.
     promotion: {
       at: 'always',
-      icon: <Layers className="size-4" />,
+      // `Diff` and not `Layers` (M6, owner decision 2026-10-10): the overlay compares the plan with a
+      // baseline, and a stack of layers is what `Baselines…` in Analysis already wears. It is also
+      // not `GitCompareArrows`, which is Compare revisions' glyph two controls away.
+      icon: <Diff className="size-4" />,
       order: 23,
-      labelVisibility: 'roomy',
+      // Icon-only at every width (M6, owner decision 2026-10-10), with the comparison glyph and a
+      // tooltip that says what it does. It was `'roomy'`: the word came back above 79 rem and took
+      // LOOK's slack with it.
+      labelVisibility: 'never',
       description: 'Draw the active baseline beside each bar',
     },
     enabled: CANVAS_LENSES_ENABLED,
@@ -1749,6 +1756,17 @@ function FilterMenuControl({
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
       activeKind={api.activeKind}
+      // The count of attributes on, from the context rather than from what the panel lists: Critical
+      // and Has conflict can be on the bar while the viewport has room (M5), and an attribute that
+      // left the panel is still a filter that is on (M6 V4a).
+      {...(ctx.filterAttrs.size > 0
+        ? {
+            badge: {
+              count: ctx.filterAttrs.size,
+              description: `${String(ctx.filterAttrs.size)} ${ctx.filterAttrs.size === 1 ? 'filter' : 'filters'} on`,
+            },
+          }
+        : {})}
       {...(api.disabled ? { disabled: true } : {})}
       // `disabledReason`, not `title` (ADR-0090 M5 accessibility gate). `Filter` is
       // `isEnabled: ctx.hasDiagram`, so every empty or uncomputed plan reaches this state, and a
@@ -1838,7 +1856,10 @@ function ExportMenuControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
+        // `closing` (M6 V4): this trigger is the DO row's deliberate last action, secondary-filled.
+        className={cn(
+          toolbarControlVariants({ state: open ? 'open' : 'rest', disabled, closing: true }),
+        )}
       >
         <FileDown aria-hidden="true" className="size-4" />
         {labelClass ? <span className={labelClass}>{name}</span> : null}
@@ -3458,7 +3479,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Real words, not a name-echo: the tooltip always mounts for a `'roomy'` item, and "Schedule
       // settings" restated the name to a reader who could see it. This says what the dialog holds.
       description: 'Calendar, critical path, progress, levelling and earned value',
-      labelVisibility: 'roomy',
+      // Icon-only at every width (M6, owner decision 2026-10-10): the gear is the universal sign for
+      // settings, and the tooltip carries the sentence that says what this one holds.
+      labelVisibility: 'never',
       // The gear, not a calendar: the dialog stopped being only the calendar long ago, and
       // `SlidersHorizontal` (View ▾) is already the deck's slider glyph. `Settings2` would read as a
       // second one.
@@ -3513,9 +3536,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...commentsShape,
-          // Icon-only below `--container-roomy` (CQ-2). On the flag-on item only, so the flag-off
-          // placeholder stays byte-for-byte what it was.
-          labelVisibility: 'roomy' as const,
+          // Icon-only at every width (M6, owner decision 2026-10-10; it was icon-only below
+          // `--container-roomy`, CQ-2). On the flag-on item only, so the flag-off placeholder stays
+          // byte-for-byte what it was.
+          labelVisibility: 'never' as const,
           description: "Show the plan's comments beside the diagram",
           isVisible: () => NOTES_ENABLED,
           // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it

@@ -187,13 +187,14 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
     expect(primary).not.toHaveAttribute('title', 'Add an activity first');
   });
 
-  it('dims the wrapper only when both halves are shut', () => {
-    // A live caret inside a washed-out control looks inert, which is a lie about what you can press.
+  it('quiets the wrapper only when both halves are shut', () => {
+    // A live caret inside a control gone quiet looks inert, which is a lie about what you can press.
+    // The shaded ink is `--muted-foreground` (M6 V3), no longer a 50 % opacity on the whole control.
     const { primary } = renderSplit({ primaryDisabled: true });
-    expect(primary.parentElement?.className).not.toMatch(/opacity-50/);
+    expect(primary.parentElement?.className).not.toMatch(/text-muted-foreground/);
     cleanup();
     const both = renderSplit({ disabled: true });
-    expect(both.primary.parentElement?.className).toMatch(/opacity-50/);
+    expect(both.primary.parentElement?.className).toMatch(/text-muted-foreground/);
   });
 });
 

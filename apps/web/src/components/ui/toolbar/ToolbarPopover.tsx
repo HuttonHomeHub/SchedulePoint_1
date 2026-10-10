@@ -31,6 +31,7 @@ export function ToolbarPopover({
   panelWidth = 'default',
   labelState = 'visible',
   closeOnChangeOf,
+  badge,
   children,
 }: {
   label: string;
@@ -107,12 +108,26 @@ export function ToolbarPopover({
    * ({@link useCloseWhenChanged}). Absent ⇒ the panel is never closed by a prop.
    */
   closeOnChangeOf?: unknown;
+  /**
+   * **How many things are engaged**, drawn as a count on the glyph's corner (toolbar-redesign M6
+   * V4a: `Filter ▾` with attributes on). It costs the row no width — it sits on the icon's corner, not
+   * beside it — which matters because the LOOK row at 1024 has about 28 px to spare with a conflict
+   * chip showing. `description` is the sentence a screen reader gets ("2 filters on") through
+   * `aria-describedby`, since the number itself is `aria-hidden`: a bare "2" inside a button's name
+   * would read as part of it. The trigger's own `aria-pressed` already says that SOMETHING is on;
+   * this says how much, in the same place for a sighted reader. Absent or zero ⇒ nothing is drawn.
+   */
+  badge?: { count: number; description: string };
   children: React.ReactNode;
 }): React.ReactElement {
   const reasonId = useId();
+  const badgeId = useId();
+  const badged = badge !== undefined && badge.count > 0;
   // Only when there IS a reason: an `aria-describedby` pointing at an element that renders nothing is
   // a dangling reference, which some AT reads as an empty description rather than as absence.
-  const describedBy = disabled === true && disabledReason ? reasonId : undefined;
+  const reasonDescribedBy = disabled === true && disabledReason ? reasonId : undefined;
+  const describedBy =
+    [reasonDescribedBy, badged ? badgeId : undefined].filter(Boolean).join(' ') || undefined;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const labelClass = toolbarLabelClass(labelState);
   const iconOnly = labelClass === null;
@@ -214,15 +229,25 @@ export function ToolbarPopover({
         )}
       >
         {icon ? (
-          <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+          <span aria-hidden="true" className="relative inline-flex shrink-0 items-center">
             {icon}
+            {badged ? (
+              <span className="bg-foreground text-background text-micro absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full font-semibold">
+                {badge.count}
+              </span>
+            ) : null}
           </span>
         ) : null}
         {labelClass ? <span className={labelClass}>{label}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
-        {describedBy ? (
+        {reasonDescribedBy ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}
+          </span>
+        ) : null}
+        {badged ? (
+          <span id={badgeId} className="sr-only">
+            {badge.description}
           </span>
         ) : null}
         {tip.tooltip}

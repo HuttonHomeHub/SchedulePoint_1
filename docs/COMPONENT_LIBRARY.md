@@ -143,7 +143,9 @@ whose roving model would otherwise move focus to the next toolbar stop and leave
 and orphaned (found reviewing the Recent edits menu, undo-redo M7).
 
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
-typeahead. Pair it with `useMenuTrigger()` rather than re-deriving the
+typeahead. (The organisation switcher is the first consumer with a list that can grow, and it has
+no type-ahead: adding it changes this primitive's key set, which ADR-0111 reviews before release, not
+inside a visual milestone. Its limit is stated in `UX_STANDARDS.md`.) Pair it with `useMenuTrigger()` rather than re-deriving the
 ref + `getBoundingClientRect()` + `useState` dance at each call site.
 
 ### Unavailable items: shade, don't hide (ADR-0082)
@@ -390,6 +392,14 @@ under focus"; only the cluster uses it, and `HistoryResultStrip` and the selecti
 DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
 deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
+**Three optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6).
+`toolbarControlVariants` gains `closing` (the row's deliberate last action, secondary-filled; Share & export is
+the one consumer) and a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none`, no longer
+`opacity-50`); `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner whose
+sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on). `toolbar-styles.ts` exports
+`DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED` and `DECK_ROW_MARK`, which `Deck` applies; nothing outside `Deck`
+should.
+
 **Promotion: a menu command comes out onto the deck when the viewport has room** (toolbar-redesign M5, spec
 §4.11). A source menu's promotable rows are declared as `PromotableEntry` records (`toolbar-promotion.tsx`)
 and `derivePromotedItems` turns each into a registry item that takes its trigger's group and row and sorts at
@@ -490,6 +500,16 @@ navy chrome, navy on the page. Writing either as a literal would pin it to one s
 unreadable on the other — which is the whole reason it is a token and not a colour.
 The tile is `aria-hidden` — it repeats the wordmark's first letter, so exposing it would have a
 screen reader announce "S SchedulePoint".
+
+`OrgSwitcher` (`features/organizations/components/OrgSwitcher.tsx`, toolbar-redesign M6 V5) is a ghost
+`Button` that opens a `Menu` of `menuitemradio` rows — the organisation icon, the current organisation's
+name truncated inside a control capped at `max-w-org-switcher` (`--container-org-switcher`, 12 rem, a named
+token), and a chevron. Its accessible name is "Active organisation: ‹Name›" (which contains the visible text,
+2.5.3) and its tooltip carries the whole name; the current row is `aria-checked`, Escape and selection return
+focus to the trigger. **Four states:** none (renders nothing), one organisation that is current (a plain label,
+not a menu — ADR-0104), one or more with no organisation in the route (a menu reading "Select organisation",
+because choosing one is the way back from `/account`), and several (the menu). The old `title` prop is gone: it
+existed for a 36 px rail that no longer exists. **No type-ahead** — `Menu` has none (see above).
 
 `AccountChip` (`components/layout/account-chip.tsx`) is an initials avatar opening a portalled
 `Menu` with the signed-in email, the account screen, keyboard shortcuts and Sign out. It replaced

@@ -1,3 +1,4 @@
+import { Eye, PencilRuler } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -13,6 +14,9 @@ import {
   type ToolbarItem,
 } from './toolbar-registry';
 import {
+  DECK_GROUP_PILL,
+  DECK_GROUP_PILL_LOCKED,
+  DECK_ROW_MARK,
   resolveLabelVisibility,
   TOOLBAR_INSET_RULE,
   toolbarLabelMinWidthClass,
@@ -379,6 +383,16 @@ export function Deck<Ctx>({
           data-deck-row={row}
           className="flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap"
         >
+          {/* **The row's identity is a quiet leading mark** (toolbar-redesign M6 V1): an eye for LOOK, a
+              pencil and rule for DO, in the muted ink, `aria-hidden` and never a stop. No stripe, no
+              tint band and no new colour — the pills carry the grouping and this carries only which
+              row you are on. **Roomy only** (`@roomy/deck:`), because it costs 18 px of the row and the
+              rows below that width have none to spare: at 1024 the LOOK row keeps about 28 px with a
+              conflict showing, and SC-1 asserts two lines there. Above it, the ladder's free widths are
+              read with the mark present (`promotion-widths.*.json`). */}
+          <span aria-hidden="true" data-deck-row-mark={row} className={DECK_ROW_MARK}>
+            {row === 'look' ? <Eye className="size-3.5" /> : <PencilRuler className="size-3.5" />}
+          </span>
           {groups
             .filter((group) => group.row === row)
             .map((group, groupIndex) => {
@@ -413,34 +427,33 @@ export function Deck<Ctx>({
                   className={cn(
                     'flex items-stretch gap-2 max-lg:shrink-0',
                     'trailing' in group && 'ml-auto',
-                    // **The group seam, built at M7 having been promised twice and never made.**
-                    // `TOOLBAR_INSET_RULE`'s own docblock states as fact that "the group-level seam
-                    // joins it at M4"; M1-T3 specified its geometry. Neither happened, and M6 then
-                    // deleted the caption whose `border-r` had been the only mark at this boundary
-                    // — so the DECK's four groups were separated by 8 px of nothing while the
-                    // registry SECTIONS inside them kept a painted rule and 16 px. The finer
-                    // division was twice as wide and the only one with ink: a hierarchy inverted,
-                    // and the boundary it erased is the one that matters most on the DO row, where
-                    // Author's eleven pen-gated commands meet Plan's, which are never gated.
+                    // **Each group is a pill, and the pill replaces the group seam** (toolbar-redesign
+                    // M6 V2). The seam (console epic M7) was a 1 px rule on the group that FOLLOWED
+                    // another, drawn at `-left-1` — so a group that wrapped onto a line of its own opened
+                    // that line with a rule pointing at nothing (SC-12, the leading-seam defect, found at
+                    // 1024). A container has no leading edge to misplace: it surrounds its own group
+                    // wherever the group lands. The pill is a pseudo-element hung 2 px past the box, so
+                    // it costs the row **no width** — the LOOK row at 1024 has about 28 px to spare with
+                    // a conflict showing, and `DECK_GROUP_PILL` spends none of it.
                     //
-                    // Found by the M7 ux and architecture reviews independently. It is the third
-                    // instance in this epic of work specified and not built — the other two being
-                    // the ladder's fifth state and CQ-4's outlet — and the only one of the three
-                    // that looked right at rest, which is why nothing surfaced it until the
-                    // captions went.
+                    // The finer division inside a group (`TOOLBAR_INSET_RULE` between registry sections)
+                    // is unchanged: a rule inside a container is still the right mark for "a different
+                    // kind of thing, same group", and the pill is the coarser mark around it.
                     //
-                    // `inset-y-1/5` is the 60 % M1-T3 named, against the section rule's 50 %: the
-                    // coarser boundary is the taller mark, which is the whole point and is what
-                    // makes the two readable as a hierarchy rather than as two of the same thing.
-                    groupIndex > 0 &&
-                      'before:bg-border relative before:absolute before:inset-y-1/5 before:-left-1 before:w-px',
+                    // **The Author pill is hollow while the pen is not held**, so the eleven pen-gated
+                    // commands and the pen that leads them read as one locked unit instead of as eleven
+                    // separately dimmed controls (V3). Hollow-and-dashed is the second channel; the
+                    // shaded ink is the first.
+                    DECK_GROUP_PILL,
+                    group.id === 'author' && !authoringEnabled && DECK_GROUP_PILL_LOCKED,
                     // The seam between the two rows on the scrolling line: below `lg` the second row's
                     // first group follows the first row's last on the same line, and nothing else
                     // would say a row ended.
-                    // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap.
+                    // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap. `after:`, because
+                    // the pill has the `before:`.
                     groupIndex === 0 &&
                       rowIndex > 0 &&
-                      'max-lg:before:bg-border max-lg:relative max-lg:before:absolute max-lg:before:inset-y-1/5 max-lg:before:-left-2 max-lg:before:w-px',
+                      'max-lg:after:bg-border max-lg:after:absolute max-lg:after:inset-y-1/5 max-lg:after:-left-2 max-lg:after:w-px',
                   )}
                 >
                   {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).

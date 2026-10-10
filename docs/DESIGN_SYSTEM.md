@@ -234,10 +234,32 @@ So, for any command surface:
   what this shares with the container-query trap in `UX_STANDARDS.md`: both are `shrink-0` on an
   auto-width item, both are invisible to jsdom, and both were found by measuring a real browser.
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
-  taxonomy as four named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
-  `aria-label` and nothing else: no visible caption, no fold, and a hairline between neighbours. The
-  captions that folded were removed in two steps (the fold on 2026-08-28, the caption itself at the
-  console epic's M6), so nothing here is a decision a reader makes for their screen.
+  taxonomy as named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
+  `aria-label`, no visible caption and no fold, and — since toolbar-redesign M6 V2 — **it is a pill**:
+  `DECK_GROUP_PILL`, a `before:` pseudo-element hung 2 px past the group's box in `--muted` at 40 %, with
+  `rounded-md` to match the `Diagram | Gantt` segment's container. It takes **no layout width**, which is
+  the constraint (the LOOK row at 1024 has about 28 px to spare with a conflict showing), and it has no
+  leading edge, so a group that wraps onto a line of its own cannot open that line with a rule pointing at
+  nothing (SC-12, the defect the group seam it replaced had). Inside a group the registry's sections are
+  still divided by the finer `TOOLBAR_INSET_RULE` hairline. The captions that folded were removed in two
+  steps (the fold on 2026-08-28, the caption itself at the console epic's M6), so nothing here is a
+  decision a reader makes for their screen.
+- **A row has a quiet leading mark, and only where there is room** (M6 V1). `DECK_ROW_MARK` is a 14 px
+  glyph in `--muted-foreground` — an eye for LOOK, a pencil and rule for DO — `aria-hidden`, never a stop,
+  with no stripe, no tint band and no new colour. It is `@roomy/deck:` only, because it costs 18 px of a row
+  and the rows under 79 rem have none to spare (SC-1 asserts two lines at 1024); the ladder's free widths
+  are read with it present.
+- **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
+  `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: the
+  ink is 7.98:1 on the band and 7.33:1 on a pill, where an alpha composites against whatever sits behind
+  it and was a figure nobody gated. ADR-0082's shading stays — a state the reader can change is shaded
+  with its reason, never hidden. While the pen is not held the **Author pill goes hollow and dashed**
+  (`DECK_GROUP_PILL_LOCKED`), so the pen and the commands it unlocks read as one locked unit.
+- **The row's last action is secondary-filled** (M6 V4). `toolbarControlVariants({ closing: true })` fills
+  Share & export with `--secondary`; hover is a 1 px inset ring in the ink, not `--secondary-hover`
+  (3.94:1 under that label). A shaded closing control drops the fill.
+- **`Filter ▾` shows how many attributes are on** (M6 V4a): `ToolbarPopover`'s `badge` draws a count on the
+  glyph's corner — no width — with the sentence ("2 filters on") as its `aria-describedby`.
 - **Whether a label shows is declared on the item and decided in one place.** Every registry item
   carries `labelVisibility: 'always' | 'never' | 'roomy' | 'roomy-fine'` (default `'always'`; the old `'auto'` and
   the `{ atLeast }` band form are gone). One resolver, `resolveLabelVisibility`, and one class helper,
@@ -252,10 +274,12 @@ So, for any command surface:
   there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
   a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
   kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
-  rest). The four today: Baseline overlay, Comments, Settings… and Apply levelled
-  dates… (Resource view was the fifth until the M5 review made it icon-only at every width). The last is `'roomy-fine'`: the same rule for a mouse, and icon-only under a coarse pointer
-  at every width (`pointer-coarse:`), because the word cost touch a deck line at 1280 (owner
-  decision, 2026-10-09).
+  rest). **One today: Apply levelled dates…**, which is `'roomy-fine'` — the same rule for a mouse, and
+  icon-only under a coarse pointer at every width (`pointer-coarse:`), because the word cost touch a deck line
+  at 1280 (owner decision, 2026-10-09). Baseline overlay, Comments and Settings… were `'roomy'` until M6 and
+  Resource view until the M5 review; all four are `'never'` now (owner decisions, 2026-10-10), keeping an
+  `aria-label` name and a `description` tooltip. Baseline overlay's glyph is `Diff`, not the `Layers` that
+  `Baselines…` wears in Analysis nor Compare revisions' `GitCompareArrows`.
 - **Free space is used: a menu command promotes onto the deck by a declared ladder** (toolbar-redesign M5,
   R9, spec §4.11). The stages are six rem viewport thresholds — `PROMOTE_80` (1280 px), `PROMOTE_90` (1440),
   `PROMOTE_100` (1600), `PROMOTE_119_5` (1912), `PROMOTE_135` (2160), `PROMOTE_160` (2560) — so a reader who raised the default font size gets the room

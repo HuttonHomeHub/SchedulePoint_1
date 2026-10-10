@@ -24,21 +24,21 @@ export type LadderRank =
 
 export const PROMOTION_LADDER: Readonly<Record<LadderRank, Exclude<PromotionAt, 'always'>>> = {
   // LOOK
-  L1: { fine: 'PROMOTE_90', coarse: 'PROMOTE_90' },
+  L1: { fine: 'PROMOTE_80', coarse: 'PROMOTE_80' },
   L2: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_119_5' },
-  L3: { fine: 'PROMOTE_100', coarse: 'PROMOTE_135' },
-  L4: { fine: 'PROMOTE_135', coarse: 'PROMOTE_135' },
+  L3: { fine: 'PROMOTE_90', coarse: 'PROMOTE_90' },
+  L4: { fine: 'PROMOTE_100', coarse: 'PROMOTE_135' },
   L5: { fine: 'PROMOTE_135', coarse: 'PROMOTE_160' },
-  L6: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
+  L6: { fine: 'PROMOTE_135', coarse: 'PROMOTE_135' },
   // DO
-  P1: { fine: 'PROMOTE_90', coarse: 'PROMOTE_90' },
-  P2: { fine: 'PROMOTE_100', coarse: 'PROMOTE_100' },
-  P3: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_119_5' },
-  P4: { fine: 'PROMOTE_80', coarse: 'PROMOTE_90' },
+  P1: { fine: 'PROMOTE_80', coarse: 'PROMOTE_90' },
+  P2: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_100' },
+  P3: { fine: 'PROMOTE_135', coarse: 'PROMOTE_119_5' },
+  P4: { fine: 'PROMOTE_90', coarse: 'PROMOTE_80' },
   P5: { fine: 'PROMOTE_160', coarse: 'PROMOTE_160' },
-  P6: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_135' },
-  P7: { fine: 'PROMOTE_135', coarse: 'PROMOTE_135' },
-  P8: { fine: 'PROMOTE_160', coarse: 'never' },
+  P6: { fine: 'PROMOTE_100', coarse: 'PROMOTE_119_5' },
+  P7: { fine: 'PROMOTE_90', coarse: 'PROMOTE_135' },
+  P8: { fine: 'PROMOTE_135', coarse: 'never' },
 };
 
 /** Which deck row each rank belongs to — the first letter, stated once for the unit test. */

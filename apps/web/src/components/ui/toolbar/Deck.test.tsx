@@ -627,7 +627,7 @@ describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
     viewport(false);
     renderDeck();
     const seamed = [...document.querySelectorAll('[data-deck-row] > [role="group"]')].filter((g) =>
-      g.className.includes('max-lg:before:absolute'),
+      g.className.includes('max-lg:after:absolute'),
     );
     expect(seamed).toHaveLength(1);
     expect(seamed[0]?.closest('[data-deck-row]')?.getAttribute('data-deck-row')).toBe('look');

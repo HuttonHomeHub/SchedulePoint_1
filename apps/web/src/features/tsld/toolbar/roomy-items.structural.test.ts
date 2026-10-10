@@ -24,7 +24,16 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * **Its blind spot, stated**: it reads the declarations. That `ToolbarButton` really mounts the
  * tooltip and `Deck` really applies the variant is `ToolbarButton`'s and the journey's to prove.
  */
-const ROOMY = ['apply-levelling', 'baseline-overlay', 'calendar', 'comments'];
+const ROOMY = ['apply-levelling'];
+
+/**
+ * **The four that went icon-only at every width** (owner decisions: Resource view at the M5 review,
+ * Baseline overlay, Comments and Settings at M6, 2026-10-10). `'never'` is not `'roomy'` and needs no
+ * container, but it takes the same obligation: with no word on the button, the name is an
+ * `aria-label` and the tooltip is the only place the sighted reader is told what it does, so each
+ * must carry a description of its own.
+ */
+const ICON_ONLY = ['baseline-overlay', 'calendar', 'comments', 'resource-view'];
 
 const registries: [string, ToolbarItem<never>[]][] = [
   ['the command deck', buildTsldToolbarItems()],
@@ -38,11 +47,11 @@ describe("the registries' 'roomy' items", () => {
       .map((item) => ({ surface, item })),
   );
 
-  it('are exactly the four the design names', () => {
+  it('are exactly the one the design names', () => {
     expect(roomy.map(({ item }) => item.id).sort()).toEqual(ROOMY);
   });
 
-  it('give only Apply levelled dates… the per-pointer form', () => {
+  it('give Apply levelled dates… the per-pointer form', () => {
     const fine = roomy
       .filter(({ item }) => item.labelVisibility === 'roomy-fine')
       .map(({ item }) => item.id);
@@ -53,11 +62,13 @@ describe("the registries' 'roomy' items", () => {
     expect(roomy.filter(({ surface }) => surface !== 'the command deck')).toEqual([]);
   });
 
-  for (const id of ROOMY) {
+  for (const id of [...ROOMY, ...ICON_ONLY]) {
     it(`${id} is a plain onActivate item with a description of its own`, () => {
-      const found = roomy.find(({ item }) => item.id === id);
-      expect(found, `${id} is not 'roomy' in any registry`).toBeDefined();
-      const { item } = found!;
+      const found = registries
+        .flatMap(([, items]) => items)
+        .find((item) => item.id === id && !item.presentational);
+      expect(found, `${id} is in no registry`).toBeDefined();
+      const item = found!;
       expect(typeof item.onActivate, `${id} must be rendered by ToolbarButton`).toBe('function');
       expect(item.render, `${id} is a render item`).toBeUndefined();
       expect(item.description, `${id} has no description`).toBeTruthy();
@@ -67,4 +78,9 @@ describe("the registries' 'roomy' items", () => {
       expect(bare(item.description!)).not.toBe(bare(item.label));
     });
   }
+
+  it.each(ICON_ONLY)('%s is icon-only at every width, not roomy', (id) => {
+    const item = registries.flatMap(([, items]) => items).find((i) => i.id === id);
+    expect(item?.labelVisibility).toBe('never');
+  });
 });

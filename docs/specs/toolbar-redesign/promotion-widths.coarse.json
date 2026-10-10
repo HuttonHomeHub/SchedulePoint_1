@@ -162,112 +162,112 @@
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1148.6,
-        "freeBase": 115.4,
+        "naturalBase": 988,
+        "freeBase": 276,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1281.9,
-        "freeWorst": -17.9
+        "naturalWorst": 1121.3,
+        "freeWorst": 142.7
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1148.6,
-        "freeBase": 275.4,
+        "naturalBase": 988,
+        "freeBase": 436,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1281.9,
-        "freeWorst": 142.1
+        "naturalWorst": 1121.3,
+        "freeWorst": 302.7
       },
       "PROMOTE_100": {
         "cell": "1600x900",
         "avail": 1584,
-        "naturalBase": 1220.6,
-        "freeBase": 363.4,
+        "naturalBase": 1060,
+        "freeBase": 524,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1353.9,
-        "freeWorst": 230.1
+        "naturalWorst": 1193.3,
+        "freeWorst": 390.7
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1220.6,
-        "freeBase": 675.4,
+        "naturalBase": 1060,
+        "freeBase": 836,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1353.9,
-        "freeWorst": 542.1
+        "naturalWorst": 1193.3,
+        "freeWorst": 702.7
       },
       "PROMOTE_135": {
         "cell": "2160x1200",
         "avail": 2144,
-        "naturalBase": 1220.6,
-        "freeBase": 923.4,
+        "naturalBase": 1060,
+        "freeBase": 1084,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1353.9,
-        "freeWorst": 790.1
+        "naturalWorst": 1193.3,
+        "freeWorst": 950.7
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1220.6,
-        "freeBase": 1323.4,
+        "naturalBase": 1060,
+        "freeBase": 1484,
         "worstState": "conflicts-cycling+peer-pen",
-        "naturalWorst": 1353.9,
-        "freeWorst": 1190.1
+        "naturalWorst": 1193.3,
+        "freeWorst": 1350.7
       }
     },
     "do": {
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1218,
-        "freeBase": 46,
+        "naturalBase": 1169.7,
+        "freeBase": 94.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 43.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 92.2
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1218,
-        "freeBase": 206,
+        "naturalBase": 1169.7,
+        "freeBase": 254.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 203.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 252.2
       },
       "PROMOTE_100": {
         "cell": "1600x900",
         "avail": 1584,
-        "naturalBase": 1218,
-        "freeBase": 366,
+        "naturalBase": 1169.7,
+        "freeBase": 414.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 363.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 412.2
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1218,
-        "freeBase": 678,
+        "naturalBase": 1169.7,
+        "freeBase": 726.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 675.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 724.2
       },
       "PROMOTE_135": {
         "cell": "2160x1200",
         "avail": 2144,
-        "naturalBase": 1218,
-        "freeBase": 926,
+        "naturalBase": 1169.7,
+        "freeBase": 974.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 923.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 972.2
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1218,
-        "freeBase": 1326,
+        "naturalBase": 1169.7,
+        "freeBase": 1374.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1220.1,
-        "freeWorst": 1323.9
+        "naturalWorst": 1171.8,
+        "freeWorst": 1372.2
       }
     }
   },

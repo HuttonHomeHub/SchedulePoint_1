@@ -3,27 +3,28 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
+import { DECK_GROUP_PILL, DECK_GROUP_PILL_LOCKED } from './toolbar-styles';
 
 /**
- * **The deck draws a coarser mark between groups than between the sections inside one** (console
- * epic M7).
+ * **A deck group is a pill, and no group draws a seam of its own** (toolbar-redesign M6 V2).
  *
- * The hierarchy was inverted in the shipped tree and nobody saw it, because each half was correct
- * on its own. Registry sections inside a group got `TOOLBAR_INSET_RULE` — a painted 1 px rule at
- * 50 % height, with 16 px around it. The deck's four groups got the row's `gap-2` and nothing
- * else: 8 px of whitespace, no ink. So the FINER division was twice as wide and the only one
- * marked, and the boundary that disappeared entirely is the one that carries the most meaning on
- * the DO row — where Author's eleven pen-gated commands meet Plan's, which are never gated.
+ * This file used to assert the opposite relationship — that the rule BETWEEN groups was taller than
+ * the rule between a group's sections (console epic M7). That was the right test for a seam, and the
+ * seam had a defect the layout could not prevent: it was drawn on the group that followed another, so
+ * a group that wrapped onto a line of its own opened that line with a rule pointing at nothing
+ * (SC-12, the leading-seam defect, measured at 1024). A container has no leading edge to misplace, so
+ * the hierarchy is now carried by what contains what: a pill around the group, a hairline between the
+ * sections inside it.
  *
- * It had been specified twice (M1-T3's geometry, and `TOOLBAR_INSET_RULE`'s own docblock claiming
- * the seam "joins it at M4") and built neither time. While the captions existed their `border-r`
- * was incidentally doing the job, so M6 did not create the defect — it removed the accident that
- * was hiding it.
+ * What has to hold, asserted as properties and not as one class string:
+ * - every group carries the pill and none carries a `before:-left-*` seam;
+ * - the pill is a pseudo-element, so it adds **no layout width** (the LOOK row at 1024 has about
+ *   28 px to spare with a conflict showing; a padded box would spend it);
+ * - the sections inside a group keep their finer hairline;
+ * - the Author pill turns hollow while the pen is not held, and no other pill does.
  *
- * **Asserted as a RELATIONSHIP, not as two class strings.** Either mark can be re-valued; what
- * must hold is that the coarser boundary is the taller one, or the two stop reading as a hierarchy
- * and become two of the same thing. Verified red against the shipped state (no group mark at all)
- * and against a group mark equal in height to the section rule.
+ * Verified red against the M7 seam (a `before:inset-y-1/5 before:-left-1` rule on every group after
+ * the first): the "no seam" and "carries the pill" cases fail on it.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -35,16 +36,15 @@ const ITEMS: ToolbarItem<Record<string, never>>[] = defineToolbar<Record<string,
   { id: 'b', group: 'find', order: 0, tier: 1, label: 'B', onActivate: () => {} },
   { id: 'c', group: 'object', order: 0, tier: 1, label: 'C', onActivate: () => {} },
   { id: 'd', group: 'output', order: 0, tier: 1, label: 'D', onActivate: () => {} },
+  { id: 'e', group: 'tools', order: 0, tier: 1, label: 'E', onActivate: () => {} },
 ]);
 
-/** The fraction of the box a `before:inset-y-1/N` mark leaves uncovered, top and bottom. */
-const insetFraction = (className: string): number | null => {
-  const m = /before:inset-y-1\/(\d+)/.exec(className);
-  return m?.[1] !== undefined ? 1 / Number(m[1]) : null;
-};
+const classes = (token: string): string[] => token.split(/\s+/);
+const has = (el: Element, token: string): boolean =>
+  classes(token).every((c) => el.classList.contains(c));
 
-describe('the deck marks a group boundary more strongly than a section boundary', () => {
-  it('gives every group after the first a taller rule than its own sections use', () => {
+describe('the deck draws a container around a group, never a seam beside it', () => {
+  it('gives every group the pill and no group a leading rule', () => {
     render(<Deck items={ITEMS} context={{}} label="Plan commands" />);
 
     const groups = screen.getAllByRole('group');
@@ -52,46 +52,43 @@ describe('the deck marks a group boundary more strongly than a section boundary'
     // below vacuously — which is the shape this repository keeps recording as green-and-meaningless.
     expect(groups.length, 'the fixture rendered fewer than two groups').toBeGreaterThan(1);
 
-    // **Per ROW, and the first attempt at this case got it wrong in a way worth keeping.** It asked
-    // that every group after the deck's first carry a seam — and a seam separates a group from the
-    // one BESIDE it, so the group that opens the DO row correctly has none. The assertion failed
-    // against correct code, which is a wrong test rather than a strict one.
-    const rows = [...document.querySelectorAll('[data-deck-row]')];
-    expect(rows.length, 'the deck declared no rows').toBeGreaterThan(0);
-    const later = rows.flatMap((row) =>
-      [...row.querySelectorAll(':scope > [role="group"]')].slice(1),
+    for (const group of groups) {
+      expect(has(group, DECK_GROUP_PILL), group.className).toBe(true);
+      expect(group.className, 'a group paints a leading seam').not.toMatch(/before:-left-/);
+      expect(group.className, 'a group paints a group seam').not.toMatch(/before:inset-y-1\/5/);
+    }
+  });
+
+  it('is a pseudo-element hung past the box, so it spends no layout width', () => {
+    // Read from the constant, not from a class on a rendered node: what matters is the SHAPE of the
+    // pill, and a padded or bordered box would show up here as a `p-`/`px-`/`border` on the group.
+    expect(DECK_GROUP_PILL).toMatch(/before:absolute/);
+    expect(DECK_GROUP_PILL).toMatch(/before:-inset-x-/);
+    expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)(p|px|py|pl|pr|m|mx)-/);
+    expect(DECK_GROUP_PILL).not.toMatch(/(^|\s)border(\s|$)/);
+  });
+
+  it('keeps the finer hairline between the sections inside a group', () => {
+    render(<Deck items={ITEMS} context={{}} label="Plan commands" />);
+
+    const plan = screen.getByRole('group', { name: 'Plan' });
+    const withRule = [...plan.querySelectorAll('div')].filter((el) =>
+      /before:inset-y-1\/4/.test(el.className),
     );
-    expect(
-      later.length,
-      'no row rendered a second group, so no seam is under test',
-    ).toBeGreaterThan(0);
+    expect(withRule.length, 'the Plan group lost the rule between its two sections').toBe(1);
+  });
 
-    const groupInsets = later.map((el) => insetFraction(el.className));
-    expect(
-      groupInsets.every((v) => v !== null),
-      `a group beside another draws no seam: ${later.map((el) => el.className).join(' | ')}`,
-    ).toBe(true);
+  it('turns the Author pill hollow while the pen is not held, and no other pill', () => {
+    const { rerender } = render(<Deck items={ITEMS} context={{}} label="Plan commands" />);
+    const hollow = (): string[] =>
+      screen
+        .getAllByRole('group')
+        .filter((g) => has(g, DECK_GROUP_PILL_LOCKED))
+        .map((g) => g.getAttribute('aria-label') ?? '');
 
-    // A section rule lives on a group's second-and-later section wrapper. Read it from the DOM
-    // rather than importing the constant, so the comparison is between what the two boundaries
-    // actually render and not between two strings that were kept in step by hand.
-    const sectionMarks = groups
-      .flatMap((g) => [...g.querySelectorAll('div')])
-      .map((el) => insetFraction(el.className))
-      .filter((v): v is number => v !== null);
-    expect(
-      sectionMarks.length,
-      'the fixture rendered no section rule to compare against',
-    ).toBeGreaterThan(0);
+    expect(hollow(), 'a pill is hollow while the pen is held').toEqual([]);
 
-    const coarsest = Math.max(...groupInsets.filter((v): v is number => v !== null));
-    const finest = Math.min(...sectionMarks);
-    // A LARGER inset fraction means a SHORTER mark, so the group's must be smaller than the
-    // section's. Stated as the relationship rather than as `1/5 < 1/4`, so a re-value of either
-    // still has to keep the hierarchy.
-    expect(
-      coarsest,
-      `the group seam (inset ${coarsest}) is not taller than the section rule (inset ${finest})`,
-    ).toBeLessThan(finest);
+    rerender(<Deck items={ITEMS} context={{}} label="Plan commands" authoringEnabled={false} />);
+    expect(hollow()).toEqual(['Author']);
   });
 });

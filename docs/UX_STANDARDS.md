@@ -386,6 +386,26 @@ change as items promote** (View, Find, Panels, Author, Plan), and a promoted ite
 trigger in the same group. **The ladder's order is the product owner's ranking** (D-n), by frequency and
 importance, and each threshold is computed from measured widths, never judged.
 
+### The visual brief: containers, a closing action, quiet shading, and an organisation menu (toolbar-redesign M6)
+
+**A group is a container, not a seam** (V2): each deck group is a low-contrast pill that costs the row no width,
+so a group that wraps onto its own line cannot open it with a stray rule (SC-12). **A row names itself quietly**
+(V1): a 14 px glyph in the muted ink leads LOOK and DO, only from 79 rem where the row has room, and never as a
+stripe, a tint band or a new colour. **A shaded control is quiet, not dimmed** (V3): the ink is the muted
+foreground at 7.98:1 and the fill and underline drop away — what says "shut" is that bare picture, no hover and
+the reachable reason (ADR-0082), and while the pen is not held the Author pill is hollow and dashed so the pen and
+the eleven commands it unlocks read as one locked unit. **The last action in a row is secondary-filled** (V4):
+Share & export, with Share… promoted beside it. **A filter that is on says how many** (V4a): `Filter ▾` carries a
+count on its glyph and "2 filters on" for a screen reader.
+
+**The organisation switcher is a menu button, and a single organisation is a label** (V5, ADR-0104). The header
+shows the current organisation's name (truncated, with the whole name in a tooltip and in the accessible name
+"Active organisation: ‹Name›"); the list is `menuitemradio` rows with the current one `aria-checked`. **It has no
+type-ahead**, and that is a stated limit and not an oversight: the list is the reader's own organisations — a
+handful — and arrow keys, Home and End reach any of them; `Menu` has no type-ahead and adding it changes a shared
+primitive's key set, which ADR-0111 reviews before release. On a route with no organisation (`/account`) the one
+organisation is not current, so the menu stays: choosing it is the way back.
+
 ### The diagram's own viewport controls (toolbar-redesign M4)
 
 Zoom, Fit and the Minimap live on the diagram's corner, not the command deck: a control belongs on its
