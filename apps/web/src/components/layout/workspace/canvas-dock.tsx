@@ -116,10 +116,15 @@ export function CanvasDockOutlet(): React.ReactElement {
   // the facts' own, where the same actions take three lines and 140 px. Only a marked strip asks, so
   // an armed-tool statement or a history result keeps sharing the line with the facts; where the row
   // is wide enough for both (1280 and up) nothing wraps and nothing changes.
+  //
+  // **From `sm` (40 rem) up only**, because the foot row's content box is 304 px at the 320 px reflow
+  // width and a 576 px floor there is a 264 px sideways scroll of the foot row (measured by the
+  // narrow-shell journey, which drives 320 and 640 wide on a coarse pointer with a selection open).
+  // Below `sm` the floor is `min-w-72`'s, so the bar takes its own line at the row's full width.
   return (
     <div
       ref={ref}
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72 pointer-coarse:has-[[data-dock-wide]]:min-w-144"
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72 sm:pointer-coarse:has-[[data-dock-wide]]:min-w-144"
     />
   );
 }

@@ -108,6 +108,7 @@ import {
 } from '../render/wbs-band';
 
 import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
+import { useWithdrawnColumnHandoff } from './use-withdrawn-column-handoff';
 import {
   clearOfObstacle,
   clusterHasRoom,
@@ -208,6 +209,10 @@ export const RULER_HEIGHT = 40;
  * subtracts this from the scene canvas's drawable height, exactly as `RULER_HEIGHT` is subtracted from
  * the top; when inactive it reserves nothing, so the scene is byte-for-byte today's (the parity gate). */
 export const RESOURCE_STRIP_HEIGHT = 72;
+
+/** Said when the stage is too short for the viewport cluster and focus was on it. */
+const CLUSTER_WITHDRAWN_MESSAGE =
+  'Diagram viewport controls hidden: not enough room. Use View, Zoom.';
 
 /**
  * The scene canvas's top offset inside the container — **the one definition** (ADR-0063 §5).
@@ -945,6 +950,14 @@ export function TsldCanvas({
   // The column the minimap and the viewport cluster share (toolbar-redesign M4). Its LIVE rect is
   // what the keyboard reveal clears, so the margin follows whatever is actually open.
   const columnRef = useRef<HTMLDivElement>(null);
+  // A column withdrawn under the reader's focus hands it to the diagram's list (the minimap's own
+  // dismiss target) and says where the controls went; `View ▾` ▸ Zoom is the route that stays.
+  useWithdrawnColumnHandoff({
+    columnRef,
+    withdrawn: !clusterRoom,
+    target: minimapDismissFocusRef,
+    message: CLUSTER_WITHDRAWN_MESSAGE,
+  });
   const coarse = useCoarsePointer();
   const coarseRef = useRef(coarse);
   const republishRoomRef = useRef<() => void>(() => {});

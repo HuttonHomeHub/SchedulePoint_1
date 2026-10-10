@@ -147,6 +147,19 @@ async function readCorner(page: Page): Promise<{
   return corner;
 }
 
+/**
+ * **These cases depend on the plan the third case seeds**, and the file is serial for that reason.
+ * Run alone (`-g`), "Fit to plan" is shaded on the empty plan and a click waits for it to enable
+ * until the test's own timeout: a 180 s hang that reads as a product defect. A short assertion turns
+ * that into the failure it is (found while verifying the reveal cases red with the margin disabled).
+ */
+async function expectPlanSeeded(page: Page): Promise<void> {
+  await expect(
+    clusterOf(page).getByRole('button', { name: 'Fit to plan' }),
+    'the plan is empty: run this file whole, because the earlier "Zoom in" case seeds the activities',
+  ).not.toHaveAttribute('aria-disabled', 'true', { timeout: 3_000 });
+}
+
 /** Whether a bar whose bottom-right corner is `corner` reaches into `obstacle` from its top-left. */
 const cornerIsUnder = (
   corner: { right: number; bottom: number },
@@ -322,6 +335,7 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
     // The floor (1024 x 600): the stage is short enough that the corner is where a bar ends up. At
     // 1646 x 1097 the bottom-right activity sits hundreds of pixels above the column and the case
     // would pass without any reveal margin at all (checked: it did).
+    await expectPlanSeeded(page);
     await page.setViewportSize({ width: 1024, height: 600 });
     await clusterOf(page).getByRole('button', { name: 'Fit to plan' }).click();
     await minimapToggle(page).click();
@@ -394,6 +408,7 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
     test.setTimeout(180_000);
     // The dock narrows the stage to 386 px, so the cluster is 44 % of its width: the corner a
     // revealed bar lands in is smaller and the column is the biggest thing in it.
+    await expectPlanSeeded(page);
     await page.setViewportSize({ width: 1024, height: 600 });
     await page.locator('[data-toolbar-item="comments"]').click();
     await expect(page.getByTestId('tsld-viewport-slot')).toBeVisible();
@@ -513,9 +528,15 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     expect(within(cluster, stage)).toBe(true);
   });
 
-  test('where even that leaves no room the cluster is withdrawn from the Tab order, and View ▾ still fits the plan', async () => {
+  test('where even that leaves no room the cluster is withdrawn from the Tab order, focus on it moves to the diagram, and View ▾ still fits the plan', async () => {
+    // Standing on Zoom in when the stage shrinks: the column is hidden under the reader's focus.
+    await clusterOf(page).getByRole('button', { name: 'Zoom in' }).focus();
     await page.setViewportSize({ width: 1024, height: 500 });
     await page.waitForTimeout(600);
+    await expect(diagramList(page)).toBeFocused();
+    await expect(page.getByTestId('announcer')).toHaveText(
+      'Diagram viewport controls hidden: not enough room. Use View, Zoom.',
+    );
     // Withdrawn means hidden and out of the tab order, not drawn clipped.
     await expect(clusterOf(page)).toBeHidden();
     await expect(page.getByTestId('tsld-viewport-slot').locator('button:visible')).toHaveCount(0);

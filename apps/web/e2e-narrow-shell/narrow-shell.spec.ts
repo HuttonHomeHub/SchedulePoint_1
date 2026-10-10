@@ -1246,6 +1246,38 @@ async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<void> {
   await cdp.detach();
 }
 
+test.describe('the selection bar on a finger-sized pointer (toolbar-redesign M4 review)', () => {
+  test.use({ acknowledgeViewportNotice: true, hasTouch: true });
+
+  // The dock outlet asks for 36 rem (576 px) while a `data-dock-wide` strip is in it, and no
+  // measurement had put that floor at a window narrower than 576 px. At 320 and 640 the foot row's
+  // own content box is under it, so the floor must give way rather than push the row sideways.
+  test('a selection open at 320 and 640 wide does not scroll the page, main or the foot row sideways', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    for (const size of [
+      { width: 320, height: 720 },
+      { width: 640, height: 844 },
+    ]) {
+      const tag = `coarse ${String(size.width)} x ${String(size.height)}`;
+      await page.setViewportSize(size);
+      await page.goto(planUrl);
+      expect(
+        await page.evaluate(() => matchMedia('(pointer: coarse)').matches),
+        `${tag}: the pointer is coarse`,
+      ).toBe(true);
+      await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+      await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+      await expect(footRow(page).getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+      await expect(footRow(page).locator('[data-dock-wide]')).toHaveCount(1);
+      await expectNoSidewaysOverflow(page, tag);
+    }
+  });
+});
+
 for (const pointer of ['fine', 'coarse'] as const) {
   test.describe(`the command band below 1024, ${pointer} pointer (toolbar-redesign M3)`, () => {
     test.use({ acknowledgeViewportNotice: true, hasTouch: pointer === 'coarse' });
