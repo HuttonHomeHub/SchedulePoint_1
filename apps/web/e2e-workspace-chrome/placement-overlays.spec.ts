@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { planCommands } from '../e2e-support/toolbar';
 
 import {
   bookOnCrane,
@@ -53,7 +54,25 @@ const STAMP = Date.now();
 /** The lens control, wherever `View ▾` puts it. Native checkbox in a label, so `checkbox`. */
 const levelledToggle = (page: Page) => page.getByRole('checkbox', { name: 'Levelled placement' });
 
-const windowToggle = (page: Page) => page.getByRole('checkbox', { name: 'Feasible window' });
+/**
+ * Turn the Feasible window on, asserting it was off, from wherever the viewport put it: its own
+ * toggle button on the bar once promoted (`aria-pressed`), else the checkbox in `View ▾`.
+ */
+async function turnOnFeasibleWindow(page: Page): Promise<void> {
+  const onBar = planCommands(page).locator('[data-toolbar-item="feasible-window"]');
+  if ((await onBar.count()) > 0) {
+    await expect(onBar).toHaveAttribute('aria-pressed', 'false');
+    await onBar.click();
+    await expect(onBar).toHaveAttribute('aria-pressed', 'true');
+    return;
+  }
+  await openViewMenu(page);
+  const checkbox = page.getByRole('checkbox', { name: 'Feasible window' });
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.check();
+  await expect(checkbox).toBeChecked();
+  await page.keyboard.press('Escape');
+}
 
 test.describe('the feasible window and the levelled lens', () => {
   test('both overlays are reachable from View, and the window brackets an unmoved bar', async ({
@@ -70,11 +89,14 @@ test.describe('the feasible window and the levelled lens', () => {
     await recalculate(page, orgSlug);
     await ensurePen(page);
 
-    // **The entry point, which is the whole of ADR-0081's requirement.** Both controls are in
-    // `View ▾ ▸ Insight overlays`; a registry record that nothing renders is not a control.
+    // **The entry point, which is the whole of ADR-0081's requirement.** The lens is in
+    // `View ▾ ▸ Insight overlays`; the window is there too until the viewport has room to promote it
+    // onto the bar (toolbar-redesign M5, rank 4) — and at this suite's 1646 px it has. A registry
+    // record that nothing renders is not a control, so the window is asked for wherever it is.
     await openViewMenu(page);
-    await expect(windowToggle(page)).toBeVisible();
     await expect(levelledToggle(page)).toBeVisible();
+    await expect(levelledToggle(page)).not.toBeChecked();
+    await page.keyboard.press('Escape');
 
     /**
      * **Both overlays ship OFF, and the first run of this case is how that got checked.**
@@ -89,11 +111,7 @@ test.describe('the feasible window and the levelled lens', () => {
      * Asserted rather than skipped: a default that flipped later would make every case below
      * vacuous in the quiet direction — they would drive a control that was already on.
      */
-    await expect(windowToggle(page)).not.toBeChecked();
-    await expect(levelledToggle(page)).not.toBeChecked();
-    await windowToggle(page).check();
-    await expect(windowToggle(page)).toBeChecked();
-    await page.keyboard.press('Escape');
+    await turnOnFeasibleWindow(page);
 
     // The bar is unplaced, so `remainingFloat` is `totalFloat` and the window brackets it with no
     // drift. Read from the API rather than the DOM under test: the clause the listbox speaks is
