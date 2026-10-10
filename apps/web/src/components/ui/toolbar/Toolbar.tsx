@@ -14,6 +14,7 @@ import { resolveLabelVisibility } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
+import type { TooltipOptions } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface ToolbarProps<Ctx> {
@@ -63,6 +64,18 @@ export interface ToolbarProps<Ctx> {
    * owner reported (ADR-0091 M7 S10). There is now only one caller and one such margin.
    */
   alignEndGroup?: ToolbarGroupId;
+  /**
+   * Render each group as a plain wrapper with **no `role="group"` and no name**. For a toolbar that
+   * holds one group, whose group name only repeats the toolbar's own: a screen reader would say
+   * "Diagram viewport toolbar" and then "Navigate group" for the same four buttons. Default off —
+   * every other toolbar's group names are structure a reader uses. Has no effect on keys or focus.
+   */
+  ungrouped?: boolean;
+  /**
+   * Tooltip placement for every icon-only control in this toolbar — see `TooltipOptions`. Absent ⇒
+   * the primitive's own default, which is every toolbar's behaviour today.
+   */
+  tooltip?: Pick<TooltipOptions, 'placement' | 'dismissOnPress'>;
   className?: string;
 }
 
@@ -157,6 +170,8 @@ export function Toolbar<Ctx>({
   groupLabels,
   segmentLabels,
   alignEndGroup,
+  ungrouped = false,
+  tooltip,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -300,6 +315,7 @@ export function Toolbar<Ctx>({
         disabled={!r.enabled}
         disabledReason={r.disabledReason}
         srDescription={r.srDescription}
+        {...(tooltip ? { tooltip } : {})}
         tabIndex={tabIndexFor(r.item.id)}
         onActivate={() => r.item.onActivate!(context)}
         onFocus={() => setActiveId(r.item.id)}
@@ -366,7 +382,7 @@ export function Toolbar<Ctx>({
               </div>
             ))
           : groupItems.map(renderItem);
-        return segments ? (
+        return segments || ungrouped ? (
           <div key={group} className={outerClass}>
             {body}
           </div>

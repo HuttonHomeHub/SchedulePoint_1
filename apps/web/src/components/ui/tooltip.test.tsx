@@ -27,6 +27,8 @@ function Host({
     content: 'content' in options ? options.content : 'Zoom in',
     purpose: options.purpose ?? 'name-echo',
     disabled: options.disabled,
+    ...(options.placement ? { placement: options.placement } : {}),
+    ...(options.dismissOnPress ? { dismissOnPress: options.dismissOnPress } : {}),
   });
   return (
     <>
@@ -346,5 +348,71 @@ describe('useTooltip', () => {
     fireEvent.pointerEnter(screen.getByRole('button'), { pointerType: 'mouse' });
     act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 50));
     expect(tip()).toBeNull();
+  });
+  describe('placement and dismiss-on-press (the diagram corner cluster)', () => {
+    // jsdom has no layout, so the trigger's rect is stubbed: a trigger mid-window, where both sides
+    // fit — so the side taken is the preference and nothing else.
+    function stubRect(): void {
+      vi.stubGlobal('innerHeight', 1000);
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.hasAttribute('data-tooltip')
+          ? ({
+              x: 0,
+              y: 0,
+              left: 0,
+              top: 0,
+              right: 100,
+              bottom: 28,
+              width: 100,
+              height: 28,
+            } as DOMRect)
+          : ({
+              x: 500,
+              y: 400,
+              left: 500,
+              top: 400,
+              right: 536,
+              bottom: 436,
+              width: 36,
+              height: 36,
+            } as DOMRect);
+      });
+    }
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('opens below by default and above when asked (red: preference ignored)', () => {
+      stubRect();
+      const { unmount } = render(<Host />);
+      fireEvent.focus(screen.getByRole('button'));
+      const below = Number.parseFloat((tip() as HTMLElement).style.top);
+      unmount();
+      render(<Host placement="above" />);
+      fireEvent.focus(screen.getByRole('button'));
+      const above = Number.parseFloat((tip() as HTMLElement).style.top);
+      expect(below).toBeGreaterThanOrEqual(436);
+      expect(above).toBeLessThan(400);
+    });
+
+    it('closes when the trigger is pressed, only when asked (red: listener removed)', () => {
+      render(<Host dismissOnPress />);
+      const button = screen.getByRole('button');
+      fireEvent.focus(button);
+      expect(tip()).not.toBeNull();
+      fireEvent.click(button);
+      expect(tip()).toBeNull();
+    });
+
+    it('stays open on a press by default', () => {
+      render(<Host />);
+      const button = screen.getByRole('button');
+      fireEvent.focus(button);
+      fireEvent.click(button);
+      expect(tip()).not.toBeNull();
+    });
   });
 });

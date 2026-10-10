@@ -76,6 +76,14 @@ describe('Toolbar (APG primitive)', () => {
     expect(within(tb).getByRole('group', { name: 'Author' })).toBeInTheDocument();
   });
 
+  it('ungrouped: renders the same controls with no group role or name (red: prop ignored)', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 2 }} label="Plan toolbar" ungrouped />);
+    const tb = screen.getByRole('toolbar', { name: 'Plan toolbar' });
+    expect(within(tb).queryAllByRole('group')).toHaveLength(0);
+    expect(within(tb).getByRole('button', { name: 'fit' })).toBeInTheDocument();
+    expect(within(tb).getByRole('button', { name: 'add' })).toBeInTheDocument();
+  });
+
   it('a labelled button with a description keeps its label in the title', () => {
     // Regression: the tooltip helper used to drop the label for a labelled item with a description,
     // showing just the bare description. It must read "<label> — <description>".
