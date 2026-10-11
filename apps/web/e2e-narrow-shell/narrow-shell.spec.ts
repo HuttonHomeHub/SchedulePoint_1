@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page } from '@playwright/test';
+import { type CDPSession, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
@@ -1232,9 +1232,22 @@ async function bandFacts(page: Page): Promise<{
   });
 }
 
-/** Browser default font size, so rem media queries answer (a CSS `html { font-size }` would not). */
-async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<void> {
+/**
+ * Browser default font size, so rem media queries answer (a CSS `html { font-size }` would not).
+ *
+ * The CDP session is returned **attached** and the caller detaches it after the last assertion: the
+ * override lives in the DevTools agent's per-page state, so a session detached straight after the
+ * send leaves it to whatever the renderer does on the next navigation. That held on a developer
+ * machine and read back 16 px on CI's Chromium in both pointer modes, while the sibling
+ * `e2e-workspace-fit` cell, which keeps its session open, reads 32 px there.
+ */
+async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<CDPSession> {
   const cdp = await page.context().newCDPSession(page);
+  await applyDefaultFontSize(cdp, scale);
+  return cdp;
+}
+
+async function applyDefaultFontSize(cdp: CDPSession, scale: 1 | 2): Promise<void> {
   await cdp.send('Page.setFontSizes', {
     fontSizes: {
       standard: 16 * scale,
@@ -1243,7 +1256,6 @@ async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<void> {
       sansSerif: 16 * scale,
     },
   } as never);
-  await cdp.detach();
 }
 
 test.describe('the selection bar on a finger-sized pointer (toolbar-redesign M4 review)', () => {
@@ -1361,37 +1373,52 @@ for (const pointer of ['fine', 'coarse'] as const) {
       page.setDefaultTimeout(20_000);
       const { planUrl } = await seedWorkspace(page);
 
-      await setDefaultFontSize(page, 2);
-      await page.setViewportSize({ width: 1280, height: 800 });
-      await page.goto(planUrl);
-      await expect(commandBand(page)).toBeVisible();
-      const root = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
-      // Without this the cell would silently read an ordinary 1280 window and pass for the wrong
-      // reason: the browser's default font size is what rem media queries answer to.
-      expect(root, 'setFontSizes moved the root font size, so rem queries respond').toBe('32px');
+      const cdp = await setDefaultFontSize(page, 2);
+      try {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto(planUrl);
+        await expect(commandBand(page)).toBeVisible();
+        const readRoot = (): Promise<string> =>
+          page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+        if ((await readRoot()) !== '32px') {
+          // The renderer can drop the override across the navigation; set it again on the live
+          // page and reload so the first layout already answers rem queries at 200 %.
+          await applyDefaultFontSize(cdp, 2);
+          await page.reload();
+          await expect(commandBand(page)).toBeVisible();
+        }
+        // Without this the cell would silently read an ordinary 1280 window and pass for the wrong
+        // reason: the browser's default font size is what rem media queries answer to.
+        expect(
+          await readRoot(),
+          'setFontSizes moved the root font size, so rem queries respond',
+        ).toBe('32px');
 
-      const facts = await bandFacts(page);
-      expect(facts.squat, '1280 x 800 at 200 % is 40 x 25 rem: narrow and short').toBe(true);
-      expect(facts.scrollsAway, 'the shell scrolls, so the band scrolls away').toBe(true);
+        const facts = await bandFacts(page);
+        expect(facts.squat, '1280 x 800 at 200 % is 40 x 25 rem: narrow and short').toBe(true);
+        expect(facts.scrollsAway, 'the shell scrolls, so the band scrolls away').toBe(true);
 
-      const ids = await commandBand(page)
-        .locator('[data-toolbar-focusable]')
-        .evaluateAll((els) => els.map((e) => e.getAttribute('data-toolbar-item') ?? ''));
-      expect(ids.length, 'the deck has its controls').toBeGreaterThan(20);
-      for (const id of ids) {
-        const control = commandBand(page).locator(`[data-toolbar-item="${id}"]`).first();
-        await control.scrollIntoViewIfNeeded();
-        await pointerReachable(page, `200 % text, ${pointer}: ${id}`, control);
+        const ids = await commandBand(page)
+          .locator('[data-toolbar-focusable]')
+          .evaluateAll((els) => els.map((e) => e.getAttribute('data-toolbar-item') ?? ''));
+        expect(ids.length, 'the deck has its controls').toBeGreaterThan(20);
+        for (const id of ids) {
+          const control = commandBand(page).locator(`[data-toolbar-item="${id}"]`).first();
+          await control.scrollIntoViewIfNeeded();
+          await pointerReachable(page, `200 % text, ${pointer}: ${id}`, control);
+        }
+
+        for (const [name, control] of [
+          ['Expand activities panel', expandPanel(page)],
+          ['Recalculate', page.getByRole('button', { name: 'Recalculate' })],
+        ] as const) {
+          await control.scrollIntoViewIfNeeded();
+          await pointerReachable(page, `200 % text, ${pointer}: ${name}`, control);
+        }
+      } finally {
+        await applyDefaultFontSize(cdp, 1);
+        await cdp.detach();
       }
-
-      for (const [name, control] of [
-        ['Expand activities panel', expandPanel(page)],
-        ['Recalculate', page.getByRole('button', { name: 'Recalculate' })],
-      ] as const) {
-        await control.scrollIntoViewIfNeeded();
-        await pointerReachable(page, `200 % text, ${pointer}: ${name}`, control);
-      }
-      await setDefaultFontSize(page, 1);
     });
   });
 }
