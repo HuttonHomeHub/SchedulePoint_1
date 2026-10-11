@@ -17,26 +17,24 @@ interface Ctx {
 }
 
 const items: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-  { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
-  { id: 'fit', group: 'frame', order: 2, tier: 1, label: 'Fit', onActivate: () => {} },
+  { id: 'today', group: 'frame', order: 1, label: 'Today', onActivate: () => {} },
+  { id: 'fit', group: 'frame', order: 2, label: 'Fit', onActivate: () => {} },
   {
     id: 'search',
     group: 'find',
     order: 1,
-    tier: 1,
     label: 'Search activities',
     render: (_ctx, { itemProps }) => <input aria-label="Search activities" {...itemProps} />,
   },
-  { id: 'filter', group: 'find', order: 2, tier: 1, label: 'Filter', onActivate: () => {} },
+  { id: 'filter', group: 'find', order: 2, label: 'Filter', onActivate: () => {} },
   {
     id: 'add-activity',
     group: 'tools',
     order: 1,
-    tier: 1,
     label: 'Add activity',
     onActivate: () => {},
   },
-  { id: 'export', group: 'output', order: 1, tier: 1, label: 'Export', onActivate: () => {} },
+  { id: 'export', group: 'output', order: 1, label: 'Export', onActivate: () => {} },
 ]);
 
 function renderDeck(): void {
@@ -50,12 +48,11 @@ function renderDeck(): void {
  * is the trigger button — so a bare date item in the shared fixture would not model anything.
  */
 const claimingItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-  { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+  { id: 'today', group: 'frame', order: 1, label: 'Today', onActivate: () => {} },
   {
     id: 'claims-arrows',
     group: 'output',
     order: 1,
-    tier: 1,
     label: 'Claims arrows',
     render: (_ctx, { itemProps }) => (
       <button
@@ -70,12 +67,11 @@ const claimingItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
 ]);
 
 const dateItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-  { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+  { id: 'today', group: 'frame', order: 1, label: 'Today', onActivate: () => {} },
   {
     id: 'go-to-date',
     group: 'frame',
     order: 2,
-    tier: 1,
     label: 'Go to date',
     render: (_ctx, { itemProps }) => <input type="date" aria-label="Go to date" {...itemProps} />,
   },
@@ -271,13 +267,13 @@ describe('Deck — the captions are gone and the group names are not', () => {
  */
 describe('Deck — the Panels group and one trailing group per row', () => {
   const panelItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-    { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
-    { id: 'filter', group: 'find', order: 1, tier: 1, label: 'Filter', onActivate: () => {} },
-    { id: 'legend', group: 'help', order: 0, tier: 1, label: 'Legend', onActivate: () => {} },
-    { id: 'comments', group: 'help', order: 2, tier: 1, label: 'Comments', onActivate: () => {} },
-    { id: 'add', group: 'tools', order: 1, tier: 1, label: 'Add activity', onActivate: () => {} },
-    { id: 'analysis', group: 'object', order: 1, tier: 1, label: 'Analysis', onActivate: () => {} },
-    { id: 'export', group: 'output', order: 1, tier: 1, label: 'Export', onActivate: () => {} },
+    { id: 'today', group: 'frame', order: 1, label: 'Today', onActivate: () => {} },
+    { id: 'filter', group: 'find', order: 1, label: 'Filter', onActivate: () => {} },
+    { id: 'legend', group: 'help', order: 0, label: 'Legend', onActivate: () => {} },
+    { id: 'comments', group: 'help', order: 2, label: 'Comments', onActivate: () => {} },
+    { id: 'add', group: 'tools', order: 1, label: 'Add activity', onActivate: () => {} },
+    { id: 'analysis', group: 'object', order: 1, label: 'Analysis', onActivate: () => {} },
+    { id: 'export', group: 'output', order: 1, label: 'Export', onActivate: () => {} },
   ]);
 
   it('names the `help` registry group "Panels", on the LOOK line, after Find', () => {
@@ -367,12 +363,11 @@ describe('arrows from the container itself', () => {
  */
 describe('Deck — the label rule', () => {
   const labelItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-    { id: 'plain', group: 'frame', order: 1, tier: 1, label: 'Plain', onActivate: () => {} },
+    { id: 'plain', group: 'frame', order: 1, label: 'Plain', onActivate: () => {} },
     {
       id: 'quiet',
       group: 'frame',
       order: 2,
-      tier: 1,
       label: 'Quiet',
       labelVisibility: 'never',
       onActivate: () => {},
@@ -381,7 +376,6 @@ describe('Deck — the label rule', () => {
       id: 'roomy',
       group: 'frame',
       order: 3,
-      tier: 1,
       label: 'Roomy',
       description: 'Says what it does',
       labelVisibility: 'roomy',

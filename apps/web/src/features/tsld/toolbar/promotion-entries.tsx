@@ -244,6 +244,11 @@ export const SHARE_ENTRY: PromotableEntry<TsldToolbarContext> = {
   from: 'export',
   rank: 4,
   at: at('P4'),
+  // The deliverables trigger reads "Export" while this button is on the bar (`ExportMenuControl`)
+  // and "Share & export" once it has moved in, so the clause names both: the reader sees the first
+  // and is told the second. The hand-off message still says "Share & export" (`menuName`), because
+  // that is the name the trigger has by the time focus lands on it.
+  description: 'Moves into the Export menu in a narrower window, where it is named Share & export',
   isVisible: () => GUEST_SHARE_LINKS_ENABLED,
   // A permission, not a state: shaded with the reason rather than hidden, so a Viewer learns that
   // sharing exists and why they cannot (ADR-0082) — the same gate the menu row carries.

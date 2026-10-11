@@ -38,7 +38,6 @@ function twoSwitches(): ToolbarItem<Ctx>[] {
       segment: d.segment,
       label: d.label,
       group: 'lens',
-      tier: 1,
       // `'always'` so these cases exercise the labelled chrome whatever width jsdom reports (0) —
       // the same reason `Toolbar.test.tsx`'s own registry pins it.
       labelVisibility: 'always',

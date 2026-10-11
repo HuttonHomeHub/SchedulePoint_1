@@ -40,18 +40,6 @@ export function groupRank(group: ToolbarGroupId): number {
 }
 
 /**
- * Prominence tier. `1` = always-visible inline control; `2` = a labelled popover trigger on the bar
- * (View/Summary/Legend/Filter); `3` = admitted last.
- *
- * **Nothing reads this any more.** ADR-0109 D1 deleted the `⋯`, the demotion pass and the width
- * ladder, and toolbar-redesign M1 deleted the last two functions that branched on it
- * (`partitionByTier` and the segment-tier guard in {@link defineToolbar}). It is kept as a declared
- * prominence on every item, not as a mechanism: setting it changes nothing, and `order` is the field
- * that decides where an item sits (`docs/TECH_DEBT.md` #193).
- */
-export type ToolbarTier = 1 | 2 | 3;
-
-/**
  * Whether a plain-button item shows its text label beside the icon — a **presentation** choice,
  * stated once on the item and decided by one resolver ({@link resolveLabelVisibility} in
  * `toolbar-styles.ts`).
@@ -143,7 +131,7 @@ export interface ToolbarItemRenderApi {
  * One toolbar command, generic over the consumer's context `Ctx` (built from the route model + local
  * UI state; the primitive never inspects `Ctx` itself — it only calls these predicates). Exactly one
  * of {@link onActivate} / {@link render} is provided (enforced by {@link defineToolbar}): a plain
- * button, or an escape-hatch for segmented controls, chips and Tier-2 popover triggers.
+ * button, or an escape-hatch for segmented controls, chips and popover triggers.
  */
 export interface ToolbarItem<Ctx> {
   /** Stable unique id (test/telemetry handle; dedup key). */
@@ -151,7 +139,6 @@ export interface ToolbarItem<Ctx> {
   group: ToolbarGroupId;
   /** Which toolbar renders this item — see {@link ToolbarRow}. Absent ⇒ `strip`. */
   row?: ToolbarRow;
-  tier: ToolbarTier;
   /**
    * Whether this item's text label is shown beside its icon. Defaults to `'always'`. See
    * {@link ToolbarLabelVisibility}. A `render` item resolves the same policy and hands it to its
@@ -277,7 +264,7 @@ export interface ToolbarItem<Ctx> {
    * {@link ToolbarItemRenderApi} does not carry it, so a `render` item declaring `isBusy` gets a
    * resolved value nothing hands it. No `render` item declares one today, which is why this is a
    * trap rather than a defect: the sentence above reads as a general contract, and the first
-   * Tier-2 popover trigger that wants a busy state will find no way to read it and re-derive it
+   * popover trigger that wants a busy state will find no way to read it and re-derive it
    * from `ctx` — two derivations of one fact, which is what the registry exists to prevent.
    *
    * **The argument for closing it is already written thirty lines below**, on `activeKind`: _"a
@@ -366,7 +353,7 @@ export interface ToolbarItem<Ctx> {
    * is a focusable stop with nothing to operate — the exact APG defect this field prevents.
    */
   presentational?: boolean;
-  /** Escape hatch for non-button controls (segmented scale, Project-finish chip, Tier-2 popovers). */
+  /** Escape hatch for non-button controls (segmented scale, Project-finish chip, popovers). */
   render?: (ctx: Ctx, api: ToolbarItemRenderApi) => ReactNode;
 }
 

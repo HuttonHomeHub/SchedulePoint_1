@@ -186,7 +186,6 @@ export function derivePromotedItems<Ctx>(
               id: `${entry.id}-caption`,
               group: entry.group ?? trigger.group,
               row: trigger.row,
-              tier: 2,
               // Just before its first member, and after anything the trigger's own order ties with.
               order: trigger.order + entry.rank / 100 - 0.0005,
               label: entry.captionBefore,
@@ -211,7 +210,6 @@ export function derivePromotedItems<Ctx>(
         id: entry.id,
         group: entry.group ?? trigger.group,
         row: trigger.row,
-        tier: 2,
         // A promoted item is labelled at every width it exists at: it is on the bar *because* there is room.
         labelVisibility: 'always',
         order: trigger.order + entry.rank / 100,

@@ -25,7 +25,6 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
     {
       id: 'fit',
       group: 'frame',
-      tier: 1,
       labelVisibility: 'always',
       order: 0,
       label: 'fit',
@@ -34,7 +33,6 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
     {
       id: 'grid',
       group: 'lens',
-      tier: 1,
       labelVisibility: 'always',
       order: 0,
       label: 'grid',
@@ -44,7 +42,6 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
     {
       id: 'add',
       group: 'tools',
-      tier: 1,
       labelVisibility: 'always',
       order: 0,
       label: 'add',
@@ -55,7 +52,6 @@ function makeItems(handlers: Handlers = {}): ToolbarItem<Ctx>[] {
     {
       id: 'finish-chip',
       group: 'object',
-      tier: 1,
       order: 0,
       label: 'finish',
       render: (c, api) => (
@@ -87,13 +83,11 @@ describe('Toolbar (APG primitive)', () => {
   it('a labelled button with a description keeps its label in the title', () => {
     // Regression: the tooltip helper used to drop the label for a labelled item with a description,
     // showing just the bare description. It must read "<label> — <description>".
-    // `labelVisibility` is declared, not inferred from `tier` — the two are separate concerns
-    // (TECH_DEBT #61), so a test about labelling says so rather than leaning on the tier.
+    // `labelVisibility` is declared, not inferred (TECH_DEBT #61), so a test about labelling says so.
     const items = defineToolbar<Ctx>([
       {
         id: 'fit',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'always',
         order: 0,
         label: 'Fit',
@@ -103,7 +97,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'plain',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'always',
         order: 1,
         label: 'Plain',
@@ -128,7 +121,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'fit',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'never',
         order: 0,
         label: 'Fit',
@@ -137,7 +129,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'undo',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'never',
         order: 1,
         label: 'Undo',
@@ -171,7 +162,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'fit',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'never',
         order: 0,
         label: 'Fit',
@@ -189,15 +179,15 @@ describe('Toolbar (APG primitive)', () => {
     expect(fit).toHaveAccessibleName('Fit'); // the name is still exactly the label
   });
 
-  describe('label policy — `labelVisibility` is presentation, `tier` decides nothing (TECH_DEBT #61)', () => {
+  describe('label policy — `labelVisibility` is presentation and nothing else decides it (TECH_DEBT #61)', () => {
     const defaulted = defineToolbar<Ctx>([
-      { id: 'a', group: 'frame', tier: 1, order: 0, label: 'Alpha', onActivate: () => {} },
-      { id: 'b', group: 'frame', tier: 2, order: 1, label: 'Beta', onActivate: () => {} },
+      { id: 'a', group: 'frame', order: 0, label: 'Alpha', onActivate: () => {} },
+      { id: 'b', group: 'frame', order: 1, label: 'Beta', onActivate: () => {} },
     ]);
 
     // The default is `'always'`, because a surface that wraps can always afford a label. It was
     // `'auto'`, which meant "if the row can afford it" under the ladder and "yes" after it.
-    it('labels an item that declares nothing, whatever its tier', () => {
+    it('labels an item that declares nothing, whatever its group', () => {
       render(<Toolbar items={defaulted} context={{ count: 1 }} label="T" />);
       // Labelled: the visible text IS the accessible name, so no `aria-label` overrides it.
       const alpha = screen.getByRole('button', { name: 'Alpha' });
@@ -206,14 +196,12 @@ describe('Toolbar (APG primitive)', () => {
       expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-label');
     });
 
-    it('honours `always` / `never` — tier never decides', () => {
-      // Both items are tier 1. Under the old `showLabel={tier === 1}` rule they were forced to
-      // agree; the policy is what separates them now.
+    it('honours `always` / `never`', () => {
+      // Two items in one group disagree: the declared policy is what separates them.
       const pinned = defineToolbar<Ctx>([
         {
           id: 'shown',
           group: 'frame',
-          tier: 1,
           labelVisibility: 'always',
           order: 0,
           label: 'Shown',
@@ -222,7 +210,6 @@ describe('Toolbar (APG primitive)', () => {
         {
           id: 'hidden',
           group: 'frame',
-          tier: 1,
           labelVisibility: 'never',
           order: 1,
           label: 'Hidden',
@@ -246,7 +233,6 @@ describe('Toolbar (APG primitive)', () => {
         {
           id: 'r',
           group: 'frame',
-          tier: 1,
           labelVisibility: 'roomy',
           order: 0,
           label: 'Roomy',
@@ -294,11 +280,10 @@ describe('Toolbar (APG primitive)', () => {
     // A native date input (e.g. the "Go to date" / "Project start" controls) owns these keys for
     // segment editing; the toolbar must not steal them and move roving focus (WCAG 2.1.1, a11y review).
     const items = defineToolbar<Ctx>([
-      { id: 'fit', group: 'frame', tier: 1, order: 0, label: 'fit', onActivate: () => {} },
+      { id: 'fit', group: 'frame', order: 0, label: 'fit', onActivate: () => {} },
       {
         id: 'date',
         group: 'frame',
-        tier: 1,
         order: 1,
         label: 'date',
         render: (_c, api) => <input {...api.itemProps} type="date" aria-label="date field" />,
@@ -370,11 +355,10 @@ describe('Toolbar (APG primitive)', () => {
 
   it('renders a presentational read-out inline but never as a roving stop', () => {
     const items = defineToolbar<Ctx>([
-      { id: 'fit', group: 'frame', tier: 1, order: 0, label: 'fit', onActivate: () => {} },
+      { id: 'fit', group: 'frame', order: 0, label: 'fit', onActivate: () => {} },
       {
         id: 'finish',
         group: 'object',
-        tier: 1,
         order: 0,
         label: 'Project finish',
         presentational: true,
@@ -405,7 +389,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'plain',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'always',
         order: 0,
         label: 'plain',
@@ -415,7 +398,6 @@ describe('Toolbar (APG primitive)', () => {
       {
         id: 'ctx',
         group: 'frame',
-        tier: 1,
         labelVisibility: 'always',
         order: 1,
         label: 'ctx',

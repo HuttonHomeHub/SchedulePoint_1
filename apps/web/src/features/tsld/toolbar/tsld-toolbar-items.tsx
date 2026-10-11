@@ -169,37 +169,6 @@ const ZOOM_LABELS: Record<string, string> = {
  * member here). */
 type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'columns';
 
-/**
- * **Why a handful of commands sit at tier 3 — last into the `⋯`, first out of it (ADR-0090 M2,
- * amended by ADR-0091 M7's admission rung, which puts them back on the row when there is room).**
- *
- * `float-paths` on Row 1. (`shortcuts` was one of these until ADR-0091 M7-S5 moved it into the
- * account menu; `next-conflict` was until ADR-0094 M2 promoted it to tier 1 so its count could sit on
- * the bar; `clear-visual-placement` was until ADR-0094 M4-T1 moved it to the selection bar — an
- * inventory in prose goes stale every time the set changes, which is why the count is not restated
- * here.)
- * Row 1 was ~360 px short of labelling itself at 1920 and Row 2 ~128 px; these four are what buys
- * both. The trade was put to the product owner with the measured numbers rather than taken here,
- * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
- *
- * **Tier 3 rather than a low `priority`, and the distinction was load-bearing when this was
- * written.** `autoLabelsFit` summed the WHOLE bar, so a merely width-demoted item still paid for
- * its label and demoting it bought nothing; `partitionByTier` takes tier 3 out of `bar` entirely.
- * The other route — making the label sum read only the inline set — was the feedback loop
- * `measureLabelWidth`'s docblock existed to prevent: labelling widens the row, the widened row
- * overflows, overflowing narrows it, and the narrower row can afford labels again.
- *
- * **Both of those functions were deleted with the width ladder (ADR-0109 D1), and neither has
- * existed since.** The paragraph is kept because it records why the tier exists and what the
- * rejected alternative cost; read it as history, not as a description of a live mechanism. The
- * `{@link measureLabelWidth}` that stood here resolved to nothing — a broken TSDoc link of exactly
- * the `isWidthConstrained` class `docs/TECH_DEBT.md` #193 records.
- *
- * `labelVisibility: 'never'` (then `showLabel`) was measured and rejected: it drops an item's label cost while keeping its
- * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
- * and it would have pinned three of the seven promotable buttons permanently icon-only to let the
- * other four gain text.
- */
 const VIEW_TOGGLE_GROUP_ORDER: ReadonlyArray<{ id: ViewToggleGroupId; label: string }> = [
   // Zoom leads the panel (ADR-0091 D3). It is the only control here that changes what the diagram
   // FRAMES rather than what it draws on top, so it reads before anything that annotates that frame
@@ -607,7 +576,6 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
         id: t.id,
         group: promotion.group ?? 'lens',
         row: promotion.row ?? 'strip',
-        tier: 2,
         labelVisibility: promotion.labelVisibility ?? 'always',
         order: promotion.order,
         label: t.label,
@@ -1359,7 +1327,6 @@ function placeholderItem(o: {
   id: string;
   group: ToolbarItem<TsldToolbarContext>['group'];
   row?: ToolbarRow;
-  tier: ToolbarItem<TsldToolbarContext>['tier'];
   order: number;
   label: string;
   icon: React.ReactNode;
@@ -2599,7 +2566,7 @@ function UndoHistoryControl({
 
 /**
  * The Undo/Redo authoring-cluster items (ADR-0048 M3.2). Real pen-gated commands (disabled from `canUndo`/`canRedo`, dynamic accessible name, driving `ctx.undo` /
- * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), tier-2 icon buttons.
+ * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), icon buttons.
  */
 function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return [
@@ -2607,7 +2574,6 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'undo',
       group: 'tools',
       row: 'strip',
-      tier: 2,
       // Declared, not enforced: this control paints its own icon-only button, so the policy has
       // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
       labelVisibility: 'never',
@@ -2622,7 +2588,6 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'undo-history',
       group: 'tools',
       row: 'strip',
-      tier: 2,
       order: 9,
       label: HISTORY_LABEL,
       penGated: true,
@@ -2634,7 +2599,6 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'redo',
       group: 'tools',
       row: 'strip',
-      tier: 2,
       // Declared, not enforced: this control paints its own icon-only button, so the policy has
       // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
       labelVisibility: 'never',
@@ -2729,7 +2693,7 @@ function penVerbs(ctx: TsldToolbarContext): { canStart: boolean; canStop: boolea
 }
 
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
-  // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
+  // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/order/
   // label/icon each remaining id carries in BOTH its real (flag-on) item and its
   // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
   // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
@@ -2737,7 +2701,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'today',
     group: 'frame' as const,
     row: 'strip' as const,
-    tier: 2 as const,
     order: 13,
     label: 'Go to today',
     icon: <LocateFixed className="size-4" />,
@@ -2749,12 +2712,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // pen can hold a labelled Apply levelled dates. Taxonomy group 7 (`help`) is the Panels group.
     group: 'help' as const,
     row: 'strip' as const,
-    tier: 2 as const,
     order: 2,
     label: 'Comments',
     icon: <MessageSquare className="size-4" />,
   };
-  // Insight-lens (VITE_CANVAS_LENSES) shared item shapes — the id/group/row/tier/order/label(/icon)
+  // Insight-lens (VITE_CANVAS_LENSES) shared item shapes — the id/group/row/order/label(/icon)
   // each lens id carries in BOTH its real (flag-on) item and its stub (flag-off `SearchFieldControl` /
   // `placeholderItem()`), declared once and spread into both branches so they can't drift (mirrors the
   // quick-wins / add-activity shared-shape pattern). All four sit on Row 1 · Look and gate on a
@@ -2763,7 +2725,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'search',
     group: 'find' as const,
     row: 'strip' as const,
-    tier: 1 as const,
     order: -1,
     label: 'Search or filter activities',
   };
@@ -2771,12 +2732,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'filter',
     group: 'find' as const,
     row: 'strip' as const,
-    tier: 2 as const,
     order: 0,
     label: 'Filter',
     icon: <Filter className="size-4" />,
   };
-  // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/tier/order/label/icon each of the
+  // Canvas-nav (VITE_CANVAS_NAV) shared item shapes — the id/group/row/order/label/icon each of the
   // three ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens
   // shared-shape pattern). isolate/next-conflict lead the Find cluster (Row 1 · Look, view-only);
@@ -2785,11 +2745,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'next-conflict',
     group: 'find' as const,
     row: 'strip' as const,
-    // **Tier 1 since ADR-0094, and the label stays STATIC.** Tier 3 is admitted last, so at 1646 this
-    // sat in the `⋯` — where its "No conflicts to review" shading was a shading nobody saw, and its
-    // count could not tell a planner whether opening the menu was worth it.
-    //
-    // The count is NOT folded into this label, and that was decided twice. `ToolbarItem.label` is a
+    // **The label stays STATIC.** The count is NOT folded into this label, and that was decided twice. `ToolbarItem.label` is a
     // plain string; making it context-bearing would widen a shared primitive for one caller, reduce
     // the accessible name to "2 of 3" (a status, not a command), and — because a label's width is
     // derived — re-run the whole ladder on every click, moving other controls under the planner's
@@ -2797,12 +2753,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // refusal gave, which survives this promotion intact: a label is painted only when labels fit.
     // The count lives in `next-conflict-status` instead, which is a `render` item and therefore
     // measured rather than derived.
-    tier: 1 as const,
     order: 2,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
-  // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/tier/order/label/icon each
+  // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/order/label/icon each
   // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
   // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
   // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
@@ -2814,7 +2769,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'export',
     group: 'output' as const,
     row: 'strip' as const,
-    tier: 2 as const,
     order: 0,
     label: SHARE_EXPORT_LABEL,
     icon: <FileDown className="size-4" />,
@@ -2846,7 +2800,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-out',
       group: 'frame',
       row: 'canvas',
-      tier: 2,
       labelVisibility: 'never',
       order: 10,
       label: 'Zoom out',
@@ -2859,7 +2812,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'zoom-in',
       group: 'frame',
       row: 'canvas',
-      tier: 2,
       labelVisibility: 'never',
       order: 11,
       label: 'Zoom in',
@@ -2872,7 +2824,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'fit',
       group: 'frame',
       row: 'canvas',
-      tier: 2,
       labelVisibility: 'never',
       order: 12,
       label: 'Fit to plan',
@@ -2893,10 +2844,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     TOOLBAR_QUICK_WINS_ENABLED
       ? {
           ...todayShape,
-          // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): tier 1, ordered ahead
-          // of the zoom cluster, where the date control has always sat. It is a `render` item and
-          // therefore pinned — a split button is not something you stuff into a menu — which is why
-          // it takes the tier that never demotes rather than `today`'s old tier 2.
+          // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): ordered ahead
+          // of the zoom cluster, where the date control has always sat. It is a `render` item, and a
+          // split button is not something you stuff into a menu.
           //
           // A `render` item owns its own chrome, and this one resolves its label from
           // `api.labelState` exactly as its `View ▾` neighbour does.
@@ -2905,7 +2855,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           // same milestone as the Early/Visual selector; the control itself is display-only and reads
           // no mode. The flag-off arm went with the flag — and it was the arm that rendered NO caret,
           // so keeping it would have been keeping the surface without the capability.
-          tier: 1 as const,
           order: -2,
           render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
             <GoToTodayControl ctx={ctx} api={api} />
@@ -2918,7 +2867,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'view',
       group: 'lens',
       row: 'strip',
-      tier: 2,
       order: 0,
       // Always shown (display toggles apply to the empty canvas grid too) — part of the stable
       // toolbar shape (ADR-0031); no longer gated on a computed diagram.
@@ -2953,7 +2901,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'view-tsld',
       group: 'lens',
       row: 'mode',
-      tier: 1,
       // TECH_DEBT #61 (the `mode-early` item this pointed at was deleted by ADR-0148).
       labelVisibility: 'always',
       order: 10,
@@ -2968,7 +2915,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'view-gantt',
       group: 'lens',
       row: 'mode',
-      tier: 1,
       labelVisibility: 'always',
       order: 11,
       segment: 'view-mode',
@@ -3006,7 +2952,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
         },
     // Filter — flag-on a real attribute Filter menu (Critical / Has constraint / Has conflict), whose
     // match set intersects with the search query; flag-off the "Coming soon" placeholder, byte-for-byte.
-    // isolate-logic and next-conflict stay inline "Coming soon" placeholders (tier 2).
+    // isolate-logic and next-conflict stay inline "Coming soon" placeholders.
     CANVAS_LENSES_ENABLED
       ? {
           ...filterShape,
@@ -3059,7 +3005,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'next-conflict-status',
       group: 'find',
       row: 'strip',
-      tier: 2,
       order: 3,
       label: 'Current conflict',
       presentational: true,
@@ -3120,7 +3065,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'pen',
       group: 'tools',
       order: -1,
-      tier: 1,
       labelVisibility: 'always',
       label: 'Editing control',
       icon: <PenLine className="size-4" />,
@@ -3175,7 +3119,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'add-activity',
       group: 'tools',
       row: 'strip',
-      tier: 1,
       // Its name is the affordance, so it stays labelled wherever the row can afford it
       // (TECH_DEBT #61).
       labelVisibility: 'always',
@@ -3221,7 +3164,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'link-tool',
       group: 'tools',
       row: 'strip',
-      tier: 1,
       order: 1,
       label: 'Link activities',
       penGated: true,
@@ -3257,7 +3199,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             id: 'marquee-select',
             group: 'tools' as const,
             row: 'strip' as const,
-            tier: 2 as const,
             order: 2,
             label: 'Select',
             description: 'Marquee-select activities on the canvas',
@@ -3272,7 +3213,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'auto-arrange',
       group: 'tools',
       row: 'strip',
-      tier: 2,
       order: 3,
       label: 'Arrange',
       description: 'Auto-arrange lanes',
@@ -3291,8 +3231,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
      * not in the Analysis menu, which is for measuring (ADR-0090). Its subject is the plan, not a
      * selection, so it is a command-surface item and not a dock item (ADR-0093 D1).
      *
-     * **Tier 3**, which is prominence and nothing else: the overflow the plan's "tier 3" assumed was
-     * deleted at ADR-0109 D1, so this is an inline control that wraps like its neighbours. The
+     * It is an inline control that wraps like its neighbours (ADR-0109 D1). The
      * ellipsis is the `calendar` item's: activating it opens a dialog that needs a confirmation.
      *
      * **Five reasons, in the spec's order**, and the order is the decision: what the reader can fix
@@ -3303,7 +3242,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'apply-levelling',
       group: 'tools',
       row: 'strip',
-      tier: 3,
       order: 4,
       label: 'Apply levelled dates…',
       description:
@@ -3392,7 +3330,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'summary',
       group: 'object',
       row: 'identity',
-      tier: 2,
       // Icon-only: it sits beside a breadcrumb and a status badge in a header that holds one line at
       // 1024, and a labelled disclosure there would take back the width this move exists to free.
       // The tooltip names it and says what it holds (ADR-0117).
@@ -3424,7 +3361,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'edit-plan',
       group: 'object',
       row: 'identity',
-      tier: 2,
       labelVisibility: 'never',
       order: 1,
       label: 'Edit plan details',
@@ -3462,7 +3398,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'analysis',
       group: 'object',
       row: 'strip',
-      tier: 2,
       order: 2,
       label: ANALYSIS_LABEL,
       icon: <ChartArea className="size-4" />,
@@ -3478,7 +3413,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'calendar',
       group: 'object',
       row: 'strip',
-      tier: 2,
       order: 3,
       label: 'Settings…',
       // Real words, not a name-echo: the tooltip always mounts for a `'roomy'` item, and "Schedule
@@ -3560,7 +3494,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // mark drawn on it, which is why it is not filed with the Insight overlays.
     // **Keyboard shortcuts left this registry in ADR-0091 M7-S5** for the account menu
     // (`components/layout/account-chip.tsx`), reached through `chrome/help-action.tsx`. It was a
-    // tier-3 command in a row rationing width between twenty-eight of them, so in practice it was
+    // command in a row rationing width between twenty-eight of them, so in practice it was
     // reachable only through the `⋯` — and it is not a command about the plan at all but a reference
     // about the application, which is what that menu already holds. `ctx.openShortcuts` stays: the
     // sheet, its state and the `?` binding did not move, only the entry point. Deleted rather than

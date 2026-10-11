@@ -47,7 +47,6 @@ describe('both renderers hand a plain command its resolved kind', () => {
     id: 'probe',
     group: 'tools' as const,
     order: 1,
-    tier: 1 as const,
     label: 'Probe',
     icon: null,
     isActive: () => true,

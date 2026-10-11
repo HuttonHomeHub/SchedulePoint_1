@@ -32,11 +32,11 @@ vi.mock('@/config/env', async (importOriginal) => ({
 
 /** Two deck groups, the second of which holds two registry sections — the shape under test. */
 const ITEMS: ToolbarItem<Record<string, never>>[] = defineToolbar<Record<string, never>>([
-  { id: 'a', group: 'frame', order: 0, tier: 1, label: 'A', onActivate: () => {} },
-  { id: 'b', group: 'find', order: 0, tier: 1, label: 'B', onActivate: () => {} },
-  { id: 'c', group: 'object', order: 0, tier: 1, label: 'C', onActivate: () => {} },
-  { id: 'd', group: 'output', order: 0, tier: 1, label: 'D', onActivate: () => {} },
-  { id: 'e', group: 'tools', order: 0, tier: 1, label: 'E', onActivate: () => {} },
+  { id: 'a', group: 'frame', order: 0, label: 'A', onActivate: () => {} },
+  { id: 'b', group: 'find', order: 0, label: 'B', onActivate: () => {} },
+  { id: 'c', group: 'object', order: 0, label: 'C', onActivate: () => {} },
+  { id: 'd', group: 'output', order: 0, label: 'D', onActivate: () => {} },
+  { id: 'e', group: 'tools', order: 0, label: 'E', onActivate: () => {} },
 ]);
 
 const classes = (token: string): string[] => token.split(/\s+/);

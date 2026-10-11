@@ -531,9 +531,8 @@ function ConflictRemedyControl({
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
  * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
- * name **is** the affordance, so a label is not something to trade away for width. Every item also
- * carries `tier: 1`, which nothing reads any more (ADR-0109 D1 deleted the demotion pass; removal is
- * toolbar-redesign M7, `docs/TECH_DEBT.md` #193). The bar wraps rather than overflowing.
+ * name **is** the affordance, so a label is not something to trade away for width. The bar wraps
+ * rather than overflowing.
  */
 /**
  * **Which flippable items carry a `lostReason`, decided one at a time** (`use-focus-handoff.ts`).
@@ -586,7 +585,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'conflict-remedy',
       group: 'object',
-      tier: 1,
       labelVisibility: 'always',
       order: -1,
       // A placeholder: the live label comes from the remedy map via `render`. `defineToolbar`
@@ -604,7 +602,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'open-logic',
       group: 'object',
-      tier: 1,
       labelVisibility: 'always',
       order: 0,
       label: 'Logic',
@@ -640,7 +637,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'notes',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 0.5,
             label: 'Notes',
@@ -659,7 +655,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'progress',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 1,
             /**
@@ -708,7 +703,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'resources',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 2,
             label: 'Resources',
@@ -737,7 +731,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'edit',
       group: 'object',
-      tier: 1,
       labelVisibility: 'always',
       order: 4,
       label: 'Edit',
@@ -763,7 +756,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'duplicate',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate',
@@ -779,7 +771,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'duplicate-band',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate band',
@@ -813,7 +804,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'make-milestone',
       group: 'object',
-      tier: 1,
       labelVisibility: 'never',
       order: 4.7,
       label: MAKE_MILESTONE_LABEL,
@@ -839,7 +829,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'dissolve',
             group: 'object',
-            tier: 1,
             labelVisibility: 'always',
             order: 5,
             label: 'Dissolve',
@@ -857,7 +846,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'delete',
       group: 'object',
-      tier: 1,
       labelVisibility: 'always',
       order: 6,
       label: 'Delete',
@@ -887,7 +875,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'clear-visual-placement',
             group: 'object' as const,
-            tier: 1 as const,
             labelVisibility: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
@@ -1034,7 +1021,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'zoom-to-selection',
             group: 'find',
-            tier: 1,
             labelVisibility: 'always',
             order: 7,
             // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
@@ -1058,7 +1044,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             // its own armed state, and this declaration is what makes the set readable.
             activeKind: 'armed' as const,
             group: 'find',
-            tier: 1,
             labelVisibility: 'always',
             order: 8,
             label: 'Isolate logic path',
@@ -1090,7 +1075,6 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'float-paths',
             group: 'find',
-            tier: 1,
             // **Icon-only, on a measurement** (`dock.spec.ts`, ADR-0115): with its label this bar
             // wraps to a second line in the foot row and a selection then costs the diagram 36 px,
             // which is the guarantee that spec asserts as an equality. The name and the tooltip

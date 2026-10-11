@@ -87,7 +87,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(diagram).toBeVisible();
   await expect(diagram.getByRole('option')).toHaveCount(2);
 
-  // The display toggles moved off the canvas into the `View▾` Tier-2 popover — a non-modal disclosure
+  // The display toggles moved off the canvas into the `View▾` popover — a non-modal disclosure
   // whose trigger is a roving toolbar member. Toggling a layer and closing keeps the canvas mounted.
   await lookRow.getByRole('button', { name: 'View', exact: true }).click();
   const viewPanel = page.getByRole('dialog', { name: 'View' });

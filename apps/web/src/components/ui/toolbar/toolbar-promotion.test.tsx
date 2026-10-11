@@ -148,7 +148,6 @@ describe('derivePromotedItems', () => {
     id: 'menu',
     group: 'tools',
     row: 'strip',
-    tier: 2,
     order: 4,
     label: 'Menu',
     render: () => <span>menu</span>,

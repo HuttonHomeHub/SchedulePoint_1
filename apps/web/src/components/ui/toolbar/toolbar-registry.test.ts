@@ -17,7 +17,7 @@ interface Ctx {
 // onActivate) — avoids passing an explicit `onActivate: undefined` (blocked by exactOptionalPropertyTypes).
 function base(over: Partial<ToolbarItem<Ctx>> & Pick<ToolbarItem<Ctx>, 'id'>): ToolbarItem<Ctx> {
   const { onActivate, render, ...rest } = over;
-  const common = { group: 'frame' as const, tier: 1 as const, order: 0, label: over.id, ...rest };
+  const common = { group: 'frame' as const, order: 0, label: over.id, ...rest };
   return render ? { ...common, render } : { ...common, onActivate: onActivate ?? (() => {}) };
 }
 
@@ -36,7 +36,7 @@ describe('defineToolbar invariants', () => {
   });
 
   it('throws when neither onActivate nor render is provided', () => {
-    const neither: ToolbarItem<Ctx> = { id: 'x', group: 'frame', tier: 1, order: 0, label: 'x' };
+    const neither: ToolbarItem<Ctx> = { id: 'x', group: 'frame', order: 0, label: 'x' };
     expect(() => defineToolbar([neither])).toThrow(
       /exactly one of onActivate or render \(got neither\)/,
     );
@@ -83,7 +83,6 @@ describe('defineToolbar invariants', () => {
     const both: ToolbarItem<Ctx> = {
       id: 'x',
       group: 'frame',
-      tier: 1,
       order: 0,
       label: 'x',
       onActivate: () => {},
@@ -280,7 +279,7 @@ describe('resolveItems — isVisible takes the context alone', () => {
  */
 describe('defineToolbar — a segment’s members share a row', () => {
   const seg = (id: string, row: 'mode' | 'strip'): ToolbarItem<Ctx> =>
-    base({ id, tier: 1, row, segment: 'view-mode', isActive: () => false });
+    base({ id, row, segment: 'view-mode', isActive: () => false });
 
   it('accepts a pair on the same row', () => {
     expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'mode')])).not.toThrow();
@@ -288,7 +287,7 @@ describe('defineToolbar — a segment’s members share a row', () => {
 
   it('treats an absent row as `strip`, so a bare pair still agrees', () => {
     const bare = (id: string): ToolbarItem<Ctx> =>
-      base({ id, tier: 1, segment: 'view-mode', isActive: () => false });
+      base({ id, segment: 'view-mode', isActive: () => false });
     expect(() => defineToolbar([bare('left'), seg('right', 'strip')])).not.toThrow();
   });
 
@@ -310,11 +309,11 @@ describe('defineToolbar — a segment’s members share a row', () => {
 describe('splitByRow — every row is a key, and the default is `strip`', () => {
   it('partitions every row and defaults a row-less item to the strip', () => {
     const rows = splitByRow([
-      base({ id: 'i', tier: 1, row: 'identity' }),
-      base({ id: 'm', tier: 1, row: 'mode' }),
-      base({ id: 's', tier: 1, row: 'strip' }),
-      base({ id: 'c', tier: 1, row: 'canvas' }),
-      base({ id: 'bare', tier: 1 }),
+      base({ id: 'i', row: 'identity' }),
+      base({ id: 'm', row: 'mode' }),
+      base({ id: 's', row: 'strip' }),
+      base({ id: 'c', row: 'canvas' }),
+      base({ id: 'bare' }),
     ]);
     expect(rows.identity.map((i) => i.id)).toEqual(['i']);
     expect(rows.mode.map((i) => i.id)).toEqual(['m']);
