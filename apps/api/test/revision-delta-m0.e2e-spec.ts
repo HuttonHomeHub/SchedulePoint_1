@@ -250,8 +250,12 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
         `finish ${engineOld.summary.projectFinish}, critical ${engineOld.summary.criticalCount}`,
     );
 
+    // Ordered, because `critical.slice(0, 4)` / `slice(4, 16)` below pick the activities to perturb:
+    // without an ORDER BY they depend on heap order, and the non-vacuity bar failed on a fresh
+    // database and passed on a used one.
     const oldSide = await prisma.baselineActivity.findMany({
       where: { baselineId: captured.id },
+      orderBy: [{ code: 'asc' }, { sourceActivityId: 'asc' }],
       select: {
         sourceActivityId: true,
         code: true,
@@ -366,7 +370,10 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     const cuts =
       LEVER === 'shorten'
         ? []
-        : links.rows.filter((l) => criticalIds.has(l.successor.id)).slice(0, 3);
+        : [...links.rows]
+            .sort((a, b) => a.id.localeCompare(b.id))
+            .filter((l) => criticalIds.has(l.successor.id))
+            .slice(0, 3);
     // Instrumented, because cutting three dependencies moved NOTHING off the path and the two
     // candidate explanations need different fixes: either the cut edges were not driving (so
     // removing them freed nothing that was binding), or something structural holds criticality

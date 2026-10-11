@@ -429,19 +429,6 @@ describe('copySelection and pasteClipboard', () => {
     expect(h.createClone).not.toHaveBeenCalled();
   });
 
-  it('starts a fresh model with an empty clipboard', async () => {
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => {
-      result.current.onPluralSelectionChange(['start']);
-      result.current.copySelection();
-    });
-    const { result: other } = renderHook(() => usePlanWorkspaceModel('acme', 'p2'), { wrapper });
-    await act(async () => {
-      await other.current.pasteClipboard();
-    });
-    expect(h.announce).toHaveBeenCalledWith('Nothing has been copied yet.');
-  });
-
   it('reports activities that no longer exist rather than quietly pasting fewer', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() => {

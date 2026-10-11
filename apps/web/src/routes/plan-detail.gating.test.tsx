@@ -443,6 +443,8 @@ describe('PlanDetailScreen — one workspace per plan (#451, #454)', () => {
     // Project Explorer; the `key` is what turns that into a fresh model. Every ref and state in the
     // model (the auto-recalc snapshot, the clipboard) otherwise carries plan A into plan B. A mount
     // counter rather than a timer: this used to be pinned only by a journey that waits 250 ms.
+    // **It relies on there being no `StrictMode` wrapper**: StrictMode double-invokes mount effects,
+    // which would make the counts 2 and 4 and still pass the comparison for the wrong reason.
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     // A fresh element per render: React bails out of an element it has already rendered, and the
     // mocked `useParams` would never be read again.

@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type RefObject,
+} from 'react';
 
 import { CANVAS_MIN_HEIGHT, isShortBody } from './use-activity-panel-prefs';
 
@@ -30,14 +37,20 @@ export interface ShortBodySwap {
   /** Collapse the panel without taking focus from the control the planner just pressed. */
   collapseQuietly: () => void;
   /** Attach to the panel's box, so the quiet collapse can tell whether focus is inside it. */
-  panelBoxRef: React.RefObject<HTMLDivElement | null>;
+  panelBoxRef: RefObject<HTMLDivElement | null>;
   /** Attach to the panel's collapse button: where stranded focus goes. */
-  collapseButtonRef: React.RefObject<HTMLButtonElement | null>;
+  collapseButtonRef: RefObject<HTMLButtonElement | null>;
   /** Focus handlers for the diagram row and the panel's resizer, the two places the swap strands focus. */
   trackFocusIn: () => void;
-  trackFocusOut: (event: React.FocusEvent<HTMLElement>) => void;
+  trackFocusOut: (event: FocusEvent<HTMLElement>) => void;
 }
 
+/**
+ * Derives the short-body swap from the measured body height and the panel's collapsed state, and owns
+ * the side effects that come with it (see {@link ShortBodySwap}). Call it after `anyRightDockActive`
+ * is known and before anything that reads `swapped`; the toolbar's `withDiagram`, `expandPanel` and
+ * dock squeeze consume its output.
+ */
 export function useShortBodySwap(params: {
   bodyHeight: number;
   collapsed: boolean;
@@ -101,7 +114,7 @@ export function useShortBodySwap(params: {
   const trackFocusIn = useCallback(() => {
     focusInHiddenRef.current = true;
   }, []);
-  const trackFocusOut = useCallback((event: React.FocusEvent<HTMLElement>) => {
+  const trackFocusOut = useCallback((event: FocusEvent<HTMLElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget)) focusInHiddenRef.current = false;
   }, []);
   useLayoutEffect(() => {

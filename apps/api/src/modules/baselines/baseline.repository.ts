@@ -941,8 +941,11 @@ export class BaselineRepository {
    * table, so one plan's list cost grew with every organisation's snapshots: 67 ms p50 at 510,000
    * rows whatever the page held, against 11 ms for a three-baseline page once the count is
    * restricted to the page's ids (`docs/specs/tidy-and-tests-sweep/m3-measurement.md` §2,
-   * `docs/TECH_DEBT.md` #441). The single read below keeps `_count`: measured, its join is not
-   * slower than the extra statement, so there is nothing to buy there.
+   * `docs/TECH_DEBT.md` #441). The win shrinks as the page grows, because the keyed count costs in
+   * proportion to the page's own rows: 67 ms against 11 ms for 3 baselines, 66 against 22 for 10, but
+   * only 67.3 against 52.9 (about 1.3x) for 30 — a plan holding thousands of snapshot rows per
+   * baseline on a small install would break even before that. The single read below keeps `_count`:
+   * measured, its join is not slower than the extra statement, so there is nothing to buy there.
    */
   async findManyActiveByPlan(params: {
     organizationId: string;

@@ -105,6 +105,16 @@ async function useEightHourCalendar(page: Page, orgSlug: string): Promise<void> 
       if (body.data.hoursPerDay !== 8) {
         return `calendar reports hoursPerDay=${String(body.data.hoursPerDay)}, expected 8`;
       }
+      // Read the week back, as `bindMonFriCalendar` does: a mis-numbered weekday (Monday is 0) once
+      // made this a Tuesday-to-Saturday calendar and every assertion still passed (#432).
+      const calendarRead = await fetch(`/api/v1/organizations/${org}/calendars/${body.data.id}`, {
+        credentials: 'include',
+      });
+      if (!calendarRead.ok) return `calendar read: ${calendarRead.status}`;
+      const stored = (await calendarRead.json()) as { data: { workingWeekdays: number } };
+      if (stored.data.workingWeekdays !== 0b0011111) {
+        return `calendar works weekdays mask ${String(stored.data.workingWeekdays)}, expected Monday to Friday (31)`;
+      }
       return null;
     },
     { org: orgSlug, id: planId, name: EIGHT_HOUR_NAME },
