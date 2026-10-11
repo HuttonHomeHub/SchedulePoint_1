@@ -37,6 +37,10 @@ change, which moves the media queries as well, reads clean on both pointers.
    per-context one, so ADR-0094 is not engaged.
 2. **D2 — A dock floor is `min(<rem>, 100%)`.** Text zoom cannot push a strip wider than its row (WCAG 1.4.4). No
    change at 100 % text: lines and foot height are identical in every measured reading.
+   The floor is written as the arbitrary value `min-w-[min(18rem,100%)]` (and `[min(36rem,100%)]`), an exception to
+   "no one-off values" that has two precedents (`sheet.tsx`'s `w-[min(20rem,85vw)]`, `tsld-toolbar-items.tsx`'s
+   `w-[min(15rem,32vw)]`): the value is a CSS function of the row, which no spacing token can express, and a named
+   utility for one call site would add a vocabulary entry nothing else reads.
 3. **D3 — The own-row floor is not extended to fine pointers.** Measured: it saves 40 px at 1024 to 1040 px and
    costs 40 px at 1120 to 1250 px (10 to 13 of 224 sweep readings, at 30 and 36 rem). The plan's stop rule said
    no state may lose canvas, so #489 closes with the table rather than being tuned.
@@ -57,6 +61,14 @@ change, which moves the media queries as well, reads clean on both pointers.
   selection moves to the end. Journeys that asserted the old stop are updated.
 - Line counts are unchanged in every measured cell (`m0-measurement.md`).
 - #487 as filed did not reproduce under a text-only 200 % route; the cap closes the one mechanism that overflows.
-- ADR-0111 review of D1 (accessibility-reviewer, component-reviewer) is owed before release; findings are
-  recorded here when they land.
+- **ADR-0111 review of D1 landed (2026-10-11): accessibility-reviewer, component-reviewer and ux-reviewer passed
+  with no blockers.** Follow-ups folded in: the refused-`groupOrder` report moved out of render into an effect
+  (once per violation, with a production-fallback test); `groupRank`, `groupOrderViolation` and `resolveItems` share
+  one parameter name; the order constant no longer splits `selectionActionItems` from its docblock; the dock floors'
+  arbitrary values are recorded under D2; `docs/COMPONENT_LIBRARY.md` and `docs/UX_STANDARDS.md` state the prop and the
+  order; the journeys assert the first Tab stop, Home and End in both views. A registry that gains a group now makes the
+  selection bar throw in development, by design (`groupOrderViolation`'s TSDoc).
+- **A visible "Float paths" label was measured and not built** (`m4-measurement.md`): it adds a line in 8 of 80
+  readings, including the plain selection at 1646 x 1097 that `dock.spec.ts` holds as an equality. The control stays an
+  icon with its name and tooltip. No divider can start a wrapped line alone: a control always shares its line.
 - No flag (ADR-0088 D1); the rollback is the commit.

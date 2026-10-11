@@ -404,6 +404,20 @@ sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on).
 `DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`, `DECK_ROW_MARK` and `DECK_CLOSING_SECTION`, which `Deck` applies;
 nothing outside `Deck` should.
 
+**`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional
+`groupOrder`, the left-to-right order of its taxonomy groups, for a surface whose subject is **one object**
+(the selection bar leads with the activity's own `object` group and trails the `find` viewing controls). Four
+rules. **Single-object surfaces only**: a deck of commands over a plan keeps the canonical order, and `Deck`
+does not take the prop. **It must be a permutation of the groups the registry uses**: a group left out would
+rank `-1` and jump to the front, and a registry that later gains a group makes the surface throw until the
+author places it. **It throws in development and falls back to the canonical order in production** (reported
+once through `console.error` from an effect, not from render). **One resolved order drives the markup, the
+Arrow/Home/End sequence and the first Tab stop** (`resolveItems`), so a surface cannot show one order and walk
+another. Absent, the markup is byte-identical to before.
+
+A dock outlet's rem floors are `min(<rem>, 100%)` (ADR-0187 D2): text zoom doubles a rem floor, so it is
+capped at the row it sits in.
+
 **Promotion: a menu command comes out onto the deck when the viewport has room** (toolbar-redesign M5, spec
 §4.11). A source menu's promotable rows are declared as `PromotableEntry` records (`toolbar-promotion.tsx`)
 and `derivePromotedItems` turns each into a registry item that takes its trigger's group and row and sorts at
