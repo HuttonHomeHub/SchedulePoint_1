@@ -488,16 +488,32 @@ export function useUpdateActivityProgress(orgSlug: string, planId: string) {
   });
 }
 
+/**
+ * What a delete is asked to remove. A bare id is the ordinary, unguarded delete; the object form can
+ * carry the `version` the caller last saw, so the server refuses (409 `STALE_VERSION`, nothing
+ * deleted) a row that changed since — what an undo needs, because it deletes on the strength of a
+ * read it took a moment earlier (`docs/TECH_DEBT.md` #450, ADR-0176).
+ */
+export type DeleteActivityInput = string | { activityId: string; version?: number | undefined };
+
+/** The `?version=N` suffix of a guarded delete, or nothing for the unguarded one. */
+function versionQuery(version: number | undefined): string {
+  return version === undefined ? '' : `?version=${version}`;
+}
+
 export function useDeleteActivity(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (activityId: string) =>
+    mutationFn: (input: DeleteActivityInput) => {
+      const { activityId, version } = typeof input === 'string' ? { activityId: input } : input;
       // Typed to its body now, not `void`: the route answers `200 { deleteBatchId }` so a caller
       // can restore exactly what it deleted (`docs/TECH_DEBT.md` #113). Callers that ignore the
       // return are unaffected.
-      apiFetch<{ deleteBatchId: string }>(`/organizations/${orgSlug}/activities/${activityId}`, {
-        method: 'DELETE',
-      }),
+      return apiFetch<{ deleteBatchId: string }>(
+        `/organizations/${orgSlug}/activities/${activityId}${versionQuery(version)}`,
+        { method: 'DELETE' },
+      );
+    },
     // Removing an activity changes the baseline variance (it reads as "Removed" or drops out).
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
@@ -509,6 +525,9 @@ export interface DissolveSummaryResponse {
   /** The batch the summary was soft-deleted in; `restore-batch` with it brings the summary back. */
   deleteBatchId: string;
 }
+
+/** As {@link DeleteActivityInput}: a bare id, or the id with the version the caller last saw. */
+export type DissolveSummaryInput = string | { activityId: string; version?: number | undefined };
 
 /**
  * Dissolve a WBS summary: remove the grouping and **keep the work** — the children are promoted to
@@ -529,11 +548,16 @@ export function useDissolveSummary(orgSlug: string, planId: string) {
     // have predicted, since it did not know which activities the summary held — and the delete batch
     // the summary went in, which is what undoing the dissolve restores it by (ADR-0176). The blanket
     // invalidation below already refetches the children, so only the undo reads the body.
-    mutationFn: (activityId: string) =>
-      apiFetch<DissolveSummaryResponse>(
+    mutationFn: (input: DissolveSummaryInput) => {
+      const { activityId, version } = typeof input === 'string' ? { activityId: input } : input;
+      return apiFetch<DissolveSummaryResponse>(
         `/organizations/${orgSlug}/activities/${activityId}/dissolve`,
-        { method: 'POST' },
-      ),
+        {
+          method: 'POST',
+          ...(version === undefined ? {} : { body: JSON.stringify({ version }) }),
+        },
+      );
+    },
     onSettled: () => invalidatePlanActivities(queryClient, orgSlug, planId),
   });
 }

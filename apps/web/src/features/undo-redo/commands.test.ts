@@ -1136,7 +1136,7 @@ describe('deleteActivityCommand', () => {
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
     expect(server.activities.has('a1')).toBe(true);
     expect(await command.redo(server.ctx)).toEqual(APPLIED);
-    expect(server.mutations.deleteActivity).toHaveBeenCalledWith('a1');
+    expect(server.mutations.deleteActivity).toHaveBeenCalledWith({ activityId: 'a1', version: 2 });
     expect(server.activities.has('a1')).toBe(false);
   });
 
@@ -1250,5 +1250,44 @@ describe('createLoeSpanCommand', () => {
     await command.redo(server.ctx);
     expect(server.mutations.deleteActivity).toHaveBeenCalledOnce();
     expect(createPlaced).toHaveBeenCalledOnce();
+  });
+
+  it('a redo whose rollback delete failed removes the orphan LOE before composing again (#450)', async () => {
+    const server = fakePlanServer({
+      activities: [A('a1', 'Start'), A('a2', 'Finish'), A('loe', 'Level of effort')],
+    });
+    let created = 0;
+    const createPlaced = vi.fn(() => {
+      created += 1;
+      const id = `loe-${created}`;
+      server.activities.set(id, A(id, 'Level of effort'));
+      return Promise.resolve(server.row(id));
+    });
+    const command = createLoeSpanCommand({
+      loe: server.row('loe'),
+      placedInput: {
+        name: 'Level of effort',
+        type: 'LEVEL_OF_EFFORT' as const,
+        durationDays: 0,
+        laneIndex: 0,
+      },
+      planId: 'p1',
+      startDriverId: 'a1',
+      finishDriverId: 'a2',
+      createPlaced,
+      createDependency: server.mutations.createDependency,
+      deleteActivity: server.mutations.deleteActivity,
+    });
+    await command.undo(server.ctx);
+
+    // The first edge fails, and so does the rollback delete: loe-1 is stranded.
+    server.mutations.createDependency.mockRejectedValueOnce(new Error('network'));
+    server.mutations.deleteActivity.mockRejectedValueOnce(new Error('pen lost'));
+    await expect(command.redo(server.ctx)).rejects.toThrow('network');
+    expect(server.activities.has('loe-1')).toBe(true);
+
+    expect(await command.redo(server.ctx)).toEqual(APPLIED);
+    expect(server.activities.has('loe-1')).toBe(false);
+    expect(server.activities.has('loe-2')).toBe(true);
   });
 });

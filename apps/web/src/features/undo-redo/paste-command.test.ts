@@ -143,7 +143,10 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
   it('deletes the ROOT and lets the cascade take the subtree, never a batch', async () => {
     const { server, command, bulkDelete } = band();
     expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
-    expect(server.mutations.deleteActivity).toHaveBeenCalledExactlyOnceWith('summary');
+    expect(server.mutations.deleteActivity).toHaveBeenCalledExactlyOnceWith({
+      activityId: 'summary',
+      version: 1,
+    });
     expect(bulkDelete).not.toHaveBeenCalled();
   });
 
