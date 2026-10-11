@@ -4,19 +4,17 @@ The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten**
 epic boundary; its history is in git.
 
 **Written:** 2026-10-11, after the **toolbar epic** — the owner's "make the toolbar amazing" request, the
-landing and list-row defects found beside it, and the conflict reason (#479). All of it is on one open
-pull request, **#915**, which was green on every check at head `ac49e0a` when this was written.
+landing and list-row defects found beside it, and the conflict reason (#479). All of it shipped in one
+pull request, **#915**, merged as `a5fe98d` and released as **web 0.184.0** through the Version Packages
+PR **#916** (`e8d023f`).
 
 ## Where things stand
 
-- **PR #915** (`claude/determined-cerf-pskzjb` → `main`, 445 files, 83+ commits, web minor, `apps/api`
-  untouched): all 10 checks green on `ac49e0a`, no review threads. **It is not merged.** The product
-  owner merges it. If this hand-off commit moved the head, re-read the check runs for the new head first
-  (`CLAUDE.md` §19.9: dedupe by name, every survivor `completed` / `success`; pin the merge to a SHA from
-  `git ls-remote`).
-- After the merge: reset the branch from `main` (`CLAUDE.md` §8), merge the **Version Packages** PR the
-  Release workflow opens (its checks never run — read its diff, then merge with its head SHA), and confirm
-  with `get_latest_release`.
+- `main` holds everything below. Latest release: **web 0.184.0** (published 2026-10-11 09:45 UTC; api
+  unchanged at 0.88.1). #915 was 445 files and 83+ commits, `apps/api` untouched, and was green on all 10
+  checks (deduped by name) at the head that was merged. No review threads.
+- On 2026-10-11 the product owner told that session to merge #915 and the generated Version Packages PR
+  itself. That was a delegation for that session only; merging is otherwise the owner's call.
 - The product owner's screens: **monitor 1912 × 948** (mouse) and **Surface 1912 × 1114, DPR 1.5** (finger
   and stylus, 44 px targets). Design floor **1024 × 600** (ADR-0179).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, reviewers are Sonnet,
@@ -49,7 +47,7 @@ pull request, **#915**, which was green on every check at head `ac49e0a` when th
 
 ## Waiting on the product owner
 
-- **Merge #915**, and **sign off the photographs** (spec SC-16): `docs/specs/toolbar-redesign/photos/m6-*`
+- **Sign off the photographs** (spec SC-16): `docs/specs/toolbar-redesign/photos/m6-*`
   (before / after, mouse and finger, pen held and not held). He has looked at the main ones and said they
   look ok; the sign-off is not yet recorded in `m6-measurement.md`.
 - **Decided, do not reopen:** `Start editing` stays plain while the pen is not held. Amber is reserved for
@@ -90,9 +88,8 @@ pull request, **#915**, which was green on every check at head `ac49e0a` when th
 
 ## Suggested next
 
-1. Merge #915, release, reset the branch from `main`.
-2. The product owner's answers above (photos, 72rem, tap page, fifth-shard decision after three CI runs).
-3. Whichever of #485 (remedy near the reason, needs ADR-0111 review), #487 or #483 (200 % text) he wants
+1. The product owner's answers above (photos, 72rem, tap page, fifth-shard decision after three CI runs).
+2. Whichever of #485 (remedy near the reason, needs ADR-0111 review), #487 or #483 (200 % text) he wants
    first; each needs its own spec if it adds surface (ADR-0105). Planning is Opus work; building is Sonnet.
 
 ## Environment notes a new session would otherwise rediscover
