@@ -1,5 +1,14 @@
 # @repo/api
 
+## 0.89.1
+
+### Patch Changes
+
+- [#926](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/926) [`18fef94`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/18fef94641d1df1b2f44ece6bb17a20d947f42b7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Two reads got cheaper with no change to what they return. A batch's history probe (a delete, restore or group
+  move over many activities) no longer fetches the latest history entry's change document, which a batch never
+  reads, and a plan's baseline list counts snapshot rows for the baselines on the page instead of grouping every
+  organisation's snapshot rows.
+
 ## 0.89.0
 
 ### Minor Changes
