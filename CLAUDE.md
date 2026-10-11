@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 25 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1627 web
+> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1628 web
 > source files with 47 Playwright suites beside the base journey, and
-> 185 ADRs.
+> 186 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -431,7 +431,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0028** _(Accepted)_ — Single-editor plan edit-lock (advisory lease + peer hand-off + write gate) → [`0028-plan-edit-lock.md`](docs/adr/0028-plan-edit-lock.md)
 - **ADR-0029** _(Proposed; "mobile-first" amended by ADR-0179)_ — Persistent app-shell & hierarchy navigator — evolve `_authed` into a mounted-once shell, URL-derived selection, hand-rolled ARIA tree & virtualization → [`0029-persistent-hierarchy-navigator.md`](docs/adr/0029-persistent-hierarchy-navigator.md)
 - **ADR-0030** _(Proposed; below-`md` rule superseded by ADR-0181)_ — Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel → [`0030-canvas-first-plan-workspace.md`](docs/adr/0030-canvas-first-plan-workspace.md)
-- **ADR-0031** _(Proposed; below-`md` rule superseded by ADR-0181)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
+- **ADR-0031** _(Proposed; below-`md` rule superseded by ADR-0181; tiers and group 1's zoom controls amended by ADR-0185)_ — TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring → [`0031-tsld-toolbar-registry-and-taxonomy.md`](docs/adr/0031-tsld-toolbar-registry-and-taxonomy.md)
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
 - **ADR-0033** _(Accepted; amended by ADR-0148 — the two scheduling modes are gone)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
 - **ADR-0034** _(Accepted)_ — Engine conformance & validation methodology → [`0034-engine-conformance-methodology.md`](docs/adr/0034-engine-conformance-methodology.md)
@@ -487,7 +487,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0088** _(Accepted)_ — Feature flags are classified, not scheduled → [`0088-flag-classification.md`](docs/adr/0088-flag-classification.md)
 - **ADR-0089** _(Accepted)_ — One activity field vocabulary, and what a field group is → [`0089-activity-field-vocabulary.md`](docs/adr/0089-activity-field-vocabulary.md)
 - **ADR-0090** _(Accepted)_ — The plan-workspace command surface — a row is a budget, and `order` is not a priority → [`0090-the-plan-workspace-command-surface.md`](docs/adr/0090-the-plan-workspace-command-surface.md)
-- **ADR-0091** _(Proposed D1–D5; D6 Accepted)_ — A mode is not a command — surface scopes for the plan workspace's command band → [`0091-modes-density-and-the-command-band.md`](docs/adr/0091-modes-density-and-the-command-band.md)
+- **ADR-0091** _(Proposed D1–D5; D6 Accepted; D3 amended by ADR-0185)_ — A mode is not a command — surface scopes for the plan workspace's command band → [`0091-modes-density-and-the-command-band.md`](docs/adr/0091-modes-density-and-the-command-band.md)
 - **ADR-0092** _(Accepted; M5 withdrawn)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
@@ -496,7 +496,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0097** _(Accepted)_ — The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped → [`0097-a-theme-is-a-system-not-a-palette.md`](docs/adr/0097-a-theme-is-a-system-not-a-palette.md)
 - **ADR-0098** _(Accepted)_ — The landing is the organisation overview → [`0098-the-landing-is-the-organisation-overview.md`](docs/adr/0098-the-landing-is-the-organisation-overview.md)
 - **ADR-0099** _(Accepted)_ — Graphite — workstation density in rail chrome → [`0099-graphite-the-workstation-in-rail-chrome.md`](docs/adr/0099-graphite-the-workstation-in-rail-chrome.md)
-- **ADR-0100** _(Accepted)_ — The canvas minimap — an invariant picture and a DOM rectangle → [`0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md`](docs/adr/0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md)
+- **ADR-0100** _(Accepted; the minimap toggle's location amended by ADR-0185)_ — The canvas minimap — an invariant picture and a DOM rectangle → [`0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md`](docs/adr/0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md)
 - **ADR-0101** _(Accepted)_ — An editor is a dialog, not a drawer → [`0101-an-editor-is-a-dialog-not-a-drawer.md`](docs/adr/0101-an-editor-is-a-dialog-not-a-drawer.md)
 - **ADR-0102** _(Accepted)_ — The light corporate theme, and the scope that never reached the painter → [`0102-the-light-corporate-theme.md`](docs/adr/0102-the-light-corporate-theme.md)
 - **ADR-0103** _(Accepted)_ — Paper is a surface, and the exported diagram is the diagram → [`0103-paper-is-a-surface.md`](docs/adr/0103-paper-is-a-surface.md)
@@ -506,7 +506,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0106** _(Accepted)_ — A rule is a scene mark; its label is chrome → [`0106-a-rule-is-a-scene-mark-its-label-is-chrome.md`](docs/adr/0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)
 - **ADR-0107** _(Accepted)_ — A migration a pristine database cannot test → [`0107-a-migration-a-pristine-database-cannot-test.md`](docs/adr/0107-a-migration-a-pristine-database-cannot-test.md)
 - **ADR-0108** _(Accepted; D2 amended by ADR-0169)_ — A modal guards the canvas and nothing else → [`0108-a-modal-guards-the-canvas-and-nothing-else.md`](docs/adr/0108-a-modal-guards-the-canvas-and-nothing-else.md)
-- **ADR-0109** _(Accepted)_ — A command surface wraps, and the leading edge belongs to the work → [`0109-a-command-surface-wraps.md`](docs/adr/0109-a-command-surface-wraps.md)
+- **ADR-0109** _(Accepted; D1 amended by ADR-0185)_ — A command surface wraps, and the leading edge belongs to the work → [`0109-a-command-surface-wraps.md`](docs/adr/0109-a-command-surface-wraps.md)
 - **ADR-0110** _(Accepted)_ — A gate is verified against the defect it names → [`0110-a-gate-is-verified-against-the-defect-it-names.md`](docs/adr/0110-a-gate-is-verified-against-the-defect-it-names.md)
 - **ADR-0111** _(Accepted)_ — A shared primitive's keyboard contract is reviewed before release, not after → [`0111-a-primitives-keyboard-contract-is-reviewed-before-release.md`](docs/adr/0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)
 - **ADR-0112** _(Accepted)_ — A header row wraps, and a pen sentence is a fact → [`0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md`](docs/adr/0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md)
@@ -585,6 +585,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0182** _(Accepted; amends ADR-0143)_ — A page grid splits on the width it has → [`0182-a-page-grid-splits-on-the-width-it-has.md`](docs/adr/0182-a-page-grid-splits-on-the-width-it-has.md)
 - **ADR-0183** _(Accepted; amends ADR-0118)_ — A row grows with the finger it holds, and the Gantt is the named exception → [`0183-a-row-grows-with-the-finger-it-holds.md`](docs/adr/0183-a-row-grows-with-the-finger-it-holds.md)
 - **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A row's subject wraps; it never clips → [`0184-a-rows-subject-wraps-it-never-clips.md`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)
+- **ADR-0185** _(Accepted; amends ADR-0031, ADR-0091 D3, ADR-0100 and ADR-0109 D1)_ — The toolbar promotes what fits, and says what moved → [`0185-the-toolbar-promotes-what-fits-and-says-what-moved.md`](docs/adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md)
 - **ADR-0186** _(Accepted; amends ADR-0094 D5)_ — The reason a conflict exists is stated on the object, and the toolbar chip stays a count → [`0186-the-reason-a-conflict-exists-is-stated-on-the-object.md`](docs/adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)
 
 A lighter-weight running log of smaller decisions is in

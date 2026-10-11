@@ -13,7 +13,7 @@ M2 and M4: the plan's facts beside its name, and the "Diagram viewport" cluster 
 The **mode row** is the four segments — `Early | Visual` and
 `Diagram | Gantt` — which sit on the **identity line in the header**, because a mode is not a
 command (ADR-0091 D1); the **strip** is every command, rendered by `Deck` as four captioned groups
-that **wrap**. Placeholders render **inline** (tier 2 icon buttons), and every command is visible at
+that **wrap**. Placeholders render **inline** (icon buttons), and every command is visible at
 every width: a line that cannot fit becomes two lines.
 
 > **This paragraph has now been wrong twice, and the second time is the more instructive.**
@@ -112,5 +112,7 @@ tooltip copy differentiates them.
   (variants of one act), View's set-once settings, and each menu's anchor. The zoom presets into the
   diagram's corner (C1) are deferred: they stage on the stage's width, not the deck's.
 - **Below 1024 the deck is one scrolling line** (toolbar-redesign M3, `docs/specs/toolbar-redesign/m3-measurement.md`):
-  every item above stays on it in LOOK-then-DO order, none is demoted, and a narrow-and-short window scrolls the shell so
-  the band scrolls away. At 1024 and up the two declared rows are unchanged.
+  every item above stays on it, none is demoted, the editing row (DO) leads the viewing row (LOOK) by being rendered
+  first (`use-deck-row-order.ts`, owner decision OD-3, not CSS `order`), and a narrow-and-short window scrolls the shell
+  so the band scrolls away. At 1024 and up the two declared rows are unchanged, LOOK above DO. The whole toolbar epic is
+  [ADR-0185](adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md).

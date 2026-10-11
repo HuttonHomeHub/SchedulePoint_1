@@ -322,7 +322,7 @@ So, for any command surface:
   it is horizontal is wrong about the only thing `aria-orientation` exists to say.
 
 **The one exception: below `lg` the deck is a single scrolling line** (toolbar-redesign M3, R6/US-6,
-`docs/TECH_DEBT.md` #471). The wrap above is budgeted from the 1024 × 600 floor up; under 64 rem it cost
+ADR-0185 D5; `docs/specs/toolbar-redesign/m3-measurement.md`). The wrap above is budgeted from the 1024 × 600 floor up; under 64 rem it cost
 355 px (640 wide) to 603 px (320 wide) of the window, so the body had no height and the foot row was
 below the window with nothing to scroll. `max-lg:` therefore puts DO then LOOK on one `flex-nowrap
 overflow-x-auto` line (the editing row leads below the floor, owner decision 2026-10-10; the rows are
@@ -352,9 +352,9 @@ narrow window buys its commands with vertical space the content would otherwise 
 trade, made deliberately — all commands visible when there is room. The cost is measured
 and budgeted from the 1024 × 600 floor up, not defended down to a phone width.
 
-`tier` is a declared prominence and **nothing reads it**: the deck has no ranking and will not get one
-(`docs/TECH_DEBT.md` #193). It was never `showLabel`, and it is not the order within a group either
-— that is `order`.
+There is no per-item prominence field: `ToolbarItem.tier` was deleted at toolbar-redesign M7 (ADR-0185;
+`docs/TECH_DEBT.md` #193, closed), because the deck has no ranking and will not get one. A label is
+`labelVisibility`, and where an item sits within its group is `order`.
 
 **A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
 never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.

@@ -422,7 +422,9 @@ unconditionally (Filter's Has constraint, Analysis's Baselines…, Share & expor
 Start → Finish, Add's Task and Level of effort). A promoted button's tooltip and description say where it goes in a
 narrower window ("Moves into the Filter menu in a narrower window"), `derivePromotedItems` refuses a trigger whose
 `order` is not an integer (it sorts a promoted item at `order + rank / 100`), and the Share & export trigger reads
-"Export" while Share… is on the bar beside it.
+"Export" while Share… is on the bar beside it, so Share…'s own clause says "Moves into the Export menu in a
+narrower window, where it is named Share & export" (its hand-off message still names Share & export, the name
+the trigger has by the time focus lands on it).
 **Two optional fields on `ToolbarItem` and one on `ToolbarButton`, no key or focus-rule change.**
 `visibleLabel` is the text painted when it is shorter than the accessible name: a member of a flat pressed set
 ("Colour by: Total float") prints its value under an `aria-hidden` caption, and `defineToolbar` refuses a
@@ -459,9 +461,10 @@ scheduling mode_ on the way past, on a control that recalculates (the scheduling
 was written about is gone, and the rule still holds for any segment whose press writes). Toolbar items stay
 `aria-pressed` toggle buttons — a weaker description than a radiogroup, not an incorrect one.
 
-Two invariants in `defineToolbar` guard the field: a segment may not span a `tier` or a `row`. The
-row one is live (each row renders its own `<Toolbar>`, so a split segment becomes two disconnected
-one-item switches); the tier one is speculative and forward-only, and its comment says so.
+One invariant in `defineToolbar` guards the field: a segment may not span a `row`. It is live (each row
+renders its own `<Toolbar>`, so a split segment becomes two disconnected one-item switches). A second,
+that a segment may not span a `tier`, was written for the demotion pass and went with the field itself
+(ADR-0185).
 
 ## Pattern: the conflict reason line (`features/plan-actions/selection-actions.tsx`)
 

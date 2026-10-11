@@ -1,6 +1,7 @@
 # Feature Spec: Toolbar redesign for a laptop, Surface Pro and monitor-first app
 
-- **Status:** Approved
+- **Status:** Accepted — shipped (ADR-0185). Approved by the product owner on 2026-10-09; built as M0-M7 (the shipped
+  numbers are in `m0` to `m6-measurement.md`, which win over this document's estimates).
 - **Author(s):** feature-analyst (for the product owner, james). Revision 2 folds in the UX, component and
   accessibility reviews. Revision 4 folds in the M0 record (`m0-measurement.md`, commit `0044ee1`) and two later
   owner decisions.
@@ -702,7 +703,7 @@ If the product owner declines V1–V5, SC-16 drops the word "amazing" and keeps 
 | `command-manifest.json`, `promotion-widths.{fine,coarse}.json` (new, committed)                                                               | SC-14/18/19 inputs                                                                                                                                                             | —                   |
 | Every `isVisible` call site using `env`                                                                                                       | typecheck-driven                                                                                                                                                               | —                   |
 
-### 4.10 ADR outline (ADR-0185, proposed)
+### 4.10 ADR outline (ADR-0185, filed; the shipped decisions are in the ADR, which differs from this outline)
 
 **"A command surface is designed from the floor up: two declared rows, labels that give way by declaration, tools on
 their subject's surface, and one scrolling line below the floor."**

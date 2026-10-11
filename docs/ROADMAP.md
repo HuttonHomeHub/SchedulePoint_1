@@ -765,8 +765,17 @@ discriminators. Each becomes a spec/plan before build:
   [`docs/specs/retire-single-pane-workspace/`](specs/retire-single-pane-workspace/)). The below-768 px
   Diagram / Activities toggle is gone: a narrow window has the same canvas row and foot row as a larger one,
   a dock that would leave the diagram under 360 px takes the row, and Compare revisions opens on a narrow
-  window. The shell chrome that leaves a short narrow window no workspace body is recorded as
-  `docs/TECH_DEBT.md` #471 and is not fixed here.
+  window. The shell chrome that left a short narrow window no workspace body was recorded
+  as `docs/TECH_DEBT.md` #471 and not fixed here; the toolbar redesign below closed it.
+
+- **The toolbar promotes what fits, and says what moved.** **Approved 2026-10-09; built as `toolbar-redesign`
+  M0-M7** ([ADR-0185](adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md); spec and plan at
+  [`docs/specs/toolbar-redesign/`](specs/toolbar-redesign/)). At 1024 × 600 with a mouse the command deck is two
+  lines in every measured state (it was four), the viewport controls sit in the diagram's corner, and below 1024 the
+  deck is one scrolling line with the editing row first. On a wider screen the commands that lived in menus come out
+  onto the bar at six widths (1280 to 2560), a menu always keeps an anchor row, and a resize that moves the control
+  a reader is on says where it went. The groups are quiet pills and the organisation switcher is a menu. The cost is
+  a CI step for the promotion journey, and menus whose contents depend on the window.
 
 - **A row's subject wraps; it never clips.** **Approved 2026-10-09; built as `row-subject-truncation` M0-M2**
   ([ADR-0184](adr/0184-a-rows-subject-wraps-it-never-clips.md); spec and plan at

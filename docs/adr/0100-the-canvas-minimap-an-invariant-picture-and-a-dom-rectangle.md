@@ -1,6 +1,8 @@
 # ADR-0100: The canvas minimap — an invariant picture and a DOM rectangle
 
 - **Status:** Accepted (filed Proposed with M1, 2026-08-21; Accepted at the M4 gate pass the same day, all findings folded)
+- **Amended by:** ADR-0185 (2026-10-11) — the minimap toggle leaves View ▾ for the diagram's corner cluster, with the
+  minimap stacked above it. The picture, the rectangle and the budgets are unchanged.
 - **Date:** 2026-08-21
 - **Deciders:** product owner (defaults Q1–Q4), Claude (spec + build), with input reports
   from the ui-architect, performance and accessibility reviewers

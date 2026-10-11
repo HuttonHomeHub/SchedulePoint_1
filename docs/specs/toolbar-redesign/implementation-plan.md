@@ -1,7 +1,7 @@
 # Implementation Plan: Toolbar redesign for a laptop, Surface Pro and monitor-first app
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Approved (the product owner approved the whole plan to run to completion on 2026-10-09; OD-1 and OD-2
+- **Status:** Accepted — shipped (ADR-0185). Approved (the product owner approved the whole plan to run to completion on 2026-10-09; OD-1 and OD-2
   in spec §0.2 were decided after M0 the same day)
 - **Owner:** web
 - **M0:** done (`m0-measurement.md`, commit `0044ee1`). It returned **no-go for M1 as written**; this revision

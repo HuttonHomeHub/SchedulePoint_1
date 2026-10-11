@@ -1,6 +1,9 @@
 # ADR-0031: TSLD toolbar-item registry & command taxonomy — a declarative registry feeding one APG `<Toolbar>`, a fixed 7-group taxonomy, three prominence tiers, and pen-gated authoring
 
 - **Status:** Proposed
+- **Amended by:** ADR-0185 (2026-10-11) — the three prominence tiers and the responsive overflow rule (decision 3) are gone:
+  `ToolbarItem.tier` was deleted (`docs/TECH_DEBT.md` #193), and group 1's zoom controls moved to the diagram's corner. The
+  taxonomy, the registry and the pen-gating are unchanged.
 - **Date:** 2026-07-13
 - **Deciders:** James Ewbank (with Claude Code — feature-analyst / ui-architect)
 - **Related:** ADR-0030 (canvas-first workspace — this refines its header/chrome and

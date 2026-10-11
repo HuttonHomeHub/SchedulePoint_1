@@ -5110,169 +5110,6 @@ of the gate that catches what a reviewer cannot see.
 > prose beside a growing set goes stale whoever writes it, and the register is not exempt from the
 > rule it wrote for the manual.
 
-### 193. Four toolbar exports have no production caller, and are deliberately kept
-
-**Status:** open · **Verified:** 2026-10-09
-
-> **The keep is OVERTURNED, and the ladder is deleted (2026-10-09, toolbar-redesign M1-T2).** This
-> row's last paragraph and ADR-0110 M5 both kept the machinery on the argument that the reduced strip
-> does not fit at 1280 or 1440 and "`resolveLayoutMode` may yet be needed". The toolbar redesign
-> (`docs/specs/toolbar-redesign/feature-spec.md` §4.2) decided the opposite, and decided it as the
-> ADR-0105 public-contract change this row said removal was: the surface fits by **moving commands to
-> their subject's surface and by one label rule**, never by a ladder, so no demotion pass will return.
-> Deleted: `resolveLayoutMode`, `bandIsAtLeast`, `TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`,
-> `ToolbarLayoutMode`, `ToolbarLayoutEnv` and the `layout` the render API carried, `isVisible`'s `env`
-> argument, `priority`, `priorityOf`, `partitionByTier`, the segment-tier guard, `triggersAreCompact`
-> and every `compact` prop. They completed ADR-0109's supersession of ADR-0090 D6 and ADR-0091 D3a.
-> **What survives, and why this row stays `open` until toolbar-redesign M7:** the `tier` field is
-> still declared on every item and is now read by nothing at all; removing it is a ~100-site edit the
-> plan does not schedule in M1, and M7's close-out closes this row once it is settled either way.
->
-> **The docblock half of this row is CLOSED (2026-09-09).** All four named docblocks and both named
-> residues were corrected, and the last one this row identified — `toolbar-registry.test.ts`'s
-> `computeLadder` companion lookup, sitting fourteen lines above the correction meant to catch it —
-> was fixed in the same pass. The corrected list of four dead exports was re-verified exact, and the
-> row's own correction about `TOOLBAR_LAYOUT_BANDS` (module-private, read by a live feature, not an
-> export) is right.
->
-> **What survives is the export question alone**, and it is a deliberate keep rather than a task:
-> ADR-0110 M5 kept the ladder machinery because the reduced strip does not fit at 1280 or 1440, and
-> removing an export is a public-contract change (ADR-0105).
->
-> **The class this row discovered is now `#277`**, which found nine citations of `autoLabelsFit` —
-> a symbol with no definition anywhere — that this row's own grep was structurally unable to find,
-> because it searched the names somebody remembered deleting.
-
-_Filed 2026-08-25 by RECONCILE step 7 (component review), which swept further than the pass had._
-
-The 2026-08-25 pass corrected two docblocks citing `ToolbarOverflow` and `toolbar-ladder.ts`. It
-stopped at the two it had found. A `grep` for the deleted machinery finds more:
-
-- `toolbar-registry.ts:544-552` — `priorityOf`'s own docblock, **immediately above** one of the two
-  the pass fixed, still describes "the demotion queue below" and `computeLadder` withdrawing labels.
-  `priorityOf` itself has **zero callers**.
-- `toolbar-registry.ts:98-101` — `resolveLayoutMode` says `Toolbar` "holds the previous mode… for
-  the same reason it holds the previous overflow set". `Toolbar` has no mode state and there is no
-  overflow set.
-- `toolbar-registry.ts:40-44` — `ToolbarTier` still describes tier-2 demoting before tier-1.
-- `toolbar-band.tsx:1-33` — cites `computeLadder` as the live consumer.
-
-**~~Five~~ FOUR exports have no production caller**: `priorityOf`, `partitionByTier`,
-`resolveLayoutMode`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`. (This sentence named `TOOLBAR_LAYOUT_BANDS`
-too, and was wrong twice over — see the correction below. It is left struck rather than rewritten,
-because a reader who acted on the original is the risk this row now exists to describe.) Both `Deck` and `Toolbar` now hard-code
-`layout: 'comfortable'` as a literal, so `resolveLayoutMode`'s other three bands are unreachable and
-`triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
-their own tests — the ADR-0081 shape: tests validating code nothing calls.
-
-#### Two more, and how the first grep missed them (2026-08-30 verification sweep)
-
-**The four docblocks above are now all corrected** — each carries a paragraph naming what it used
-to say and citing this number.
-
-> **The list of five was wrong about one of them, and acting on it would have broken production**
-> (corrected 2026-08-31, verified by reading rather than by anything failing). **`TOOLBAR_LAYOUT_BANDS`
-> is not an export and is not dead.** It is a module-private `const` (`toolbar-registry.ts:72`), and
-> `bandIsAtLeast` (`:161-165`) reads it — a function called in live code at
-> `features/tsld/toolbar/tsld-toolbar-items.tsx:2570`, inside an `isVisible` predicate that runs on
-> every render. Deleting it deletes a working feature. That its _value_ is constant today (`env.layout`
-> is hard-coded `'comfortable'`) is a different claim from "no production caller", and this row
-> conflated the two.
->
-> Calling it an export also weakened the row's own closing argument, which rests on removal being a
-> public-contract change: removing a module-private const is not one.
->
-> The corrected list is **four**: `priorityOf` (no reference of any kind, including tests),
-> `partitionByTier` and `resolveLayoutMode` (test-only), and `TOOLBAR_LAYOUT_HYSTERESIS_PX` (read
-> only inside `resolveLayoutMode`). The row's summary "they are exercised only by their own tests"
-> is false for `priorityOf`, which has no test either — the sweep paragraph below gets that right,
-> so the row contradicted itself.
->
-> **Worth keeping for the method.** This was found by spot-checking a subagent's report against the
-> code before acting on it — the same rule the register applies to its own rows, one document out.
-
-**Two citations of the same class were not on the list, because the list was a list of names.**
-
-- `toolbar-registry.ts:455` and `toolbar-registry.test.ts:308` both explain a guard in terms of
-  what **`companionsOf`** does. There is no `companionsOf` — it went with the ladder. Two comments
-  justify live code by the behaviour of a function that does not exist.
-- `app-header.tsx:197` cites **`isWidthConstrained` (`Toolbar.tsx:81-84`)** for why a
-  width-unconstrained row is charged no chrome. `Toolbar.tsx` exists; that symbol does not, at those
-  lines or anywhere.
-
-**The transferable part is why the 2026-08-25 grep could not have found them.** It searched for the
-machinery it knew had been deleted — `ToolbarOverflow`, `toolbar-ladder.ts`, `computeLadder` — and
-both of these cite something _else_. A grep for known-deleted names finds citations of names you
-remember deleting; it is structurally blind to a citation of a name nobody remembers existed. The
-instrument that does work is the opposite direction — resolve every backticked identifier in a
-comment against the tree — which is `#177`/`#183`'s shape one layer in, applied to this repository's
-own symbols rather than a dependency's. Recorded rather than built: it is a shared gate, so it needs
-a spec (ADR-0105).
-
-**Not deleted here deliberately.** ADR-0110 M5's own decision was to KEEP the ladder machinery
-because the reduced strip does not fit at 1280 or 1440, so `resolveLayoutMode` may yet be needed;
-and removing exports is a public-contract change (ADR-0105). The docblocks, though, are simply wrong
-and should be corrected whether or not the code goes. Decide the two questions separately.
-
----
-
-> **Every line citation in the bullet list has moved** (2026-09-03 sweep) — the docblocks were
-> corrected and the file shifted underneath the references to them. The **substance is unchanged and
-> verified**: all four docblocks now name what they used to say, and the corrected list of four dead
-> exports is exact — `priorityOf` has no caller at all, `partitionByTier` and `resolveLayoutMode` are
-> test-only, and `TOOLBAR_LAYOUT_HYSTERESIS_PX` is read only inside `resolveLayoutMode`. The row's own
-> correction about `TOOLBAR_LAYOUT_BANDS` is also verified right: it is module-private and read by a
-> live feature, so deleting it would break something.
->
-> **One residue the row does not cover:** `toolbar-registry.test.ts` still says "never enters
-> `computeLadder`'s companion lookup" — a surviving citation of deleted machinery, sitting a few lines
-> above the correction that was supposed to catch it. This row's own failure mode, one line from its
-> own fix.
-
-#### The four are still exact, and the row's method could not see the larger instance (2026-09-13)
-
-**Re-derived, and the corrected list of four is unchanged** — `priorityOf` has no reference of any
-kind including tests, `partitionByTier` and `resolveLayoutMode` are test-only, and
-`TOOLBAR_LAYOUT_HYSTERESIS_PX` is read only inside `resolveLayoutMode`. That is a checked negative:
-ADR-0133 reworked this exact surface on 2026-09-10, the day after the previous verification, and
-moved none of them.
-
-**What the re-derivation found is one field along, and it is bigger than the four exports.**
-`ToolbarItem.priority` is read by nothing. Both comparators that order this surface —
-`resolveToolbarItems` and `Toolbar`'s own grouping pass — key on `groupRank`, then `order`, then
-declaration index; the field's only reader is `priorityOf`, which has no caller. Yet **ten registry
-items in `tsld-toolbar-items.tsx` declare a `priority`**, and **six comment blocks beside them
-described the `⋯` and the demotion ladder as live mechanisms** — four of them the same text repeated.
-One of those six is the considered fix for a real, journey-found defect (`next-conflict` raised
-90 → 110 at Graphite M5, because the ladder had demoted it and kept `zoom-out`, reinstating
-ADR-0094 M2's finding). That remedy is now inert.
-
-**The worst site was the field's own type docblock** — the thing every author of a new registry item
-reads — which opened "higher survives longer, lowest goes into the `⋯` first" in the present tense.
-All seven are corrected; none of the ranks is deleted, because removing them is the separate decision
-this row already isolates.
-
-**Why this row's own instrument was blind to it.** The row's transferable point is that a `grep` for
-known-deleted names cannot find a citation of a name nobody remembers existed. This is the same blind
-spot one layer in: the search was for **export names**, and `priority` is a **field on a
-declaration** — a live symbol, spelled correctly, in code that compiles, describing a mechanism that
-does not exist. Neither the name-based grep nor `#277`'s resolve-every-backticked-identifier
-direction would flag it, because every identifier in those comments resolves.
-
-**And the correction paragraph beside `priorityOf` carried a third stale claim, of a new kind.** It
-closed "`priority` survives only as ordering within a group" — false; ordering within a group is
-`order`. Its own two previous versions were citations that outlived their subject, which a reader can
-catch by resolving a name against the tree. This one **asserted a residual role the field does not
-have**, so there was nothing dangling to resolve and it read as diligence. A correction that invents
-a smaller job for the thing it is retiring is harder to catch than the staleness it replaced.
-
-**Also corrected: the row's closing argument is weaker than it states.** `components/ui/toolbar/index.ts`
-is an explicit named re-export list and contains **none of the four** — they are module-level exports
-reachable only by deep import from inside that directory. So "removing an export is a public-contract
-change (ADR-0105)" overstates it, exactly as the row already corrected once for
-`TOOLBAR_LAYOUT_BANDS`. The keep-decision may still be right on ADR-0110 M5's grounds; the
-public-contract half of the reason is not load-bearing. Established by reading the barrel.
-
 ### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
 **Status:** open · **Verified:** 2026-09-13
@@ -6564,6 +6401,8 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                                   | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --- | ------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 471 | At narrow widths the app header and wrapped command band took 355-603 px of the height                        | 2026-10-11 | **Closed by toolbar-redesign M3** (`docs/specs/toolbar-redesign/m3-measurement.md` §2; ADR-0185 D5). Below 1024 the deck is one scrolling line and a narrow-and-short window scrolls the band away, so Expand and Recalculate are reachable at all five cells on both pointers (unreachable at all five before). What the row left over is filed: the foot row's outlet (#489) and the header at 320 (#490).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 193 | Four toolbar exports had no production caller, and were deliberately kept                                     | 2026-10-11 | **Closed by toolbar-redesign M1 and M7** (`docs/specs/toolbar-redesign/`, ADR-0185). The keep (ADR-0110 M5) was overturned as the ADR-0105 contract change this row said removal was: M1 deleted `resolveLayoutMode`, `bandIsAtLeast`, `TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`, `priority`, `priorityOf`, `partitionByTier`, the segment-tier guard, `triggersAreCompact` and every `compact` prop; M7 deleted `ToolbarItem.tier` and `ToolbarTier` from the ~100 registrations and the tests that set them. Nothing read the field since ADR-0109 D1; `grep -rn 'ToolbarTier' apps/web` is empty. The class this row found (a citation of a symbol nobody remembers) is #277.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 479 | The reason a conflict is flagged was spoken but shown nowhere a sighted keyboard user reads                   | 2026-10-11 | **Closed by `docs/specs/conflict-reason-on-object/` M0-M2** (ADR-0186; readings in `m0-measurement.md` and `m1-measurement.md`). A flagged selection states every reason on a caption line above the selection bar's controls, in the wording the announcer and the listbox option also use; the controls never reflow. The cost is 20 px of canvas (16 px on a one-line bar at 1912 x 1080), accepted by the product owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 472 | A list row's `project · client` subtitle (and its plan name) was truncated mid-word at every width            | 2026-10-09 | **Closed by `docs/specs/row-subject-truncation/` M0-M2** (ADR-0184; readings in `m0-measurement.md`, verdict in `m2-verdict.md`). `RowSubject` wraps and never clips; `ListRow`'s trailing block drops beneath the row's text under 7rem. 0 names, contexts or trailing facts clipped in every measured cell; the cost is height in the capped boxes (3 and 3 whole rows became 2 and 2 at 1646 × 1000, 1 and 1 at 1912 × 948), accepted by the product owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 466 | At 320 px the activities table row's `⋯` was under the bottom panel's bar, so a pointer could not reach it    | 2026-10-09 | **Closed as not reproducible: the bar went with the single-pane layout** (ADR-0181, `web` 0.182.0, #907). Read in the container's Chromium on `main` at `7949e496`, panel expanded, 12 activities: the first and last visible rows' `⋯` is the topmost element at its centre and four inner corners and opens its menu, by mouse and by touch (`hasTouch`, `pointer: coarse`), at 700 × 900 and 320 × 1200 (the latter after scrolling the table's own region sideways: its 447 px of columns sit in a 288 px region, so the `⋯` at the right end is off screen until then, which is a scrolling table and not a covered control). At 320 × 720 the 109 px body shows no row (Expand's centre is reachable and opens the panel), which is #471's limit. Pinned by `apps/web/e2e-narrow-shell/narrow-shell.spec.ts` "the row menu is reachable by a fine / coarse pointer"; proved able to fail by laying a fixed `div` over the first `⋯`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -11852,48 +11691,6 @@ surface of the coarse sweep can pass honestly and name what it excuses. **Next:*
 `--control-h` (the row is already 61 px with a 44 px `⋯`, so it costs no height) and delete the marker and
 `ROW_SELECT_EXEMPT`. **Trigger:** any device reading that misses a row checkbox, or the next touch pass over the table.
 
-### 471. At narrow widths the app header and wrapped command band take 355–603 px of the height, leaving the workspace body no room
-
-**Status:** open · **Verified:** 2026-10-09 (`docs/specs/retire-single-pane-workspace/m0-measurement.md` §2–§3, the container's Chromium, layout only; `<main>` starts at y = 355 at 640 wide and y = 603 at 320)
-**Raised:** 2026-10-09 · **Size:** M · **Owner:** web
-
-The shell's header (88 px at 640, 136 at 320) and the wrapped command band (248 at 640, 448 at 320) sit above `<main>`
-in **both** the old below-`md` layout and the one that replaced it, so the plan workspace's body is the viewport height
-less 355 px at 640 and less 603 px at 320: **117 px at 640 × 480, 109 px at 320 × 720, and 0 at 640 × 360, 640 × 300
-and 320 × 256**. Below about 604 px of viewport height at 640 wide, no layout shows a table row, and at 640 × 360 and
-below the foot row (Expand, Recalculate) is below the viewport and `<main>` has no height to scroll — a pointer cannot
-reach it. This is **pre-existing** (today's single pane shows 0 rows at 640 × 480 and 320 × 720 as well) and below the
-1024 × 600 design floor (ADR-0179), so retiring the single-pane layout neither causes nor fixes it. The retire-single-pane
-epic **withdrew** its "table keeps a row at 640 × 300 / 360 / 480" criteria for this reason; ADR-0181 records the figures.
-
-**M3 of the toolbar redesign (2026-10-09) shipped the band half on this branch**: below 1024 the deck is one scrolling line
-and a narrow-and-short window scrolls the band away, so Expand and Recalculate are reachable at all five cells on both pointers
-(`docs/specs/toolbar-redesign/m3-measurement.md`). The row stays **open** until that is released and the header's own height at 320
-(184 / 239 px band, 212 / 275 on touch) is decided (M7 closes the band half).
-
-**Needs its own spec** (ADR-0105: a shell layout rule, and a component's public contract if the band or the header
-changes). The levers are the shell's, not the workspace's: let the command band collapse behind a disclosure below a
-height or width, or let the shell scroll as a whole when the window cannot hold its chrome plus the foot row. **Next:**
-spec it, measuring first (ADR-0113) at the retire-single-pane matrix. **Trigger:** a device or zoom reading that needs
-a table row or the foot row below 604 px of height, or the next pass over the narrow shell.
-
-**Separate, also pre-existing and independent of narrow widths:** a selection bar docked in the foot row grows it to
-167–367 px at 1280–1024 and below (M0 §5, an activity selected), already true at the 1024 floor, because the 582 px facts
-block beside the outlet is `shrink-0` and the outlet column is left 0–113 px wide. The foot row now wraps, which helps at
-narrow widths, but the outlet's `flex-1` / zero basis never asks for a line of its own. Give the outlet a content basis
-or its own row when it holds a bar.
-
-**Follow-up from the ADR-0181 reviews:** a dock that has taken the row hides the diagram without saying so (ADR-0180's
-swap prints "Diagram hidden. Collapse to return."). It needs a note slot in the shared dock chrome of the four
-panels, with the note tied to the control that restores the diagram; not built in the retirement, so it is an open
-part of this row.
-
-**Read in a browser while building ADR-0181 (2026-10-09, the container's Chromium):** once the foot row wraps
-and its facts outlet is bounded (the facts no longer push Recalculate off the right edge at 320), the row is **123 px at
-320 × 720**, taller than the **109 px** body: the canvas row has no height, a dock opened there is 0 px tall, and Expand
-sits 10 px below the viewport (its centre is reachable). The journey reads docks at 320 × 1000 for that reason
-(body 397, canvas row 274).
-
 ### 473. The Explorer's splitter wrapper fails axe `region` in every state
 
 **Status:** open · **Verified:** 2026-10-09 (`overview.spec.ts` step 5b2 with `region` enabled: one node, `div[data-surface="panel"].contents` from `explorer-column.tsx:128-130`)
@@ -12038,4 +11835,25 @@ With text-only zoom at 200 % on a coarse pointer at 1024 × 600, the selection t
 **Status:** open · **Verified:** 2026-10-11 (`e2e-minimap/viewport-cluster.spec.ts:515` reads 122 px; `m1-measurement.md` §1b)
 **Raised:** 2026-10-11 (conflict-reason-on-object) · **Size:** S · **Owner:** web
 
-The reason line took that stage from 134 to 114 px; tighter caption leading and `pointer-coarse:py-0.5` on the foot row return it to 122 px. Two pixels is one border away from red: a later row of facts, a font change or another line in the bar fails the floor again. **Next:** `#471`'s structural fix (give the outlet its own row when it holds a bar) removes the dependency; until then, treat any change to the foot row's height on touch as needing this reading. **Trigger:** the next change to the foot row's padding, the facts block or the caption.
+The reason line took that stage from 134 to 114 px; tighter caption leading and `pointer-coarse:py-0.5` on the foot row return it to 122 px. Two pixels is one border away from red: a later row of facts, a font change or another line in the bar fails the floor again. **Next:** #489's structural fix (give the outlet its own row when it holds a bar) removes the dependency; until then, treat any change to the foot row's height on touch as needing this reading. **Trigger:** the next change to the foot row's padding, the facts block or the caption.
+
+### 489. A selection bar docked in the foot row grows it to 167-367 px, because the outlet is never asked for a line of its own
+
+**Status:** open · **Verified:** 2026-10-11 (`docs/specs/toolbar-redesign/m3-measurement.md` §4: fine 1024 × 600, bar 323 px wide over 4 lines, foot row 167 px, canvas 246; the 582 px facts block beside the outlet is `shrink-0`)
+**Raised:** 2026-10-09 (the second paragraph of #471, split out at toolbar-redesign close-out, D-j) · **Size:** M · **Owner:** web · **Needs a spec** (ADR-0105: a shell layout rule)
+
+An activity selected at 1280-1024 docks the selection bar in the foot row, which grows from 51 px to 167 px because the outlet column is left 0-113 px wide next to the facts block, and the outlet's `flex-1` / zero basis never asks for a line of its own. Wrapping the row helped below 1024 and did not change this at the floor. **What users see:** 116 px less canvas the moment anything is selected, which is what SC-1's 362 px (nothing selected) and 246 px (selected) split records. **Next:** give the outlet a content basis, or its own row, when it holds a bar; measure first (ADR-0113) at the floor on both pointers. It also removes #488's dependency. **Trigger:** the next change to the foot row, or a report that selecting costs too much canvas.
+
+### 490. The app header at 320 wide is four lines, so `<main>` starts at 239 px against a 200 px target
+
+**Status:** open · **Verified:** 2026-10-11 (`docs/specs/toolbar-redesign/m3-measurement.md` §3 and `m6-measurement.md` §5: fine 192 / 239 band, coarse 220 / 275)
+**Raised:** 2026-10-09 (toolbar redesign M3) · **Size:** S · **Owner:** web
+
+At 320 the brand, status badge and "Plan details" toolbar are 316 px against 288 of row, so the identity wraps under the brand (`app-header.tsx`, `max-xs:`). SC-5 holds (the band is 33 % / 38 % of 720), but the owner's `<main>` y target of 200 px does not. Reaching it means choosing one of: hide the status badge, an icon-only brand, or the identity beside the view switch; M6 §5 adds the organisation switcher as glyph-only below `sm`. All are header decisions with a cost in what a phone-width reader sees, so none was taken. **Next:** the owner picks; 320 is below the 1024 design floor (ADR-0179), so it is a courtesy width. **Trigger:** a report at a phone width, or the next pass over the header.
+
+### 491. The web end-to-end total passed ADR-0138's 2,372 s re-open trigger when the promotion journey joined CI
+
+**Status:** open · **Verified:** 2026-10-11 (`docs/specs/toolbar-redesign/m5-measurement.md` §6: the web total is 2,393 s, read from `scripts/e2e-durations.json`; the trigger is in `docs/adr/0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md`, "Re-open triggers")
+**Raised:** 2026-10-11 (toolbar redesign close-out) · **Size:** S · **Owner:** web
+
+The promotion journey has its own config and CI step (`playwright.promotion.config.ts`, `test:e2e:promotion`), placed on the lightest shard with three existing steps moved to pay for it. The web total is now 21 s over the figure at which ADR-0138 says four shards need more than 593 s each. The spread across shards was not re-measured after the move. **Next:** re-measure the four shards' wall times on a CI run and either re-pack (`scripts/e2e-durations.json`) or take ADR-0138's trigger as fired and re-open the shard count. **Trigger:** the next CI run whose slowest shard is the long pole, or the next journey added.
