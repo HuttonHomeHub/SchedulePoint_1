@@ -1,5 +1,21 @@
 # @repo/api
 
+## 0.89.0
+
+### Minor Changes
+
+- [#918](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/918) [`58147dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58147dcd439004e116d5d301228241c62888aa99) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The revision comparison's moved activities now carry `fromStart`, `toStart`, `fromFinish` and `toFinish`, named for the dates the comparison actually used (placed dates when `datesBasis` is `PLACED`). The `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` fields carry the same values, are marked deprecated and will be removed at the next breaking API change. The OpenAPI description of `placementNotAssessableReason` no longer says placement comparison is unimplemented.
+
+- [#918](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/918) [`58147dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58147dcd439004e116d5d301228241c62888aa99) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleting a single activity, link or resource assignment, and dissolving a summary, now accept an optional version. When it is sent and the row has changed since, the request is refused with 409 and nothing is deleted. Without it the routes behave exactly as before. The audit entry for a dissolved summary now records the batch it can be restored from.
+
+### Patch Changes
+
+- [#918](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/918) [`58147dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58147dcd439004e116d5d301228241c62888aa99) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Editing a calendar's working time (its working week, shifts, hours per day or an exception) or a resource's calendar or capacity limit now marks every plan that uses it as edited since it was calculated, so the overview and the plan's status bar no longer read as current over dates the edit has moved.
+
+- [#918](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/918) [`58147dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58147dcd439004e116d5d301228241c62888aa99) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Moving, arranging or applying levelling to many activities while the plan recalculates can no longer fail with an unexplained error: both now take their activity row locks in the same order. Deleting a single summary activity also waits for an in-flight recalculation instead of racing it. Other bulk deletes and dissolve are not yet covered.
+
+- [#918](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/918) [`58147dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58147dcd439004e116d5d301228241c62888aa99) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console's Run diagnostics now takes one consistent, read-only snapshot and gives up on any single statement that runs past three seconds, instead of running thirty-two separate unbounded queries.
+
 ## 0.88.1
 
 ### Patch Changes
