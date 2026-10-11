@@ -82,3 +82,78 @@ test('a plan edited elsewhere since its calculation says so, and Recalculate cle
   await expect(bar).not.toHaveAttribute('data-schedule-state', 'pending');
   await expect(bar).toHaveAttribute('data-schedule-state', 'current');
 });
+
+/**
+ * **A shared calendar's edit is an edit to every plan on it** (`docs/TECH_DEBT.md` #449). The plan's
+ * own rows are untouched; only the calendar changes, so before the fix the status bar kept saying
+ * "current" over dates the new exception had moved. The calendar is edited through the REST API for
+ * the same reason as above: it is the edit this tab never saw.
+ */
+test('a calendar exception added elsewhere marks the plans on that calendar stale', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, STAMP + 1);
+  await createHierarchy(page);
+  await newPlan(page, 'Foxtrot');
+  await ensurePen(page);
+  await seedActivities(page, orgSlug, [{ name: 'Foxtrot one', laneIndex: 0 }]);
+  const planId = openPlanId(page);
+
+  // Bind the plan to a new organisation calendar (a plan-settings write, so it stamps by itself),
+  // then calculate so the baseline for "edited since" is after it.
+  const calendarId = await page.evaluate(
+    async ({ org, plan }: { org: string; plan: string }) => {
+      const send = async (path: string, method: string, body: unknown) => {
+        const response = await fetch(`/api/v1/organizations/${org}/${path}`, {
+          method,
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok)
+          throw new Error(`${method} ${path} ${String(response.status)}: ${await response.text()}`);
+        return (await response.json()) as { data: { id: string; version: number } };
+      };
+      const calendar = await send('calendars', 'POST', {
+        name: 'Site week',
+        workingWeekdays: 31,
+      });
+      const current = await (
+        await fetch(`/api/v1/organizations/${org}/plans/${plan}`, { credentials: 'include' })
+      ).json();
+      await send(`plans/${plan}`, 'PATCH', {
+        calendarId: calendar.data.id,
+        version: (current as { data: { version: number } }).data.version,
+      });
+      return calendar.data.id;
+    },
+    { org: orgSlug, plan: planId },
+  );
+  await recalculate(page, orgSlug);
+  const bar = page.locator('[data-schedule-state]');
+  await expect(bar).toHaveAttribute('data-schedule-state', 'current');
+
+  await page.evaluate(
+    async ({ org, calendar }: { org: string; calendar: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/calendars/${calendar}/exceptions`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ date: '2026-02-10', label: 'Site closed' }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(`POST exception ${String(response.status)}: ${await response.text()}`);
+    },
+    { org: orgSlug, calendar: calendarId },
+  );
+
+  await page.reload();
+  await ensurePen(page);
+  await expect(bar).toHaveAttribute('data-schedule-state', 'stale');
+
+  await bar.getByRole('button', { name: 'Recalculate' }).click();
+  await expect(bar).toHaveAttribute('data-schedule-state', 'current');
+});

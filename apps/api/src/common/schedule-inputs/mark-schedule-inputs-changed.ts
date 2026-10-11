@@ -24,6 +24,10 @@ import type { Prisma } from '@prisma/client';
  * until the next recalculation (`docs/TECH_DEBT.md` #449). `GREATEST` keeps the column monotone when
  * two transactions commit out of order.
  *
+ * The callers are the activity, dependency, cross-plan link, assignment and plan-settings writers, and
+ * the calendar working-time and resource calendar/ceiling writers, which name every plan that uses the
+ * edited object (`schedule-inputs.structural.spec.ts` lists them).
+ *
  * Several plans are locked in id order, so two multi-plan stamps cannot deadlock each other.
  *
  * It touches no `version`, `updated_at` or `updated_by`, so an activity edit cannot 409 a concurrent

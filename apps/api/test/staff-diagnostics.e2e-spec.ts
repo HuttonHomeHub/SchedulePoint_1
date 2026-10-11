@@ -2,10 +2,13 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { ThrottlerStorage } from '@nestjs/throttler';
+import { Prisma } from '@prisma/client';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import type { DiagnosticEntry } from '../src/modules/staff/staff-diagnostics.registry';
+import { StaffDiagnosticsRepository } from '../src/modules/staff/staff-diagnostics.repository';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
@@ -1206,5 +1209,67 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       expect(row.affected).toBe(plain.get(row.id)!.affected);
       expect(row.examined).toBe(plain.get(row.id)!.examined);
     }
+  });
+
+  /**
+   * **A press is one bounded, read-only reading** (`docs/TECH_DEBT.md` #456, ADR-0140 amendment).
+   *
+   * Driven through the repository's own seam rather than the shipped registry: a statement slower than
+   * the bound cannot be written into the registry, whose entries are fixed counts, and a test-only
+   * entry there would have to survive gates S-1 to S-5. The seam is what the service calls, so the
+   * guarantees below are the route's.
+   */
+  describe('the press transaction (#456)', () => {
+    const entryRunning = (sql: Prisma.Sql): DiagnosticEntry =>
+      ({ id: 'probe', denominator: sql, numerator: sql }) as unknown as DiagnosticEntry;
+
+    it('cancels a statement over the bound, and the pooled connection is usable afterwards', async () => {
+      const repository = app.get(StaffDiagnosticsRepository);
+      const slow = entryRunning(Prisma.sql`SELECT pg_sleep(5)::text::bigint AS examined`);
+      const startedAt = Date.now();
+
+      // 57014 is Postgres's `query_canceled` for a statement timeout. The service lets it propagate,
+      // and `AllExceptionsFilter` answers the route's existing 500 for a non-conflict database error.
+      await expect(repository.reading((db) => repository.examined(slow, db))).rejects.toMatchObject(
+        {
+          meta: { code: '57014' },
+        },
+      );
+      expect(Date.now() - startedAt).toBeLessThan(4_500);
+
+      // The setting was LOCAL, so the next transaction on the pool is unbounded again and works.
+      const fast = entryRunning(Prisma.sql`SELECT count(*) AS examined FROM organizations`);
+      await expect(repository.reading((db) => repository.examined(fast, db))).resolves.toBeTypeOf(
+        'number',
+      );
+      const rows = await prisma.$queryRaw<{ st: string }[]>`
+        SELECT current_setting('statement_timeout') AS st`;
+      expect(rows[0]?.st).toBe('0');
+    });
+
+    it('refuses a write inside the press with 25006, whatever the registry contains', async () => {
+      const repository = app.get(StaffDiagnosticsRepository);
+      const write = entryRunning(Prisma.sql`UPDATE organizations SET name = name WHERE false`);
+
+      await expect(
+        repository.reading((db) => repository.examined(write, db)),
+      ).rejects.toMatchObject({ meta: { code: '25006' } });
+    });
+
+    it('reads every entry from one snapshot', async () => {
+      const repository = app.get(StaffDiagnosticsRepository);
+      const count = entryRunning(Prisma.sql`SELECT count(*) AS examined FROM organizations`);
+
+      const [first, second] = await repository.reading(async (db) => {
+        const before = await repository.examined(count, db);
+        // A row committed by ANOTHER connection between the two reads must not be visible to the
+        // second: that is the whole difference between one reading and thirty-two.
+        await prisma.organization.create({ data: { name: 'Late', slug: `late-${Date.now()}` } });
+        return [before, await repository.examined(count, db)] as const;
+      });
+
+      expect(second).toBe(first);
+      await prisma.organization.deleteMany({ where: { slug: { startsWith: 'late-' } } });
+    });
   });
 });

@@ -296,6 +296,31 @@ installation is the reader, and what to tell them is which plan to recalculate. 
 reading of `retrospective` than the copy gives, and is recorded here rather than folded into the
 screen, because it is true of these two diagnostics and not of the field in general.
 
+## Amendment 2026-10-11 — a press is one read-only, bounded transaction (`docs/TECH_DEBT.md` #456)
+
+D3 and D5 describe what one statement may project and why it is raw SQL. They said nothing about the
+**press**, which ran its 32 statements on the shared client, each with its own snapshot and no time bound.
+Two consequences, both found by reading the code on 2026-10-11, neither a change to D1 to D7:
+
+- **A press is now one snapshot.** `StaffDiagnosticsRepository.reading` opens one `REPEATABLE READ`
+  transaction and every entry's `examined` and `affected` run inside it, so an entry's numerator can no longer
+  count rows its denominator never saw. The block a staff member pastes into a measurement record is one
+  observation, which it was always presented as.
+- **A press cannot write, and cannot run unbounded.** The transaction is `READ ONLY` (a write is refused by
+  Postgres with 25006, whatever a future registry entry contains) and sets `statement_timeout` to 3 s locally,
+  about 5.5 times the slowest statement measured at a million rows. A timed-out entry fails the whole press with
+  the route's existing 500, logged with the entry id. Per-entry failure would change the row shape and is a
+  decision of its own.
+
+**The gate needed no change, and that is the point of recording it.** S-3 bans `$executeRaw` and
+`$queryRawUnsafe` with no exception and admits `$queryRaw` in one named file. The two setup statements are
+fixed text with no interpolation and no `SELECT`, issued through `$queryRaw` in that file, so S-1 to S-5 and the
+repository's "composes no SQL of its own" rule (which is about projections) still hold as written. Verified
+on Postgres 17 through Prisma's interactive transaction: `SET TRANSACTION READ ONLY` and `SET LOCAL
+statement_timeout` take effect as the first statements, a write is refused with 25006, a statement over the
+bound is cancelled with 57014 (`PrismaClientKnownRequestError`), and the setting does not outlive the
+transaction. The proof is `test/staff-diagnostics.e2e-spec.ts` ("the press transaction").
+
 ## What this ADR does not do
 
 It does **not** license, and a later request for any of these is a new decision rather than an

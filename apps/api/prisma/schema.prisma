@@ -980,6 +980,12 @@ model Plan {
   /// after its read is missed, and a recalc queued on the plan lock behind an edit it then reads
   /// leaves a spurious flag.
   ///
+  /// NOT ONLY THIS PLAN'S OWN ROWS. A calendar's working time and a resource's calendar or capacity
+  /// ceiling are inputs of every plan that uses them, so editing one stamps each of those plans
+  /// (`CalendarsService`, `ResourcesService`; `docs/TECH_DEBT.md` #449). An `hours_per_day`-only edit
+  /// stamps too: the engine never reads it, but the recalculation write converts float and drift to
+  /// days with it, so the stored figures go stale.
+  ///
   /// CLIENT-NEVER, USER-INVISIBLE TO LOCKING. Stamped by a raw `UPDATE plans` that touches no
   /// `version`/`updated_at`/`updated_by` (the `stampScheduleComputedAt` shape), so an activity edit
   /// cannot 409 a concurrent plan-settings save. Never accepted from a DTO. The recalculation does

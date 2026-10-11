@@ -65,6 +65,10 @@ export const DATES_BASIS_NOTE =
   '`YYYY-MM-DD`. Holds the PLACED date when the read’s `datesBasis` is `PLACED`, and the ' +
   'network’s earliest date when it is `NETWORK`, whatever the field’s name says.';
 
+/** Appended to each deprecated `*Early*` description; the removal condition is stated once. */
+export const DEPRECATED_EARLY_NOTE =
+  'Removed at the next breaking API change (`docs/API.md`, "Deprecated fields").';
+
 export class RevisionSideDto implements RevisionSide {
   @ApiProperty({ enum: REVISION_SIDE_KINDS, description: 'Which kind of revision this side is.' })
   kind!: RevisionSideKind;
@@ -121,12 +125,41 @@ export class RevisionMovedActivityDto implements RevisionMovedActivity {
   floatMovementDays!: number | null;
 
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toFinish!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `fromStart`. ' + DEPRECATED_EARLY_NOTE,
+  })
   fromEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `toStart`. ' + DEPRECATED_EARLY_NOTE,
+  })
   toEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `fromFinish`. ' + DEPRECATED_EARLY_NOTE,
+  })
   fromEarlyFinish!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `toFinish`. ' + DEPRECATED_EARLY_NOTE,
+  })
   toEarlyFinish!: string | null;
 
   @ApiProperty({
@@ -361,17 +394,17 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
     nullable: true,
     enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
-      'Whether the two sides’ PLACEMENTS COULD be compared — null when both recorded one, a ' +
-      'reason when they did not. **No placement comparison is implemented yet**, so null means ' +
-      '“nothing prevents one”, never “one was done”: the ghosts and the delta both still run on ' +
-      'early dates on both sides. The field ships ahead of its consumer deliberately — it is ' +
-      'unrecoverable after the fact, because a baseline captured without the placement columns can ' +
-      'never be told what they held. A baseline froze where the NETWORK said work could go and never ' +
-      'where a planner had put it, so every baseline captured before that change is ' +
-      '`placement_snapshot_level: NONE` and **permanently** so: a backfill would state as history ' +
-      'a placement that baseline never saw. Reported whether or not either plan happens to hold a ' +
-      'placement — a reason that appeared only when there was something to compare could not ' +
-      'separate "nobody looked" from "we looked and there was nothing".',
+      'Whether the comparison read the two sides’ PLACEMENTS — null when both recorded one, a ' +
+      'reason when they did not. Null is exactly `datesBasis: PLACED`: every frozen side recorded ' +
+      'where its bars were placed (and the live side always has its own), so the dates compared, ' +
+      'the delta and the ghosts all use the placed dates. A reason is exactly `datesBasis: ' +
+      'NETWORK`: one side is a baseline captured before placements were frozen, and comparing a ' +
+      'placed span with a network span would report every placement as a move, so the whole pair ' +
+      'falls back to the network’s earliest dates. Such a baseline is `placement_snapshot_level: ' +
+      'NONE` **permanently**: a backfill would state as history a placement that baseline never ' +
+      'saw. Reported whether or not either plan happens to hold a placement — a reason that ' +
+      'appeared only when there was something to compare could not separate "nobody looked" from ' +
+      '"we looked and there was nothing".',
   })
   placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }

@@ -110,6 +110,7 @@ describe('CalendarsService', () => {
     findActiveExceptionByIdInCalendar: ReturnType<typeof vi.fn>;
     softDeleteException: ReturnType<typeof vi.fn>;
     touchVersion: ReturnType<typeof vi.fn>;
+    findActivePlanIdsUsing: ReturnType<typeof vi.fn>;
   };
   let resources: { countActiveResourcesUsingCalendar: ReturnType<typeof vi.fn> };
   let projects: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
@@ -138,6 +139,8 @@ describe('CalendarsService', () => {
       findActiveExceptionByIdInCalendar: vi.fn(),
       softDeleteException: vi.fn(),
       touchVersion: vi.fn(),
+      // The plan-set query is proven against a real table in calendars-edited-since.e2e-spec.ts.
+      findActivePlanIdsUsing: vi.fn().mockResolvedValue([]),
     };
     resources = { countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0) };
     projects = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }) };

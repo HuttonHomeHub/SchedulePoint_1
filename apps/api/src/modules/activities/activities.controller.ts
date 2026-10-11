@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -26,6 +27,7 @@ import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
+import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
 import { ResourceEnvelope } from '../../common/dto/resource-envelope';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
@@ -150,19 +152,27 @@ export class ActivitiesController {
       'takes — **the reason this answers 200 rather than 204**: the id already existed server-' +
       'side, but a bodiless response meant a client could not restore what it had just deleted, ' +
       'so undoing a band copy had no redo (`docs/TECH_DEBT.md` #113). The status code moves, ' +
-      '204 → 200: a caller reading the body is unaffected, one branching on the status is not.',
+      '204 → 200: a caller reading the body is unaffected, one branching on the status is not. ' +
+      '**Optional `?version=N`** (`docs/TECH_DEBT.md` #450): when sent, the row is locked and its ' +
+      'version compared before anything is deleted, and a stale one is refused with 409 ' +
+      '`STALE_VERSION`; for a summary the version guards the root only. Omit it for today’s ' +
+      'behaviour exactly.',
   })
   @ApiOkResponse({ type: DeleteActivityResultDto })
+  @ApiConflictResponse({
+    description: 'A `version` was sent and the activity is at another (STALE_VERSION).',
+  })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
+    @Query() query: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<DeleteActivityResultDto> {
     return DeleteActivityResultDto.from(
-      await this.service.remove(principal, orgSlug, activityId, context),
+      await this.service.remove(principal, orgSlug, activityId, context, query.version),
     );
   }
 
@@ -180,7 +190,9 @@ export class ActivitiesController {
       'otherwise 409 on its next save with no explanation. The response returns those rows at ' +
       'their new versions — the caller cannot derive them, since it did not know which activities ' +
       'were children and the count alone would not carry the versions. `deleteBatchId` is the batch ' +
-      'the summary’s soft-delete was stamped with: `POST …/restore-batch/:batchId` undoes the dissolve.',
+      'the summary’s soft-delete was stamped with: `POST …/restore-batch/:batchId` undoes the dissolve. ' +
+      '**Optional body `{ "version": N }`** (#450): when sent, a summary at any other version is ' +
+      'refused with 409 `STALE_VERSION` and nothing is promoted or deleted.',
   })
   @ApiOkResponse({ type: DissolveSummaryResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
@@ -192,6 +204,7 @@ export class ActivitiesController {
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('activityId', ParseUuidPipe) activityId: string,
+    @Body() dto: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<DissolveSummaryResponseDto> {
     const { promoted, deleteBatchId } = await this.service.dissolveSummary(
@@ -199,6 +212,7 @@ export class ActivitiesController {
       orgSlug,
       activityId,
       context,
+      dto.version,
     );
     return { promoted, deleteBatchId };
   }

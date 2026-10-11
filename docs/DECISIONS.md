@@ -10,6 +10,39 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-11 — Placement batches and the recalculation lock activity rows in id order, not by taking the plan lock (#440)
+
+**What was decided.** The lock-free multi-row writers (`updatePlacements`, `updateLanePositions`) and the
+recalculation's `writeResults` first lock their rows with `SELECT … ORDER BY id FOR NO KEY UPDATE`
+(spec [`specs/correctness-sweep/`](specs/correctness-sweep/spec.md), D2.1). A single `DELETE` of a WBS summary,
+which sweeps activities and dependencies, takes the plan advisory lock as `bulkDelete` already does.
+**Why not the plan lock for placements.** The recalculation holds it while the engine computes, so every drag
+would queue behind that window. **Why not the row's remedy.** `ORDER BY` inside the `unnest` does not set
+the lock order: the measured plan is a hash join. The hazard reproduced (3 `40P01` in 200 rounds; 0 after).
+**Consequence.** A new raw `UPDATE activities` must call the seam or declare `lock-order: plan-lock` with a
+reason; a structural spec refuses one that does neither. The ids are written `IN (SELECT … unnest(…))`, not
+`= ANY(array)`, which was 8 times slower under contention for a cause not isolated
+([`m2-measurement.md`](specs/correctness-sweep/m2-measurement.md)).
+
+---
+
+## 2026-10-11 — A shared calendar or resource stamps every plan that uses it (#449)
+
+**What was decided.** A calendar working-time edit (shifts, working week, `hours_per_day`, any exception write)
+and a resource calendar or capacity-ceiling edit mark the plans that use the edited object "edited since
+calculated" (spec [`specs/correctness-sweep/`](specs/correctness-sweep/spec.md), D1.1 to D1.3).
+**D1.1.** A ceiling edit stamps only plans that use the resource and have levelling on, because levelling is the
+ceiling's only reader; a resource calendar edit stamps every plan that uses it. **D1.2.** An `hours_per_day`-only
+edit stamps: the engine never reads it, but the recalculation write converts float and drift to days with it. A
+false positive is honest, a miss is the defect. **D1.3.** A calendar's plan set is plans on it directly, plans with
+an active activity on it, and plans with an active assignment of an active resource on it; cross-plan successors
+are not fanned out, which matches every existing stamp. **Why.** The overview and the status bar said figures
+were current after an edit that had moved them. **Consequence.** A calendar used widely locks that many plan rows
+until commit, in id order; measured at 1,262 plans as about 30 to 60 ms
+([`m1-measurement.md`](specs/correctness-sweep/m1-measurement.md)).
+
+---
+
 ## 2026-10-08 — The layout is designed from 1024 × 600 up; the phone is not a design target
 
 **What was decided.** The standing responsive rules stop saying "mobile-first" and say "designed from a laptop or

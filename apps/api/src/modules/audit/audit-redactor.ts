@@ -115,7 +115,8 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
     'dependencyCount',
   ],
   'activity.restored': ['name', 'code', 'deleteBatchId', 'activityCount'],
-  'activity.dissolved': ['name', 'promotedChildCount'],
+  // `deleteBatchId` joins this row to the `activity.restored` row an undo writes (#450).
+  'activity.dissolved': ['name', 'promotedChildCount', 'deleteBatchId'],
   // `parentCount` disambiguates a case the API permits and the feature spec's shape did not
   // cover: a batch may name a different destination per row, and `{ movedCount, parentName }`
   // alone would render that identically to "moved to top level". One destination named, one

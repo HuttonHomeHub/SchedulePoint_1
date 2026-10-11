@@ -98,6 +98,15 @@ export interface RevisionMovedRow {
   readonly toTotalFloatDays: number | null;
   /** `to - from`, or **null** if either side is unknown. Absence and zero are different facts. */
   readonly floatMovementDays: number | null;
+  /**
+   * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
+   * Named for what they hold, not for one basis (`docs/TECH_DEBT.md` #405).
+   */
+  readonly fromStart: string | null;
+  readonly toStart: string | null;
+  readonly fromFinish: string | null;
+  readonly toFinish: string | null;
+  /** The same four values under their original names, kept until the next breaking change. */
   readonly fromEarlyStart: string | null;
   readonly toEarlyStart: string | null;
   readonly fromEarlyFinish: string | null;
@@ -223,6 +232,12 @@ function moved(from: RevisionRow, to: RevisionRow): RevisionMovedRow {
     fromTotalFloatDays: from.totalFloatDays,
     toTotalFloatDays: to.totalFloatDays,
     floatMovementDays: floatMovement(from.totalFloatDays, to.totalFloatDays),
+    // One value, two names: the deprecated `*Early*` fields are the new ones, so the two sets cannot
+    // disagree (the projection puts placed dates in `earlyStart`/`earlyFinish` under `PLACED`).
+    fromStart: from.earlyStart,
+    toStart: to.earlyStart,
+    fromFinish: from.earlyFinish,
+    toFinish: to.earlyFinish,
     fromEarlyStart: from.earlyStart,
     toEarlyStart: to.earlyStart,
     fromEarlyFinish: from.earlyFinish,

@@ -10,6 +10,7 @@ import {
   type PercentCompleteType,
 } from '@prisma/client';
 
+import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -252,8 +253,10 @@ export class ActivityRepository {
    * because `lane_index` is `NOT NULL`. Every other null is a genuine clear.
    *
    * One statement, never a per-row loop: the ADR-0053 M6 lesson (830 ms → 13 ms for 2,000 rows).
-   * The caller takes **no** plan advisory lock — this said it did until 2026-10-05; the row locks
-   * this statement takes in join order are what `docs/TECH_DEBT.md` #440 is about.
+   * The caller takes **no** plan advisory lock, so the rows are locked first, in id order
+   * ({@link lockActivityRowsInIdOrder}): without that, the order this statement locks them in is
+   * whatever join plan Postgres picks, which can deadlock a concurrent recalculation
+   * (`docs/TECH_DEBT.md` #440).
    */
   async updatePlacements(
     organizationId: string,
@@ -279,6 +282,7 @@ export class ActivityRepository {
     const visualStarts = placements.map((p) => p.visualStart);
     const laneIndexes = placements.map((p) => p.laneIndex);
 
+    await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     return db.$executeRaw`
       UPDATE activities AS a
       SET constraint_type = v.constraint_type::"ConstraintType",
@@ -304,6 +308,10 @@ export class ActivityRepository {
     `;
   }
 
+  /**
+   * Batch lane write, by `id + version`. Like {@link updatePlacements} the caller takes no plan
+   * advisory lock, so the rows are locked in id order first (`docs/TECH_DEBT.md` #440).
+   */
   async updateLanePositions(
     organizationId: string,
     planId: string,
@@ -316,6 +324,7 @@ export class ActivityRepository {
     const laneIndexes = positions.map((p) => p.laneIndex);
     const versions = positions.map((p) => p.version);
 
+    await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     return db.$executeRaw`
       UPDATE activities AS a
       SET lane_index = v.lane_index,
@@ -374,6 +383,9 @@ export class ActivityRepository {
    *
    * Callers MUST hold the plan advisory lock — this writes the parent tree, whose acyclicity is a
    * read-then-write invariant (ADR-0038 (a)); see `ActivitiesService.assertValidParent`.
+   *
+   * lock-order: plan-lock — the plan advisory lock excludes the recalculation, so no row pre-lock
+   * is needed (`activity-row-lock.structural.spec.ts` reads this declaration).
    */
   async updateParents(
     organizationId: string,

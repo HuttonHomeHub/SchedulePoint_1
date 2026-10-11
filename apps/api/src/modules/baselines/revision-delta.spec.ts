@@ -82,6 +82,42 @@ describe('computeRevisionDelta', () => {
     expect(d.entered).toHaveLength(0);
   });
 
+  it('carries the basis-neutral dates and the deprecated *Early* names as one value', () => {
+    // #405: the four dates are named for what they hold, and the old names stay until the next
+    // breaking change, so they must never disagree.
+    const d = computeRevisionDelta(
+      [
+        row({
+          activityId: 'a',
+          isCritical: false,
+          earlyStart: '2026-02-01',
+          earlyFinish: '2026-02-20',
+        }),
+      ],
+      [
+        row({
+          activityId: 'a',
+          isCritical: true,
+          earlyStart: '2026-02-10',
+          earlyFinish: '2026-03-01',
+        }),
+      ],
+      CAP,
+    );
+
+    const [moved] = d.entered;
+    expect(moved).toMatchObject({
+      fromStart: '2026-02-01',
+      toStart: '2026-02-10',
+      fromFinish: '2026-02-20',
+      toFinish: '2026-03-01',
+    });
+    expect(moved?.fromEarlyStart).toBe(moved?.fromStart);
+    expect(moved?.toEarlyStart).toBe(moved?.toStart);
+    expect(moved?.fromEarlyFinish).toBe(moved?.fromFinish);
+    expect(moved?.toEarlyFinish).toBe(moved?.toFinish);
+  });
+
   it('keeps a null float null rather than coercing it to zero', () => {
     const d = computeRevisionDelta(
       [row({ activityId: 'a', totalFloatDays: null })],
