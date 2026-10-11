@@ -196,6 +196,19 @@ Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stop
       narrow on purpose (use View > Columns > Table width there): [ ] understood [ ] it should be
       wider too
 
+- [ ] **26. Press the line between the Project Explorer and the plan with one finger, without moving
+      it (a plain tap), then do the same on the line above the activities table and beside an open
+      Comments panel.**
+      A small box opened next to your finger with a number in it, and the cursor was in the number:
+      [ ] yes, on all three [ ] on some: __________ [ ] no. Type a number a little bigger and press
+      Enter on the keyboard cover or the on-screen keyboard: the panel changed to that size
+      [ ] yes [ ] no. Tap elsewhere: the box went away [ ] yes [ ] no. A tap you meant as a drag
+      opened the box by accident: [ ] never [ ] sometimes: __________ (if so, how far did your finger
+      slide? The box opens for a slide of under 4 px.)
+- [ ] **27. Put the box away with Escape on a keyboard, or by tapping the line again.** Focus is back
+      on the line: [ ] yes [ ] no. "Reset to standard" is finger-sized and puts the panel back:
+      [ ] yes [ ] no
+
 ## When you are done
 
 Send the photos of the `pointer-check` screen (one per posture), this sheet with its ticks, and any

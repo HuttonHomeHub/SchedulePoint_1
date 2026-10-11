@@ -1416,6 +1416,9 @@ function GanttPanelBody({
           min={gridPrefs.min}
           max={gridPrefs.max}
           label="Grid width"
+          // The same name the `View ▾` field has, so the two routes to one value read alike.
+          sizeLabel="Table width"
+          onReset={gridPrefs.resetSize}
           // **The named exception to the 44 px strip** (ADR-0188 D3): this line runs through the last
           // grid column and the chart's first bars, so a finger-sized strip would cover whole 28 px
           // row menus and the Float left and Timeline headers (19 to 25 px each, `m0-measurement.md`

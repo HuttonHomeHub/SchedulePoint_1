@@ -1,7 +1,7 @@
 # Implementation Plan: Accessibility and touch sweep
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft
+- **Status:** Approved 2026-10-11 by the product owner (see the spec). M0-M3 built (ADR-0188); M4-M5 follow.
 - **Owner:** web. Built by the **builder** agent (Sonnet); planned here (Opus).
 
 ## Breakdown

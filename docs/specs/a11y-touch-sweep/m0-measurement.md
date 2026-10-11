@@ -61,7 +61,7 @@ side named, in px of the neighbour's own box):
 
 | Divider (cell 1646 x 1097)                                   | Live today                                      | Neighbours near the line                                                                                                | Centred 44 overlaps                    | Verdict                      |
 | ------------------------------------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------- |
-| Explorer (vertical)                                          | -12..0 only. **The right half is the stage's.** | Panel side: `⋯` 44 x 44 ends 5 px short of the line, "Hide Explorer" 13 px, destination links 9 px. Stage side: none.   | 9 to 17 px of the panel's own controls | `outward` (into the stage)   |
+| Explorer (vertical)                                          | -12..0 only. **The right half is the stage's.** | Panel side: `⋯` 44 x 44 ends 5 px short of the line, "Hide Explorer" 13 px, destination links 9 px. Stage side: none.   | 9 to 17 px of the panel's own controls | centred (see §5)             |
 | Float, Health, Revisions, Notes docks (vertical; Notes read) | -12..12                                         | Stage side: Minimap button ends 17 px short. Dock side: textarea starts 18 px away.                                     | 5 px of Minimap, 4 px of the textarea  | `both`, with the 5 px stated |
 | Activities panel (horizontal)                                | -12..12                                         | Above: Zoom out, Zoom in, Fit to plan, Minimap, 44 x 44, bottom edge 17 px above the line. Below: nothing within 30 px. | 5 px of each of the four buttons       | `both`, with the 5 px stated |
 | Gantt grid (vertical)                                        | -12..12                                         | "Float left" header and its button, "Timeline" header, four 28 px row `⋯` starting 3 px from the line.                  | 25, 19, 19 px                          | **`none`** (named exception) |
@@ -123,6 +123,8 @@ Crumb widths in px (project / plan; full text width in brackets 525 / 510 at 200
 
 - M1 #470: change both labels under `pointer-coarse:`; the header row's growth is in the changeset.
 - M1 #473: hoist as planned. The plan page's `data-chrome-slot="rows"` finding is a new row, not this change.
-- M2 #476: Explorer `outward` and the strip stacks above the stage; docks and the activities panel `both`
-  (5 px stated); the Gantt `none`.
+- M2 #476: every divider takes the centred 44 px strip (the docks' and the activities panel's 5 px stated), the
+  strip stacks above the stage, and the Gantt is `none`. **The Explorer was to grow only away from its panel
+  ("outward", 12 px + 32 px). The dividers sweep found that covers the first control of the selection bar
+  beside it at its centre (+30 px), in a state where a bar is selected, so it was withdrawn (ADR-0188 D3).**
 - M4 #483: comments and the closing record only.

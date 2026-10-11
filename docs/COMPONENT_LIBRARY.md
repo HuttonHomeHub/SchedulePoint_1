@@ -682,6 +682,26 @@ combobox listbox portal to `document.body`, so a menu opened from the navy toolb
 on `--popover`. That is intended — an overlay belongs to the page, not to the surface that
 summoned it.
 
+## Primitives: `PanelResizer` and `SizeField` — a divider has a single-pointer twin (ADR-0188)
+
+`PanelResizer` (`components/ui/panel-resizer.tsx`) is the one divider: an APG window splitter with a drag,
+arrows, Home and End. **Every call site passes `sizeLabel` and `onReset`** (a structural test counts them),
+because a drag is not enough for WCAG 2.5.7: a press that moves under 4 px, or a click with no pointer gesture
+before it, opens a small non-modal box at the line holding a `SizeField` ("Project Explorer width"), the range
+in words and "Reset to standard". No key opens it. The box is a sibling of the separator, never a child, or the
+separator's drag and arrow handlers would act on the field's events.
+
+- **The grab strip** is the `[data-resizer-hit]` child: 25 px with a mouse, `--control-h` (44) with a finger,
+  centred on the line, stacked above its neighbours (`z-10`). `coarseStrip="none"` opts a divider out and marks it
+  `data-coarse-exempt="divider"`; **it is a named exception with a typed equivalent**, and a structural test lists
+  them (today: the Gantt grid divider, whose twin is View ▾ › Columns › Table width).
+- **`SizeField`** (`components/ui/size-field.tsx`) is the shared typed size, and `useSizeNotice` the polite status
+  beside it. It applies on Enter, blur or an arrow step, never per keystroke; Escape discards a draft (heard on
+  `window` in the capture phase, because a container that closes on Escape blurs the field first); a limited
+  value is said in words and never changed silently. Use it for any typed pixel size rather than `TextField`.
+- **`usePointerDrag`** reports a press through `onPress` and then withholds `onValue` until the pointer passes the
+  slop; a handle that passes no `onPress` is unchanged.
+
 ## Documentation requirements
 
 - **TSDoc** on the component and any non-obvious prop.

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePointerDrag } from './use-pointer-drag';
+import { PRESS_SLOP_PX, usePointerDrag } from './use-pointer-drag';
 
 let frames: FrameRequestCallback[] = [];
 
@@ -10,6 +10,7 @@ function Handle(props: {
   onValue: (n: number) => void;
   onStart?: () => void;
   onEnd?: () => void;
+  onPress?: () => void;
 }): React.ReactElement {
   const handlers = usePointerDrag<HTMLDivElement>({
     toValue: (e) => e.clientX,
@@ -147,5 +148,80 @@ describe('usePointerDrag', () => {
     fireEvent.pointerUp(h, { pointerId: 1 });
     expect(onValue).toHaveBeenCalledWith(8);
     expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a press that never became a drag (ADR-0188 D1)', () => {
+    it('fires onPress on a release that did not move, after onEnd', () => {
+      const order: string[] = [];
+      render(
+        <Handle
+          onValue={vi.fn()}
+          onEnd={() => order.push('end')}
+          onPress={() => order.push('press')}
+        />,
+      );
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerUp(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      expect(order).toEqual(['end', 'press']);
+    });
+
+    it('treats movement under the slop as a press and applies no value for it', () => {
+      const onValue = vi.fn();
+      const onPress = vi.fn();
+      render(<Handle onValue={onValue} onPress={onPress} />);
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 102, clientY: 51 });
+      fireEvent.pointerUp(h, { pointerId: 1, clientX: 102, clientY: 51 });
+      expect(onPress).toHaveBeenCalledTimes(1);
+      expect(onValue).not.toHaveBeenCalled();
+      expect(frames).toHaveLength(0);
+    });
+
+    it('is a drag once the pointer passes the slop: values apply and no press fires', () => {
+      const onValue = vi.fn();
+      const onPress = vi.fn();
+      render(<Handle onValue={onValue} onPress={onPress} />);
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 100 + PRESS_SLOP_PX, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 140, clientY: 50 });
+      fireEvent.pointerUp(h, { pointerId: 1, clientX: 140, clientY: 50 });
+      expect(onValue).toHaveBeenLastCalledWith(140);
+      expect(onPress).not.toHaveBeenCalled();
+    });
+
+    it('stays a drag if the pointer returns to where it started', () => {
+      const onPress = vi.fn();
+      render(<Handle onValue={vi.fn()} onPress={onPress} />);
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 160, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerUp(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      expect(onPress).not.toHaveBeenCalled();
+    });
+
+    it('does not press on a cancel, or for a secondary button', () => {
+      const onPress = vi.fn();
+      render(<Handle onValue={vi.fn()} onPress={onPress} />);
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 5, clientY: 5 });
+      fireEvent.pointerCancel(h, { pointerId: 1 });
+      fireEvent.pointerDown(h, { pointerId: 2, clientX: 5, clientY: 5, button: 2 });
+      fireEvent.pointerUp(h, { pointerId: 2, clientX: 5, clientY: 5, button: 2 });
+      expect(onPress).not.toHaveBeenCalled();
+    });
+
+    it('changes nothing for a handle that listens for no press: a tiny move still applies', () => {
+      const onValue = vi.fn();
+      render(<Handle onValue={onValue} />);
+      const h = screen.getByTestId('h');
+      fireEvent.pointerDown(h, { pointerId: 1, clientX: 100, clientY: 50 });
+      fireEvent.pointerMove(h, { pointerId: 1, clientX: 101, clientY: 50 });
+      fireEvent.pointerUp(h, { pointerId: 1, clientX: 101, clientY: 50 });
+      expect(onValue).toHaveBeenCalledWith(101);
+    });
   });
 });

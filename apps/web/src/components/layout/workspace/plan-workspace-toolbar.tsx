@@ -2617,6 +2617,8 @@ export function ToolbarPlanWorkspace({
                         min={floatPathsBounds.min}
                         max={floatPathsBounds.max}
                         label="Resize float paths panel"
+                        sizeLabel="Float paths panel width"
+                        onReset={floatPathsPrefs.resetSize}
                         onResize={onFloatPathsResize}
                         pointerToSize={floatPathsPointerToSize}
                         reverseKeys
@@ -2652,6 +2654,8 @@ export function ToolbarPlanWorkspace({
                         min={healthBounds.min}
                         max={healthBounds.max}
                         label="Resize health check panel"
+                        sizeLabel="Health check panel width"
+                        onReset={healthPrefs.resetSize}
                         onResize={onHealthResize}
                         pointerToSize={healthPointerToSize}
                         reverseKeys
@@ -2679,6 +2683,8 @@ export function ToolbarPlanWorkspace({
                         min={revisionBounds.min}
                         max={revisionBounds.max}
                         label="Resize revision comparison panel"
+                        sizeLabel="Revision comparison panel width"
+                        onReset={revisionPrefs.resetSize}
                         onResize={onRevisionResize}
                         pointerToSize={revisionPointerToSize}
                         reverseKeys
@@ -2706,6 +2712,8 @@ export function ToolbarPlanWorkspace({
                         min={notesBounds.min}
                         max={notesBounds.max}
                         label="Resize notes panel"
+                        sizeLabel="Notes panel width"
+                        onReset={notesPanel.resetSize}
                         onResize={onNotesResize}
                         pointerToSize={notesPointerToSize}
                         // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
@@ -2744,6 +2752,8 @@ export function ToolbarPlanWorkspace({
                         min={PANEL_MIN_OPEN}
                         max={effectiveMax}
                         label="Resize activities panel"
+                        sizeLabel="Activities panel height"
+                        onReset={panel.resetSize}
                         onResize={onResize}
                         pointerToSize={pointerToSize}
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"

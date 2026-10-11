@@ -42,8 +42,12 @@ const ESTIMATED_HEIGHT = 320;
  */
 export interface PopoverPanel {
   open: boolean;
-  /** Anchor the panel under `triggerRef`'s box and open it. No-op before the trigger has mounted. */
-  openPanel: () => void;
+  /**
+   * Anchor the panel under `triggerRef`'s box and open it. No-op before the trigger has mounted.
+   * `at` anchors it under a point instead — for a trigger that is not the thing pressed, such as a
+   * divider pressed at one place along its length (ADR-0188 D1).
+   */
+  openPanel: (at?: { x: number; y: number }) => void;
   /** Close it; `restoreFocus` returns focus to the trigger (never to a `tabIndex={-1}` caret). */
   close: (restoreFocus: boolean) => void;
   /** The panel element, portalled past any clipping ancestor, or `null` while closed. */
@@ -54,6 +58,7 @@ export function usePopoverPanel({
   triggerRef,
   align = 'start',
   panelWidth = 'default',
+  initialFocus,
 }: {
   /**
    * The element the panel anchors to and returns focus to. For a split button this is the
@@ -70,6 +75,13 @@ export function usePopoverPanel({
    * reflows to one column (`sm:`) rather than overflowing.
    */
   panelWidth?: 'default' | 'wide';
+  /**
+   * What takes focus when the panel opens. Absent ⇒ the panel itself, which is right for static
+   * content (Summary, Legend). A panel whose purpose is one field (a divider's size box) names it, so
+   * a keyboard or screen-reader user lands where they type. It is read when the panel opens, after
+   * its children have mounted and attached their refs.
+   */
+  initialFocus?: React.RefObject<HTMLElement | null>;
 }): PopoverPanel {
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -80,7 +92,12 @@ export function usePopoverPanel({
     bottom: 0,
   });
 
-  const openPanel = (): void => {
+  const openPanel = (at?: { x: number; y: number }): void => {
+    if (at) {
+      setTriggerBox({ left: at.x, right: at.x, bottom: at.y });
+      setOpen(true);
+      return;
+    }
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     setTriggerBox({ left: rect.left, right: rect.right, bottom: rect.bottom });
@@ -120,7 +137,7 @@ export function usePopoverPanel({
   useEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
-    panel?.focus();
+    (initialFocus?.current ?? panel)?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         // **Both, and `preventDefault` is the load-bearing one** (#196a, its third copy — the fix
@@ -160,7 +177,7 @@ export function usePopoverPanel({
       document.removeEventListener('pointerdown', onPointer, true);
       panel?.removeEventListener('focusout', onFocusOut);
     };
-  }, [open, triggerRef]);
+  }, [open, triggerRef, initialFocus]);
 
   const panel = (label: string, children: React.ReactNode): React.ReactNode =>
     open

@@ -12,7 +12,22 @@ export interface UsePointerDragOptions<E extends HTMLElement> {
   onStart?: (event: React.PointerEvent<E>) => void;
   /** A gesture that had begun ended (release or cancel), after the last value was applied. */
   onEnd?: () => void;
+  /**
+   * The primary button or a finger went down and came up **without moving more than
+   * {@link PRESS_SLOP_PX}** — a press, not a drag (ADR-0188 D1). Fires after `onEnd`, never on a
+   * cancel, and never for a secondary button. **Giving this option also withholds `onValue` until the
+   * pointer has moved past the slop**, so finger jitter on a tap cannot nudge the size it is about to
+   * offer to type. A handle that passes no `onPress` is unchanged. It still claims no key.
+   */
+  onPress?: (event: React.PointerEvent<E>) => void;
 }
+
+/**
+ * How far (CSS px, straight line) a pointer may travel between press and release and still be a press.
+ * 4 px is a default, not a measurement: a finger's jitter on a tap is read on the Surface sheet
+ * (`device-checklist.md`, step 26), and a mouse click moves 0 to 2.
+ */
+export const PRESS_SLOP_PX = 4;
 
 export interface PointerDragHandlers<E extends HTMLElement> {
   onPointerDown: (event: React.PointerEvent<E>) => void;
@@ -39,10 +54,16 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
   onValue,
   onStart,
   onEnd,
+  onPress,
 }: UsePointerDragOptions<E>): PointerDragHandlers<E> {
   const draggingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const pendingRef = useRef<number | null>(null);
+  /** Where the press began, and whether the pointer has since gone past the slop. */
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  /** Set only for a primary-button press on a handle that listens for one. */
+  const pressableRef = useRef(false);
 
   const flush = useCallback(() => {
     rafRef.current = null;
@@ -55,15 +76,25 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<E>) => {
       draggingRef.current = true;
+      startRef.current = { x: event.clientX, y: event.clientY };
+      movedRef.current = false;
+      pressableRef.current = onPress !== undefined && event.button === 0;
       onStart?.(event);
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [onStart],
+    [onStart, onPress],
   );
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<E>) => {
       if (!draggingRef.current) return;
+      if (pressableRef.current && !movedRef.current) {
+        const start = startRef.current;
+        if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) < PRESS_SLOP_PX) {
+          return;
+        }
+        movedRef.current = true;
+      }
       pendingRef.current = toValue(event);
       if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush);
     },
@@ -71,7 +102,7 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
   );
 
   const stopDragging = useCallback(
-    (event: React.PointerEvent<E>) => {
+    (event: React.PointerEvent<E>, released: boolean) => {
       const wasDragging = draggingRef.current;
       draggingRef.current = false;
       // Apply the final position immediately (don't wait a frame) and drop any queued move.
@@ -83,9 +114,20 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
-      if (wasDragging) onEnd?.();
+      if (wasDragging) {
+        onEnd?.();
+        if (released && pressableRef.current && !movedRef.current) onPress?.(event);
+      }
     },
-    [flush, onEnd],
+    [flush, onEnd, onPress],
+  );
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<E>) => stopDragging(event, true),
+    [stopDragging],
+  );
+  const onPointerCancel = useCallback(
+    (event: React.PointerEvent<E>) => stopDragging(event, false),
+    [stopDragging],
   );
 
   // Cancel a queued frame if the handle unmounts mid-drag. Cleared too, so a StrictMode
@@ -100,5 +142,5 @@ export function usePointerDrag<E extends HTMLElement = HTMLElement>({
     [],
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp: stopDragging, onPointerCancel: stopDragging };
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
 }

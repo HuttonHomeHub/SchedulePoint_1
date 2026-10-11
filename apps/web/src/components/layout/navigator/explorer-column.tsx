@@ -137,9 +137,8 @@ export function ExplorerColumn({
           min={EXPLORER_MIN_WIDTH}
           max={prefs.limit}
           label="Resize Project Explorer"
-          // The panel holds its controls at the line (the `⋯` 5 px short, the links 9), so a finger's
-          // wider strip grows into the stage, which has none there (`m0-measurement.md` §2).
-          coarseStrip="outward"
+          sizeLabel="Project Explorer width"
+          onReset={prefs.resetSize}
           onResize={prefs.setSize}
           pointerToSize={(event) => {
             const left = panelRef.current?.getBoundingClientRect().left ?? 0;

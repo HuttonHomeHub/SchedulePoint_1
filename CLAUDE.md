@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 25 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1629 web
+> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1631 web
 > source files with 47 Playwright suites beside the base journey, and
-> 187 ADRs.
+> 188 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -588,6 +588,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0185** _(Accepted; amends ADR-0031, ADR-0091 D3, ADR-0100 and ADR-0109 D1)_ — The toolbar promotes what fits, and says what moved → [`0185-the-toolbar-promotes-what-fits-and-says-what-moved.md`](docs/adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md)
 - **ADR-0186** _(Accepted; amends ADR-0094 D5)_ — The reason a conflict exists is stated on the object, and the toolbar chip stays a count → [`0186-the-reason-a-conflict-exists-is-stated-on-the-object.md`](docs/adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)
 - **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
+- **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
