@@ -12,6 +12,7 @@ import {
   type ResourceCurveType,
 } from '@prisma/client';
 
+import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
@@ -803,6 +804,10 @@ export class ScheduleRepository {
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
    * id can never write across a plan or tenant). Sets only the twenty-three engine
    * columns; a no-op for an empty result set.
+   *
+   * The caller holds the plan advisory lock, which the lock-free placement writers do not, so the
+   * rows are locked in id order first: both sides then acquire in one total order and cannot
+   * deadlock (`docs/TECH_DEBT.md` #440, {@link lockActivityRowsInIdOrder}).
    */
   async writeResults(
     organizationId: string,
@@ -819,6 +824,7 @@ export class ScheduleRepository {
     if (results.length === 0) return;
 
     const ids = results.map((r) => r.activityId);
+    await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     const earlyStart = results.map((r) => r.earlyStart);
     const earlyFinish = results.map((r) => r.earlyFinish);
     const lateStart = results.map((r) => r.lateStart);

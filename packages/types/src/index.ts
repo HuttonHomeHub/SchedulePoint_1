@@ -3174,9 +3174,21 @@ export interface RevisionMovedActivity {
   fromTotalFloatDays: number | null;
   toTotalFloatDays: number | null;
   floatMovementDays: number | null;
+  /**
+   * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
+   * Named for what they hold, not for one basis (`docs/TECH_DEBT.md` #405).
+   */
+  fromStart: string | null;
+  toStart: string | null;
+  fromFinish: string | null;
+  toFinish: string | null;
+  /** @deprecated Same value as `fromStart`. Removed at the next breaking API change. */
   fromEarlyStart: string | null;
+  /** @deprecated Same value as `toStart`. Removed at the next breaking API change. */
   toEarlyStart: string | null;
+  /** @deprecated Same value as `fromFinish`. Removed at the next breaking API change. */
   fromEarlyFinish: string | null;
+  /** @deprecated Same value as `toFinish`. Removed at the next breaking API change. */
   toEarlyFinish: string | null;
   /**
    * Whether the activity is on the LIVE plan, which is what decides whether a client may offer to

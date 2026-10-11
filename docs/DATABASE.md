@@ -90,6 +90,16 @@
   transaction — publish after commit.
 - Choose isolation deliberately; use appropriate levels for read-modify-write on
   contended rows (see optimistic locking).
+- **Row lock order for a multi-row `UPDATE`.** `UPDATE … FROM unnest(…)` locks rows in the order the
+  planner's join produces them (a hash join: not the order the array was written in), so two overlapping
+  batches can deadlock (`40P01`, an opaque 500). A statement that updates many `activities` rows takes
+  `lockActivityRowsInIdOrder` first (`common/db/activity-row-lock.ts`): `SELECT … ORDER BY id FOR NO KEY
+UPDATE`, which the PostgreSQL documentation says locks rows in the order returned. Today that is
+  `updatePlacements`, `updateLanePositions` (both lock-free, to keep a drag out of the engine's queue) and the
+  recalculation's `writeResults`; the parent-tree write instead declares `lock-order: plan-lock`, because
+  the plan advisory lock already excludes the engine. `activity-row-lock.structural.spec.ts` refuses a new
+  raw `UPDATE activities` that does neither. Reproduced and fixed under `docs/TECH_DEBT.md` #440
+  (`docs/specs/correctness-sweep/m2-measurement.md`: 3 deadlocks in 200 rounds before, 0 after).
 
 ## Soft deletes
 

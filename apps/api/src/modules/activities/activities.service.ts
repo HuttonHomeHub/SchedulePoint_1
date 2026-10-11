@@ -1496,6 +1496,9 @@ export class ActivitiesService {
     // the client never learnt it and could not restore what it had just deleted. That is why
     // undoing a band copy had no redo: `restoreDeleteBatch` needs an id nobody was told.
     const deleteBatchId = await this.prisma.$transaction(async (tx) => {
+      // A summary delete sweeps a subtree's activities AND links, the two tables the recalculation
+      // writes, and used to do it with no plan lock (`docs/TECH_DEBT.md` #440). `bulkDelete` takes it.
+      await acquirePlanWriteLock(tx, existing.planId);
       const knockOn: KnockOn = { links: [], activityIds: [] };
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,

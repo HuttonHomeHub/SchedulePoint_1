@@ -18,6 +18,8 @@ function stubRepository(
   overrides: Partial<Record<string, unknown>> = {},
 ): StaffDiagnosticsRepository {
   return {
+    // Hands the reader a handle, as the real transaction does; the handle is opaque to the service.
+    reading: vi.fn((read: (db: unknown) => unknown) => read({})),
     examined: vi.fn().mockResolvedValue(1284),
     affected: vi.fn().mockResolvedValue({
       affected: 17,
@@ -29,10 +31,11 @@ function stubRepository(
 }
 
 const version = { getVersion: () => '0.63.0' } as never;
+const logger = { error: vi.fn() } as never;
 
 describe('StaffDiagnosticsService', () => {
   it('runs every registry entry and returns one row each', async () => {
-    const service = new StaffDiagnosticsService(stubRepository(), version);
+    const service = new StaffDiagnosticsService(stubRepository(), version, logger);
 
     const result = await service.run();
 
@@ -42,7 +45,7 @@ describe('StaffDiagnosticsService', () => {
   });
 
   it('reports the numbers beside the denominator they are a fraction of', async () => {
-    const service = new StaffDiagnosticsService(stubRepository(), version);
+    const service = new StaffDiagnosticsService(stubRepository(), version, logger);
 
     const [first] = await service.run().then((r) => r.diagnostics);
 
@@ -66,6 +69,7 @@ describe('StaffDiagnosticsService', () => {
           .mockResolvedValue({ affected: 0, affectedPlans: 0, affectedOrganizations: 0 }),
       }),
       version,
+      logger,
     );
 
     const [first] = await service.run().then((r) => r.diagnostics);
@@ -76,7 +80,7 @@ describe('StaffDiagnosticsService', () => {
   });
 
   it('takes ONE server timestamp for the whole run, not one per entry', async () => {
-    const service = new StaffDiagnosticsService(stubRepository(), version);
+    const service = new StaffDiagnosticsService(stubRepository(), version, logger);
 
     const result = await service.run();
 
@@ -85,6 +89,38 @@ describe('StaffDiagnosticsService', () => {
     // observations of a moving system.
     expect(result.takenAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(Object.keys(result.diagnostics[0]!)).not.toContain('takenAt');
+  });
+
+  it('runs the whole press inside ONE repository reading, handing every entry the same handle', async () => {
+    const repository = stubRepository();
+    const service = new StaffDiagnosticsService(repository, version, logger);
+
+    await service.run();
+
+    // One snapshot is the point of #456: a second `reading` would be a second observation.
+    expect(repository.reading).toHaveBeenCalledTimes(1);
+    const handles = new Set(
+      [...(repository.examined as ReturnType<typeof vi.fn>).mock.calls].map((call) => call[1]),
+    );
+    expect(handles.size).toBe(1);
+  });
+
+  it('logs the entry that failed by id and rethrows, so the route answers its existing 500', async () => {
+    const boom = Object.assign(new Error('canceling statement due to statement timeout'), {
+      code: '57014',
+    });
+    const error = vi.fn();
+    const service = new StaffDiagnosticsService(
+      stubRepository({ examined: vi.fn().mockRejectedValue(boom) }),
+      version,
+      { error } as never,
+    );
+
+    await expect(service.run()).rejects.toBe(boom);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ diagnosticId: DIAGNOSTICS[0]?.id, err: boom }),
+      expect.any(String),
+    );
   });
 
   it('takes no argument — the absence of an input is the decision (ADR-0140 D2, clause 2)', () => {

@@ -10,6 +10,22 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-11 — Placement batches and the recalculation lock activity rows in id order, not by taking the plan lock (#440)
+
+**What was decided.** The lock-free multi-row writers (`updatePlacements`, `updateLanePositions`) and the
+recalculation's `writeResults` first lock their rows with `SELECT … ORDER BY id FOR NO KEY UPDATE`
+(spec [`specs/correctness-sweep/`](specs/correctness-sweep/spec.md), D2.1). A single `DELETE` of a WBS summary,
+which sweeps activities and dependencies, takes the plan advisory lock as `bulkDelete` already does.
+**Why not the plan lock for placements.** The recalculation holds it while the engine computes, so every drag
+would queue behind that window. **Why not the row's remedy.** `ORDER BY` inside the `unnest` does not set
+the lock order: the measured plan is a hash join. The hazard reproduced (3 `40P01` in 200 rounds; 0 after).
+**Consequence.** A new raw `UPDATE activities` must call the seam or declare `lock-order: plan-lock` with a
+reason; a structural spec refuses one that does neither. The ids are written `IN (SELECT … unnest(…))`, not
+`= ANY(array)`, which was 8 times slower under contention for a cause not isolated
+([`m2-measurement.md`](specs/correctness-sweep/m2-measurement.md)).
+
+---
+
 ## 2026-10-11 — A shared calendar or resource stamps every plan that uses it (#449)
 
 **What was decided.** A calendar working-time edit (shifts, working week, `hours_per_day`, any exception write)

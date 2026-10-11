@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -26,21 +27,61 @@ import type { DiagnosticEntry } from './staff-diagnostics.registry';
  * than trusting the declared type, so a `bigint`, a numeric string or a missing key each produce a
  * loud failure instead of a plausible wrong number or a `JSON.stringify` throw.
  */
+/**
+ * **One press is one transaction** (`docs/TECH_DEBT.md` #456, ADR-0140 amendment). The 32 statements
+ * of a press used to run on the shared client, each with its own snapshot and no time bound:
+ *
+ * - **One reading.** `REPEATABLE READ` gives every `examined` and `affected` the same snapshot, so an
+ *   entry's numerator can no longer count rows its denominator never saw. The block a staff member
+ *   pastes into a measurement record is one observation, which it was only ever presented as.
+ * - **Provably read-only.** `SET TRANSACTION READ ONLY` makes Postgres itself refuse a write (25006),
+ *   whatever a future registry entry contains. Gate S-3 bans `$executeRaw` here, and `$queryRaw` of a
+ *   `SET` is not a way round it: the two setup statements are fixed text with no interpolation.
+ * - **Bounded.** `SET LOCAL statement_timeout` cancels a statement at three seconds (57014), about
+ *   5.5 times the slowest measured at a million rows (524 to 538 ms), and the setting dies with the
+ *   transaction so it never reaches the pool. A timed-out entry fails the whole press with the
+ *   route's existing 500: per-entry failure would change the row shape and is an ADR-0140 decision.
+ *
+ * The transaction's own 60 s ceiling is far above the worst case (32 statements at the bound would
+ * be 96 s, but nothing near it has been measured); it exists so a hung connection cannot pin a pooled
+ * client for ever.
+ *
+ * The setup deliberately contains no `SELECT`, so the registry stays the only file the projection
+ * gate (S-4) has to read.
+ */
+const PRESS_TRANSACTION_TIMEOUT_MS = 60_000;
+
 @Injectable()
 export class StaffDiagnosticsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Run `read` inside the press's single, read-only, time-bounded snapshot. */
+  reading<T>(read: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SET TRANSACTION READ ONLY`;
+        await tx.$queryRaw`SET LOCAL statement_timeout = '3s'`;
+        return read(tx);
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        timeout: PRESS_TRANSACTION_TIMEOUT_MS,
+      },
+    );
+  }
+
   /** How many rows the question is asked of. */
-  async examined(entry: DiagnosticEntry): Promise<number> {
-    const rows = await this.prisma.$queryRaw(entry.denominator);
+  async examined(entry: DiagnosticEntry, db: Prisma.TransactionClient): Promise<number> {
+    const rows = await db.$queryRaw(entry.denominator);
     return toCount(firstRow(rows, entry.id), 'examined', entry.id);
   }
 
   /** How many answer it, and how far they spread. */
   async affected(
     entry: DiagnosticEntry,
+    db: Prisma.TransactionClient,
   ): Promise<{ affected: number; affectedPlans: number; affectedOrganizations: number }> {
-    const row = firstRow(await this.prisma.$queryRaw(entry.numerator), entry.id);
+    const row = firstRow(await db.$queryRaw(entry.numerator), entry.id);
     return {
       affected: toCount(row, 'affected', entry.id),
       affectedPlans: toCount(row, 'affected_plans', entry.id),

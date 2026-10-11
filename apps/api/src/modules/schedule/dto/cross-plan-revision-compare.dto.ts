@@ -27,6 +27,7 @@ import {
 
 import {
   DATES_BASIS_NOTE,
+  DEPRECATED_EARLY_NOTE,
   RevisionCompletionDto,
   RevisionGhostBarDto,
   RevisionLinkChangeDto,
@@ -200,12 +201,41 @@ export class CrossPlanMovedActivityDto implements CrossPlanMovedActivity {
   floatMovementDays!: number | null;
 
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toStart!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  fromFinish!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  toFinish!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `fromStart`. ' + DEPRECATED_EARLY_NOTE,
+  })
   fromEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `toStart`. ' + DEPRECATED_EARLY_NOTE,
+  })
   toEarlyStart!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `fromFinish`. ' + DEPRECATED_EARLY_NOTE,
+  })
   fromEarlyFinish!: string | null;
-  @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    deprecated: true,
+    description: 'Deprecated: the same value as `toFinish`. ' + DEPRECATED_EARLY_NOTE,
+  })
   toEarlyFinish!: string | null;
 
   @ApiProperty({
@@ -296,12 +326,12 @@ export class CrossPlanChangeReportDto implements CrossPlanChangeReport {
     nullable: true,
     enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
-      'Whether the two sides’ PLACEMENTS COULD be compared — null when both recorded one, a ' +
-      'reason when they did not. **No placement comparison is implemented yet**, so null means ' +
-      '“nothing prevents one”, never “one was done”. NOT trivially null on this route: a cross-plan comparison matches ' +
-      'two plans on the activity code, but either side may still be one of that plan’s baselines, ' +
-      'so a snapshot captured before placements were frozen reaches this route exactly as it ' +
-      'reaches the plan-nested one.',
+      'Whether the comparison read the two sides’ PLACEMENTS — null when both recorded one, a ' +
+      'reason when they did not. Null is exactly `datesBasis: PLACED` (placed dates are compared); a ' +
+      'reason is exactly `datesBasis: NETWORK` (the whole pair falls back to earliest dates). NOT ' +
+      'trivially null on this route: a cross-plan comparison matches two plans on the activity ' +
+      'code, but either side may still be one of that plan’s baselines, so a snapshot captured ' +
+      'before placements were frozen reaches this route exactly as it reaches the plan-nested one.',
   })
   placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
