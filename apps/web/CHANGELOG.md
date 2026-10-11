@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.186.1
+
+### Patch Changes
+
+- [#924](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/924) [`f2c6d06`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f2c6d063bb57fa3d9dfc8ecc328311d922a19400) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo and Redo no longer delete a row a colleague has just changed. When a step removes an activity, a link, an assignment or a summary's grouping, the delete now names the version it checked a moment earlier, so an edit that landed in between sets the step aside as "skipped" instead of being deleted along with the row. A "Level of effort" span whose redo failed part-way no longer leaves a stray activity behind when you try again. The revision comparison panel and its printout read the plan's placed or earliest dates under their new, basis-neutral names; nothing looks different.
+
 ## 0.186.0
 
 ### Minor Changes
