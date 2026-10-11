@@ -520,6 +520,16 @@ function ConflictRemedyControl({
 }
 
 /**
+ * The bar's groups, left to right: the activity's own actions, then the viewing controls (ADR-0187).
+ * `Toolbar`'s canonical order puts `find` first, which put the conflict remedy behind three viewing
+ * controls, two lines under its reason, and made Zoom to selection (Diagram) or Float paths (Gantt)
+ * the first Tab stop for every selection. One static order for every selection, flagged or not, so
+ * a control never moves under the cursor as the selection changes (ADR-0094 refuses a per-context
+ * order; this is not one).
+ */
+export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', 'find'];
+
+/**
  * The selection object-actions, expressed as toolbar items over {@link SelectionActionContext}. Order:
  * Logic → (Progress) → (Resources) → (Steps) → Edit → Delete. Labels use the activities-table's
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
@@ -561,16 +571,6 @@ function ConflictRemedyControl({
  * - `pen` (`penManaged === true`). It survives a peer TAKING the pen; what would remove it is the
  *   lock feature itself going away mid-session, and any sentence about that would be a guess.
  */
-/**
- * The bar's groups, left to right: the activity's own actions, then the viewing controls (ADR-0187).
- * `Toolbar`'s canonical order puts `find` first, which put the conflict remedy behind three viewing
- * controls, two lines under its reason, and made Zoom to selection (Diagram) or Float paths (Gantt)
- * the first Tab stop for every selection. One static order for every selection, flagged or not, so
- * a control never moves under the cursor as the selection changes (ADR-0094 refuses a per-context
- * order; this is not one).
- */
-export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', 'find'];
-
 export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   defineToolbar<SelectionBarContext>([
     // ── The conflict remedy (ADR-0094 M4) ───────────────────────────────────────────────────

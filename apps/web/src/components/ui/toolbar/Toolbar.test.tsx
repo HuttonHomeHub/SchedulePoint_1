@@ -573,4 +573,35 @@ describe('groupOrder', () => {
       quiet.mockRestore();
     }
   });
+
+  it('falls back to the canonical order in production and reports the violation once', () => {
+    vi.stubEnv('DEV', false);
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <Toolbar
+          items={makeItems()}
+          context={{ count: 1 }}
+          label="T"
+          groupOrder={['object', 'frame']}
+        />,
+      );
+      const bar = screen.getByRole('toolbar', { name: 'T' });
+      expect(ids(bar)).toEqual(['fit', 'grid', 'add', 'finish-chip']);
+      // A re-render with the same bad order is not a second report.
+      rerender(
+        <Toolbar
+          items={makeItems()}
+          context={{ count: 2 }}
+          label="T"
+          groupOrder={['object', 'frame']}
+        />,
+      );
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(String(report.mock.calls[0]?.[0])).toMatch(/permutation.*canonical order/);
+    } finally {
+      report.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
 });

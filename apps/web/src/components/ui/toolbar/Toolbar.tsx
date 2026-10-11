@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
 import {
@@ -194,14 +194,23 @@ export function Toolbar<Ctx>({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const order = useMemo(() => {
-    if (!groupOrder) return TOOLBAR_GROUPS;
-    const violation = groupOrderViolation(items, groupOrder);
-    if (violation === null) return groupOrder;
-    if (import.meta.env.DEV) throw new Error(`Toolbar "${label}": ${violation}`);
-    console.error(`Toolbar "${label}": ${violation} Falling back to the canonical order.`);
-    return TOOLBAR_GROUPS;
-  }, [groupOrder, items, label]);
+  const orderViolation = useMemo(
+    () => (groupOrder ? groupOrderViolation(items, groupOrder) : null),
+    [groupOrder, items],
+  );
+  // Thrown in render so a development author cannot miss it; in production the canonical order
+  // stands in, because a mis-ordered bar is a smaller harm than no bar.
+  if (orderViolation !== null && import.meta.env.DEV) {
+    throw new Error(`Toolbar "${label}": ${orderViolation}`);
+  }
+  const order = orderViolation === null && groupOrder ? groupOrder : TOOLBAR_GROUPS;
+
+  // Reported from an effect, not from render: a render may run twice (StrictMode) and must not
+  // have side effects. Keyed on the message so it says so once per distinct violation.
+  useEffect(() => {
+    if (orderViolation === null) return;
+    console.error(`Toolbar "${label}": ${orderViolation} Falling back to the canonical order.`);
+  }, [orderViolation, label]);
 
   const resolved = useMemo(
     () => resolveItems(items, context, authoringEnabled, order),

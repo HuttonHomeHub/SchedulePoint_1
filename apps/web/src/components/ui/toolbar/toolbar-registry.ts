@@ -40,9 +40,9 @@ export type ToolbarGroupId = (typeof TOOLBAR_GROUPS)[number];
  */
 export function groupRank(
   group: ToolbarGroupId,
-  order: readonly ToolbarGroupId[] = TOOLBAR_GROUPS,
+  groupOrder: readonly ToolbarGroupId[] = TOOLBAR_GROUPS,
 ): number {
-  return order.indexOf(group);
+  return groupOrder.indexOf(group);
 }
 
 /**
@@ -53,14 +53,21 @@ export function groupRank(
  * and the front of the roving sequence. Naming a group the registry does not use is refused for
  * the same reason in the other direction: it says the author believes the registry holds something
  * it does not. Pure, so the rule is testable without rendering.
+ *
+ * **A registry that later gains a group makes the surface that passes a `groupOrder` throw in
+ * development** (the new group is "missing"). That is the intent: the author is told to place the
+ * new group, in the build, rather than discovering it ranked first in a browser. The selection bar
+ * is the only such surface today.
  */
 export function groupOrderViolation<Ctx>(
   items: readonly ToolbarItem<Ctx>[],
-  order: readonly ToolbarGroupId[],
+  groupOrder: readonly ToolbarGroupId[],
 ): string | null {
   const present = new Set(items.map((item) => item.group));
-  const given = new Set(order);
-  if (given.size !== order.length) return `groupOrder repeats a group: ${order.join(', ')}.`;
+  const given = new Set(groupOrder);
+  if (given.size !== groupOrder.length) {
+    return `groupOrder repeats a group: ${groupOrder.join(', ')}.`;
+  }
   const missing = [...present].filter((g) => !given.has(g));
   const unknown = [...given].filter((g) => !present.has(g));
   if (missing.length === 0 && unknown.length === 0) return null;
