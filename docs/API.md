@@ -38,9 +38,9 @@ carry **one value**, set from one expression, so they cannot disagree.
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------- |
 | `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | At the next breaking API change |
 
-The names said "early" but hold the placed dates when `datesBasis` is `PLACED`. The web client still reads
-the old names; it switches in a later release, once the API serving the new ones is out (releases are per
-package, ADR-0027).
+The names said "early" but hold the placed dates when `datesBasis` is `PLACED`. The web client reads the new
+names (the comparison panel and its printout); the old four remain only for other clients, and are removed at the
+next breaking API change.
 
 ## Response envelope
 
