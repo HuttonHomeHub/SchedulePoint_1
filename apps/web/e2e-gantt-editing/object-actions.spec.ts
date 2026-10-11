@@ -194,14 +194,30 @@ test('a planner opens Float paths from the Gantt bar and from a row menu', async
   const floatPaths = bar.getByRole('button', { name: 'Float paths', exact: true });
   await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
 
-  // By keyboard from the bar, reached by Tab from the selected row rather than by `focus()`: Enter
-  // opens the panel, and closing it returns focus to the button.
+  // **The bar leads with the activity's own actions and ends with its viewing controls** (ADR-0187),
+  // so Float paths is the LAST control, no longer the first stop. It was the lone leading glyph.
+  const ids = await bar.evaluate((el) =>
+    [...el.querySelectorAll<HTMLElement>('[data-toolbar-item]')].map(
+      (c) => c.getAttribute('data-toolbar-item') ?? '',
+    ),
+  );
+  expect(ids[0], 'the Gantt bar leads with Logic').toBe('open-logic');
+  expect(ids.at(-1), 'and ends with Float paths').toBe('float-paths');
+
+  // By keyboard from the bar, reached by Tab from the selected row rather than by `focus()`: Tab
+  // enters the bar's one roving stop (its first control) and End walks to the last. Enter opens the
+  // panel, and closing it returns focus to the button.
   await ganttRow(page, 'Seeded 0').focus();
   for (let i = 0; i < 12; i += 1) {
-    if (await floatPaths.evaluate((el) => el === document.activeElement)) break;
+    if (await bar.evaluate((el) => el.contains(document.activeElement))) break;
     await page.keyboard.press('Tab');
   }
-  await expect(floatPaths, 'Tab never reached the bar\u2019s Float paths').toBeFocused();
+  await expect(
+    bar.locator('[data-toolbar-item="open-logic"]'),
+    'Tab never entered the bar at its first control',
+  ).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(floatPaths, 'End did not reach the bar\u2019s Float paths').toBeFocused();
   await page.keyboard.press('Enter');
   const panel = page.getByRole('region', { name: 'Float paths' });
   await expect(panel).toBeVisible();

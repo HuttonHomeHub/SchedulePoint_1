@@ -1,6 +1,6 @@
 # Feature Spec: Selection bar fit (register group 1: #482, #484 to #489)
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — 2026-10-11 by the product owner (ADR-0187); M0 to M3 built, M4 close-out pending.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-11
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #482, #484, #485, #486, #487, #488, #489 (register rows, not GitHub issues)

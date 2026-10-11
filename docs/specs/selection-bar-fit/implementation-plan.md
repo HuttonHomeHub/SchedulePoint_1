@@ -1,7 +1,7 @@
 # Implementation Plan: Selection bar fit (register group 1: #482, #484 to #489)
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — 2026-10-11 by the product owner (ADR-0187); M0 to M3 built, M4 close-out pending.
 - **Owner:** web. Planning on Opus. Building on the **builder** agent (Sonnet), never `general-purpose` (`CLAUDE.md` §19.14)
 
 ## Breakdown

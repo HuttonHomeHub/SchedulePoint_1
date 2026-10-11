@@ -62,10 +62,14 @@ function dock(page: Page) {
 
 /**
  * Tab into the selection bar from the diagram's list and arrow along it until `target` holds focus.
- * Asserts the entry stop is the canvas's first item (Zoom to selection) and that the reason line
- * is never what holds focus. The bar is one roving Tab stop, so this is the keyboard's whole path.
+ * Asserts the entry stop is `entry` and that the reason line is never what holds focus. The bar is
+ * one roving Tab stop, so this is the keyboard's whole path.
+ *
+ * **The entry stop is the bar's FIRST control, which is its own activity's first action** (ADR-0187):
+ * the route remedy when the activity has one, otherwise Logic. It was Zoom to selection until the bar
+ * stopped leading with its viewing controls.
  */
-async function walkBar(page: Page, target: string): Promise<void> {
+async function walkBar(page: Page, target: string, entry: string): Promise<void> {
   await diagramList(page).focus();
   await page.keyboard.press('Tab');
   const here = async (): Promise<string> =>
@@ -76,11 +80,11 @@ async function walkBar(page: Page, target: string): Promise<void> {
     );
   // The viewport cluster sits between the list and the bar in the Tab order, so step until the bar.
   let at = await here();
-  for (let i = 0; i < 6 && at !== 'zoom-to-selection'; i += 1) {
+  for (let i = 0; i < 6 && at !== entry; i += 1) {
     await page.keyboard.press('Tab');
     at = await here();
   }
-  expect(at, 'the bar’s first roving stop on the canvas').toBe('zoom-to-selection');
+  expect(at, 'the bar’s first roving stop on the canvas').toBe(entry);
   for (let i = 0; i < 20 && at !== target; i += 1) {
     await page.keyboard.press('ArrowRight');
     at = await here();
@@ -268,9 +272,10 @@ test.describe('Conflict review', () => {
       })),
     ).toEqual({ tabindex: null, role: null, live: null, inToolbar: false });
     // The bar is ONE Tab stop (roving). Tab from the diagram's list enters it at its first item,
-    // which on the canvas is Zoom to selection, and the arrow keys walk it. The reason line is never
-    // a stop on that walk, and Clear visual start (which carries the reason) is reachable by it.
-    await walkBar(page, 'clear-visual-placement');
+    // which for a barAction conflict is Logic (the remedy is Clear visual start, in its place after
+    // Delete), and the arrow keys walk it. The reason line is never a stop on that walk, and Clear
+    // visual start (which carries the reason) is reachable by it.
+    await walkBar(page, 'clear-visual-placement', 'open-logic');
 
     // ── 7 · Using it resolves the conflict the toolbar was describing ────────────────────────
     await clearOnBar.click();
@@ -343,8 +348,38 @@ test.describe('Conflict review', () => {
     await expect(page.locator('[data-conflict-reason]')).toHaveText('Constraint not met');
     await expect(remedy).toHaveAccessibleName('Review the constraint…');
     await expect(remedy).toHaveAccessibleDescription('Constraint not met');
-    // The bar's roving walk reaches the remedy, and never lands on the reason line.
-    await walkBar(page, 'conflict-remedy');
+    // **The fix sits directly under the reason** (ADR-0187, #485): the remedy is the bar's first
+    // control, on the first control line beneath the caption, and the arrow keys walk the controls in
+    // the order they are drawn. Asserted on geometry because the claim is about where the eye goes.
+    const geometry = await dock(page).evaluate((bar) => {
+      const caption = document.querySelector<HTMLElement>('[data-conflict-reason]');
+      const items = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')].map((el) => {
+        const b = el.getBoundingClientRect();
+        return { id: el.getAttribute('data-toolbar-item') ?? '', top: b.top, left: b.left };
+      });
+      const firstTop = Math.min(...items.map((i) => i.top));
+      return {
+        captionBottom: caption?.getBoundingClientRect().bottom ?? null,
+        firstTop,
+        ids: items.map((i) => i.id),
+        remedyTop: items.find((i) => i.id === 'conflict-remedy')?.top ?? null,
+        // Reading order: line by line (within 4 px is one line), then left to right.
+        reading: [...items]
+          .sort((a, b) => (Math.abs(a.top - b.top) > 4 ? a.top - b.top : a.left - b.left))
+          .map((i) => i.id),
+      };
+    });
+    expect(geometry.ids[0], 'the remedy is the first control').toBe('conflict-remedy');
+    expect(geometry.remedyTop, 'and on the first control line').toBeLessThanOrEqual(
+      geometry.firstTop + 4,
+    );
+    expect(
+      geometry.remedyTop,
+      'which is the line directly under the caption, not beside or above it',
+    ).toBeGreaterThanOrEqual((geometry.captionBottom ?? 0) - 1);
+    expect(geometry.ids, 'the roving order is the reading order').toEqual(geometry.reading);
+    // The bar's roving walk starts at the remedy, and never lands on the reason line.
+    await walkBar(page, 'conflict-remedy', 'conflict-remedy');
 
     await remedy.click();
     // **The editor lands in the context drawer, not a modal** (Graphite M10). This read

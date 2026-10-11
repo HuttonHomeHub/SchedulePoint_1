@@ -34,9 +34,40 @@ export const TOOLBAR_GROUPS = [
 
 export type ToolbarGroupId = (typeof TOOLBAR_GROUPS)[number];
 
-/** Zero-based rank of a group in the canonical order (for stable left→right layout). */
-export function groupRank(group: ToolbarGroupId): number {
-  return TOOLBAR_GROUPS.indexOf(group);
+/**
+ * Zero-based rank of a group in an order (for stable left→right layout). The canonical taxonomy
+ * order unless a surface supplies its own through {@link resolveItems}'s `groupOrder`.
+ */
+export function groupRank(
+  group: ToolbarGroupId,
+  order: readonly ToolbarGroupId[] = TOOLBAR_GROUPS,
+): number {
+  return order.indexOf(group);
+}
+
+/**
+ * Why a `groupOrder` is not a permutation of the groups a registry uses, or `null` when it is.
+ *
+ * A permutation and not a subset, on purpose: an omitted group would have no rank, and `indexOf`
+ * answers `-1` for it, which sorts it **first** — a control silently jumping to the leading edge
+ * and the front of the roving sequence. Naming a group the registry does not use is refused for
+ * the same reason in the other direction: it says the author believes the registry holds something
+ * it does not. Pure, so the rule is testable without rendering.
+ */
+export function groupOrderViolation<Ctx>(
+  items: readonly ToolbarItem<Ctx>[],
+  order: readonly ToolbarGroupId[],
+): string | null {
+  const present = new Set(items.map((item) => item.group));
+  const given = new Set(order);
+  if (given.size !== order.length) return `groupOrder repeats a group: ${order.join(', ')}.`;
+  const missing = [...present].filter((g) => !given.has(g));
+  const unknown = [...given].filter((g) => !present.has(g));
+  if (missing.length === 0 && unknown.length === 0) return null;
+  return (
+    `groupOrder must be a permutation of the groups the registry uses (${[...present].join(', ')}); ` +
+    `missing: ${missing.join(', ') || 'none'}, not in the registry: ${unknown.join(', ') || 'none'}.`
+  );
 }
 
 /**
@@ -557,17 +588,23 @@ export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, T
  * Resolve every item's context-dependent state and drop the invisible ones, returning the survivors
  * in **canonical order**: by group rank, then by `order`, then by registry index (stable). Pen-gated
  * items are disabled as a set when `authoringEnabled` is false. Pure — no DOM, no measurement.
+ *
+ * `groupOrder` replaces the canonical group order for a surface whose subject is one object
+ * (ADR-0187). This is the ONE place the order is decided, and the rendered order, the roving
+ * sequence and the first Tab stop all read it from here — so a surface cannot show one order and
+ * walk another, which is the keyboard-contract failure ADR-0111 exists for.
  */
 export function resolveItems<Ctx>(
   items: ToolbarItem<Ctx>[],
   ctx: Ctx,
   authoringEnabled: boolean,
+  groupOrder: readonly ToolbarGroupId[] = TOOLBAR_GROUPS,
 ): ResolvedToolbarItem<Ctx>[] {
   return items
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.isVisible?.(ctx) ?? true)
     .sort((a, b) => {
-      const byGroup = groupRank(a.item.group) - groupRank(b.item.group);
+      const byGroup = groupRank(a.item.group, groupOrder) - groupRank(b.item.group, groupOrder);
       if (byGroup !== 0) return byGroup;
       const byOrder = a.item.order - b.item.order;
       if (byOrder !== 0) return byOrder;

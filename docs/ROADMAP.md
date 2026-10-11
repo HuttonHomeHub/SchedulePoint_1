@@ -791,6 +791,13 @@ discriminators. Each becomes a spec/plan before build:
   wording the announcer and the screen reader also use; none of the controls moves. The deck's chip stays a count.
   The cost is 20 px of canvas while a flagged activity is selected, measured and accepted.
 
+- **The selection bar leads with its subject.** **Approved 2026-10-11; built as `selection-bar-fit` M0-M3**
+  ([ADR-0187](adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md); spec and plan at
+  [`docs/specs/selection-bar-fit/`](specs/selection-bar-fit/)). The fix for a conflict now sits first, directly under
+  the sentence that explains it, in the Diagram and the Gantt, with Zoom to selection, Isolate and Float paths after the
+  activity's own actions. The dock's width floors can no longer exceed the row at large text. The cost is that the first
+  Tab stop in the bar changes.
+
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
   [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu
