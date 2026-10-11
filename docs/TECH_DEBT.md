@@ -11537,39 +11537,35 @@ mix, then decide between a larger per-handler limit, a per-user key for authenti
 carrying more than about 10 concurrent users (the point where a scripted 49 to 89 per minute each stops being
 a safe upper bound for the shared bucket).
 
-### 450. A single `DELETE` carries no version, so undo's check-then-delete has a small window
+### 450. Undo's deletes do not send the `version` the API now accepts, and the LOE span's redo can leave an orphan
 
-**Status:** open · **Verified:** 2026-10-05 (`activities.controller.ts`, `dependencies.controller.ts`: both `DELETE` routes take an id and no version; `docs/adr/0176-*.md`) ·
-**Raised:** 2026-10-05 (undo-redo M2 review) · **Size:** S · **Owner:** api
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-11 (`activities.controller.ts`, `dependencies.controller.ts`, `resource-assignments.controller.ts`: the three single-row `DELETE`s and dissolve accept an optional version, proven by `test/versioned-delete.e2e-spec.ts`; `apps/web/src/features/undo-redo/commands.ts` and `record-commands.ts` do not send it) ·
+**Raised:** 2026-10-05 (undo-redo M2 review) · **Size:** S · **Owner:** web
 
-Undo and redo of a step that **deletes** (add-then-undo, delete-then-redo, a copy's undo, a link's removal) now
-re-read what they are about to delete and refuse if it was edited, linked or filed under since (ADR-0176). But the
-single-row `DELETE` routes are **unversioned**, so between that read and the delete a colleague's write can still
-land and be deleted with the row. The window is one round trip, and the bulk delete is already versioned.
-Accepted for now; the API is not changed by the undo work.
+The API half shipped additively on 2026-10-11 (correctness-sweep M6): `DELETE …/activities/:id`,
+`…/dependencies/:id` and `…/assignments/:id` take an optional `?version=N`, and `POST …/dissolve` an optional
+`{ version }`. When sent, the row is locked inside the delete's transaction and compared before anything is
+touched; a stale one is a 409 `STALE_VERSION` and nothing is deleted, audited, stamped or recorded. The
+`activity.dissolved` audit row now carries `deleteBatchId`, so the undo's `activity.restored` row joins to it.
+`docs/API.md`, OpenAPI and ADR-0176 are updated. Without a version every route behaves as before, so no existing
+caller changed.
 
-**Resource assignments have the same shape** (undo-redo M3): `DELETE /assignments/:id` takes no version
-(`resource-assignments.controller.ts`, `remove`), so an assignment step's check-then-delete has the same window, and
-so does the one place an undo deletes and re-creates an assignment (a PATCH cannot clear a rate, ADR-0040). That
-case is compensated, not closed: a create that fails after the delete is retried from the row that was read and
-reported as a distinct failure (ADR-0176).
+**What is left, and why it is not done:** undo and redo must pass the version they just read. That waits for the
+API release, because releases are per package (ADR-0027) and a client that sent a version to an API that ignored
+it would be protected by nothing while believing it was. Until then the one-round-trip window the row described
+stands for undo. Two further parts of the original row are unchanged:
 
-**The LOE span's redo rolls back the same way** (undo-redo M2 security re-check): if one of its two edges fails
-after the LOE was created, the LOE is deleted best-effort and the error rethrown so a retry composes again. If that
-rollback delete itself fails (a 423 mid-sequence), an LOE with no logic is left behind and a retry creates a second
-one. Rare, visible and restorable; recording the orphan id so the retry deletes it first would close it.
+- **The LOE span's redo rolls back the same way**: if one of its two edges fails after the LOE was created, the
+  LOE is deleted best-effort and the error rethrown so a retry composes again. If that rollback delete itself
+  fails (a 423 mid-sequence), an LOE with no logic is left behind and a retry creates a second one. Rare,
+  visible and restorable; recording the orphan id so the retry deletes it first would close it.
+- **Resource assignments** have the same shape for the one place an undo deletes and re-creates an assignment
+  (a PATCH cannot clear a rate, ADR-0040); that case is compensated, not closed (ADR-0176).
 
-**Next:** an optional `version` (or `If-Match`) on single-row `DELETE`, enforced when sent, which `commands.ts` and
-`record-commands.ts` would then pass from the row their pre-check just read. Additive and opt-in, so existing
-callers are unaffected.
-**Trigger:** a report of a colleague's edit lost to an undo, or the next change to either `DELETE` route.
-
-**Dissolve has the same window, and one gap of its own** (undo-redo M6 security review): `POST …/dissolve` takes no
-expected version, so redo's check-then-dissolve can promote a child a colleague filed under the summary in the one
-round trip between the read and the write. And the `activity.dissolved` audit row does not record `deleteBatchId`, so
-the `activity.restored` row an undo writes cannot be joined to the dissolve it reversed. **Next:** an optional
-`version` on the dissolve body, enforced when sent, which redo would pass from its pre-check; and `deleteBatchId` in
-the `activity.dissolved` audit payload (additive).
+**Next:** in a release after `api` carrying the parameter, thread the version from `checkDeletable`'s read into
+the delete and dissolve calls in `commands.ts` and `record-commands.ts` (a 409 already reads as the `changed`
+set-aside, ADR-0176 D3), and record the LOE orphan id. **Trigger:** that API release being out, or a report of a
+colleague's edit lost to an undo.
 
 ### 437. A Gantt zoom preset frames the chart for the default grid width after the divider is dragged
 

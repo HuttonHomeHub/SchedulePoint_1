@@ -147,7 +147,11 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   colleague's edit to such a date alone is therefore not noticed. Accepted.
 - **Single-row `DELETE` is unversioned**, so the check-then-delete has a window of one round trip in
   which a colleague's write is deleted with the row. The API is not changed here; `docs/TECH_DEBT.md`
-  #450 proposes an optional version on `DELETE`.
+  #450 proposes an optional version on `DELETE`. _Amended 2026-10-11:_ the API half shipped — the three
+  single-row `DELETE`s take `?version=N` and dissolve takes `{ version }`, each refused with 409
+  `STALE_VERSION` when stale (`docs/API.md`). The undo commands do not pass it yet: that follows the API
+  release, because a client that sent a version to an API that ignored it would get none of the protection
+  and a client cannot tell. Until then the window above stands for undo.
 - A set-aside step is gone from the history. The strip says so, says why, and calls it "skipped" —
   nothing was removed from the plan, and the planner can make the edit again by hand.
 - **A record with no restore endpoint is identified by what it joins, not by its id.** An assignment

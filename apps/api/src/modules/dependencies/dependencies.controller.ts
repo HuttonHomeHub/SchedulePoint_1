@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -15,6 +25,7 @@ import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
+import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { DependenciesService } from './dependencies.service';
@@ -72,16 +83,26 @@ export class DependenciesController {
 
   @Delete(':dependencyId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a dependency (soft).' })
+  @ApiOperation({
+    summary: 'Delete a dependency (soft).',
+    description:
+      '**Optional `?version=N`** (`docs/TECH_DEBT.md` #450): when sent, the link is locked and its ' +
+      'version compared before anything is deleted, and a stale one is refused with 409 ' +
+      '`STALE_VERSION`. Omit it for today’s behaviour exactly.',
+  })
   @ApiNoContentResponse()
+  @ApiConflictResponse({
+    description: 'A `version` was sent and the link is at another (STALE_VERSION).',
+  })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('dependencyId', ParseUuidPipe) dependencyId: string,
+    @Query() query: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, dependencyId, context);
+    await this.service.remove(principal, orgSlug, dependencyId, context, query.version);
   }
 }

@@ -4,6 +4,7 @@ import { DEPENDENCY_CONFLICT_MESSAGES, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { assertVersionMatches, lockDependencyVersion } from '../../common/db/locked-version';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
@@ -471,6 +472,7 @@ export class DependenciesService {
     orgSlug: string,
     dependencyId: string,
     context?: RequestContext,
+    expectedVersion?: number,
   ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:delete', organization.id);
@@ -480,6 +482,16 @@ export class DependenciesService {
     await this.editLock.assertHoldsPen(principal, existing.planId, organization.id);
 
     await this.prisma.$transaction(async (tx) => {
+      // Opt-in (`?version=`, `docs/TECH_DEBT.md` #450): lock and compare before the cascade stamps
+      // anything, so undo's check-then-delete cannot delete a lag edit that landed in between.
+      if (expectedVersion !== undefined) {
+        assertVersionMatches(
+          await lockDependencyVersion(tx, organization.id, dependencyId),
+          expectedVersion,
+          'dependency',
+          'Dependency not found.',
+        );
+      }
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
         'dependency',

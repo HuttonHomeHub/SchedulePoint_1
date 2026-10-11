@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -26,6 +27,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ResourceAssignmentResponseDto } from './dto/assignment-response.dto';
@@ -152,14 +154,24 @@ export class ResourceAssignmentsController {
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   @Delete('assignments/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Unassign a resource from an activity (soft delete).' })
+  @ApiOperation({
+    summary: 'Unassign a resource from an activity (soft delete).',
+    description:
+      '**Optional `?version=N`** (`docs/TECH_DEBT.md` #450): when sent, the assignment is locked and ' +
+      'its version compared before anything is deleted, and a stale one is refused with 409 ' +
+      '`STALE_VERSION`. Omit it for today’s behaviour exactly.',
+  })
   @ApiNoContentResponse()
+  @ApiConflictResponse({
+    description: 'A `version` was sent and the assignment is at another (STALE_VERSION).',
+  })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('id', ParseUuidPipe) id: string,
+    @Query() query: OptionalVersionDto,
   ): Promise<void> {
-    await this.service.remove(principal, orgSlug, id);
+    await this.service.remove(principal, orgSlug, id, query.version);
   }
 }

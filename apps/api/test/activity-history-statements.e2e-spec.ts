@@ -67,10 +67,14 @@ const OWN_LINK_REMOVE = 4;
 // number: the placements route is one read (which now also carries the before-values), one UPDATE
 // and the stamp; the re-parent reads the plan's tree once; the rest are each route's existing
 // cascade. The stamp is one statement per route however many rows.
-const OWN_PLACEMENTS = 3;
+//
+// Two of these moved on 2026-10-11 (`docs/TECH_DEBT.md` #440), each by exactly one statement and
+// however many rows: the placements route now takes its rows in id order before the UPDATE (3 to 4),
+// and the single DELETE takes the plan advisory lock as bulk delete does (7 to 8).
+const OWN_PLACEMENTS = 4;
 const OWN_PARENTS = 6;
 const OWN_DISSOLVE = 12;
-const OWN_DELETE = 7;
+const OWN_DELETE = 8;
 const OWN_RESTORE = 20;
 const OWN_BULK_DELETE = 9;
 const OWN_BATCH_RESTORE = 21;

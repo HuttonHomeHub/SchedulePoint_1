@@ -4,6 +4,7 @@ import { RESOURCE_ERROR } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { assertVersionMatches, lockAssignmentVersion } from '../../common/db/locked-version';
 import { acquireResourceWriteLock } from '../../common/db/resource-advisory-lock';
 import {
   ConflictError,
@@ -400,7 +401,12 @@ export class ResourceAssignmentService {
     return { assignment: updated, canReadCost };
   }
 
-  async remove(principal: Principal, orgSlug: string, assignmentId: string): Promise<void> {
+  async remove(
+    principal: Principal,
+    orgSlug: string,
+    assignmentId: string,
+    expectedVersion?: number,
+  ): Promise<void> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'resource:assign', organization.id);
 
@@ -413,6 +419,17 @@ export class ResourceAssignmentService {
     await this.editLock.assertHoldsPen(principal, activity.planId, organization.id);
 
     await this.prisma.$transaction(async (tx) => {
+      // Opt-in (`?version=`, `docs/TECH_DEBT.md` #450): lock and compare before the soft delete, so
+      // an undo that re-reads the assignment and then deletes it cannot delete a rate edit that
+      // landed in between.
+      if (expectedVersion !== undefined) {
+        assertVersionMatches(
+          await lockAssignmentVersion(tx, organization.id, assignmentId),
+          expectedVersion,
+          'assignment',
+          RESOURCE_ERROR.ASSIGNMENT_NOT_FOUND,
+        );
+      }
       // Recorded only by the transaction that made the transition (count 1): two concurrent removes
       // record one "removed". The state is read after the stamp, from the row that was removed.
       const removed = await this.assignments.softDelete(assignmentId, principal.userId, tx);

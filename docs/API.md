@@ -1642,6 +1642,19 @@ controller's 30 / 60 s per handler.
   client treating 204 specially, is not, and five of this repository's own e2e specs had to change
   `.expect(204)` to `.expect(200)`. This entry said "additive rather than breaking" until the API
   review put that claim next to the diff disproving it (ADR-0076).
+- **Single-row deletes take an optional `version`** (`docs/TECH_DEBT.md` #450):
+  `DELETE …/activities/:activityId?version=N`, `DELETE …/dependencies/:dependencyId?version=N` and
+  `DELETE …/assignments/:id?version=N`, and `POST …/activities/:activityId/dissolve` with a body
+  `{ "version": N }`. **Opt-in and additive:** without it every route behaves exactly as before. With it, the
+  row is locked inside the delete's own transaction and compared before anything is touched; a row at any
+  other version answers **409** with `details.reason: "STALE_VERSION"` and nothing is deleted, audited,
+  stamped or recorded, and a row already gone answers 404. This closes the one-round-trip window in which a
+  colleague's write could land between undo's re-read and its delete. A query parameter, not a body, on
+  `DELETE` (intermediaries handle a `DELETE` body poorly), and not `If-Match` (no route here uses ETags). A
+  non-integer or non-positive value is `422`. For a summary the version guards the **root** only; its
+  children were covered by the caller's own check (ADR-0176). The `activity.dissolved` audit row now also
+  carries `deleteBatchId`, so the `activity.restored` row an undo writes can be joined to the dissolve it
+  reversed.
 - `POST …/activities/:activityId/dissolve` (**200**) removes a WBS summary's grouping and **keeps
   the work**: its direct children take its own parent, then the now-childless summary is
   soft-deleted, in one transaction. It is a separate endpoint from `DELETE`, not a flag on it,

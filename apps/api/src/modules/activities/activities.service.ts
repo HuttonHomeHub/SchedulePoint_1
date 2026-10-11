@@ -14,6 +14,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { chunkIds } from '../../common/db/id-chunks';
+import { lockActivityVersion, assertVersionMatches } from '../../common/db/locked-version';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
@@ -1479,6 +1480,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     context?: RequestContext,
+    expectedVersion?: number,
   ): Promise<{ deleteBatchId: string }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
@@ -1499,6 +1501,17 @@ export class ActivitiesService {
       // A summary delete sweeps a subtree's activities AND links, the two tables the recalculation
       // writes, and used to do it with no plan lock (`docs/TECH_DEBT.md` #440). `bulkDelete` takes it.
       await acquirePlanWriteLock(tx, existing.planId);
+      // Opt-in (`?version=`, #450): the subject row is locked and compared before the cascade touches
+      // anything, so the version deleted is the version the client read. For a summary it guards the
+      // root only; its children were covered by the client's own check (ADR-0176).
+      if (expectedVersion !== undefined) {
+        assertVersionMatches(
+          await lockActivityVersion(tx, organization.id, activityId),
+          expectedVersion,
+          'activity',
+          'Activity not found.',
+        );
+      }
       const knockOn: KnockOn = { links: [], activityIds: [] };
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
@@ -1844,6 +1857,7 @@ export class ActivitiesService {
     orgSlug: string,
     activityId: string,
     context?: RequestContext,
+    expectedVersion?: number,
   ): Promise<DissolveSummaryResult> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:delete', organization.id);
@@ -1862,6 +1876,16 @@ export class ActivitiesService {
     const { promoted, deleteBatchId } = await this.prisma.$transaction(async (tx) => {
       // Same lock as every other parent-tree write.
       await acquirePlanWriteLock(tx, existing.planId);
+      // Opt-in (`version` in the body, #450): redo's check-then-dissolve could otherwise promote a
+      // child a colleague filed under the summary in the one round trip between the read and here.
+      if (expectedVersion !== undefined) {
+        assertVersionMatches(
+          await lockActivityVersion(tx, organization.id, activityId),
+          expectedVersion,
+          'activity',
+          'Activity not found.',
+        );
+      }
 
       /*
        * **Re-read the summary under the lock**, and take the children's new parent from THAT row.
@@ -1926,7 +1950,12 @@ export class ActivitiesService {
           subjectType: 'ACTIVITY',
           subjectId: activityId,
           subjectLabel: existing.name,
-          before: { name: existing.name, promotedChildCount: rows.length },
+          // `deleteBatchId` joins this row to the `activity.restored` row an undo writes (#450).
+          before: {
+            name: existing.name,
+            promotedChildCount: rows.length,
+            deleteBatchId: cascade.batchId,
+          },
           ...auditActor(principal, context),
         },
         tx,
