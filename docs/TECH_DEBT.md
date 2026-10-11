@@ -11504,13 +11504,16 @@ figure in ADR-0174. **Trigger:** a slow delete or restore of a large summary, or
 
 ### 445. A history entry keeps a deleted neighbour's name, and an xlink entry keeps the other plan's name
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-04 (`docs/specs/activity-change-history/`, M2; the entries are written by `activity-history.recorder.ts`) ·
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-11 (`activity-history.recorder.ts:378-404` and `:444-458` snapshot the names; `hierarchy-expiry.service.ts:197-267` selects only clients, projects and plans) ·
 **Raised:** 2026-10-04 (M2 review) · **Size:** S · **Owner:** api
 
 A knock-on entry (a link lost because the other end was deleted) and a dissolve entry copy the deleted
 neighbour's code and name into the **survivor's** history, and an `xlink:<id>` entry snapshots the other
-plan's name. ADR-0096 retention later hard-deletes the neighbour, but its name stays in the survivor's
-history for as long as the survivor lives. It is not a new exposure today: a reader of the survivor could
+plan's name. **Only the xlink case can outlive its subject:** ADR-0096 retention expiry selects clients,
+projects and plans (`hierarchy-expiry.service.ts`), never an activity in a live plan, so a deleted
+neighbour's row stays in `activities` as long as the survivor's plan does and a knock-on or dissolve entry's
+name is still resolvable there. An xlink entry names a plan that can expire while the other plan's history
+still names it. It is not a new exposure today: a reader of the survivor could
 already see the neighbour on the link. It matters to a right-to-erasure request about content, and to any
 future per-plan access model, where the other plan's name would be visible to somebody who may not see
 that plan. **Next:** decide whether retention scrubs the names from surviving entries or the entry stores
@@ -11523,8 +11526,7 @@ permissions being introduced. Related theme: #118a.
 **Raised:** 2026-10-04 (closing the throttle visibility epic, spec §4's observation) · **Size:** M · **Owner:** api
 
 The API's `ThrottlerGuard` allows 100 requests per 60 s per IP per handler. Users behind one office NAT or
-proxy share an IP, so they share one bucket for each handler, and `GET /api/v1/me` is read on every route
-change. **Unmeasured for real use.** The only figures are one test user's: the census saw a single
+proxy share an IP, so they share one bucket for each handler, and `GET /api/v1/me` is read often: display observers hold it for the app default of 30 s since #455, and the `_authed` guard asks the router for it on navigation. Whether a route change refetches it is **not verified** here; it depends on TanStack Query's `ensureQueryData` serving cached data, a library claim nobody has registered. **Unmeasured for real use.** The only figures are one test user's: the census saw a single
 `activity-editor` user peak at 49 `GET /me` per 60 s after #786 and at 64 before it, and the
 `overview` suite at 89 (`arrange` 77, `gantt-editing` 84). Those are scripted, faster than a person, and
 a person does not call `/me` at that rate, so a dozen planners working at once could plausibly stay under 100
@@ -11533,7 +11535,7 @@ not be: raising the limit blind is the move #361 refused four times.
 
 **Next:** measure real per-IP `/me` rates from production logs or a census against a representative session
 mix, then decide between a larger per-handler limit, a per-user key for authenticated routes, or leaving it.
-**Trigger:** a production 429 report from a user who was not abusing anything, or any single address
+**Already observable:** every 429 is logged at `warn` with its code and path (`all-exceptions.filter.ts`), so the trigger can be checked from the logs without new code. **Trigger:** a production 429 report from a user who was not abusing anything, or any single address
 carrying more than about 10 concurrent users (the point where a scripted 49 to 89 per minute each stops being
 a safe upper bound for the shared bucket).
 
