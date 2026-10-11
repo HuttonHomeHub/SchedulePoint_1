@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PanelResizer } from './panel-resizer';
 
+// The polite announcer is what a lost draft is said through; stood in for so the message is observable.
+const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
+vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
+
 function renderResizer(over: Partial<React.ComponentProps<typeof PanelResizer>> = {}) {
   const onResize = vi.fn();
   const { unmount } = render(
@@ -13,6 +17,7 @@ function renderResizer(over: Partial<React.ComponentProps<typeof PanelResizer>> 
       max={500}
       label="Resize X"
       sizeLabel="X width"
+      onReset={vi.fn()}
       onResize={onResize}
       pointerToSize={(e) => e.clientX}
       {...over}
@@ -124,6 +129,7 @@ describe('PanelResizer', () => {
   describe('pressing the divider opens a size box (ADR-0188 D1)', () => {
     let frames: FrameRequestCallback[] = [];
     beforeEach(() => {
+      announce.mockClear();
       frames = [];
       vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
       vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -193,13 +199,13 @@ describe('PanelResizer', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('applies a typed size on Enter, and says nothing when it was applied as typed', () => {
+    it('applies a typed size on Enter, and says it was applied as typed', () => {
       const { separator, onResize } = renderResizer();
       press(separator);
       fireEvent.change(field(), { target: { value: '250' } });
       fireEvent.keyDown(field(), { key: 'Enter' });
       expect(onResize).toHaveBeenLastCalledWith(250);
-      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      expect(screen.getByRole('status')).toHaveTextContent('X width set to 250 px.');
     });
 
     it('limits a size outside the range and says so, never silently', () => {
@@ -253,18 +259,38 @@ describe('PanelResizer', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('offers Reset to standard only when the consumer has one, and says it was done', () => {
-      const first = renderResizer();
-      press(first.separator);
-      expect(screen.queryByRole('button', { name: 'Reset to standard' })).toBeNull();
-      first.unmount();
-
+    it('Reset to standard calls onReset and says it was done', () => {
       const onReset = vi.fn();
-      const second = renderResizer({ onReset });
-      press(second.separator);
+      const { separator } = renderResizer({ onReset });
+      press(separator);
       fireEvent.click(screen.getByRole('button', { name: 'Reset to standard' }));
       expect(onReset).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('status')).toHaveTextContent('X width reset to standard.');
+    });
+
+    it('a press outside while a size is typed does not apply it, and says it was not applied', () => {
+      const { separator, onResize } = renderResizer();
+      press(separator);
+      onResize.mockClear();
+      fireEvent.change(field(), { target: { value: '450' } });
+      act(() => {
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(onResize).not.toHaveBeenCalled();
+      expect(announce).toHaveBeenCalledExactlyOnceWith('X width: the typed size was not applied.');
+    });
+
+    it('says nothing when the box closes with no draft, or by Escape', () => {
+      const { separator } = renderResizer();
+      press(separator);
+      act(() => {
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      });
+      press(separator);
+      fireEvent.change(field(), { target: { value: '450' } });
+      fireEvent.keyDown(field(), { key: 'Escape' });
+      expect(announce).not.toHaveBeenCalled();
     });
 
     it('goes with its divider: unmounting while open leaves no box behind', () => {

@@ -1,6 +1,6 @@
 # Feature Spec: Accessibility and touch sweep — dividers, row checkboxes, the Explorer landmark, and the breadcrumb at enlarged text
 
-- **Status:** Approved 2026-10-11 by the product owner, every recommendation accepted (CQ-1 A, CQ-2 now, CQ-3 the browser's own text size). M0-M3 built (ADR-0188); M4-M5 follow.
+- **Status:** Accepted — shipped (ADR-0188). Approved 2026-10-11 by the product owner, every recommendation accepted (CQ-1 A, CQ-2 now, CQ-3 the browser's own text size); built as M0-M5. #483 closed unbuilt on M0's readings.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-11
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #442, #470, #473, #476, #483 (and #475, checked for overlap)

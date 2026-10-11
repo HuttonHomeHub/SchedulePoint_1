@@ -110,7 +110,9 @@ test.describe('A divider is pressed to type a size', () => {
       await page.keyboard.press('Enter');
       await expect(explorer).toHaveAttribute('aria-valuenow', String(typed));
       expect(Math.round((await panel.boundingBox())?.width ?? 0)).toBe(typed);
-      await expect(page.getByRole('status').filter({ hasText: 'width' })).toHaveCount(0);
+      await expect(page.getByRole('status').filter({ hasText: 'set to' })).toContainText(
+        `Project Explorer width set to ${typed} px.`,
+      );
 
       // A size outside the range is limited and SAYS so: never changed silently.
       await field.fill('5000');

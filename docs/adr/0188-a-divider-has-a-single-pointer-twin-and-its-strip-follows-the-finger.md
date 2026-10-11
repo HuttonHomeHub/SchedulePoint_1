@@ -93,12 +93,12 @@ the Gantt's grid width. Three facts, each read rather than assumed:
   (D3). **A symmetric strip on the Gantt grid divider** is the one case where the cost is a whole target, so it
   is the named exception.
 - **The tooltip primitive for the hint.** Declined: its long-press and click-swallowing would fight the
-  separator's own pointer handlers. A native `title` is the hint for a mouse; the box is the control.
+  separator's own pointer handlers. The separator's native `title` (and so its description) says what the KEYS do, because no key opens the box; the box is the control.
 
 ## Consequences
 
 - **A click on a divider opens a box, which is new behaviour on a monitor** and is stated in the changeset.
-  Nothing visible says the line can be pressed except the cursor and the `title`; the Surface sheet (steps 25b
+  Nothing visible says the line can be pressed except the cursor; the Surface sheet (steps 25b
   and 26) asks whether a finger finds the line and whether the box surprises.
 - **A finger's strip takes the nearest 5 to 17 px of a neighbour's box** (D3), never its centre. Stated,
   measured and gated rather than hidden. The cost is a finger that means the edge of such a control may grab
@@ -113,6 +113,23 @@ the Gantt's grid width. Three facts, each read rather than assumed:
   browser setting produces. The two stale comments beside it are corrected.
 - **Not measured:** the finger's press-to-release movement (a container has no finger; 4 px is the default and
   step 26 records the reading), a Viewer seat's table, and the Surface sheet's answers.
+- **A size applied exactly as typed is announced** ("Project Explorer width set to 340 px."), and **a draft lost to
+  an outside press is announced as not applied** ("…the typed size was not applied.") rather than applied or
+  dropped silently; Escape discards on purpose and says nothing. Both come from the accessibility review (4.1.3,
+  ADR-0173).
+- **`SizeField` is not a pure extraction.** Escape moved to a `window` capture listener, so the Gantt Columns
+  fields' Escape behaviour changed: it now discards a draft where it used to apply it. That is the fix for a
+  pre-existing defect, not a regression, and the Gantt's own suite passes unchanged. The field and `TextField`
+  can drift (`docs/TECH_DEBT.md` #495).
+- **Accepted, unchanged: Tab out of the field closes the box with no focus restore** (the next stop in document
+  order after the portal), as `ToolbarPopover` does. Escape is the route back to the line.
+- **`CLICK_AFTER_GESTURE_MS` (500 ms) is a heuristic** that tells the click a browser fires after a press or a drag
+  from an assistive technology's synthesised one. jsdom proves its two branches; only a real browser proves the
+  number, and a screen reader's browse-mode click has not been exercised on a device.
+- **Safari/iPad is unchecked:** a tap may not focus a button there, so the box's focus-out handler could close it
+  before "Reset to standard" acts. Device-sheet step 28 asks.
+- **Filed:** #493 (axe `region` on a plan page), #494 (the Gantt's 25 px strip covers a third of each row menu,
+  pre-existing), #495 (`SizeField` against `TextField`).
 - **One more shared-primitive review.** `PanelResizer`, `usePointerDrag` and `SizeField` change their public
   contracts, so accessibility-reviewer and component-reviewer read them before release (ADR-0111).
 

@@ -1,7 +1,7 @@
 # Implementation Plan: Accessibility and touch sweep
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved 2026-10-11 by the product owner (see the spec). M0-M3 built (ADR-0188); M4-M5 follow.
+- **Status:** Accepted — shipped (ADR-0188). Approved 2026-10-11 by the product owner, every recommendation accepted (CQ-1 A, CQ-2 now, CQ-3 the browser's own text size); built as M0-M5. #483 closed unbuilt on M0's readings.
 - **Owner:** web. Built by the **builder** agent (Sonnet); planned here (Opus).
 
 ## Breakdown

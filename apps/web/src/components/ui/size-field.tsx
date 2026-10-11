@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Input } from '@/components/ui/input';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { cn } from '@/lib/utils';
@@ -80,12 +81,32 @@ export function SizeField({
   // `null` while the field shows the committed value; a string only between typing and committing.
   const [draft, setDraft] = useState<string | null>(null);
   const discarded = useRef(false);
+  // Escape threw the draft away on purpose; unlike `discarded` it outlives the blur that follows.
+  const escaped = useRef(false);
   const draftRef = useRef<string | null>(null);
   const ownInputRef = useRef<HTMLInputElement>(null);
   const input = inputRef ?? ownInputRef;
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+
+  // **A typed value is never changed silently, and that includes losing it.** Pressing outside while a
+  // draft is typed closes the container with the field still holding it; the field unmounts without a
+  // blur, so nothing was applied and nothing said so. It is not applied (an outside press is not a
+  // commit), and it is announced politely. Escape discards on purpose and says nothing.
+  const announce = useAnnounce();
+  const lost = useRef({ announce, subject });
+  useEffect(() => {
+    lost.current = { announce, subject };
+  }, [announce, subject]);
+  useEffect(
+    () => () => {
+      if (draftRef.current !== null && !escaped.current) {
+        lost.current.announce(`${lost.current.subject}: the typed size was not applied.`);
+      }
+    },
+    [],
+  );
 
   // **Escape is heard on `window`, in the capture phase, and that is the only place early enough.**
   // A container that closes on Escape (`usePopoverPanel`) listens on `document` in the capture phase
@@ -100,6 +121,7 @@ export function SizeField({
       // blurs the field; `discarded` makes that blur skip the commit (it is cleared by the blur
       // itself, or by the next edit if no blur arrives).
       discarded.current = draftRef.current !== null;
+      escaped.current = true;
       setDraft(null);
     };
     window.addEventListener('keydown', onEscape, true);
@@ -136,6 +158,7 @@ export function SizeField({
         className="w-24"
         onChange={(event) => {
           discarded.current = false;
+          escaped.current = false;
           setDraft(event.target.value);
         }}
         onBlur={(event) => {

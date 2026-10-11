@@ -38,10 +38,11 @@ export interface PanelResizerProps {
    */
   sizeLabel: string;
   /**
-   * Put the size back on its standard. Offers "Reset to standard" in the size box; absent ⇒ no button.
-   * Every consumer's prefs hook knows its default (`resetSize`), so passing it is the rule.
+   * Put the size back on its standard: the size box's "Reset to standard". **Required**, like
+   * `sizeLabel`: every consumer's prefs hook knows its default (`resetSize`), and a divider whose box
+   * cannot go back is a one-way edit.
    */
-  onReset?: () => void;
+  onReset: () => void;
   /** Apply a new size (px). The caller clamps + persists. */
   onResize: (size: number) => void;
   /**
@@ -206,10 +207,11 @@ export function PanelResizer({
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuetext={`${size} pixels`}
-        // The affordance a pointer user has: nothing else says the line can be pressed. (A native
-        // `title`, because the Tooltip primitive's long-press and click swallowing would fight this
-        // element's own pointer handlers; it is a hint for a mouse, and the box itself is the control.)
-        title="Drag to resize, or click to type a size"
+        // States what the KEYS do, which is what an assistive technology reads as the description: no
+        // key opens the size box (the separator's keyboard contract is the arrows, Home and End). A
+        // native `title`, because the Tooltip primitive's long-press and click swallowing would fight
+        // this element's own pointer handlers.
+        title="Drag to resize. Arrow keys change the size; Home and End jump to the smallest and largest."
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         onPointerDown={pointer.onPointerDown}
@@ -272,7 +274,7 @@ export function PanelResizer({
             max={max}
             step={keyStep}
             onResize={onResize}
-            {...(onReset ? { onReset } : {})}
+            onReset={onReset}
             fieldRef={fieldRef}
           />
         </div>,
@@ -302,11 +304,14 @@ function SizeBox({
   max: number;
   step: number;
   onResize: (size: number) => void;
-  onReset?: () => void;
+  onReset: () => void;
   fieldRef: React.RefObject<HTMLInputElement | null>;
 }): React.ReactElement {
   const hintId = useId();
   const { setNotice, status } = useSizeNotice();
+  // What the last apply wrote, so a size applied exactly as typed is still SAID (WCAG 4.1.3): the field
+  // reports only when it limited a value.
+  const lastApplied = useRef(size);
   return (
     <>
       <SizeField
@@ -320,27 +325,26 @@ function SizeBox({
         apply={(next) => {
           // The caller clamps and persists too; clamping here is what tells the field the truth.
           const applied = clampSize(next, min, max);
+          lastApplied.current = applied;
           onResize(applied);
           return applied;
         }}
-        onNotice={setNotice}
+        onNotice={(message) => setNotice(message ?? `${subject} set to ${lastApplied.current} px.`)}
       />
       <p id={hintId} className="text-muted-foreground text-xs">
         {min} to {max} pixels. Drag the line, or type a size and press Enter.
       </p>
-      {onReset ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            onReset();
-            setNotice(`${subject} reset to standard.`);
-          }}
-        >
-          Reset to standard
-        </Button>
-      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          onReset();
+          setNotice(`${subject} reset to standard.`);
+        }}
+      >
+        Reset to standard
+      </Button>
       {status}
     </>
   );

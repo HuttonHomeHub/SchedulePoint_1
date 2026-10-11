@@ -209,6 +209,11 @@ Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stop
       on the line: [ ] yes [ ] no. "Reset to standard" is finger-sized and puts the panel back:
       [ ] yes [ ] no
 
+- [ ] **28. Only if the device is an iPad or a Mac running Safari: open a divider's box (step 26), then
+      tap "Reset to standard".** Safari does not focus a button on a tap, so the box could mistake the tap
+      for focus leaving and close before the button acts. The panel went back to its standard size:
+      [ ] yes [ ] no, the box closed first [ ] not Safari
+
 ## When you are done
 
 Send the photos of the `pointer-check` screen (one per posture), this sheet with its ticks, and any

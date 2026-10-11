@@ -16,14 +16,14 @@ export interface Crumb {
  * `aria-current="page"`); earlier crumbs link to their ancestor route. Ancestors match `exact` on
  * purpose, so a page beneath one never marks it current: only the last crumb is.
  *
- * **`variant="nowrap"` is for a trail inside a fixed-height band**, which is a different
- * problem from the one the default solves. On a hierarchy screen the trail is free to wrap
- * onto a second line and should; in the ADR-0097 D1b chrome band a wrapped crumb grows the
- * band, which silently gives back the 45 px that merge was measured to win. So the variant
- * refuses to wrap and truncates each crumb instead, with `title` carrying the full string.
+ * **`variant="nowrap"` is for a trail in the chrome band's header row**, a different problem from the one
+ * the default solves. On a hierarchy screen the trail is free to wrap onto a second line and should; in
+ * the header a wrapped crumb costs a line of diagram (48 px, the row is `min-h-12` and may wrap but
+ * should not need to). So the variant refuses to wrap and truncates each crumb instead, with `title`
+ * carrying the full string.
  *
- * A named variant rather than a `className` escape hatch: "a breadcrumb in a fixed-height
- * band must not wrap" is a reusable rule about a situation, and the next band gets it right
+ * A named variant rather than a `className` escape hatch: "a breadcrumb in the header row
+ * must not wrap" is a reusable rule about a situation, and the next band gets it right
  * by asking for it (`docs/DESIGN_SYSTEM.md` — no one-off component styling).
  */
 export function Breadcrumbs({
