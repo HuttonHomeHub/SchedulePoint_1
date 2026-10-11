@@ -198,7 +198,7 @@ export class ActivityHistoryRecorder {
     // The probe also reads the clock, so it is one statement: it runs AFTER the lock is held. `now()`
     // is the transaction's start and could date this entry before one a concurrent recorder committed
     // while we waited; `clock_timestamp()` cannot, and `planRecord` clamps against the latest entry.
-    const probes = await this.probe(tx, writes);
+    const probes = await this.probe(tx, writes, batch !== undefined);
     const t = [...probes.rows.values()][0]?.now;
     if (!t) throw new Error('ActivityHistoryRecorder: the probe returned no activity or clock');
 
@@ -514,12 +514,20 @@ export class ActivityHistoryRecorder {
    * cannot plant a row in another tenant (R5).
    *
    * The names ride on the first row only, so a many-activity write does not repeat them per row.
+   *
+   * **A batch does not read the latest entry's `changes`.** A batch is never joinable
+   * (`planRecord`: `!write.isBatch`) and the document is only read behind `joinable`, so for a batch
+   * the column is selected as `NULL`: a knock-on over 2,000 survivors would otherwise detoast and
+   * ship up to 32 KB per row that nothing reads (`docs/TECH_DEBT.md` #444). The latest entry is
+   * still found through the same index, so the merge decision's other inputs are unchanged.
    */
   private async probe(
     tx: Prisma.TransactionClient,
     writes: readonly RecordedActivityWrite[],
+    isBatch: boolean,
   ): Promise<{ rows: Map<string, ProbeRow>; names: ResolvedNames }> {
     const refs = combineChanges(...writes.map((w) => w.changes)).refs;
+    const latestChanges = isBatch ? Prisma.sql`NULL::jsonb` : Prisma.sql`h.changes`;
     // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, and names the calendar, WBS parent, resource, plan and a knock-on's other end as they are now (a deleted one still has a name), so no row may be filtered out.
     const rows = await tx.$queryRaw<ProbeRow[]>`
       WITH names AS (
@@ -550,7 +558,9 @@ export class ActivityHistoryRecorder {
       JOIN plans pl ON pl.id = a.plan_id
       CROSS JOIN names
       LEFT JOIN LATERAL (
-        SELECT * FROM activity_history_entries h
+        SELECT h.id, h.actor_user_id, h.scope, h.first_recorded_at, h.last_recorded_at,
+               h.edit_count, h.batch_id, ${latestChanges} AS changes
+        FROM activity_history_entries h
         WHERE h.activity_id = a.id
         ORDER BY h.first_recorded_at DESC, h.id DESC
         LIMIT 1
@@ -721,6 +731,10 @@ function uuidV7(at: Date): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
+/**
+ * `changes` is `null` on a batch's probe (see {@link ActivityHistoryRecorder.probe}); `planRecord`
+ * reads it only for a joinable single-object write, which a batch never is.
+ */
 function toLatest(row: ProbeRow): LatestEntry {
   return {
     id: row.entryId as string,

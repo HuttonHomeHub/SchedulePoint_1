@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiFetchError } from '@/lib/api/client';
@@ -23,6 +23,8 @@ import { ApiFetchError } from '@/lib/api/client';
 // Mutable per-test state, referenced by the hoisted mock factories.
 const h = vi.hoisted(() => ({
   role: 'PLANNER',
+  planId: 'p1',
+  modelMounts: 0,
   pen: {},
   activities: [] as { id: string; version: number; name: string }[],
   tsld: { props: null as Record<string, unknown> | null },
@@ -63,7 +65,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
-  useParams: () => ({ orgSlug: 'acme', planId: 'p1' }),
+  useParams: () => ({ orgSlug: 'acme', planId: h.planId }),
   // The workspace reads/writes the `?view=` projection (ADR-0059); these two keep the mock a
   // complete stand-in rather than a partial one that throws the moment the view switch renders.
   useSearch: () => ({}),
@@ -83,7 +85,15 @@ vi.mock('@/features/auth', () => ({
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   // Keep the REAL derivePlanGating + PenReadOnlyNote (the logic under test); stub the rest.
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => h.pen,
+  // Called once per workspace model, so an effect here counts model MOUNTS — not renders, and not
+  // `TsldPanel`'s, which is keyed by plan on its own (`plan-workspace-toolbar.tsx`) and would mask a
+  // lost route key. The per-plan remount pin below must not pass because something else reset.
+  usePlanPen: () => {
+    useEffect(() => {
+      h.modelMounts += 1;
+    }, []);
+    return h.pen;
+  },
   EditLockBanner: () => <div data-testid="edit-lock-banner" />,
 }));
 
@@ -264,6 +274,8 @@ function pen(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 beforeEach(() => {
   h.role = 'PLANNER';
+  h.planId = 'p1';
+  h.modelMounts = 0;
   h.pen = pen();
   h.activities = [{ id: 'a1', version: 3, name: 'Excavate' }];
   h.tsld.props = null;
@@ -422,5 +434,33 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     expect(h.setVisualStart).toHaveBeenCalledTimes(1);
     expect(outcome.applied).toBe(true); // the move persisted…
     expect(outcome.conflict).toMatch(/couldn.t recalculate/i); // …dates stay stale until next recalc
+  });
+});
+
+describe('PlanDetailScreen — one workspace per plan (#451, #454)', () => {
+  it('remounts the workspace when only the plan id changes', () => {
+    // TanStack Router re-renders this route with new params when another plan is opened from the
+    // Project Explorer; the `key` is what turns that into a fresh model. Every ref and state in the
+    // model (the auto-recalc snapshot, the clipboard) otherwise carries plan A into plan B. A mount
+    // counter rather than a timer: this used to be pinned only by a journey that waits 250 ms.
+    // **It relies on there being no `StrictMode` wrapper**: StrictMode double-invokes mount effects,
+    // which would make the counts 2 and 4 and still pass the comparison for the wrong reason.
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // A fresh element per render: React bails out of an element it has already rendered, and the
+    // mocked `useParams` would never be read again.
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <PlanDetailScreen />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(tree());
+    expect(h.modelMounts).toBe(1);
+
+    rerender(tree());
+    expect(h.modelMounts).toBe(1);
+
+    h.planId = 'p2';
+    rerender(tree());
+    expect(h.modelMounts).toBe(2);
   });
 });

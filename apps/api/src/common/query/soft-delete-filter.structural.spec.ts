@@ -1840,9 +1840,9 @@ describe('soft-delete scanner — raw SQL predicates', () => {
   });
 });
 
-// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04); 30 covering 83 with the second milestone's plan join in the probe and the restore's returning statement (2026-10-04); 31 covering 84 with the scheduling-input stamp's plan update (2026-10-04); 34 covering 87 with the three history diagnostics' activities joins (2026-10-05).
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04); 30 covering 83 with the second milestone's plan join in the probe and the restore's returning statement (2026-10-04); 31 covering 84 with the scheduling-input stamp's plan update (2026-10-04); 34 covering 87 with the three history diagnostics' activities joins (2026-10-05); `_count` selections 1 once the baseline list's moved to a keyed `groupBy` (2026-10-11, TECH_DEBT #441).
 const NESTED_READS_FLOOR = 9;
-const COUNTS_FLOOR = 2;
+const COUNTS_FLOOR = 1;
 const DECLARATIONS = 34;
 const COVERED = 87;
 

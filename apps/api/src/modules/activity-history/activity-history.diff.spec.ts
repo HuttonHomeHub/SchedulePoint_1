@@ -395,6 +395,29 @@ describe('planRecord', () => {
     expect(planRecord(latest(latestOver), write(writeOver), NOW).action).toBe('insert');
   });
 
+  it("never reads the latest entry's changes for a batch write", () => {
+    // The recorder's batch probe selects that column as NULL (TECH_DEBT #444), which is only safe
+    // while a batch cannot reach the document. A getter that throws turns that reading of
+    // `planRecord` into a test: the day a batch starts consulting `latest.changes`, this fails
+    // instead of the recorder silently planning against a null.
+    const unreadable = latest();
+    Object.defineProperty(unreadable, 'changes', {
+      get: () => {
+        throw new Error('a batch must not read the latest entry’s changes');
+      },
+    });
+    expect(planRecord(unreadable, write({ isBatch: true }), NOW)).toMatchObject({
+      action: 'insert',
+    });
+    expect(
+      planRecord(
+        unreadable,
+        write({ isBatch: true, changes: { laneIndex: { from: 0, to: 1 } } }),
+        NOW,
+      ),
+    ).toEqual({ action: 'none' });
+  });
+
   it('merges exactly at the 60 s and 10 minute boundaries (inclusive)', () => {
     expect(
       planRecord(

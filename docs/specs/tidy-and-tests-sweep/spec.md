@@ -1,6 +1,6 @@
 # Feature Spec: Tidy, tests and measured performance — register group 4
 
-- **Status:** Draft — awaiting the product owner's approval before any implementation.
+- **Status:** Approved — the product owner accepted every recommendation on 2026-10-11 (CQ-1 to CQ-3 as defaulted, #435 closing at ten clean runs, #469 narrower than its row). ADR-0174 cites the M3 measurement record. The work is built on `fix/tidy-and-tests-sweep` and awaits merge.
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-11
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #419, #429, #432, #435, #441, #443, #444, #454, #469, #481

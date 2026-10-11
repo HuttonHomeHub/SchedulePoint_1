@@ -36,7 +36,6 @@ import { resetThrottleCounters } from '../throttle-reset';
  */
 const ORIGIN = 'http://localhost:5173';
 const PASSWORD = 'correct-horse-battery';
-const API = '/api/v1/organizations/acme';
 const ROWS = 2000;
 const ITER = Number(process.env.MEASURE_ITER ?? 8);
 const BRANCH_CHILDREN = 200;
@@ -106,6 +105,8 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history batch measurement',
       .expect(200);
     const org = await agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
     const organizationId = org.body.data.id as string;
+    // The slug the server chose, not 'acme': on a database that already holds one, it is suffixed.
+    const API = `/api/v1/organizations/${org.body.data.slug as string}`;
     const client = await agent.post(`${API}/clients`).send({ name: 'Northgate' }).expect(201);
     const project = await agent
       .post(`${API}/clients/${client.body.data.id}/projects`)
@@ -209,9 +210,97 @@ describe.skipIf(!process.env.DATABASE_URL)('activity history batch measurement',
       return [median(without), median(withRec), worst(without), worst(withRec)];
     }
 
+    /**
+     * TECH_DEBT #444 — what does a batch's probe cost when each survivor's latest entry carries a
+     * real document? The route arms above leave survivors with NO history, which is how the saving
+     * was under-measured the first time (`activity-change-history/implementation-plan.md` M2-T5).
+     *
+     * Both statement shapes are run against the same rows in the same transaction-free session,
+     * interleaved: `wide` is the probe as it was (`SELECT *` inside the LATERAL, `e.changes` out) and
+     * `narrow` is the batch probe as it is (`changes` selected as NULL). The SQL is the recorder's
+     * minus the names CTE, which neither shape touches. The document is a few KB of incompressible
+     * text, so it is stored out of line — highly repetitive text compresses under the TOAST
+     * threshold and would hide exactly the cost being measured.
+     */
+    async function longHistoryProbe(): Promise<Summary> {
+      const planId = await newPlan('Long history');
+      await prisma.activity.createMany({
+        data: Array.from({ length: ROWS }, (_, i) => ({
+          organizationId,
+          planId,
+          name: `Survivor ${String(i).padStart(4, '0')}`,
+          durationMinutes: 7200,
+        })),
+      });
+      const ids = (await prisma.activity.findMany({ where: { planId }, select: { id: true } })).map(
+        (r) => r.id,
+      );
+      const docBytes = Number(process.env.MEASURE_DOC_KB ?? 6) * 1024;
+      await prisma.$executeRaw`
+        INSERT INTO activity_history_entries (
+          id, organization_id, activity_id, actor_user_id, scope,
+          first_recorded_at, last_recorded_at, has_non_cost_change, changes)
+        SELECT gen_random_uuid(), ${organizationId}::uuid, a.id, 'measure-user', 'DEFINITION',
+               now() - interval '1 hour', now() - interval '1 hour', true,
+               jsonb_build_object('description', jsonb_build_object('from',
+                 (SELECT string_agg(md5(a.id::text || g::text), '')
+                  FROM generate_series(1, ${Math.ceil(docBytes / 32)}) g), 'to', 'x'))
+        FROM activities a WHERE a.plan_id = ${planId}::uuid`;
+      const stored = await prisma.$queryRaw<{ bytes: number }[]>`
+        SELECT avg(pg_column_size(changes))::int AS bytes FROM activity_history_entries
+        WHERE organization_id = ${organizationId}::uuid AND activity_id = ANY(${ids}::uuid[])`;
+      out.longHistoryDocBytes = stored[0]?.bytes;
+
+      const wide = (): Promise<unknown[]> =>
+        prisma.$queryRaw<unknown[]>`
+          SELECT a.id AS "activityId", a.organization_id AS "organizationId",
+                 e.id AS "entryId", e.actor_user_id AS "actorUserId", e.scope::text AS scope,
+                 e.first_recorded_at AS "firstRecordedAt", e.last_recorded_at AS "lastRecordedAt",
+                 e.edit_count AS "editCount", e.batch_id AS "batchId", e.changes AS changes
+          FROM unnest(${ids}::uuid[]) WITH ORDINALITY AS u(id, ord)
+          JOIN activities a ON a.id = u.id
+          LEFT JOIN LATERAL (
+            SELECT * FROM activity_history_entries h
+            WHERE h.activity_id = a.id
+            ORDER BY h.first_recorded_at DESC, h.id DESC
+            LIMIT 1
+          ) e ON true`;
+      const narrow = (): Promise<unknown[]> =>
+        prisma.$queryRaw<unknown[]>`
+          SELECT a.id AS "activityId", a.organization_id AS "organizationId",
+                 e.id AS "entryId", e.actor_user_id AS "actorUserId", e.scope::text AS scope,
+                 e.first_recorded_at AS "firstRecordedAt", e.last_recorded_at AS "lastRecordedAt",
+                 e.edit_count AS "editCount", e.batch_id AS "batchId", e.changes AS changes
+          FROM unnest(${ids}::uuid[]) WITH ORDINALITY AS u(id, ord)
+          JOIN activities a ON a.id = u.id
+          LEFT JOIN LATERAL (
+            SELECT h.id, h.actor_user_id, h.scope, h.first_recorded_at, h.last_recorded_at,
+                   h.edit_count, h.batch_id, NULL::jsonb AS changes
+            FROM activity_history_entries h
+            WHERE h.activity_id = a.id
+            ORDER BY h.first_recorded_at DESC, h.id DESC
+            LIMIT 1
+          ) e ON true`;
+
+      const wideMs: number[] = [];
+      const narrowMs: number[] = [];
+      for (let i = 0; i < ITER * 2 + 2; i += 1) {
+        const arm = i < 2 ? 'warm' : i % 2 === 0 ? 'narrow' : 'wide';
+        const t0 = performance.now();
+        const rows = await (arm === 'wide' ? wide() : narrow());
+        const ms = performance.now() - t0;
+        if (rows.length !== ROWS) throw new Error(`probe returned ${String(rows.length)} rows`);
+        if (arm === 'wide') wideMs.push(ms);
+        if (arm === 'narrow') narrowMs.push(ms);
+      }
+      out.longHistoryProbe = { wide: wideMs, narrow: narrowMs };
+      return [median(wideMs), median(narrowMs), worst(wideMs), worst(narrowMs)];
+    }
+
     for (const [name, run] of [
       ['placements', placements],
       ['branchDelete', branchDelete],
+      ['longHistoryProbe (without = wide probe, with = narrow probe)', longHistoryProbe],
     ] as const) {
       const [wo, w, woMax, wMax] = await run();
       const added = w - wo;

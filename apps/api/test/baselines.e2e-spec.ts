@@ -260,6 +260,87 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(await baselineRepo.loadActiveActivitiesForDelta(orgId, randomUUID())).toEqual([]);
   });
 
+  it('counts live snapshot rows per baseline in the list: soft-deleted rows, an empty baseline and another organisation (TECH_DEBT #441)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const first = await actor.agent.post(baselinesUrl(planId)).send({ name: 'One' }).expect(201);
+    await makeActivity(actor, planId, 'B', 2);
+    await makeActivity(actor, planId, 'C', 2);
+    await recalc(actor, planId);
+    const second = await actor.agent.post(baselinesUrl(planId)).send({ name: 'Three' }).expect(201);
+    const firstId = first.body.data.id as string;
+    const secondId = second.body.data.id as string;
+    // A baseline with no snapshot rows at all, and one snapshot row deleted on its own.
+    const empty = await prisma.baseline.create({
+      data: { organizationId: orgId, planId, name: 'Empty' },
+    });
+    const secondRows = await prisma.baselineActivity.findMany({
+      where: { baselineId: secondId },
+      orderBy: { sourceActivityId: 'asc' },
+    });
+    expect(secondRows).toHaveLength(3);
+    await prisma.baselineActivity.update({
+      where: { id: secondRows[0]!.id },
+      data: { deletedAt: new Date() },
+    });
+
+    // Another organisation with a baseline of its own, bigger than any of ours.
+    const other = await signUp('other@example.com');
+    const otherOrg = await other.agent
+      .post('/api/v1/organizations')
+      .send({ name: 'Other' })
+      .expect(201);
+    const otherOrgId = otherOrg.body.data.id as string;
+    const otherClient = await other.agent
+      .post('/api/v1/organizations/other/clients')
+      .send({ name: 'Elsewhere' })
+      .expect(201);
+    const otherProject = await other.agent
+      .post(`/api/v1/organizations/other/clients/${otherClient.body.data.id}/projects`)
+      .send({ name: 'Yard' })
+      .expect(201);
+    const otherPlan = await other.agent
+      .post(`/api/v1/organizations/other/projects/${otherProject.body.data.id}/plans`)
+      .send({ name: 'Theirs', plannedStart: '2026-01-01' })
+      .expect(201);
+    const otherBaseline = await prisma.baseline.create({
+      data: {
+        organizationId: otherOrgId,
+        planId: otherPlan.body.data.id as string,
+        name: 'Theirs',
+      },
+    });
+    await prisma.baselineActivity.createMany({
+      data: Array.from({ length: 7 }, (_, i) => ({
+        organizationId: otherOrgId,
+        baselineId: otherBaseline.id,
+        sourceActivityId: randomUUID(),
+        name: `Other ${String(i)}`,
+        durationMinutes: 480,
+      })),
+    });
+
+    const list = await actor.agent.get(baselinesUrl(planId)).expect(200);
+    const counts = Object.fromEntries(
+      (list.body.data as { id: string; activityCount: number }[]).map((b) => [
+        b.id,
+        b.activityCount,
+      ]),
+    );
+    expect(Object.keys(counts).sort()).toEqual([firstId, secondId, empty.id].sort());
+    expect(counts).toEqual({ [firstId]: 1, [secondId]: 2, [empty.id]: 0 });
+
+    const theirs = await other.agent
+      .get(`/api/v1/organizations/other/plans/${otherPlan.body.data.id as string}/baselines`)
+      .expect(200);
+    expect(
+      (theirs.body.data as { id: string; activityCount: number }[]).map((b) => [
+        b.id,
+        b.activityCount,
+      ]),
+    ).toEqual([[otherBaseline.id, 7]]);
+  });
+
   it('captures, lists and reads a baseline of a computed plan', async () => {
     const { actor } = await adminWithOrg();
     const { planId, activityId } = await calculatedPlan(actor);

@@ -935,6 +935,17 @@ export class BaselineRepository {
    * A page of a plan's active baselines with their snapshot-row counts (keyset cursor
    * by id, ordered by capture recency). `order` sorts by `createdAt` (newest-first by
    * default) then `id` for a deterministic cursor.
+   *
+   * **The counts are a second, keyed statement and not a `_count` include.** Prisma compiles
+   * `_count` to a `LEFT JOIN` of `GROUP BY baseline_id` over the **whole** `baseline_activities`
+   * table, so one plan's list cost grew with every organisation's snapshots: 67 ms p50 at 510,000
+   * rows whatever the page held, against 11 ms for a three-baseline page once the count is
+   * restricted to the page's ids (`docs/specs/tidy-and-tests-sweep/m3-measurement.md` §2,
+   * `docs/TECH_DEBT.md` #441). The win shrinks as the page grows, because the keyed count costs in
+   * proportion to the page's own rows: 67 ms against 11 ms for 3 baselines, 66 against 22 for 10, but
+   * only 67.3 against 52.9 (about 1.3x) for 30 — a plan holding thousands of snapshot rows per
+   * baseline on a small install would break even before that. The single read below keeps `_count`:
+   * measured, its join is not slower than the extra statement, so there is nothing to buy there.
    */
   async findManyActiveByPlan(params: {
     organizationId: string;
@@ -948,11 +959,18 @@ export class BaselineRepository {
       orderBy: [{ createdAt: params.order }, { id: params.order }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-      include: { _count: { select: { activities: { where: { deletedAt: null } } } } },
     });
-    return rows.map(({ _count, ...baseline }) => ({
+    // An empty page issues no count: a `groupBy` over an empty `in` list is a wasted round trip.
+    if (rows.length === 0) return [];
+    const counts = await this.prisma.baselineActivity.groupBy({
+      by: ['baselineId'],
+      where: { baselineId: { in: rows.map((r) => r.id) }, deletedAt: null },
+      _count: { _all: true },
+    });
+    const byBaseline = new Map(counts.map((c) => [c.baselineId, c._count._all]));
+    return rows.map((baseline) => ({
       ...baseline,
-      activityCount: _count.activities,
+      activityCount: byBaseline.get(baseline.id) ?? 0,
     }));
   }
 }

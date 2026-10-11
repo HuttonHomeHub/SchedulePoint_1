@@ -468,12 +468,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setPluralSelectionActive(ids.length > 1);
   }, []);
   // The app clipboard (M3). A ref for the same reason: nothing renders from it, and re-rendering the
-  // workspace on a copy would be a visible cost for an invisible change. Cleared on plan switch —
-  // the ADR-0048 history lifetime, mirrored deliberately rather than coincidentally.
+  // workspace on a copy would be a visible cost for an invisible change. Its lifetime is the plan's:
+  // `PlanDetailScreen` keys the whole workspace by plan, so a switch remounts this model and the ref
+  // starts empty — the ADR-0048 history lifetime, mirrored deliberately rather than coincidentally.
+  // The paste's `planId` check is the backstop if that remount is ever lost.
   const clipboardRef = useRef<ClipboardContents | null>(null);
-  useEffect(() => {
-    clipboardRef.current = null;
-  }, [planId]);
   // The toolbar's **Update progress…** action (F3) and the canvas selection bar's **Report
   // progress** both open the editor's Progress tab — where the reported % sits beside the measure
   // it does NOT control (ADR-0060 §7). Each held its own id and its own dialog until

@@ -1,7 +1,7 @@
 # Implementation Plan: Tidy, tests and measured performance — register group 4
 
-- **Feature spec:** [`./spec.md`](./spec.md) (Draft, awaiting the product owner's approval)
-- **Status:** Draft
+- **Feature spec:** [`./spec.md`](./spec.md) (Approved)
+- **Status:** Approved
 - **Owner:** James Ewbank (product owner); built by the **builder** agent, reviewed per milestone
 
 ## Breakdown

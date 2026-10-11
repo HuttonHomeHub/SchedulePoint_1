@@ -198,6 +198,34 @@ describe.skipIf(!hasDatabase)('Activity history — batches and knock-ons (e2e)'
       expect(entries.map((e) => e.scope)).toEqual(['DEFINITION', 'PLACEMENT', 'DEFINITION']);
     });
 
+    it('records a batch over an activity whose latest entry is a real edit, leaving that entry untouched', async () => {
+      // The batch probe selects the latest entry's `changes` as NULL (TECH_DEBT #444): a batch never
+      // merges, so it must still find the entry (to date the new one after it) without reading or
+      // rewriting its document. This is the Postgres-backed proof of that wiring.
+      const { admin, planId, acts } = await setup('Excavate');
+      const a = acts[0] as Json;
+      const v = (await fresh(admin, a.id)).version as number;
+      await admin
+        .patch(`${API}/activities/${a.id}`)
+        .send({ durationDays: 7, version: v })
+        .expect(200);
+      const before = await history(admin, a.id);
+      expect(before).toHaveLength(1);
+      expect(Object.keys(before[0]?.changes as Json).length).toBeGreaterThan(0);
+
+      await move(admin, planId, [placement(await fresh(admin, a.id), '2026-02-02')]).expect(200);
+
+      const after = await history(admin, a.id);
+      expect(after).toHaveLength(2);
+      // Newest first: the batch entry, then the edit exactly as it was recorded.
+      expect(after[0]).toMatchObject({ scope: 'PLACEMENT', batch: { size: 1 } });
+      expect(after[0]?.changes.visualStart).toEqual({ from: null, to: '2026-02-02' });
+      expect(after[1]).toEqual(before[0]);
+      expect(Date.parse(after[0]?.firstRecordedAt)).toBeGreaterThan(
+        Date.parse(before[0]?.lastRecordedAt),
+      );
+    });
+
     it('records a move that travels with a lane and keeps a lane-only batch out of the history', async () => {
       const { admin, planId, acts } = await setup('Excavate', 'Pour slab');
       const [a, b] = acts as [Json, Json];

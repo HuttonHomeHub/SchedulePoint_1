@@ -232,8 +232,14 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
   knock-on recording from a delete or restore, the **150 ms absolute** bar is binding; group moves keep
   both bars (they pass). On this host the added cost grows about 50 µs per affected activity, so a
   single delete reaches 150 ms at about 3,000 survivors — beyond a 2,000-activity plan, within reach of
-  an imported 10,000-activity programme. The lookup trim the diagnosis proposes is
-  `docs/TECH_DEBT.md` #444.
+  an imported 10,000-activity programme. The lookup trim the diagnosis proposes was shipped
+  as `docs/TECH_DEBT.md` #444 on 2026-10-11 (a batch's probe no longer selects the latest entry's
+  `changes`, which a batch never reads). Measured against survivors that carry history, on the same
+  harness with a long-history arm, 2,000 survivors: the probe falls from 197 ms to 25 ms median with
+  a 6 KB document and from 98 ms to 24 ms with a 2 KB one, and is unchanged against survivors with
+  none (`docs/specs/tidy-and-tests-sweep/m3-measurement.md` §1). The 150 ms bar above was
+  measured against survivors with no history, which is the case the trim leaves unchanged; the probe
+  no longer grows with the size of their history.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
   activities in no defined order (`docs/TECH_DEBT.md` #440).
 
