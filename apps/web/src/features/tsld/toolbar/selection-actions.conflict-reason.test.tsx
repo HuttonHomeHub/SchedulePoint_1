@@ -79,8 +79,8 @@ describe('the conflict reason line', () => {
   it.each([
     ['constraintViolated', 'Constraint not met'],
     ['visualEarlierThanLogic', 'Placed before its logic allows'],
-    ['visualLaterThanBound', 'Placed after its constraint date'],
-    ['levelingWindowExceeded', "Can't be levelled within its window"],
+    ['visualLaterThanBound', 'Placed after its constraint'],
+    ['levelingWindowExceeded', 'Levelling window exceeded'],
   ] as const)('states the %s reason in words', (key, text) => {
     render(<SelectionActionsBar context={ctx({ conflictKey: key, conflictKeys: [key] })} />);
     expect(line()).toHaveTextContent(text);
@@ -95,7 +95,7 @@ describe('the conflict reason line', () => {
         })}
       />,
     );
-    expect(line()).toHaveTextContent("Constraint not met, can't be levelled within its window");
+    expect(line()).toHaveTextContent('Constraint not met, levelling window exceeded');
     // The remedy answers the LEADING reason only: one route, and not the levelling one.
     expect(within(bar()).getAllByRole('button', { name: /^Review / })).toHaveLength(1);
     expect(
@@ -113,9 +113,7 @@ describe('the conflict reason line', () => {
         })}
       />,
     );
-    expect(line()).toHaveTextContent(
-      "Placed before its logic allows, can't be levelled within its window",
-    );
+    expect(line()).toHaveTextContent('Placed before its logic allows, levelling window exceeded');
     expect(bar().querySelector('[data-toolbar-item="conflict-remedy"]')).toBeNull();
   });
 
@@ -164,7 +162,7 @@ describe('the conflict reason line', () => {
       />,
     );
     expect(document.querySelectorAll('[data-conflict-reason]')).toHaveLength(1);
-    expect(line()).toHaveTextContent('Placed after its constraint date');
+    expect(line()).toHaveTextContent('Placed after its constraint');
   });
 
   it('leaves when the conflict resolves, without remounting the toolbar', () => {

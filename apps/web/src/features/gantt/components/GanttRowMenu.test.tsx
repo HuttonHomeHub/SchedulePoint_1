@@ -119,14 +119,19 @@ describe('a menu item needs an activation path', () => {
     expect(screen.queryByRole('menuitem', { name: /Fix this conflict/ })).toBeNull();
   });
 
-  it('every item the menu renders can be activated', () => {
+  it('every item the menu renders maps to a registry item that can be activated', () => {
     openMenu(flagged());
     const items = screen.getAllByRole('menuitem');
     expect(items.length).toBeGreaterThan(0);
-    // The registry's own statement of it: each rendered item is a registry item with `onActivate`.
-    for (const item of selectionActionItems.filter((i) => i.isVisible?.(flagged()) ?? true)) {
-      const listed = items.some((el) => el.textContent?.includes(item.label));
-      if (listed) expect(item.onActivate, `${item.id} lists in the menu`).toBeDefined();
+    for (const el of items) {
+      const name = (el.textContent ?? '').trim();
+      // A listed item is a registry item whose label opens its accessible name; it must activate.
+      const source = selectionActionItems.find((i) => name.startsWith(i.label));
+      expect(source, `"${name}" is not a registry item`).toBeDefined();
+      expect(
+        source?.onActivate,
+        `${source?.id} lists in the menu with no activation path`,
+      ).toBeDefined();
     }
   });
 

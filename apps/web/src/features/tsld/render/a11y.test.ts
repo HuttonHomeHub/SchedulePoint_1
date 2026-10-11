@@ -18,6 +18,7 @@ import {
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
+import { CONFLICT_FLAGS } from './conflicts';
 import { linkRung } from './link-marks';
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -408,11 +409,68 @@ describe('describeActivity (Tier 1)', () => {
         totalFloat: 5,
       }),
     );
-    expect(s).toContain(', conflict: placed past the constraint on it');
+    expect(s).toContain(', conflict: placed after its constraint');
     expect(s).not.toContain('before its earliest feasible start');
     // And the positive-drift clause stays out of its way: that sentence is for a placement that is
     // merely late, not one that has breached a bound, and two of them would contradict each other.
     expect(s).not.toContain('drift');
+  });
+
+  /**
+   * **The option's conflict clause is the caption's sentence** (conflict-reason-on-object, ADR-0186
+   * D2). A constraint conflict and a levelling-window conflict said nothing here before, so a
+   * screen-reader user who arrowed to a flagged bar heard no reason for two of the four types, while
+   * a sighted one read it on the bar. Verified red against the pre-change clause, which spoke only
+   * the two placement reasons and in different words.
+   */
+  it('speaks a constraint conflict', () => {
+    expect(describeActivity(activity({ constraintViolated: true }))).toContain(
+      ', conflict: constraint not met',
+    );
+  });
+
+  it('speaks a levelling-window conflict', () => {
+    expect(describeActivity(activity({ levelingWindowExceeded: true }))).toContain(
+      ', conflict: levelling window exceeded',
+    );
+  });
+
+  it('speaks every reason, joined as the caption and the announcer join them', () => {
+    expect(
+      describeActivity(
+        activity({
+          constraintViolated: true,
+          visualConflict: true,
+          visualConflictReason: 'LATER_THAN_BOUND',
+          visualDriftDays: 3,
+        }),
+      ),
+    ).toContain(', conflict: constraint not met, placed after its constraint');
+  });
+
+  it('says nothing about a conflict for an unflagged activity', () => {
+    expect(describeActivity(activity())).not.toContain('conflict');
+  });
+
+  it('uses the same wording as the flag table for every reason it can speak', () => {
+    for (const flag of CONFLICT_FLAGS) {
+      const fields = {
+        constraintViolated: flag.key === 'constraintViolated',
+        levelingWindowExceeded: flag.key === 'levelingWindowExceeded',
+        visualConflictReason:
+          flag.key === 'visualEarlierThanLogic'
+            ? ('EARLIER_THAN_LOGIC' as const)
+            : flag.key === 'visualLaterThanBound'
+              ? ('LATER_THAN_BOUND' as const)
+              : null,
+      };
+      const sentence = describeActivity(
+        activity({ ...fields, visualConflict: fields.visualConflictReason !== null }),
+      );
+      expect(sentence, flag.key).toContain(
+        `, conflict: ${flag.label.charAt(0).toLowerCase()}${flag.label.slice(1)}`,
+      );
+    }
   });
 
   it('speaks a same-lane overlap only when the caller flags it (the spoken badge equivalent)', () => {
@@ -630,6 +688,9 @@ describe('a11y-string parity across the M4 visual refresh', () => {
           constraintType: 'SNET',
           constraintDate: '2026-01-02',
           visualConflict: true,
+          // The engine derives the boolean FROM the reason, so a fixture holding one without the other
+          // is a row it cannot write; the clause now reads the reason.
+          visualConflictReason: 'EARLIER_THAN_LOGIC',
           visualDriftDays: -2,
           // **2, not null** — `remainingFloat` is `totalFloat - visualDriftDays`, so a bar placed
           // two working days before its earliest feasible start has two days of room before its
@@ -644,7 +705,7 @@ describe('a11y-string parity across the M4 visual refresh', () => {
     ).toBe(
       'Excavate, A100, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
         'Start no earlier than 02 Jan 2026, ' +
-        'conflict: placed 2 working days before its earliest feasible start, ' +
+        'conflict: placed before its logic allows, 2 working days before its earliest feasible start, ' +
         'overlaps another activity in its lane',
     );
   });

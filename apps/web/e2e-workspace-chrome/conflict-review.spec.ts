@@ -408,7 +408,7 @@ test.describe('Conflict review', () => {
     await expect(nextConflict).not.toHaveAttribute('aria-disabled', 'true', { timeout: 20_000 });
     const expectedReason: Record<string, string> = {
       'Steel beam': 'Constraint not met',
-      Roof: 'Placed after its constraint date',
+      Roof: 'Placed after its constraint',
     };
     for (let press = 0; press < 3; press += 1) {
       await nextConflict.click();

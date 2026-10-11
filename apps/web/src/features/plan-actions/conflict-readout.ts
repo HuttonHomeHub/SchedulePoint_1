@@ -6,7 +6,8 @@
  *
  * Foreground, not muted: the line that says what is wrong must not be the quietest text on the bar.
  * The icon is `--warning-text`, the token gated for text-on-chrome contrast; colour is never the
- * only signal because the words carry the meaning (WCAG 1.4.1).
+ * only signal because the words carry the meaning (WCAG 1.4.1). In forced colours the icon takes
+ * `CanvasText`, as the words do, so a high-contrast palette never leaves it a lone authored colour.
  */
 export const CONFLICT_READOUT_TEXT = 'text-foreground font-normal';
-export const CONFLICT_READOUT_ICON = 'text-warning-text shrink-0';
+export const CONFLICT_READOUT_ICON = 'text-warning-text shrink-0 forced-colors:[color:CanvasText]';

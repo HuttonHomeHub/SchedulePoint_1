@@ -501,6 +501,12 @@ export function PlanActivitiesFootRow({
        * values out of the sizing ratchet's sight. The vertical cost is the ask, not a side effect;
        * `dock.spec.ts`'s guarantees are deltas (a docked strip costs the canvas nothing), which a
        * constant applied to both states cannot move.
+       *
+       * **`pointer-coarse:py-0.5` deliberately breaks that copy on touch** (conflict-reason-on-object,
+       * `docs/specs/conflict-reason-on-object/m1-measurement.md` §1b). The reason line above a flagged
+       * selection took the finger-sized 1024 x 600 stage from 134 to 114 px, under the 120 px floor
+       * `e2e-minimap/viewport-cluster.spec.ts` holds; 4 px here and 4 px of caption leading put it at 122.
+       * Fine pointers keep `py-1`, and the deck keeps its own inset.
        */
       className="border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1 pointer-coarse:py-0.5"
     >

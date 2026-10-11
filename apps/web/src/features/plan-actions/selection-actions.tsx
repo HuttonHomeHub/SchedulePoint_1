@@ -413,7 +413,7 @@ function IsolateControl({
  */
 
 /** The label of one conflict key, from the same table the announcer and the reason line read. */
-function leadingConflictReason(key: ConflictKey): string | undefined {
+function conflictReasonLabel(key: ConflictKey): string | undefined {
   return CONFLICT_FLAGS.find((flag) => flag.key === key)?.label;
 }
 
@@ -436,7 +436,7 @@ function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.R
   // keep the stage at 122 px with a conflict selected on a finger-sized 1024 x 600 window, over the
   // 120 px floor `e2e-minimap/viewport-cluster.spec.ts` holds. Coarse only: a finger-sized column is
   // wide enough that the line stays on one line, so the tighter leading never meets a wrapped line.
-  const labels = keys.flatMap((key) => leadingConflictReason(key) ?? []);
+  const labels = keys.flatMap((key) => conflictReasonLabel(key) ?? []);
   return (
     <p
       data-conflict-reason=""
@@ -512,7 +512,7 @@ function ConflictRemedyControl({
           from a hidden node, whereas text inside the button would be content and so become part of
           its accessible name ("Review the constraint…Constraint not met"). */}
       <span id={reasonId} hidden>
-        {leadingConflictReason(key)}
+        {conflictReasonLabel(key)}
       </span>
     </>
   );
@@ -967,7 +967,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
               return remedy?.kind === 'barAction' &&
                 remedy.itemId === 'clear-visual-placement' &&
                 ctx.conflictKey !== null
-                ? leadingConflictReason(ctx.conflictKey)
+                ? conflictReasonLabel(ctx.conflictKey)
                 : undefined;
             },
             penGated: true,

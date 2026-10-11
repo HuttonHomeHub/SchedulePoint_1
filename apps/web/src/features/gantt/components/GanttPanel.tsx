@@ -89,6 +89,7 @@ import { Surface } from '@/components/ui/surface';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
+import { joinConflictReasons, matchingConflictFlags } from '@/features/tsld/render/conflicts';
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
@@ -1938,6 +1939,8 @@ function GanttRowView({
     swallowClick.current = lastPointerType.current === 'touch' || lastPointerType.current === 'pen';
   };
 
+  const conflictReasons = matchingConflictFlags(activity).map((flag) => flag.label);
+
   const ghost =
     showVariance && variance !== undefined
       ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
@@ -1961,6 +1964,13 @@ function GanttRowView({
       aria-level={depth + 1}
       {...(hasChildren ? { 'aria-expanded': expanded === true } : {})}
       {...(isSelected ? { 'aria-selected': true } : {})}
+      // The row's conflict reason, in the caption's own words (conflict-reason-on-object, ADR-0186
+      // D2): the docked bar states it for sighted readers and the listbox option speaks it on the
+      // canvas, so a screen-reader user on a flagged row hears it here too. A description, not part
+      // of the row's name, and no new element in a row that may hold only cells.
+      {...(conflictReasons.length > 0
+        ? { 'aria-description': joinConflictReasons(conflictReasons, 'start') }
+        : {})}
       tabIndex={isTabStop ? 0 : -1}
       onFocus={onFocusRow}
       // Capture, because a bar that starts a drag stops the event's propagation: a bubbling handler

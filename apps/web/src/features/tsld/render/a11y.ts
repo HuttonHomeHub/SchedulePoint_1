@@ -1,5 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
+import { joinConflictReasons, matchingConflictFlags } from './conflicts';
 import type { LinkGap } from './link-gap';
 
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
@@ -208,14 +209,22 @@ export function describeActivity(
    * the drift is measured from the earliest start, which is not what was breached. It is written to
    * stand alone anyway, so it stays true if a future reason fires without a constraint clause.
    */
+  //
+  // **One sentence with the caption and the announcer** (conflict-reason-on-object, ADR-0186 D2): the
+  // reasons are `matchingConflictFlags` joined by `joinConflictReasons`, the same derivation the
+  // selection bar's caption and the Next-conflict announcement use, so a screen-reader user who
+  // arrows to a flagged option hears what a sighted one reads. That also fills the two gaps this
+  // clause had — a constraint conflict and a levelling-window conflict said nothing here at all.
+  const reasons = matchingConflictFlags(a).map((flag) => flag.label);
+  // What the labels cannot carry: how far before its earliest start an early placement sits.
+  const earlyBy =
+    a.visualConflictReason === 'EARLIER_THAN_LOGIC' && a.visualDriftDays !== null
+      ? `, ${Math.abs(a.visualDriftDays)} working ${
+          Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
+        } before its earliest feasible start`
+      : '';
   const conflictPart =
-    a.visualConflictReason === 'LATER_THAN_BOUND'
-      ? ', conflict: placed past the constraint on it'
-      : a.visualConflict && a.visualDriftDays !== null
-        ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
-            Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
-          } before its earliest feasible start`
-        : '';
+    reasons.length > 0 ? `, conflict: ${joinConflictReasons(reasons, 'mid')}${earlyBy}` : '';
   // Same-lane time-overlap cue (TECH_DEBT #24c): the spoken equivalent of the stacked-squares badge
   // on a bar a manual lane drop left overlapping another in its lane (WCAG 1.1.1). Derived (not a
   // persisted field), so the caller passes it — computed at the mapping seam (`laneOverlapIds`).

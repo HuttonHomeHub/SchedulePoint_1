@@ -58,10 +58,10 @@ describe('CONFLICT_FLAGS', () => {
     expect(
       orderedConflicts([activity({ id: 'x', visualConflictReason: 'LATER_THAN_BOUND' })])[0]
         ?.reasons,
-    ).toEqual(['Placed after its constraint date']);
+    ).toEqual(['Placed after its constraint']);
     expect(
       orderedConflicts([activity({ id: 'x', levelingWindowExceeded: true })])[0]?.reasons,
-    ).toEqual(["Can't be levelled within its window"]);
+    ).toEqual(['Levelling window exceeded']);
   });
 
   // `keys` is what the remedy is chosen by; `reasons` is what the planner reads. Two projections of
@@ -72,7 +72,7 @@ describe('CONFLICT_FLAGS', () => {
       activity({ id: 'x', constraintViolated: true, levelingWindowExceeded: true }),
     ])[0];
     expect(hit?.keys).toEqual(['constraintViolated', 'levelingWindowExceeded']);
-    expect(hit?.reasons).toEqual(['Constraint not met', "Can't be levelled within its window"]);
+    expect(hit?.reasons).toEqual(['Constraint not met', 'Levelling window exceeded']);
     expect(hit?.keys).toHaveLength(hit?.reasons.length ?? -1);
   });
 });
@@ -179,18 +179,14 @@ describe('matchingConflictFlags', () => {
 });
 
 describe('joinConflictReasons', () => {
-  const two = ['Constraint not met', "Can't be levelled within its window"];
+  const two = ['Constraint not met', 'Levelling window exceeded'];
 
   it("'start' keeps only the first capital", () => {
-    expect(joinConflictReasons(two, 'start')).toBe(
-      "Constraint not met, can't be levelled within its window",
-    );
+    expect(joinConflictReasons(two, 'start')).toBe('Constraint not met, levelling window exceeded');
   });
 
   it("'mid' lower-cases every first character, because words precede the line", () => {
-    expect(joinConflictReasons(two, 'mid')).toBe(
-      "constraint not met, can't be levelled within its window",
-    );
+    expect(joinConflictReasons(two, 'mid')).toBe('constraint not met, levelling window exceeded');
   });
 
   it('changes only the first character of a label', () => {

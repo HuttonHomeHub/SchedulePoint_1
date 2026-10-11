@@ -119,12 +119,12 @@ export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
   },
   {
     key: 'visualLaterThanBound',
-    label: 'Placed after its constraint date',
+    label: 'Placed after its constraint',
     matches: (a) => a.visualConflictReason === 'LATER_THAN_BOUND',
   },
   {
     key: 'levelingWindowExceeded',
-    label: "Can't be levelled within its window",
+    label: 'Levelling window exceeded',
     matches: (a) => a.levelingWindowExceeded,
   },
 ];
