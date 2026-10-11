@@ -1,6 +1,6 @@
 # Feature Spec: Correctness sweep, group 3 (behind-the-scenes correctness)
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-10-11 (all recommendations)
 - **Author(s):** feature-analyst (Opus), for the product owner
 - **Date:** 2026-10-11
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` rows #449, #450, #440, #445, #405, #456, #446
@@ -18,18 +18,18 @@
 
 ## 0. Verdicts at a glance
 
-| Row  | Problem still true on `main`?                                                                                      | Recommendation                                                                                       | Schema change? | Public API change?                                       |
-| ---- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------- |
-| #449 | **Yes**, plus one gap the row does not name (hours-per-day, §1.1)                                                  | **Build** (M1)                                                                                       | No (the indexes exist, §3) | No shape change. `editedSinceCalculated` becomes true in more cases |
-| #440 | **Yes, as a hazard.** Not reproduced. **The row's own remedy would not work** (§1.2)                               | **Build** (M2), with a corrected remedy and a reproduction harness first                             | No             | No                                                       |
-| #456 | **Yes**, plus a consistency gap the row does not name (§1.3)                                                       | **Build** (M3), before the product owner's 1 November reading                                        | No             | No (staff console only)                                  |
-| #405 | **Partly.** Only 4 fields are misnamed, not the 8 the row lists. **And one public description is now false** (§1.4) | **Build** the false-description fix (M4). The rename: **additive with deprecation** (M5), pending CQ-1 | No             | **Yes.** Additive now, breaking only when old names are removed later |
-| #450 | **Yes**, but the realistic window is narrower than the row implies (§1.5)                                          | **Build, low priority** (M6), pending CQ-2. Leaving it is defensible                                  | No             | **Yes, additive and opt-in** (optional `version`)        |
-| #445 | **Partly.** For knock-on and dissolve entries it is **not true**: the neighbour row is never hard-deleted (§1.6)    | **Leave** (deferred on its trigger). Narrow the row's wording                                         | No             | No                                                       |
-| #446 | **Yes** as code. Real-world impact unmeasured; one claim in the row is overstated (§1.7)                           | **Leave** (deferred on its trigger). The trigger can already be seen in the logs                     | No             | No                                                       |
+| Row  | Problem still true on `main`?                                                                                       | Recommendation                                                                                         | Schema change?             | Public API change?                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------------- |
+| #449 | **Yes**, plus one gap the row does not name (hours-per-day, §1.1)                                                   | **Build** (M1)                                                                                         | No (the indexes exist, §3) | No shape change. `editedSinceCalculated` becomes true in more cases   |
+| #440 | **Yes, as a hazard.** Not reproduced. **The row's own remedy would not work** (§1.2)                                | **Build** (M2), with a corrected remedy and a reproduction harness first                               | No                         | No                                                                    |
+| #456 | **Yes**, plus a consistency gap the row does not name (§1.3)                                                        | **Build** (M3), before the product owner's 1 November reading                                          | No                         | No (staff console only)                                               |
+| #405 | **Partly.** Only 4 fields are misnamed, not the 8 the row lists. **And one public description is now false** (§1.4) | **Build** the false-description fix (M4). The rename: **additive with deprecation** (M5), pending CQ-1 | No                         | **Yes.** Additive now, breaking only when old names are removed later |
+| #450 | **Yes**, but the realistic window is narrower than the row implies (§1.5)                                           | **Build, low priority** (M6), pending CQ-2. Leaving it is defensible                                   | No                         | **Yes, additive and opt-in** (optional `version`)                     |
+| #445 | **Partly.** For knock-on and dissolve entries it is **not true**: the neighbour row is never hard-deleted (§1.6)    | **Leave** (deferred on its trigger). Narrow the row's wording                                          | No                         | No                                                                    |
+| #446 | **Yes** as code. Real-world impact unmeasured; one claim in the row is overstated (§1.7)                            | **Leave** (deferred on its trigger). The trigger can already be seen in the logs                       | No                         | No                                                                    |
 
 **No row needs a schema change** under this design. CLAUDE.md §19.3 still applies the moment a build
-finds it needs one. Plan M1 and M2 ask the **database-architect** to *review* a query and a lock order.
+finds it needs one. Plan M1 and M2 ask the **database-architect** to _review_ a query and a lock order.
 That review is a recommendation, not a §19.3 obligation, because neither adds DDL.
 
 ## 1. Business understanding
@@ -226,7 +226,7 @@ written.
 - It is keyed on `req.ip`, with `trust proxy` set from `TRUSTED_PROXY_IPS` (`app-setup.ts:78-88`).
 - It is per handler by the guard's key prefix. That is registered in `scripts/dependency-claims.json`
   (`throttler.guard.js`, anchor
-  `` const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`; ``).
+  ``const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;``).
 
 **One claim in the row is overstated.** "`GET /api/v1/me` is read on every route change":
 
@@ -242,15 +242,15 @@ new code.
 
 ### Users
 
-| Row  | Who is affected                                                                                                                                       |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Row  | Who is affected                                                                                                                                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | #449 | Planner, Org Admin (they edit calendars and resources: `calendar:update`, `calendar:manage_org`, `resource:update`). Every member who reads the overview |
-| #440 | Planner holding the pen (placement, Arrange, levelling apply)                                                                                         |
-| #456 | Staff (ADR-0086), and the product owner taking readings                                                                                               |
-| #405 | API consumers. Today that is the web app's revision-compare panel and its printed form                                                                |
-| #450 | Planner using undo/redo. Any Contributor whose progress write lands in the window                                                                     |
-| #445 | None today                                                                                                                                            |
-| #446 | Members of an organisation behind one NAT. None measured                                                                                              |
+| #440 | Planner holding the pen (placement, Arrange, levelling apply)                                                                                            |
+| #456 | Staff (ADR-0086), and the product owner taking readings                                                                                                  |
+| #405 | API consumers. Today that is the web app's revision-compare panel and its printed form                                                                   |
+| #450 | Planner using undo/redo. Any Contributor whose progress write lands in the window                                                                        |
+| #445 | None today                                                                                                                                               |
+| #446 | Members of an organisation behind one NAT. None measured                                                                                                 |
 
 ### Primary use cases
 
@@ -398,7 +398,7 @@ There is no new screen. Each journey runs through an **existing** entry point (�
   order (`mark-schedule-inputs-changed.ts:41-49`).
 - **#440.** Each lock-free multi-row activity writer, and `writeResults`, first issues
   `SELECT 1 FROM activities WHERE id = ANY($ids) AND plan_id = $p AND organization_id = $o ORDER BY id
-  FOR NO KEY UPDATE`, then its existing `UPDATE`. The single `DELETE` takes `acquirePlanWriteLock`.
+FOR NO KEY UPDATE`, then its existing `UPDATE`. The single `DELETE` takes `acquirePlanWriteLock`.
 - **#456.** `run()` opens one interactive transaction. Its first statements set it read-only and set
   the local timeout. All entries run inside it, then it commits.
 
@@ -437,26 +437,26 @@ Nothing changes:
 
 ### Error scenarios
 
-| Scenario                                          | Detection                                | User-facing result                               | Status |
-| ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ | ------ |
-| Stale `version` on single `DELETE` / dissolve     | locked re-read inside the tx             | undo strip "changed", step set aside             | 409    |
-| Diagnostics statement over `statement_timeout`    | Postgres `57014`, propagated             | staff panel's existing failure state             | 500    |
-| Write attempted inside the diagnostics tx         | Postgres `25006` (read-only transaction) | never reachable by a registry entry; test only   | 500    |
-| Deadlock after M2                                 | should be impossible                     | unchanged: opaque 500, logged at `error`         | 500    |
+| Scenario                                       | Detection                                | User-facing result                             | Status |
+| ---------------------------------------------- | ---------------------------------------- | ---------------------------------------------- | ------ |
+| Stale `version` on single `DELETE` / dissolve  | locked re-read inside the tx             | undo strip "changed", step set aside           | 409    |
+| Diagnostics statement over `statement_timeout` | Postgres `57014`, propagated             | staff panel's existing failure state           | 500    |
+| Write attempted inside the diagnostics tx      | Postgres `25006` (read-only transaction) | never reachable by a registry entry; test only | 500    |
+| Deadlock after M2                              | should be impossible                     | unchanged: opaque 500, logged at `error`       | 500    |
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes |
-| -------------- | ------ | ----- |
-| Frontend       | low    | #405 M5: two components and their tests switch field names. #450 M6: `commands.ts` and `record-commands.ts` pass `version`, and the LOE orphan id is remembered. No new UI |
-| Backend        | med    | #449: calendars and resources services, plus two plan-set queries. #440: three repository writers and `writeResults`. #456: staff repository/service. #450: three delete paths and dissolve |
+| Area           | Impact     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | low        | #405 M5: two components and their tests switch field names. #450 M6: `commands.ts` and `record-commands.ts` pass `version`, and the LOE orphan id is remembered. No new UI                                                                                                                                                                                                                                                                                                               |
+| Backend        | med        | #449: calendars and resources services, plus two plan-set queries. #440: three repository writers and `writeResults`. #456: staff repository/service. #450: three delete paths and dissolve                                                                                                                                                                                                                                                                                              |
 | Database       | none (DDL) | **No schema change.** The plan-set queries are served by existing partial indexes: `idx_plans_calendar_id` (`migrations/20260710130000_add_plan_calendar/migration.sql:13`), `idx_activities_calendar_id` (`20260715130000_activate_activity_calendar_fk/migration.sql:22`), `idx_resources_calendar_id` and `idx_resource_assignments_resource_id` (`20260717020000_m7_resource_model/migration.sql:151`, `:173`). Whether the planner uses them is to be shown with `EXPLAIN` in M1-T0 |
-| API            | med    | #405: additive fields + `deprecated: true`, and a description fix. #450: optional query parameter / optional body. Both go into `docs/API.md` + OpenAPI. **No breaking change in this spec.** Removing the deprecated #405 fields later is breaking and needs an ADR (`docs/API.md:28-29`) |
-| Security       | low    | #456 changes `staff-boundary.structural.spec.ts`. The narrowest change is to let the one existing `$queryRaw` exception file also issue the two transaction-setup statements. `$executeRaw` stays banned (`:155`, `:191-196`), so setup goes through `$queryRaw`/`set_config`, verified in M3-T0. #450 adds a stricter guard, never a looser one |
-| Performance    | low–med | #449 adds one indexed plan-set read and one plan `UPDATE` to calendar/resource edits. #440 adds one ordered lock statement to `writeResults` (up to 2,000 rows), which **must be measured** (M2-T3). #456 holds one pooled connection for one press, as today |
-| Infrastructure | none   | No env var, no compose change, no flag (ADR-0088 D1) |
-| Observability  | low    | #456 logs the timed-out entry id. #440 needs nothing, since `error` logs already carry the cause |
-| Testing        | med    | Supertest e2e for #449, #450, #456. A concurrency harness and a structural spec for #440. A Playwright step extending `edited-since.spec.ts` for #449. Existing revision-compare and undo journeys re-run |
+| API            | med        | #405: additive fields + `deprecated: true`, and a description fix. #450: optional query parameter / optional body. Both go into `docs/API.md` + OpenAPI. **No breaking change in this spec.** Removing the deprecated #405 fields later is breaking and needs an ADR (`docs/API.md:28-29`)                                                                                                                                                                                               |
+| Security       | low        | #456 changes `staff-boundary.structural.spec.ts`. The narrowest change is to let the one existing `$queryRaw` exception file also issue the two transaction-setup statements. `$executeRaw` stays banned (`:155`, `:191-196`), so setup goes through `$queryRaw`/`set_config`, verified in M3-T0. #450 adds a stricter guard, never a looser one                                                                                                                                         |
+| Performance    | low–med    | #449 adds one indexed plan-set read and one plan `UPDATE` to calendar/resource edits. #440 adds one ordered lock statement to `writeResults` (up to 2,000 rows), which **must be measured** (M2-T3). #456 holds one pooled connection for one press, as today                                                                                                                                                                                                                            |
+| Infrastructure | none       | No env var, no compose change, no flag (ADR-0088 D1)                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Observability  | low        | #456 logs the timed-out entry id. #440 needs nothing, since `error` logs already carry the cause                                                                                                                                                                                                                                                                                                                                                                                         |
+| Testing        | med        | Supertest e2e for #449, #450, #456. A concurrency harness and a structural spec for #440. A Playwright step extending `edited-since.spec.ts` for #449. Existing revision-compare and undo journeys re-run                                                                                                                                                                                                                                                                                |
 
 ### Dependencies
 
@@ -548,15 +548,15 @@ flowchart TD
 
 ### API changes
 
-| Route | Change | Breaking? |
-| ----- | ------ | --------- |
-| `GET …/plans/:id/revision-compare` and the cross-plan revision route (exact paths as in `docs/API.md`) | `placementNotAssessableReason` description corrected (M4) | No |
-| Same | `RevisionMovedActivity` gains `fromStart`, `toStart`, `fromFinish`, `toFinish`. The `*Early*` four are marked `deprecated: true` with "same value; removed at the next breaking change" (M5, if CQ-1) | No (additive). Removal later is breaking + ADR |
-| `DELETE …/activities/:activityId` | optional `?version=` → 409 `STALE_VERSION` when stale | No (opt-in) |
-| `DELETE …/dependencies/:dependencyId` | same | No |
-| `DELETE …/assignments/:id` | same (assignment's version) | No |
-| `POST …/activities/:activityId/dissolve` | optional body `{ version? }` | No |
-| `activity.dissolved` audit payload | gains `deleteBatchId` (#450) | No (additive) |
+| Route                                                                                                  | Change                                                                                                                                                                                                | Breaking?                                      |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `GET …/plans/:id/revision-compare` and the cross-plan revision route (exact paths as in `docs/API.md`) | `placementNotAssessableReason` description corrected (M4)                                                                                                                                             | No                                             |
+| Same                                                                                                   | `RevisionMovedActivity` gains `fromStart`, `toStart`, `fromFinish`, `toFinish`. The `*Early*` four are marked `deprecated: true` with "same value; removed at the next breaking change" (M5, if CQ-1) | No (additive). Removal later is breaking + ADR |
+| `DELETE …/activities/:activityId`                                                                      | optional `?version=` → 409 `STALE_VERSION` when stale                                                                                                                                                 | No (opt-in)                                    |
+| `DELETE …/dependencies/:dependencyId`                                                                  | same                                                                                                                                                                                                  | No                                             |
+| `DELETE …/assignments/:id`                                                                             | same (assignment's version)                                                                                                                                                                           | No                                             |
+| `POST …/activities/:activityId/dissolve`                                                               | optional body `{ version? }`                                                                                                                                                                          | No                                             |
+| `activity.dissolved` audit payload                                                                     | gains `deleteBatchId` (#450)                                                                                                                                                                          | No (additive)                                  |
 
 `docs/API.md` and OpenAPI are updated in the same PR as each change.
 
@@ -573,33 +573,33 @@ flowchart TD
 **#449.** Chosen: resolve the plan set in the calendar/resource repositories and call the existing
 helper last in the transaction.
 
-- *Alternative:* a database trigger on `calendar_shifts`/`calendar_exceptions`. Rejected: it moves
+- _Alternative:_ a database trigger on `calendar_shifts`/`calendar_exceptions`. Rejected: it moves
   "which writes are inputs" out of the structural spec that pins it, it would fire on engine-irrelevant
   writes, and it is a schema change.
-- *Alternative:* stamp the **calendar** and have the overview join through it. Rejected: it changes the
+- _Alternative:_ stamp the **calendar** and have the overview join through it. Rejected: it changes the
   read model, the plan response and a gated column's single-writer rule.
 
 **#440.** Chosen: id-ordered pre-lock (D2.1), plus the plan lock on single delete.
 
-- *Alternative:* the plan advisory lock on every placement. Simpler, but it serialises a drag behind
+- _Alternative:_ the plan advisory lock on every placement. Simpler, but it serialises a drag behind
   the engine's compute window.
-- *Alternative:* the row's remedy, `ORDER BY` in `unnest`. Insufficient, see §1.2.
-- *Alternative:* retry on `40P01`. It treats the symptom, and a retried placement batch must re-check
+- _Alternative:_ the row's remedy, `ORDER BY` in `unnest`. Insufficient, see §1.2.
+- _Alternative:_ retry on `40P01`. It treats the symptom, and a retried placement batch must re-check
   versions anyway.
 
 **#456.** Chosen: one read-only `REPEATABLE READ` transaction with a local timeout.
 
-- *Alternative:* a role-level `statement_timeout`. That is operator configuration on the host, and it
+- _Alternative:_ a role-level `statement_timeout`. That is operator configuration on the host, and it
   would bound every API query, not this one.
 
 **#405.** Chosen: add, deprecate, and remove later (CQ-1).
 
-- *Alternative:* rename in place. Breaking, needs an ADR, and needs the api and web images to deploy
+- _Alternative:_ rename in place. Breaking, needs an ADR, and needs the api and web images to deploy
   together (ADR-0027 per-package releases).
 
 **#450.** Chosen: an opt-in version.
 
-- *Alternative:* undo calls the already-versioned bulk delete with one row. Rejected: bulk delete
+- _Alternative:_ undo calls the already-versioned bulk delete with one row. Rejected: bulk delete
   refuses a `WBS_SUMMARY` by design (`commands.ts:1748-1752`).
 
 **ADR impact**

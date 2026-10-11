@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 /**
  * An optional optimistic-locking `version` on a write that has never taken one — a single-row
@@ -13,6 +13,7 @@ import { IsInt, IsOptional, Min } from 'class-validator';
 export class OptionalVersionDto {
   @ApiPropertyOptional({
     minimum: 1,
+    maximum: 2147483647,
     description:
       'The version the client last read. When sent, a row at any other version is refused ' +
       '(409 `STALE_VERSION`) and nothing is deleted. Omit it to delete without the check.',
@@ -21,5 +22,7 @@ export class OptionalVersionDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  // The column is a 32-bit INTEGER: a larger value would reach the query and answer 500, not 422.
+  @Max(2147483647)
   version?: number;
 }

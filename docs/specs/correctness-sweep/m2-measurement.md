@@ -60,6 +60,10 @@ placement batch leaves); only the before and after were measured, and the seam's
 
 ## Verdict
 
-Fix verified against the defect: 3 deadlocks and 3 500s before, 0 and 0 after, with a lock order that holds by
+Fix verified against the defect it reproduced (placement batch against recalculation): 3 deadlocks and 3 500s before, 0 and 0 after, with a lock order that holds by
 construction rather than by luck. The added time is the lock statement (about 10 to 20 ms at 2,000 rows) plus the
 wait the two writers now do for each other. A backend-performance review of that wait was not run by this build.
+
+**Scope of the claim.** Proven here: the placement, lane-position and recalculation writers are ordered. The
+multi-row `activity.updateMany` writers in the delete cascades, `bulkDelete` and dissolve still lock in scan order
+and were not measured; they are `docs/TECH_DEBT.md` #492.

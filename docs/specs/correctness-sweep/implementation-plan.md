@@ -1,7 +1,7 @@
 # Implementation Plan: Correctness sweep, group 3
 
 - **Feature spec:** [spec.md](./spec.md)
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-11 (all recommendations)
 - **Owner:** builder (Sonnet) per milestone; feature-analyst authored
 
 ## Breakdown
@@ -62,12 +62,13 @@ since calculated" until it is recalculated.
 > **Complexity:** M
 > **Dependencies:** none
 > **Risks:**
-> - *Lock-order inversion with plan settings or activity writes.* The helper locks plans in id order
+>
+> - _Lock-order inversion with plan settings or activity writes._ The helper locks plans in id order
 >   and these transactions lock no activity rows. **database-architect reviews** the order before
 >   merge (spec §4).
-> - *Fan-out cost on an org calendar used by many plans.* M1-T0 measures it.
-> **Testing requirements:** Supertest e2e per route (SC-1, SC-2); the structural spec extended;
-> unit tests for the value diff on resources; the Playwright step above.
+> - _Fan-out cost on an org calendar used by many plans._ M1-T0 measures it.
+>   **Testing requirements:** Supertest e2e per route (SC-1, SC-2); the structural spec extended;
+>   unit tests for the value diff on resources; the Playwright step above.
 
 ##### Task M1-T0: measure the plan-set query before building it (ADR-0142)
 
@@ -148,11 +149,12 @@ absence of a 500.`
 > **Complexity:** S–M
 > **Dependencies:** none
 > **Risks:**
+>
 > - The extra lock statement on `writeResults` costs time at 2,000 rows. Measure it (T3).
 > - The `ORDER BY … FOR NO KEY UPDATE` ordering claim is about Postgres. T0 verifies it on the real
 >   statement before anything relies on it.
-> **Testing requirements:** a concurrency harness (before and after), a structural spec, and the
-> existing activity, schedule and history e2e suites green.
+>   **Testing requirements:** a concurrency harness (before and after), a structural spec, and the
+>   existing activity, schedule and history e2e suites green.
 
 ##### Task M2-T0: reproduction harness (red, or an honest null)
 
@@ -236,14 +238,15 @@ indefinitely.
 > **Complexity:** S
 > **Dependencies:** none. **Land before 2026-11-01.**
 > **Risks:**
+>
 > - The staff boundary gate bans `$executeRaw` (`staff-boundary.structural.spec.ts:155`, `:191-196`).
 >   Transaction setup must go through `$queryRaw` (`SELECT set_config(...)`) in the one excepted
 >   file, or the gate is amended narrowly. Either way security-reviewer reviews it, and ADR-0140 gains
 >   an amendment note.
 > - Prisma's interactive-transaction defaults and its `isolationLevel` option are dependency claims.
 >   Register them in `scripts/dependency-claims.json` (`pnpm check:claims`).
-> **Testing requirements:** a real-database e2e for the timeout and for read-only. A unit test that
-> the service opens exactly one transaction.
+>   **Testing requirements:** a real-database e2e for the timeout and for read-only. A unit test that
+>   the service opens exactly one transaction.
 
 ##### Task M3-T0: verify the setup statements on a real database
 
@@ -330,10 +333,11 @@ its printed form. There is no visual change.
 > **Complexity:** M
 > **Dependencies:** M4; CQ-1
 > **Risks:**
+>
 > - The two sets of fields disagree. A single producer sets both from one value in `revision-delta.ts`,
 >   and an e2e asserts equality on every row.
 > - Removing the old names later is breaking, needs an ADR and is **not** in this plan.
-> **Testing requirements:** Supertest equality; web unit tests updated; api-reviewer.
+>   **Testing requirements:** Supertest equality; web unit tests updated; api-reviewer.
 
 ##### Task M5-T1: API and types
 
@@ -386,11 +390,12 @@ at the API.
 > **Dependencies:** M2-T2 (single `remove` already takes the plan lock there; the version re-read goes
 > after it). CQ-2.
 > **Risks:**
+>
 > - A stricter refusal than the client's check (§1.5): a placement or progress write in the window
 >   now refuses. That is correct and reads as `changed`.
 > - The audit payload's change of shape. Check any audit payload schema or registry gate.
-> **Testing requirements:** Supertest per route (stale → 409, absent → unchanged, fresh → 200/204);
-> web unit tests that the version is threaded; security-reviewer and api-reviewer.
+>   **Testing requirements:** Supertest per route (stale → 409, absent → unchanged, fresh → 200/204);
+>   web unit tests that the version is threaded; security-reviewer and api-reviewer.
 
 ##### Task M6-T1: API
 
@@ -471,13 +476,13 @@ Each task's PR meets the Feature Completion Criteria in [`docs/PROCESS.md`](../.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| ----------------- | ---------- | ------ | ---------- |
-| Calendar fan-out locks many plan rows, so plan saves wait | med | low | Ids in order, held only to commit; measured in M1-T0 |
-| Plan-set query needs an index at scale | low | med | Measure first; **stop** and go to the database-architect if so (§19.3) |
-| Lock inversion between the calendar stamp and plan/activity writes | low | high | database-architect review; analysis in spec §4 shows no cycle (FK `KEY SHARE` is compatible with `NO KEY UPDATE`), to be confirmed |
-| #440 harness shows zero deadlocks before the fix | med | low | Recorded as a null; fix rests on the `EXPLAIN` join shape, not a flaky red |
-| Ordered pre-lock slows `writeResults` | low | med | M2-T3 measures it; backend-performance review |
-| `$queryRaw` cannot set read-only/timeout under the staff gate | med | low | M3-T0 probe; narrow gate amendment + security review |
-| Deprecated #405 fields never removed | med | low | The row stays open with "removal pending" and the existing trigger |
-| This analysis ran no code | certain | med | Every behavioural claim is file:line; every measurable one has a T0 task |
+| Risk / assumption                                                  | Likelihood | Impact | Mitigation                                                                                                                         |
+| ------------------------------------------------------------------ | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar fan-out locks many plan rows, so plan saves wait          | med        | low    | Ids in order, held only to commit; measured in M1-T0                                                                               |
+| Plan-set query needs an index at scale                             | low        | med    | Measure first; **stop** and go to the database-architect if so (§19.3)                                                             |
+| Lock inversion between the calendar stamp and plan/activity writes | low        | high   | database-architect review; analysis in spec §4 shows no cycle (FK `KEY SHARE` is compatible with `NO KEY UPDATE`), to be confirmed |
+| #440 harness shows zero deadlocks before the fix                   | med        | low    | Recorded as a null; fix rests on the `EXPLAIN` join shape, not a flaky red                                                         |
+| Ordered pre-lock slows `writeResults`                              | low        | med    | M2-T3 measures it; backend-performance review                                                                                      |
+| `$queryRaw` cannot set read-only/timeout under the staff gate      | med        | low    | M3-T0 probe; narrow gate amendment + security review                                                                               |
+| Deprecated #405 fields never removed                               | med        | low    | The row stays open with "removal pending" and the existing trigger                                                                 |
+| This analysis ran no code                                          | certain    | med    | Every behavioural claim is file:line; every measurable one has a T0 task                                                           |

@@ -67,7 +67,15 @@ export class StaffDiagnosticsService {
       examined = await this.repository.examined(entry, db);
       counts = await this.repository.affected(entry, db);
     } catch (error) {
-      this.logger.error({ err: error, diagnosticId: entry.id }, 'staff diagnostic failed');
+      // Message and code only: the whole error can carry the statement and its bound parameters.
+      this.logger.error(
+        {
+          diagnosticId: entry.id,
+          errMessage: error instanceof Error ? error.message : String(error),
+          errCode: (error as { code?: unknown } | null)?.code,
+        },
+        'staff diagnostic failed',
+      );
       throw error;
     }
 

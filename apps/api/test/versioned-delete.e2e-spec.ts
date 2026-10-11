@@ -139,6 +139,8 @@ describe.skipIf(!hasDatabase)('Versioned single-row delete (e2e)', () => {
       await actor.agent.delete(`${API}/activities/${a.id}?version=abc`).expect(422);
       await actor.agent.delete(`${API}/activities/${a.id}?version=0`).expect(422);
       await actor.agent.delete(`${API}/activities/${a.id}?unknown=1`).expect(422);
+      // Past INTEGER: without @Max this reached Postgres and answered 500.
+      await actor.agent.delete(`${API}/activities/${a.id}?version=99999999999`).expect(422);
       const row = await prisma.activity.findUniqueOrThrow({ where: { id: a.id } });
       expect(row.deletedAt).toBeNull();
     });

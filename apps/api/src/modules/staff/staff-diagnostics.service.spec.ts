@@ -118,7 +118,11 @@ describe('StaffDiagnosticsService', () => {
 
     await expect(service.run()).rejects.toBe(boom);
     expect(error).toHaveBeenCalledWith(
-      expect.objectContaining({ diagnosticId: DIAGNOSTICS[0]?.id, err: boom }),
+      {
+        diagnosticId: DIAGNOSTICS[0]?.id,
+        errMessage: 'canceling statement due to statement timeout',
+        errCode: '57014',
+      },
       expect.any(String),
     );
   });
