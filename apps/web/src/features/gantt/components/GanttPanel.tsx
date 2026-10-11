@@ -1416,6 +1416,11 @@ function GanttPanelBody({
           min={gridPrefs.min}
           max={gridPrefs.max}
           label="Grid width"
+          // **The named exception to the 44 px strip** (ADR-0188 D3): this line runs through the last
+          // grid column and the chart's first bars, so a finger-sized strip would cover whole 28 px
+          // row menus and the Float left and Timeline headers (19 to 25 px each, `m0-measurement.md`
+          // §2). `View ▾` › Columns › `Table width` is the typed, finger-sized equivalent.
+          coarseStrip="none"
           onResize={gridPrefs.setSize}
           // Measured from the SCROLLER's left edge, because that is what the sticky column's width
           // is measured from — `clientX` alone would be the viewport's and would be wrong by

@@ -2274,6 +2274,127 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   }
 
   /**
+   * **Every divider's grab strip is a finger wide, and a wider strip steals no neighbour's centre**
+   * (`docs/TECH_DEBT.md` #476, ADR-0188 D3). The sweep above measures controls; a divider's target is
+   * the `[data-resizer-hit]` child of a 1 px separator, which it never saw.
+   *
+   * Four things are asked of each separator on screen, at the Surface and at the floor:
+   * - **wide**: the strip is at least 44 across its axis, unless the separator names itself
+   *   `data-coarse-exempt="divider"` (and then it is counted, not measured);
+   * - **live**: `elementFromPoint` a quarter and three quarters of the way across the strip, midway
+   *   along the line, lands on the separator. This is what fails without the stage-stacking `z-10`,
+   *   under which the Explorer's right half was dead (M0 §2);
+   * - **no theft**: every control whose box meets the strip is still hit at its own centre;
+   * - **the exception is exercised**: the Gantt grid divider is the one `divider` exemption, and the
+   *   inventory is read in the Gantt view, so a marker nobody carries could not read as cover.
+   *
+   * The activities panel's divider exists only where the panel is not swapped for the body (ADR-0180),
+   * so it is asserted at 1646 and its absence is not read as a failure at the floor.
+   */
+  test("every divider is a finger wide, live across its strip, and takes no neighbour's centre", async () => {
+    test.setTimeout(180_000);
+    interface DividerReading {
+      name: string;
+      exempt: boolean;
+      across: number | null;
+      live: boolean[];
+      stolen: string[];
+    }
+    const readDividers = (): Promise<DividerReading[]> =>
+      page.evaluate(() => {
+        const out: DividerReading[] = [];
+        for (const sep of document.querySelectorAll<HTMLElement>('[role="separator"]')) {
+          if (sep.getClientRects().length === 0) continue;
+          const vertical = sep.getAttribute('aria-orientation') === 'vertical';
+          const exempt = sep.getAttribute('data-coarse-exempt') === 'divider';
+          const hit = sep.querySelector<HTMLElement>('[data-resizer-hit]');
+          const box = hit?.getBoundingClientRect() ?? null;
+          const live: boolean[] = [];
+          const stolen: string[] = [];
+          if (box && !exempt) {
+            for (const f of [0.25, 0.75]) {
+              const x = vertical ? box.left + box.width * f : box.left + box.width / 2;
+              const y = vertical ? box.top + box.height / 2 : box.top + box.height * f;
+              const at = document.elementFromPoint(x, y);
+              live.push(at !== null && sep.contains(at));
+            }
+            for (const el of document.querySelectorAll<HTMLElement>(
+              'button,a,input,textarea,select,[role="button"],[role="tab"]',
+            )) {
+              if (sep.contains(el) || el.getClientRects().length === 0) continue;
+              const r = el.getBoundingClientRect();
+              if (r.right <= box.left || r.left >= box.right) continue;
+              if (r.bottom <= box.top || r.top >= box.bottom) continue;
+              if (r.width === 0 || r.height === 0) continue;
+              const cx = r.left + r.width / 2;
+              const cy = r.top + r.height / 2;
+              if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) continue;
+              const at = document.elementFromPoint(cx, cy);
+              if (at !== null && !(at === el || el.contains(at) || at.contains(el))) {
+                stolen.push(
+                  el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 24),
+                );
+              }
+            }
+          }
+          out.push({
+            name: sep.getAttribute('aria-label') ?? '(unnamed)',
+            exempt,
+            across: box ? Math.round(vertical ? box.width : box.height) : null,
+            live,
+            stolen,
+          });
+        }
+        return out;
+      });
+
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      await showView('tsld');
+      if (viewport.height >= 700) await showActivities(page);
+      // The notes dock: a right dock, resizable where the row has the room.
+      const notes = page.locator('[data-toolbar-item="comments"]').first();
+      if ((await page.getByRole('button', { name: 'Close plan notes' }).count()) === 0) {
+        await notes.click();
+      }
+      await page.getByRole('separator', { name: 'Resize notes panel' }).waitFor();
+      const diagram = await readDividers();
+      const names = diagram.map((d) => d.name);
+      expect(names, `the diagram's dividers at ${viewport.width}`).toEqual(
+        expect.arrayContaining(['Resize Project Explorer', 'Resize notes panel']),
+      );
+      if (viewport.height >= 700) expect(names).toContain('Resize activities panel');
+
+      await page.getByRole('button', { name: 'Close plan notes' }).click();
+      await showView('gantt');
+      const gantt = await readDividers();
+      const grid = gantt.find((d) => d.name === 'Grid width');
+      expect(grid, `the Gantt grid divider at ${viewport.width}`).toBeDefined();
+      expect(grid?.exempt, 'the Gantt grid divider is the named exception').toBe(true);
+      expect(
+        [...diagram, ...gantt].filter((d) => d.exempt).map((d) => d.name),
+        `the exempt dividers at ${viewport.width}`,
+      ).toEqual(['Grid width']);
+
+      for (const d of [...diagram, ...gantt].filter((r) => !r.exempt)) {
+        expect(
+          d.across,
+          `${d.name}: strip across its axis at ${viewport.width}`,
+        ).toBeGreaterThanOrEqual(HOUSE_TARGET);
+        expect(
+          d.live,
+          `${d.name}: the strip is live across its width at ${viewport.width}`,
+        ).toEqual([true, true]);
+        expect(
+          d.stolen,
+          `${d.name}: the strip covers a control's centre at ${viewport.width}`,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  /**
    * **A coarse 1024 × 600 cell keeps its line bound, and the roomy labels follow the same width
    * rule** (toolbar-redesign M1). The owner accepted four deck lines on touch at exactly 1024
    * (OD-2: 44 px targets stay, ADR-0183), so the bound here is the reading M0 took and not the fine

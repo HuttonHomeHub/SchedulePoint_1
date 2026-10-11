@@ -81,4 +81,57 @@ describe('PanelResizer', () => {
     fireEvent.keyDown(separator, { key: 'a' });
     expect(onResize).not.toHaveBeenCalled();
   });
+
+  describe('the coarse grab strip (ADR-0188 D3)', () => {
+    const hitOf = (separator: HTMLElement): HTMLElement => {
+      const hit = separator.querySelector<HTMLElement>('[data-resizer-hit]');
+      if (!hit) throw new Error('the separator has no hit strip');
+      return hit;
+    };
+
+    it('keeps the mouse strip at 25 px and grows it to --control-h under a finger, centred by default', () => {
+      const { separator } = renderResizer();
+      const hit = hitOf(separator);
+      expect(hit).toHaveClass('-right-3', '-left-3');
+      expect(hit).toHaveClass('pointer-coarse:w-(--control-h)', 'pointer-coarse:left-1/2');
+      expect(separator).not.toHaveAttribute('data-coarse-exempt');
+    });
+
+    it('a horizontal divider grows its height, centred by default', () => {
+      const { separator } = renderResizer({ orientation: 'horizontal' });
+      expect(hitOf(separator)).toHaveClass(
+        '-top-3',
+        '-bottom-3',
+        'pointer-coarse:h-(--control-h)',
+        'pointer-coarse:top-1/2',
+      );
+    });
+
+    it.each([
+      [false, 'pointer-coarse:-left-3'],
+      [true, 'pointer-coarse:-right-3'],
+    ])(
+      'outward keeps 12 px on the panel side and grows away from it (reverseKeys %s)',
+      (reverseKeys, edge) => {
+        const { separator } = renderResizer({ coarseStrip: 'outward', reverseKeys });
+        const hit = hitOf(separator);
+        expect(hit).toHaveClass(edge, 'pointer-coarse:w-(--control-h)');
+        expect(hit).not.toHaveClass('pointer-coarse:left-1/2');
+      },
+    );
+
+    it('none stays 25 px and marks itself, so the sweep can count the exception', () => {
+      const { separator } = renderResizer({ coarseStrip: 'none' });
+      expect(separator).toHaveAttribute('data-coarse-exempt', 'divider');
+      expect(hitOf(separator).className).not.toContain('--control-h');
+      expect(hitOf(separator)).toHaveClass('-right-3', '-left-3');
+    });
+
+    it('the strip stacks above the stage it grows into, but only under a coarse pointer', () => {
+      const { separator } = renderResizer({ coarseStrip: 'outward' });
+      const hit = hitOf(separator);
+      expect(hit).toHaveClass('pointer-coarse:z-10');
+      expect(hit).not.toHaveClass('z-10');
+    });
+  });
 });

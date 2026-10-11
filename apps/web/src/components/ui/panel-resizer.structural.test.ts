@@ -71,4 +71,23 @@ describe('PanelResizer call sites', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * `coarseStrip="none"` is a NAMED exception (ADR-0188 D3), not a preference. A divider that opts out
+   * of the finger-sized strip must be on this list, which is the ADR's list: adding a name here is
+   * the decision, made where a reviewer will see it. Verified red by adding `coarseStrip="none"` to
+   * the Explorer's call site.
+   */
+  it('only the named exceptions opt out of the finger-sized strip', () => {
+    const NAMED = ['features/gantt/components/GanttPanel.tsx'];
+    const optedOut: string[] = [];
+    for (const file of sourceFiles(WEB_SRC)) {
+      for (const tag of openingTags(readFileSync(file, 'utf8'))) {
+        if (/coarseStrip="none"/.test(tag)) {
+          optedOut.push(relative(WEB_SRC, file).split(sep).join('/'));
+        }
+      }
+    }
+    expect(optedOut.sort()).toEqual(NAMED);
+  });
 });

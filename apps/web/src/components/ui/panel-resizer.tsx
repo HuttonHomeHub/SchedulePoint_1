@@ -42,8 +42,56 @@ export interface PanelResizerProps {
    * so the keyboard matches the pointer (Left = grow, Right = shrink). Default `false` (start-anchored).
    */
   reverseKeys?: boolean;
+  /**
+   * How the grab strip grows under a **coarse pointer** (ADR-0188 D3; fine pointers always keep 25 px).
+   * The strip is `--control-h` (44 px) across the divider's axis, which is wider than the gap some
+   * dividers have on either side, so the consumer says which way it may grow:
+   *
+   * - `both` (default): centred on the line. It takes over the nearest 5 px of a neighbouring 44 px
+   *   control where the gap is 17 px each side (M0 measured this at the docks and the activities
+   *   panel); the neighbour keeps 39 of its 44.
+   * - `outward`: keeps today's 12 px on the panel side and grows the other 32 px away from the panel
+   *   the divider sizes, for a divider whose panel holds controls at the line (the Explorer's `⋯` and
+   *   links end 5 to 13 px short of it). The stage side is not empty either — the activities table's
+   *   select labels start there — but a 32 px reach leaves their centres alone.
+   * - `none`: stays 25 px, and marks itself `data-coarse-exempt="divider"` so the coarse sweep counts
+   *   it. Only where a wider strip would cover a neighbour's whole target and a typed equivalent
+   *   exists — the Gantt grid divider, whose equivalent is View ▾ › Columns › Table width.
+   */
+  coarseStrip?: 'both' | 'outward' | 'none';
   /** Surface-specific styling (colour, visibility) merged onto the orientation base classes. */
   className?: string;
+}
+
+/**
+ * The hit strip's coarse classes. Whole literals, so Tailwind sees them. The strip is 25 px
+ * (`-3` either side of the 1 px line) with a mouse and a finger alike unless `coarseStrip` says
+ * otherwise; `z-10` makes it win the pixels it grows into, which for the Explorer's outward half is
+ * the stage — a positioned child of `main` that otherwise paints over it (M0: every sample from +1 to
+ * +26 px hit the canvas, so today's right half is dead).
+ */
+function coarseStripClasses(
+  orientation: 'vertical' | 'horizontal',
+  strip: 'both' | 'outward',
+  reverseKeys: boolean,
+): string {
+  if (orientation === 'vertical') {
+    if (strip === 'both') {
+      return 'pointer-coarse:z-10 pointer-coarse:inset-x-auto pointer-coarse:left-1/2 pointer-coarse:w-(--control-h) pointer-coarse:-translate-x-1/2';
+    }
+    // The panel is on the start side unless the keys are reversed (an end-anchored panel). The panel
+    // side keeps today's 12 px and the rest of the 44 grows the other way.
+    return reverseKeys
+      ? 'pointer-coarse:z-10 pointer-coarse:inset-x-auto pointer-coarse:-right-3 pointer-coarse:w-(--control-h)'
+      : 'pointer-coarse:z-10 pointer-coarse:inset-x-auto pointer-coarse:-left-3 pointer-coarse:w-(--control-h)';
+  }
+  if (strip === 'both') {
+    return 'pointer-coarse:z-10 pointer-coarse:inset-y-auto pointer-coarse:top-1/2 pointer-coarse:h-(--control-h) pointer-coarse:-translate-y-1/2';
+  }
+  // A horizontal panel grows upward by default, so it sits below the line and outward is up.
+  return reverseKeys
+    ? 'pointer-coarse:z-10 pointer-coarse:inset-y-auto pointer-coarse:-top-3 pointer-coarse:h-(--control-h)'
+    : 'pointer-coarse:z-10 pointer-coarse:inset-y-auto pointer-coarse:-bottom-3 pointer-coarse:h-(--control-h)';
 }
 
 /**
@@ -59,6 +107,11 @@ export interface PanelResizerProps {
  * last, so a consumer could undo this; none may, and a structural test fails a `<PanelResizer>`
  * call site that passes a `touch-*` class.
  *
+ * **Strip contract (TECH_DEBT #476, ADR-0188 D3).** The grab strip is 25 px with a mouse and
+ * `--control-h` (44 px) with a finger, unless `coarseStrip` says `outward` or `none`. It is the
+ * `[data-resizer-hit]` child, which is what the coarse sweep measures; the 1 px separator is not the
+ * target. A `none` divider carries `data-coarse-exempt="divider"` so the sweep can count it.
+ *
  * jsx-a11y treats `separator` as non-interactive, so the tabindex / handler rules are disabled
  * deliberately — the ARIA value + keyboard support are exactly what make it operable.
  */
@@ -72,6 +125,7 @@ export function PanelResizer({
   pointerToSize,
   keyStep = KEY_STEP,
   reverseKeys = false,
+  coarseStrip = 'both',
   className,
 }: PanelResizerProps): React.ReactElement {
   // The pointer half lives in `usePointerDrag` (shared with the Gantt's column edges, ADR-0173); this
@@ -126,6 +180,7 @@ export function PanelResizer({
       onPointerUp={pointer.onPointerUp}
       onPointerCancel={pointer.onPointerCancel}
       onKeyDown={onKeyDown}
+      {...(coarseStrip === 'none' ? { 'data-coarse-exempt': 'divider' } : {})}
       className={cn(
         // `touch-none` must be on the element that owns the pointer handlers; the hit-area child is covered by it (the effective touch-action is the intersection up the ancestors).
         'relative shrink-0 touch-none outline-none',
@@ -135,13 +190,18 @@ export function PanelResizer({
         className,
       )}
     >
-      {/* Widen the pointer hit area to ≥24px over the 1px divider (WCAG 2.2 SC 2.5.8): the
-          overflowing child bubbles pointer events to the separator. */}
+      {/* Widen the pointer hit area to ≥24px over the 1px divider (WCAG 2.2 SC 2.5.8), and to 44 under
+          a coarse pointer unless `coarseStrip` is `none`: the overflowing child bubbles pointer
+          events to the separator. */}
       <span
         aria-hidden="true"
+        data-resizer-hit=""
         className={cn(
           'absolute',
           vertical ? 'inset-y-0 -right-3 -left-3' : 'inset-x-0 -top-3 -bottom-3',
+          coarseStrip === 'none'
+            ? undefined
+            : coarseStripClasses(orientation, coarseStrip, reverseKeys),
         )}
       />
     </div>
