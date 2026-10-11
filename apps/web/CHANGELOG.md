@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.186.0
+
+### Minor Changes
+
+- [#922](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/922) [`885d298`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/885d2981b32419cc7ad06d87654403923fc81b80) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Pressing a panel divider without dragging it now opens a small box where you can type the panel's size. It works on the Project Explorer, the activities table, and the Comments, Float paths, Health check and Revision comparison panels, and on the Gantt's table/chart line, with the same field as View, Columns, Table width. Type a size and press Enter; a size outside the range is limited and the box says so; Escape puts the box away and returns you to the line; "Reset to standard" puts the panel back. Dragging the line and moving it with the arrow keys work exactly as before, and no key opens the box. This is new for a mouse as well as a finger: a click on a divider opens the box. A size applied exactly as typed is announced, and a typed size lost to a press elsewhere is announced as not applied. In View, Columns, pressing Escape in a width field now throws away what you typed (before, it could apply it).
+
+### Patch Changes
+
+- [#922](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/922) [`885d298`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/885d2981b32419cc7ad06d87654403923fc81b80) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The select boxes in the activities table are finger-sized on a touch screen: the box you tick is still small, but the area that takes your tap is now 44 pixels square, for each row and for the header's "Select all". With a mouse nothing changes. The header row of the table is a little taller on touch (61 pixels, from 41 to 57), and body rows do not move because they were already 61 pixels tall for the row menu. The Project Explorer's resize handle now sits inside the "Project Explorer" navigation landmark, so a screen reader that moves by landmark reaches it there.
+
+- [#922](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/922) [`885d298`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/885d2981b32419cc7ad06d87654403923fc81b80) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a touch screen the grab strip on a panel divider is now 44 pixels wide instead of 25, so a finger finds the line first time: the Project Explorer, the activities table's top edge, and the Comments, Float paths, Health check and Revision comparison panels. With a mouse nothing changes. The Project Explorer's strip now also works on the diagram's side of the line, which was covered by the diagram before. The line between the Gantt's table and chart stays narrow, because a wider one would cover the row menus and column headers beside it; View, Columns, Table width is its finger-sized equivalent.
+
 ## 0.185.0
 
 ### Minor Changes
