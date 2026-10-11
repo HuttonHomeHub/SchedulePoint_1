@@ -1,0 +1,292 @@
+{
+  "pointer": "coarse",
+  "provisional": false,
+  "note": "Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns \"Share & export\" into \"Export\"). A form whose stage is never is not on the bar at 3840, so its committed width stands. freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.",
+  "itemGapPx": 4,
+  "safetyPx": 2,
+  "ladderOrder": {
+    "look": ["L1", "L2", "L3", "L4", "L5", "L6"],
+    "do": ["P1", "P4", "P2", "P3", "P6", "P7", "P5", "P8"]
+  },
+  "entries": [
+    {
+      "rank": "L1",
+      "row": "look",
+      "name": "Critical only",
+      "from": "Filter",
+      "memberWidths": {
+        "critical-only": 121.9
+      },
+      "width": 121.9
+    },
+    {
+      "rank": "L2",
+      "row": "look",
+      "name": "Colour by: Criticality / Total float / WBS group",
+      "from": "View",
+      "memberWidths": {
+        "colour-by-criticality-caption": 43.4,
+        "colour-by-criticality": 85.6,
+        "colour-by-totalFloat": 88.5,
+        "colour-by-wbs": 95
+      },
+      "width": 324.5
+    },
+    {
+      "rank": "L3",
+      "row": "look",
+      "name": "Late-start overlay",
+      "from": "View",
+      "memberWidths": {
+        "late-start-overlay": 159.6
+      },
+      "width": 159.6
+    },
+    {
+      "rank": "L4",
+      "row": "look",
+      "name": "Feasible window",
+      "from": "View",
+      "memberWidths": {
+        "feasible-window": 153.3
+      },
+      "width": 153.3
+    },
+    {
+      "rank": "L5",
+      "row": "look",
+      "name": "Levelled placement",
+      "from": "View",
+      "memberWidths": {
+        "levelled-overlay": 170.9
+      },
+      "width": 170.9
+    },
+    {
+      "rank": "L6",
+      "row": "look",
+      "name": "Has conflict only",
+      "from": "Filter",
+      "memberWidths": {
+        "has-conflict-only": 152
+      },
+      "width": 152
+    },
+    {
+      "rank": "P1",
+      "row": "do",
+      "name": "Health check",
+      "from": "Analysis",
+      "memberWidths": {
+        "health-check": 129.7
+      },
+      "width": 129.7
+    },
+    {
+      "rank": "P2",
+      "row": "do",
+      "name": "Add: Start milestone",
+      "from": "Add",
+      "memberWidths": {
+        "add-start-milestone": 177.9
+      },
+      "width": 177.9
+    },
+    {
+      "rank": "P3",
+      "row": "do",
+      "name": "Add: Finish milestone",
+      "from": "Add",
+      "memberWidths": {
+        "add-finish-milestone": 184.7
+      },
+      "width": 184.7
+    },
+    {
+      "rank": "P4",
+      "row": "do",
+      "name": "Share…",
+      "from": "Share & export",
+      "memberWidths": {
+        "share": 94.8
+      },
+      "width": 41.8,
+      "triggerShrinkPx": 53
+    },
+    {
+      "rank": "P5",
+      "row": "do",
+      "name": "Link: Finish → Start / Start → Start / Finish → Finish",
+      "from": "Link",
+      "memberWidths": {
+        "link-fs-caption": 33.9,
+        "link-fs": 114.2,
+        "link-ss": 107.3,
+        "link-ff": 121.1
+      },
+      "width": 388.5
+    },
+    {
+      "rank": "P6",
+      "row": "do",
+      "name": "Compare revisions",
+      "from": "Analysis",
+      "memberWidths": {
+        "compare-revisions": 164.8
+      },
+      "width": 164.8
+    },
+    {
+      "rank": "P7",
+      "row": "do",
+      "name": "Earned value…",
+      "from": "Analysis",
+      "memberWidths": {
+        "earned-value": 141
+      },
+      "width": 141
+    },
+    {
+      "rank": "P8",
+      "row": "do",
+      "name": "Resource histogram…",
+      "from": "Analysis",
+      "memberWidths": {
+        "resource-histogram": 185.2
+      },
+      "width": 185.2
+    }
+  ],
+  "freeWidthByStage": {
+    "look": {
+      "PROMOTE_80": {
+        "cell": "1280x800",
+        "avail": 1264,
+        "naturalBase": 988,
+        "freeBase": 276,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1121.3,
+        "freeWorst": 142.7
+      },
+      "PROMOTE_90": {
+        "cell": "1440x900",
+        "avail": 1424,
+        "naturalBase": 988,
+        "freeBase": 436,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1121.3,
+        "freeWorst": 302.7
+      },
+      "PROMOTE_100": {
+        "cell": "1600x900",
+        "avail": 1584,
+        "naturalBase": 1060,
+        "freeBase": 524,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1193.3,
+        "freeWorst": 390.7
+      },
+      "PROMOTE_119_5": {
+        "cell": "1912x1080",
+        "avail": 1896,
+        "naturalBase": 1060,
+        "freeBase": 836,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1193.3,
+        "freeWorst": 702.7
+      },
+      "PROMOTE_135": {
+        "cell": "2160x1200",
+        "avail": 2144,
+        "naturalBase": 1060,
+        "freeBase": 1084,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1193.3,
+        "freeWorst": 950.7
+      },
+      "PROMOTE_160": {
+        "cell": "2560x1440",
+        "avail": 2544,
+        "naturalBase": 1060,
+        "freeBase": 1484,
+        "worstState": "conflicts-cycling+peer-pen",
+        "naturalWorst": 1193.3,
+        "freeWorst": 1350.7
+      }
+    },
+    "do": {
+      "PROMOTE_80": {
+        "cell": "1280x800",
+        "avail": 1264,
+        "naturalBase": 1169.7,
+        "freeBase": 94.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 92.2
+      },
+      "PROMOTE_90": {
+        "cell": "1440x900",
+        "avail": 1424,
+        "naturalBase": 1169.7,
+        "freeBase": 254.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 252.2
+      },
+      "PROMOTE_100": {
+        "cell": "1600x900",
+        "avail": 1584,
+        "naturalBase": 1169.7,
+        "freeBase": 414.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 412.2
+      },
+      "PROMOTE_119_5": {
+        "cell": "1912x1080",
+        "avail": 1896,
+        "naturalBase": 1169.7,
+        "freeBase": 726.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 724.2
+      },
+      "PROMOTE_135": {
+        "cell": "2160x1200",
+        "avail": 2144,
+        "naturalBase": 1169.7,
+        "freeBase": 974.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 972.2
+      },
+      "PROMOTE_160": {
+        "cell": "2560x1440",
+        "avail": 2544,
+        "naturalBase": 1169.7,
+        "freeBase": 1374.3,
+        "worstState": "peer-pen",
+        "naturalWorst": 1171.8,
+        "freeWorst": 1372.2
+      }
+    }
+  },
+  "c1ZoomPresets": {
+    "widthWithCaption": 470,
+    "members": {
+      "C1a Zoom: Day": 70.3,
+      "C1b Zoom: Week": 81.9,
+      "C1c Zoom: Month": 86.6,
+      "C1d Zoom: Quarter": 95.4,
+      "C1e Zoom: Year": 74.7
+    },
+    "captionWidth": 41.1
+  },
+  "clusterButtons": {
+    "zoom-out": 44,
+    "zoom-in": 44,
+    "fit": 44,
+    "undo": 44,
+    "redo": 44
+  }
+}

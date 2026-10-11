@@ -10,6 +10,7 @@ import {
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
  * **NetPoint grammar M4 — the canvas's text, on the real canvas** (spec §4.2 G7, G11).
@@ -98,6 +99,7 @@ async function inkAroundBar(page: Page): Promise<{ above: number; below: number 
 async function viewCheckbox(page: Page, name: string, checked: boolean): Promise<void> {
   const view = page.getByRole('button', { name: 'View', exact: true });
   if ((await view.getAttribute('aria-expanded')) !== 'true') await view.click();
+  await unfoldViewSections(page);
   const box = page.getByRole('checkbox', { name, exact: true });
   if (checked) await box.check();
   else await box.uncheck();

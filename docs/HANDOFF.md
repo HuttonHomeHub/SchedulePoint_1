@@ -3,124 +3,161 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-09, after the **screen-fit batch** that followed the minimum-viewport epic
-(ADR-0179). The product owner approved four plans on 2026-10-08 ("Approved with your recommendations")
-and this session built and released all of them, plus two small rows.
+**Written:** 2026-10-11, after the **toolbar epic** — the owner's "make the toolbar amazing" request, the
+landing and list-row defects found beside it, and the conflict reason (#479). All of it is on one open
+pull request, **#915**, which was green on every check at head `ac49e0a` when this was written.
 
 ## Where things stand
 
-- `main` holds everything below. Latest release: **web 0.183.1** (api unchanged at 0.88.1).
-- The product owner's two screens, from `/pointer-check.html`
-  (`apps/web/public/pointer-check.js:39`): **monitor 1912 × 948** (mouse) and **Surface 1912 × 1114,
-  DPR 1.5** (finger and stylus, 44 px targets). The design floor is **1024 × 600** (ADR-0179); the
-  Surface upright reads about 1272 × 1800.
-- Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, **explorer** (Haiku)
-  searches, planners are Opus. Never send implementation to `general-purpose`.
+- **PR #915** (`claude/determined-cerf-pskzjb` → `main`, 445 files, 83+ commits, web minor, `apps/api`
+  untouched): all 10 checks green on `ac49e0a`, no review threads. **It is not merged.** The product
+  owner merges it. If this hand-off commit moved the head, re-read the check runs for the new head first
+  (`CLAUDE.md` §19.9: dedupe by name, every survivor `completed` / `success`; pin the merge to a SHA from
+  `git ls-remote`).
+- After the merge: reset the branch from `main` (`CLAUDE.md` §8), merge the **Version Packages** PR the
+  Release workflow opens (its checks never run — read its diff, then merge with its head SHA), and confirm
+  with `get_latest_release`.
+- The product owner's screens: **monitor 1912 × 948** (mouse) and **Surface 1912 × 1114, DPR 1.5** (finger
+  and stylus, 44 px targets). Design floor **1024 × 600** (ADR-0179).
+- Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, reviewers are Sonnet,
+  **explorer** (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
 
-## What this batch shipped
+## What this epic shipped (all in #915)
 
-| PR(s)            | What                                                                                                                                                                                                                                                             | Release                 |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| #897, #898, #899 | Approved specs, then **ADR-0180**: on a short screen the expanded activities panel takes the whole workspace (the diagram hides until Collapse); #468 closed.                                                                                                    | web 0.180.0             |
-| #901, #903, #904 | **Finger-sized rows (ADR-0183)**: the activities row `⋯` and the Explorer tree rows grow to 44 px under a coarse pointer, the hidden-Explorer spine is 53 px touch / 45 px mouse. #467 and #215 closed.                                                          | web 0.181.0 and 0.181.1 |
-| #906             | ADR-0183, the 24 px row-checkbox row (#470) and **Surface sheet steps 13–24**.                                                                                                                                                                                   | none                    |
-| #907             | **ADR-0181**: the below-768 single-pane workspace and its Diagram/Activities toggle are retired; docks are capped (a dock that cannot leave the diagram 360 px takes the whole row and the diagram waits, inert); Compare revisions now opens on narrow windows. | web 0.182.0             |
-| #909             | **ADR-0182**: `PageGrid` splits into two columns on its own width (72rem container query) instead of the viewport, for the landing, Members and the staff console. **The 72rem threshold is provisional** (see below).                                           | web 0.183.0             |
-| #911             | `PanelResizer` gets `touch-none`, so a finger drag of any divider follows the finger (#439 closed). **Surface sheet step 25.**                                                                                                                                   | web 0.183.1             |
-| #913             | #466 (row `⋯` under the pane bar at 320) closed as not reproducible, with a narrow-shell journey that pins pointer reach of the row `⋯`.                                                                                                                         | none                    |
+- **Landing and lists:** the one-column landing gap (item 0); a landing box is a tab stop only when it
+  scrolls (#474); a list row's subject wraps and never clips (#472, **ADR-0184**).
+- **Toolbar redesign, M0–M7 (ADR-0185)**, specs and measurement records in `docs/specs/toolbar-redesign/`:
+  - a **promotion ladder** — six rem stages (80 / 90 / 100 / 119.5 / 135 / 160) from widths measured in a
+    real browser (`promotion-widths.{fine,coarse}.json`, `apps/web/src/features/tsld/toolbar/promotion-ladder.ts`)
+    that move commands out of menus onto the bar as width allows; anchors never leave their menu (Link keeps
+    Start → Finish, Add keeps Task and Level of Effort, Filter keeps Has constraint, Analysis keeps
+    Baselines…, Share & export keeps the formats and Print); a computed "no tool is lost" manifest
+    (`command-manifest.json`, `pnpm --filter @repo/web manifest:commands`);
+  - focus hand-off and announcements when a control moves between bar and menu, and when a stage change
+    closes an open menu (`useCloseWhenChanged`, `usePromotionFocusFollow`, `useToolbarFocusHandoff`);
+  - zoom / fit / minimap in the diagram's corner; below 1024 the editing row leads the scrolling line (DOM
+    order = visual order); `Deck` row order in `use-deck-row-order.ts`;
+  - the **visual brief**: quiet group pills, a row mark, quiet shading that survives forced colours, an
+    outlined Export / Share closing action, a Filter count badge, icon-only Baseline overlay (Diff glyph),
+    Comments, Settings and Resource view, the organisation switcher as a ghost button + radio menu;
+  - the inert `tier` concept removed (#193); header and command-band height at small windows fixed (#471).
+- **Conflict reason on the object (#479, ADR-0186)**, `docs/specs/conflict-reason-on-object/`: a caption
+  line above the selection bar says why an activity is flagged; the toolbar chip stays a count. The same
+  words feed the announcer, the diagram's listbox option and the Gantt row.
+- **CI:** the promotion journey has its own step and config (`playwright.promotion.config.ts`,
+  `test:e2e:promotion`); shards were repacked (`scripts/e2e-durations.json`).
 
 ## Waiting on the product owner
 
-- **Confirm 72rem** for the page-grid split (ADR-0182 reads "Accepted (CQ-2 threshold provisional …)").
-  The spec's own rule could not decide it (its subtitle clause fails even at 1912), so the orchestrator
-  chose 72rem on the plan-name-wrap evidence under the delegation "CQ-2 by M0 photographs". Cost, in
-  the ADR: a 1440 px laptop with the Explorer open gets **one** wide column; boxes wholly visible go
-  2 → 1 of 4 at 1024 × 600 and 1280 × 800. An arbitrary `@[69rem]` would keep 1440 in two columns but
-  needs one more measurement round at 1400 and 1440.
-- **The tap-to-answer page** (<https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY>, Surface sheet steps
-  13–24; answers land in its `rowchecks` collection, read them with `ArtifactData list`): **no answers
-  at 2026-10-09 10:20 UTC.** If more than one of the ten checks misses, or any is a "no", diagnose and fix,
-  then record the results in `docs/specs/gantt-coarse-pointer/device-results.md` and the register.
-  **Step 25** (dragging a divider with a finger) is on the paper sheet only,
-  `docs/specs/gantt-coarse-pointer/device-checklist.md`.
-- **The history count on or after 1 November** (ADR-0174 / #443): staff console → Tools → **Run
-  diagnostics** → **Copy results**. Record it in #443 and the activity-history plan's M3-T2.
-- **Gantt hands-on readings** are still owed (unchanged).
+- **Merge #915**, and **sign off the photographs** (spec SC-16): `docs/specs/toolbar-redesign/photos/m6-*`
+  (before / after, mouse and finger, pen held and not held). He has looked at the main ones and said they
+  look ok; the sign-off is not yet recorded in `m6-measurement.md`.
+- **Decided, do not reopen:** `Start editing` stays plain while the pen is not held. Amber is reserved for
+  the held state (ADR-0133); making it amber too would need a new public `ToolbarButton` prop (ADR-0105).
+  The product owner said "leave it as it is" on 2026-10-11.
+- **CI time (TECH_DEBT #491):** the web e2e total is 2,393 s, over the 2,372 s re-open trigger in
+  `docs/specs/ci-sharding/m4-measurement.md` §7; shards project to about 596 / 598 / 600 / 599 s against a
+  593 s budget. The record says re-measure over **three CI runs** before adding a fifth shard — his call.
+- **Header at 320 / 640 wide on touch** is 192 / 220 px and 96 / 108 px tall (#490, unchanged by this epic;
+  mobile is unsupported). Recommended: leave.
+- **Confirm 72rem** for the page-grid split (ADR-0182 "CQ-2 threshold provisional"); the tap-to-answer page
+  (<https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY>, answers in its `rowchecks` collection) had no
+  answers at 2026-10-09; Surface sheet **step 25**; the **history count on or after 1 November**
+  (ADR-0174 / #443: staff console → Tools → Run diagnostics → Copy results); **Gantt hands-on readings**.
+  All unchanged from the previous hand-off.
+- **Not exercised on real hardware:** the Filter badge on a real display, the long-press tooltip on real
+  touch, any screen reader, and CI's own font rendering (see the environment notes).
 
-## Open rows from this batch
+## Open rows from this epic
 
-- **#471** — at narrow widths the app header and wrapped command band take 355–603 px of height, so
-  the workspace body has no room (below the 1024 floor). Needs its own spec (ADR-0105). The reason the
-  tiny-window criteria of the single-pane retirement were withdrawn.
-- **#472** — a list row's `project · client` subtitle is truncated mid-word at every width, 1912
-  included (`RowSubject`, `list-row.tsx`). Own spec: it changes a component contract.
-- **#473** — the Explorer's splitter wrapper fails axe `region`; **#474** — `SectionCard fill` body is a
-  tab stop whether or not it scrolls (a shared keyboard change: accessibility-reviewer first, §19.13);
-  **#475** — two stale statements (one fixed; the `HANDOFF.md:38` citation in ADR-0179 and the
-  minimum-viewport spec now points at a file that no longer holds that line — the readings are above);
-  **#476** — a `PanelResizer` grab strip is 25 px, under the 44 px touch preference.
-- **#442** — the dividers outside the Gantt have no pointer-only way to set a size (keyboard twin only).
-- **#469** (the short-body swap state could be a `useShortBodySwap` hook) and **#470** (24 px row
-  checkboxes on touch) from the earlier part of this batch.
-- Known and recorded in ADR-0181: a squeezed dock hides the diagram without saying why (follow-up in
-  #471); at 320 wide the activities row `⋯` is off screen to the right until the table's own region is
-  scrolled sideways (a scrolling data table, optional follow-up to pin it).
-- Unchanged: **#456**, **#454**, **#449**, **#450**, **#440–#446**, **#435**, **#432**, **#429**,
-  **#419**, **#405**. `wip/history-numerator-preaggregate` (`64ff45d4`) is still the first remedy to
-  measure when the 250,000 trigger fires.
+- **#482** zoom presets in the diagram corner and search-field growth at 2560 (deferred, not built).
+- **#483** at 200 % text-only the breadcrumb collapses to "R… / P" (1.4.4, predates this epic).
+- **#484** touch 1024 × 600: the Do row wraps its tail onto a third line.
+- **#485** the remedy button sits far from the reason on wrapped bars (needs an ADR-0111 review: it
+  touches roving order). **#486** the warning triangle repeats up to three times on one bar; a stray
+  icon-only canvas control in the Gantt dock. **#487** at 200 % text on touch 1024 the selection bar's tail
+  is clipped (predates #479). **#488** the touch 1024 × 600 stage is 122 px against a 120 px floor — two
+  pixels of margin; the foot row is deliberately `pointer-coarse:py-0.5`.
+- **#489** the foot-row outlet (D-j). **#490** the header at 320. **#491** the CI budget above.
+- **#481** `HistoryResultStrip` could adopt `useContainerUnmountHandoff` (its destination is a callback,
+  so not a drop-in).
+- Carried over, unchanged: **#473** (Explorer splitter fails axe `region`), **#475** (two stale statements,
+  one fixed), **#476** (a `PanelResizer` grab strip is 25 px), **#442**, **#469**, **#470**, **#456**,
+  **#454**, **#449**, **#450**, **#440–#446**, **#435**, **#432**, **#429**, **#419**, **#405**.
+  `wip/history-numerator-preaggregate` (`64ff45d4`) is still the first remedy to measure when the 250,000
+  trigger fires.
+- Closed by this epic: **#471, #472, #474, #479, #193** (these are register rows, not GitHub issues).
 
 ## Suggested next
 
-1. The product owner's answers above (72rem, tap page, Surface step 25).
-2. Whichever of #471 (shell chrome at narrow widths), #472 (subtitle) or #474 (tab stop) he wants first;
-   each needs its own spec. Planning is Opus work; building is Sonnet.
+1. Merge #915, release, reset the branch from `main`.
+2. The product owner's answers above (photos, 72rem, tap page, fifth-shard decision after three CI runs).
+3. Whichever of #485 (remedy near the reason, needs ADR-0111 review), #487 or #483 (200 % text) he wants
+   first; each needs its own spec if it adds surface (ADR-0105). Planning is Opus work; building is Sonnet.
 
 ## Environment notes a new session would otherwise rediscover
 
-- **`send_later` works in a session the product owner started.** Arm it as the first action of each
-  turn; re-arm only on a firing; `list_triggers` before arming out of band. A fired notification can be
-  delivered late (once ~40 minutes).
-- **The GitHub MCP tools can disconnect mid-session.** Reload them with
+- **`send_later` works in a session the product owner started.** Arm it as the first action of each turn;
+  re-arm only on a firing; `list_triggers` can return `[]` while triggers are live. A fired notification
+  can be delivered late. **`delete_trigger` the last one when the chain ends.**
+- **The GitHub and claude-code-remote MCP tools disconnect and reconnect mid-session.** Reload with
   `ToolSearch select:mcp__github__<name>`; the repo is `HuttonHomeHub/SchedulePoint_1`.
+- **`ss` is not installed in the container.** Pick high random free ports with a `python3` socket bind
+  check. **Never `pkill` by pattern**: a reviewer's `pkill -f "nest start"` once risked other agents'
+  servers; start servers under `setsid` and kill your own **process group**.
+- **Isolated stack for a journey:** API —
+  `cd apps/api && API_PORT=<p> BETTER_AUTH_URL=http://localhost:<p> CORS_ORIGINS=http://localhost:<vite> DATABASE_URL=postgresql://app:app@localhost:5432/app_test?schema=public BETTER_AUTH_SECRET=local-e2e-secret-at-least-32-characters-long RATE_LIMIT_LIMIT=400 pnpm exec nest start`;
+  web — `cd apps/web && VITE_API_URL=http://localhost:<p> pnpm exec vite --port <vite>` (**no `/api/v1`**);
+  then `PLAYWRIGHT_SKIP_WEBSERVER=1 E2E_BASE_URL=http://localhost:<vite> PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome … --project=chromium`.
+  **Each Playwright config has its own `VITE_` flags and API env — copy them from the config**, and make
+  sure no leftover server from a previous suite answers the next one (it cost two builders a false round).
+  Run journeys **serially**; parallel runs cause sign-up timeouts.
+- **API rate limit:** the activities `POST` is throttled at 100 per 60 s per IP per handler. A suite that
+  seeds heavily sets `RATE_LIMIT_LIMIT` in its config's `webServer` env (narrow-shell: 400,
+  workspace-chrome: 1250). Local runs hid this for a day.
+- **CI renders text slightly differently from this container** (a label measured 103.7 px on CI against
+  106.2 here). The promotion width assertion (SC-18a) is therefore one-sided-strict plus a bounded 4 %
+  narrower allowance; re-take the JSON on the CI runner (ADR-0128) rather than widening it if it flags a
+  label. The 120 px stage-floor assertion in `e2e-minimap/viewport-cluster.spec.ts` has two pixels of
+  margin and cannot be confirmed against CI fonts.
+- **Text-only 200 % in a journey** uses a CDP `Page.setFontSizes`, kept attached and re-applied if the root
+  size reads 16 px (`narrow-shell.spec.ts`, `setDefaultFontSize`). It passed here on both Chromium builds;
+  the CI fix `ac49e0a` is the defensive version of a guess — if SC-7 ever reads `16px` on CI again, set the
+  default font size as a browser-level preference instead.
+- **The account suite needs a random `E2E_SMTP_PORT`**; its default fixed ports collide with other runs.
 - **Parallel branches collide on shared numbers.** TECH_DEBT row numbers and the `CLAUDE.md` / `README.md`
-  banner counts (web source files, ADRs) both clash when two PRs are open; **rebase every PR branch onto
-  the latest `origin/main` before opening it** and re-run `pnpm check:counts` and `check:debt-status`.
-- **Subagents sometimes have no shell**: files they write are in their worktree and must be committed and
-  pushed by someone with one. Brief builders to commit and push after every step
-  (`chore(web): wip …`, never a bare `wip`).
+  banner counts (web source files, ADRs) clash when two PRs are open; rebase every branch onto the latest
+  `origin/main` before opening it and re-run `pnpm check:counts` and `check:debt-status`.
+- **Subagents sometimes have no shell**: brief builders to commit and push after every green slice
+  (`chore(web): wip …`, never a bare `wip`), and to stage explicit paths only.
 - **A fresh worktree needs** `pnpm install --frozen-lockfile`, `pnpm --filter "./packages/*" build` and
-  `pnpm --filter @repo/api exec prisma generate` before lint will pass.
-- **The shell now always mounts an empty `role="status"` live region** (the narrow-window banner,
-  ADR-0179). Any e2e `getByRole('status')` on a signed-in page must be scoped.
-- **Signed-in e2e below 1024 must opt in** with `test.use({ acknowledgeViewportNotice: true })` or
-  `acknowledgeViewportNotice(page)` from `apps/web/e2e-support/test.ts`.
-- **`plan-switch.spec.ts:109` fails intermittently under local load** (a 30 s timeout in `newPlan()`),
-  always passing alone and in CI. Recorded under **#435**. `web:page-composition` once failed a table-wrap
-  scan that ran before its data loaded; a re-run passed.
-- **A stale API server on :3000 poisons later local runs.** Before a run,
-  `curl -s localhost:3000/api/v1/health` should return nothing.
-- **Never let two Playwright or DB-backed runs overlap**; check `pgrep -fa "playwright test --config|e2e-local.sh"`.
+  `pnpm --filter @repo/api exec prisma generate` before lint will pass; `scripts/e2e-local.sh --db-only`
+  starts Postgres.
+- **The shell always mounts an empty `role="status"` live region** (ADR-0179): scope any e2e
+  `getByRole('status')`. Signed-in e2e below 1024 must opt in with `acknowledgeViewportNotice`.
+- **`plan-switch.spec.ts:109` flaked** under load; the `newPlan` helper had a race (it skipped the project
+  link click if the Explorer had not drawn it) and now waits for whichever of the link or the "New plan"
+  button appears first (fixed in this epic; recorded under #435).
+- **A stale API server on :3000 poisons later local runs** (`curl -s localhost:3000/api/v1/health` should
+  return nothing). Never let two DB-backed runs overlap.
 - **CodeQL flags `new StorageEvent('storage', { key })`** and stat-then-read directory walks; use
   `apps/web/src/test/storage-event.ts` and `readdirSync(dir, { withFileTypes: true })`.
 - **`check:counts` trips on every new web source file** (the `CLAUDE.md` banner count); a new test file
-  counts too.
-- **The container restarts without warning** and kills agents; files in worktrees, pushed branches and
-  wake-ups survive.
-- **`.claude/worktrees/` must be in `.git/info/exclude`** in each fresh container.
-- **An interrupted e2e run can leave `ops@schedulepoint.test` unverified**:
-  `PGPASSWORD=app psql -h localhost -U app app_test -c "update users set email_verified=true where email='ops@schedulepoint.test'"`.
+  counts too. Adding an ADR also moves the ADR count (186 today).
+- **The container restarts without warning** and kills agents; pushed branches and wake-ups survive.
+  **`.claude/worktrees/` must be in `.git/info/exclude`** in each fresh container.
 - **The Version Packages PR's checks never run** (`action_required`); read its diff (`get_files`), then merge
-  it with its head SHA. Confirm the release with `get_latest_release`; **never** `actions_list
-list_workflow_runs` (its output is huge regardless of `perPage`).
-- **`gh api …/jobs/<id>/logs` is blocked by the proxy**; use `actions_get get_workflow_job` for step
-  timings or the MCP `get_job_logs` (the tail is often service-container noise).
+  it with its head SHA. **Never** `actions_list list_workflow_runs` (its output is huge).
+- **`gh api …/jobs/<id>/logs` is blocked by the proxy**; use the MCP `get_job_logs` — its tail is mostly
+  Postgres service-container noise, so delegate log reading to a read-only agent and filter for
+  `✘` / `Error:` / `Expected` / `Received`.
 - **The `@repo/interchange` "decodes CP1252 high bytes" test fails in the container only**, so
-  `pnpm prepush` reports `FAILED: test`; run `pnpm --filter @repo/web test` on its own.
-- **Chaining a build on an unmerged branch works**: after the base squash-merges,
-  `git rebase --onto origin/main <old base tip>` and force-push with lease.
+  `pnpm prepush` reports `FAILED: test`; `check:reconcile-due` warns on the shallow clone. Both are
+  pre-existing. Run `pnpm --filter @repo/web test` on its own.
 - **A PR title over ~93 characters fails `pr-title.yml`**; commit bodies ≤ 100 characters per line.
 - **ADR-0131's spec gate reads the first word of `Status:`**; an ADR citing a Draft spec's path fails
   `check:spec-status` S3.
-- **Playwright in the container:** Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
+- **Playwright in the container:** Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+  (also `chromium_headless_shell-1194`). Never run `playwright install`.
 - **The Surface sheet rule:** `docs/specs/gantt-coarse-pointer/device-checklist.md` must change in the
   same PR whenever what it tests changes (touch rows, dividers, targets).

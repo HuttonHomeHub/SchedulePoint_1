@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { pickAddKind } from '../e2e-support/toolbar';
+
 /**
  * Journey helpers for the **canvas authoring flow** suite (ADR-0064,
  * `docs/specs/canvas-authoring-and-routing/`).
@@ -327,10 +329,7 @@ export async function armAdd(
   page: Page,
   kind: 'Task' | 'Start milestone' | 'Finish milestone',
 ): Promise<void> {
-  await doToolbar(page)
-    .getByRole('button', { name: /^Activity type:/ })
-    .click();
-  await page.getByRole('menuitemradio', { name: kind }).click();
+  await pickAddKind(page, kind);
   await expect(doToolbar(page).getByRole('button', { name: /^Adding/ })).toBeVisible();
 }
 

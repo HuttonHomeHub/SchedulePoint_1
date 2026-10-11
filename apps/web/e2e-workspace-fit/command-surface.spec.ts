@@ -403,6 +403,85 @@ async function openGanttExpanded(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/**
+ * **View ▾ at the floor, on either pointer** (toolbar-redesign M2-T3, SC-13).
+ *
+ * Opens the panel at 1024 × 600 in the Diagram and asserts (1) it is at most 70 % of the viewport
+ * high, (2) it has no inner scroll in its default state, and (3) once every folded section is
+ * opened, every checkbox and radio in it can be scrolled to and pressed — an inner scroll is allowed
+ * there, because it is the planner who asked for the long form. The 420 bar is the spec's number
+ * (70 % of 600), not a measured one: a bound with slack in it cannot report what a row is worth.
+ */
+async function assertViewPanelFitsTheFloor(
+  page: Page,
+  view: 'Diagram' | 'Gantt' = 'Diagram',
+): Promise<void> {
+  // This serial page is left in whichever view an earlier case used, so the view is chosen here.
+  // The Gantt's View ▾ holds a third folded section (Columns, 681 px of chooser and width fields on
+  // its own) and is held to the same bar.
+  await page
+    .getByRole('toolbar', { name: 'Plan view' })
+    .getByRole('button', { name: view, exact: true })
+    .click();
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await page.waitForTimeout(500);
+  const trigger = page
+    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('button', { name: /^View/ });
+  await trigger.click();
+  const panel = page.getByRole('dialog', { name: /^View/ });
+  await expect(panel).toBeVisible();
+  const folded = await panel.getByRole('button', { expanded: false }).count();
+  // The pinned positive: a panel with nothing folded would meet the bar by being short for another
+  // reason, and the disclosures are what this milestone built.
+  expect(folded, 'no section starts folded').toBeGreaterThan(0);
+
+  const reading = await panel.evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    scrollable: el.scrollHeight - el.clientHeight,
+    viewport: window.innerHeight,
+  }));
+  expect(
+    reading.height,
+    `View ▾ is ${String(reading.height)} px of ${String(reading.viewport)} at the floor`,
+  ).toBeLessThanOrEqual(420);
+  expect(
+    reading.scrollable,
+    'View ▾ scrolls inside itself in its default state',
+  ).toBeLessThanOrEqual(1);
+
+  // The first remaining fold each time: `.all()` re-resolves `nth` against a set that shrinks.
+  const folds = panel.getByRole('button', { expanded: false });
+  while ((await folds.count()) > 0) await folds.first().click();
+  const controls = panel.locator('input[type="checkbox"], input[type="radio"]');
+  const total = await controls.count();
+  expect(total, 'the unfolded panel offers almost nothing').toBeGreaterThan(15);
+  for (let i = 0; i < total; i += 1) {
+    const control = controls.nth(i);
+    await control.scrollIntoViewIfNeeded();
+    const hit = await control.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return {
+        ok:
+          top !== null &&
+          (top === el || el.contains(top) || top.closest('label')?.contains(el) === true),
+        found:
+          top === null
+            ? 'nothing'
+            : `${top.tagName.toLowerCase()} ${top.textContent ?? ''}`.slice(0, 60),
+        box: `${String(Math.round(box.top))}-${String(Math.round(box.bottom))} of ${String(window.innerHeight)}`,
+      };
+    });
+    expect(
+      hit.ok,
+      `toggle ${String(i)} in View ▾ cannot be reached by a pointer: ${hit.found} at ${hit.box}`,
+    ).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('The plan command surface', () => {
@@ -543,15 +622,22 @@ test.describe('The plan command surface', () => {
       // Two since M4: the search field is 168 px below 1600, so LOOK is 1254 px in a 1264 px row
       // (`docs/specs/minimum-viewport/m4-measurement.md`). It was 3 with the 240 px field.
       1280: { max: 2 },
-      // The floor, measured at M0 (`docs/specs/minimum-viewport/m0-measurement.md` §1): four lines,
-      // each declared row wrapping once. M4 measured that this is arithmetic, not a defect: the four
-      // groups are 733, 513, 627 and 622 px in a 1008 px row, so no two share a line without a
-      // command losing its label (`m4-measurement.md`). The bound stays at the reading.
-      1024: { max: 4 },
+      // The floor, a **mouse**: two lines since toolbar-redesign M4 (SC-1). It was four
+      // (`docs/specs/minimum-viewport/m0-measurement.md` §1: the four groups were 733, 513, 627 and
+      // 622 px in a 1008 px row, so no two shared a line without losing a label) until M1 made four
+      // controls icon-only, M2 moved Summary, Float paths and Comments off the rows, and M4 moved
+      // Zoom, Fit and the Minimap to the diagram's corner: LOOK is 862 px and DO 955.7 in 1008
+      // (`m4-measurement.md`). Touch keeps four (OD-2), asserted in the coarse suite below.
+      1024: { max: 2 },
     };
-    // The DO row is one line at every width the epic is judged on. The floor is the exception M4
-    // owns (see above), so it is named here rather than passed by loosening the others.
-    const DO_ROW_MAX_LINES = (width: number): number => (width <= 1024 ? 2 : 1);
+    // Each declared row is one line at every width, the floor included (M4: two lines in total at
+    // 1024 is one for each row, so the old exception for the floor is gone).
+    const DO_ROW_MAX_LINES = 1;
+    // The 1024 bar: M0 §2 read a band of about 139 px at the floor; the bar is that reading plus the
+    // two pixels of sub-pixel rounding the other bars carry, not a round number above it.
+    const BAND_1024_MAX_PX = 141;
+    // SC-1: the diagram keeps at least this much canvas at 1024 × 600 on a mouse (M0 projection 362).
+    const CANVAS_1024_MIN_PX = 350;
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(400);
@@ -585,6 +671,7 @@ test.describe('The plan command surface', () => {
         const foot = document.querySelector('[data-activities-bar]');
         if (!foot) throw new Error('the activities row was not found — nothing to assert about');
         return {
+          canvas: document.querySelector('main canvas')?.getBoundingClientRect().height ?? 0,
           foot: foot.getBoundingClientRect().height,
           band: band.getBoundingClientRect().height,
           ...linesIn(deck),
@@ -610,17 +697,17 @@ test.describe('The plan command surface', () => {
         `the deck's controls sit on ${reading.lines} rows at ${viewport.width}`,
       ).toBeLessThanOrEqual(LINES[viewport.width]!.max);
 
-      // **Per row, since M4 declared them.** Each row is one line at every width the epic is judged
-      // on; below that the LOOK row is allowed a second line and the DO row is not, because a wrap
-      // inside a row is local — it can never move a command to the other row.
+      // **Per row, since M4 declared them.** Each row is one line at every width, the floor
+      // included (a wrap inside a row is local — it can never move a command to the other row, which
+      // is why the rows are asserted separately as well as in total).
       expect(
         reading.look.lines,
         `the LOOK row wraps to ${reading.look.lines} lines at ${viewport.width}`,
-      ).toBeLessThanOrEqual(viewport.width >= 1280 ? 1 : 2);
+      ).toBeLessThanOrEqual(1);
       expect(
         reading.do.lines,
         `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,
-      ).toBeLessThanOrEqual(DO_ROW_MAX_LINES(viewport.width));
+      ).toBeLessThanOrEqual(DO_ROW_MAX_LINES);
 
       // **Membership, and it is the assertion that carries M4's argument.** Line counts alone pass
       // against a build where a command has moved rows — which is exactly what flex wrapping did
@@ -638,6 +725,13 @@ test.describe('The plan command surface', () => {
       ).toBe(true);
       expect(reading.doIds, 'the authoring tools left the DO row').toContain('add-activity');
       expect(reading.lookIds, 'the search field left the LOOK row').toContain('search');
+      // Zoom, Fit and the Minimap live in the diagram's corner cluster (M4), not on the deck.
+      for (const moved of ['zoom-out', 'zoom-in', 'fit', 'minimap']) {
+        expect(
+          [...reading.lookIds, ...reading.doIds],
+          `${moved} is back on the deck at ${viewport.width}`,
+        ).not.toContain(moved);
+      }
       // **1920 and 1646 only, by design.** F1 names those two widths; at 1440 the header itself
       // wraps to two lines today (ADR-0112 D4's accepted state) because the pen cluster sits on
       // it, and `m0-measurement.md` §1 shows that row un-wrapping to one line at 1440 the moment
@@ -648,6 +742,17 @@ test.describe('The plan command surface', () => {
           reading.band,
           `the command band is ${reading.band} px at ${viewport.width} against a bar of ${BAND_MAX_PX}`,
         ).toBeLessThanOrEqual(BAND_MAX_PX);
+      }
+
+      if (viewport.width === 1024) {
+        expect(
+          reading.band,
+          `the command band is ${reading.band} px at the floor against a bar of ${BAND_1024_MAX_PX}`,
+        ).toBeLessThanOrEqual(BAND_1024_MAX_PX);
+        expect(
+          reading.canvas,
+          `the diagram has ${reading.canvas} px at the floor against a floor of ${CANVAS_1024_MIN_PX}`,
+        ).toBeGreaterThanOrEqual(CANVAS_1024_MIN_PX);
       }
 
       // **F7, the foot row, which had no gate until M7.** It was measured once by hand at M6 (51 px
@@ -769,6 +874,18 @@ test.describe('The plan command surface', () => {
         unreachable,
         `controls a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
       ).toEqual([]);
+
+      // The cluster at the diagram's corner (M4) is not under the deck's root, so it is swept on
+      // its own: four buttons, each a real target a pointer can reach over the canvas.
+      const cluster = await sweep(page, '[role="toolbar"][aria-label="Diagram viewport"]');
+      expect(
+        cluster.length,
+        `the cluster swept ${cluster.length} controls at ${viewport.width}`,
+      ).toBe(4);
+      expect(
+        cluster.filter((t) => !t.visible || t.w < MIN_TARGET || t.h < MIN_TARGET || !t.reachable),
+        `cluster controls below ${MIN_TARGET}×${MIN_TARGET} or unreachable at ${viewport.width}`,
+      ).toEqual([]);
     }
   });
 
@@ -795,7 +912,8 @@ test.describe('The plan command surface', () => {
     await expect(page.locator('[data-toolbar-item^="caption:"]')).toHaveCount(0);
     await expect(deck.getByRole('button', { name: /commands$/ })).toHaveCount(0);
     // The pinned positive: the groups themselves survive, named for AT.
-    for (const name of ['View', 'Find', 'Author', 'Plan']) {
+    // 'Panels' joined at toolbar-redesign M2-T2: ADR-0031 group 7 (`help`) is its own deck group.
+    for (const name of ['View', 'Find', 'Panels', 'Author', 'Plan']) {
       await expect(deck.getByRole('group', { name, exact: true })).toBeVisible();
     }
 
@@ -1092,6 +1210,573 @@ test.describe('The plan command surface', () => {
     await page.reload();
     await ensurePen(page);
   });
+
+  /**
+   * **The label rule on the deck** (toolbar-redesign M1, `docs/specs/toolbar-redesign/`).
+   *
+   * Four controls — Baseline overlay, Comments, Settings… and, since M2, Apply
+   * levelled dates… — are `labelVisibility: 'roomy'` (Resource view was the fifth until the M5
+   * review made it icon-only at every width, asserted below beside them): labelled when the deck is at least `--container-roomy`
+   * (79 rem, the deck's own width in a 1280 px window) and icon-only below it. Both halves are
+   * asserted, because a rule that only ever shows its label and one that only ever hides it are
+   * each green against half of this.
+   *
+   * **The deck IS the container, and that is asserted as geometry.** `@container` applies
+   * `contain: inline-size`, so putting it on anything that sizes to its content collapses the
+   * thing to nothing (`docs/UX_STANDARDS.md`, the container-query trap). jsdom has no layout, so the
+   * unit tier cannot ask; this reads the deck's width against the wrapper it sits in, at every cell.
+   *
+   * **Apply levelled dates… joined at M2** (D-l) as `'roomy-fine'`: under this fine pointer it
+   * follows the 79 rem rule like the others, and under a coarse pointer it is icon-only at every
+   * width (owner decision, 2026-10-09; asserted in the coarse deck case below). This case asserts
+   * no line count; `LINES` above does.
+   *
+   * Verified red by making `Deck` resolve against the `'toolbar'` surface (the labels stop going
+   * icon-only at 1024) and by removing `@container/deck` (the width assertion fails at every cell).
+   */
+  const ROOMY_ITEMS: readonly { id: string; label: string; description: string }[] = [
+    {
+      id: 'apply-levelling',
+      label: 'Apply levelled dates…',
+      description:
+        'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
+    },
+  ];
+
+  /**
+   * **Icon-only at every width** (`'never'`): Resource view (the M5 review) and Baseline overlay,
+   * Comments and Settings… (M6, owner decisions 2026-10-10). Each keeps its name in `aria-label` and
+   * its tooltip says what it does; none paints a word.
+   */
+  const ICON_ONLY_ITEMS = [
+    {
+      id: 'baseline-overlay',
+      label: 'Baseline overlay',
+      description: 'Draw the active baseline beside each bar',
+    },
+    {
+      id: 'comments',
+      label: 'Comments',
+      description: "Show the plan's comments beside the diagram",
+    },
+    {
+      id: 'calendar',
+      label: 'Settings…',
+      description: 'Calendar, critical path, progress, levelling and earned value',
+    },
+    {
+      id: 'resource-view',
+      label: 'Resource view',
+      description: 'Show resource loading under the diagram',
+    },
+  ] as const;
+
+  /**
+   * Resource view's tooltip is the only thing naming it at any width (`'never'`), so the tooltip
+   * cases below walk it with the roomy controls even though its label never shows.
+   */
+  const TIPPED_ITEMS = [...ROOMY_ITEMS, ...ICON_ONLY_ITEMS] as const;
+
+  const escapeForRegExp = (text: string): string => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
+
+  /** 79 rem at the browser's default 16 px — the token's value, restated here as the oracle. */
+  const ROOMY_PX = 79 * 16;
+
+  const labelReading = async (): Promise<{
+    deckWidth: number;
+    wrapperInner: number;
+    containerType: string;
+    containerName: string;
+    items: { id: string; labelWidth: number | null }[];
+  }> =>
+    page.evaluate((specs) => {
+      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      if (!deck) throw new Error('the deck was not found — nothing to assert about');
+      const wrapper = deck.parentElement!;
+      const wrapperStyle = getComputedStyle(wrapper);
+      const deckStyle = getComputedStyle(deck);
+      return {
+        deckWidth: deck.getBoundingClientRect().width,
+        wrapperInner:
+          wrapper.clientWidth -
+          parseFloat(wrapperStyle.paddingLeft) -
+          parseFloat(wrapperStyle.paddingRight),
+        containerType: deckStyle.containerType,
+        containerName: deckStyle.containerName,
+        items: specs.map(({ id, label }) => {
+          const control = deck.querySelector(`[data-toolbar-item="${id}"]`);
+          const text = control
+            ? [...control.querySelectorAll('span')].find(
+                (s) => s.textContent?.trim() === label && s.getAttribute('aria-hidden') !== 'true',
+              )
+            : undefined;
+          return { id, labelWidth: text ? text.getBoundingClientRect().width : null };
+        }),
+      };
+    }, ROOMY_ITEMS);
+
+  test('the roomy control is labelled from 79 rem and icon-only below it, and the icon-only four never paint a word', async () => {
+    test.setTimeout(240_000);
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const reading = await labelReading();
+      const at = `${String(viewport.width)} px`;
+
+      expect(reading.containerType, `the deck is not an inline-size container at ${at}`).toBe(
+        'inline-size',
+      );
+      expect(reading.containerName).toBe('deck');
+      expect(
+        Math.abs(reading.deckWidth - reading.wrapperInner),
+        `the deck is ${String(reading.deckWidth)} px in a ${String(reading.wrapperInner)} px wrapper at ${at}`,
+      ).toBeLessThanOrEqual(1);
+
+      const roomy = reading.deckWidth >= ROOMY_PX;
+      // The pinned positives: both sides of the threshold are exercised by this list of widths.
+      expect(roomy, `${at} should be ${viewport.width >= 1280 ? 'roomy' : 'narrow'}`).toBe(
+        viewport.width >= 1280,
+      );
+      // The icon-only four never paint a word (`'never'`): their names are `aria-label` and `sr-only`.
+      for (const spec of ICON_ONLY_ITEMS) {
+        const control = page
+          .getByRole('toolbar', { name: 'Plan commands' })
+          .locator(`[data-toolbar-item="${spec.id}"]`);
+        await expect(control, `${spec.label} lost its name at ${at}`).toHaveAccessibleName(
+          spec.label,
+        );
+        expect(
+          await control.evaluate(
+            (el, label) =>
+              [...el.querySelectorAll('span')].filter((s) => s.textContent?.trim() === label)
+                .length,
+            spec.label,
+          ),
+          `${spec.label} paints its label at ${at}`,
+        ).toBe(0);
+      }
+      for (const spec of ROOMY_ITEMS) {
+        const item = reading.items.find((i) => i.id === spec.id)!;
+        expect(item.labelWidth, `${spec.id} has no label in the tree at ${at}`).not.toBeNull();
+        if (roomy) {
+          expect(item.labelWidth!, `${spec.id} lost its label at ${at}`).toBeGreaterThan(8);
+        } else {
+          // `sr-only` is 1 px wide: present for the name, absent to the eye.
+          expect(item.labelWidth!, `${spec.id} still shows its label at ${at}`).toBeLessThanOrEqual(
+            2,
+          );
+        }
+        await expect(
+          page
+            .getByRole('toolbar', { name: 'Plan commands' })
+            .locator(`[data-toolbar-item="${spec.id}"]`),
+        ).toHaveAccessibleName(spec.label);
+      }
+    }
+  });
+
+  test('a roomy control shows its tooltip on hover and on focus, and Escape dismisses it', async () => {
+    test.setTimeout(240_000);
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const tooltip = page.locator('[data-tooltip]');
+    // One icon-only cell (1024) and one labelled cell (1646): the tooltip mounts in both, because
+    // a CSS rule decides whether the label shows and a portalled tooltip cannot follow it.
+    for (const viewport of [WIDTHS[4]!, WIDTHS[1]!]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      for (const spec of TIPPED_ITEMS) {
+        const control = deck.locator(`[data-toolbar-item="${spec.id}"]`);
+        const shaded = (await control.getAttribute('aria-disabled')) === 'true';
+        // A shaded control's tooltip leads with its reason; a live one carries the description.
+        const expected = shaded
+          ? new RegExp('^' + escapeForRegExp(spec.label) + ' — .+')
+          : `${spec.label} — ${spec.description}`;
+        const at = `${spec.id} at ${String(viewport.width)} px (${shaded ? 'shaded' : 'live'})`;
+
+        await page.mouse.move(2, 2);
+        await expect(tooltip, `a tooltip is left open before ${at}`).toHaveCount(0);
+
+        // Hover.
+        await control.hover();
+        await expect(tooltip, `no tooltip on hover: ${at}`).toBeVisible();
+        await expect(tooltip, `wrong tooltip on hover: ${at}`).toHaveText(expected);
+        await page.mouse.move(2, 2);
+        await expect(tooltip).toHaveCount(0);
+
+        // Focus, and Escape with focus unmoved.
+        await control.focus();
+        await expect(tooltip, `no tooltip on focus: ${at}`).toBeVisible();
+        await expect(tooltip, `wrong tooltip on focus: ${at}`).toHaveText(expected);
+        await page.keyboard.press('Escape');
+        await expect(tooltip, `Escape did not dismiss: ${at}`).toHaveCount(0);
+        await expect(control, `Escape moved focus: ${at}`).toBeFocused();
+        await control.blur();
+      }
+    }
+  });
+
+  /**
+   * **The plan's identity row** (toolbar-redesign M2-T1): Plan summary and Edit plan details, one
+   * named toolbar beside the plan's name in the header.
+   *
+   * What only a browser can say: that the popover's focus really comes back to an icon button across
+   * a portal, that the native `<dialog>` Edit plan opens hands focus back to the control that opened
+   * it, and that the row is ONE Tab stop. The unit tier asserts the ARIA state; none of those three
+   * exist in jsdom.
+   *
+   * Verified red by restoring the deck's `summary` item (the role lookup then finds no "Plan
+   * details" toolbar) and by removing the popover's focus return (the focus assertion fails).
+   */
+  test('the identity row: Plan summary and Edit plan details open, close and give focus back', async () => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const details = page.getByRole('toolbar', { name: 'Plan details', exact: true });
+    await expect(details).toBeVisible();
+
+    // One Tab stop: the roving model leaves exactly one of the two controls tabbable.
+    await expect(details.locator('[data-toolbar-focusable][tabindex="0"]')).toHaveCount(1);
+
+    const summary = details.getByRole('button', { name: 'Plan summary', exact: true });
+    await expect(summary).toHaveAttribute('aria-haspopup', 'dialog');
+    await expect(summary).toHaveAttribute('aria-expanded', 'false');
+    await summary.click();
+    await expect(summary).toHaveAttribute('aria-expanded', 'true');
+    const panel = page.getByRole('dialog', { name: 'Plan summary', exact: true });
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(summary).toBeFocused();
+
+    // By keyboard alone: Enter opens it and Escape gives it back, as the APG disclosure says.
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(summary).toBeFocused();
+
+    const edit = details.getByRole('button', { name: 'Edit plan details', exact: true });
+    await expect(edit).toBeVisible();
+    await edit.click();
+    const dialog = page.getByRole('dialog', { name: 'Edit plan details' });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(edit).toBeFocused();
+  });
+
+  /**
+   * **Panels** (toolbar-redesign M2-T2): Legend, Resource view and Comments, each a toggle that
+   * reports `aria-pressed`, and none of which may leave focus on `<body>` — a revealed panel that
+   * takes focus (the resource strip does, ADR-0049) and a closed one that unmounts what had it are
+   * the two ways a keyboard planner is left nowhere (WCAG 2.4.3).
+   */
+  test('the Panels group: each toggle reports aria-pressed and focus is never left on the body', async () => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const panels = deck.getByRole('group', { name: 'Panels', exact: true });
+    await expect(panels).toBeVisible();
+    const onBody = (): Promise<boolean> =>
+      page.evaluate(() => document.activeElement === document.body);
+
+    for (const id of ['legend', 'resource-view', 'comments']) {
+      const toggle = panels.locator(`[data-toolbar-item="${id}"]`);
+      await expect(toggle, `${id} is not in the Panels group`).toBeVisible();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(await onBody(), `focus was left on <body> after opening ${id}`).toBe(false);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(await onBody(), `focus was left on <body> after closing ${id}`).toBe(false);
+    }
+  });
+
+  /**
+   * **One trailing group per line, and DOM order is visual order** (R4, US-5 at ≥ 1280).
+   *
+   * Panels closes the LOOK line and Plan closes the DO line, each pushed there by a single
+   * `ml-auto`. Asserted as geometry — the group's right edge meets its row's — because a class
+   * string cannot say the margin is doing anything. And the walk a keyboard takes (document order)
+   * is compared with the order the eye reads (left to right within a line), because a flex item
+   * moved with `order` or an absolutely positioned one would pass every other assertion here.
+   */
+  test('Panels trails LOOK and Plan trails DO from 1280 up, and the DOM order is the reading order', async () => {
+    test.setTimeout(180_000);
+    for (const viewport of WIDTHS.filter((v) => v.width >= 1280)) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(400);
+      const reading = await page.evaluate(() => {
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!deck) throw new Error('the deck was not found — nothing to assert about');
+        return ['look', 'do'].map((row) => {
+          const rowEl = deck.querySelector(`[data-deck-row="${row}"]`)!;
+          const rowRight = rowEl.getBoundingClientRect().right;
+          const groups = [...rowEl.querySelectorAll(':scope > [role="group"]')];
+          const last = groups[groups.length - 1]!;
+          const items = [...rowEl.querySelectorAll('[data-toolbar-item]')].map((el) => {
+            const box = el.getBoundingClientRect();
+            return { id: el.getAttribute('data-toolbar-item') ?? '', top: box.top, left: box.left };
+          });
+          // Reading order: line by line (4 px tolerance, as the line counter does), then leftwards.
+          const read = [...items].sort((a, b) =>
+            Math.abs(a.top - b.top) > 4 ? a.top - b.top : a.left - b.left,
+          );
+          return {
+            row,
+            lastGroup: last.getAttribute('aria-label'),
+            gapToRowEnd: rowRight - last.getBoundingClientRect().right,
+            dom: items.map((i) => i.id),
+            visual: read.map((i) => i.id),
+          };
+        });
+      });
+      for (const r of reading) {
+        const at = `${r.row} at ${String(viewport.width)}`;
+        expect(r.lastGroup, `${at}: the closing group`).toBe(r.row === 'look' ? 'Panels' : 'Plan');
+        expect(
+          Math.abs(r.gapToRowEnd),
+          `${at}: ${String(r.lastGroup)} is ${String(r.gapToRowEnd)} px short of the row's end`,
+        ).toBeLessThanOrEqual(1);
+        expect(r.visual, `${at}: DOM order is not the reading order`).toEqual(r.dom);
+      }
+    }
+  });
+
+  /**
+   * **View ▾ fits the floor** (toolbar-redesign M2-T3, SC-13): at 1024 × 600 the panel is at most
+   * 420 px (70 % of the viewport) with no inner scroll in its default, folded state, and every
+   * toggle is still reachable once the folded sections are open.
+   *
+   * It measured 584 of 600 with 617 px of content before M2 — an inner scroll with controls below
+   * the fold. Verified red against that panel by restoring the single column (the height assertion
+   * fails at 584) and by removing the disclosures (the 420 bar fails at about 480).
+   */
+  test('View ▾ is at most 420 px at the floor with no inner scroll, and every toggle is reachable', async () => {
+    test.setTimeout(120_000);
+    await assertViewPanelFitsTheFloor(page);
+  });
+
+  test('View ▾ holds the same bar in the Gantt, where Columns starts folded too', async () => {
+    test.setTimeout(120_000);
+    await assertViewPanelFitsTheFloor(page, 'Gantt');
+  });
+
+  /**
+   * **A roomy control's tooltip follows focus and never traps it** (toolbar-redesign M2, the
+   * accessibility reviewer's suggestion at M1): Tab into the deck, arrow across the controls, and
+   * at every stop the tooltip belongs to the focused control, at most one is open, Escape dismisses
+   * it with focus unmoved, blur closes it, and Tab leaves the deck.
+   *
+   * Run at a narrow deck (1024, labels hidden: the tooltip is the only name on screen) and a roomy
+   * one (1280, labels showing: it must still mount). jsdom has no focus ring and no portal
+   * stacking, which is the whole of this case.
+   */
+  test('Tab into the deck and arrow across a roomy control: the tooltip follows focus and nothing traps it', async () => {
+    test.setTimeout(240_000);
+    const tooltip = page.locator('[data-tooltip]');
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    for (const viewport of [WIDTHS[4]!, WIDTHS[3]!]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const at = String(viewport.width);
+
+      // Tab in from the control before the deck: the "Plan view" switch.
+      await page
+        .getByRole('toolbar', { name: 'Plan view' })
+        .getByRole('button', { name: 'Gantt', exact: true })
+        .focus();
+      let entered = false;
+      for (let i = 0; i < 4 && !entered; i += 1) {
+        await page.keyboard.press('Tab');
+        entered = await page.evaluate(
+          () =>
+            document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label') ===
+            'Plan commands',
+        );
+      }
+      expect(entered, `Tab never entered the deck at ${at}`).toBe(true);
+      await page.keyboard.press('Home');
+
+      const visited: string[] = [];
+      for (let i = 0; i < 60; i += 1) {
+        const here = await page.evaluate(() => {
+          const active = document.activeElement;
+          return {
+            id: active?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item') ?? null,
+            isField: active?.tagName === 'INPUT',
+          };
+        });
+        if (here.id !== null && !visited.includes(here.id)) visited.push(here.id);
+        // A tooltip is only ever the focused control's, and at most one is open application-wide.
+        expect(
+          await tooltip.count(),
+          `more than one tooltip is open on ${String(here.id)}`,
+        ).toBeLessThanOrEqual(1);
+        const tipped = here.id === null ? undefined : TIPPED_ITEMS.find((i) => i.id === here.id);
+        if (tipped !== undefined) {
+          await expect(tooltip, `no tooltip on focus of ${here.id} at ${at}`).toBeVisible();
+          await expect(tooltip).toContainText(`${tipped.label} —`);
+          // Escape dismisses it; focus does not move.
+          await page.keyboard.press('Escape');
+          await expect(tooltip, `Escape did not dismiss the tooltip on ${here.id}`).toHaveCount(0);
+          await expect(deck.locator(`[data-toolbar-item="${here.id}"]`)).toBeFocused();
+        }
+        await page.keyboard.press(here.isField ? 'ArrowDown' : 'ArrowRight');
+      }
+      expect(visited, `the walk never reached Resource view at ${at}`).toContain('resource-view');
+      expect(visited, `the walk never reached Comments at ${at}`).toContain('comments');
+      // Every roomy control the deck carries is walked and tipped, not the two that were first.
+      for (const spec of TIPPED_ITEMS) {
+        expect(visited, `the walk never reached ${spec.id} at ${at}`).toContain(spec.id);
+      }
+
+      // The identity row is its own toolbar and its own Tab stop; its two icon-only controls name
+      // themselves by tooltip on focus too.
+      const identity = page.getByRole('toolbar', { name: 'Plan details', exact: true });
+      for (const label of ['Plan summary', 'Edit plan details']) {
+        await identity.getByRole('button', { name: label }).focus();
+        await expect(tooltip, `no tooltip on focus of ${label} at ${at}`).toBeVisible();
+        await expect(tooltip).toContainText(label);
+      }
+
+      // Blur closes it: land on a roomy control, then leave the deck with Tab.
+      await deck.locator('[data-toolbar-item="comments"]').focus();
+      await expect(tooltip).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(tooltip, `the tooltip outlived its control's focus at ${at}`).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () =>
+            document.activeElement?.closest('[role="toolbar"]')?.getAttribute('aria-label') ===
+            'Plan commands',
+        ),
+        `Tab did not leave the deck at ${at}: it is a focus trap`,
+      ).toBe(false);
+    }
+  });
+
+  /**
+   * **WCAG 2.5.3 Label in Name, swept over every control on the deck** (toolbar-redesign M1, US-2).
+   *
+   * A visible label must be contained in the control's accessible name. It is asked of the *painted*
+   * label: a `'roomy'` label that has gone `sr-only` is not visible, so the cell where it is hidden
+   * is exactly where a regression would hide — the name still holds the words, and the question is
+   * whether the words the eye reads are in it. A text node counts as visible when its element has a
+   * real box and no `aria-hidden` ancestor, which excludes the `sr-only` reason and description
+   * spans a shaded control carries.
+   */
+  test('every visible label on the deck is contained in its accessible name, at every width', async () => {
+    test.setTimeout(240_000);
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const reading = await page.evaluate(() => {
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!deck) throw new Error('the deck was not found — nothing to assert about');
+        const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim();
+        const visibleText = (root: Element): string => {
+          const parts: string[] = [];
+          const walk = (node: Node): void => {
+            for (const child of node.childNodes) {
+              if (child.nodeType === Node.TEXT_NODE) {
+                const text = (child.textContent ?? '').trim();
+                const owner = child.parentElement;
+                if (!text || !owner || owner.closest('[aria-hidden="true"]')) continue;
+                const box = owner.getBoundingClientRect();
+                if (box.width > 2 && box.height > 2) parts.push(text);
+              } else if (child.nodeType === Node.ELEMENT_NODE) {
+                walk(child);
+              }
+            }
+          };
+          walk(root);
+          return parts.join(' ');
+        };
+        const controls = [...deck.querySelectorAll('[data-toolbar-focusable]')];
+        const bad: { id: string; visible: string; name: string }[] = [];
+        let withText = 0;
+        for (const el of controls) {
+          const visible = visibleText(el);
+          if (!visible) continue;
+          withText += 1;
+          const name = el.getAttribute('aria-label') ?? el.textContent ?? '';
+          if (!norm(name).includes(norm(visible)))
+            bad.push({ id: el.getAttribute('data-toolbar-item') ?? '(unnamed)', visible, name });
+        }
+        return { controls: controls.length, withText, bad };
+      });
+      expect(reading.controls, `no controls at ${String(viewport.width)}`).toBeGreaterThan(15);
+      // A sweep that found no labelled control would pass vacuously.
+      expect(
+        reading.withText,
+        `no visible label found at ${String(viewport.width)}`,
+      ).toBeGreaterThan(5);
+      expect(
+        reading.bad,
+        `a visible label is missing from its name at ${String(viewport.width)}: ${JSON.stringify(reading.bad)}`,
+      ).toEqual([]);
+    }
+  });
+
+  /**
+   * **Text-only 200 % at 2560 × 1440** (SC-7, toolbar-redesign M1) — the browser's *default* font
+   * size doubled through the DevTools protocol, which is what a reader who set "Font size: Very
+   * large" has, and which a CSS `html { font-size }` does not reproduce: rem media queries and rem
+   * container queries read the browser default, not the stylesheet. Root font size is asserted to
+   * be 32 px first, because a failed `Page.setFontSizes` is silent and yields a green run about the
+   * wrong cell (the M0 harness records the same guard).
+   *
+   * 2560 px of CSS width is 80 rem here, so the deck (2544 px) is 79.5 rem — just over the roomy
+   * width — and the labels show; every control must still be reachable. The 1280 × 800 text-only
+   * cell (40 rem) is M3's: the band takes 88 % of that window today.
+   */
+  test('at text-only 200 % on a 2560 px window every deck control is hit-testable and roomy labels show', async () => {
+    test.setTimeout(240_000);
+    const cdp = await page.context().newCDPSession(page);
+    const setFonts = async (scale: 1 | 2): Promise<void> => {
+      await cdp.send('Page.setFontSizes', {
+        fontSizes: {
+          standard: 16 * scale,
+          fixed: 13 * scale,
+          serif: 16 * scale,
+          sansSerif: 16 * scale,
+        },
+      } as never);
+    };
+    try {
+      await setFonts(2);
+      await page.setViewportSize({ width: 2560, height: 1440 });
+      await page.goto(page.url());
+      await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
+        timeout: 30_000,
+      });
+      await page.waitForTimeout(700);
+      const rootPx = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+      expect(rootPx, 'Page.setFontSizes did not move the root font size').toBe('32px');
+
+      const targets = await sweep(page);
+      expect(targets.length, 'no controls swept at 200 % text').toBeGreaterThan(15);
+      expect(
+        targets.filter((t) => !t.visible || !t.reachable),
+        'a deck control cannot be reached at 200 % text',
+      ).toEqual([]);
+
+      const reading = await labelReading();
+      expect(reading.deckWidth / 32, 'the deck should be 79.5 rem here').toBeGreaterThanOrEqual(79);
+      for (const item of reading.items) {
+        expect(item.labelWidth!, `${item.id} lost its label at 200 % text`).toBeGreaterThan(8);
+      }
+    } finally {
+      await setFonts(1);
+      await cdp.detach();
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await page.goto(page.url());
+      await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+      await ensurePen(page);
+    }
+  });
 });
 
 /**
@@ -1178,6 +1863,12 @@ interface CoarseSurface {
 
 const COARSE_SURFACES: readonly CoarseSurface[] = [
   { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
+  // The cluster at the diagram's corner (toolbar-redesign M4): four buttons, swept where they live.
+  {
+    name: 'Diagram viewport cluster',
+    root: '[role="toolbar"][aria-label="Diagram viewport"]',
+    atLeast: 3,
+  },
   { name: 'plan header', root: 'header', atLeast: 5 },
   // `minWidth` because below `lg` the pinned Explorer is not rendered at all — it becomes the
   // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
@@ -1340,10 +2031,18 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       if (!(await grid.isVisible())) await openGanttExpanded(page);
       return;
     }
-    if (await grid.isVisible()) {
+    // By the view switch's own pressed state, not by the grid being visible: at the floor an
+    // expanded activities panel hides the Gantt behind "Gantt hidden. Collapse to return.", the grid
+    // reads as not visible, and the view is still the Gantt — which left the diagram (and so the
+    // viewport cluster, toolbar-redesign M4) unmounted for the surfaces swept after it.
+    const ganttSegment = page.locator('[data-toolbar-item="view-gantt"]').first();
+    if ((await ganttSegment.getAttribute('aria-pressed')) === 'true') {
       await page.getByRole('button', { name: 'Diagram', exact: true }).click();
       await expect(grid).toBeHidden();
     }
+    // And a panel left expanded takes the stage's place at the floor; the diagram is what is swept.
+    const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+    if (await collapse.isVisible()) await collapse.click();
   }
 
   /**
@@ -1416,6 +2115,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         await showView(surface.view === 'gantt' ? 'gantt' : 'tsld');
         if (surface.activities) await showActivities(page);
         const exempt = surface.view === 'gantt' ? ganttExempt() : EXEMPT_WITHIN;
+        // A surface that mounts on a view switch (the cluster appears when the diagram does, through a
+        // portal slot published a commit later) is awaited rather than raced.
+        await page.locator(surface.root).first().waitFor({ state: 'attached' });
         let targets = await sweep(
           page,
           surface.root,
@@ -1583,6 +2285,86 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       `the 'row-select' exemption covers a control that already clears ${HOUSE_TARGET} at ${width}: delete the exemption`,
     ).toBe(true);
   }
+
+  /**
+   * **A coarse 1024 × 600 cell keeps its line bound, and the roomy labels follow the same width
+   * rule** (toolbar-redesign M1). The owner accepted four deck lines on touch at exactly 1024
+   * (OD-2: 44 px targets stay, ADR-0183), so the bound here is the reading M0 took and not the fine
+   * pointer's: `{ max: 4 }`. It is asserted next to a pinned positive — a deck that rendered nothing
+   * is one line tall and passes any bound — and next to the label rule, because a touch cell is
+   * where the deck is tightest and where a label that should have gone icon-only would show.
+   *
+   * Two lines on touch is **not** asserted anywhere in M1: M0 measured DO 143.7 px over at this
+   * cell whatever is compacted, so that is a later milestone's claim, if ever.
+   */
+  test('a coarse 1024 cell stays within four deck lines, Apply levelled dates… is icon-only, and Comments never paints a word', async () => {
+    test.setTimeout(120_000);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(
+      pointer,
+      'this context is not a coarse pointer — the cell would measure the wrong thing',
+    ).toBe('coarse');
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await showView('tsld');
+      await page.waitForTimeout(500);
+      const reading = await page.evaluate(() => {
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!deck) throw new Error('the deck was not found — nothing to assert about');
+        const tops = [...deck.querySelectorAll('[data-toolbar-item]')]
+          .map((el) => el.getBoundingClientRect().top)
+          .sort((a, b) => a - b);
+        let lines = 0;
+        let last = Number.NEGATIVE_INFINITY;
+        for (const t of tops) {
+          if (t - last > 4) lines += 1;
+          last = t;
+        }
+        const labelOf = (id: string, text: string): number | null => {
+          const control = deck.querySelector(`[data-toolbar-item="${id}"]`);
+          const span = control
+            ? [...control.querySelectorAll('span')].find((s) => s.textContent?.trim() === text)
+            : undefined;
+          return span ? span.getBoundingClientRect().width : null;
+        };
+        return {
+          applyLabelWidth: labelOf('apply-levelling', 'Apply levelled dates…'),
+          lines,
+          controls: tops.length,
+          deckWidth: deck.getBoundingClientRect().width,
+          commentsLabelWidth: labelOf('comments', 'Comments'),
+        };
+      });
+      const at = String(viewport.width);
+      // Owner decision 2026-10-09: Apply levelled dates… is `'roomy-fine'` — the word never shows
+      // under a touch pointer, so touch keeps its row at 1280. In the tree (the name), 1 px to the eye.
+      expect(
+        reading.applyLabelWidth,
+        `Apply levelled dates… has no label in the tree at ${at}`,
+      ).not.toBeNull();
+      expect(
+        reading.applyLabelWidth!,
+        `Apply levelled dates… shows its word under touch at ${at}`,
+      ).toBeLessThanOrEqual(2);
+      expect(reading.controls, `no controls in the deck at ${at}`).toBeGreaterThan(15);
+      expect(
+        reading.lines,
+        `the coarse deck sits on ${String(reading.lines)} lines at ${at}`,
+      ).toBeLessThanOrEqual(viewport.width >= 1646 ? 2 : 4);
+      // Comments is icon-only at every width (`'never'`, M6): no painted label in the tree at all, at
+      // either side of 79 rem. Its name is the `aria-label`, asserted by the fine-pointer case above.
+      expect(reading.commentsLabelWidth, `Comments paints a label under touch at ${at}`).toBeNull();
+    }
+  });
+
+  /** **View ▾ at the floor under a finger too** — 44 px rows cost it height, and SC-13 holds on both. */
+  test('View ▾ is at most 420 px at the floor with no inner scroll, under a coarse pointer', async () => {
+    test.setTimeout(120_000);
+    await showView('tsld');
+    await assertViewPanelFitsTheFloor(page);
+  });
 
   /**
    * **The list pages' `⋯`** (`RowActionsMenu`, six tables; Clients is the one swept). The loop above

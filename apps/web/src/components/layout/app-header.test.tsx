@@ -101,7 +101,7 @@ describe('header layout (feature-spec.md §4.9)', () => {
     );
     const header = screen.getByRole('banner');
     const brand = screen.getByText('SchedulePoint');
-    const orgSwitcher = screen.getByLabelText('Active organisation');
+    const orgSwitcher = screen.getByText('Acme Co');
     const account = screen.getByRole('button', { name: /Account:/ });
 
     // DOCUMENT_POSITION_FOLLOWING (4) means the argument comes AFTER the node it's called on.
@@ -120,7 +120,7 @@ describe('header layout (feature-spec.md §4.9)', () => {
       <AppHeaderRow identitySlotRef={() => undefined} modeSlotRef={() => undefined} />,
     );
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
-    expect(screen.getByLabelText('Active organisation')).toBeInTheDocument();
+    expect(screen.getByText('Acme Co')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Account:/ })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
   });
@@ -139,11 +139,13 @@ describe('header layout (feature-spec.md §4.9)', () => {
     }
   });
 
-  it('caps the org switcher width so a long org name shifts the centre by a bounded amount', () => {
+  it('caps the org switcher width at a named token so a long org name shifts the centre by a bounded amount', () => {
     renderWithTheme(
       <AppHeaderRow identitySlotRef={() => undefined} modeSlotRef={() => undefined} />,
     );
-    expect(screen.getByLabelText('Active organisation')).toHaveClass('max-w-[12rem]', 'truncate');
+    const name = screen.getByText('Acme Co');
+    expect(name).toHaveClass('truncate');
+    expect(name.parentElement).toHaveClass('max-w-org-switcher');
   });
 });
 

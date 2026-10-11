@@ -15,7 +15,7 @@ import { formatCalendarDate } from '@/lib/format-date';
  * Moved as a component rather than reimplemented in the header, so the states below cannot drift
  * from what shipped: a **loading placeholder** (the slot must not flicker in and out), and
  * **nothing at all** when the plan has not been calculated or the load failed — the full states
- * live in `Summary ▾`, which reuses the same `ScheduleSummaryStrip`, so this stays a glance and
+ * live in `Plan summary`, which reuses the same `ScheduleSummaryStrip`, so this stays a glance and
  * never becomes a second error surface.
  *
  * It now lives beside `ScheduleSummaryStrip` rather than inside `use-tsld-toolbar-context.tsx`,

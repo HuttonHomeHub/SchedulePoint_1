@@ -1,5 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
+import { pickAddKind } from '../e2e-support/toolbar';
+
 /**
  * Journey helpers for the flag-ON **External-Guest per-plan share links** suite
  * (`VITE_GUEST_SHARE_LINKS`, ADR-0051 F-M4). The onboarding + client/project/plan helpers and the
@@ -73,9 +75,9 @@ export async function drawActivity(
   pos: { x: number; y: number },
 ): Promise<void> {
   // The Add control is a true split button (ADR-0064 T3): its primary region arms the tool, and the
-  // caret — located here by its `Activity type: <kind>` label — opens the kind menu.
-  await page.getByRole('button', { name: /^Activity type:/ }).click();
-  await page.getByRole('menuitemradio', { name: kind }).click();
+  // caret — located here by its `Activity type: <kind>` label — opens the kind menu. A milestone
+  // kind is a button of its own on a wide bar (toolbar-redesign M5); `pickAddKind` finds either.
+  await pickAddKind(page, kind);
   await canvas(page).click({ position: pos });
   const form = page.getByRole('form', { name: 'Name the new activity' });
   await form.getByLabel('Name').fill(name);

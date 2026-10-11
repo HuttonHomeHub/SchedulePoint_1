@@ -61,6 +61,7 @@ export function PlanStandingRow({
 
   return (
     <ListRow
+      align="baseline"
       primary={
         <>
           <RowSubject
@@ -73,13 +74,7 @@ export function PlanStandingRow({
                 {standing.planName}
               </Link>
             }
-            badge={
-              standing.status === 'DRAFT' ? (
-                <Badge size="sm" className="shrink-0">
-                  Draft
-                </Badge>
-              ) : null
-            }
+            badge={standing.status === 'DRAFT' ? <Badge size="sm">Draft</Badge> : null}
             context={`${standing.projectName} · ${standing.clientName}`}
           />
           <p

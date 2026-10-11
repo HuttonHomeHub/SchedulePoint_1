@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAMP_MARGIN, clampAnchor, portalTarget } from './overlay-position';
+import { CLAMP_MARGIN, clampAnchor, portalTarget, useMeasuredBox } from './overlay-position';
 
 /**
  * `clampAnchor`'s boundary arithmetic, covered at the unit tier for the first time — TECH_DEBT
@@ -61,5 +62,56 @@ describe('portalTarget', () => {
     expect(portalTarget()).toBe(inner);
     outer.remove();
     inner.remove();
+  });
+});
+
+/**
+ * **An open overlay is re-measured when its content changes size** (toolbar-redesign M2-T3).
+ *
+ * `useMeasuredBox` measured on open and never again, which was right while every overlay had the
+ * size it opened with. View ▾'s folded sections broke that: unfolding one at 1024 x 600 grew the
+ * panel, the position computed for the shorter box left its bottom below the viewport, and the last
+ * controls could not be reached — found by `command-surface.spec.ts`'s "every toggle is reachable".
+ * jsdom has no layout, so this drives the observer by hand: a size change delivered to the observer
+ * must reach the returned box.
+ *
+ * Verified red by deleting the observer: the box stays at its opening height.
+ */
+describe('useMeasuredBox', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('follows the element when it resizes while open, and stops following when it closes', () => {
+    let deliver: () => void = () => {
+      throw new Error('no observer was created');
+    };
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          deliver = callback;
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect = disconnect;
+      },
+    );
+    let height = 300;
+    const el = document.createElement('div');
+    el.getBoundingClientRect = () => ({ width: 200, height }) as DOMRect;
+    const ref = { current: el };
+
+    const { result, rerender } = renderHook(
+      ({ open }: { open: boolean }) => useMeasuredBox(ref, 'anchor', open),
+      { initialProps: { open: true } },
+    );
+    expect(result.current).toEqual({ width: 200, height: 300 });
+
+    height = 520;
+    act(() => deliver());
+    expect(result.current).toEqual({ width: 200, height: 520 });
+
+    rerender({ open: false });
+    expect(disconnect).toHaveBeenCalled();
   });
 });

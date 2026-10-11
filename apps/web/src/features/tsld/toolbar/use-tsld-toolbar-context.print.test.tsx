@@ -374,15 +374,14 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
     // Every prop the outer memo lists is hoisted and created ONCE, so only `dependencies.data`
     // moves across the re-render — an inline `vi.fn()` inside the render callback would be a NEW
     // function on every call and would (correctly) invalidate the memo for an unrelated reason,
-    // masking exactly the defect this case exists to isolate. The four `useTsldToolbarContext`
-    // no-op DEFAULTS (`toggleFloatPaths`/`toggleHealthCheck`/`toggleRevisionCompare`/
-    // `setPlanView`) are exactly such a source when left implicit — a fresh `() => {}` is minted
-    // on every render the prop is omitted from — so all four are passed explicitly here too.
+    // masking exactly the defect this case exists to isolate. The three `useTsldToolbarContext`
+    // no-op DEFAULTS (`toggleHealthCheck`/`toggleRevisionCompare`/`setPlanView`)
+    // are exactly such a source when left implicit — a fresh `() => {}` is minted on every render
+    // the prop is omitted from — so all three are passed explicitly here too.
     const openDialog = vi.fn();
     const legend = { open: false, toggle: vi.fn() };
     const minimap = { open: false, toggle: vi.fn() };
     const revealComments = vi.fn();
-    const toggleFloatPaths = vi.fn();
     const toggleHealthCheck = vi.fn();
     const toggleRevisionCompare = vi.fn();
     const setPlanView = vi.fn();
@@ -396,7 +395,6 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
           legend,
           minimap,
           revealComments,
-          toggleFloatPaths,
           toggleHealthCheck,
           toggleRevisionCompare,
           setPlanView,
@@ -435,8 +433,8 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
  * stabilised `dependencies` local instead of `model.dependencies`).
  *
  * **Isolated from two OTHER identity confounds M0 found the same way it found E12's mask**
- * (`m0-measurement.md`): the four `useTsldToolbarContext` no-op parameter DEFAULTS
- * (`toggleFloatPaths`/`toggleHealthCheck`/`toggleRevisionCompare`/`setPlanView`), each a fresh
+ * (`m0-measurement.md`): the three `useTsldToolbarContext` no-op parameter DEFAULTS
+ * (`toggleHealthCheck`/`toggleRevisionCompare`/`setPlanView`), each a fresh
  * `() => {}` on every render the prop is omitted from; and `useRecalculateCommand`'s mock, which
  * returned a new `{ isPending, run }` literal per call. Both are unconditional churn sources —
  * present whether or not E13 exists — so left uncontrolled this case would fail for THREE
@@ -467,7 +465,6 @@ describe('useTsldToolbarContext — context identity against a REAL query result
     const legend = { open: false, toggle: vi.fn() };
     const minimap = { open: false, toggle: vi.fn() };
     const revealComments = vi.fn();
-    const toggleFloatPaths = vi.fn();
     const toggleHealthCheck = vi.fn();
     const toggleRevisionCompare = vi.fn();
     const setPlanView = vi.fn();
@@ -483,7 +480,6 @@ describe('useTsldToolbarContext — context identity against a REAL query result
           legend,
           minimap,
           revealComments,
-          toggleFloatPaths,
           toggleHealthCheck,
           toggleRevisionCompare,
           setPlanView,

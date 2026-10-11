@@ -237,7 +237,7 @@ export function PlanShortcutsHelp({
           <ShortcutList items={READ_SHORTCUTS} />
         </section>
         <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Minimap (View ▾ ▸ Panels ▸ Minimap)</h3>
+          <h3 className="text-sm font-semibold">Minimap (Diagram viewport ▸ Minimap)</h3>
           <ShortcutList items={MINIMAP_SHORTCUTS} />
         </section>
         {CANVAS_MULTI_SELECT_ENABLED ? (

@@ -28,7 +28,8 @@ import { clearMeasurement, writeMeasurement } from './output';
  * - **Icon-only on the DECK.** Move them, but unlabelled, so the deck's `find` card grows by ~72 px
  *   rather than ~239 px against 275 px of line-1 slack at 1646.
  *
- * `ICON_ONLY` already exists in `Deck.tsx` as a closed set for exactly this trade, and the object
+ * The deck's `labelVisibility: 'never'` items (a closed set, once `Deck.tsx`'s `ICON_ONLY`)
+ * already exist for exactly this trade, and the object
  * bar's own docblock argues the opposite for its surface — *"a compact bar of a handful of commands
  * where the name IS the affordance"*. Both are reasonable; only one of them is affordable, and
  * which is a measurement.

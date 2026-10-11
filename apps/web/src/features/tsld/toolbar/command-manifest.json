@@ -1,0 +1,184 @@
+{
+  "registry": [
+    "add-activity",
+    "analysis",
+    "apply-levelling",
+    "auto-arrange",
+    "baseline-overlay",
+    "calendar",
+    "comments",
+    "edit-plan",
+    "export",
+    "filter",
+    "fit",
+    "legend",
+    "link-tool",
+    "marquee-select",
+    "minimap",
+    "next-conflict",
+    "redo",
+    "resource-view",
+    "search",
+    "summary",
+    "today",
+    "undo",
+    "undo-history",
+    "view",
+    "view-gantt",
+    "view-tsld",
+    "zoom-in",
+    "zoom-out"
+  ],
+  "selectionBar": [
+    "clear-visual-placement",
+    "conflict-remedy",
+    "delete",
+    "dissolve",
+    "duplicate",
+    "duplicate-band",
+    "edit",
+    "float-paths",
+    "isolate-logic",
+    "make-milestone",
+    "notes",
+    "open-logic",
+    "progress",
+    "resources",
+    "zoom-to-selection"
+  ],
+  "menus": {
+    "filter": ["Critical", "Has conflict", "Has constraint"],
+    "view": [
+      "Colour · Criticality",
+      "Colour · Total float",
+      "Colour · WBS group",
+      "Compare on diagram",
+      "Dates",
+      "Day — 2 weeks",
+      "Feasible window",
+      "Flag over-allocated",
+      "Late-start overlay",
+      "Levelled placement",
+      "Link gaps",
+      "Month — 3 months",
+      "Quarter — 1 year",
+      "Week — 1 month",
+      "Year — 3 years"
+    ],
+    "analysis": [
+      "Baselines…",
+      "Compare revisions…",
+      "Earned value…",
+      "Health check…",
+      "Resource histogram…"
+    ],
+    "export": [
+      "Diagram — current view (PDF)",
+      "Diagram — current view (PNG)",
+      "Diagram — whole plan (PDF)",
+      "Diagram — whole plan (PNG)",
+      "Print…",
+      "Schedule (CSV)",
+      "Share…"
+    ],
+    "add-activity": ["Finish milestone", "Level of Effort (hammock)", "Start milestone", "Task"],
+    "link-tool": [
+      "FF — Finish → Finish",
+      "FS — Finish → Start",
+      "SF — Start → Finish",
+      "SS — Start → Start"
+    ]
+  },
+  "promotable": [
+    {
+      "id": "add-finish-milestone",
+      "from": "add-activity",
+      "menuLabel": "Finish milestone"
+    },
+    {
+      "id": "add-start-milestone",
+      "from": "add-activity",
+      "menuLabel": "Start milestone"
+    },
+    {
+      "id": "colour-by-criticality",
+      "from": "view",
+      "menuLabel": "Colour · Criticality"
+    },
+    {
+      "id": "colour-by-totalFloat",
+      "from": "view",
+      "menuLabel": "Colour · Total float"
+    },
+    {
+      "id": "colour-by-wbs",
+      "from": "view",
+      "menuLabel": "Colour · WBS group"
+    },
+    {
+      "id": "compare-revisions",
+      "from": "analysis",
+      "menuLabel": "Compare revisions…"
+    },
+    {
+      "id": "critical-only",
+      "from": "filter",
+      "menuLabel": "Critical"
+    },
+    {
+      "id": "earned-value",
+      "from": "analysis",
+      "menuLabel": "Earned value…"
+    },
+    {
+      "id": "feasible-window",
+      "from": "view",
+      "menuLabel": "Feasible window"
+    },
+    {
+      "id": "has-conflict-only",
+      "from": "filter",
+      "menuLabel": "Has conflict"
+    },
+    {
+      "id": "health-check",
+      "from": "analysis",
+      "menuLabel": "Health check…"
+    },
+    {
+      "id": "late-start-overlay",
+      "from": "view",
+      "menuLabel": "Late-start overlay"
+    },
+    {
+      "id": "levelled-overlay",
+      "from": "view",
+      "menuLabel": "Levelled placement"
+    },
+    {
+      "id": "link-ff",
+      "from": "link-tool",
+      "menuLabel": "FF — Finish → Finish"
+    },
+    {
+      "id": "link-fs",
+      "from": "link-tool",
+      "menuLabel": "FS — Finish → Start"
+    },
+    {
+      "id": "link-ss",
+      "from": "link-tool",
+      "menuLabel": "SS — Start → Start"
+    },
+    {
+      "id": "resource-histogram",
+      "from": "analysis",
+      "menuLabel": "Resource histogram…"
+    },
+    {
+      "id": "share",
+      "from": "export",
+      "menuLabel": "Share…"
+    }
+  ]
+}

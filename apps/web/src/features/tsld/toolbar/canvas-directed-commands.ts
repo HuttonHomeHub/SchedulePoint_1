@@ -72,7 +72,6 @@ export const COMMAND_CLASS: Record<CommandKey, CommandClass> = {
 
   toggleHealthCheck: 'dock',
   toggleRevisionCompare: 'dock',
-  toggleFloatPaths: 'dock',
   revealComments: 'dock',
 
   toggleView: 'unaffected',

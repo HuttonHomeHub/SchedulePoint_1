@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { probeRowSubjects, type ProbeResult } from '../scripts/row-subject-probe.mjs';
 
 import {
   addActivity,
@@ -211,7 +212,9 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     ).toBe(true);
   };
 
-  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows. With one
+  // Enough plans that "Recently changed" holds more than a box's 220 px floor of rows, and (#474) more
+  // than the two-column box can show (the API returns at most 8), so one body overflows while the
+  // shorter boxes do not. With one
   // plan every box is shorter than its floor, so a clamp to the floor and a box sized by its content
   // read the same and the assertion below would pass against the defect it names.
   await overviewPage.evaluate(async (org) => {
@@ -227,7 +230,7 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     };
     const client = await call('/clients', { name: 'Filler Estates' });
     const project = await call(`/clients/${client.id}/projects`, { name: 'Filler Works' });
-    for (let i = 1; i <= 6; i += 1) {
+    for (let i = 1; i <= 7; i += 1) {
       await call(`/projects/${project.id}/plans`, {
         name: `Filler plan ${String(i)}`,
         plannedStart: '2026-03-02',
@@ -242,6 +245,17 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
 
   await overviewPage.setViewportSize({ width: 1280, height: 800 });
   await settled(1);
+  // **One column means one ordinary gap between boxes, not a floor's worth of air.** The 220 px
+  // floor is a two-column rule; applied in one column it held each wrapper at 220 while the card
+  // inside stopped at its content, leaving 100-130 px bands between short boxes (measured at 1465
+  // with the Explorer open). Geometry, because jsdom lays out nothing.
+  const gaps = await overviewPage.evaluate(() => {
+    const boxes = [...document.querySelectorAll('main section[aria-labelledby]')].map((el) =>
+      el.getBoundingClientRect(),
+    );
+    return boxes.slice(1).map((b, i) => Math.round(b.top - (boxes[i]?.bottom ?? 0)));
+  });
+  expect(gaps, 'one-column gaps between boxes').toEqual([24, 24, 24]);
   // **In one column the boxes stack at the height their content needs and `<main>` scrolls.** A cap
   // that survived the split clamped all four to their 220 px floor, each body scrolling on its own
   // (ADR-0182, the accessibility review).
@@ -251,11 +265,13 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
         document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ===
         'Recently changed',
     );
-    const body = recent?.querySelector('[tabindex="0"]');
+    // Structural, not `[tabindex="0"]`: the body's tab stop is conditional now (#474).
+    const body = recent?.lastElementChild;
     const main = document.querySelector('main');
     return {
       boxHeight: Math.round(recent?.getBoundingClientRect().height ?? 0),
       bodyClipped: body ? body.scrollHeight - body.clientHeight : -1,
+      bodyTabindex: body?.getAttribute('tabindex') ?? null,
       mainScrolls: main ? main.scrollHeight > main.clientHeight : false,
     };
   });
@@ -266,6 +282,9 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   expect(stacked.bodyClipped, 'the box body scrolls on its own in one column').toBeLessThanOrEqual(
     0,
   );
+  // #474: nothing scrolls in one column, so the body is out of the tab sequence — as `-1`, never
+  // without the attribute, which would drop focus to `<body>` if it were focused when this applied.
+  expect(stacked.bodyTabindex, 'a body that scrolls nothing is still a tab stop').toBe('-1');
   expect(stacked.mainScrolls, 'the page does not scroll').toBe(true);
   await expectSameSequence('one column at 1280');
   await axeBoth('one column at 1280');
@@ -314,9 +333,12 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   //
   // **What this asserts, and what it deliberately does not.** The density work caps each box and
   // lets its body scroll, so the body is a scroll container — and a scroll container that cannot
-  // take focus cannot be scrolled without a pointer (WCAG 2.2 §2.1.1, level A). Browsers have been
-  // inconsistent about focusing them implicitly, so `SectionCard fill` sets `tabIndex={0}` and this
-  // proves focus really lands there in a real browser, which jsdom structurally cannot.
+  // take focus cannot be scrolled without a pointer (WCAG 2.2 §2.1.1, level A). `SectionCard fill`
+  // gives the body `tabIndex` 0 while it overflows and -1 while it does not (`docs/TECH_DEBT.md`
+  // #474: -1 and not removal, because removing the attribute from a focused element drops focus to
+  // `<body>`; and it fails open to 0 when unmeasured, because an unreachable scroller is the level-A
+  // failure and a spare stop is not). This proves, in a real browser jsdom cannot stand in for,
+  // that the two states match the real overflow and that the overflowing one scrolls from the keys.
   //
   // It does NOT assert that the workspace stops scrolling, which is the claim the whole milestone
   // is about. That was written, run, and **found to be vacuous**: this organisation holds one plan,
@@ -324,17 +346,322 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   // assertion green. A test that passes against the defect it names is worse than no test, so the
   // claim stays where a fixture can exhibit it: `measure-landing-density.mjs`, on twelve plans,
   // reported in `m9-density-design.md` §5. The blind spot is stated rather than papered over.
-  const scrollable = overviewPage.locator('section [tabindex="0"]').first();
-  await expect(scrollable).toHaveCount(1);
+  const bodies = await overviewPage.evaluate(() =>
+    [...document.querySelectorAll('main section[aria-labelledby]')].map((el, index) => {
+      const body = el.lastElementChild;
+      return {
+        index,
+        overflowing: body ? body.scrollHeight > body.clientHeight + 1 : false,
+        tabindex: body?.getAttribute('tabindex') ?? null,
+      };
+    }),
+  );
+  expect(
+    bodies.filter((b) => b.overflowing && b.tabindex === '0'),
+    'no box overflows at 1600 x 1000, so the keyboard path below has nothing to drive',
+  ).not.toHaveLength(0);
+  expect(
+    bodies.filter((b) => !b.overflowing && b.tabindex === '-1'),
+    'every box overflows at 1600 x 1000, so the spare-stop state is never exercised',
+  ).not.toHaveLength(0);
+  expect(
+    bodies.filter((b) => b.overflowing !== (b.tabindex === '0')),
+    "a body's tab stop disagrees with whether it overflows",
+  ).toEqual([]);
+
+  const scrollIndex = bodies.find((b) => b.overflowing)?.index ?? 0;
+  const scrollable = overviewPage
+    .locator('main section[aria-labelledby]')
+    .nth(scrollIndex)
+    .locator('> :last-child');
   await scrollable.focus();
   expect(
     await overviewPage.evaluate(() => document.activeElement?.getAttribute('tabindex')),
     'the capped box body did not take focus, so it cannot be scrolled from the keyboard',
   ).toBe('0');
+  await overviewPage.keyboard.press('PageDown');
+  expect(
+    await scrollable.evaluate((el) => el.scrollTop),
+    'PageDown did not scroll the focused box body',
+  ).toBeGreaterThan(0);
 
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
   await expect(overviewPage).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+
+  // -------------------------------------------------- 7. No row's subject is ever cut off (#472)
+  //
+  // **Geometry from glyph rectangles, by the same probe the measurement harness runs**
+  // (`scripts/row-subject-probe.mjs`), because "clipped" has one definition: the old instrument
+  // counted a `text-overflow: ellipsis` on a text node's direct parent, which a plan name inside a
+  // router `<a>` never has, so it reported zero clipped names while 16 of 17 were (M0). A unit test
+  // cannot ask: jsdom lays nothing out.
+  const LONG_NAME = 'Berth 4 Deepening — Dredging and Revetment Works, Stage 2B';
+  await acknowledgeViewportNotice(overviewPage);
+  const planId = await overviewPage.evaluate(
+    async ({ org, name }: { org: string; name: string }) => {
+      const call = async (path: string, body: object) => {
+        const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`POST ${path}: ${String(response.status)}`);
+        return ((await response.json()) as { data: { id: string } }).data;
+      };
+      const client = await call('/clients', { name: 'Northern Ports and Harbours Authority' });
+      const project = await call(`/clients/${client.id}/projects`, {
+        name: 'Estuary Crossing Programme — Western Approaches',
+      });
+      return (await call(`/projects/${project.id}/plans`, { name, plannedStart: '2026-02-02' })).id;
+    },
+    { org: orgSlug, name: LONG_NAME },
+  );
+  // Open it once, so "Jump back in" carries it as well as "Recently changed" (the remembered id is
+  // recorded when the plan has LOADED, which is what the pen control signals).
+  await overviewPage.goto(`/orgs/${orgSlug}/plans/${planId}`);
+  await expect(overviewPage.getByRole('button', { name: /^(Start|Stop) editing$/ })).toBeVisible();
+
+  /** Open the landing at a size and read the probe once two readings agree. */
+  const readSubjects = async (width: number, height: number): Promise<ProbeResult> => {
+    await overviewPage.setViewportSize({ width, height });
+    await openOverview(overviewPage, orgSlug);
+    await expect(section(overviewPage, 'Jump back in').getByRole('link').first()).toBeVisible();
+    let previous = '';
+    let reading = await overviewPage.evaluate(probeRowSubjects);
+    await expect
+      .poll(
+        async () => {
+          reading = await overviewPage.evaluate(probeRowSubjects);
+          const signature = JSON.stringify(reading.subjects.map((x) => x.rowHeight));
+          const settled = signature === previous;
+          previous = signature;
+          return settled;
+        },
+        { message: `the landing never settled at ${String(width)} x ${String(height)}` },
+      )
+      .toBe(true);
+    return reading;
+  };
+  const clippedSubjects = (reading: ProbeResult): string[] =>
+    reading.subjects
+      .filter(
+        (x) =>
+          x.name.clipped ||
+          x.context.clipped ||
+          x.name.ellipsis ||
+          x.context.ellipsis ||
+          x.trailing?.clipped,
+      )
+      .map((x) => `${x.region}: ${x.text}`);
+
+  for (const [width, height] of [
+    [1477, 900],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)}`;
+    const reading = await readSubjects(width, height);
+    // The pinned positive case: "nothing is clipped" is also what a page with no subjects reports.
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(
+      reading.subjects.some((x) => x.text.includes(LONG_NAME) && x.hasBadge && x.hasContext),
+      `${at}: the long-named plan is not on the landing with its badge and context`,
+    ).toBe(true);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+
+    // Reading order for the long-named row from where the boxes are, not from the DOM: name, then
+    // badge, then context — on one line left to right, otherwise top to bottom.
+    const order = await overviewPage.evaluate((longName) => {
+      // "Jump back in" renders the same plan with no badge or context, so the row asked about is the
+      // first one that has both.
+      const subject = [...document.querySelectorAll('[data-row-subject]')].find(
+        (el) =>
+          el.textContent?.includes(longName) && (el.firstElementChild?.children.length ?? 0) > 1,
+      );
+      const group = subject?.firstElementChild;
+      const contextBox = subject?.lastElementChild;
+      const link = group?.querySelector('a');
+      const badge = group && group.children.length > 1 ? group.lastElementChild : null;
+      const first = (el: Element | null | undefined) => el?.getClientRects()[0] ?? null;
+      const boxes = [first(link), first(badge), first(contextBox)];
+      return boxes.map((b) => (b ? { top: b.top, left: b.left } : null));
+    }, LONG_NAME);
+    const [nameBox, badgeBox, contextBox] = order;
+    expect(
+      nameBox && badgeBox && contextBox,
+      `${at}: a part of the long row is missing`,
+    ).toBeTruthy();
+    const before = (a: { top: number; left: number }, b: { top: number; left: number }) =>
+      Math.abs(a.top - b.top) < 8 ? a.left < b.left : a.top < b.top;
+    expect(before(nameBox!, badgeBox!), `${at}: the badge reads before the name`).toBe(true);
+    expect(before(badgeBox!, contextBox!), `${at}: the context reads before the badge`).toBe(true);
+  }
+
+  /** SC-2's after-control: a token no layout can fit, injected into one whole context. */
+  const controlSeesAnInjectedToken = async (): Promise<void> => {
+    const base = await overviewPage.evaluate(probeRowSubjects);
+    const target = base.subjects.findIndex((x) => x.hasContext && !x.context.clipped);
+    expect(target, 'no unclipped context to inject into').toBeGreaterThanOrEqual(0);
+    await overviewPage.evaluate((i) => {
+      const host = document.querySelectorAll('[data-row-subject]')[i]?.lastElementChild;
+      const token = document.createElement('span');
+      token.dataset.injected = 'true';
+      token.style.cssText = 'display:inline-block;white-space:nowrap';
+      // Wider than the window itself (a "W" at 14 px is ~12.5 px): a context now wraps under its name,
+      // so a fixed 400 px token (the harness's, on the OLD tree) simply fits at 1280. The probe reads
+      // glyph rects, so an empty box would overflow nothing it can see.
+      token.textContent = 'W'.repeat(Math.ceil((window.innerWidth * 1.5) / 12));
+      host?.appendChild(token);
+    }, target);
+    const injected = await overviewPage.evaluate(probeRowSubjects);
+    await overviewPage.evaluate(() => document.querySelector('[data-injected]')?.remove());
+    expect(
+      injected.subjects[target]?.context.clipped,
+      'the probe is silent about an injected overflow, so its zero counts mean nothing',
+    ).toBe(true);
+  };
+
+  await readSubjects(1280, 800);
+  await controlSeesAnInjectedToken();
+
+  /** Re-read the probe after a style change, once two readings agree (the page does not reload). */
+  const reprobe = async (): Promise<ProbeResult> => {
+    let previous = '';
+    let reading = await overviewPage.evaluate(probeRowSubjects);
+    await expect
+      .poll(async () => {
+        reading = await overviewPage.evaluate(probeRowSubjects);
+        const signature = JSON.stringify(reading.subjects.map((x) => x.rowHeight));
+        const same = signature === previous;
+        previous = signature;
+        return same;
+      })
+      .toBe(true);
+    return reading;
+  };
+  /** A section body is a second scroll axis (SC-6): its content may not be wider than it is. */
+  const bodiesOverflowingSideways = (): Promise<string[]> =>
+    overviewPage.evaluate(() =>
+      [...document.querySelectorAll('main section[aria-labelledby]')]
+        .filter((el) => {
+          const body = el.lastElementChild;
+          return body ? body.scrollWidth > body.clientWidth : false;
+        })
+        .map(
+          (el) =>
+            document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ?? '',
+        ),
+    );
+  /** Within each section, rows stack: every row starts below the previous row's top and clear of it. */
+  const rowsThatOverlap = (): Promise<string[]> =>
+    overviewPage.evaluate(() => {
+      const bad: string[] = [];
+      for (const sectionEl of document.querySelectorAll('main section[aria-labelledby]')) {
+        let previous: DOMRect | null = null;
+        for (const subject of sectionEl.querySelectorAll('[data-row-subject]')) {
+          const row = subject.closest('li') ?? subject;
+          const rect = row.getBoundingClientRect();
+          if (previous && (rect.top <= previous.top || rect.top < previous.bottom - 1)) {
+            bad.push((subject.textContent ?? '').trim().slice(0, 40));
+          }
+          previous = rect;
+        }
+      }
+      return bad;
+    });
+
+  // SC-8, WCAG 1.4.12 text spacing: the four values the criterion names, injected as an author
+  // stylesheet at the three cells the spec lists. A row that wraps instead of clipping must also not
+  // collide with its neighbour once the lines grow.
+  for (const [width, height] of [
+    [1280, 800],
+    [1477, 900],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)} with text spacing`;
+    await readSubjects(width, height);
+    const spacing = await overviewPage.addStyleTag({
+      content:
+        '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important } p { margin-bottom: 2em !important }',
+    });
+    const reading = await reprobe();
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+    expect(await bodiesOverflowingSideways(), `${at}: a box body is wider than itself`).toEqual([]);
+    expect(await rowsThatOverlap(), `${at}: a row overlaps the one above it`).toEqual([]);
+    await spacing.evaluate((el) => (el as Element).remove());
+  }
+
+  // SC-6 / SC-9 at 200 % text, applied the way the earlier 200 % block does it (`html { font-size:
+  // 200% }`, a labelled proxy for the browser's text-only zoom, which a headless run cannot set).
+  // That block runs before any long name exists, so the row-subject claims are made here.
+  for (const [width, height] of [
+    [1280, 800],
+    [1912, 948],
+  ] as const) {
+    const at = `${String(width)} x ${String(height)} at 200 % text`;
+    await readSubjects(width, height);
+    await overviewPage.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    const reading = await reprobe();
+    expect(reading.found, `${at}: the probe found no row subject`).toBeGreaterThan(0);
+    expect(clippedSubjects(reading), `${at}: a name, context or trailing fact is cut off`).toEqual(
+      [],
+    );
+    expect(reading.docOverflowX, `${at}: the page overflows sideways`).toBeLessThanOrEqual(0);
+    expect(await bodiesOverflowingSideways(), `${at}: a box body is wider than itself`).toEqual([]);
+    const trailing = reading.subjects.filter((x) => x.trailing);
+    expect(trailing.length, `${at}: no row has a trailing fact to measure`).toBeGreaterThan(0);
+    for (const x of trailing) {
+      expect(
+        x.trailing?.primaryChars,
+        `${at}: ${x.text} leaves its name too little room`,
+      ).toBeGreaterThanOrEqual(12);
+    }
+    await overviewPage.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+  }
+
+  // 320 x 800 is the 1280-at-400 % reflow proxy (WCAG 1.4.10). The "designed for larger screens"
+  // notice sits above the landing; it is measured beneath, as M0 did.
+  const narrow = await readSubjects(320, 800);
+  expect(narrow.found, '320: the probe found no row subject').toBeGreaterThan(0);
+  expect(clippedSubjects(narrow), '320: a name, context or trailing fact is cut off').toEqual([]);
+  await controlSeesAnInjectedToken();
+  const withTrailing = narrow.subjects.filter((x) => x.trailing);
+  expect(withTrailing.length, '320: no row has a trailing fact to measure').toBeGreaterThan(0);
+  for (const x of withTrailing) {
+    // SC-9: the name keeps room — 12 advances of "0" in its own font — and the fact is beneath.
+    expect(
+      x.trailing?.primaryChars,
+      `320: ${x.text} leaves its name too little room`,
+    ).toBeGreaterThanOrEqual(12);
+    expect(x.trailing?.beneath, `320: ${x.text} keeps its trailing fact beside a 320 px name`).toBe(
+      true,
+    );
+  }
+
+  // The floor: at 1024 x 600 nothing drops, because the narrowest track is wider than 7rem plus the
+  // trailing fact.
+  const floor = await readSubjects(1024, 600);
+  const floorTrailing = floor.subjects.filter((x) => x.trailing);
+  expect(floorTrailing.length, '1024: no row has a trailing fact to measure').toBeGreaterThan(0);
+  for (const x of floorTrailing) {
+    expect(
+      x.trailing?.centreInFirstLine,
+      `1024: ${x.text} has dropped its trailing fact below the first line`,
+    ).toBe(true);
+  }
+  expect(clippedSubjects(floor), '1024: a name, context or trailing fact is cut off').toEqual([]);
 });
 
 test('the settled overview has no accessibility violations', async ({ page }) => {

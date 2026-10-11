@@ -1,10 +1,12 @@
 import { ChevronDown } from 'lucide-react';
 import { useId, useRef } from 'react';
 
-import type { ToolbarItemRenderApi } from './toolbar-registry';
-import { toolbarControlVariants } from './toolbar-styles';
+import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry';
+import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
+import { useCloseWhenChanged } from './use-close-when-changed';
 import { usePopoverPanel } from './use-popover-panel';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -24,8 +26,12 @@ export function ToolbarPopover({
   activeKind,
   title,
   disabledReason,
+  description,
   align = 'start',
-  compact = false,
+  panelWidth = 'default',
+  labelState = 'visible',
+  closeOnChangeOf,
+  badge,
   children,
 }: {
   label: string;
@@ -67,40 +73,104 @@ export function ToolbarPopover({
    * Also fills the tooltip when no explicit {@link title} is given, so the two cannot disagree.
    */
   disabledReason?: string;
+  /**
+   * What the control is for, as a sentence — the tooltip an **icon-only** trigger names itself with
+   * (`<label> — <description>`). Ignored while the label is painted, because a visible name needs no
+   * tip. An icon-only trigger without one tips its bare name (ADR-0117's `'name-echo'`).
+   *
+   * The tooltip is the Tooltip primitive and not a native `title`: `title` is hover-only, which is
+   * the gap ADR-0117 closed for `ToolbarButton`, and this trigger became icon-only for the first
+   * time when Summary moved to the plan's identity row (toolbar-redesign M2-T1). It stands down
+   * while the panel is open, so the tip never lies across the panel it opened.
+   */
+  description?: string;
   /** Align the panel's inline-start (`start`) or inline-end (`end`) to the trigger. */
   align?: 'start' | 'end';
+  /** How wide the panel may grow — see {@link usePopoverPanel}. `'wide'` is for a panel in columns. */
+  panelWidth?: 'default' | 'wide';
   /**
-   * Icon-only trigger (ADR-0090 M3-T3): the visible label is withheld and moves to `aria-label` +
-   * the native tooltip, so the control keeps its **name** while giving back roughly 60 px.
-   *
-   * Set from the row's `collapsed` band and nothing else. The measured reason: at 960 px Row 1's six
-   * remaining controls lay out 11 px wider than their container and at 768 px 203 px wider, and four
-   * of the six are this component — so one prop here is most of the collapse.
-   *
-   * **The name moves; it does not disappear.** An icon-only `<button>` whose only child is an
+   * Whether the visible label shows — pass the render API's `labelState`, already resolved by
+   * `resolveLabelVisibility`. `'hidden'` withholds it: the name moves to `aria-label` + the native
+   * tooltip, so the control keeps its **name**. An icon-only `<button>` whose only child is an
    * `aria-hidden` glyph has no accessible name at all, which is the failure mode a `sr-only` span
    * would also solve — `aria-label` is chosen because this trigger's name is a plain string it
    * already receives, with no markup to preserve.
+   *
+   * This replaced a `compact` boolean (ADR-0090 M3-T3) that the row's `collapsed` band set and that
+   * no band could set after ADR-0109 D1. A trigger cannot be `'roomy'`: it has only a native
+   * `title`, and `defineToolbar` refuses the declaration.
    */
-  compact?: boolean;
+  labelState?: ToolbarLabelState;
+  /**
+   * Close the panel when this value changes (compared with `Object.is`). The promotion ladder passes
+   * its stage: a resize can move a row out of the panel, and the panel is portalled where nothing
+   * inside it sees that. Focus inside the panel as it closes goes to the trigger, announced
+   * ({@link useCloseWhenChanged}). Absent ⇒ the panel is never closed by a prop.
+   */
+  closeOnChangeOf?: unknown;
+  /**
+   * **How many things are engaged**, drawn as a count on the glyph's corner (toolbar-redesign M6
+   * V4a: `Filter ▾` with attributes on). It costs the row no width — it sits on the icon's corner, not
+   * beside it — which matters because the LOOK row at 1024 has about 28 px to spare with a conflict
+   * chip showing. `description` is the sentence a screen reader gets ("2 filters on") through
+   * `aria-describedby`, since the number itself is `aria-hidden`: a bare "2" inside a button's name
+   * would read as part of it. The trigger's own `aria-pressed` already says that SOMETHING is on;
+   * this says how much, in the same place for a sighted reader. Absent or zero ⇒ nothing is drawn.
+   */
+  badge?: { count: number; description: string };
   children: React.ReactNode;
 }): React.ReactElement {
   const reasonId = useId();
+  const badgeId = useId();
+  const badged = badge !== undefined && badge.count > 0;
   // Only when there IS a reason: an `aria-describedby` pointing at an element that renders nothing is
   // a dangling reference, which some AT reads as an empty description rather than as absence.
-  const describedBy = disabled === true && disabledReason ? reasonId : undefined;
+  const reasonDescribedBy = disabled === true && disabledReason ? reasonId : undefined;
+  const describedBy =
+    [reasonDescribedBy, badged ? badgeId : undefined].filter(Boolean).join(' ') || undefined;
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const labelClass = toolbarLabelClass(labelState);
+  const iconOnly = labelClass === null;
   // The panel itself is `usePopoverPanel` (ADR-0091 M7-S6) — anchor, clamp, Escape, outside-pointer
   // and focus-left, and the portal. Extracted so the merged `Go to today ▾` split button can host
   // the same panel without a second implementation of behaviours this repository has already fixed
   // defects in. This component's props did not change, which is what makes its suite the oracle.
-  const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef, align });
+  const { open, openPanel, close, panel } = usePopoverPanel({
+    triggerRef,
+    align,
+    panelWidth,
+  });
+  useCloseWhenChanged(closeOnChangeOf, open, () => close(false), triggerRef);
+  // Purpose is derived exactly as `ToolbarButton` derives it: a tip carrying a `description` says
+  // MORE than the name, so it is linked to the control; one that restates the name is not, or a
+  // screen reader says the name twice. A shaded trigger's reason already rides `aria-describedby`.
+  const tipped = iconOnly && !open;
+  const tip = useTooltip({
+    content: iconOnly
+      ? disabled === true && disabledReason
+        ? `${label} — ${disabledReason}`
+        : description
+          ? `${label} — ${description}`
+          : label
+      : undefined,
+    purpose: description && disabled !== true ? 'description' : 'name-echo',
+    disabled: !tipped,
+  });
+  const fullDescribedBy =
+    [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
 
   return (
     <>
       <button
         {...itemProps}
-        ref={triggerRef}
+        // Spread after `itemProps` and before the two keys that need composing, as `ToolbarButton`
+        // does: a key added to the tooltip's `triggerProps` later reaches the DOM without this file
+        // knowing. Both are inert unless the trigger is icon-only and closed.
+        {...tip.triggerProps}
+        ref={(el) => {
+          tip.triggerProps.ref(el);
+          triggerRef.current = el;
+        }}
         type="button"
         aria-disabled={disabled || undefined}
         aria-haspopup="dialog"
@@ -124,15 +194,23 @@ export function ToolbarPopover({
         // pins it: the span lives inside the button, and a button's name comes from its content, so
         // without this the reason would be appended to the name as well as the description
         // ("Filter Add an activity first").
-        {...(compact || describedBy ? { 'aria-label': label } : {})}
+        {...(iconOnly || describedBy ? { 'aria-label': label } : {})}
         // A disabled reason still wins the tooltip: "why can't I press this" outranks "what is it",
-        // and in that state the `aria-label` is already carrying the name.
-        {...((title ?? disabledReason)
-          ? { title: title ?? disabledReason }
-          : compact
-            ? { title: label }
+        // and in that state the `aria-label` is already carrying the name. An icon-only trigger
+        // speaks through the Tooltip primitive above instead of a native `title` — two tips on one
+        // hover — so it keeps a `title` only when the caller passes one.
+        {...(iconOnly
+          ? title
+            ? { title }
+            : {}
+          : (title ?? disabledReason)
+            ? { title: title ?? disabledReason }
             : {})}
-        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+        {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
+        onFocus={(event) => {
+          tip.triggerProps.onFocus(event);
+          itemProps.onFocus?.();
+        }}
         onClick={() => {
           if (disabled) return;
           if (open) close(false);
@@ -151,17 +229,31 @@ export function ToolbarPopover({
         )}
       >
         {icon ? (
-          <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+          <span aria-hidden="true" className="relative inline-flex shrink-0 items-center">
             {icon}
+            {badged ? (
+              // Out past the glyph's corner (`-top-2.5 -right-2`) and smaller (`h-3.5`), so it no longer
+              // covers the funnel; `min-w-3.5 px-0.5` lets two characters ("9+") widen it into a pill
+              // instead of spilling, and the count stops at 9+ (the sentence says the exact number).
+              <span className="bg-foreground text-background text-micro absolute -top-2.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5">
+                {badge.count > 9 ? '9+' : badge.count}
+              </span>
+            ) : null}
           </span>
         ) : null}
-        {compact ? null : <span className="truncate">{label}</span>}
+        {labelClass ? <span className={labelClass}>{label}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
-        {describedBy ? (
+        {reasonDescribedBy ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}
           </span>
         ) : null}
+        {badged ? (
+          <span id={badgeId} className="sr-only">
+            {badge.description}
+          </span>
+        ) : null}
+        {tip.tooltip}
       </button>
 
       {panel(label, children)}

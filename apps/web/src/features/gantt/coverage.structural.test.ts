@@ -53,8 +53,6 @@ function suiteText(): { files: string[]; text: string } {
  * ADR-0073 C4 defect in miniature, where a cap written as a literal fell behind the vocabulary it
  * capped and started rejecting valid input.
  */
-const LAYOUT_MODES = ['comfortable', 'compact', 'condensed', 'collapsed'] as const;
-
 function ganttReachableLabels(): string[] {
   const ganttCtx = { canvas: null } as never;
   // An ARRAY, not a factory — `selection-actions.tsx:442`. Called it as a function first; the
@@ -63,19 +61,8 @@ function ganttReachableLabels(): string[] {
     .filter((item) => {
       // `isVisible` is the canvas gate: the two canvas-only items answer false with `canvas: null`.
       // Items without one are unconditional and therefore reachable in both views.
-      //
-      // It takes `(ctx, env)`, and the **union across every band** is the right reading: an action a
-      // planner can reach at any width is an action that must be exercised. Taking one band would
-      // let a future width-dependent item fall out of the requirement at whichever width this test
-      // happened to pick — silently, since the item would still render for real users. No selection
-      // action reads `env` today; this is written so the first one that does cannot create a hole.
-      // (I passed one argument at first. It ran green under vitest, which does not typecheck, and
-      // `pnpm typecheck` caught it — the fifth assumed signature this epic has had corrected by the
-      // compiler rather than by reading.)
       try {
-        return item.isVisible
-          ? LAYOUT_MODES.some((layout) => item.isVisible!(ganttCtx, { layout }))
-          : true;
+        return item.isVisible ? item.isVisible(ganttCtx) : true;
       } catch {
         // An item whose predicate needs more context than this stub cannot be classified here.
         // Treat it as reachable: a false negative would silently drop it from the requirement,

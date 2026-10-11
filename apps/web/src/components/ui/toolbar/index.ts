@@ -13,5 +13,4 @@ export {
   type ToolbarItem,
   type ToolbarItemRenderApi,
   type ToolbarRow,
-  type ToolbarTier,
 } from './toolbar-registry';

@@ -6,7 +6,6 @@ import { BrandLink } from '@/components/layout/brand-mark';
 import { ChromeSlot } from '@/components/layout/chrome/chrome-slot';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
-import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { OrgSwitcher } from '@/features/organizations';
 
 /**
@@ -129,12 +128,23 @@ function HeaderContents({
           `lg`** (ADR-0179, minimum-viewport M4). The cap is what keeps the row one line at 1024: the
           content did not shrink, so without it the organisation switcher wrapped to a second row
           (48 px of diagram). The plan name truncates instead, and its `title` carries the whole.
-          Below `lg` the section also holds the drawer trigger and a phone's width has no room to
-          give away, so there it is uncapped. They belong together:
+          Below `lg` — under the design floor (ADR-0179) — the section also holds the drawer trigger
+          and a window that narrow has no room to give away, so there it is uncapped. They belong
+          together:
           `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
           of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
-          `shrink` because this is the section that gives way — it is text with a `title`. */}
-      <div className="flex min-w-0 shrink items-center gap-3 lg:max-w-1/2">
+          `shrink` because this is the section that gives way — it is text with a `title`.
+
+          **`max-xs:flex-wrap`, so the identity drops under the brand in a window that narrow**
+          (toolbar-redesign M3, found reading the 320 cells). Truncating the plan name is this
+          section's only way to give, and the brand, the status badge and the two-button "Plan
+          details" toolbar do not shrink: at 320 they alone are 316 px against 288, so Edit plan
+          details was laid out at x = 322 — off the window, and the shell scrolled sideways to
+          reach it. A second line is the cost the one-row header already accepts below its
+          container (`falsification.md`). `xs` is 26 rem (`globals.css`), not `lg`: at 640 the same
+          content truncates the name and fits, and a wrap there cost the band 48 px of the window
+          for nothing. */}
+      <div className="max-xs:flex-wrap flex min-w-0 shrink items-center gap-3 lg:max-w-1/2">
         <div className="flex shrink-0 items-center gap-2">
           {shell && orgSlug ? (
             <Button
@@ -160,7 +170,7 @@ function HeaderContents({
           three sections at once, and ADR-0091 M7 records a flex line splitting free space *equally*
           between every auto margin — which is what we now want, and want the row to own. */}
       <div className="flex shrink-0 items-center gap-3">
-        <OrgSwitcher className="max-w-[12rem] truncate" />
+        <OrgSwitcher />
         <AccountChip />
       </div>
     </div>
@@ -195,29 +205,14 @@ export function AppHeaderRow({
   modeSlotRef: (node: HTMLDivElement | null) => void;
 }): React.ReactElement {
   return (
-    // **`ToolbarBandProvider` wraps the row, and the reason is a reading rather than a caution**
-    // (`m0-landing-d1-measurement.md`). The identity slot carries the plan's mode `Toolbar`, and a
-    // toolbar with no provider above it resolves its DENSITY from its own `clientWidth` — which for
-    // a `shrink-0` row is its content width, landing it in a narrow band on a wide screen.
-    //
-    // It is NOT protection against the fit trap — a width-unconstrained row's `clientWidth` is an
-    // *output* of a fit decision, so charging it chrome makes the pass measure itself. That trap is
-    // moot since ADR-0109 D1: the surface wraps, nothing demotes, and the guard this paragraph
-    // named — `isWidthConstrained` (`Toolbar.tsx:81-84`) — went with the ladder and does not exist
-    // at those lines or anywhere (`docs/TECH_DEBT.md` #193, 2026-08-30 verification sweep).
-    //
-    // The first answer here was "the mode items are `render`, so they cannot demote", and that was
-    // false even then: `mode-early` had an `onActivate` and a `segment` (ADR-0148 has since
-    // deleted it). Recorded because it
-    // was nearly built on, and it is the more durable half — the density reading above is what this
-    // provider is actually for.
-    //
-    // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
-    // surface is and never answers whether a row's content fits.
-    <ToolbarBandProvider className="min-h-12 px-4 py-1">
+    // The row is a plain `<div>`. It used to be a `ToolbarBandProvider` so a mode `Toolbar` inside a
+    // `shrink-0` row did not resolve its density from its own `clientWidth`
+    // (`m0-landing-d1-measurement.md`); the density bands went with ADR-0109 D1 and the provider,
+    // which nothing read, was deleted afterwards (`docs/TECH_DEBT.md` #193).
+    <div className="min-h-12 px-4 py-1">
       <header className="flex min-h-full items-center">
         <HeaderContents identitySlotRef={identitySlotRef} modeSlotRef={modeSlotRef} />
       </header>
-    </ToolbarBandProvider>
+    </div>
   );
 }

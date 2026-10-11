@@ -60,9 +60,16 @@ export const DATA_DATE = '2026-01-05';
 
 /** Create a plan under the suite's project and open it (mounts the canvas workspace). */
 export async function newPlan(page: Page, planName: string): Promise<void> {
-  const project = page.getByRole('link', { name: 'Riverside', exact: true });
-  if ((await project.count()) > 0) await project.first().click();
-  await page.getByRole('button', { name: 'New plan' }).click();
+  const newPlanButton = page.getByRole('button', { name: 'New plan' });
+  const project = page.getByRole('link', { name: 'Riverside', exact: true }).first();
+  // Only a project page draws "New plan", so a caller standing on another plan has to go to the
+  // project first. That used to be `if (count() > 0) click()`: `count()` does not wait, so when
+  // the Explorer had not yet drawn the project (the second plan of a journey, straight after the
+  // first opened) the click was skipped and the button was awaited for 30 s on a page that never
+  // draws it. Waiting for whichever of the two appears first removes the race either way round.
+  await newPlanButton.or(project).first().waitFor();
+  if (!(await newPlanButton.isVisible())) await project.click();
+  await newPlanButton.click();
   await page.getByRole('dialog').getByLabel('Name').fill(planName);
   await page
     .getByRole('dialog')

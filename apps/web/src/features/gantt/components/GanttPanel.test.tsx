@@ -476,3 +476,30 @@ describe('GanttPanel — variance honesty', () => {
     expect(screen.getAllByText('New')).toHaveLength(1);
   });
 });
+
+describe('GanttPanel — a flagged row says why (conflict-reason-on-object, ADR-0186 D2)', () => {
+  it('describes a flagged row with the caption’s wording, and an unflagged row with nothing', () => {
+    render(
+      <GanttPanel
+        activities={[
+          anActivity({
+            id: 'a',
+            code: 'A10',
+            name: 'Excavate',
+            earlyStart: '2026-02-02',
+            earlyFinish: '2026-02-06',
+            constraintViolated: true,
+            visualConflictReason: 'LATER_THAN_BOUND',
+          }),
+          TWO[1]!,
+        ]}
+      />,
+    );
+    const [flagged, plain] = rows();
+    expect(flagged).toHaveAttribute(
+      'aria-description',
+      'Constraint not met, placed after its constraint',
+    );
+    expect(plain).not.toHaveAttribute('aria-description');
+  });
+});

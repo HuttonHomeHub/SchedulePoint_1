@@ -12,6 +12,7 @@ import {
   isFilterActive,
   isOverAllocated,
   matchesActivityFilter,
+  type ColourMode,
 } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
 
@@ -21,6 +22,7 @@ import { useDiagramImage } from './commands/use-diagram-image';
 import { useSearchNavigation } from './commands/use-search-navigation';
 import { useViewportCommands } from './commands/use-viewport-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
+import { COLOUR_MODE_LABELS } from './promotion-entries';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { UseMinimapPanelPrefs } from './use-minimap-panel-prefs';
@@ -32,6 +34,7 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
+import { usePromotionStage } from '@/components/ui/toolbar/use-promotion-stage';
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
@@ -82,10 +85,12 @@ export function useTsldToolbarContext({
   openDialog,
   legend,
   minimap,
+  minimapRoom = true,
   revealComments,
-  toggleFloatPaths = () => {},
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
+  healthOpen = false,
+  revisionsOpen = false,
   hasRevisionPair = false,
   comparedWithPlanName,
   planView = DEFAULT_PLAN_VIEW_MODE,
@@ -124,22 +129,19 @@ export function useTsldToolbarContext({
   legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
   /** The minimap panel's open/toggle pair (ADR-0100) — passed in for the `legend` reason. */
   minimap: Pick<UseMinimapPanelPrefs, 'open' | 'toggle'>;
+  /** The canvas's `minimapRoom` measurement, when a canvas is mounted (default: room). */
+  minimapRoom?: boolean;
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
-  /**
-   * Open the Float paths analysis on the current selection, or close it if it is already showing
-   * (audit F4). Passed IN for the same reason as `revealComments`: the two are right-side docks and
-   * only one can hold the edge, so the mutual exclusion belongs to the workspace that lays them out
-   * — not to the toolbar, which would have to know about a column it does not render.
-   *
-   * Defaults to a no-op, describing a build where the panel has no host.
-   */
-  toggleFloatPaths?: () => void;
   /** Toggle the docked Health check panel (health M2). Defaults to a no-op for standalone hosts. */
   toggleHealthCheck?: () => void;
   /** Toggle the docked revision comparison (revision M2). Defaults to a no-op for standalone hosts. */
   toggleRevisionCompare?: () => void;
+  /** Whether the Health check dock is open — the promoted toggle's pressed state (M5). Default: closed. */
+  healthOpen?: boolean;
+  /** Whether the revision-comparison dock is open — the promoted toggle's pressed state (M5). Default: closed. */
+  revisionsOpen?: boolean;
   /**
    * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
    *
@@ -180,6 +182,7 @@ export function useTsldToolbarContext({
 }): TsldToolbarContext {
   const { orgSlug, planId } = model;
   const announce = useAnnounce();
+  const promotion = usePromotionStage();
   // Schedule interchange export (ADR-0050 M4d): the caller's `interchange:export` PERMISSION — every
   // member holds it (Viewer upward), so most users see it. Derived in the model (`canExportSchedule`,
   // role-only) like the other capabilities. This context field is the permission ONLY (mirroring the
@@ -259,18 +262,17 @@ export function useTsldToolbarContext({
     [canWrite, setEditing],
   );
 
-  // The Summary popover folds the former Plan-details facts (status + data date) together with the
+  // The Summary popover folds the former Plan-details status together with the
   // computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
   const summaryContent = useMemo(
     () => (
       <PlanSummaryPanel
         statusLabel={PLAN_STATUS_LABELS[plan.status]}
-        dataDate={plan.plannedStart}
         orgSlug={orgSlug}
         planId={planId}
       />
     ),
-    [orgSlug, planId, plan.status, plan.plannedStart],
+    [orgSlug, planId, plan.status],
   );
 
   const { open: legendOpen, toggle: toggleLegend } = legend;
@@ -600,6 +602,11 @@ export function useTsldToolbarContext({
       // The revision comparison is a DOCKED COLUMN too, for the health reason verbatim — the
       // workspace owns its state and the one-dock-at-a-time set, so this is a host callback.
       toggleRevisionCompare: withDiagram(toggleRevisionCompare, undefined, 'dock'),
+      healthOpen,
+      revisionsOpen,
+      // Read here, once, so the bar's derived items and the menus they came out of share one answer
+      // (spec §4.11). Stage 0 where there is no `matchMedia`, which is every unit test's.
+      promotion,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).
@@ -625,6 +632,7 @@ export function useTsldToolbarContext({
       toggleLegend,
       minimapOpen,
       toggleMinimap,
+      minimapRoom,
 
       // Summary popover + pinned finish chip
       summaryContent,
@@ -654,7 +662,14 @@ export function useTsldToolbarContext({
       filterAttrs: lensState.filterAttrs,
       toggleFilterAttr,
       colourMode: lensState.colourMode,
-      setColourMode,
+      // Said as well as shown: the colour choice is a flat run of pressed buttons on a wide bar, and a
+      // screen reader hears only the one it is standing on change, not its sibling letting go
+      // (toolbar-redesign M5). A press on the mode already chosen is a no-op and says nothing.
+      setColourMode: (mode: ColourMode) => {
+        if (mode === lensState.colourMode) return;
+        setColourMode(mode);
+        announce(`Bars coloured by ${COLOUR_MODE_LABELS[mode].toLowerCase()}.`);
+      },
       baselineOverlay: lensState.baselineOverlay,
       toggleBaselineOverlay,
       compareOverlay: lensState.compareOverlay,
@@ -680,12 +695,6 @@ export function useTsldToolbarContext({
       conflictCount: orderedConflictHits.length,
       hasConflicts: orderedConflictHits.length > 0,
 
-      // Float paths (audit F4) — the count the ladder reads, the pressed state, and the toggle.
-      // Inert while `VITE_FLOAT_PATHS` is off: the registry does not register the item at all, so
-      // nothing reads these and `toggleFloatPaths` is never called.
-      activityCount: activities.length,
-      floatPathsOpen: model.floatPaths?.open ?? false,
-      toggleFloatPaths: withDiagram(toggleFloatPaths, undefined, 'dock'),
       currentConflict,
       goToNextConflict: withDiagram(goToNextConflict),
       searchStatus,
@@ -992,6 +1001,7 @@ export function useTsldToolbarContext({
     toggleLegend,
     minimapOpen,
     toggleMinimap,
+    minimapRoom,
     // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
     // toggle is a stable model callback).
     model.resourceViewOpen,
@@ -1039,11 +1049,11 @@ export function useTsldToolbarContext({
     navState.isolateMode,
     toggleIsolate,
     setIsolateMode,
-    // Float paths — re-identify when the dock's pressed state or the plan's activity count changes.
-    model.floatPaths?.open,
-    toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
+    healthOpen,
+    revisionsOpen,
+    promotion,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

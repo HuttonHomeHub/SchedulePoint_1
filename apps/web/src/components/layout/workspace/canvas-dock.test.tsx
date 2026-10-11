@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -134,5 +137,22 @@ describe('CanvasDock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Drop' }));
     expect(screen.getByTestId('scene')).toContainElement(screen.getByText('Pick a predecessor.'));
+  });
+});
+
+/**
+ * **The marker and the class that reads it are written in two files and must name the same attribute.**
+ * A Tailwind class has to be a literal, so no shared constant can carry the name; renaming one side
+ * would leave the selection bar without its floor and nothing else would notice (the journeys only see
+ * the result on a finger-sized window).
+ */
+describe('the data-dock-wide marker', () => {
+  const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8');
+
+  it('is set by the selection bar and read by the outlet class under the same name', () => {
+    const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
+    const bar = read('src/features/plan-actions/selection-actions.tsx');
+    expect(outlet).toMatch(/has-\[\[data-dock-wide\]\]:min-w-/);
+    expect(bar).toMatch(/\n\s+data-dock-wide=""/);
   });
 });

@@ -1,6 +1,8 @@
 # ADR-0091: A mode is not a command — surface scopes for the plan workspace's command band
 
 - **Status:** Proposed (D1–D5); **D6 Accepted** with M7
+- **Amended by:** ADR-0185 (2026-10-11) — D3's zoom placement: Zoom out, Zoom in and Fit to plan are in the
+  diagram's corner, not the deck. D3a's code was already dead (ADR-0109) and was deleted at toolbar-redesign M1.
 - **Date:** 2026-08-12 (D6: 2026-08-13)
 - **Deciders:** Product owner, Claude Code
 

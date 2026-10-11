@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   createHierarchy,
@@ -533,8 +534,9 @@ for (const cell of [
       const initial = await settledView(page);
       const box = await canvasEl(page).boundingBox();
       if (!box) throw new Error('the canvas has no box');
-      // Empty ground, bottom-right: zoom there, then drag the ground (pan) both ways.
-      const x = box.x + box.width - 60;
+      // Empty ground along the bottom, left of the viewport cluster that now fills the corner
+      // (toolbar-redesign M4): zoom there, then drag the ground (pan) both ways.
+      const x = box.x + 220;
       const y = box.y + box.height - 20;
       await page.mouse.move(x, y);
       await page.mouse.wheel(0, -300);
@@ -590,8 +592,14 @@ for (const cell of [
       const zoomed = await settledView(page);
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
+      // The swap hides the diagram row, cluster and all, so the route to Fit is View ▾ — the same
+      // wrapped command (`docs/TECH_DEBT.md` #480).
       await page
         .getByRole('toolbar', { name: 'Plan commands' })
+        .getByRole('button', { name: /^View/ })
+        .click();
+      await page
+        .getByRole('dialog', { name: 'View' })
         .getByRole('button', { name: 'Fit to plan' })
         .click();
       await expect(expandButton(page)).toBeVisible();
@@ -644,8 +652,7 @@ for (const cell of [
       // Swap active, then open Health: the panel collapses and the dock is shown.
       await expandButton(page).click();
       await expect(collapseButton(page)).toBeVisible();
-      await page.locator('[data-toolbar-item="analysis"]').click();
-      await page.getByRole('menuitem', { name: /Health check/ }).click();
+      await openHealthCheck(page);
       await expect(expandButton(page)).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Health check' })).toBeVisible();
     });
@@ -745,12 +752,13 @@ test.describe('the short-body swap, one pointer', () => {
     test.use({ acknowledgeViewportNotice: true });
 
     // The swap applies at every width (ADR-0181; it was inert below `md` while that width had a
-    // layout of its own). 640 x 480 and 320 x 256 are not rows here: the shell's chrome leaves
-    // the workspace no body at those sizes, which no panel rule can repair (ADR-0181, `docs/TECH_DEBT.md`
-    // #471), so the sizes are the ones the body can hold a table in (m0-measurement.md §2).
+    // layout of its own). The sizes are the ones whose body is SHORT: the command band is one
+    // scrolling line below 1024 now (toolbar-redesign M3), so a 900 px window has a 757 px body that
+    // holds the panel beside the diagram and does not swap (`isShortBody`: under 611 px). 740 px
+    // leaves 597 on a mouse and 577 on touch.
     for (const size of [
-      { width: 700, height: 900 },
-      { width: 640, height: 844 },
+      { width: 700, height: 740 },
+      { width: 640, height: 740 },
     ]) {
       test(`case 7: ${String(size.width)} x ${String(size.height)} swaps like the wide layout`, async ({
         page,

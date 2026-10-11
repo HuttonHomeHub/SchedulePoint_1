@@ -10,9 +10,11 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { resolveLabelVisibility } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
+import type { TooltipPlacementOptions } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface ToolbarProps<Ctx> {
@@ -62,6 +64,19 @@ export interface ToolbarProps<Ctx> {
    * owner reported (ADR-0091 M7 S10). There is now only one caller and one such margin.
    */
   alignEndGroup?: ToolbarGroupId;
+  /**
+   * Render each group as a plain wrapper with **no `role="group"` and no name**. For a toolbar that
+   * holds one group, whose group name only repeats the toolbar's own: a screen reader would say
+   * "Diagram viewport toolbar" and then "Navigate group" for the same four buttons. Default off —
+   * every other toolbar's group names are structure a reader uses. Has no effect on keys or focus.
+   */
+  ungrouped?: boolean;
+  /**
+   * Tooltip placement for every `ToolbarButton` item in this toolbar — see `TooltipOptions`. It does
+   * **not** reach a popover or split-button trigger, which own their tips. Absent ⇒ the primitive's
+   * own default, which is every toolbar's behaviour today.
+   */
+  tooltip?: TooltipPlacementOptions;
   className?: string;
 }
 
@@ -156,16 +171,15 @@ export function Toolbar<Ctx>({
   groupLabels,
   segmentLabels,
   alignEndGroup,
+  ungrouped = false,
+  tooltip,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // `'comfortable'` is passed as a constant rather than measured. It is the band in which nothing
-  // folds, so every `isVisible` predicate that takes an env resolves exactly what it always did —
-  // deleting the ladder must not quietly change which items a registry produces.
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled, 'comfortable'),
+    () => resolveItems(items, context, authoringEnabled),
     [items, context, authoringEnabled],
   );
 
@@ -184,6 +198,7 @@ export function Toolbar<Ctx>({
     resolvedIds: focusableIds,
     toolbarLabel: label,
     lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+    successorFor: (id) => items.find((item) => item.id === id)?.successorId,
   });
 
   // Derived, not repaired in an effect: an `activeId` naming an item a predicate has since hidden
@@ -270,7 +285,7 @@ export function Toolbar<Ctx>({
           disabledReason: r.disabledReason,
           active: r.active,
           activeKind: r.activeKind,
-          layout: 'comfortable',
+          labelState: resolveLabelVisibility(r.item.labelVisibility, 'toolbar'),
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
             : {
@@ -286,13 +301,13 @@ export function Toolbar<Ctx>({
         key={r.item.id}
         itemId={r.item.id}
         label={r.item.label}
+        {...(r.item.visibleLabel ? { visibleLabel: r.item.visibleLabel } : {})}
         {...(r.item.description ? { description: r.item.description } : {})}
         icon={r.icon}
         {...(r.busy ? { busy: true } : {})}
-        // The item's own policy decides, with `'auto'` now meaning "yes": under the
-        // ladder `'auto'` meant "if the row can afford it", and a row that wraps can
-        // always afford it.
-        showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
+        // The one resolver decides. This surface is not a container, so `'roomy'` is `'always'`
+        // here.
+        labelState={resolveLabelVisibility(r.item.labelVisibility, 'toolbar')}
         {...(r.item.isActive ? { pressed: r.active } : {})}
         // Forwarded here as well as in `Deck` — the component review caught this missing, which is
         // the "one correct pattern applied to a control and not its neighbour" shape named three
@@ -303,6 +318,7 @@ export function Toolbar<Ctx>({
         disabled={!r.enabled}
         disabledReason={r.disabledReason}
         srDescription={r.srDescription}
+        {...(tooltip ? { tooltip } : {})}
         tabIndex={tabIndexFor(r.item.id)}
         onActivate={() => r.item.onActivate!(context)}
         onFocus={() => setActiveId(r.item.id)}
@@ -369,7 +385,7 @@ export function Toolbar<Ctx>({
               </div>
             ))
           : groupItems.map(renderItem);
-        return segments ? (
+        return segments || ungrouped ? (
           <div key={group} className={outerClass}>
             {body}
           </div>

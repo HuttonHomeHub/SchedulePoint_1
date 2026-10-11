@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
-import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   ActivityBottomPanel,
@@ -19,7 +19,7 @@ import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
-import { DOCK_TRIGGER_ITEM, docksToClose, type RightDock } from './right-docks';
+import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -28,6 +28,7 @@ import {
   isShortBody,
   useActivityPanelPrefs,
 } from './use-activity-panel-prefs';
+import { useDockOpener } from './use-dock-opener';
 import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
 import {
   NOTES_PANEL_MAX_WIDTH,
@@ -49,12 +50,10 @@ import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
 import { deriveScheduleState, type ScheduleState } from '@/components/layout/status/schedule-state';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -135,9 +134,14 @@ import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-stri
 import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
 import type { CommandClass } from '@/features/tsld/toolbar/canvas-directed-commands';
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
-import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
+import { DiagramViewportCluster } from '@/features/tsld/toolbar/diagram-viewport-cluster';
+import {
+  ALL_PROMOTION_ENTRIES,
+  buildTsldToolbarItems,
+} from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
+import { usePromotionFocusFollow } from '@/features/tsld/toolbar/use-promotion-focus';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
@@ -239,6 +243,11 @@ export function ToolbarPlanWorkspace({
   // toggled from the toolbar's Legend control and rendered over the canvas below.
   const legend = useLegendPanelPrefs();
   const minimap = useMinimapPanelPrefs();
+  // The "Diagram viewport" cluster (toolbar-redesign M4): the node the canvas publishes for it and
+  // the canvas's own answer to "is there room for the minimap", both held as state because a ref
+  // would not re-render the portal or the toggle's reason when they arrive.
+  const [viewportSlot, setViewportSlot] = useState<HTMLDivElement | null>(null);
+  const [minimapRoom, setMinimapRoom] = useState(true);
   // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
   // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
   // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
@@ -401,6 +410,28 @@ export function ToolbarPlanWorkspace({
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
   }, [setNotesOpen, closeOtherDocks]);
+
+  /**
+   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
+   * listbox (ADR-0026 D7).
+   *
+   * **One callback rather than one per view**, because its caller is the placement-migration
+   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
+   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
+   * reason that one states.
+   *
+   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
+   * order is a tie-break that never fires rather than a precedence.
+   */
+  const focusPlanSurface = useCallback(() => {
+    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
+    if (grid) {
+      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
+      return;
+    }
+    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
+  }, []);
+
   // **The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
   // right columns, and each reserves `CANVAS_MIN_WIDTH` for the diagram only as a best-effort floor
   // (see `notesEffectiveMax` below) — two of them plus the Project Explorer rail on a 1280 px screen
@@ -410,46 +441,62 @@ export function ToolbarPlanWorkspace({
   const floatPaths = model.floatPaths;
   const openFloatPathsWith = floatPaths.openWith;
   const closeFloatPaths = floatPaths.close;
-  const floatPathsSelectedId = model.selectedActivityId;
-  // Close the dock AND return focus to the toolbar item — the notes dock's `closeNotes` rule,
-  // copied deliberately. The panel's own Close button and its Escape handler both go through this,
-  // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
-  // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
+  // Close the dock AND return focus — the notes dock's `closeNotes` rule, copied deliberately. The
+  // panel's own Close button and its Escape handler both go through this, not through the raw
+  // `close`: unmounting the focused Close button with nothing to catch focus strands it on `<body>`
+  // (WCAG 2.4.3), which is what shipped until the a11y gate found it.
   //
-  // Searched from `document`, not `rootRef`: the toolbar lives in the chrome band and is not a
-  // DOM descendant of the workspace root.
+  // **Three destinations, in order** (ADR-0135's hand-off, for a dock rather than a roving item):
+  // the selection bar's Float paths control, which exists only while ONE activity is selected and is
+  // searched from `document` because the plan's foot row is not a descendant of the workspace root;
+  // else the control the panel was opened from, if it is still in the document (a Gantt row's `⋯`);
+  // else the plan surface itself. The middle step is what the first version lacked: opened from a
+  // row menu with nothing selected there is no bar control, and focus went to `<body>`, which also
+  // silently disables every workspace accelerator (they are handlers on the root).
+  const floatPathsOpener = useDockOpener();
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
-    // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
-    // command to tier 3, so it is a menu item that UNMOUNTS with the menu the moment it is chosen —
-    // by the time the panel closes there is no `[data-toolbar-item="float-paths"]` to return to, and
-    // focus was landing on `<body>` (WCAG 2.4.3). The `⋯` is the stable ancestor of wherever the
-    // command actually lives, so it is the honest destination: the planner is returned to the
-    // control they opened this from. Found by `e2e-float-paths`, which asserts the restore — no unit
-    // test could, because the element only goes missing once a real menu closes.
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
-  }, [closeFloatPaths]);
+    const opener = floatPathsOpener.take();
+    const barControl = document.querySelector<HTMLElement>('[data-toolbar-item="float-paths"]');
+    if (barControl) barControl.focus();
+    else if (opener) opener.focus();
+    else focusPlanSurface();
+  }, [closeFloatPaths, floatPathsOpener, focusPlanSurface]);
 
-  const toggleFloatPaths = useCallback(() => {
-    if (floatPaths.open) {
-      closeFloatPathsAndFocus();
-      return;
-    }
-    // The ladder already refuses the no-selection case, so this is a guard rather than a branch a
-    // planner reaches: a target is required, never inferred (CQ-2).
-    if (floatPathsSelectedId === null) return;
-    closeOtherDocks('floatPaths');
-    openFloatPathsWith(floatPathsSelectedId);
-  }, [
-    floatPaths.open,
-    closeFloatPathsAndFocus,
-    openFloatPathsWith,
-    floatPathsSelectedId,
-    closeOtherDocks,
-  ]);
+  /**
+   * Open Float paths into `targetId`, close it when it is already showing THAT activity, or
+   * **retarget** when it is showing another. The target is **the activity the control belongs to** —
+   * the selection bar's activity, or the Gantt row the menu was opened on — rather than "the
+   * workspace selection", because a row menu acts on its own row (`rowMenuContextFor`). The old deck
+   * item read the selection, which had to exist; this takes it as an argument, so a target is
+   * required and never inferred (CQ-2). A press on a control whose activity is not the target must
+   * not close the panel: its `aria-pressed` says "off", and a press on an off control turns it on.
+   *
+   * The opener is recorded at open time. A row menu's item is the active element when this runs, and
+   * it unmounts with its menu — which restores focus to the `⋯` trigger a frame later — so a menu
+   * item is resolved to its trigger there, after the menu has handed focus back.
+   */
+  const toggleFloatPathsInto = useCallback(
+    (targetId: string) => {
+      if (floatPaths.open && floatPaths.targetId === targetId) {
+        closeFloatPathsAndFocus();
+        return;
+      }
+      if (!floatPaths.open) {
+        floatPathsOpener.remember();
+        closeOtherDocks('floatPaths');
+      }
+      openFloatPathsWith(targetId);
+    },
+    [
+      floatPaths.open,
+      floatPaths.targetId,
+      floatPathsOpener,
+      closeFloatPathsAndFocus,
+      openFloatPathsWith,
+      closeOtherDocks,
+    ],
+  );
 
   // Close the health dock AND return focus — the Float-paths rule verbatim: the menu item that
   // opened this unmounts with its menu, so the stable ancestor (`analysis`, else the deck's `⋯`)
@@ -457,10 +504,7 @@ export function ToolbarPlanWorkspace({
   const closeHealthAndFocus = useCallback(() => {
     setHealthOpen(false);
     setHealthRevealId(null);
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
+    focusDockTrigger('health');
   }, []);
 
   const toggleHealthCheck = useCallback(() => {
@@ -478,10 +522,7 @@ export function ToolbarPlanWorkspace({
   const closeRevisionsAndFocus = useCallback(() => {
     setRevisionsOpen(false);
     setRevisionRevealId(null);
-    const target =
-      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
-      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
-    target?.focus();
+    focusDockTrigger('revisions');
   }, []);
 
   const toggleRevisionCompare = useCallback(() => {
@@ -646,7 +687,7 @@ export function ToolbarPlanWorkspace({
   );
 
   // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
-  // `toggleFloatPaths` above for why.
+  // `toggleFloatPathsInto` above for why.
   const floatPathsPrefs = useFloatPathsPanelPrefs();
   const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
   const floatPathsBounds = dockBounds({
@@ -781,13 +822,7 @@ export function ToolbarPlanWorkspace({
       ?.closest('[data-right-dock]')
       ?.getAttribute('data-right-dock');
     for (const closeDock of Object.values(closeDockOf)) closeDock();
-    if (held !== null && held !== undefined) {
-      const item = DOCK_TRIGGER_ITEM[held as RightDock];
-      (
-        document.querySelector<HTMLElement>(`[data-toolbar-item="${item}"]`) ??
-        document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]')
-      )?.focus();
-    }
+    if (held !== null && held !== undefined) focusDockTrigger(held as RightDock);
     ganttAnnounce('Panel closed to show the diagram.');
   }, [closeDockOf, ganttAnnounce]);
   const withDiagram = useCallback(
@@ -816,6 +851,15 @@ export function ToolbarPlanWorkspace({
     [swapped, dockSqueezed, collapseQuietly, closeAllDocks],
   );
 
+  // **Float paths opens a dock, so it is class `dock`** (`canvas-directed-commands.ts`): it replaces
+  // an open dock and shares the short body with the expanded panel, exactly as the deck item it
+  // replaced was wrapped. The bar in either view and the Gantt row menu take this one function.
+  const onToggleFloatPaths = useCallback(
+    (activity: ActivitySummary): void =>
+      withDiagram((id: string) => toggleFloatPathsInto(id), undefined, 'dock')(activity.id),
+    [withDiagram, toggleFloatPathsInto],
+  );
+
   const ctx = useTsldToolbarContext({
     model,
     penLock,
@@ -824,6 +868,7 @@ export function ToolbarPlanWorkspace({
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },
+    minimapRoom,
     revealComments,
     hasRevisionPair,
     /**
@@ -836,9 +881,10 @@ export function ToolbarPlanWorkspace({
       activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
         ? activeCompare.data.fromPlan.name
         : undefined,
-    toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
+    healthOpen,
+    revisionsOpen,
     planView,
     setPlanView,
     barDateSource,
@@ -874,6 +920,9 @@ export function ToolbarPlanWorkspace({
         : undefined,
   });
   const items = useMemo(() => buildTsldToolbarItems(), []);
+  // Focus follows a command a resize moves between its menu and the bar (toolbar-redesign M5, E-1).
+  // The demotion half (E-2) is the toolbar primitives' own hand-off.
+  usePromotionFocusFollow(ctx.promotion, ALL_PROMOTION_ENTRIES);
   // Split the registry into the two rows (ADR-0031 two-row amendment): Row 1 · Look (view/navigate,
   // always live) and Row 2 · Do (build/manage, its authoring cluster pen-gated). Each row is its own
   // <Toolbar> so grouping/overflow stay per-row and the primitive is unchanged.
@@ -992,26 +1041,6 @@ export function ToolbarPlanWorkspace({
    * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
    * both problems go away at once: it is self-invalidating.
    */
-  /**
-   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
-   * listbox (ADR-0026 D7).
-   *
-   * **One callback rather than one per view**, because its caller is the placement-migration
-   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
-   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
-   * reason that one states.
-   *
-   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
-   * order is a tie-break that never fires rather than a precedence.
-   */
-  const focusPlanSurface = useCallback(() => {
-    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
-    if (grid) {
-      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
-      return;
-    }
-    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
-  }, []);
 
   const session = useSession();
   const migrationUserId = session.data?.user.id ?? null;
@@ -1475,6 +1504,8 @@ export function ToolbarPlanWorkspace({
       resourceStrip={stripSnapshot}
       minimapActive={minimap.open}
       onMinimapClose={minimap.close}
+      onViewportSlot={setViewportSlot}
+      onMinimapRoomChange={setMinimapRoom}
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
       // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
       overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
@@ -1482,6 +1513,11 @@ export function ToolbarPlanWorkspace({
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
       selectionCanvas={selectionCanvas}
+      floatPathsOpen={
+        floatPaths.open &&
+        floatPaths.targetId === (model.selectedActivityId ?? model.logicActivity?.id)
+      }
+      onToggleFloatPaths={onToggleFloatPaths}
     />
   );
 
@@ -1635,6 +1671,15 @@ export function ToolbarPlanWorkspace({
       focusGanttRow(a.id);
       model.onMakeMilestone(a);
     },
+    // Float paths on the Gantt's bar and row menu (toolbar-redesign M2-T4): the same toggle the
+    // diagram's bar receives (minus the diagram's swap), so the two views open the panel one way.
+    // Pressed means THIS activity is the target — not that the panel is open for some other one.
+    floatPathsOpen:
+      floatPaths.open &&
+      floatPaths.targetId === (model.selectedActivityId ?? model.logicActivity?.id),
+    // Not wrapped in `withDiagram`: the Gantt has no diagram to collapse or restore, and wrapping
+    // would make this input read the swap's refs during render (`react-hooks/refs`).
+    onToggleFloatPaths: (activity) => toggleFloatPathsInto(activity.id),
   };
 
   const ganttSelectionCtx = buildSelectionBarContext(ganttSelectionInput);
@@ -1654,6 +1699,7 @@ export function ToolbarPlanWorkspace({
       ...ganttSelectionInput,
       selectedId: activity.id,
       selectionCount: 1,
+      floatPathsOpen: floatPaths.open && floatPaths.targetId === activity.id,
     });
 
   /**
@@ -2103,14 +2149,10 @@ export function ToolbarPlanWorkspace({
           before the band existed. */}
 
         <ChromePortal>
-          {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
-            row's density reflects the surface rather than whatever width is left after its
-            siblings. Without it, the project-finish chip beside Row 1 silently costs the four
-            viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
           {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
               directly on the band's 3 px amber rule with nothing between them — a double seam that
               said the same thing twice, 1 px apart. */}
-          <ToolbarBandProvider className="flex flex-col">
+          <div className="flex flex-col">
             {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
@@ -2135,15 +2177,8 @@ export function ToolbarPlanWorkspace({
           this block reads — `model`, `ctx`, the ADR-0031 registry, the workspace key scope — stays
           exactly where it was and the shell stays plan-unaware (ADR-0029).
 
-          **Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
-          omission.** That provider renders a `<div>` and publishes ITS width as the band width; here
-          that div would be the identity block, which is the header row's one shrinkable item — so
-          the published figure would be "whatever width is left after my siblings", which is
-          precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped once in
-          `web-v0.86.0`. Nothing is lost by leaving it out: `resolveLayoutMode` has no production
-          caller at all (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this
-          mode toolbar already resolving `collapsed` at every viewport under the old arrangement,
-          harmlessly, because all four of its items are `showLabel: 'always'`. */}
+          The band is a plain `<div>` that publishes no width, so there is nothing to wrap this in
+          (`docs/TECH_DEBT.md` #193). */}
             {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
           mode cluster below (2026-08-26): the header places the two in different sections of a
           `justify-between` row, and one slot cannot put its contents in two places.
@@ -2241,37 +2276,39 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                  {model.canWrite ? (
-                    // `icon`, not `icon-sm` (ADR-0118 M4). This is not a dense-list row — it sits
-                    // in the plan identity line, whose height is its content's — so it takes the
-                    // ordinary icon button and reaches 44 px under a coarse pointer. `icon-sm`
-                    // stays 28 px on both pointers as D1's second named exception, and that
-                    // exception is for consumers inside a container whose height is fixed
-                    // independently of them; this one is not, so it does not qualify.
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => model.setEditing(true)}
-                      title="Edit plan…"
-                      aria-label="Edit plan"
-                      className="text-muted-foreground shrink-0"
-                    >
-                      <SquarePen aria-hidden="true" className="size-4" />
-                    </Button>
-                  ) : null}
+                  {/* **The plan's facts, as their own named toolbar — Plan summary and Edit plan
+                details** (toolbar-redesign M2-T1). The pencil that stood here was a hand-rolled
+                `Button` and the Summary popover was a deck item two rows down; both are registry
+                items now (`row: 'identity'`), rendered by one `Toolbar`, so they get the same
+                gating, tooltip and roving model as every other command rather than a copy of it.
+
+                Its own `role="toolbar"` and therefore its own Tab stop: the deck is one stop and
+                the mode switch is another, and folding these two into either would put a plan fact
+                in the middle of the sequence for a command surface. `ChromePortal` moves the DOM
+                node and leaves the React tree alone, so `ctx` reaches it unchanged.
+
+                The previous comment here argued `icon` against `icon-sm` for the pencil (ADR-0118
+                M4: not a dense-list row, so it reaches 44 px under a coarse pointer). That is still
+                the rule and is now the registry's: `ToolbarButton` and `ToolbarPopover` size
+                through `toolbarControlVariants`, which reads `--control-h`. */}
+                  <Toolbar
+                    items={rows.identity}
+                    context={ctx}
+                    label="Plan details"
+                    // The group is named for what it holds. The default, "Plan actions", would sit
+                    // beside the deck's "Plan" group and the "Plan view" switch, and an accessible
+                    // name that is a substring of two others is a locator trap (the e2e suites
+                    // match by name).
+                    groupLabels={{ object: 'About this plan' }}
+                    className="shrink-0"
+                  />
                 </div>
               </div>
             </ChromePortal>
 
             {/* **The plan's modes and pen — section 2, the middle of the header row.**
-          Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
-          omission. That provider renders a `<div>` and publishes ITS width as the band width; here
-          that div would be this section, whose width is whatever the row's `justify-between` leaves
-          — which is precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped
-          once in `web-v0.86.0`. Nothing is lost: `resolveLayoutMode` has no production caller at all
-          (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this mode toolbar
-          already resolving `collapsed` at every viewport, harmlessly, because all four of its items
-          are `showLabel: 'always'`. */}
+          Nothing publishes a band width any more, so there is no wrapper to omit
+          (`docs/TECH_DEBT.md` #193). */}
             <ChromePortal name="mode">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {/* **The mode cluster is back on the identity line, beside the pen** (workspace
@@ -2403,7 +2440,7 @@ export function ToolbarPlanWorkspace({
                 wrapper's own inset is the last of the band's height that is not a control.
                 `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
                 COPIES this one rather than judging its own, so the two cannot part company. */}
-            <div className="px-2 py-1">
+            <div className="px-2 py-1 max-lg:px-0">
               <Deck
                 items={rows.strip}
                 context={ctx}
@@ -2411,12 +2448,21 @@ export function ToolbarPlanWorkspace({
                 authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               />
             </div>
-          </ToolbarBandProvider>
+          </div>
         </ChromePortal>
 
         {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
           toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders
           nothing until an export/print fails; `null` when the flag is off. */}
+        {/* **The "Diagram viewport" cluster** (toolbar-redesign M4) — portalled into the slot the canvas
+            publishes at its bottom-right, so the context stays derived once, here. The slot exists
+            only while the diagram is mounted: in the Gantt it is `null` and the cluster is absent
+            rather than shaded (CQ-1, owner decision), which is also what hands focus on
+            (`DiagramViewportCluster`). */}
+        {viewportSlot
+          ? createPortal(<DiagramViewportCluster items={rows.canvas} context={ctx} />, viewportSlot)
+          : null}
+
         {ctx.exportError ? (
           <div className="px-4 pt-2">
             <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
@@ -2489,8 +2535,8 @@ export function ToolbarPlanWorkspace({
               role="status"
               className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
             >
-              The Late-start overlay is on — editing is paused. Turn it off in{' '}
-              <span className="font-medium">View</span> to edit.
+              The Late-start overlay is on — editing is paused. Turn off{' '}
+              <span className="font-medium">Late-start overlay</span> to edit.
             </p>
           </div>
         ) : null}

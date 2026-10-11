@@ -83,6 +83,72 @@ export async function clickToolbarCommand(page: Page, id: string): Promise<void>
 }
 
 /**
+ * Press a command that **lives in a menu and comes out onto the bar when there is room**
+ * (toolbar-redesign M5, the promotion ladder): its own button when the viewport has promoted it,
+ * else the row in the menu it left. A journey is about the command, not about the stage the
+ * viewport happens to be at, so it asks for the command by `id` and menu row.
+ *
+ * `id` is the promoted button's registry id (`health-check`, `share`, `add-start-milestone`);
+ * `via` is the menu trigger's (`analysis`, `export`, `add-activity`) and `menuItem` the row's name.
+ * An Add or Link preset opens no menu at all: pressing it arms the tool with that kind, exactly as
+ * picking the row does.
+ */
+export async function pressPromotable(
+  page: Page,
+  { id, via, menuItem }: { id: string; via: string; menuItem: string | RegExp },
+): Promise<void> {
+  const row = planCommands(page);
+  await expect(row).toBeVisible();
+  const promoted = row.locator(`[data-toolbar-item="${id}"]`);
+  if ((await promoted.count()) > 0) {
+    await promoted.click();
+    return;
+  }
+  await (await revealToolbarCommand(page, via)).click();
+  await page.getByRole('menuitem', { name: menuItem }).click();
+}
+
+/**
+ * Arm the Add tool on `kind`: the milestone kinds are buttons of their own on the bar once the
+ * viewport has promoted them (toolbar-redesign M5) and arm the tool exactly as picking the row from
+ * the `Activity type` menu does; Task is that menu's anchor and is always a row.
+ */
+export async function pickAddKind(
+  page: Page,
+  kind: 'Task' | 'Start milestone' | 'Finish milestone',
+): Promise<void> {
+  const preset =
+    kind === 'Start milestone'
+      ? 'add-start-milestone'
+      : kind === 'Finish milestone'
+        ? 'add-finish-milestone'
+        : null;
+  if (preset !== null) {
+    const button = planCommands(page).locator(`[data-toolbar-item="${preset}"]`);
+    if ((await button.count()) > 0) {
+      await button.click();
+      return;
+    }
+  }
+  await page.getByRole('button', { name: /^Activity type:/ }).click();
+  await page.getByRole('menuitemradio', { name: kind }).click();
+}
+
+/** Open the Health check dock: its button when the viewport has promoted it, else the Analysis row. */
+export async function openHealthCheck(page: Page): Promise<void> {
+  await pressPromotable(page, {
+    id: 'health-check',
+    via: 'analysis',
+    menuItem: 'Health check…',
+  });
+}
+
+/** Open the Share links dialog: its button when promoted, else the Share & export row. */
+export async function openShare(page: Page): Promise<void> {
+  await pressPromotable(page, { id: 'share', via: 'export', menuItem: 'Share…' });
+}
+
+/**
  * Is `id` offered by the command surface at all?
  *
  * The negative form matters as much as the positive one. Under the ladder this had to look in two
@@ -154,4 +220,28 @@ export async function recalculate(page: Page): Promise<void> {
       .catch(() => undefined);
   }
   await expect(bar).toHaveAttribute('data-schedule-state', 'current');
+}
+
+/**
+ * Unfold every folded section of the open **View ▾** panel.
+ *
+ * Structure, Markers and — in the Gantt — Columns start folded (toolbar-redesign M2-T3): they are
+ * the sections a planner opens least, and folding them is what brings the panel inside SC-13's
+ * 420 px at 1024 × 600. A folded section is **unmounted**, not clipped, so a journey that reaches
+ * for one of its checkboxes finds nothing until it is opened — and says "not found" rather than
+ * "folded". Call this after opening the panel and before the first such checkbox.
+ *
+ * Opens all of them rather than one by name: the journeys that need it are about the toggle, not
+ * about which section holds it, and a name list here would be a second copy of the registry's
+ * section list to keep in step.
+ */
+export async function unfoldViewSections(page: Page): Promise<void> {
+  const panel = page.getByRole('dialog', { name: /^View/ });
+  await expect(panel).toBeVisible();
+  // Always the FIRST remaining fold: `.all()` would hand back `nth` locators that re-resolve against
+  // the shrinking set, so the second click waits forever on a button the first one already opened.
+  const folded = panel.getByRole('button', { expanded: false });
+  while ((await folded.count()) > 0) {
+    await folded.first().click();
+  }
 }

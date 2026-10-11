@@ -81,7 +81,14 @@ describe('ToolbarSplitButton — per-half gating', () => {
     // The wrapper's wash only fires when BOTH halves are shut, so a caret shaded beside a live
     // primary rendered identically to a live one.
     const { caret } = renderSplit({ caretDisabled: true });
-    expect(caret.className).toMatch(/opacity-50/);
+    expect(caret.className).toMatch(/cursor-default/);
+    expect(caret.className).not.toMatch(/hover:bg-muted/);
+    // The quiet ink, not an alpha (M6): `opacity-*` is a value nobody gated.
+    expect(caret.className).not.toMatch(/opacity-/);
+    expect(caret.className).toMatch(/forced-colors:\[color:GrayText\]/);
+    cleanup();
+    const live = renderSplit({});
+    expect(live.caret.className).toMatch(/hover:bg-muted/);
   });
 
   it('keeps the arrow-key route to the menu open when only the primary is shaded', () => {
@@ -114,7 +121,7 @@ describe('ToolbarSplitButton — per-half gating', () => {
   });
 });
 
-describe('ToolbarSplitButton — haspopup and compact', () => {
+describe('ToolbarSplitButton — haspopup and hidden label', () => {
   it('announces a menu by default and a dialog on request', () => {
     const { caret } = renderSplit();
     expect(caret).toHaveAttribute('aria-haspopup', 'menu');
@@ -127,9 +134,9 @@ describe('ToolbarSplitButton — haspopup and compact', () => {
   });
 
   it('keeps the name when it withholds the visible label', () => {
-    // `compact` may not cost the control its name — an icon-only button with no accessible name is
+    // A hidden label may not cost the control its name — an icon-only button with no accessible name is
     // the blank-button defect ADR-0090 M3 shipped once.
-    renderSplit({ compact: true });
+    renderSplit({ labelState: 'hidden' });
     const primary = screen.getByRole('button', { name: 'Today' });
     expect(primary).toHaveTextContent('');
   });
@@ -187,13 +194,14 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
     expect(primary).not.toHaveAttribute('title', 'Add an activity first');
   });
 
-  it('dims the wrapper only when both halves are shut', () => {
-    // A live caret inside a washed-out control looks inert, which is a lie about what you can press.
+  it('quiets the wrapper only when both halves are shut', () => {
+    // A live caret inside a control gone quiet looks inert, which is a lie about what you can press.
+    // The shaded ink is `--muted-foreground` (M6 V3), no longer a 50 % opacity on the whole control.
     const { primary } = renderSplit({ primaryDisabled: true });
-    expect(primary.parentElement?.className).not.toMatch(/opacity-50/);
+    expect(primary.parentElement?.className).not.toMatch(/text-muted-foreground/);
     cleanup();
     const both = renderSplit({ disabled: true });
-    expect(both.primary.parentElement?.className).toMatch(/opacity-50/);
+    expect(both.primary.parentElement?.className).toMatch(/text-muted-foreground/);
   });
 });
 

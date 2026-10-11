@@ -1,6 +1,7 @@
 import { type Locator, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { unfoldViewSections } from '../e2e-support/toolbar';
 
 import {
   createClient,
@@ -42,6 +43,7 @@ async function nestedPlan(page: Page): Promise<void> {
 
 async function setCodeWidth(page: Page, width: number): Promise<void> {
   await page.getByRole('button', { name: 'View', exact: true }).click();
+  await unfoldViewSections(page);
   await page.getByRole('spinbutton', { name: 'Code width' }).fill(String(width));
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');

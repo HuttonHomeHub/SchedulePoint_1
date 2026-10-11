@@ -65,7 +65,7 @@ export function PlanPenControl({
       itemId={api.itemProps['data-toolbar-item']}
       label={canStop ? lockCopy.stopEditing : lockCopy.startEditing}
       icon={canStop ? <PenOff className="size-4" /> : <PenLine className="size-4" />}
-      showLabel
+      labelState={api.labelState}
       // Never absent while the lock status is resolving or shut — an item that disappears takes a
       // roving stop with it and shifts every command on the DO row sideways, which is worse than a
       // shaded control and a shape ADR-0064 records shipping once. So it renders in all thirteen

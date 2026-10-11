@@ -7,6 +7,7 @@ import {
   Diamond,
   Eraser,
   Route,
+  Split,
   SquarePen,
   StickyNote,
   Trash2,
@@ -14,9 +15,11 @@ import {
   Ungroup,
   Users,
   Waypoints,
+  X,
 } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef } from 'react';
 
+import { CONFLICT_READOUT_ICON, CONFLICT_READOUT_TEXT } from './conflict-readout';
 import { CONFLICT_REMEDIES } from './conflict-remedy';
 import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-gate';
 
@@ -32,11 +35,13 @@ import {
   toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
+import { useTooltip } from '@/components/ui/tooltip';
 import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   ENTRY_ROUTES_ENABLED,
+  FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
@@ -44,7 +49,11 @@ import {
 } from '@/config/env';
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
-import type { ConflictKey } from '@/features/tsld/render/conflicts';
+import {
+  CONFLICT_FLAGS,
+  joinConflictReasons,
+  type ConflictKey,
+} from '@/features/tsld/render/conflicts';
 import type { LogicPathMode } from '@/features/tsld/render/logic-path';
 import { cn } from '@/lib/utils';
 
@@ -92,6 +101,13 @@ export interface SelectionActionContext {
    * attached to the OBJECT means (ADR-0093's discriminator).
    */
   conflictKey: ConflictKey | null;
+  /**
+   * **Every** conflict the selected activity matches, in `CONFLICT_FLAGS` order; `[]` when it is not
+   * flagged. `conflictKey` is exactly `conflictKeys[0] ?? null` — the builder sets both from one
+   * `matchingConflictFlags` call. The bar's reason line names all of them; the remedy answers the
+   * leading one only (ADR-0094 D5).
+   */
+  conflictKeys: readonly ConflictKey[];
   /** Whether clearing a hand-placed placement is actionable now, and why not — from the shared
    * `clearVisualPlacementGate`, so this and the command surface cannot drift. The SAME
    * `BulkActionGate` type the plural bar uses, imported rather than re-typed: a third structurally
@@ -140,6 +156,19 @@ export interface SelectionActionContext {
   makeMilestone: MakeMilestoneGate;
   /** Open the Make milestone dialog for the selected activity. */
   onMakeMilestone: () => void;
+  /**
+   * Whether the Float paths panel is showing — the item's `aria-pressed`. A context **fact** rather
+   * than a read of the panel's state from inside the registry, for the reason every other state on
+   * this bar is one (ADR-0133 D6): the bar says what is true and the host owns where it came from.
+   */
+  floatPathsOpen: boolean;
+  /**
+   * Open Float paths on the selected activity, or close the panel if it is showing. `null` when the
+   * host has no panel to open, in which case the item is **omitted** rather than lit and inert (the
+   * ADR-0064 §7 dead end). It is a toggle because the panel's close path hands focus back to this
+   * very control, which only exists to receive it while the bar is mounted.
+   */
+  toggleFloatPaths: (() => void) | null;
 }
 
 /**
@@ -180,31 +209,29 @@ export interface SelectionCanvasContext {
 }
 
 /**
- * **`float-paths` is deliberately NOT here, and the plan said it should be.**
+ * **`float-paths` is on this bar, and is deliberately NOT in {@link SelectionCanvasContext}.**
  *
- * `implementation-plan.md` M2-T1 lists it with the other two on the grounds that _"`isEnabled`
- * requires a selection"_. That is true and it is the wrong test: it conflates **needs a selection**
- * with **is a canvas command**. Float paths is an *analysis* and runs in the **Gantt** as well as
- * the diagram — its `isEnabled` reads `activityCount`, deliberately not `canvasActive` or even
- * `hasDiagram` — so moving it into a bar that only the canvas renders would delete it from the
- * Gantt outright.
+ * It moved here from the command deck (toolbar-redesign M2-T4, ADR-0093: its `isEnabled` required a
+ * selection, which makes the selected activity its subject). Until then this paragraph said the
+ * opposite, and was right to: the item is an *analysis* that runs in the Gantt as well as the
+ * diagram, so putting it in the canvas half would have deleted it from the Gantt. The plan that
+ * once proposed exactly that (`implementation-plan.md` M2-T1 of the workspace-layout epic) conflated
+ * **needs a selection** with **is a canvas command**.
  *
- * That is not an inference. `tsld-toolbar-items.tsx` states it at the registration (_"Live in the
- * Gantt as well as the Diagram… the ADR-0059 M6 lesson inverted: shade what only the canvas can do,
- * never what both can"_), and `float-paths-view-agnostic.structural.test.ts` exists **specifically**
- * to make that fail loudly, because — in its own words — a canvas coupling "would only show up as a
- * broken Gantt in someone's browser".
- *
- * So M2-T1 moves **two** commands, not three. Float paths keeps its Row-1 seat until a destination
- * exists that both views share; the pinned-floor saving is correspondingly smaller.
+ * What made the move possible is that the Gantt DOES render this bar: `plan-workspace-toolbar.tsx`
+ * mounts the same {@link SelectionActionsBar} in the Gantt's dock row, and the Gantt row menu is
+ * derived from {@link selectionActionItems}. So the item lives in the object context
+ * ({@link SelectionActionContext.floatPathsOpen}), reaches both views by construction, and
+ * `float-paths-view-agnostic.structural.test.ts` still pins that the analysis imports nothing from
+ * either view.
  */
 
 /**
  * What the bar's items are actually typed over: the object actions, plus a **nullable** canvas half.
  *
  * Nested and nullable rather than a flat intersection, because the canvas half genuinely can be
- * absent — the Gantt renders no selection bar today, but `TsldPanel` is not the only conceivable
- * host, and the alternative (inert no-op defaults plus a separate "are these real?" boolean) is the
+ * absent — the Gantt renders this bar too, with `canvas: null`, so the two canvas-only items drop
+ * out there — and the alternative (inert no-op defaults plus a separate "are these real?" boolean) is the
  * fused shape ADR-0062 warns about: two facts in one object where neither can be checked.
  * `canvas === null` is the whole statement, and the three items' `isVisible` reads exactly it.
  */
@@ -372,17 +399,6 @@ function IsolateControl({
 }
 
 /**
- * The **Next-conflict status chip** (canvas nav, U2) — a compact, VISIBLE `role="status"` read-out
- * pinned beside the Next-conflict button that names the conflict being reviewed ("Conflict 2 of 5 ·
- * constraint conflict"), so a sighted planner gets the reason on screen (4 of the 5 flag types have no
- * on-canvas badge), not only in the polite announcement. Presentational (spreads `itemProps`, never a
- * roving-tabindex stop, mirrors the Project-finish chip); it renders nothing — and the registry item
- * hides — unless a conflict is being cycled (`ctx.currentConflict != null`, i.e. not while isolating /
- * before the first press / with no conflicts / flag-off). The reason truncates at narrow widths; the
- * full reason list is in the `title`. `goToNextConflict` keeps speaking the full polite announcement,
- * so this doubles as its visible half rather than replacing it.
- */
-/**
  * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
  * which one the planner is standing on.
  *
@@ -395,6 +411,48 @@ function IsolateControl({
  * typed and wants to know whether it was worth pressing), **"3 of 12"** after (they are walking them).
  * Collapsing the two into one would make the read-out say a position the planner has not reached.
  */
+
+/** The label of one conflict key, from the same table the announcer and the reason line read. */
+function conflictReasonLabel(key: ConflictKey): string | undefined {
+  return CONFLICT_FLAGS.find((flag) => flag.key === key)?.label;
+}
+
+/**
+ * **The reason, as a line above the bar's controls** (conflict-reason-on-object, ADR-0186).
+ *
+ * Shown whenever the selected activity is flagged, however the planner arrived. It is a caption on
+ * the object, not a toolbar item: it takes no roving stop and no Tab stop (no `tabindex`, no role),
+ * is not a live region (a conflict is a standing condition; ADR-0132), and never truncates
+ * (ADR-0184). It sits on its OWN line so the controls below it never reflow — an inline item cost a
+ * line at 1912 x 1080 (`m0-measurement.md`), which is why this is not one.
+ *
+ * Every reason is named, joined as the announcer joins them; the remedy beside it answers the
+ * leading one only. Not `aria-hidden`: where no described control exists (no placement, quick wins
+ * off, a second flag behind a leading `barAction`) this text is the only channel.
+ */
+function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.ReactElement | null {
+  if (keys.length === 0) return null;
+  // `pointer-coarse:leading-4` (and the foot row's `pointer-coarse:py-0.5`) give back the 8 px that
+  // keep the stage at 122 px with a conflict selected on a finger-sized 1024 x 600 window, over the
+  // 120 px floor `e2e-minimap/viewport-cluster.spec.ts` holds. Coarse only: a finger-sized column is
+  // wide enough that the line stays on one line, so the tighter leading never meets a wrapped line.
+  const labels = keys.flatMap((key) => conflictReasonLabel(key) ?? []);
+  return (
+    <p
+      data-conflict-reason=""
+      className={cn(
+        'flex items-start gap-1.5 px-2 text-sm leading-5 pointer-coarse:leading-4',
+        CONFLICT_READOUT_TEXT,
+      )}
+    >
+      <TriangleAlert
+        aria-hidden="true"
+        className={cn('mt-0.5 size-4 pointer-coarse:mt-0', CONFLICT_READOUT_ICON)}
+      />
+      <span>{joinConflictReasons(labels, 'start')}</span>
+    </p>
+  );
+}
 
 /**
  * The conflict remedy, rendered from {@link CONFLICT_REMEDIES} (ADR-0094 M4).
@@ -425,6 +483,7 @@ function ConflictRemedyControl({
   api: ToolbarItemRenderApi;
 }): React.ReactElement | null {
   const key = ctx.conflictKey;
+  const reasonId = useId();
   // `barAction` renders nothing: that remedy is an item the bar already carries, and a second copy
   // of it would be ADR-0093's defect inside one surface. `isVisible` on the registry item says the
   // same thing, so this is a belt-and-braces guard rather than the rule's only home — and it is the
@@ -434,17 +493,28 @@ function ConflictRemedyControl({
   const remedy = CONFLICT_REMEDIES[key];
   if (remedy.kind !== 'openEditorAt') return null;
   return (
-    <button
-      // `api.itemProps` already carries the focusable marker for a non-presentational render item;
-      // repeating it was harmless duplication the accessibility gate asked to remove.
-      {...api.itemProps}
-      type="button"
-      onClick={() => ctx.onOpenEditorAt(remedy.at)}
-      className={cn(toolbarControlVariants({}), 'gap-1.5')}
-    >
-      <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-      <span className="truncate">{remedy.label}</span>
-    </button>
+    <>
+      <button
+        // `api.itemProps` already carries the focusable marker for a non-presentational render item;
+        // repeating it was harmless duplication the accessibility gate asked to remove.
+        {...api.itemProps}
+        type="button"
+        // The remedy's DESCRIPTION is the reason it answers, so a keyboard or screen-reader user
+        // who Tabs here hears why before acting. A description, never part of the name.
+        aria-describedby={reasonId}
+        onClick={() => ctx.onOpenEditorAt(remedy.at)}
+        className={cn(toolbarControlVariants({}), 'gap-1.5')}
+      >
+        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+        <span className="truncate">{remedy.label}</span>
+      </button>
+      {/* A SIBLING of the button, and `hidden`: an `aria-describedby` reference is still computed
+          from a hidden node, whereas text inside the button would be content and so become part of
+          its accessible name ("Review the constraint…Constraint not met"). */}
+      <span id={reasonId} hidden>
+        {conflictReasonLabel(key)}
+      </span>
+    </>
   );
 }
 
@@ -460,15 +530,9 @@ function ConflictRemedyControl({
  * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
- * Every item pins `showLabel: 'always'` — this is a compact floating bar of five actions where the
- * name **is** the affordance, so a label is not something to trade away for width. Every item is also
- * `tier: 1`, but that is now a separate statement (TECH_DEBT #61): it says "demote these last", not
- * "label these". The two used to be the same property, and this file's own comment used to gloss
- * `tier: 1` as "(visible labels)" — which is precisely the conflation the split removed.
- *
- * The tier trade-off stands: under extreme narrow width the primitive demotes trailing items
- * (Edit/Delete) to overflow before the newer ones — accepted, since this floating bar rarely
- * overflows and surfacing the new actions is the goal.
+ * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
+ * name **is** the affordance, so a label is not something to trade away for width. The bar wraps
+ * rather than overflowing.
  */
 /**
  * **Which flippable items carry a `lostReason`, decided one at a time** (`use-focus-handoff.ts`).
@@ -521,8 +585,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'conflict-remedy',
       group: 'object',
-      tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: -1,
       // A placeholder: the live label comes from the remedy map via `render`. `defineToolbar`
       // rejects an empty label, and the overflow menu reads `item.label` directly.
@@ -539,8 +602,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'open-logic',
       group: 'object',
-      tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 0,
       label: 'Logic',
       icon: <Waypoints className="size-4" />,
@@ -575,8 +637,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'notes',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 0.5,
             label: 'Notes',
             description: 'Add or read notes on this activity.',
@@ -594,8 +655,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'progress',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 1,
             /**
              * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
@@ -643,8 +703,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'resources',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 2,
             label: 'Resources',
             icon: <Users className="size-4" />,
@@ -672,8 +731,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'edit',
       group: 'object',
-      tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 4,
       label: 'Edit',
       icon: <SquarePen className="size-4" />,
@@ -698,8 +756,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'duplicate',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate',
             icon: <Copy className="size-4" />,
@@ -714,8 +771,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'duplicate-band',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 4.5,
             label: 'Duplicate band',
             description: 'Copies the summary and every activity in it',
@@ -733,7 +789,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     /**
      * **Make milestone… — icon-only, and only for a zero-duration task** (ADR-0162 decision 4).
      *
-     * `showLabel: 'never'`, against this bar's every-item-carries-its-name rule, on a measurement:
+     * `labelVisibility: 'never'`, against this bar's every-item-carries-its-name rule, on a measurement:
      * M0-T5 found no labelled candidate that keeps the foot row on one line at 1646 (the shortest,
      * `Milestone…`, needs 116 px against 70 px of room), and a wrap costs the diagram 36 px on the
      * product owner's own screen, which ADR-0115 exists to prevent. The name still reaches everyone:
@@ -748,8 +804,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'make-milestone',
       group: 'object',
-      tier: 1,
-      showLabel: 'never',
+      labelVisibility: 'never',
       order: 4.7,
       label: MAKE_MILESTONE_LABEL,
       icon: <Diamond className="size-4" />,
@@ -774,8 +829,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'dissolve',
             group: 'object',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 5,
             label: 'Dissolve',
             icon: <Ungroup className="size-4" />,
@@ -792,8 +846,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     {
       id: 'delete',
       group: 'object',
-      tier: 1,
-      showLabel: 'always',
+      labelVisibility: 'always',
       order: 6,
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
@@ -822,8 +875,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'clear-visual-placement',
             group: 'object' as const,
-            tier: 1 as const,
-            showLabel: 'always' as const,
+            labelVisibility: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
             // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
@@ -894,6 +946,17 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
                 <Eraser className="size-4" />
               );
             },
+            // When this IS the conflict's remedy it carries the reason as its description, so a
+            // Viewer reaching the shaded button hears why it is there. Asked of the remedy map, not
+            // a key literal, like the icon above; `visualLaterThanBound`'s route carries its own.
+            srDescription: (ctx: SelectionActionContext) => {
+              const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+              return remedy?.kind === 'barAction' &&
+                remedy.itemId === 'clear-visual-placement' &&
+                ctx.conflictKey !== null
+                ? conflictReasonLabel(ctx.conflictKey)
+                : undefined;
+            },
             penGated: true,
             // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
             // in — never re-derived here. Two independent copies of a four-condition ladder is how
@@ -909,9 +972,9 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // A separate `find` group, so the primitive draws its rule between "what to do with this
     // activity" and "how to look at it". Neither is pen-gated: looking is not editing.
     //
-    // `showLabel: 'always'` matches the object actions above rather than the Row-1 registrations
+    // `labelVisibility: 'always'` matches the object actions above rather than the Row-1 registrations
     // these replace, and the reason is the surface: this is a compact bar of a handful of commands
-    // where the name IS the affordance, not a 25-item row rationing width. Same for `tier: 1`.
+    // where the name IS the affordance, not a 25-item row rationing width.
     //
     // **This paragraph was here TWICE**, in near-identical copies, and the deleted one still said
     // "none of the three" after `float-paths` left. A comment that disagrees with its neighbour
@@ -919,7 +982,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // sitting in the block being edited.
     //
     // **`zoom-to-selection` KEEPS its label, and the round trip is worth recording.** M1 made it
-    // `showLabel: 'never'`: at ten items the bar needed 1037.4 px against 775.6 px at 1646, so it
+    // `labelVisibility: 'never'`: at ten items the bar needed 1037.4 px against 775.6 px at 1646, so it
     // wrapped and the diagram paid 36 px, and dropping this one label plus omitting
     // `clear-visual-placement` was the measured fix.
     //
@@ -931,8 +994,8 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // with a selection. They chose the label, with that cost stated.
     //
     // So the surface rule this file states one paragraph up survives intact: every item on this
-    // bar carries its name, because the name IS the affordance here. `Deck.tsx`'s `ICON_ONLY` set
-    // exists for glyphs a stranger cannot guess wrong, and a crosshair is not one of them.
+    // bar carries its name, because the name IS the affordance here. The deck's `'never'` items
+    // exist for glyphs a stranger cannot guess wrong, and a crosshair is not one of them.
     //
     // Moving these two to the command deck instead was approved and then **withdrawn on its own
     // measurement**: the deck goes two lines → three at 1646, costing 58 px to save 36. See
@@ -940,12 +1003,10 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     //
     // **Two things a future reader will reach for, and neither works here.**
     //
-    // `showLabel: { atLeast: 'comfortable' }` — the band form (ADR-0091 D3a) — is **inert on this
-    // bar**. `Toolbar.tsx` pins `layout: 'comfortable'` and then resolves the policy as
-    // `(showLabel ?? 'auto') !== 'never'`, so an object literal is never equal to `'never'` and
-    // labels unconditionally. The docked selection bar sits outside any band by design
-    // (`toolbar-band.tsx`), so a width-conditional label here would read as conditional and not be
-    // one. `'never'` is the only lever that exists.
+    // `'roomy'` — the label that goes below the deck's container width — is **not available on this
+    // bar**. `Toolbar` is not a container, so `resolveLabelVisibility` turns it into `'always'`
+    // here, and a label that looks width-conditional and is not would read as a promise. `'never'`
+    // is the only lever that exists on this surface.
     //
     // And this is **not** a reversal of ADR-0114 D7, which declined to shorten this item's label
     // text on WCAG 2.4.6 grounds. The accessible name is unchanged — `ToolbarButton` pins it to
@@ -960,8 +1021,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           {
             id: 'zoom-to-selection',
             group: 'find',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 7,
             // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
             // named "Actions for <activity>", so in context the short form reads fine — but an
@@ -984,8 +1044,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             // its own armed state, and this declaration is what makes the set readable.
             activeKind: 'armed' as const,
             group: 'find',
-            tier: 1,
-            showLabel: 'always',
+            labelVisibility: 'always',
             order: 8,
             label: 'Isolate logic path',
             icon: <Route className="size-4" />,
@@ -1000,7 +1059,77 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionBarContext>,
         ]
       : []),
+    // **Float paths — moved here from the command deck** (toolbar-redesign M2-T4, D-c). The ranked
+    // driving chains INTO the selected activity, in a docked right panel (audit F4,
+    // `VITE_FLOAT_PATHS`). Its subject is the selected object, which is ADR-0093's discriminator, and
+    // on the deck it spent most of its life shaded with "Select an activity first".
+    //
+    // **View-agnostic, so it is NOT gated on `canvas`**: the analysis runs in the Gantt as well as
+    // the diagram (the ADR-0059 M6 lesson inverted — shade what only the canvas can do, never what
+    // both can). The gates the deck item carried carry over by construction rather than by copy: the
+    // deck required `activityCount > 0` and a selected activity, and this bar renders only for a
+    // selection, so both hold whenever the item exists. It is never pen-gated — looking is not
+    // editing. Flag-off the item is absent, as it was on the deck.
+    ...(FLOAT_PATHS_ENABLED
+      ? [
+          {
+            id: 'float-paths',
+            group: 'find',
+            // **Icon-only, on a measurement** (`dock.spec.ts`, ADR-0115): with its label this bar
+            // wraps to a second line in the foot row and a selection then costs the diagram 36 px,
+            // which is the guarantee that spec asserts as an equality. The name and the tooltip
+            // carry the words, as they do for Make milestone… above.
+            labelVisibility: 'never',
+            order: 9,
+            label: 'Float paths',
+            description: 'Trace the chains of activities that drive this one',
+            icon: <Split className="size-4" />,
+            isVisible: (ctx: SelectionActionContext) => ctx.toggleFloatPaths !== null,
+            isActive: (ctx: SelectionActionContext) => ctx.floatPathsOpen,
+            onActivate: (ctx: SelectionActionContext) => ctx.toggleFloatPaths?.(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
   ]);
+
+/**
+ * **The way out of a selection, on the bar that a selection opens.** Escape clears it from the
+ * diagram's list and the Clear control of the plural bar does the same, but the singular bar had no
+ * visible exit — and on a short, finger-sized window its own height leaves the diagram only a sliver
+ * (`docs/specs/toolbar-redesign/m4-measurement.md` §6), where "press Escape" is no help to someone
+ * without a keyboard. Icon-only, because the bar is already the tallest thing in the foot row; the
+ * tip says the key.
+ *
+ * **A separate Tab stop outside the roving toolbar, and touch-only by design** (product owner,
+ * accepted at the M4 review). It is rendered beside `Toolbar`, not as one of its items, so it is not
+ * part of that toolbar's arrow-key walk and costs a keyboard planner one extra Tab; and it is shown
+ * only on a finger-sized pointer, because Escape already does this for everyone with a keyboard.
+ */
+function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React.ReactElement {
+  const tip = useTooltip({ content: 'Clear selection (Esc)', purpose: 'name-echo' });
+  return (
+    <>
+      <button
+        {...tip.triggerProps}
+        type="button"
+        aria-label="Clear selection"
+        aria-keyshortcuts="Escape"
+        onClick={onActivate}
+        // Finger-sized windows only. With a mouse the bar's twelve actions already fill the foot row
+        // (`dock.spec.ts` holds a selection to zero canvas cost), the diagram is tall enough that
+        // Escape and a click on empty canvas are no hardship, and one more 36 px control wrapped the bar.
+        className={cn(
+          toolbarControlVariants({ state: 'rest' }),
+          // After the variants, which declare `inline-flex`: a merge keeps the later display.
+          'hidden pointer-coarse:inline-flex',
+        )}
+      >
+        <X aria-hidden="true" className="size-4" />
+      </button>
+      {tip.tooltip}
+    </>
+  );
+}
 
 /**
  * The **selection-actions toolbar** (ADR-0031, Fork-2) — the object actions for the selected
@@ -1031,8 +1160,11 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
 export function SelectionActionsBar({
   context,
   restoreFocus,
+  onClear,
 }: {
   context: SelectionBarContext | null;
+  /** Clear the selection. Present ⇒ the bar shows a visible Clear control after its actions. */
+  onClear?: () => void;
   /** Called when the bar unmounts **while it holds focus**, to hand focus back (e.g. to the canvas
    * listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
   restoreFocus?: () => void;
@@ -1102,6 +1234,8 @@ export function SelectionActionsBar({
 
   return (
     <div
+      // Asks the dock outlet for a line of its own on a finger-sized window — see `CanvasDockOutlet`.
+      data-dock-wide=""
       onFocus={() => {
         heldFocusRef.current = true;
       }}
@@ -1168,13 +1302,32 @@ export function SelectionActionsBar({
           subject, and names it more precisely than the word SELECTION did. The plural bar already
           had none, so the two bars now agree rather than differing by an accident of when each
           was written. */}
-      <Toolbar
-        items={selectionActionItems}
-        context={actionContext}
-        label={`Actions for ${actionContext.targetName}`}
-        groupLabels={{ object: 'Activity actions' }}
-        authoringEnabled={actionContext.canEditSchedule}
-      />
+      {/* The reason sits on its own line ABOVE a row that is the same row the bar has always been, so
+          flagging an activity never reflows a control. The row wrapper is always there (the caption
+          is the only thing that comes and goes), so a conflict resolving while focus is on a control
+          does not remount it. */}
+      <div className="flex min-w-0 flex-col">
+        <ConflictReasonLine keys={actionContext.conflictKeys} />
+        <div className="flex min-w-0 items-center gap-2">
+          <Toolbar
+            items={selectionActionItems}
+            context={actionContext}
+            label={`Actions for ${actionContext.targetName}`}
+            groupLabels={{ object: 'Activity actions' }}
+            authoringEnabled={actionContext.canEditSchedule}
+          />
+          {onClear ? (
+            <ClearSelectionButton
+              onActivate={() => {
+                // The press removes the bar that holds it, so focus goes to the restore target first —
+                // the same order `onMakeMilestone` uses, and for the same reason.
+                restoreFocus?.();
+                onClear();
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

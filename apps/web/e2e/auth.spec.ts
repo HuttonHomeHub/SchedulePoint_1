@@ -51,7 +51,9 @@ test.describe('Authentication journey', () => {
     // organisation rather than merely rendering something.
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
     await expect(page.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
-    await expect(page.getByLabel('Active organisation')).toHaveValue(orgSlug);
+    // A reader with ONE organisation sees it as a plain label, not a menu (ADR-0104, M6 V5), so the
+    // active organisation is read from the header's text rather than from a control's value.
+    await expect(page.getByRole('banner').getByText(orgName)).toBeVisible();
 
     // Sign out lives in the account chip's menu (ADR-0055 S1) — the header no longer carries a
     // bare button, so the journey opens the chip first.

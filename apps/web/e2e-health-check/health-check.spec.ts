@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import { canvasListbox, createAndOpenPlan, onboard, openProject, seedDefects } from './support';
 
@@ -30,12 +30,7 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   await page.reload();
 
   // ── 1 · The entry point, in the shipped layout ─────────────────────────────────────────────
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  await openHealthCheck(page);
 
   // ── 2 · Fourteen rows, always — and the seeded defects' verdicts ───────────────────────────
   const panel = page.getByRole('region', { name: 'Health check' });
@@ -128,22 +123,22 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   const focusedItem = await page.evaluate(() =>
     document.activeElement?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item'),
   );
-  expect(focusedItem).toBe('analysis');
+  // At this suite's 1646 px the viewport has promoted Health check onto the bar (toolbar-redesign
+  // M5), and the toggle is the control the reader pressed, so focus returns to it; below 1440 the
+  // command is only a row of `Analysis`, and `Analysis` takes it.
+  expect(focusedItem).toBe('health-check');
 
   // ── 5 · One dock at a time: opening Health check closes Float paths ────────────────────────
   // (The three-way exclusivity is pinned at the unit tier; the journey proves ONE real pair in
   // the shipped layout so the wiring — not just the helper — is exercised.)
   await canvasListbox(page).focus(); // select an activity so Float paths has a target
+  // Float paths is on the selection bar since toolbar-redesign M2-T4, not on the deck.
   await page
-    .getByRole('toolbar', { name: 'Plan commands' })
+    .getByRole('toolbar', { name: /^Actions for/ })
     .locator('[data-toolbar-item="float-paths"]')
     .click();
   await expect(page.getByRole('region', { name: 'Float paths' })).toBeVisible();
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  await openHealthCheck(page);
   await expect(page.getByRole('region', { name: 'Health check' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Float paths' })).not.toBeVisible();
 

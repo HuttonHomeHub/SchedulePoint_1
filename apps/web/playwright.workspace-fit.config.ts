@@ -25,6 +25,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e-workspace-fit',
+  // The promotion ladder's journey has its own config and CI step (`playwright.promotion.config.ts`).
+  testIgnore: 'promotion.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

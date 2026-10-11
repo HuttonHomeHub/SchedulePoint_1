@@ -1084,3 +1084,45 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
     );
   });
 });
+
+describe.each(THEME_SELECTORS)(
+  "%s — the conflict reason line on the selection bar's card (ADR-0186)",
+  (theme) => {
+    /**
+     * **The one pair neither gate above can see.** The bar's card is `toolbarCardVariants`, which
+     * is `bg-foreground/5`, painted on the foot row's chrome scope. `TEXT_PAIRS` holds bare token
+     * pairs and cannot express an alpha, and the alpha census scans only class strings holding both a
+     * `bg-X/NN` and a `text-Y` — the card's string has no `text-`. So the card's COMPOSITE fill is
+     * built here, the way the browser does it, and the line's two inks are asserted against it:
+     * its words (`--foreground`) and its icon (`--warning-text`, the token the deck's chip icon uses).
+     *
+     * The icon is asserted at 4.5:1, stricter than the 3:1 a graphic needs (1.4.11), because it is
+     * the same token the text-pair matrix gates at 4.5 and there is no reason for this surface to be
+     * the one place a weaker bar is applied.
+     */
+    const tokens = resolve(theme, 'chrome');
+    const value = (name: string): string => {
+      const v = tokens.get(name);
+      if (v === undefined) throw new Error(`${name} is not declared`);
+      return v;
+    };
+    const surface = fillOf(tokens);
+    const card = compositeOver({ ...parseColour(value('--foreground')), alpha: 0.05 }, surface);
+    const against = (ink: string): number =>
+      contrastRatio(card, compositeOver(parseColour(value(ink)), card));
+
+    it('the reason text is legible on the composited card (≥ 4.5:1)', () => {
+      const r = against('--foreground');
+      expect(r, `--foreground on the card is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('the warning icon is legible on the composited card (≥ 4.5:1)', () => {
+      const r = against('--warning-text');
+      expect(r, `--warning-text on the card is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('the card is a translucent fill and not the bare surface, so the pair above measures something', () => {
+      expect(card).not.toEqual(surface);
+    });
+  },
+);

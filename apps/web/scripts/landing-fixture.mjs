@@ -266,6 +266,61 @@ export async function seedLandingStates(page, slug) {
 }
 
 /**
+ * The long-name additions for `docs/specs/row-subject-truncation` M0-T2.
+ *
+ * Every plan the API creates is a DRAFT, so each of these wears the badge. `maxima` adds the
+ * 200 + 200 + 200 case (the DTO limits: `create-plan.dto.ts:23`, and the client and project DTOs) in
+ * its own client and project, so it dominates the boxes only when asked — the spec reports SC-5 with
+ * and without it.
+ */
+export async function seedLongNames(page, slug, { maxima }) {
+  return page.evaluate(
+    async ({ org, withMaxima }) => {
+      const call = async (method, path, body) => {
+        const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+          method,
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body ?? {}),
+        });
+        if (!response.ok)
+          throw new Error(`${method} ${path}: ${response.status} ${await response.text()}`);
+        return (await response.json()).data;
+      };
+      const client = await call('POST', '/clients', {
+        name: 'Northern Ports and Harbours Authority',
+      });
+      const project = await call('POST', `/clients/${client.id}/projects`, {
+        name: 'Estuary Crossing Programme — Western Approaches',
+      });
+      const names = [
+        'NetPoint reference: power-plant programme',
+        'EDF - Hynamics Proposal',
+        'Berth 4 Deepening — Dredging and Revetment Works, Stage 2B',
+      ];
+      const plans = [];
+      for (const name of names) {
+        plans.push(
+          await call('POST', `/projects/${project.id}/plans`, { name, plannedStart: '2026-02-02' }),
+        );
+      }
+      let maximaPlan = null;
+      if (withMaxima) {
+        const fill = (stem) => `${stem} ${'long-name segment '.repeat(20)}`.slice(0, 200).trim();
+        const c = await call('POST', '/clients', { name: fill('Client') });
+        const pr = await call('POST', `/clients/${c.id}/projects`, { name: fill('Project') });
+        maximaPlan = await call('POST', `/projects/${pr.id}/plans`, {
+          name: fill('Plan'),
+          plannedStart: '2026-02-02',
+        });
+      }
+      return { plans: plans.map((x) => x.id), maxima: maximaPlan?.id ?? null };
+    },
+    { org: slug, withMaxima: maxima },
+  );
+}
+
+/**
  * Ages one invitation past `expiresAt`, and this is the fixture's ONE departure from the public API.
  *
  * `INVITATION_TTL_MS` is seven days (`apps/api/src/modules/invitations/invitations.service.ts:27`)

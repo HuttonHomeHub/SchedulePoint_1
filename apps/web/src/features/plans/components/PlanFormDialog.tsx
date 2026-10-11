@@ -41,7 +41,7 @@ export function PlanFormDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Edit plan' : 'New plan'}
+      title={isEdit ? 'Edit plan details' : 'New plan'}
       {...(isEdit ? {} : { description: 'Add a plan to this project.' })}
     >
       <PlanForm

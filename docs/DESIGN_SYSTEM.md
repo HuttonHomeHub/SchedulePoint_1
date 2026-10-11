@@ -234,11 +234,85 @@ So, for any command surface:
   what this shares with the container-query trap in `UX_STANDARDS.md`: both are `shrink-0` on an
   auto-width item, both are invisible to jsdom, and both were found by measuring a real browser.
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
-  taxonomy as four captioned groups that a reader can **fold**, which is a decision the reader makes
-  about their own screen — not one a `ResizeObserver` makes for them at a width nobody measured.
-- **`showLabel` is presentation and it means what it says.** `'auto'` now means _yes_: under the
-  ladder it meant "if the row can afford it", and a row that wraps can always afford it. `'never'`
-  is for the handful of icons that are genuinely universal (zoom ±, fit, undo, redo, print).
+  taxonomy as named groups in two declared rows (LOOK, DO). A group has a `role="group"` and an
+  `aria-label`, no visible caption and no fold, and — since toolbar-redesign M6 V2 — **it is a pill**:
+  `DECK_GROUP_PILL`, a `before:` pseudo-element filling the group's box in `--muted` at 50 % with a
+  hairline `--border` (40 % and no edge read as nothing at a tablet's distance; 60 % would have thinned the
+  idle hover wash to 1.10:1), and with `rounded-md` to match the `Diagram | Gantt` segment's container. It takes **no layout width**, which is
+  the constraint (the LOOK row at 1024 has about 28 px to spare with a conflict showing), and it has no
+  leading edge, so a group that wraps onto a line of its own cannot open that line with a rule pointing at
+  nothing (SC-12, the defect the group seam it replaced had). Inside a group the registry's sections are
+  still divided by the finer `TOOLBAR_INSET_RULE` hairline. The captions that folded were removed in two
+  steps (the fold on 2026-08-28, the caption itself at the console epic's M6), so nothing here is a
+  decision a reader makes for their screen.
+- **A row has a quiet leading mark, and only where there is room** (M6 V1). `DECK_ROW_MARK` is a 14 px
+  glyph in `--muted-foreground` — an eye for LOOK, a wrench for DO (not a pencil: `Start editing` leads that
+  row, and a second pencil read as its twin) — `aria-hidden`, never a stop, with no stripe, no tint band and
+  no new colour. It is `@roomy/deck:` only — **from 79 rem (1264 px), deliberately** — because it costs 18 px
+  of a row and the rows under that width have none to spare (SC-1 asserts two lines at 1024); the ladder's
+  free widths are read with it present.
+- **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
+  `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: a lens
+  that is on but shaded keeps a 2 px underline in the same ink, and `forced-colors:[color:GrayText]` keeps
+  a shut control distinguishable where the mode overrides `color` to `CanvasText` on everything. The
+  ink is 7.98:1 on the band and 7.33:1 on a pill, where an alpha composites against whatever sits behind
+  it and was a figure nobody gated. ADR-0082's shading stays — a state the reader can change is shaded
+  with its reason, never hidden. While the pen is not held the **Author pill goes hollow and dashed**
+  (`DECK_GROUP_PILL_LOCKED`: a `--muted-foreground` dash at 50 %, 3.04:1, where the hairline it first wore was
+  1.5:1; `GrayText` in forced colours), so the pen and the commands it unlocks read as one locked unit.
+  **`Start editing` is not given the pen's amber fill while the pen is not held**: `primary` is the held
+  state (ADR-0133 D3/D4), and a fill for the other half would need a new prop on `ToolbarButton`.
+- **The row's last action is outlined, not filled** (M6 V4, reworked after review). Share & export was
+  `--secondary`-filled, the exact fill of the selected `Diagram | Gantt` segment and of a pressed toggle.
+  `DECK_CLOSING_SECTION` puts a 1 px inset `--muted-foreground` ring at 60 % (3.6:1 on a pill) on every
+  button of the deck's `output` section, so `Export` and a promoted `Share…` are outlined together by
+  construction; there is no `closing` variant, and so no hover token to keep above 4.5:1 (the 3.94:1 of
+  `--secondary-hover` under that label is moot). The ring is inside the box: no width.
+- **`Filter ▾` shows how many attributes are on** (M6 V4a): `ToolbarPopover`'s `badge` draws a count on the
+  glyph's corner (`h-3.5`, out past the funnel at `-top-2.5 -right-2`, capped at `9+`) — no width — with the
+  sentence ("2 filters on") as its `aria-describedby`.
+- **Whether a label shows is declared on the item and decided in one place.** Every registry item
+  carries `labelVisibility: 'always' | 'never' | 'roomy' | 'roomy-fine'` (default `'always'`; the old `'auto'` and
+  the `{ atLeast }` band form are gone). One resolver, `resolveLabelVisibility`, and one class helper,
+  `toolbarLabelClass`, both in `toolbar-styles.ts`, serve `Deck`, `Toolbar` and every trigger.
+  `'never'` is for the glyphs that are genuinely universal (zoom ±, fit, undo, redo).
+- **`'roomy'` is a container query on the deck, and it is the only width-dependent label there is.**
+  The label is `sr-only` below `--container-roomy` (**79 rem**, `globals.css`: the deck's own measured
+  width in a 1280 px window), via the **named** variant `@max-roomy/deck:` — never an arbitrary
+  `@max-[…]` value, because the design system has no arbitrary values. The deck declares
+  `@container/deck` on its root (a block-level box as wide as the band, so `contain: inline-size`
+  costs nothing; see the container-query trap in `UX_STANDARDS.md`). `Toolbar` is not a container, so
+  there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
+  a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
+  kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
+  rest). **One today: Apply levelled dates…**, which is `'roomy-fine'` — the same rule for a mouse, and
+  icon-only under a coarse pointer at every width (`pointer-coarse:`), because the word cost touch a deck line
+  at 1280 (owner decision, 2026-10-09). Baseline overlay, Comments and Settings… were `'roomy'` until M6 and
+  Resource view until the M5 review; all four are `'never'` now (owner decisions, 2026-10-10), keeping an
+  `aria-label` name and a `description` tooltip. Baseline overlay's glyph is `Diff`, not the `Layers` that
+  `Baselines…` wears in Analysis nor Compare revisions' `GitCompareArrows`.
+- **Free space is used: a menu command promotes onto the deck by a declared ladder** (toolbar-redesign M5,
+  R9, spec §4.11). The stages are six rem viewport thresholds — `PROMOTE_80` (1280 px), `PROMOTE_90` (1440),
+  `PROMOTE_100` (1600), `PROMOTE_119_5` (1912), `PROMOTE_135` (2160), `PROMOTE_160` (2560) — so a reader who raised the default font size gets the room
+  in text terms (a 1280 px window at a 32 px root is 40 rem and promotes nothing). Each entry has a stage
+  **per pointer**, because the same command is wider under a finger: the thresholds are committed in
+  `promotion-ladder.ts` and derived from the measured widths in `promotion-widths.{fine,coarse}.json` by
+  `computePromotionStages`, which fills each deck row's free width in rank order, skips an entry that does not
+  fit, carries every promoted entry forward and **reserves the worst stress state** (a cycling conflict
+  read-out on LOOK, a peer's pen on DO) and 2 px more. `--container-roomy` stays 79 rem, one rem under the
+  first stage, so nothing promotes while compact labels are still hidden. A promoted item is always
+  labelled, its tooltip says where it goes in a narrower window ("Moves into the ‹menu› menu in a narrower window"),
+  and a set of alternatives (Colour by, Link kind) is a flat run
+  of `aria-pressed` buttons under an `aria-hidden` caption — never a nested `role="group"`. The ladder is
+  **not a width mechanism**: nothing measures the deck, and `deck-no-measurement.structural.test.ts` still
+  holds. At each stage cell a row is ≤ 15 % empty on both pointers, or no command left in a menu would
+  fit; between the cells a sweep every 40 px holds a ceiling (30 % from 80 rem, 33 % under it where nothing
+  promotes) — SC-17, restated honestly in `docs/specs/toolbar-redesign/m5-measurement.md` §3 and asserted by
+  `e2e-workspace-fit/promotion.spec.ts`, which has its own config and CI step.
+- **A popover panel's width is a named token.** `ToolbarPopover` takes `panelWidth: 'default' | 'wide'`
+  and `usePopoverPanel` maps them to `--container-popover` (20 rem) and `--container-popover-wide`
+  (44 rem, View ▾'s three columns), each capped at the viewport less 1 rem — tokens in `globals.css`,
+  not arbitrary `max-w-[min(…)]` values, which the sizing ratchet counts.
 - **A command surface is horizontal.** `Toolbar` carried an `orientation` prop for Graphite's 48 px
   mode rail; ADR-0109 D2 deleted that rail, and the prop sat with **no consumer at all** while this
   clause went on documenting the rule that governed it — dead code kept alive by a standard
@@ -247,15 +321,40 @@ So, for any command surface:
   lines; the part to get right is the **announcement**, since a stack that tells assistive technology
   it is horizontal is wrong about the only thing `aria-orientation` exists to say.
 
+**The one exception: below `lg` the deck is a single scrolling line** (toolbar-redesign M3, R6/US-6,
+ADR-0185 D5; `docs/specs/toolbar-redesign/m3-measurement.md`). The wrap above is budgeted from the 1024 × 600 floor up; under 64 rem it cost
+355 px (640 wide) to 603 px (320 wide) of the window, so the body had no height and the foot row was
+below the window with nothing to scroll. `max-lg:` therefore puts DO then LOOK on one `flex-nowrap
+overflow-x-auto` line (the editing row leads below the floor, owner decision 2026-10-10; the rows are
+**rendered** in that order by `use-deck-row-order.ts`, never reordered with CSS `order`, so the Tab and
+arrow sequence is the order on screen — WCAG 1.3.2, 2.4.3 — and LOOK above DO at 1024 and wider is untouched), and **reachability is still structural**, now by three things rather than by
+the wrap: `scroll-px-8` and a focus handler that calls `scrollIntoView({ block: 'nearest', inline:
+'nearest' })` (keyboard focus only, and only where the deck overflows), so a focused control is never
+flush with the edge or under the fade; `max-lg:deck-edge-fade`, a mask whose two widths are driven
+by the scroll position (`animation-timeline: scroll(self inline)`), so a reader sees the line goes on
+even where overlay scrollbars hide; and `usePopoverPanel` / `Menu`'s viewport clamp for an overlay
+opened from a half-scrolled trigger. A short-but-wide window (1280 × 600) keeps its two rows (CQ-3).
+**`squat`** (`@custom-variant squat`, `(width < 64rem) and (height <= 26rem)`, pinned in
+`lib/breakpoints.ts`) is narrow **and** short: the shell itself scrolls and the band scrolls away, so
+a 640 × 360 or 320 × 256 window (or a 1280 × 800 window at text-only 200 %, which is 40 × 25 rem)
+reaches the foot row by scrolling to it. `xs` (26 rem) is the narrower step the app header uses to
+drop its plan identity under the brand.
+
+**The "Diagram viewport" cluster** (toolbar-redesign M4) is a `toolbarCardVariants` card at the diagram's
+bottom-right: Zoom out, Zoom in, Fit to plan (a frame glyph) and the Minimap toggle, `shadow-sm`, inside the
+canvas surface scope, tooltips opening **above** it and closing when pressed. It is anchored to the
+**visible** stage, not the canvas's own box (which a short stage clips), and where the visible stage cannot
+hold the 46 px (fine) or 54 px (coarse) card plus its 12 px inset it is withdrawn with `visibility: hidden`
+rather than drawn clipped; Fit to plan is then still in `View ▾`.
+
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the
 trade, made deliberately — all commands visible when there is room. The cost is measured
 and budgeted from the 1024 × 600 floor up, not defended down to a phone width.
 
-`tier` survives as **priority within a group**, and it is still not `showLabel`. They were one
-property once, which meant a static per-item flag decided a question about render-time width
-(ADR-0031, TECH_DEBT #61); they are two now for the opposite reason — neither of them is about
-width any more.
+There is no per-item prominence field: `ToolbarItem.tier` was deleted at toolbar-redesign M7 (ADR-0185;
+`docs/TECH_DEBT.md` #193, closed), because the deck has no ranking and will not get one. A label is
+`labelVisibility`, and where an item sits within its group is `order`.
 
 **A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
 never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.
@@ -301,14 +400,16 @@ only in the relationship — the ADR-0093 shape.
 So, for any surface holding a mixed set of controls:
 
 - **The height is declared once and applied to every branch**, including the ones a `render` item
-  brings its own markup to. On the deck that is `min-h-9`; the width minimums (`min-w-9` icon-only,
-  `min-w-12` labelled) and the label's `text-micro` ramp step are the same in both branches.
-- **A caption is a control and takes the control's box.** The deck's group captions fold their
-  group and are roving tab stops, so a caption measured at a smaller height than the buttons beside
-  it was a target-size question wearing a typography costume (WCAG 2.2 §2.5.8).
-- **Turning the card on its side spends width, not height.** The caption leads its row rather than
-  sitting above it, because a full-width caption row costs the deck a line per group and the deck's
-  scarce axis is vertical.
+  brings its own markup to. On the deck that is `min-h-(--control-h)` (36 px, 44 px under a coarse
+  pointer, ADR-0118); the width minimums (`min-w-9` icon-only, `min-w-12` labelled) are the same in
+  both branches, and the label is the one type size the shared control declares (`text-sm`) — the
+  `text-micro` step the deck once forced on a labelled command was removed in
+  `docs/specs/object-bar-defects/` M3.
+- **A group has no caption to size.** The captions that folded their group, and were roving tab
+  stops, are gone; what marks a group now is an inset hairline, and the group's name reaches
+  assistive technology through its `aria-label`.
+- **The card stays on its side.** A group is one row of controls, so the deck's scarce axis, height,
+  is spent on controls rather than on a caption row.
 
 **What it measured, so the next reader does not re-derive it:** worst within-row label spread
 **12 px → 3 px**; deck height **116 → 108** at 1920/1646/1440 and **116 → 224 at 1280**, where the
@@ -617,7 +718,14 @@ differently from its neighbour, and no way to change the measure once.
 | `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to   |
 | `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                               |
 | `Skeleton`                    | the loading **material** only; each archetype owns its own loading **shape**                                                    |
-| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly                                                          |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)            |
+
+**A list row's subject wraps; it never clips** (ADR-0184, extending ADR-0146 D3/D4). `RowSubject`'s name, Draft
+badge and `project · client` are never `truncate`d, ellipsised, clamped or reordered: one line when they fit,
+otherwise the context moves whole under the name, in whole 20 px steps with no vertical gap. `ListRow`'s trailing
+block drops beneath its primary block when the primary would be under `7rem` (`min-w-28`), which never happens at
+or above the 1024 px floor. A row's height is therefore content, not a constant; `title` is not the remedy for a
+clipped name (it is invisible to keyboard and touch).
 
 **The authoring rule: reach for the archetype, or raise the requirement — never
 invent a one-off.** A hand-rolled frame that happens to match today's archetype

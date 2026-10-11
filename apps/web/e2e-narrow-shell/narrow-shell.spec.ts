@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page } from '@playwright/test';
+import { type CDPSession, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
@@ -537,10 +537,12 @@ async function expectNoSidewaysScroll(page: Page, label: string): Promise<void> 
  * Below 768 px the plan workspace used to be a separate single-pane layout with a Workspace-view
  * toggle; it is the same stack as at 1024 now — canvas row, then the foot row — and this block drives
  * it at the widths the old branch served. The readings it holds the layout to are
- * `m0-measurement.md`'s: 700 × 900 and 640 × 844 have a body tall enough for rows and the foot row;
- * 320 × 720 has a ~109 px body (the shell's wrapped chrome is 603 px), so only width facts are
- * asserted there — `docs/TECH_DEBT.md` #471 owns the height. Nothing is asserted about the table at
- * 640 × 480 and below: the criteria that did were withdrawn with M0.
+ * `m0-measurement.md`'s, taken before the command band became one scrolling line (toolbar-redesign
+ * M3): 700 × 900 and 640 × 844 had a body tall enough for rows and the foot row, and 320 × 720 a
+ * ~109 px body (the shell's wrapped chrome was 603 px). The band is 143-239 px now, so those windows
+ * have 700-757 px and 481-529 px of body, and the cases that assert the SWAP read the heights where
+ * the body is short (740 px). The table at 640 × 480 and below is asserted by the M3 block at the end
+ * of this file (SC-5, SC-6): `docs/TECH_DEBT.md` #471's band half.
  *
  * **The dock rule, stated as the arithmetic the journey can check from the outside.** A right dock
  * that would leave the diagram under 360 px (`CANVAS_MIN_WIDTH`) takes the whole row and the stage
@@ -595,6 +597,13 @@ const NARROW_DOCK_SIZES = [
 ] as const;
 
 const commandBand = (page: Page) => page.getByRole('toolbar', { name: 'Plan commands' });
+/** The selection bar, which holds Float paths since toolbar-redesign M2-T4 (it left the deck). */
+const selectionBar = (page: Page) => page.getByRole('toolbar', { name: /^Actions for/ });
+/** The control that opens a dock, on whichever surface holds it. */
+const dockTrigger = (page: Page, dock: DockSpec) =>
+  (dock.key === 'float paths' ? selectionBar(page) : commandBand(page)).locator(
+    `[data-toolbar-item="${dock.trigger}"]`,
+  );
 const expandPanel = (page: Page) => page.getByRole('button', { name: 'Expand activities panel' });
 const collapsePanel = (page: Page) =>
   page.getByRole('button', { name: 'Collapse activities panel' });
@@ -606,15 +615,20 @@ const dockSurface = (page: Page, dock: DockSpec) =>
 
 /** Open a dock the way a pointer does. */
 async function openDock(page: Page, dock: DockSpec): Promise<void> {
-  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  const trigger = dockTrigger(page, dock);
   await trigger.click();
   if (dock.menuItem !== null) await page.getByRole('menuitem', { name: dock.menuItem }).click();
   await expect(dockRegion(page, dock)).toBeVisible();
+  // A press focuses the trigger, and an icon-only trigger's tooltip opens on focus and stays until
+  // the pointer leaves (ADR-0117); the tip hangs below the trigger, which on a line this narrow is
+  // over the dock's own header. A planner's pointer moves on to the Close button, and the tip leaves
+  // with it. Playwright checks the target BEFORE it moves the mouse, so say where the mouse goes.
+  await page.mouse.move(0, 0);
 }
 
 /** Open a dock from the keyboard alone: focus the trigger, Enter, and Enter on the menu item if any. */
 async function openDockByKeyboard(page: Page, dock: DockSpec): Promise<void> {
-  const trigger = commandBand(page).locator(`[data-toolbar-item="${dock.trigger}"]`);
+  const trigger = dockTrigger(page, dock);
   await trigger.focus();
   await page.keyboard.press('Enter');
   if (dock.menuItem !== null) {
@@ -875,10 +889,16 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
 
     // No selection here: a selected activity docks its action bar in the foot row and grows it to
     // most of a narrow body (m0-measurement.md §5, pre-existing), which is a different reading.
+    // The heights are the ones where the body is SHORT, so the swap is what is under test: the
+    // band is one scrolling line now (toolbar-redesign M3), so a 900 px window leaves a 757 px body
+    // that holds the panel beside the diagram and never swaps (the body must be under 611 px:
+    // `isShortBody`). 740 px leaves 597 (fine) and 577 (coarse). 320 x 720 has a 529 px body and
+    // swaps too, where it used to have 109.
     for (const size of [
-      { width: 700, height: 900, bodyRows: true },
-      { width: 640, height: 844, bodyRows: true },
-      { width: 320, height: 720, bodyRows: false },
+      { width: 700, height: 740, minRows: 5 },
+      { width: 640, height: 740, minRows: 5 },
+      // The foot row wraps taller at 320, so the same body shows fewer rows.
+      { width: 320, height: 720, minRows: 3 },
     ] as const) {
       const tag = `${String(size.width)} x ${String(size.height)}`;
       await page.setViewportSize({ width: size.width, height: size.height });
@@ -909,23 +929,19 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
 
       // The panel, where the body has the height for it: ADR-0180's swap shows rows, the table's
       // region keeps its floor, and the way back is there.
-      if (size.bodyRows) {
-        await expand.click();
-        await expect(collapsePanel(page)).toBeVisible();
-        await expectNoSidewaysOverflow(page, `${tag}: expanded`);
-        await expect
-          .poll(() => hittableRows(page), { message: `${tag}: rows under the swap` })
-          .toBeGreaterThanOrEqual(5);
-        const region = await boxOf(
-          page.getByRole('region', { name: 'Activities', exact: true }),
-          'the Activities region',
-        );
-        expect(region.height, `${tag}: the table region keeps its floor`).toBeGreaterThanOrEqual(
-          128,
-        );
-        await collapsePanel(page).click();
-        await expect(expand).toBeVisible();
-      }
+      await expand.click();
+      await expect(collapsePanel(page)).toBeVisible();
+      await expectNoSidewaysOverflow(page, `${tag}: expanded`);
+      await expect
+        .poll(() => hittableRows(page), { message: `${tag}: rows under the swap` })
+        .toBeGreaterThanOrEqual(size.minRows);
+      const region = await boxOf(
+        page.getByRole('region', { name: 'Activities', exact: true }),
+        'the Activities region',
+      );
+      expect(region.height, `${tag}: the table region keeps its floor`).toBeGreaterThanOrEqual(128);
+      await collapsePanel(page).click();
+      await expect(expand).toBeVisible();
     }
   });
 
@@ -990,25 +1006,41 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     });
   }
 
-  test('a squeezed dock gives way to Fit, and the panel and a dock never coexist', async ({
+  test('a squeezed dock gives way to a viewport command, and the panel and a dock never coexist', async ({
     page,
   }) => {
     test.setTimeout(300_000);
     page.setDefaultTimeout(20_000);
     const { planUrl } = await seedWorkspace(page);
-    await page.setViewportSize({ width: 640, height: 844 });
+    // 740 px high, not the 844 this read before the band became one line: a 844 px window now has a
+    // body tall enough (701 px) to hold a dock and the panel's minimum, so nothing is squeezed.
+    await page.setViewportSize({ width: 640, height: 740 });
     await page.goto(planUrl);
     const health = DOCKS[0];
 
-    // Fit acts on the diagram, so a dock that has taken the row closes first and the stage is back.
-    // Fit is shaded until the schedule is calculated, and calculating needs the pen.
+    // A viewport command acts on the diagram, so a dock that has taken the row closes first and the
+    // stage is back. It is Go to today, not Fit: Fit moved into the cluster inside the stage
+    // (toolbar-redesign M4), which is inert in exactly this state (`docs/TECH_DEBT.md` #480). Go to
+    // today is shaded until the schedule is calculated, and calculating needs the pen.
     await ensurePen(page);
     await recalculate(page);
     await openDock(page, health);
     expect(await stageInert(page), 'the squeezed dock made the stage inert').toBe(true);
-    await commandBand(page).getByRole('button', { name: 'Fit to plan' }).click();
+    await commandBand(page).getByRole('button', { name: 'Go to today' }).click();
     await expect(dockRegion(page, health)).toBeHidden();
-    expect(await stageInert(page), 'Fit freed the stage').toBe(false);
+    expect(await stageInert(page), 'the viewport command freed the stage').toBe(false);
+
+    // Fit to plan is in View ▾ as well (`docs/TECH_DEBT.md` #480): the same wrapped command, so with
+    // a dock squeezing the stage it closes the dock and fits, from the deck, by keyboard or pointer.
+    await openDock(page, health);
+    expect(await stageInert(page), 'the squeezed dock made the stage inert again').toBe(true);
+    await commandBand(page).getByRole('button', { name: /^View/ }).click();
+    await page
+      .getByRole('dialog', { name: 'View' })
+      .getByRole('button', { name: 'Fit to plan' })
+      .click();
+    await expect(dockRegion(page, health)).toBeHidden();
+    expect(await stageInert(page), 'View ▾ Fit to plan freed the stage').toBe(false);
 
     // ADR-0180's exclusivity, now at this width: Expand closes an open dock, and opening a dock over
     // the swapped panel collapses the panel.
@@ -1151,5 +1183,655 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     await expect(collapsePanel(page)).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(expandPanel(page)).toBeFocused();
+  });
+});
+
+/**
+ * **Below 1024 wide the command band is one line that scrolls sideways** (toolbar-redesign M3, US-6,
+ * `docs/TECH_DEBT.md` #471; `docs/specs/toolbar-redesign/m3-measurement.md` holds the readings).
+ *
+ * Before it the header and the deck's wrapped lines took 355 px of a 640-wide window and 603 px of a
+ * 320-wide one: `<main>` had no height at 640 x 360 and below, and the foot row — Expand, Recalculate
+ * — was under the window with nothing to scroll. On a touch pointer Expand was unreachable at all
+ * five of #471's cells. Reachability here is `elementFromPoint` at the control's centre, as
+ * `pointerReachable` has it: "visible" and "hit-testable" are different facts (ADR-0114 M1).
+ *
+ * **Narrow AND short is the one case where the band scrolls away** (`squat`, 26 rem): there the shell
+ * itself scrolls, so Expand is a scroll away and every reading scrolls it into view first — that is
+ * what a planner does, and what `scrollIntoViewIfNeeded` does for them. At 640 x 480 and above the
+ * band is held and Expand is reachable at rest.
+ */
+const SC5_CELLS = [
+  { width: 640, height: 480 },
+  { width: 640, height: 360 },
+  { width: 640, height: 300 },
+  { width: 320, height: 720 },
+  { width: 320, height: 256 },
+] as const;
+
+/** The band's fraction of the window, and whether the shell scrolls (so the band can scroll away). */
+async function bandFacts(page: Page): Promise<{
+  share: number;
+  scrollsAway: boolean;
+  squat: boolean;
+  mainTop: number;
+  scrollTop: number;
+}> {
+  return page.evaluate(() => {
+    const band = document.querySelector('[data-surface="chrome"]:not([data-activities-bar])');
+    const main = document.querySelector('main');
+    const shell = main?.parentElement ?? null;
+    const height = band?.getBoundingClientRect().height ?? 0;
+    return {
+      share: height / window.innerHeight,
+      scrollsAway: shell !== null && shell.scrollHeight > shell.clientHeight,
+      squat: window.matchMedia('(width < 64rem) and (height <= 26rem)').matches,
+      mainTop: (main?.getBoundingClientRect().top ?? 0) + (shell?.scrollTop ?? 0),
+      scrollTop: shell?.scrollTop ?? 0,
+    };
+  });
+}
+
+/**
+ * Browser default font size, so rem media queries answer (a CSS `html { font-size }` would not).
+ *
+ * The CDP session is returned **attached** and the caller detaches it after the last assertion: the
+ * override lives in the DevTools agent's per-page state, so a session detached straight after the
+ * send leaves it to whatever the renderer does on the next navigation. That held on a developer
+ * machine and read back 16 px on CI's Chromium in both pointer modes, while the sibling
+ * `e2e-workspace-fit` cell, which keeps its session open, reads 32 px there.
+ */
+async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<CDPSession> {
+  const cdp = await page.context().newCDPSession(page);
+  await applyDefaultFontSize(cdp, scale);
+  return cdp;
+}
+
+async function applyDefaultFontSize(cdp: CDPSession, scale: 1 | 2): Promise<void> {
+  await cdp.send('Page.setFontSizes', {
+    fontSizes: {
+      standard: 16 * scale,
+      fixed: 13 * scale,
+      serif: 16 * scale,
+      sansSerif: 16 * scale,
+    },
+  } as never);
+}
+
+test.describe('the selection bar on a finger-sized pointer (toolbar-redesign M4 review)', () => {
+  test.use({ acknowledgeViewportNotice: true, hasTouch: true });
+
+  // The dock outlet asks for 36 rem (576 px) while a `data-dock-wide` strip is in it, and no
+  // measurement had put that floor at a window narrower than 576 px. At 320 and 640 the foot row's
+  // own content box is under it, so the floor must give way rather than push the row sideways.
+  test('a selection open at 320 and 640 wide does not scroll the page, main or the foot row sideways', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    for (const size of [
+      { width: 320, height: 720 },
+      { width: 640, height: 844 },
+    ]) {
+      const tag = `coarse ${String(size.width)} x ${String(size.height)}`;
+      await page.setViewportSize(size);
+      await page.goto(planUrl);
+      expect(
+        await page.evaluate(() => matchMedia('(pointer: coarse)').matches),
+        `${tag}: the pointer is coarse`,
+      ).toBe(true);
+      await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+      await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+      await expect(footRow(page).getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+      await expect(footRow(page).locator('[data-dock-wide]')).toHaveCount(1);
+      await expectNoSidewaysOverflow(page, tag);
+    }
+  });
+});
+
+for (const pointer of ['fine', 'coarse'] as const) {
+  test.describe(`the command band below 1024, ${pointer} pointer (toolbar-redesign M3)`, () => {
+    test.use({ acknowledgeViewportNotice: true, hasTouch: pointer === 'coarse' });
+
+    test('SC-5, SC-6 and SC-7: the band is held to 40 % or scrolls away, and the foot row is reachable', async ({
+      page,
+    }) => {
+      test.setTimeout(420_000);
+      page.setDefaultTimeout(20_000);
+      const { planUrl } = await seedWorkspace(page);
+
+      for (const size of SC5_CELLS) {
+        const tag = `${pointer} ${String(size.width)} x ${String(size.height)}`;
+        await page.setViewportSize(size);
+        await page.goto(planUrl);
+        expect(
+          await page.evaluate(() => matchMedia('(pointer: coarse)').matches),
+          `${tag}: the pointer is the one this block names`,
+        ).toBe(pointer === 'coarse');
+        await expect(commandBand(page)).toBeVisible();
+
+        // The deck is one line, and it says so by being wider than its box.
+        const deck = await commandBand(page).evaluate((el) => ({
+          overflows: el.scrollWidth > el.clientWidth,
+          lines: new Set(
+            [...el.querySelectorAll('[data-toolbar-focusable]')].map((c) =>
+              Math.round(c.getBoundingClientRect().top / 4),
+            ),
+          ).size,
+        }));
+        expect(deck.overflows, `${tag}: the deck scrolls sideways`).toBe(true);
+        expect(deck.lines, `${tag}: the deck is one line`).toBe(1);
+
+        const facts = await bandFacts(page);
+        expect(
+          facts.share <= 0.4 || (facts.squat && facts.scrollsAway),
+          `${tag}: the band is ${String(Math.round(facts.share * 100))} % of the window and ` +
+            `${facts.squat && facts.scrollsAway ? 'scrolls away' : 'is held'}`,
+        ).toBe(true);
+
+        // Expand and Recalculate (the plan is not calculated, so it renders) are under a pointer
+        // once scrolled to, which is all a band that scrolls away asks of a planner.
+        const expand = expandPanel(page);
+        const recalculate = page.getByRole('button', { name: 'Recalculate' });
+        for (const [name, control] of [
+          ['Expand activities panel', expand],
+          ['Recalculate', recalculate],
+        ] as const) {
+          await control.scrollIntoViewIfNeeded();
+          await pointerReachable(page, `${tag}: ${name}`, control);
+        }
+        if (!facts.squat) {
+          // Held band: nothing has to be scrolled to.
+          const reach = await page.evaluate(() => {
+            const el = document.querySelector('button[aria-label="Expand activities panel"]');
+            if (!el) return false;
+            const b = el.getBoundingClientRect();
+            return b.top >= 0 && b.bottom <= window.innerHeight;
+          });
+          expect(reach, `${tag}: Expand is on screen without scrolling`).toBe(true);
+        }
+
+        // SC-6: with the panel expanded the table keeps a row a pointer can hit, where the body can
+        // hold one (a 640 x 480 or 320 x 720 window; the shorter cells scroll to a full window).
+        if (size.height >= 480) {
+          await expand.click();
+          await expect(collapsePanel(page)).toBeVisible();
+          await expect
+            .poll(() => hittableRows(page), { message: `${tag}: rows with the panel expanded` })
+            .toBeGreaterThanOrEqual(1);
+          await collapsePanel(page).click();
+          await expect(expand).toBeVisible();
+        }
+      }
+    });
+
+    test('SC-7: at text-only 200 % in a 1280 x 800 window every deck control is hit-testable', async ({
+      page,
+    }) => {
+      test.setTimeout(420_000);
+      page.setDefaultTimeout(20_000);
+      const { planUrl } = await seedWorkspace(page);
+
+      const cdp = await setDefaultFontSize(page, 2);
+      try {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto(planUrl);
+        await expect(commandBand(page)).toBeVisible();
+        const readRoot = (): Promise<string> =>
+          page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+        if ((await readRoot()) !== '32px') {
+          // The renderer can drop the override across the navigation; set it again on the live
+          // page and reload so the first layout already answers rem queries at 200 %.
+          await applyDefaultFontSize(cdp, 2);
+          await page.reload();
+          await expect(commandBand(page)).toBeVisible();
+        }
+        // Without this the cell would silently read an ordinary 1280 window and pass for the wrong
+        // reason: the browser's default font size is what rem media queries answer to.
+        expect(
+          await readRoot(),
+          'setFontSizes moved the root font size, so rem queries respond',
+        ).toBe('32px');
+
+        const facts = await bandFacts(page);
+        expect(facts.squat, '1280 x 800 at 200 % is 40 x 25 rem: narrow and short').toBe(true);
+        expect(facts.scrollsAway, 'the shell scrolls, so the band scrolls away').toBe(true);
+
+        const ids = await commandBand(page)
+          .locator('[data-toolbar-focusable]')
+          .evaluateAll((els) => els.map((e) => e.getAttribute('data-toolbar-item') ?? ''));
+        expect(ids.length, 'the deck has its controls').toBeGreaterThan(20);
+        for (const id of ids) {
+          const control = commandBand(page).locator(`[data-toolbar-item="${id}"]`).first();
+          await control.scrollIntoViewIfNeeded();
+          await pointerReachable(page, `200 % text, ${pointer}: ${id}`, control);
+        }
+
+        for (const [name, control] of [
+          ['Expand activities panel', expandPanel(page)],
+          ['Recalculate', page.getByRole('button', { name: 'Recalculate' })],
+        ] as const) {
+          await control.scrollIntoViewIfNeeded();
+          await pointerReachable(page, `200 % text, ${pointer}: ${name}`, control);
+        }
+      } finally {
+        await applyDefaultFontSize(cdp, 1);
+        await cdp.detach();
+      }
+    });
+  });
+}
+
+test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesign M3)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  /** The deck's visible box and the focused control's, in one read. */
+  const focusReading = (page: Page) =>
+    page.evaluate(() => {
+      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      const focused = document.activeElement;
+      if (!deck || !focused || !deck.contains(focused)) return null;
+      const d = deck.getBoundingClientRect();
+      const f = focused.getBoundingClientRect();
+      return {
+        id: focused.getAttribute('data-toolbar-item'),
+        leftGap: f.left - d.left,
+        rightGap: d.right - f.right,
+        // A one-line deck: a control the deck's box does not contain vertically is on a wrapped line
+        // or under another layer, which the sideways gaps cannot see.
+        topGap: f.top - d.top,
+        bottomGap: d.bottom - f.bottom,
+        scrollLeft: deck.scrollLeft,
+        maxScroll: deck.scrollWidth - deck.clientWidth,
+      };
+    });
+
+  test('ArrowRight, Home, End and Tab keep the focused control inside the line, clear of its edges', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 640, height: 480 });
+    await page.goto(planUrl);
+    const deck = commandBand(page);
+    await expect(deck).toBeVisible();
+    const stops = deck.locator('[data-toolbar-focusable]');
+    const count = await stops.count();
+    expect(count, 'the deck has many more controls than a 640 px line holds').toBeGreaterThan(20);
+
+    // The inset the line keeps either side (`max-lg:px-2`); a focused control is never nearer an edge
+    // than that, which is what "flush" would be.
+    const INSET = 8 - 0.5;
+    const inside = async (label: string): Promise<{ id: string | null; scrollLeft: number }> => {
+      const reading = await focusReading(page);
+      expect(reading, `${label}: focus is in the deck`).not.toBeNull();
+      if (!reading) throw new Error('unreachable');
+      expect(
+        reading.leftGap,
+        `${label} (${String(reading.id)}): clear of the leading edge`,
+      ).toBeGreaterThanOrEqual(INSET);
+      expect(
+        reading.rightGap,
+        `${label} (${String(reading.id)}): clear of the trailing edge`,
+      ).toBeGreaterThanOrEqual(INSET);
+      // Half a pixel of rounding either way; a control on a second line is tens of pixels out.
+      expect(
+        reading.topGap,
+        `${label} (${String(reading.id)}): inside the deck, top`,
+      ).toBeGreaterThanOrEqual(-0.5);
+      expect(
+        reading.bottomGap,
+        `${label} (${String(reading.id)}): inside the deck, bottom`,
+      ).toBeGreaterThanOrEqual(-0.5);
+      return reading;
+    };
+
+    await stops.first().focus();
+    await inside('first control');
+    let farthest = 0;
+    for (let i = 1; i < count; i += 1) {
+      // The search field keeps ArrowRight for its caret, so the deck's way out of it is a vertical
+      // arrow (`toolbar-keyboard.ts`); every other stop takes ArrowRight.
+      const inField = await page.evaluate(() => document.activeElement?.tagName === 'INPUT');
+      await page.keyboard.press(inField ? 'ArrowDown' : 'ArrowRight');
+      const at = await inside(`step ${String(i)}`);
+      farthest = Math.max(farthest, at.scrollLeft);
+    }
+    expect(farthest, 'the line really scrolled to bring the last control in').toBeGreaterThan(0);
+    expect(
+      (await focusReading(page))?.id,
+      'the lap reached the last control, so no stop was skipped or stuck',
+    ).toBe('comments');
+
+    // End after a lap lands where the lap ended; Home returns to the start of the line.
+    await page.keyboard.press('Home');
+    const home = await inside('Home');
+    expect(home.scrollLeft, 'Home scrolls the line back to its start').toBe(0);
+    await page.keyboard.press('End');
+    const end = await inside('End');
+    expect(end.scrollLeft, 'End scrolls the line to its end').toBeGreaterThan(0);
+
+    // Tab into the deck from the header: the roving stop is the last control (End), the line is
+    // scrolled back to its start, and the stop must be scrolled into view by the Tab that lands on it.
+    await deck.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+    await page.getByRole('button', { name: 'Show Project Explorer' }).focus();
+    const toDeck = await page.evaluate(() => {
+      const d = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      return d ? d.scrollLeft : null;
+    });
+    expect(toDeck, 'the line is back at its start before Tab').toBe(0);
+    // The header's own controls come before the deck in tab order; Tab until the deck is reached.
+    for (let i = 0; i < 30; i += 1) {
+      await page.keyboard.press('Tab');
+      const reading = await focusReading(page);
+      if (reading) break;
+    }
+    const tabbed = await inside('Tab into the deck');
+    expect(tabbed.scrollLeft, 'Tab scrolled the roving stop into view').toBeGreaterThan(0);
+  });
+
+  test('the line says it goes on: an edge fade that follows the scroll, and a control cut at the edge', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 640, height: 480 });
+    await page.goto(planUrl);
+    const deck = commandBand(page);
+    await expect(deck).toBeVisible();
+
+    const read = () =>
+      deck.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        const d = el.getBoundingClientRect();
+        const cut = [...el.querySelectorAll('[data-toolbar-focusable]')].filter((c) => {
+          const r = c.getBoundingClientRect();
+          return (r.left < d.left && r.right > d.left) || (r.left < d.right && r.right > d.right);
+        }).length;
+        return {
+          mask: cs.maskImage,
+          start: parseFloat(cs.getPropertyValue('--deck-fade-start')),
+          end: parseFloat(cs.getPropertyValue('--deck-fade-end')),
+          cut,
+          remPx: parseFloat(getComputedStyle(document.documentElement).fontSize),
+        };
+      });
+
+    await deck.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+    const atStart = await read();
+    expect(atStart.mask, 'the deck is masked').not.toBe('none');
+    expect(atStart.start, 'nothing fades at the start: the first control is whole').toBe(0);
+    expect(atStart.end, 'the far edge fades: there is more').toBe(2 * atStart.remPx);
+    // Which control straddles the edge depends on where the line happens to start, and the editing
+    // row now leads it (owner decision, 2026-10-10), so the cue is asserted along the scroll: at some
+    // position a control is cut, which is what tells a reader the line goes on where a mask is unavailable.
+    const max = await deck.evaluate((el) => el.scrollWidth - el.clientWidth);
+    let cutSomewhere = false;
+    for (let x = 0; x <= max && !cutSomewhere; x += 24) {
+      await deck.evaluate((el, left) => {
+        el.scrollLeft = left;
+      }, x);
+      cutSomewhere = (await read()).cut >= 1;
+    }
+    expect(cutSomewhere, 'a control is cut at the edge, the cue where a mask is unavailable').toBe(
+      true,
+    );
+
+    await deck.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+    });
+    await expect
+      .poll(async () => (await read()).end, { message: 'the fade follows the scroll' })
+      .toBe(0);
+    const atEnd = await read();
+    expect(atEnd.start, 'the leading edge fades at the end: there is more behind').toBe(
+      2 * atEnd.remPx,
+    );
+
+    // A wide window has no line to scroll and no fade.
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await expect(deck).toBeVisible();
+    const wide = await deck.evaluate((el) => ({
+      overflows: el.scrollWidth > el.clientWidth,
+      mask: getComputedStyle(el).maskImage,
+      rows: new Set(
+        [...el.querySelectorAll('[data-deck-row]')].map((r) =>
+          Math.round(r.getBoundingClientRect().top),
+        ),
+      ).size,
+    }));
+    expect(wide.overflows, '1280 x 600 does not scroll sideways').toBe(false);
+    expect(wide.mask, '1280 x 600 has no fade').toBe('none');
+    expect(wide.rows, '1280 x 600 keeps its two rows (CQ-3)').toBe(2);
+  });
+
+  test('in a squat window, focus moving into a band that has scrolled away brings it back into view', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 640, height: 300 });
+    await page.goto(planUrl);
+    const deck = commandBand(page);
+    await expect(deck).toBeVisible();
+
+    const shellScrollTop = () =>
+      page.evaluate(() => document.querySelector('main')?.parentElement?.scrollTop ?? -1);
+    /** The focused control's vertical position against the window, and whether it is in the deck. */
+    const focusedInWindow = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        const inDeck = !!el?.closest('[role="toolbar"][aria-label="Plan commands"]');
+        const r = el?.getBoundingClientRect();
+        return { inDeck, top: r?.top ?? NaN, bottom: r?.bottom ?? NaN, h: window.innerHeight };
+      });
+    const scrollShellAway = async () => {
+      await page.evaluate(() => {
+        const shell = document.querySelector('main')?.parentElement;
+        if (shell) shell.scrollTop = shell.scrollHeight;
+      });
+      // Without this the cases below would pass against a shell that never scrolled.
+      expect(await shellScrollTop(), 'the shell scrolled, so the band is away').toBeGreaterThan(0);
+      const away = await deck.evaluate((el) => el.getBoundingClientRect().bottom);
+      expect(away, 'the band is above the window').toBeLessThanOrEqual(0);
+    };
+
+    // Shift+Tab from the foot strip, with the band scrolled away, until focus reaches the deck.
+    await scrollShellAway();
+    await expandPanel(page).focus();
+    let reached = false;
+    for (let i = 0; i < 80 && !reached; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      reached = (await focusedInWindow()).inDeck;
+    }
+    expect(reached, 'Shift+Tab from the foot strip reaches the deck').toBe(true);
+    let at = await focusedInWindow();
+    expect(at.top, 'Shift+Tab into the deck: its top is on screen').toBeGreaterThanOrEqual(0);
+    expect(at.bottom, 'Shift+Tab into the deck: its bottom is on screen').toBeLessThanOrEqual(at.h);
+
+    // An arrow press inside a deck that has scrolled away again: the roving move is the deck's own
+    // focus (preventScroll), so the shell only follows because `onFocus` scrolls it.
+    await scrollShellAway();
+    await page.keyboard.press('ArrowRight');
+    at = await focusedInWindow();
+    expect(at.inDeck, 'ArrowRight stays in the deck').toBe(true);
+    expect(
+      at.top,
+      'ArrowRight: the moved-to control is scrolled into the window, top',
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      at.bottom,
+      'ArrowRight: the moved-to control is scrolled into the window, bottom',
+    ).toBeLessThanOrEqual(at.h);
+  });
+
+  for (const pointer of ['fine', 'coarse'] as const) {
+    test.describe(`a menu from a half-scrolled trigger, ${pointer} pointer`, () => {
+      test.use({ hasTouch: pointer === 'coarse' });
+
+      test('Share & export and View open on screen from either edge of the line', async ({
+        page,
+      }) => {
+        test.setTimeout(300_000);
+        page.setDefaultTimeout(20_000);
+        const { planUrl } = await seedWorkspace(page);
+        await page.setViewportSize({ width: 640, height: 480 });
+        await page.goto(planUrl);
+        const deck = commandBand(page);
+        await expect(deck).toBeVisible();
+
+        // The trailing edge is Share & export (a `Menu`), the last control of the line; the leading
+        // edge needs a control with line after it to scroll under, so it is View (the other overlay
+        // the deck opens, a popover panel). Both are portalled and clamped by `overlay-position`.
+        for (const [edge, id, opens, role] of [
+          ['trailing', 'export', 'Share & export', 'menu'],
+          ['leading', 'view', 'View', 'dialog'],
+        ] as const) {
+          // Park the trigger half under the named edge of the line, the case a clamp has to answer.
+          await deck.evaluate(
+            (el, args) => {
+              const t = el.querySelector(`[data-toolbar-item="${args.id}"]`);
+              if (!t) throw new Error('no trigger');
+              const d = el.getBoundingClientRect();
+              const r = t.getBoundingClientRect();
+              el.scrollLeft +=
+                args.edge === 'trailing'
+                  ? r.right - (d.right + r.width / 2)
+                  : r.left - (d.left - r.width / 2);
+            },
+            { id, edge },
+          );
+          const trigger = deck.locator(`[data-toolbar-item="${id}"]`);
+          const box = await boxOf(trigger, opens);
+          const deckBox = await boxOf(deck, 'the deck');
+          const cut = box.x < deckBox.x || box.x + box.width > deckBox.x + deckBox.width;
+          expect(cut, `${edge}: the trigger is half under the edge`).toBe(true);
+
+          // Press the half that is showing.
+          const x =
+            edge === 'trailing'
+              ? (box.x + deckBox.x + deckBox.width) / 2
+              : (deckBox.x + box.x + box.width) / 2;
+          const y = box.y + box.height / 2;
+          if (pointer === 'coarse') await page.touchscreen.tap(x, y);
+          else await page.mouse.click(x, y);
+          const menu =
+            role === 'menu' ? page.getByRole('menu') : page.getByRole('dialog', { name: opens });
+          await expect(menu, `${edge}: ${opens} opens`).toBeVisible();
+          // The overlay measures itself and re-clamps in a layout effect, so read it once it has
+          // stopped moving rather than at the first frame it is visible.
+          let last = '';
+          await expect
+            .poll(
+              async () => {
+                const now = JSON.stringify(await menu.boundingBox());
+                const settled = now === last;
+                last = now;
+                return settled;
+              },
+              { message: `${edge}: the menu stops moving` },
+            )
+            .toBe(true);
+          const m = await boxOf(menu, 'the menu');
+          const vw = 640;
+          const vh = 480;
+          expect(m.x, `${edge}: the menu starts on screen`).toBeGreaterThanOrEqual(0);
+          expect(m.x + m.width, `${edge}: the menu ends on screen`).toBeLessThanOrEqual(vw);
+          expect(m.y, `${edge}: the menu starts below the top`).toBeGreaterThanOrEqual(0);
+          expect(m.y + m.height, `${edge}: the menu ends above the bottom`).toBeLessThanOrEqual(vh);
+          await pointerReachable(
+            page,
+            `${edge}: the overlay's first control`,
+            role === 'menu' ? menu.getByRole('menuitem').first() : menu.getByRole('radio').first(),
+          );
+          await page.keyboard.press('Escape');
+          await expect(menu).toBeHidden();
+          await expect(trigger, `${edge}: focus returns to the trigger`).toBeFocused();
+        }
+      });
+    });
+  }
+});
+
+test.describe('the editing row leads on the scrolling line (owner decision, 2026-10-10)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  /**
+   * Every deck control in document order with where it is drawn. The Tab and arrow sequence is the
+   * document's (`[data-toolbar-focusable]`), so "the order on screen is the order of the keys" is
+   * this list being sorted by its own position — which is what WCAG 1.3.2 and 2.4.3 ask.
+   */
+  async function deckStops(
+    page: Page,
+  ): Promise<{ id: string; row: string; x: number; y: number }[]> {
+    return page.evaluate(() =>
+      [
+        ...document.querySelectorAll(
+          '[role="toolbar"][aria-label="Plan commands"] [data-toolbar-focusable]',
+        ),
+      ].map((el) => {
+        const b = el.getBoundingClientRect();
+        return {
+          id: el.getAttribute('data-toolbar-item') ?? '',
+          row: el.closest('[data-deck-row]')?.getAttribute('data-deck-row') ?? '',
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+        };
+      }),
+    );
+  }
+
+  test('below 1024 the pen leads, DO comes before LOOK, and the DOM order is the order on screen; at 1024 and up LOOK is above DO as before', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    page.setDefaultTimeout(20_000);
+    const { planUrl } = await seedWorkspace(page);
+    await page.setViewportSize({ width: 800, height: 760 });
+    await page.goto(planUrl);
+    await expect(commandBand(page).getByRole('button', { name: 'Go to today' })).toBeAttached();
+
+    const narrow = await deckStops(page);
+    expect(narrow.length).toBeGreaterThan(10);
+    // Rows in the order the document renders them: every DO control before every LOOK control.
+    const rowsSeen = narrow.map((s) => s.row).filter((r, i, all) => i === 0 || r !== all[i - 1]);
+    expect(rowsSeen, 'DO then LOOK, each row contiguous').toEqual(['do', 'look']);
+    // The first control is the pen, on screen as in the document.
+    expect(narrow[0]?.id).toBe('pen');
+    // One line: no control sits left of the one before it, so the document order is the reading
+    // order on screen (a CSS `order` would have made this list jump backwards).
+    for (let i = 1; i < narrow.length; i += 1) {
+      expect(
+        narrow[i]!.x,
+        `${narrow[i]!.id} is drawn left of ${narrow[i - 1]!.id}, so the keys would jump backwards`,
+      ).toBeGreaterThanOrEqual(narrow[i - 1]!.x);
+    }
+    // And the keys really do walk that order: focus the first stop and arrow along.
+    await page.locator('[data-toolbar-item="pen"]').focus();
+    for (let i = 1; i < 6; i += 1) {
+      await page.keyboard.press('ArrowRight');
+      expect(
+        await page.evaluate(() => document.activeElement?.getAttribute('data-toolbar-item') ?? ''),
+        `arrow ${String(i)} lands on the next control on screen`,
+      ).toBe(narrow[i]?.id);
+    }
+
+    // At the floor and wider the rows stack LOOK above DO, unchanged.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(commandBand(page)).toBeVisible();
+    const wide = await deckStops(page);
+    const rowsWide = wide.map((s) => s.row).filter((r, i, all) => i === 0 || r !== all[i - 1]);
+    expect(rowsWide, 'LOOK then DO at 1280').toEqual(['look', 'do']);
+    const lookY = Math.max(...wide.filter((s) => s.row === 'look').map((s) => s.y));
+    const doY = Math.min(...wide.filter((s) => s.row === 'do').map((s) => s.y));
+    expect(doY, 'DO is drawn below LOOK at 1280').toBeGreaterThan(lookY);
   });
 });

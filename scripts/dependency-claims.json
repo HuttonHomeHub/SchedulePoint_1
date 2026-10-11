@@ -925,6 +925,17 @@
       "citedBy": ["docs/specs/workspace-modes/feature-spec.md"]
     },
     {
+      "ref": "lucide-react.d.ts:4306",
+      "package": "lucide-react",
+      "path": "dist/lucide-react.d.ts",
+      "lines": "4306",
+      "anchor": "declare const ChartColumnStacked: LucideIcon;",
+      "citedBy": [
+        "docs/specs/toolbar-redesign/feature-spec.md",
+        "docs/specs/toolbar-redesign/implementation-plan.md"
+      ]
+    },
+    {
       "ref": "waypoints.mjs:19",
       "package": "lucide-react",
       "path": "dist/esm/icons/waypoints.mjs",

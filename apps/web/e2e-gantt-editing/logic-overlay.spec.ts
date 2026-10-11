@@ -13,7 +13,7 @@ import {
   startEditing,
 } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
-import { recalculate } from '../e2e-support/toolbar';
+import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
  * **M4 — the logic overlay, driven against a real plan with real dependencies.**
@@ -110,6 +110,7 @@ test('the toggle reveals a link between two rows neither of which is selected', 
   // popover invites you to assume. Established by reading `ViewTogglesPanel` rather than by
   // guessing again.
   await page.getByRole('button', { name: 'View', exact: true }).click();
+  await unfoldViewSections(page);
   await page.getByRole('checkbox', { name: 'Logic links' }).check();
   await page.keyboard.press('Escape');
 

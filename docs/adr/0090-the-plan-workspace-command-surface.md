@@ -3,6 +3,8 @@
 - **Status:** Accepted (2026-08-11) — approved by the product owner after the M0 measurement and a
   five-specialist pre-approval review. **Corrected in place rather than superseded**, on the product
   owner's decision: it had never been Accepted, so nothing downstream depended on the withdrawn text.
+- **Completed by:** ADR-0185 (2026-10-11) — D6's layout mode and the `priority` / tier machinery, superseded by
+  ADR-0109 and kept alive by ADR-0110 M5, were deleted at toolbar-redesign M1 and M7.
 - **Date:** 2026-08-11
 - **Deciders:** James Ewbank (with Claude Code — ui-architect)
 - **Related:** amends **ADR-0031** (toolbar registry, 7-group taxonomy, tiers, and its

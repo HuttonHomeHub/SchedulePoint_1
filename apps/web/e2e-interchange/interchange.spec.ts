@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { drawnSpanDays } from '@repo/layout';
 
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   layoutXerFile,
@@ -109,12 +109,7 @@ test('an imported zero-duration task is advised in the report and listed by the 
   await dialog.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  await openHealthCheck(page);
   const panel = page.getByRole('region', { name: 'Health check' });
   const advisory = panel.getByRole('region', { name: 'Beyond the DCMA assessment' });
   const toggle = advisory.getByRole('button', { name: /Zero-duration tasks/ });
@@ -329,7 +324,7 @@ test('a planner exports a plan to .xer from the canvas Export menu', async ({ pa
   // and its suggested filename ends `.xer`.
   // ADR-0090 M2-T4 folded Export, Print and Share into one `Share & export` trigger — three Row-2
   // stops for one act. The formats inside are unchanged, so only the way in changes here.
-  await page.getByRole('button', { name: /Share & export/ }).click();
+  await page.getByRole('button', { name: /^(Share & export|Export)$/ }).click();
 
   // The open Export menu (incl. the new Interchange group) stays WCAG 2.2 AA — mirrors the import
   // dialog's axe check above.
@@ -376,7 +371,7 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   await seed.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
-  await page.getByRole('button', { name: /Share & export/ }).click();
+  await page.getByRole('button', { name: /^(Share & export|Export)$/ }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('menuitem', { name: 'Primavera P6 (XER)' }).click(),

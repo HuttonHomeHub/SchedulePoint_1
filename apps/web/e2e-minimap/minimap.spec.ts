@@ -12,9 +12,10 @@ import {
 
 /**
  * **The minimap's journey** (ADR-0100, minimap M2-T7) — lands with the first user-facing
- * milestone, per ADR-0081: its opening moves ARE the entry point (`View ▾` → Panels →
- * `Minimap`, all by role and accessible name, never by copy or CSS selector — ADR-0091 M7's
- * rule after three journeys broke on labels).
+ * milestone, per ADR-0081: its opening moves ARE the entry point (the "Diagram viewport"
+ * toolbar's `Minimap` toggle at the diagram's corner — it was `View ▾` → Panels until
+ * toolbar-redesign M4 — all by role and accessible name, never by copy or CSS selector —
+ * ADR-0091 M7's rule after three journeys broke on labels).
  *
  * What only this suite can prove: the toggle row, the panel, the rectangle and the picture
  * exist **in the shipped workspace against a real API with the pen enforced** — the unit
@@ -29,7 +30,7 @@ test.describe.configure({ mode: 'serial' });
 const STAMP = Date.now() + 4100;
 
 test.describe('The minimap', () => {
-  test('is reachable from View ▾, shows the picture and the rectangle, persists, and closes clean', async ({
+  test('is reachable from the Diagram viewport toolbar, shows the picture and the rectangle, persists, and closes clean', async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -38,13 +39,16 @@ test.describe('The minimap', () => {
     await newPlan(page, 'Minimap journey');
     await ensurePen(page);
 
-    // ── Before any activity has computed dates: the row is SHADED with a reason, not hidden
-    // (ADR-0082) — and it is not pressable.
-    await page.getByRole('button', { name: 'View', exact: true }).click();
-    const shadedRow = page.getByRole('checkbox', { name: 'Minimap' });
-    await expect(shadedRow).toBeVisible();
-    await expect(shadedRow).toHaveAttribute('aria-disabled', 'true');
-    await page.keyboard.press('Escape');
+    // ── Before any activity has computed dates: the toggle is SHADED with a reason, not hidden
+    // (ADR-0082) — it stays focusable, it is not pressable, and the reason is reachable.
+    const toggle = page
+      .getByRole('toolbar', { name: 'Diagram viewport' })
+      .getByRole('button', { name: 'Minimap' });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-disabled', 'true');
+    await toggle.focus();
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAccessibleDescription('Add an activity first');
 
     // ── Seed a small network through the real API and recalculate, so the picture has bars
     // and a critical path to draw.
@@ -60,12 +64,10 @@ test.describe('The minimap', () => {
     await recalculate(page, orgSlug);
     await ensurePen(page);
 
-    // ── The entry point (the test's real subject): View ▾ → Panels → Minimap.
-    await page.getByRole('button', { name: 'View', exact: true }).click();
-    const row = page.getByRole('checkbox', { name: 'Minimap' });
-    await expect(row).not.toBeChecked();
-    await row.click();
-    await page.keyboard.press('Escape');
+    // ── The entry point (the test's real subject): the cluster's Minimap toggle.
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
     // ── The panel, the picture and the rectangle are all present, in the shipped workspace.
     const panel = page.getByRole('group', { name: 'Diagram overview' });
@@ -252,8 +254,7 @@ test.describe('The minimap', () => {
     const focusedTag = await page.evaluate(() => document.activeElement?.tagName ?? 'BODY');
     expect(focusedTag, 'focus must not drop to <body> on dismissal').not.toBe('BODY');
 
-    // ── And the toggle row now reads unchecked again.
-    await page.getByRole('button', { name: 'View', exact: true }).click();
-    await expect(page.getByRole('checkbox', { name: 'Minimap' })).not.toBeChecked();
+    // ── And the toggle follows the panel's own close: pressed state is the one fact, not a copy.
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 });

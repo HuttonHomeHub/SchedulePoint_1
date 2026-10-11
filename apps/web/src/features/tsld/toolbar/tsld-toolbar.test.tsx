@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
@@ -93,21 +93,62 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   );
 }
 
+/** The "Diagram viewport" cluster: the `canvas` slice of the same registry (toolbar-redesign M4). */
+function renderCluster(context: TsldToolbarContext) {
+  const rows = splitByRow(buildTsldToolbarItems());
+  return render(<Toolbar items={rows.canvas} context={context} label="Diagram viewport" />);
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar registry (two-row)', () => {
   it('renders the frame controls and drives the canvas seam', () => {
+    // The presets left the bar for the `View ▾` panel (ADR-0091 D3); −/+ and Fit left the deck for
+    // the "Diagram viewport" cluster at the diagram's corner (toolbar-redesign M4).
     renderRows(ctx());
-    // The presets left the bar for the `View ▾` panel (ADR-0091 D3); −/+ and Fit stayed inline.
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     fireEvent.click(
       within(screen.getByRole('dialog', { name: 'View' })).getByRole('radio', { name: /Month/ }),
     );
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
+    expect(screen.queryByRole('button', { name: 'Zoom in' })).not.toBeInTheDocument();
+    // Fit to plan is in the panel (the route that stays when the cluster is withdrawn) and not on
+    // the deck itself.
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Plan commands' })).queryByRole('button', {
+        name: 'Fit to plan',
+      }),
+    ).not.toBeInTheDocument();
+    cleanup();
+    renderCluster(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(spies.stepZoom).toHaveBeenCalledWith(0.5);
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(spies.stepZoom).toHaveBeenCalledWith(2);
     fireEvent.click(screen.getByRole('button', { name: 'Fit to plan' }));
     expect(spies.fit).toHaveBeenCalledOnce();
+  });
+
+  it('puts Fit to plan in the View panel as the route that stays when the cluster is withdrawn', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Fit to plan' }));
+    expect(spies.fit).toHaveBeenCalledOnce();
+  });
+
+  it('shades the panel\u2019s Fit to plan with its reason when there is no diagram, and does nothing', () => {
+    renderRows(ctx({ hasDiagram: false }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const fit = within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+      name: 'Fit to plan',
+    });
+    expect(fit).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(fit.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Add an activity to fit the view',
+    );
+    fireEvent.click(fit);
+    expect(spies.fit).not.toHaveBeenCalled();
   });
 
   it('reflects the active scale preset in the View panel', () => {
@@ -126,8 +167,61 @@ describe('TSLD toolbar registry (two-row)', () => {
     renderRows(ctx());
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
     const panel = screen.getByRole('dialog', { name: 'View' });
+    // Markers starts folded (toolbar-redesign M2-T3): open it, then toggle.
+    fireEvent.click(within(panel).getByRole('button', { name: /^Markers/ }));
     fireEvent.click(within(panel).getByLabelText('Non-working'));
     expect(spies.toggleView).toHaveBeenCalledWith('nonWorking');
+  });
+
+  it('starts Structure and Markers folded, and keeps Zoom and Insight overlays open', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    for (const name of ['Structure', 'Markers']) {
+      const fold = within(panel).getByRole('button', { name: new RegExp(`^${name}`) });
+      expect(fold).toHaveAttribute('aria-expanded', 'false');
+      // A folded section is unmounted, not clipped: a hidden toggle must not be a tab stop.
+      expect(within(panel).queryByRole('group', { name })).toBeNull();
+    }
+    expect(within(panel).queryByLabelText('Non-working')).toBeNull();
+    expect(within(panel).getByRole('radiogroup', { name: 'Zoom level' })).toBeInTheDocument();
+    // Opening one reveals its rows inside a named group, and closing it takes them away again.
+    const markers = within(panel).getByRole('button', { name: /^Markers/ });
+    fireEvent.click(markers);
+    expect(markers).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(within(panel).getByRole('group', { name: 'Markers' })).getAllByRole('checkbox'),
+    ).not.toHaveLength(0);
+    fireEvent.click(markers);
+    expect(within(panel).queryByLabelText('Non-working')).toBeNull();
+  });
+
+  it('says in a folded section\u2019s name how many of its toggles are on', () => {
+    const base = ctx().viewToggles;
+    renderRows(ctx({ viewToggles: { ...base, nonWorking: true, today: true, labels: true } }));
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    const markers = within(panel).getByRole('button', { name: /^Markers/ });
+    const count = Number(/\((\d+) on\)$/.exec(markers.textContent ?? '')?.[1]);
+    expect(count).toBeGreaterThanOrEqual(3);
+  });
+
+  it('opens folded again on the next opening — the open state lives for one opening (ADR-0169)', () => {
+    renderRows(ctx());
+    const trigger = screen.getByRole('button', { name: /View/ });
+    fireEvent.click(trigger);
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+        name: /^Markers/,
+      }),
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(trigger);
+    expect(
+      within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
+        name: /^Markers/,
+      }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('keeps the two rows on distinct toolbars (Look / Do)', () => {
@@ -157,10 +251,12 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(within(lookRow).queryByTestId('finish-chip-body')).toBeNull();
   });
 
-  it('renders the Summary popover body from the context', () => {
+  it('does not carry Summary or Edit plan details — they are the identity row (M2-T1)', () => {
+    // Moved to the header's own "Plan details" toolbar; `plan-identity-toolbar.test.tsx` drives the
+    // popover body from the context there. The deck keeping a copy would be one control, two homes.
     renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /Summary/ }));
-    expect(screen.getByTestId('summary-body')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Summary/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit plan/ })).not.toBeInTheDocument();
   });
 
   it('toggles the on-canvas Legend panel from Row 1, and offers it nowhere else', () => {
@@ -250,13 +346,15 @@ describe('TSLD toolbar registry (two-row)', () => {
   });
 
   it('shades — not hides — the frame controls on an empty plan (stable shape)', () => {
-    renderRows(ctx({ hasDiagram: false }));
-    // Zoom + Fit stay on the bar but disabled, so the toolbar's silhouette doesn't shift as the plan
+    renderCluster(ctx({ hasDiagram: false }));
+    // Zoom + Fit stay in the cluster but disabled, so the toolbar's silhouette doesn't shift as the plan
     // gains a computed diagram (ADR-0031 "shade, don't hide").
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
+    cleanup();
+    renderRows(ctx({ hasDiagram: false }));
     // The zoom PRESETS are no longer a bar control to shade (ADR-0091 D3) — they live in `View ▾`,
     // which stays available on an empty plan for the same reason the other display toggles do.
     // What the silhouette argument still covers is the −/+ and Fit cluster, asserted above.

@@ -144,12 +144,18 @@ export function GanttRowMenu({
 
   // The same classification the coverage gate makes: an item gated on the canvas is not reachable
   // here, and the two canvas-only actions answer false with `canvas: null`.
+  //
+  // **A menu item needs an activation path** (ADR-0186 D5). The conflict remedy is a `render` item
+  // with no `onActivate`, so it used to list as a live "Fix this conflict" that did nothing when
+  // chosen; the remedy is on the docked bar. An item that renders but cannot activate is not a
+  // menu item.
   const items =
     resolved === null
       ? []
-      : selectionActionItems.filter((item) =>
-          item.isVisible ? item.isVisible(resolved, { layout: 'comfortable' }) : true,
-        );
+      : selectionActionItems
+          .filter((item) => (item.isVisible ? item.isVisible(resolved) : true))
+          .filter((item) => item.onActivate !== undefined)
+          .sort((a, b) => rowMenuRank(a) - rowMenuRank(b));
 
   return (
     <>
@@ -221,6 +227,9 @@ export function GanttRowMenu({
               key={item.id}
               disabled={!enabled}
               {...(reason === null ? {} : { disabledReason: reason })}
+              // A toggle says whether it is on (`menuitemcheckbox`): Float paths is the one item
+              // here that is a standing panel rather than a one-shot command.
+              {...(item.isActive ? { checked: item.isActive(ctx) } : {})}
               onSelect={() => {
                 setAnchor(null);
                 setResolved(null);
@@ -265,6 +274,20 @@ export function GanttRowMenu({
       </Menu>
     </>
   );
+}
+
+/**
+ * Where an item sits in the row menu: the ways in (remedy, Logic, Notes, Progress, Resources), then
+ * the looking tools (Float paths, Zoom to selection) so they come before the edits they are not,
+ * then the edits, and **Delete last** — a destructive item beside the one a hand reaches for
+ * second-to-last is how a slip becomes a delete. The registry's array order is not this order (it
+ * is declaration order, and Float paths was declared last), and a stable sort keeps ties in the
+ * registry's own sequence. `order` is not consulted across groups: it ranks within one group.
+ */
+function rowMenuRank(item: { id: string; group: string; order?: number }): number {
+  if (item.id === 'delete') return 3;
+  if (item.group === 'find') return 1;
+  return (item.order ?? 0) < 3 ? 0 : 2;
 }
 
 /**

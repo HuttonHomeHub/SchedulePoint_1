@@ -39,6 +39,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     definitionGate: null,
     makeMilestone: { applies: false },
     onMakeMilestone: vi.fn(),
+    floatPathsOpen: false,
+    toggleFloatPaths: null,
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
@@ -50,6 +52,7 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     // that cannot hold the control they are about.
     hasPlacement: true,
     conflictKey: null,
+    conflictKeys: [],
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
     onClearVisualPlacement: spies.onClearVisualPlacement,

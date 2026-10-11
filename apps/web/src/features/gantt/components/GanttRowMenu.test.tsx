@@ -8,7 +8,10 @@ import {
   type GanttRowStructureActions,
 } from './GanttRowMenu';
 
-import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
+import {
+  selectionActionItems,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 /**
  * **M5-T3's menu, actually driven.**
@@ -30,6 +33,8 @@ const context = (over: Partial<SelectionBarContext> = {}): SelectionBarContext =
   definitionGate: null,
   makeMilestone: { applies: false },
   onMakeMilestone: vi.fn(),
+  floatPathsOpen: false,
+  toggleFloatPaths: null,
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,
@@ -38,6 +43,7 @@ const context = (over: Partial<SelectionBarContext> = {}): SelectionBarContext =
   isSummary: false,
   hasPlacement: false,
   conflictKey: null,
+  conflictKeys: [],
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
   // Visible unless a case says otherwise — the fixtures' status quo (M1).
   onOpenLogic: vi.fn(),
@@ -98,6 +104,43 @@ describe('the trigger', () => {
   });
 });
 
+describe('a menu item needs an activation path', () => {
+  const flagged = () =>
+    context({
+      conflictKey: 'constraintViolated',
+      conflictKeys: ['constraintViolated'],
+      hasPlacement: true,
+    });
+
+  it('lists no inert "Fix this conflict" for a flagged row — the remedy is on the docked bar', () => {
+    // `conflict-remedy` is a `render` item with no `onActivate`; it used to list as a live menu item
+    // that did nothing when chosen (ADR-0186 D5). Red without the filter in `GanttRowMenu`.
+    openMenu(flagged());
+    expect(screen.queryByRole('menuitem', { name: /Fix this conflict/ })).toBeNull();
+  });
+
+  it('every item the menu renders maps to a registry item that can be activated', () => {
+    openMenu(flagged());
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThan(0);
+    for (const el of items) {
+      const name = (el.textContent ?? '').trim();
+      // A listed item is a registry item whose label opens its accessible name; it must activate.
+      const source = selectionActionItems.find((i) => name.startsWith(i.label));
+      expect(source, `"${name}" is not a registry item`).toBeDefined();
+      expect(
+        source?.onActivate,
+        `${source?.id} lists in the menu with no activation path`,
+      ).toBeDefined();
+    }
+  });
+
+  it('offers no menu item for the unlabelled conflict reason either', () => {
+    openMenu(flagged());
+    expect(screen.queryByRole('menuitem', { name: /Conflict reason/ })).toBeNull();
+  });
+});
+
 describe('the items', () => {
   it('offers the dock roster and none of the canvas-only actions', () => {
     openMenu();
@@ -112,6 +155,45 @@ describe('the items', () => {
     const ctx = openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /^Progress/ }));
     expect(ctx.onProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Float paths, never pen-gated, and runs the host toggle (toolbar-redesign M2-T4)', () => {
+    // The item came off the command deck into the object roster, so the Gantt row menu gets it by
+    // derivation. It is an analysis, not a canvas command: it must be present with `canvas: null`,
+    // and a reader without the pen must still be able to open it.
+    const toggleFloatPaths = vi.fn();
+    openMenu(context({ canEditSchedule: false, toggleFloatPaths }));
+    // A checkbox, because it is a standing panel: the item says whether it is on.
+    const item = screen.getByRole('menuitemcheckbox', { name: /^Float paths/ });
+    expect(item).toHaveAttribute('aria-checked', 'false');
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(toggleFloatPaths).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits Float paths when the host has no panel to open, rather than lighting it inert', () => {
+    openMenu(context({ toggleFloatPaths: null }));
+    expect(screen.queryByRole('menuitemcheckbox', { name: /^Float paths/ })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /^Float paths/ })).toBeNull();
+  });
+
+  it('says the panel is on for its own row', () => {
+    openMenu(context({ floatPathsOpen: true, toggleFloatPaths: vi.fn() }));
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Float paths/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('puts the looking tools before the edits and Delete last', () => {
+    openMenu(context({ toggleFloatPaths: vi.fn() }));
+    const names = [...screen.getByRole('menu').querySelectorAll('[role^="menuitem"]')].map(
+      (el) => el.textContent?.trim() ?? '',
+    );
+    const at = (label: RegExp): number => names.findIndex((n) => label.test(n));
+    expect(at(/^Float paths/)).toBeGreaterThan(-1);
+    expect(at(/^Float paths/)).toBeLessThan(at(/^Edit/));
+    expect(at(/^Delete/), 'Delete is not last').toBe(names.length - 1);
   });
 
   it('offers Make milestone… on a zero-duration task and converts it (ADR-0162 decision 4)', () => {

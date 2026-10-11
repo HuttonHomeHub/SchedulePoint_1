@@ -143,7 +143,9 @@ whose roving model would otherwise move focus to the next toolbar stop and leave
 and orphaned (found reviewing the Recent edits menu, undo-redo M7).
 
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
-typeahead. Pair it with `useMenuTrigger()` rather than re-deriving the
+typeahead. (The organisation switcher is the first consumer with a list that can grow, and it has
+no type-ahead: adding it changes this primitive's key set, which ADR-0111 reviews before release, not
+inside a visual milestone. Its limit is stated in `UX_STANDARDS.md`.) Pair it with `useMenuTrigger()` rather than re-deriving the
 ref + `getBoundingClientRect()` + `useState` dance at each call site.
 
 ### Unavailable items: shade, don't hide (ADR-0082)
@@ -367,6 +369,75 @@ were told about, which is worse than the undifferentiated group. `partitionBySeg
 `console.warn` naming the group and its items, because a silent fallback is how a capability
 regresses with nothing saying so.
 
+**`ToolbarPopover`'s `description` and `panelWidth`, and the `identity` row** (toolbar-redesign M2).
+`description` is the trigger's tooltip sentence (`<label> — <description>`), which an icon-only
+trigger needs to be named by purpose and not only by its label. `panelWidth` is `'default'` (one
+column, 20 rem) or `'wide'` (44 rem, for a panel that lays out in columns); both are viewport-capped
+named tokens. `ToolbarRow` has five values: `strip` (the deck, the default), `mode` (Diagram | Gantt),
+`identity` (the plan's facts beside its name in the header: Plan summary, Edit plan details) and
+`canvas` (the "Diagram viewport" cluster at the diagram's corner: Zoom out, Zoom in, Fit to plan,
+Minimap), each its own `role="toolbar"` and Tab stop.
+
+**Three optional props added with the cluster (toolbar-redesign M4 review). `Toolbar`, `ToolbarButton` and
+`useTooltip` change no key set and no focus rule; `Deck`'s roving order does change below 1024, by design (see
+the last sentence of this paragraph).** `Toolbar` takes `ungrouped` (groups render as plain wrappers with no
+`role="group"` and no name, for a one-group toolbar whose group name only repeats the toolbar's) and
+`tooltip` (`TooltipPlacementOptions`, `{ placement, dismissOnPress }`, forwarded to each `ToolbarButton` item
+and not to a popover or split-button trigger). `useTooltip` takes
+`placement: 'below' | 'above'` (default `'below'`, every existing caller) and `dismissOnPress` (default
+off). `useContainerUnmountHandoff({ target, message })` is the hook for "this container goes away
+under focus"; only the cluster uses it, and `HistoryResultStrip` and the selection bar keep their own copies
+(`docs/TECH_DEBT.md` #481).
+`Deck` renders its two rows in the order `use-deck-row-order.ts` gives: LOOK then DO at 1024 and wider,
+DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
+deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
+
+**Three optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6).
+`toolbarControlVariants` gains a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none` and
+`forced-colors:[color:GrayText]`, no longer `opacity-50`; a shaded `selected` lens keeps an underline).
+The row's closing action has **no variant**: `DECK_CLOSING_SECTION` outlines every button in the deck's `output`
+section by descendant selector, because Export is a hand-written `render` item and Share… a derived
+`ToolbarButton`, and a `closing` prop would have widened three contracts for a decoration. A shut
+`ToolbarSplitButton` caret is `cursor-default` with no hover wash (a live one has `hover:bg-muted`), not
+`opacity-50`. `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner (capped at `9+`) whose
+sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on). `toolbar-styles.ts` exports
+`DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`, `DECK_ROW_MARK` and `DECK_CLOSING_SECTION`, which `Deck` applies;
+nothing outside `Deck` should.
+
+**Promotion: a menu command comes out onto the deck when the viewport has room** (toolbar-redesign M5, spec
+§4.11). A source menu's promotable rows are declared as `PromotableEntry` records (`toolbar-promotion.tsx`)
+and `derivePromotedItems` turns each into a registry item that takes its trigger's group and row and sorts at
+`trigger.order + rank / 100`, i.e. immediately after it. `isPromoted(at, { stage, pointer })` is the one
+predicate: the bar's `isVisible` and the menu that lost the row both read it, so a command is on the bar
+**xor** in its menu. The viewport's stage is `usePromotionStage()` (one `useSyncExternalStore` over six rem
+media queries, `PROMOTION_STAGES` in `lib/breakpoints.ts` — `PROMOTE_80/90/100/119_5/135/160`, the one list the
+names, rems and queries derive from — plus `useCoarsePointer`; one subscription so a resize across two
+thresholds never renders the stage between them), read once by
+`useTsldToolbarContext` into `ctx.promotion`; it is stage `0` where there is no `matchMedia`, so every
+unit test sees the unpromoted deck. `at` is `'always'` (Legend, Resource view, Baseline overlay, the Minimap:
+the ladder never demotes them) or a stage per pointer from the committed table `promotion-ladder.ts`, which
+`computePromotionStages` derives from `docs/specs/toolbar-redesign/promotion-widths.<pointer>.json`
+(a unit test pins every `at` to it). **No menu ever empties**: each keeps an anchor row that renders
+unconditionally (Filter's Has constraint, Analysis's Baselines…, Share & export's formats and Print…, Link's
+Start → Finish, Add's Task and Level of effort). A promoted button's tooltip and description say where it goes in a
+narrower window ("Moves into the Filter menu in a narrower window"), `derivePromotedItems` refuses a trigger whose
+`order` is not an integer (it sorts a promoted item at `order + rank / 100`), and the Share & export trigger reads
+"Export" while Share… is on the bar beside it, so Share…'s own clause says "Moves into the Export menu in a
+narrower window, where it is named Share & export" (its hand-off message still names Share & export, the name
+the trigger has by the time focus lands on it).
+**Two optional fields on `ToolbarItem` and one on `ToolbarButton`, no key or focus-rule change.**
+`visibleLabel` is the text painted when it is shorter than the accessible name: a member of a flat pressed set
+("Colour by: Total float") prints its value under an `aria-hidden` caption, and `defineToolbar` refuses a
+`visibleLabel` that is not contained in the name (WCAG 2.5.3). `successorId` names the item that takes focus
+when this one leaves while a reader is standing on it: `useToolbarFocusHandoff` gains a `successorFor` option,
+and a promoted command that falls back into its menu hands focus to the menu's trigger with its static
+`lostReason` ("Moved into the Filter menu.") instead of to the container (ADR-0135 with a destination).
+A command that arrives under a reader's focus in a menu is followed by `usePromotionFocusFollow` (host-side,
+`use-promotion-focus.ts`), which moves focus to the new button and announces it; a resize that crosses a stage
+closes an open menu or popover (`useCloseOnPromotionChange`, and `ToolbarPopover`'s optional `closeOnChangeOf`,
+both over `useCloseWhenChanged`) — and when focus was inside it, hands focus to the control that opened it and
+announces "Menu closed because the toolbar changed." (a row that left under the reader is the follower's, not this).
+
 **Three rules for a consumer:**
 
 1. **Still pass `groupLabels`.** It is defence in depth, not decoration. If the precondition ever
@@ -390,9 +461,22 @@ scheduling mode_ on the way past, on a control that recalculates (the scheduling
 was written about is gone, and the rule still holds for any segment whose press writes). Toolbar items stay
 `aria-pressed` toggle buttons — a weaker description than a radiogroup, not an incorrect one.
 
-Two invariants in `defineToolbar` guard the field: a segment may not span a `tier` or a `row`. The
-row one is live (each row renders its own `<Toolbar>`, so a split segment becomes two disconnected
-one-item switches); the tier one is speculative and forward-only, and its comment says so.
+One invariant in `defineToolbar` guards the field: a segment may not span a `row`. It is live (each row
+renders its own `<Toolbar>`, so a split segment becomes two disconnected one-item switches). A second,
+that a segment may not span a `tier`, was written for the demotion pass and went with the field itself
+(ADR-0185).
+
+## Pattern: the conflict reason line (`features/plan-actions/selection-actions.tsx`)
+
+`ConflictReasonLine` is the selection bar's caption for a flagged activity: a `<p>` above the bar's
+controls holding a warning icon (`aria-hidden`) and `joinConflictReasons(labels, 'start')`. It is
+**not** a registry item and not part of the `Toolbar` — a toolbar item cannot sit on a line above its own
+toolbar, and an inline one wrapped the bar at 1912 x 1080. Its look is `features/plan-actions/conflict-readout.ts`
+(`CONFLICT_READOUT_TEXT`, `CONFLICT_READOUT_ICON`), shared with the deck's count chip so the two cannot drift.
+Contract: no `tabindex`, `role`, `aria-live` or `truncate`; not `aria-hidden` (where no described control
+exists it is the only channel); one derivation (`matchingConflictFlags`) with the announcer and the remedy.
+`ConflictRemedyControl` and Clear visual start (when it is the remedy) carry the leading reason as
+`aria-describedby`/`srDescription`. The Gantt row menu lists only items with an activation path.
 
 ## Primitive: `Tabs` (`components/ui/tabs.tsx`)
 
@@ -435,6 +519,17 @@ navy chrome, navy on the page. Writing either as a literal would pin it to one s
 unreadable on the other — which is the whole reason it is a token and not a colour.
 The tile is `aria-hidden` — it repeats the wordmark's first letter, so exposing it would have a
 screen reader announce "S SchedulePoint".
+
+`OrgSwitcher` (`features/organizations/components/OrgSwitcher.tsx`, toolbar-redesign M6 V5) is a ghost
+`Button` that opens a `Menu` of `menuitemradio` rows — the organisation icon, the current organisation's
+name truncated inside a control capped at `max-w-org-switcher` (`--container-org-switcher`, 12 rem, a named
+token), and a chevron. Its accessible name is "Active organisation: ‹Name›" (which contains the visible text,
+2.5.3) and its tooltip carries the whole name; the current row is `aria-checked`, Escape and selection return
+focus to the trigger. **Four states:** none (renders nothing), one organisation that is current (a plain label,
+not a menu — ADR-0104 — with no glyph, no native `title` and no tab stop; the design-system tooltip carries the
+full name and the tree carries it whole), one or more with no organisation in the route (a menu reading "Select organisation",
+because choosing one is the way back from `/account`), and several (the menu). The old `title` prop is gone: it
+existed for a 36 px rail that no longer exists, and so is the `className` prop, which no call site passed. **No type-ahead** — `Menu` has none (see above).
 
 `AccountChip` (`components/layout/account-chip.tsx`) is an initials avatar opening a portalled
 `Menu` with the signed-in email, the account screen, keyboard shortcuts and Sign out. It replaced
@@ -629,6 +724,25 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 | a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                    |
 | a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
 | a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
+
+## Page archetypes: `ListRow` and `RowSubject` — a row's subject wraps, it never clips
+
+`ListRow` (`components/ui/page/list-row.tsx`) is one list row: a `primary` block and an optional `trailing` block.
+`RowSubject` renders the primary's first line: name (the row's one link), an optional `badge`, an optional
+`context` (muted `text-sm`). Both follow ADR-0184:
+
+- **`RowSubject` never truncates.** Nothing in it carries `truncate`, `text-ellipsis`, `whitespace-nowrap`,
+  `overflow-hidden`, `line-clamp-*`, `order-*`, `flex-row-reverse` or `flex-wrap-reverse`. It is one
+  `<p data-row-subject>` that is `flex flex-wrap items-baseline gap-x-2 gap-y-0`: the name group (name, one
+  collapsible space, badge) then the context, which wraps whole beneath the name when the line is full. The
+  context begins with an `sr-only` ", " so a screen reader pauses. The badge may start a line alone.
+- **`ListRow`'s trailing block wraps beneath the primary** when the primary would be under `7rem`
+  (`min-w-28 flex-1` on the primary, `flex-wrap gap-x-4 gap-y-0` on the container). That is behaviour, not a
+  prop. The one additive prop is `align?: 'center' | 'baseline'` (default `'center'`); pass `'baseline'` where the
+  trailing fact should sit on the name's first line when the subject wraps.
+- **Tests:** jsdom lays nothing out, so the unit tests are tripwires on the forbidden utilities and DOM order. The
+  behaviour is judged by `scripts/row-subject-probe.mjs`, which the `e2e-overview` journey also runs.
+- **Do not** add a `title` to a clipped name: wrap it instead. `ListRowSkeleton` is unchanged.
 
 ## Primitives: `EmptyState` and `NoticeStrip` — and where the boundary is
 

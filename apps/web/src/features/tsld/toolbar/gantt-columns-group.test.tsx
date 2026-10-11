@@ -286,6 +286,8 @@ describe('inside the View ▾ popover of a real toolbar', () => {
       </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    // Columns starts folded in the real panel (toolbar-redesign M2-T3); open it to reach the fields.
+    fireEvent.click(screen.getByRole('button', { name: 'Columns', expanded: false }));
     const code = field('Code width');
     code.focus();
     fireEvent.keyDown(code, { key: 'ArrowDown' });

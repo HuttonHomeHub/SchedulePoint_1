@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ADD_KIND_ENTRIES, LINK_KIND_ENTRIES } from './promotion-entries';
 import { selectionActionItems } from './selection-actions';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
@@ -56,14 +57,23 @@ describe('the state ladder names its modal tools', () => {
    */
   const PRIMARY_CONTROLS = ['pen'] as const;
 
-  it('exactly the four modal tools declare themselves armed', () => {
+  /**
+   * The kind presets the promotion ladder brings out of the Add and Link menus (toolbar-redesign
+   * M5). They are **the same fact from the kind's side**: "Add: Start milestone" is pressed when the
+   * Add tool is armed *and* the kind is that one, and it arms the tool when pressed, so it takes the
+   * modal tools' picture rather than a toggle's. Derived from the entries, so a new preset is named
+   * by being declared.
+   */
+  const KIND_PRESETS = [...ADD_KIND_ENTRIES, ...LINK_KIND_ENTRIES].map((entry) => entry.id);
+
+  it('exactly the four modal tools and their kind presets declare themselves armed', () => {
     const armed = items.filter((i) => i.activeKind === 'armed').map((i) => i.id);
 
     // The pinned positive, and it is not decoration: "no item declares armed" satisfies a
     // set-difference assertion perfectly, so a registry that had lost the field entirely would pass
     // a weaker version of this test while every tool in the product painted as a toggle.
     expect(armed.length, 'no item declares activeKind: "armed"').toBeGreaterThan(0);
-    expect([...armed].sort()).toEqual([...MODAL_TOOLS].sort());
+    expect([...armed].sort()).toEqual([...MODAL_TOOLS, ...KIND_PRESETS].sort());
   });
 
   it('exactly the pen declares itself primary', () => {

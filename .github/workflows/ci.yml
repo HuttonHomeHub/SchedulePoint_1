@@ -542,7 +542,7 @@ jobs:
       # no layering left to describe — this is the only plan workspace there is. Runs after the
       # prior runs tear down their servers, reusing the ports.
       - name: Web end-to-end tests (canvas toolbar workspace)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:toolbar
 
       # The toolbar FIT gate is GONE (workspace redesign, 2026-08-24), and deleted rather than
@@ -675,7 +675,7 @@ jobs:
       # full-definition PATCH, and that a lag moved to the 24-hour calendar is re-measured as
       # elapsed time.
       - name: Web end-to-end tests (sub-day durations flag on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:sub-day
 
       # The per-assignment join lag (ADR-0071 M4) against a real API with the pen enforced. What a
@@ -940,6 +940,18 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:workspace-fit
 
+      # The promotion ladder (playwright.promotion.config.ts, toolbar-redesign M5): the real deck at
+      # the six promotion stages on both pointers, the SC-17 gap swept across 1192-2600, and the
+      # focus hand-offs when a resize moves a command or closes the menu a reader is in. It was a
+      # case of `workspace-fit` until it reached ~two minutes and put that shard past its budget;
+      # as its own step it sits on the lightest shard (`pnpm check:e2e-roster` prints the packing,
+      # and `scripts/e2e-durations.json` records what it costs and that the web total now crosses
+      # docs/specs/ci-sharding/m4-measurement.md's 2,372 s re-open trigger). Runs after the prior
+      # suites tear down their servers.
+      - name: Web end-to-end tests (promotion ladder — stages, gap sweep, focus hand-offs)
+        if: ${{ matrix.shard == 3 }}
+        run: pnpm --filter @repo/web test:e2e:promotion
+
       # The TSLD minimap journey (playwright.minimap.config.ts, ADR-0100 M2-T7 — lands with the
       # first user-facing milestone, ADR-0081). No flags to pin: the epic ships without a VITE_
       # flag, so this runs the default bundle, which IS the shipped surface. What only it can
@@ -1036,7 +1048,7 @@ jobs:
       # a socket, and the only way to obtain a reset link at all, since it goes to the mailbox and
       # the verification row now stores its identifier hashed.
       - name: Web end-to-end tests (account recovery flags on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:account
 
       # The enforcement half, against its own API process with the switch ON. It was committed red

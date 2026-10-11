@@ -101,6 +101,10 @@ client` subtitle shows **0 of 584 px** in "Where the work stands" and "Recently 
 - The reflow is instant, with no transition, as `md:` was.
 - Behaviour is held by the `e2e-overview` journey; jsdom evaluates no container query.
 
+- **Closed by ADR-0184 (2026-10-09):** the `RowSubject` truncation this ADR set aside as #472 is fixed
+  (`docs/specs/row-subject-truncation/`). The 1477 × 900 poorest-case reading above is superseded: the long
+  programme's subtitle is shown whole there, at the cost of row height.
+
 ## References
 
 - `docs/TECH_DEBT.md` #333 (the report), #472 (subtitle truncation), #473 (splitter `region`), #474

@@ -1,5 +1,4 @@
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
 
 import {
   canvasListbox,
@@ -50,58 +49,41 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // Fourteen chains, ten asked for.
   expect(analysis.hasMorePaths).toBe(true);
 
-  // ── 2 · The command: shaded without a selection, live with one ────────────────────────────
-  // Shaded-with-a-reason rather than hidden, which is what this section is actually about, and the
-  // reason travels by `aria-describedby` rather than a `title` — so the assertion follows the
-  // channel rather than the rendering.
-  // ADR-0090 M2 made it tier 3, i.e. permanently inside the `⋯`; ADR-0091 M7 added the admission
-  // rung, so a row with room took it back out. **ADR-0109 D1 deleted the `⋯` altogether** — the
-  // command surface wraps now and every command is inline at every width — so "wherever the ladder
-  // has put it" has exactly one answer and the two-branch dance below is gone with it.
+  // ── 2 · The command: on the selection bar, absent without a selection, live with one ──────────
+  // **It moved off the deck** (toolbar-redesign M2-T4, ADR-0093): its subject is the selected
+  // activity, and on the deck it spent most of its life shaded with "Select an activity first". The
+  // object is now where the control is — present when there is a selection and absent when there is
+  // not (ADR-0082's omit branch, because with no object the action does not apply).
   //
-  // It stays located by `[data-toolbar-item]` and never by role or copy. That was never about the
-  // menu: the id is what the registry guarantees and the words are not, which is the standing rule
-  // after three journeys broke on a label change (ADR-0091 M7).
-  const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
-  const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
-  /**
-   * The control, through the shared helper.
-   *
-   * **Converged onto `revealToolbarCommand`** in Graphite M5's follow-up. This suite solved the
-   * problem first and correctly, including the trap its own comment recorded: `count()` is a
-   * point-in-time read with no auto-wait, so on a slower machine the first call ran before the
-   * toolbar mounted, found nothing, and then waited out the timeout — a helper that reports "it is
-   * elsewhere" when what it saw was an empty page. Two implementations of "where is this command"
-   * would drift, and the drift would be invisible until a width changed.
-   *
-   * The helper still earns its place with the `⋯` gone: it awaits the surface before asking, which
-   * is the half that trap was really about, and it now diagnoses a FOLDED GROUP — the one remaining
-   * way a command can be absent from the DOM.
-   */
-  const revealFloatPaths = () => revealToolbarCommand(page, 'float-paths');
-  /**
-   * What focus must return to after the panel closes.
-   *
-   * This used to be an async two-branch lookup — the inline control if it was still mounted, else
-   * the `⋯` it was reached through, because a menu item unmounts with its menu. ADR-0109 D1 deleted
-   * the `⋯`, so there is one answer and it needs no lookup: the control that opened the panel is
-   * the control that is still there. The indirection goes; the assertion it served does not.
-   */
-  const restoreTarget = inlineFloatPaths;
-
-  let floatPaths = await revealFloatPaths();
-  await expect(floatPaths).toBeVisible();
-  await expect(floatPaths).toHaveAttribute('aria-disabled', 'true');
-  const reasonId = await floatPaths.getAttribute('aria-describedby');
-  await expect(page.locator(`#${reasonId}`)).toHaveText(/select an activity first/i);
-  await page.keyboard.press('Escape');
+  // Located by `[data-toolbar-item]` and never by role or copy: the id is what the registry
+  // guarantees and the words are not, which is the standing rule after three journeys broke on a
+  // label change (ADR-0091 M7). It is asked of the whole page first, so a copy left on the deck
+  // would be found — one control, two homes, is the defect this move removes.
+  const anyFloatPaths = page.locator('[data-toolbar-item="float-paths"]');
+  await expect(
+    page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .locator('[data-toolbar-item="float-paths"]'),
+    'Float paths is still on the command deck',
+  ).toHaveCount(0);
+  await expect(anyFloatPaths, 'Float paths is offered with nothing selected').toHaveCount(0);
 
   await selectOnCanvas(page, 'Target');
-  floatPaths = await revealFloatPaths();
+  const bar = page.getByRole('toolbar', { name: /^Actions for Target/ });
+  const floatPaths = bar.locator('[data-toolbar-item="float-paths"]');
+  await expect(floatPaths).toBeVisible();
   await expect(floatPaths).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'false');
+  /**
+   * What focus must return to after the panel closes: the control that opened it. It is still
+   * mounted — the selection bar stays while the activity is selected — so there is one answer and
+   * it needs no lookup.
+   */
+  const restoreTarget = anyFloatPaths;
 
   // ── 3 · The panel: Driving named, the branch measured on the target's calendar ────────────
   await floatPaths.click();
+  await expect(floatPaths).toHaveAttribute('aria-pressed', 'true');
   const panel = page.getByRole('region', { name: 'Float paths' });
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Target');
@@ -131,7 +113,7 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // ── 6 · The same analysis, the same emphasis, in the Gantt ────────────────────────────────
   // It is an analysis, not a canvas viewport command, so it is live in both views (the ADR-0059 M6
   // lesson inverted). The panel is workspace-hosted and must survive the switch.
-  // Scoped to the MODE row, not `lookRow`: ADR-0091 D1 moved the view switch (and the scheduling
+  // Scoped to the MODE row, not the command deck: ADR-0091 D1 moved the view switch (and the scheduling
   // mode) off Row 1 and onto the identity line beside the pen, because neither is a command — they
   // set how everything below behaves. The old row-scoped locator matched nothing and timed out,
   // which no unit suite could have caught: the items still exist, still carry the same names, and
@@ -173,8 +155,41 @@ test('a planner reads the float paths into an activity, in both views', async ({
   await panel.getByRole('button', { name: 'Close float paths' }).click();
   await expect(panel).toHaveCount(0);
   await expect(drivingRow).not.toContainText('(off the float path)');
-  // Focus returns to the control the planner opened this from — the inline button when the row has
-  // room for it, and otherwise the `⋯` it lives behind, because a menu item unmounts with its menu.
-  // Returning to a detached node dropped focus to `<body>`; this journey is what found that.
+  // Focus returns to the control the planner opened this from. Returning to a detached node dropped
+  // focus to `<body>` once; this journey is what found that, and it is why the control's own Close
+  // goes through `closeFloatPathsAndFocus`.
   await expect(restoreTarget).toBeFocused();
+  await expect(anyFloatPaths).toHaveAttribute('aria-pressed', 'false');
+
+  // ── 8 · By keyboard, in the Gantt, and the route's focus comes back there too ──────────────────
+  // The Gantt renders the same bar, so the item is in reach with no pointer. Enter opens, Escape
+  // closes the panel (its own handler), and focus returns to the item.
+  // Asked of the page, not of the Target bar: the selection is Branch since step 5, and the Gantt's
+  // bar is named for it. There is exactly one such control wherever the selection is.
+  await expect(anyFloatPaths).toHaveCount(1);
+  await anyFloatPaths.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await expect(anyFloatPaths).toHaveAttribute('aria-pressed', 'true');
+  await panel.getByRole('button', { name: 'Close float paths' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toHaveCount(0);
+  await expect(anyFloatPaths).toBeFocused();
+
+  // ── 9 · …and back in the diagram, by keyboard ─────────────────────────────────────────────────
+  await page
+    .getByRole('toolbar', { name: 'Plan view' })
+    .getByRole('button', { name: 'Diagram', exact: true })
+    .click();
+  await selectOnCanvas(page, 'Target');
+  const diagramFloatPaths = page
+    .getByRole('toolbar', { name: /^Actions for Target/ })
+    .locator('[data-toolbar-item="float-paths"]');
+  await diagramFloatPaths.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Close float paths' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel).toHaveCount(0);
+  await expect(diagramFloatPaths).toBeFocused();
 });

@@ -48,6 +48,11 @@ already does one line down.
 would render the same merged line; four call sites each free-handing a flex row is how the two
 tables in ADR-0143 ended up 371–660 px apart. One component, one truncation rule.
 
+> **Reversed 2026-10-09 by ADR-0184 — the name never survived.** The context did not truncate "first and
+> alone": the name lost a share of every overflow (16 of 17 names clipped at 1024 × 600, 11 at 1912 × 948,
+> `m0-measurement.md` in `docs/specs/row-subject-truncation/`). A row's subject now wraps and never clips; the
+> 20 px per row this decision saved is spent only on the rows that need a second line.
+
 ### D2 — The staleness caveat rides the movement line
 
 `STALE_FIGURES_SENTENCE` costs a whole 20 px line to qualify the sentence directly above it. It

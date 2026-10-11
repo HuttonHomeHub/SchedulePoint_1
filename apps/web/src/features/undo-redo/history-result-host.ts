@@ -45,7 +45,7 @@ export function blockedHistoryResult(params: {
   const { direction, label, canEditSchedule, scheduleRefusal } = params;
   if (label === null) return null;
   const reason = canEditSchedule
-    ? `The Late-start overlay is on — editing is paused. Turn it off in View to ${direction}.`
+    ? `The Late-start overlay is on — editing is paused. Turn off Late-start overlay to ${direction}.`
     : (scheduleRefusal(historyPhrase(direction, label)) ?? `You can’t ${direction} right now.`);
   return { direction, outcome: 'blocked', label, reason };
 }

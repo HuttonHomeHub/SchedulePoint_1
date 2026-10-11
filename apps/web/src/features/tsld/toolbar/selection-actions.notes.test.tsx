@@ -26,6 +26,8 @@ function ctx(overrides: Partial<SelectionBarContext> = {}): SelectionBarContext 
     definitionGate: null,
     makeMilestone: { applies: false },
     onMakeMilestone: vi.fn(),
+    floatPathsOpen: false,
+    toggleFloatPaths: null,
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
@@ -33,6 +35,7 @@ function ctx(overrides: Partial<SelectionBarContext> = {}): SelectionBarContext 
     isSummary: false,
     hasPlacement: false,
     conflictKey: null,
+    conflictKeys: [],
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
     onOpenLogic: vi.fn(),

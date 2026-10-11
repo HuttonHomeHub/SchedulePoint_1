@@ -129,12 +129,28 @@ export function useMeasuredBox(
     if (!open) return;
     const el = panelRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    setBox((prev) =>
-      prev && prev.width === rect.width && prev.height === rect.height
-        ? prev
-        : { width: rect.width, height: rect.height },
-    );
+    const measure = (): void => {
+      const rect = el.getBoundingClientRect();
+      setBox((prev) =>
+        prev && prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height },
+      );
+    };
+    measure();
+    // **A panel whose content changes size while it is open must be re-clamped** (toolbar-redesign
+    // M2-T3). The measurement above runs on open, which is the only time every overlay's size was
+    // known until View ▾ gained folded sections: opening one at 1024 × 600 grows the panel by 200 px,
+    // and a position computed for the shorter box left its bottom 80 px below the viewport — inside
+    // an `overflow-y: auto` panel that therefore had nothing to scroll, with the last controls
+    // unreachable by pointer (#203(a)'s class, found by the journey that asked). An observer is the
+    // one mechanism that follows every cause — a disclosure, rows arriving from a query, a hint
+    // wrapping at a new width — without each caller having to say its content moved. Absent in the
+    // engines that lack it, where the open-time measurement is what there ever was.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [panelRef, remeasureKey, open]);
 
   return box;

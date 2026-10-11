@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { pressPromotable } from '../e2e-support/toolbar';
 
 import { createAndOpenPlan, onboard, openProject, seedCrossPlanPair } from './support';
 
@@ -51,12 +51,12 @@ test('a planner compares the open plan against another plan in the same project'
   await page.reload();
 
   // ── 1 · The entry point, in the shipped layout — the SAME one, not a new door ───────────────
-  await revealToolbarCommand(page, 'analysis');
-  await page
-    .getByRole('toolbar', { name: 'Plan commands' })
-    .locator('[data-toolbar-item="analysis"]')
-    .click();
-  await page.getByRole('menuitem', { name: 'Compare revisions…' }).click();
+  // Its own button where the viewport has promoted it (toolbar-redesign M5/M6), else the Analysis row.
+  await pressPromotable(page, {
+    id: 'compare-revisions',
+    via: 'analysis',
+    menuItem: 'Compare revisions…',
+  });
 
   const panel = page.getByRole('region', { name: 'Compare revisions' });
   await expect(panel).toBeVisible();

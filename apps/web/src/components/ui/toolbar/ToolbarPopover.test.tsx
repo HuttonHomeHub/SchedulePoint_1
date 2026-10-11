@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ToolbarPopover } from './ToolbarPopover';
@@ -85,23 +85,23 @@ describe('ToolbarPopover — the shut trigger', () => {
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
   });
 
-  it('keeps the name when compact withholds the visible label', () => {
+  it('keeps the name when the label is hidden', () => {
     render(
-      <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} compact>
+      <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} labelState="hidden">
         <p>panel</p>
       </ToolbarPopover>,
     );
     expect(screen.getByRole('button')).toHaveAccessibleName('Filter');
   });
 
-  it('keeps both the name and the reason when compact and shut together', () => {
-    // The state the collapsed band and an uncomputed plan produce at the same time — neither of the
+  it('keeps both the name and the reason when icon-only and shut together', () => {
+    // The state an icon-only trigger and an uncomputed plan produce at the same time — neither of the
     // two `aria-label` writers may win at the other's expense.
     render(
       <ToolbarPopover
         label="Filter"
         itemProps={ITEM_PROPS}
-        compact
+        labelState="hidden"
         disabled
         disabledReason="Add an activity first"
       >
@@ -113,5 +113,79 @@ describe('ToolbarPopover — the shut trigger', () => {
     const describedBy = trigger.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveTextContent('Add an activity first');
+  });
+});
+
+describe('ToolbarPopover — closeOnChangeOf', () => {
+  const panel = (key: number): React.ReactElement => (
+    <ToolbarPopover label="Filter" itemProps={ITEM_PROPS} closeOnChangeOf={key}>
+      <button type="button">Has constraint</button>
+    </ToolbarPopover>
+  );
+
+  it('closes the panel and hands focus to the trigger when the key changes under a focused row', () => {
+    // Verified red by removing the `useCloseWhenChanged` call: the panel stays open.
+    const { rerender } = render(panel(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    screen.getByRole('button', { name: 'Has constraint' }).focus();
+
+    rerender(panel(1));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Filter' }));
+  });
+
+  it('leaves the panel open when the key is unchanged', () => {
+    const { rerender } = render(panel(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    rerender(panel(0));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+/**
+ * **The count badge stays on the glyph's corner and never spills** (M6 review U6). It covered the
+ * funnel at `size-4`/`-top-1.5`, and a two-digit count overflowed its circle. Verified red by
+ * restoring `{badge.count}` (the "9+" case fails) and `size-4` (the geometry case fails).
+ */
+describe('ToolbarPopover — the count badge', () => {
+  const renderBadge = (count: number): HTMLElement => {
+    render(
+      <ToolbarPopover
+        label="Filter"
+        icon={<svg data-testid="glyph" />}
+        itemProps={ITEM_PROPS}
+        badge={{ count, description: `${count} filters on` }}
+      >
+        <p>panel</p>
+      </ToolbarPopover>,
+    );
+    return screen.getByRole('button');
+  };
+
+  it('draws a single digit as it is, smaller than the glyph and outside its corner', () => {
+    const trigger = renderBadge(3);
+    const badge = [...trigger.querySelectorAll('span[aria-hidden] > span')].find(
+      (el) => el.textContent === '3',
+    );
+    expect(badge, 'no badge was drawn').toBeDefined();
+    expect(badge?.className).toMatch(/-top-2\.5/);
+    expect(badge?.className).toMatch(/-right-2/);
+    expect(badge?.className).toMatch(/h-3\.5/);
+    expect(badge?.className).toMatch(/min-w-3\.5/);
+  });
+
+  it('caps the display at 9+, and the description still carries the exact number', () => {
+    const trigger = renderBadge(12);
+    const drawn = [...trigger.querySelectorAll('span[aria-hidden] > span')].map(
+      (el) => el.textContent,
+    );
+    expect(drawn).toEqual(['9+']);
+    expect(trigger).toHaveAccessibleDescription('12 filters on');
+  });
+
+  it('draws nothing for zero', () => {
+    const trigger = renderBadge(0);
+    expect(trigger.querySelector('span[aria-hidden] > span')).toBeNull();
   });
 });

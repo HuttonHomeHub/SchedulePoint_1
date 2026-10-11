@@ -47,7 +47,7 @@ function flushFrames(): void {
 }
 
 beforeEach(() => {
-  announceSpy.mockClear();
+  announceSpy.mockReset();
   frames = [];
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
     frames.push(cb);
@@ -64,6 +64,8 @@ interface HarnessProps {
   /** Which item ids the container currently renders. */
   ids: readonly string[];
   lostReasonFor?: (id: string) => string | undefined;
+  /** The item that takes focus in place of the container when a given item leaves. */
+  successorFor?: (id: string) => string | undefined;
   /** Render a split button, so a caret (a `tabIndex={-1}` sibling) can be focused. */
   splitButton?: boolean;
   /**
@@ -81,6 +83,7 @@ interface HarnessProps {
 function Harness({
   ids,
   lostReasonFor,
+  successorFor,
   splitButton = false,
   portalled = false,
 }: HarnessProps): React.ReactElement {
@@ -90,6 +93,7 @@ function Harness({
     resolvedIds: ids,
     toolbarLabel: 'Actions for Excavate',
     ...(lostReasonFor ? { lostReasonFor } : {}),
+    ...(successorFor ? { successorFor } : {}),
   });
   return (
     <div
@@ -187,6 +191,100 @@ describe('useToolbarFocusHandoff — it fires', () => {
     flushFrames();
 
     expect(announceSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useToolbarFocusHandoff — a named successor (toolbar-redesign M5, E-2)', () => {
+  // A promoted command that falls back into its menu as the window narrows: the reader should land
+  // on the menu's trigger, which is on the bar at every width, not on the container.
+  const successorFor = (id: string): string | undefined =>
+    id === 'critical' ? 'filter' : undefined;
+  const lostReasonFor = (id: string): string | undefined =>
+    id === 'critical' ? 'Moved into the Filter menu.' : undefined;
+
+  it('lands on the successor, not the container', () => {
+    // Verified red by ignoring `successorFor`: focus lands on the toolbar and this fails.
+    const { rerender } = render(
+      <Harness
+        ids={['filter', 'critical']}
+        successorFor={successorFor}
+        lostReasonFor={lostReasonFor}
+      />,
+    );
+    screen.getByRole('button', { name: 'critical' }).focus();
+
+    rerender(
+      <Harness ids={['filter']} successorFor={successorFor} lostReasonFor={lostReasonFor} />,
+    );
+    flushFrames();
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'filter' }));
+  });
+
+  it('announces where the command went and where focus now is', () => {
+    const { rerender } = render(
+      <Harness
+        ids={['filter', 'critical']}
+        successorFor={successorFor}
+        lostReasonFor={lostReasonFor}
+      />,
+    );
+    screen.getByRole('button', { name: 'critical' }).focus();
+    rerender(
+      <Harness ids={['filter']} successorFor={successorFor} lostReasonFor={lostReasonFor} />,
+    );
+    flushFrames();
+
+    expect(announceSpy).toHaveBeenCalledTimes(1);
+    expect(announceSpy).toHaveBeenCalledWith(
+      'critical is no longer on the toolbar. Moved into the Filter menu. Focus moved to filter.',
+    );
+  });
+
+  it('falls back to the container when the successor has gone too', () => {
+    // Verified red by dropping the `?? container`: the rule would then focus nothing.
+    const { rerender } = render(
+      <Harness
+        ids={['filter', 'critical']}
+        successorFor={successorFor}
+        lostReasonFor={lostReasonFor}
+      />,
+    );
+    screen.getByRole('button', { name: 'critical' }).focus();
+    rerender(<Harness ids={[]} successorFor={successorFor} lostReasonFor={lostReasonFor} />);
+    flushFrames();
+
+    expect(document.activeElement).toBe(toolbar());
+  });
+
+  it('still yields to anything else that moved focus during the frame', () => {
+    const { rerender } = render(
+      <Harness
+        ids={['filter', 'critical']}
+        successorFor={successorFor}
+        lostReasonFor={lostReasonFor}
+      />,
+    );
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    screen.getByRole('button', { name: 'critical' }).focus();
+    rerender(
+      <Harness ids={['filter']} successorFor={successorFor} lostReasonFor={lostReasonFor} />,
+    );
+    elsewhere.focus();
+    flushFrames();
+
+    expect(document.activeElement).toBe(elsewhere);
+    expect(announceSpy).not.toHaveBeenCalled();
+    elsewhere.remove();
+  });
+
+  it('an item that names no successor still goes to the container', () => {
+    const { rerender } = render(<Harness ids={['filter', 'edit']} successorFor={successorFor} />);
+    screen.getByRole('button', { name: 'edit' }).focus();
+    rerender(<Harness ids={['filter']} successorFor={successorFor} />);
+    flushFrames();
+    expect(document.activeElement).toBe(toolbar());
   });
 });
 

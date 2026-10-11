@@ -1,3 +1,4 @@
+import { Eye, Wrench } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -12,8 +13,17 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { TOOLBAR_INSET_RULE } from './toolbar-styles';
+import {
+  DECK_CLOSING_SECTION,
+  DECK_GROUP_PILL,
+  DECK_GROUP_PILL_LOCKED,
+  DECK_ROW_MARK,
+  resolveLabelVisibility,
+  TOOLBAR_INSET_RULE,
+  toolbarLabelMinWidthClass,
+} from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
+import { useDeckRowOrder } from './use-deck-row-order';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
@@ -33,9 +43,17 @@ import { cn } from '@/lib/utils';
  * width. The whole ladder was a consequence of insisting the surface stay one row tall.
  *
  * So the deck's fit algorithm is **flex line-breaking, and nothing else**. There is no
- * `ResizeObserver` here, no `clientWidth` read, no width constant, and no priority ranking. That is
+ * `ResizeObserver` here, no `matchMedia`, no width constant, and no priority ranking. That is
  * not a simplification of the old approach — it is the removal of a class of defect this repository
  * has recorded five times, in which a row measures its own leftover width and gets it wrong.
+ *
+ * **One layout-overflow read remains, and it is not a width ladder.** Below `lg` the line scrolls
+ * (toolbar-redesign M3), and `deckScrolls` reads `scrollWidth > clientWidth` to decide only whether
+ * keyboard focus should `scrollIntoView` / `preventScroll`. It never drives layout: the scrolling
+ * line, the edge fade and the `squat` vertical scroll-away are CSS alone, and a structural test
+ * pins the read to that one function. The way back from a band `squat` has scrolled away is the
+ * foot strip or keyboard focus (which scrolls the shell to the focused control); the wheel over the
+ * canvas does not scroll the shell, a discoverability gap `docs/TECH_DEBT.md` records.
  *
  * ## What replaces the ladder
  *
@@ -52,21 +70,21 @@ import { cn } from '@/lib/utils';
  * at M7 after being specified twice and built neither time.
  *
  * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
- * Read the paragraph below as history: its width argument still explains why the deck can afford to
- * wrap, but it no longer describes the layout. It said "stacked buttons" while the code two hundred
- * lines down had stopped stacking them.
+ * A control is now its icon beside its label at the shared `text-sm` (the 9.5 px `text-micro` label
+ * the stacked geometry used went with it, `docs/specs/object-bar-defects/` M3). Read the stacked
+ * geometry's width argument as history: it explained why "every command labelled" was once
+ * affordable and describes no layout that exists. The label is suppressed only where the icon is
+ * genuinely universal, and that is each item's own `labelVisibility` rather than a list kept here.
  *
- * Icon above a 9.5 px label rather than beside it — roughly half the width for
- * the same information, which is the geometry that makes "every command labelled" affordable at all.
- * The label is suppressed only where the icon is genuinely universal ({@link ICON_ONLY}).
- *
- * ## The 7 → 4 mapping
+ * ## The 7 → 5 mapping
  *
  * The registry's seven-group taxonomy (ADR-0031) is **not** discarded and the ~40 registrations are
  * untouched. Seven named groups would be more chrome than commands, so pairs that answer the same
  * question share one and keep a hairline between them: `frame`+`lens` are both "what am I looking
- * at", `object`+`output`+`help` are all "this plan, as a document". The taxonomy survives as
- * structure **inside** a group rather than as a name above it.
+ * at", `object`+`output` are both "this plan, as a document". `help` stands alone as **Panels** —
+ * the controls that open a panel beside the diagram (toolbar-redesign M2). The taxonomy survives as
+ * structure **inside** a group rather than as a name above it. This section said 7 → 4 until that
+ * milestone gave `help` a name of its own.
  *
  * **There is no card**, and this paragraph said there was until M7. M1 deleted the box (a border
  * and padding at ≈1.2:1 against the band, drawing a boundary a 175 %-scaled screen cannot see) and
@@ -96,13 +114,25 @@ import { cn } from '@/lib/utils';
 const DECK_GROUPS = [
   { id: 'view', name: 'View', row: 'look', members: ['frame', 'lens'] },
   { id: 'find', name: 'Find', row: 'look', members: ['find'] },
+  // **Panels — ADR-0031 group 7 (`help`), renamed by what it now holds** (toolbar-redesign M2-T2).
+  // `help` was in Plan and held nothing after the shortcuts left for the account menu (ADR-0091
+  // M7-S5); Legend, Resource view and Comments are what sits in it now, because each opens a panel
+  // beside the diagram. No taxonomy change: the registry still has seven groups, and the deck still
+  // maps them onto a handful of named ones (the 7 → 4 argument above, now 7 → 5).
+  //
+  // `trailing` is R4: **one trailing group per row**, pushed to the line's end by a single
+  // `ml-auto`. Free space on a flex line is shared equally among every auto margin on it, so a
+  // second one would strand a group mid-row (the `alignEndGroup` defect, ADR-0091 M7 S10); the
+  // `satisfies` below cannot say "at most one per row", and `Deck.test.tsx` does.
+  { id: 'panels', name: 'Panels', row: 'look', members: ['help'], trailing: true },
   { id: 'author', name: 'Author', row: 'do', members: ['tools'] },
-  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
+  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output'], trailing: true },
 ] as const satisfies ReadonlyArray<{
   id: string;
   name: string;
   row: DeckRowId;
   members: readonly ToolbarGroupId[];
+  trailing?: true;
 }>;
 
 /**
@@ -122,31 +152,6 @@ type DeckRowId = (typeof DECK_ROWS)[number];
 
 export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
 
-/**
- * Commands whose icon carries the whole meaning, so a label beside it is cost without information.
- *
- * **The test is "would a planner who has never seen this product guess wrong?"** — not "do I
- * recognise it". A magnifier, a plus and minus, and the two undo arrows are among the most
- * standardised glyphs in software. `Arrange` and `Float paths` are not, and the difference between
- * a labelled and an unlabelled one there is the difference between a planner using the feature and
- * never finding it.
- *
- * Deliberately a small, closed set. Every addition trades discoverability for width, and the width
- * is no longer scarce now that the deck can wrap.
- */
-const ICON_ONLY = new Set([
-  'zoom-in',
-  'zoom-out',
-  'fit',
-  'undo',
-  'redo',
-  'print',
-  // The one member that fails the test above on merit: a balance is not a universal glyph for
-  // "apply levelled dates". It is here because the deck's DO row has a budget of one line and this
-  // is the longest label in it (ADR-0090); the name and tooltip carry the words (ADR-0117).
-  'apply-levelling',
-]);
-
 export interface DeckProps<Ctx> {
   /** The registry (validated via `defineToolbar`). */
   items: ToolbarItem<Ctx>[];
@@ -159,6 +164,16 @@ export interface DeckProps<Ctx> {
   className?: string;
 }
 
+/** Whether the deck's line is wider than its box — true only where US-6's scrolling line applies. */
+function deckScrolls(deck: HTMLElement): boolean {
+  return deck.scrollWidth > deck.clientWidth;
+}
+
+/** Focus the keyboard (or a handoff after keyboard use) gave a control, as opposed to a press. */
+function isKeyboardFocus(el: HTMLElement): boolean {
+  return el.matches(':focus-visible');
+}
+
 export function Deck<Ctx>({
   items,
   context,
@@ -168,14 +183,16 @@ export function Deck<Ctx>({
 }: DeckProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  /** True only while `onKeyDown` is moving focus itself — see `onFocus`. */
+  const rovingMove = useRef(false);
 
-  // `layout` is fixed at `comfortable`: the deck never folds items away on width, so there is no
-  // band to resolve. Passing the constant keeps `isVisible` predicates that take an env working
-  // exactly as they did, rather than quietly changing what a registry resolves to.
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled, 'comfortable'),
+    () => resolveItems(items, context, authoringEnabled),
     [items, context, authoringEnabled],
   );
+  // LOOK then DO at the floor and wider; DO then LOOK on the scrolling line below it, rendered in
+  // that order so the Tab and arrow sequence is the order on screen (`use-deck-row-order.ts`).
+  const rowOrder = useDeckRowOrder(DECK_ROWS);
 
   /** Deck group → its registry sub-groups → the items in each, preserving registry order. */
   const groups = useMemo(() => {
@@ -185,15 +202,20 @@ export function Deck<Ctx>({
       if (list) list.push(r);
       else byRegistryGroup.set(r.item.group, [r]);
     }
-    return DECK_GROUPS.map((group) => ({
-      ...group,
-      // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
-      // section is entirely hidden by predicates draws a rule with nothing on one side of it.
-      sections: group.members
-        .map((member) => byRegistryGroup.get(member) ?? [])
-        .filter((section) => section.length > 0),
-    })).filter((group) => group.sections.length > 0);
-  }, [resolved]);
+    return (
+      DECK_GROUPS.map((group) => ({
+        ...group,
+        // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
+        // section is entirely hidden by predicates draws a rule with nothing on one side of it.
+        sections: group.members
+          .map((member) => byRegistryGroup.get(member) ?? [])
+          .filter((section) => section.length > 0),
+      }))
+        .filter((group) => group.sections.length > 0)
+        // The groups follow the row order too, so the first roving stop is the first thing on screen.
+        .sort((a, b) => rowOrder.indexOf(a.row) - rowOrder.indexOf(b.row))
+    );
+  }, [resolved, rowOrder]);
 
   /**
    * One roving tab stop across the whole deck — the COMMANDS only, since the fold's removal
@@ -230,10 +252,38 @@ export function Deck<Ctx>({
       const current = nodes.findIndex((n) => n === document.activeElement);
       const next = rovingIndexFor(event.key, current, nodes.length);
       event.preventDefault();
-      nodes[next]?.focus();
+      // **The deck scrolls itself below `lg` (US-6), so the browser's own focus-scroll is replaced by
+      // `onFocus` below** — one path that every keyboard focus takes, whichever key or Tab brought it.
+      // Where the deck does not overflow nothing here changes: `focus()` keeps the scroll it always did.
+      // `rovingMove` marks this focus as the keyboard's even where `:focus-visible` is unavailable.
+      rovingMove.current = true;
+      try {
+        nodes[next]?.focus(deckScrolls(event.currentTarget) ? { preventScroll: true } : undefined);
+      } finally {
+        rovingMove.current = false;
+      }
     },
     [focusables],
   );
+
+  /**
+   * **A control the keyboard focuses is brought inside the scrolling line, clear of the edge fade**
+   * (US-6, ADR-0111). `scroll-padding` on the deck (`max-lg:scroll-px-8`, the fade's width) is what makes
+   * `nearest` stop short of the edge instead of leaving the control flush with it, or under the fade.
+   *
+   * **Keyboard focus only (`:focus-visible`).** A pointer press focuses a button too, and scrolling
+   * the control it is being pressed on out from under the pointer between `pointerdown` and `click`
+   * is how a tap lands on its neighbour. A half-clipped control can be pressed where it is.
+   *
+   * **Scoped to controls that overflow**: at 1024 and wider `deckScrolls` is false and this does
+   * nothing, so the wide layout's focus behaviour is byte-for-byte what it was.
+   */
+  const onFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!deckScrolls(event.currentTarget) || !target.matches('[data-toolbar-focusable]')) return;
+    if (!rovingMove.current && !isKeyboardFocus(target)) return;
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, []);
 
   // The roving stop must always exist and always point at something rendered. Items appear and
   // disappear as predicates change, so an `activeId` naming a gone item would leave the deck with
@@ -267,6 +317,7 @@ export function Deck<Ctx>({
     resolvedIds: stopIds,
     toolbarLabel: label,
     lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+    successorFor: (id) => items.find((item) => item.id === id)?.successorId,
   });
 
   return (
@@ -279,6 +330,7 @@ export function Deck<Ctx>({
       // by sequential navigation, so the deck still has exactly one Tab stop.
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      onFocus={onFocus}
       {...focusHandoff}
       // **Two declared rows, as plain `<div>`s inside the one `role="toolbar"`.**
       //
@@ -295,7 +347,26 @@ export function Deck<Ctx>({
       // was that the existing roving-walk case passes **unchanged** — the ADR-0062 extraction
       // argument applied to a layout change.
       className={cn(
-        'flex flex-col gap-2',
+        // **The deck is the label rule's container** (`@container/deck`, toolbar-redesign M1): a
+        // `'roomy'` label asks how wide THIS box is (`toolbarLabelClass`). It sits on the root and
+        // not on a control, because `@container` applies `contain: inline-size` and an auto-width
+        // `shrink-0` item stops sizing to its content (`docs/UX_STANDARDS.md`, "A collapse is
+        // triggered by the row's pressure"). The root is a block-level flex column inside a
+        // full-width wrapper, so its width is the band's inner width and `contain` changes nothing —
+        // `command-surface.spec.ts` asserts the equality at every cell.
+        '@container/deck flex flex-col gap-2',
+        // **Below `lg` the deck is ONE line that scrolls sideways** (toolbar-redesign M3, US-6,
+        // #471). Both rows sit side by side on a `flex-nowrap` line, LOOK then DO, and the rows,
+        // groups and sections below stop wrapping and stop shrinking (`max-lg:shrink-0`), so a
+        // control keeps its width and the line runs past the edge instead of folding into five or
+        // eleven stacked lines that took 355-603 px of a 360-720 px window. `scroll-px-8` is the
+        // edge fade's width (`deck-edge-fade`, `globals.css`): a control scrolled into view stops
+        // short of the edge rather than flush with it or under the fade. The inset is the root's
+        // own (`max-lg:px-2`), because the wrapper's gives way at this width so the line runs to the
+        // window's edge, where a half-clipped control tells a reader there is more.
+        // `max-lg:overflow-y-hidden` is not a decision: a scroller on one axis computes the other
+        // to `auto`, and a line exactly its own height must not grow a vertical scrollbar.
+        'max-lg:deck-edge-fade max-lg:scroll-px-8 max-lg:flex-row max-lg:items-start max-lg:gap-4 max-lg:overflow-x-auto max-lg:overflow-y-hidden max-lg:px-2',
         // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
         // This container became focusable only when the handoff gained somewhere to put focus,
         // and until then nothing had ever decided what "the toolbar itself is focused" looks
@@ -307,8 +378,23 @@ export function Deck<Ctx>({
         className,
       )}
     >
-      {DECK_ROWS.map((row) => (
-        <div key={row} data-deck-row={row} className="flex flex-wrap items-start gap-2">
+      {rowOrder.map((row, rowIndex) => (
+        <div
+          key={row}
+          data-deck-row={row}
+          className="flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap"
+        >
+          {/* **The row's identity is a quiet leading mark** (toolbar-redesign M6 V1): an eye for LOOK, a
+              wrench for DO (not a pencil: `Start editing` leads this row, and a second pencil beside it
+              read as a duplicate of the pen), in the muted ink, `aria-hidden` and never a stop. No stripe, no
+              tint band and no new colour — the pills carry the grouping and this carries only which
+              row you are on. **Roomy only** (`@roomy/deck:`, 79 rem = 1264 px, a deliberate floor), because it costs 18 px of the row and the
+              rows below that width have none to spare: at 1024 the LOOK row keeps about 28 px with a
+              conflict showing, and SC-1 asserts two lines there. Above it, the ladder's free widths are
+              read with the mark present (`promotion-widths.*.json`). */}
+          <span aria-hidden="true" data-deck-row-mark={row} className={DECK_ROW_MARK}>
+            {row === 'look' ? <Eye className="size-3.5" /> : <Wrench className="size-3.5" />}
+          </span>
           {groups
             .filter((group) => group.row === row)
             .map((group, groupIndex) => {
@@ -341,28 +427,35 @@ export function Deck<Ctx>({
                   // keeps its role and its name; its height is now the control row's. The shared
                   // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
                   className={cn(
-                    'flex items-stretch gap-2',
-                    // **The group seam, built at M7 having been promised twice and never made.**
-                    // `TOOLBAR_INSET_RULE`'s own docblock states as fact that "the group-level seam
-                    // joins it at M4"; M1-T3 specified its geometry. Neither happened, and M6 then
-                    // deleted the caption whose `border-r` had been the only mark at this boundary
-                    // — so the DECK's four groups were separated by 8 px of nothing while the
-                    // registry SECTIONS inside them kept a painted rule and 16 px. The finer
-                    // division was twice as wide and the only one with ink: a hierarchy inverted,
-                    // and the boundary it erased is the one that matters most on the DO row, where
-                    // Author's eleven pen-gated commands meet Plan's, which are never gated.
+                    'flex items-stretch gap-2 max-lg:shrink-0',
+                    'trailing' in group && 'ml-auto',
+                    // **Each group is a pill, and the pill replaces the group seam** (toolbar-redesign
+                    // M6 V2). The seam (console epic M7) was a 1 px rule on the group that FOLLOWED
+                    // another, drawn at `-left-1` — so a group that wrapped onto a line of its own opened
+                    // that line with a rule pointing at nothing (SC-12, the leading-seam defect, found at
+                    // 1024). A container has no leading edge to misplace: it surrounds its own group
+                    // wherever the group lands. The pill is a pseudo-element filling the box exactly, so
+                    // it costs the row **no width** — the LOOK row at 1024 has about 28 px to spare with
+                    // a conflict showing, and `DECK_GROUP_PILL` spends none of it.
                     //
-                    // Found by the M7 ux and architecture reviews independently. It is the third
-                    // instance in this epic of work specified and not built — the other two being
-                    // the ladder's fifth state and CQ-4's outlet — and the only one of the three
-                    // that looked right at rest, which is why nothing surfaced it until the
-                    // captions went.
+                    // The finer division inside a group (`TOOLBAR_INSET_RULE` between registry sections)
+                    // is unchanged: a rule inside a container is still the right mark for "a different
+                    // kind of thing, same group", and the pill is the coarser mark around it.
                     //
-                    // `inset-y-1/5` is the 60 % M1-T3 named, against the section rule's 50 %: the
-                    // coarser boundary is the taller mark, which is the whole point and is what
-                    // makes the two readable as a hierarchy rather than as two of the same thing.
-                    groupIndex > 0 &&
-                      'before:bg-border relative before:absolute before:inset-y-1/5 before:-left-1 before:w-px',
+                    // **The Author pill is hollow while the pen is not held**, so the eleven pen-gated
+                    // commands and the pen that leads them read as one locked unit instead of as eleven
+                    // separately dimmed controls (V3). Hollow-and-dashed is the second channel; the
+                    // shaded ink is the first.
+                    DECK_GROUP_PILL,
+                    group.id === 'author' && !authoringEnabled && DECK_GROUP_PILL_LOCKED,
+                    // The seam between the two rows on the scrolling line: below `lg` the second row's
+                    // first group follows the first row's last on the same line, and nothing else
+                    // would say a row ended.
+                    // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap. `after:`, because
+                    // the pill has the `before:`.
+                    groupIndex === 0 &&
+                      rowIndex > 0 &&
+                      'max-lg:after:bg-border max-lg:after:absolute max-lg:after:inset-y-1/5 max-lg:after:-left-2 max-lg:after:w-px',
                   )}
                 >
                   {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
@@ -383,20 +476,26 @@ export function Deck<Ctx>({
                 the commands. It was this span, its `pr-2`, its `border-r` and the gaps either
                 side, twice over on a row carrying two cards. The captions cost the row more than
                 the control the previous milestone added to it. */}
-                  <div className="flex flex-wrap items-stretch gap-1">
+                  <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
                     {group.sections.map((section, sectionIndex) => (
                       <div
                         key={section[0]?.item.group ?? sectionIndex}
                         className={cn(
-                          'flex flex-wrap items-stretch gap-1',
+                          'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
                           // The seven-group taxonomy, surviving as an inset hairline between sections
                           // rather than as a caption above them — the ONE seam treatment the three
                           // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.
                           sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
+                          // The output section (Export, and Share… once promoted) is the row's closing
+                          // action: outlined together, never filled (`DECK_CLOSING_SECTION`).
+                          section[0]?.item.group === 'output' && DECK_CLOSING_SECTION,
                         )}
                       >
-                        {section.map((r) =>
-                          r.item.render ? (
+                        {section.map((r) => {
+                          // One resolution per item: the `render` branch hands it to the trigger and
+                          // the plain branch to `ToolbarButton`, and neither decides for itself.
+                          const labelState = resolveLabelVisibility(r.item.labelVisibility, 'deck');
+                          return r.item.render ? (
                             // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
                             // `focusables()` queries `[data-toolbar-focusable]` in document order
                             // and a duplicate marker would put the wrapper in the roving walk. See
@@ -411,7 +510,7 @@ export function Deck<Ctx>({
                                 disabledReason: r.disabledReason,
                                 active: r.active,
                                 activeKind: r.activeKind,
-                                layout: 'comfortable',
+                                labelState,
                                 itemProps: r.item.presentational
                                   ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
                                   : {
@@ -427,10 +526,13 @@ export function Deck<Ctx>({
                               key={r.item.id}
                               itemId={r.item.id}
                               label={r.item.label}
+                              {...(r.item.visibleLabel
+                                ? { visibleLabel: r.item.visibleLabel }
+                                : {})}
                               {...(r.item.description ? { description: r.item.description } : {})}
                               icon={r.icon}
                               {...(r.busy ? { busy: true } : {})}
-                              showLabel={!ICON_ONLY.has(r.item.id)}
+                              labelState={labelState}
                               {...(r.item.isActive ? { pressed: r.active } : {})}
                               activeKind={r.activeKind}
                               disabled={!r.enabled}
@@ -475,10 +577,10 @@ export function Deck<Ctx>({
                               //
                               // Deleting it leaves one scale declared in one place, by the primitive.
                               // `min-w-*` is kept: it is geometry, and it was never the problem.
-                              className={cn(ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12')}
+                              className={toolbarLabelMinWidthClass(labelState)}
                             />
-                          ),
-                        )}
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

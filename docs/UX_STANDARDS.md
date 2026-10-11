@@ -366,6 +366,77 @@ entry stops being needed.
   two-dimensional surface under 1.4.10), and every canvas affordance keeps its
   keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
+### Free space is used by commands that were in a menu (toolbar-redesign M5, R9)
+
+When a deck row has spare width, a command that lives in a menu and could sit on the bar is promoted out of
+that menu; it falls back into the menu when the width runs out. Seven rules follow. **A promoted command
+leaves its menu; it is not shaded there** — one accessible name exists once in the tree. **A menu never
+empties**: each keeps an anchor row that renders in every state, so its trigger is on the bar at every width
+(commands stay in place). **Nothing on today's bar is ever demoted**: promotion only adds. **A promoted
+command is the same command**: a kind preset ("Add: Start milestone", "Link: Start → Start") arms its tool
+exactly as the menu pick does and is pen-gated with the same reason; a dock toggle is pressed from the dock
+itself, so it stays in step when the dock is closed from its own close button; Critical only and Filter read
+one set. **Focus follows the command** (ADR-0135): a resize that promotes the command a reader is on in a
+menu moves focus to its button and announces "‹name› is now on the toolbar."; one that demotes the command
+a reader is on lands focus on the menu's trigger with "Moved into the ‹menu› menu."; a resize that closes the
+menu a reader is in (the stage changed under it) hands focus to its trigger with "Menu closed because the toolbar
+changed." — never to the page. **Copy does not point at a row that can move**: a banner says "Turn off Late-start
+overlay", not "Turn it off in View". **Group names do not
+change as items promote** (View, Find, Panels, Author, Plan), and a promoted item sits immediately after its
+trigger in the same group. **The ladder's order is the product owner's ranking** (D-n), by frequency and
+importance, and each threshold is computed from measured widths, never judged.
+
+### The visual brief: containers, a closing action, quiet shading, and an organisation menu (toolbar-redesign M6)
+
+**A group is a container, not a seam** (V2): each deck group is a low-contrast pill that costs the row no width,
+so a group that wraps onto its own line cannot open it with a stray rule (SC-12). **A row names itself quietly**
+(V1): a 14 px glyph in the muted ink (an eye, and a wrench rather than a second pencil beside `Start editing`) leads
+LOOK and DO, only from 79 rem (1264 px) where the row has room — deliberately — and never as a
+stripe, a tint band or a new colour. **A shaded control is quiet, not dimmed** (V3): the ink is the muted
+foreground at 7.98:1 and the fill and underline drop away — what says "shut" is that bare picture, no hover and
+the reachable reason (ADR-0082), and while the pen is not held the Author pill is hollow and dashed so the pen and
+the eleven commands it unlocks read as one locked unit; a lens that is on but shaded keeps a quiet underline,
+and a shaded control takes `GrayText` in forced colours. **The last action in a row is outlined, never filled**
+(V4): Export and a promoted Share… share one ring, because the secondary fill means "chosen" on the
+`Diagram | Gantt` segment and on a pressed toggle. **`Start editing` stays an ordinary control while the pen is not
+held** — the amber slab is the pen _held_ (ADR-0133 D3/D4); the locked Author pill's stronger dash is what says
+"start here". **A filter that is on says how many** (V4a): `Filter ▾` carries a
+count on its glyph and "2 filters on" for a screen reader.
+
+**The organisation switcher is a menu button, and a single organisation is a label** (V5, ADR-0104). The header
+shows the current organisation's name (truncated, with the whole name in a tooltip and in the accessible name
+"Active organisation: ‹Name›"). **A single organisation is text, with no glyph**, so it cannot be mistaken for
+a button that has died, and it is deliberately not a tab stop: the whole name is in the tree for a screen reader,
+and a sighted keyboard-only reader who sees it cut gets no tooltip, which is accepted over a do-nothing stop; the list is `menuitemradio` rows with the current one `aria-checked`. **It has no
+type-ahead**, and that is a stated limit and not an oversight: the list is the reader's own organisations — a
+handful — and arrow keys, Home and End reach any of them; `Menu` has no type-ahead and adding it changes a shared
+primitive's key set, which ADR-0111 reviews before release. On a route with no organisation (`/account`) the one
+organisation is not current, so the menu stays: choosing it is the way back.
+
+### The diagram's own viewport controls (toolbar-redesign M4)
+
+Zoom, Fit and the Minimap live on the diagram's corner, not the command deck: a control belongs on its
+subject (R5). Three rules follow from the review. **A control that cannot be seen is not in the Tab order**:
+the cluster is withdrawn (hidden, not clipped) when the visible stage cannot hold it, and `View ▾` carries
+Fit to plan as the route that stays. **A finger-sized window gives the selection bar a line of its own**
+(`data-dock-wide`) so the diagram keeps at least 120 px of stage with a conflict selected, and the bar has a
+visible **Clear selection** on a finger-sized pointer (Escape does the same) as its way out. **Below 1024 the editing row leads** the
+one scrolling line, in the DOM as on screen.
+
+### A flagged object states its reason beside its remedy (conflict-reason-on-object)
+
+When the selected activity is flagged, the selection bar leads with a **reason line** naming every
+conflict it matches, in words, in the one wording the announcer also speaks (`CONFLICT_FLAGS` labels,
+sentence case, no full stop). Four rules. **It is a caption on the object, not a toolbar item**: on its
+own line above the controls, so flagging an activity never reflows a control (an inline item cost a line
+at 1912 x 1080, `docs/specs/conflict-reason-on-object/m0-measurement.md`), and it takes no roving stop, no
+Tab stop and no role. **It is a standing condition, not an event**: never a live region, never a toast,
+replaced in place as the selection moves, gone when the selection or the conflict goes (ADR-0132).
+**It never truncates** (ADR-0184); it wraps. **The control that answers the leading conflict carries the
+same reason as its accessible description**, never its name. A status read-out in a toolbar or bar is
+foreground text with a warning-coloured icon: no fill, border or hover, so it cannot be read as a control.
+The deck's count chip stays count-only; the reason lives on the object.
+
 ### Give-way order in a fixed-height chrome row (ADR-0110)
 
 A chrome row whose height is fixed — the workspace foot, the command band, the
@@ -401,6 +472,11 @@ Where labels can be shed at all, prefer **always showing them** over a
 disclosure: a row that hides four facts behind a press has traded a width
 problem for a discoverability one.
 
+- **Below 1024 the command deck is one scrolling line, and a narrow-and-short window scrolls the whole shell**
+  (`squat`, `(width < 64rem) and (height <= 26rem)`; toolbar-redesign M3). The way back to a band scrolled away is the
+  foot strip or keyboard focus, and a keyboard-focused control is brought clear of the edge fade. At 1024 and up the deck
+  never scrolls sideways and the band never scrolls away, whatever the height.
+
 ### A short body gives the whole workspace to the panel (ADR-0180)
 
 When the workspace body is too short to give the diagram its minimum and the activities panel three
@@ -413,7 +489,7 @@ A panel that shows no rows is not an expanded panel.
 - **Commands are classed by what they act on.** A command aimed at the diagram (zoom, fit, presets, go
   to date and today, next conflict, the find cursor, arming a drawing tool, opening a right dock)
   **collapses the panel first, then runs**, so it never acts on a diagram you cannot see. Display
-  marks (View ▾ toggles, Legend) and plan, data and output commands (Summary, Settings…, Analysis,
+  marks (View ▾ toggles, Legend) and plan, data and output commands (Plan summary, Settings…, Analysis,
   Share & export, Print, Undo) are unaffected. A new canvas-directed command chooses a class; a
   structural test fails if it does not.
 - **A tool armed when the swap begins is put away,** and the note says so.

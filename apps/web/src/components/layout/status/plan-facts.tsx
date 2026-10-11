@@ -105,11 +105,18 @@ export function PlanFacts({
        * row by 302 px and pushed Expand out of sight (M0). Bounded by its container it wraps its own
        * items onto further lines instead, by the same mechanism as `max-w-64` above.
        *
+       * **`px-2` and `gap-x-3`, 12 px between them, are the margin the selection bar needs at 1646**
+       * (toolbar-redesign M2). Float paths joined the bar as a 32 px icon, which left the ordinary
+       * selection 34 px of slack in the foot row's 958 px dock and a zero-duration task's Make
+       * milestone… control 2 px short, so the bar wrapped and a selection cost the diagram 36 px —
+       * the equality `zero-duration.spec.ts` asserts (ADR-0115). Facts are the one trailing block
+       * whose inset is not content, and 12 px leaves 10 px over rather than a sub-pixel pass.
+       *
        * **What it does NOT do is fix 1646** — that was M1's, and wrapping the facts there buys
        * nothing, because a wrapping row breaks between ITEMS rather than by total width (ADR-0114
        * M2 recorded the same thing freeing 164 px and gaining zero).
        */
-      className="text-muted-foreground flex min-h-6 max-w-full shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
+      className="text-muted-foreground flex min-h-6 max-w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-0 px-2 text-xs"
     >
       {/* **The collapse is WITHDRAWN, on its own measurement** (M2-T3, reversed at M2-T4).
           Tailwind's `@container` sets `container-type: inline-size`, which applies

@@ -81,7 +81,9 @@ test('an organisation-scoped route still gets the whole navigator', async ({ pag
   // stays withheld — and the switcher, which is the reader's actual route back, stays.
   await openFromAccountMenu(page, 'Your account');
   await expectNoOrganisationNavigation(page);
-  await expect(page.getByLabel('Active organisation')).toBeVisible();
+  // One organisation, not current on this route: it is still a MENU, because choosing it is the way
+  // back (a plain label would be the ADR-0104 shape for the route where it is current).
+  await expect(page.getByRole('button', { name: /^Select organisation/ })).toBeVisible();
 });
 
 /**

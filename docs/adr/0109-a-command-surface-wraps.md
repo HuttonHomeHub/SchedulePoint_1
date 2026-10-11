@@ -1,6 +1,9 @@
 # ADR-0109 — A command surface wraps, and the leading edge belongs to the work
 
 - **Status:** Accepted (M1–M5 landed 2026-08-24)
+- **Amended by:** ADR-0185 (2026-10-11) — D1's "never hides" gains a bounded companion: a viewport stage may
+  _add_ a menu command to the bar, and a command already on the bar never leaves it. The deleted mechanism (demotion
+  into a `⋯` as width fell) does not return, and its dead code, with `ToolbarItem.tier`, is now deleted.
 - **Date:** 2026-08-24
 - **Supersedes:** the width-ladder half of ADR-0090, ADR-0091 and ADR-0094 M0-T1; ADR-0099 D1 (the
   tool rail); ADR-0099 D2's Project-Explorer-as-drawer-subject

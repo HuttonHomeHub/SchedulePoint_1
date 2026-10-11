@@ -7,6 +7,7 @@ import {
   portalTarget,
   useMeasuredBox,
 } from '@/components/ui/overlay-position';
+import { cn } from '@/lib/utils';
 
 /** Estimated panel box for the first paint only — the measured correction lands before paint. */
 const ESTIMATED_WIDTH = 288;
@@ -17,7 +18,7 @@ const ESTIMATED_HEIGHT = 320;
  * (ADR-0091 M7-S6) so a second control can host one without a second implementation.
  *
  * There is exactly one thing this hook is for. `Go to date` merges into `Go to today` as a split
- * button, and its caret has to open the same kind of panel `View ▾` and `Summary ▾` open — anchored,
+ * button, and its caret has to open the same kind of panel `View ▾` and `Plan summary` open — anchored,
  * clamped to the viewport, closed by Escape, by an outside pointer press and by focus leaving, and
  * portalled so it escapes the row's clip. Every one of those behaviours has a defect recorded
  * against it, and this repository's standing finding is that two implementations of one behaviour
@@ -52,6 +53,7 @@ export interface PopoverPanel {
 export function usePopoverPanel({
   triggerRef,
   align = 'start',
+  panelWidth = 'default',
 }: {
   /**
    * The element the panel anchors to and returns focus to. For a split button this is the
@@ -60,6 +62,14 @@ export function usePopoverPanel({
    */
   triggerRef: React.RefObject<HTMLElement | null>;
   align?: 'start' | 'end';
+  /**
+   * How wide the panel may grow. `'default'` is 20 rem, which every single-column panel (Summary,
+   * the Go-to-date picker, Filter) was designed against; `'wide'` is 44 rem, for a panel that lays
+   * its content out in columns to stay inside the 1024 × 600 floor (toolbar-redesign M2-T3: View ▾).
+   * Both are capped by the viewport, so a narrow window gets a panel that fits it and the content
+   * reflows to one column (`sm:`) rather than overflowing.
+   */
+  panelWidth?: 'default' | 'wide';
 }): PopoverPanel {
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -161,7 +171,10 @@ export function usePopoverPanel({
             aria-label={label}
             tabIndex={-1}
             style={{ position: 'fixed', left, top, maxHeight }}
-            className="border-border bg-popover text-popover-foreground z-50 max-w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-md border p-3 shadow-md outline-none"
+            className={cn(
+              'border-border bg-popover text-popover-foreground z-50 overflow-y-auto rounded-md border p-3 shadow-md outline-none',
+              panelWidth === 'wide' ? 'max-w-popover-wide' : 'max-w-popover',
+            )}
           >
             {children}
           </div>,

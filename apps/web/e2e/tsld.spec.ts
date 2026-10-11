@@ -70,7 +70,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
 
   // Before scheduling there is nothing to plot: the diagram prompts a recalculation.
-  await page.getByRole('button', { name: 'Edit plan' }).click();
+  await page.getByRole('button', { name: 'Edit plan details' }).click();
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)
@@ -129,13 +129,11 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
 
   // The "Fit to plan" control re-frames the diagram without error.
   //
-  // It is on the command surface now, not inside the diagram region — the workspace renders
-  // `TsldPanel` chromeless and the toolbar owns the viewport commands (ADR-0091 M7 folded them
-  // into `Zoom ▾`). Located by `[data-toolbar-item]` rather than by copy, because at narrower
-  // bands this item is icon-only by design (`showLabel: { atLeast: 'comfortable' }`) and its
-  // visible text is not something a journey may assume.
+  // It is in the "Diagram viewport" cluster at the diagram's bottom-right corner now (toolbar
+  // redesign M4), not on the command deck. Located by `[data-toolbar-item]` rather than by copy,
+  // because it is icon-only by design and its visible text is not something a journey may assume.
   await expect(
-    page.getByRole('toolbar', { name: 'Plan commands' }).locator('[data-toolbar-item="fit"]'),
+    page.getByRole('toolbar', { name: 'Diagram viewport' }).locator('[data-toolbar-item="fit"]'),
   ).toBeVisible();
 
   // The plan view with the rendered logic diagram is accessible.

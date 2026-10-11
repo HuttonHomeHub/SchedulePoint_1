@@ -40,6 +40,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     definitionGate: null,
     makeMilestone: { applies: false },
     onMakeMilestone: vi.fn(),
+    floatPathsOpen: false,
+    toggleFloatPaths: null,
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
@@ -57,6 +59,7 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
     conflictKey: null,
+    conflictKeys: [],
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
     onClearVisualPlacement: vi.fn(),

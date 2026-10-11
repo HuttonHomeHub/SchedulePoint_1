@@ -573,6 +573,9 @@ export interface TsldPanelProps {
   /** Minimap panel (ADR-0100): mounted by the canvas when true; closing is host-owned. */
   minimapActive?: boolean;
   onMinimapClose?: () => void;
+  /** The "Diagram viewport" cluster's slot and the minimap-room fact — see `TsldCanvas`. */
+  onViewportSlot?: (node: HTMLDivElement | null) => void;
+  onMinimapRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
@@ -601,6 +604,14 @@ export interface TsldPanelProps {
    * context; **absent ⇒ the bar is byte-for-byte its pre-M2 self**, which is the rollback contract.
    */
   selectionCanvas?: SelectionCanvasContext | undefined;
+  /**
+   * Float paths on the docked selection bar (toolbar-redesign M2-T4): whether the panel is showing,
+   * and the toggle that opens it into the given activity or closes it. Both come from the workspace,
+   * which owns the right-hand dock they open; **absent ⇒ the bar offers no Float paths**, never a
+   * lit control that does nothing.
+   */
+  floatPathsOpen?: boolean | undefined;
+  onToggleFloatPaths?: ((activity: ActivitySummary) => void) | undefined;
 }
 
 interface PendingCreate {
@@ -687,9 +698,13 @@ export function TsldPanel({
   resourceStrip = null,
   minimapActive = false,
   onMinimapClose,
+  onViewportSlot,
+  onMinimapRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
   selectionCanvas,
+  floatPathsOpen,
+  onToggleFloatPaths,
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
@@ -799,9 +814,22 @@ export function TsldPanel({
   const canvasSurface = useCanvasSurface();
   const registerCanvasSurface = useRegisterCanvasSurface();
   const listboxRef = useRef<HTMLUListElement>(null);
+  // The node the canvas draws its bottom-right column into — after the activity list, so Tab
+  // reaches the diagram's keyboard surface before the minimap and the cluster (see `TsldCanvas`).
+  const [columnHost, setColumnHost] = useState<HTMLDivElement | null>(null);
+  // The section is the box that is on screen: `h-full min-h-0` inside the stage, while the surface
+  // inside it keeps a 240 px minimum that the stage then clips (`TsldCanvas`'s `visibleBoxRef`).
+  const visibleBoxRef = useRef<HTMLElement>(null);
   // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
   const restoreSelectionFocus = useCallback(() => listboxRef.current?.focus(), []);
+  // The docked bar's visible Clear control: the plural bar's own `onClear`, and Escape's, in one
+  // spelling, so the three exits leave the same state and say the same sentence.
+  const clearSelectionFromBar = useCallback(() => {
+    setSelection(EMPTY_SELECTION);
+    setActiveIdRaw(null);
+    announce('Selection cleared.');
+  }, [announce]);
   /**
    * Focus the listbox **after** a closing modal has released it.
    *
@@ -1810,6 +1838,8 @@ export function TsldPanel({
         onOpenEditorAt,
         definitionGate,
         onMakeMilestone,
+        floatPathsOpen,
+        onToggleFloatPaths,
       }),
     [
       selectionCanvas,
@@ -1837,6 +1867,8 @@ export function TsldPanel({
       // selection bar offering the old answer.
       canWriteNotes,
       onNotes,
+      floatPathsOpen,
+      onToggleFloatPaths,
     ],
   );
 
@@ -2911,6 +2943,7 @@ export function TsldPanel({
 
   return (
     <section
+      ref={visibleBoxRef}
       aria-label="Time-scaled logic diagram"
       className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}
     >
@@ -3054,7 +3087,11 @@ export function TsldPanel({
           selected, and only when the host wired the object actions.
         */}
         {showDiagram && selectionActionsWired ? (
-          <SelectionActionsBar context={selectionCtx} restoreFocus={restoreSelectionFocus} />
+          <SelectionActionsBar
+            context={selectionCtx}
+            restoreFocus={restoreSelectionFocus}
+            onClear={clearSelectionFromBar}
+          />
         ) : null}
 
         {/*
@@ -3326,6 +3363,10 @@ export function TsldPanel({
               resourceStrip={resourceStrip}
               minimapActive={minimapActive}
               {...(onMinimapClose ? { onMinimapClose } : {})}
+              columnHost={columnHost}
+              visibleBoxRef={visibleBoxRef}
+              {...(onViewportSlot ? { onViewportSlot } : {})}
+              {...(onMinimapRoomChange ? { onMinimapRoomChange } : {})}
               minimapDismissFocusRef={listboxRef}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
@@ -3579,6 +3620,15 @@ export function TsldPanel({
                 </li>
               ))}
             </ul>
+            {/* The canvas's bottom-right column (minimap above the "Diagram viewport" cluster) is
+                drawn here, after the list above, so Tab order is the diagram's keyboard surface,
+                then the minimap, then the cluster. A full-surface overlay that takes no pointer
+                events itself; its two occupants do. */}
+            <div
+              ref={setColumnHost}
+              data-testid="tsld-column-host"
+              className="pointer-events-none absolute inset-0 z-10"
+            />
           </>
         ) : (
           <div className="text-muted-foreground flex h-full items-center justify-center p-8 text-center text-sm">

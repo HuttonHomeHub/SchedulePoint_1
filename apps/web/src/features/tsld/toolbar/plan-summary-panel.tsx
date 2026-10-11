@@ -1,5 +1,4 @@
 import { ScheduleSummaryStrip } from '@/features/schedule';
-import { formatCalendarDate } from '@/lib/format-date';
 
 /**
  * The body of the toolbar's **Summary** popover (ADR-0031 amendment) — the single place a planner
@@ -11,12 +10,10 @@ import { formatCalendarDate } from '@/lib/format-date';
  */
 export function PlanSummaryPanel({
   statusLabel,
-  dataDate,
   orgSlug,
   planId,
 }: {
   statusLabel: string;
-  dataDate: string | null;
   orgSlug: string;
   planId: string;
 }): React.ReactElement {
@@ -25,8 +22,9 @@ export function PlanSummaryPanel({
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5">
         <dt className="text-muted-foreground">Status</dt>
         <dd className="text-right font-medium">{statusLabel}</dd>
-        <dt className="text-muted-foreground">Data date</dt>
-        <dd className="text-right font-medium">{dataDate ? formatCalendarDate(dataDate) : '—'}</dd>
+        {/* **No Data date row** (toolbar-redesign M2 review): the plan's header facts show it, and
+            the schedule strip below shows it again once calculated — a third copy in this list was
+            the same fact three times in one glance. */}
         {/* **The Mode row is gone** (one-planning-surface M-F-T5). It read "Early" or "Visual",
             and there is now one planning surface, so the row could only ever have printed one word
             — a fact about the product rather than about this plan, which is not what this list is

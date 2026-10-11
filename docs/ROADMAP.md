@@ -220,7 +220,7 @@ keep `main` releasable.
 - **The diagram can say where you are** (ADR-0100, the TSLD minimap). The last unbuilt
   Should-have on the primary surface: a 200×120 overview panel in the canvas's bottom-right —
   an invariant cached picture of the whole programme (critical path surviving 1 px decimation)
-  with the live viewport as a DOM rectangle — reached from `View ▾ ▸ Panels ▸ Minimap`, off by
+  with the live viewport as a DOM rectangle — reached from the Minimap button in the diagram's corner cluster, off by
   default. Drag the rectangle, click to jump, or drive it from the keyboard: the canvas's first
   **unanchored** pan that does not need a pointer. Built measure-first — the falsification
   condition was committed before the prototype and passed on both fixtures and again against
@@ -765,8 +765,31 @@ discriminators. Each becomes a spec/plan before build:
   [`docs/specs/retire-single-pane-workspace/`](specs/retire-single-pane-workspace/)). The below-768 px
   Diagram / Activities toggle is gone: a narrow window has the same canvas row and foot row as a larger one,
   a dock that would leave the diagram under 360 px takes the row, and Compare revisions opens on a narrow
-  window. The shell chrome that leaves a short narrow window no workspace body is recorded as
-  `docs/TECH_DEBT.md` #471 and is not fixed here.
+  window. The shell chrome that left a short narrow window no workspace body was recorded
+  as `docs/TECH_DEBT.md` #471 and not fixed here; the toolbar redesign below closed it.
+
+- **The toolbar promotes what fits, and says what moved.** **Approved 2026-10-09; built as `toolbar-redesign`
+  M0-M7** ([ADR-0185](adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md); spec and plan at
+  [`docs/specs/toolbar-redesign/`](specs/toolbar-redesign/)). At 1024 × 600 with a mouse the command deck is two
+  lines in every measured state (it was four), the viewport controls sit in the diagram's corner, and below 1024 the
+  deck is one scrolling line with the editing row first. On a wider screen the commands that lived in menus come out
+  onto the bar at six widths (1280 to 2560), a menu always keeps an anchor row, and a resize that moves the control
+  a reader is on says where it went. The groups are quiet pills and the organisation switcher is a menu. The cost is
+  a CI step for the promotion journey, and menus whose contents depend on the window.
+
+- **A row's subject wraps; it never clips.** **Approved 2026-10-09; built as `row-subject-truncation` M0-M2**
+  ([ADR-0184](adr/0184-a-rows-subject-wraps-it-never-clips.md); spec and plan at
+  [`docs/specs/row-subject-truncation/`](specs/row-subject-truncation/)). On the organisation landing every plan
+  name, Draft badge, project and client is shown in full at every width: a row grows a line when it needs one, the
+  date or "actor · time" sits on the name's line, and on a very narrow screen it drops beneath the row's text.
+  The cost is height in the capped two-column boxes, measured and accepted.
+
+- **A flagged selection says why.** **Approved 2026-10-10; built as `conflict-reason-on-object` M0-M2**
+  ([ADR-0186](adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md); spec and plan at
+  [`docs/specs/conflict-reason-on-object/`](specs/conflict-reason-on-object/)). Select a flagged activity, in the
+  Diagram or the Gantt, and the selection bar states every reason in words on a line above its controls, in the
+  wording the announcer and the screen reader also use; none of the controls moves. The deck's chip stays a count.
+  The cost is 20 px of canvas while a flagged activity is selected, measured and accepted.
 
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at

@@ -60,7 +60,30 @@ export interface TooltipOptions {
   purpose: 'name-echo' | 'description';
   /** Suppresses the whole mechanism (e.g. a control that has a visible label). */
   disabled?: boolean | undefined;
+  /**
+   * Which side of the trigger the tip prefers. `'below'` (the default) is the rule every trigger in
+   * the command deck has always had. `'above'` is for a trigger that sits on the bottom edge of
+   * something with a row under it — the diagram's corner cluster, whose tip would otherwise open
+   * downward over the foot row — and falls back to below only where there is no room above.
+   */
+  placement?: 'below' | 'above';
+  /**
+   * Close the tip when the trigger is activated (WCAG 1.4.13 leaves a tip up until it is dismissed;
+   * a press is the reader dismissing it). For a control whose press puts something where the tip
+   * is: the Minimap toggle opens its panel directly above itself, and the tip used to linger over it.
+   * Default off — a tip beside a control that changes nothing near it has no reason to go.
+   *
+   * "Press" is a `click` on the trigger, so a keyboard activation (Enter or Space) closes the tip
+   * as well as a pointer press. **The close is transient by design**: the tip opens again the next
+   * time focus leaves and returns, or the pointer leaves and re-enters. A tip placed `'above'` a
+   * trigger whose press opens a panel there can therefore sit over that panel again on a later
+   * focus; the Minimap toggle's panel is the case, and it is accepted rather than designed around.
+   */
+  dismissOnPress?: boolean;
 }
+
+/** The two options a container forwards to every tooltip it owns (`Toolbar`, `ToolbarButton`). */
+export type TooltipPlacementOptions = Pick<TooltipOptions, 'placement' | 'dismissOnPress'>;
 
 export interface TooltipApi {
   /** Spread onto the trigger element. Never contains `title`. */
@@ -124,12 +147,17 @@ function placeTip(
   anchor: TriggerAnchor,
   width: number,
   height: number,
+  prefer: 'below' | 'above' = 'below',
 ): { left: number; top: number } {
   const x = anchor.x - width / 2;
+  const aboveTop = anchor.above - height;
+  // `'above'` takes the upper side first, and the lower one only when the top edge has no room.
+  if (prefer === 'above' && aboveTop >= CLAMP_MARGIN) {
+    return clampAnchor({ x, y: aboveTop }, width, height);
+  }
   const below = clampAnchor({ x, y: anchor.below }, width, height);
   if (below.top >= anchor.below) return below;
 
-  const aboveTop = anchor.above - height;
   if (aboveTop >= CLAMP_MARGIN) return clampAnchor({ x, y: aboveTop }, width, height);
 
   // Neither side fits. Only `left` is taken from the clamp: its `top` is what covers the trigger.
@@ -160,7 +188,13 @@ function releaseTip(handle: TipHandle): void {
   if (currentTip === handle) currentTip = null;
 }
 
-export function useTooltip({ content, purpose, disabled = false }: TooltipOptions): TooltipApi {
+export function useTooltip({
+  content,
+  purpose,
+  disabled = false,
+  placement = 'below',
+  dismissOnPress = false,
+}: TooltipOptions): TooltipApi {
   const active = !disabled && !!content;
   const tipId = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -284,20 +318,30 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
       if (triggerRef.current?.contains(target) || tipRef.current?.contains(target)) return;
       close();
     };
+    // A press on the trigger itself, after the focus it caused has already opened (and been
+    // allowed to open) the tip — closing on `pointerdown` would be undone by that focus.
+    const onClick = (event: MouseEvent): void => {
+      // The click a released long-press fires is swallowed by the trigger and is not a press: the
+      // long-press just opened this tip on purpose.
+      if (suppressNextClick.current) return;
+      if (triggerRef.current?.contains(event.target as Node)) close();
+    };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer, true);
+    if (dismissOnPress) document.addEventListener('click', onClick, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('click', onClick, true);
     };
-  }, [open, close]);
+  }, [open, close, dismissOnPress]);
 
   // The measured clamp: centre under the trigger, corrected against the tip's real box before
   // paint (the M-C leaf — a third clamp is the defect this epic exists to close).
   const box = useMeasuredBox(tipRef, openState, open);
   const width = box?.width ?? TIP_ESTIMATE.width;
   const height = box?.height ?? TIP_ESTIMATE.height;
-  const position = openState ? placeTip(openState.box, width, height) : null;
+  const position = openState ? placeTip(openState.box, width, height, placement) : null;
 
   const triggerProps: TooltipApi['triggerProps'] = {
     ref: (el) => {

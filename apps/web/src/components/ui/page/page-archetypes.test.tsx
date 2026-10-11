@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
   EmptyState,
@@ -378,27 +378,84 @@ describe('RowSubject', () => {
     expect(container.textContent).toBe('Tower B');
   });
 
-  it('lets the context give way before the name does', () => {
-    // The truncation rule is the decision this component owns. A call site must not be able to
-    // answer it differently, and a name clipped in favour of its project is the wrong sacrifice.
+  // jsdom lays nothing out, so these are tripwires on the markup, not proof of the behaviour: that is
+  // the probe in `e2e-overview` (ADR-0110). The test this replaces asserted `truncate` and
+  // `shrink-[3]`, i.e. the defect, and was green while 16 of 17 names were clipped.
+  const FORBIDDEN =
+    /(^|\s)(truncate|text-ellipsis|whitespace-nowrap|overflow-hidden|line-clamp-\S*|order-\S*|flex-row-reverse|flex-wrap-reverse)(\s|$)/;
+
+  it('never truncates, clips or reorders anything in the subject', () => {
+    const { container } = render(
+      <RowSubject name="Tower B" badge={<span>Draft</span>} context="Riverside · Acme" />,
+    );
+    const subject = container.querySelector('[data-row-subject]');
+    for (const el of [subject, ...(subject?.querySelectorAll('*') ?? [])]) {
+      expect(el?.getAttribute('class') ?? '', 'a subject part can clip its text').not.toMatch(
+        FORBIDDEN,
+      );
+    }
+  });
+
+  it('keeps the badge in the name group, and reads name, badge, context in that order', () => {
+    const { container } = render(
+      <RowSubject name="Tower B" badge={<span>Draft</span>} context="Riverside · Acme" />,
+    );
+    const subject = container.querySelector('p[data-row-subject]');
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    const [group, ctx] = [...(subject?.children ?? [])];
+    expect(group?.textContent).toBe('Tower B Draft');
+    expect(group?.lastElementChild?.textContent).toBe('Draft');
+    expect(ctx?.textContent).toBe(', Riverside · Acme');
+    expect(subject?.className).toMatch(/\bflex-wrap\b/);
+    expect(subject?.className).toMatch(/\bgap-y-0\b/);
+  });
+
+  it('puts one sr-only ", " before a context, and none when there is no context', () => {
+    const withContext = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+    const hidden = withContext.container.querySelectorAll('.sr-only');
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0]?.textContent).toBe(', ');
+    withContext.unmount();
+
+    const without = render(<RowSubject name="Tower B" />);
+    expect(without.container.querySelector('.sr-only')).toBeNull();
+  });
+
+  it('renders nothing after the name when there is no badge', () => {
     const { container } = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+    const group = container.querySelector('[data-row-subject]')?.firstElementChild;
+    expect(group?.childNodes).toHaveLength(1);
+    expect(group?.textContent).toBe('Tower B');
+  });
+});
 
-    const spans = [...container.querySelectorAll('span')];
-    const nameSpan = spans.find((el) => el.textContent === 'Tower B');
-    const contextSpan = spans.find((el) => el.textContent === 'Riverside · Acme');
+describe('ListRow wrapping', () => {
+  it('centres its trailing block by default and baselines it on request', () => {
+    const plain = render(<ListRow primary="a" trailing="b" />);
+    expect(plain.container.firstElementChild?.className).toMatch(/\bitems-center\b/);
+    expect(plain.container.firstElementChild?.className).not.toMatch(/items-baseline/);
+    plain.unmount();
 
-    expect(nameSpan?.className).toMatch(/\btruncate\b/);
-    expect(contextSpan?.className).toMatch(/\btruncate\b/);
-    // Three times faster, so the name survives a long project and client.
-    expect(contextSpan?.className).toMatch(/shrink-\[3\]/);
-    expect(nameSpan?.className).not.toMatch(/shrink-\[3\]/);
+    const based = render(<ListRow align="baseline" primary="a" trailing="b" />);
+    expect(based.container.firstElementChild?.className).toMatch(/\bitems-baseline\b/);
+    expect(based.container.firstElementChild?.className).not.toMatch(/items-center/);
+  });
+
+  it('wraps its trailing block under a primary that would be under 7rem, without reordering', () => {
+    const { container } = render(<ListRow primary="a" trailing="b" />);
+    const row = container.firstElementChild;
+    expect(row?.className).toMatch(/\bflex-wrap\b/);
+    expect(row?.className).not.toMatch(/flex-wrap-reverse|flex-row-reverse|\border-/);
+    expect(row?.firstElementChild?.className).toMatch(/\bmin-w-28\b/);
+    expect(row?.firstElementChild?.className).toMatch(/\bflex-1\b/);
   });
 });
 
 describe('SectionCard fill', () => {
-  it('makes the body a keyboard-operable scroll region', () => {
+  it('makes an unmeasured body a keyboard-operable scroll region', () => {
     // WCAG 2.2 §2.1.1: a scroll container that cannot take focus cannot be scrolled without a
-    // pointer. Browsers have been inconsistent about focusing them implicitly.
+    // pointer. jsdom lays out nothing, so this is the fail-open state: an unmeasured body keeps its
+    // stop. The measured states are pinned in `SectionCard fill tab stop` below.
     const { container } = render(
       <SectionCard title="Recently changed" fill>
         <p>row</p>
@@ -487,6 +544,130 @@ describe('SectionCard fill', () => {
     // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
     const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/\bflex-row\b/);
+  });
+});
+
+/**
+ * `docs/TECH_DEBT.md` #474: a filled body is a tab stop only while it overflows. jsdom lays out
+ * nothing, so the geometry is injected and the observer is a recorder whose callback the test fires.
+ */
+describe('SectionCard fill tab stop', () => {
+  interface FakeObserver {
+    callback: () => void;
+    observed: Element[];
+    disconnect: Mock<() => void>;
+  }
+  const observers: FakeObserver[] = [];
+
+  const install = () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        readonly record: FakeObserver;
+        constructor(callback: () => void) {
+          this.record = { callback, observed: [], disconnect: vi.fn() };
+          observers.push(this.record);
+        }
+        observe(target: Element) {
+          this.record.observed.push(target);
+        }
+        unobserve() {}
+        disconnect() {
+          this.record.disconnect();
+        }
+      },
+    );
+  };
+  const size = (el: HTMLElement, client: number, scroll: number) => {
+    Object.defineProperty(el, 'clientHeight', { configurable: true, value: client });
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scroll });
+  };
+  /** Renders a filled card whose body reports the given geometry from its first measurement. */
+  const renderWith = (client: number, scroll: number) => {
+    const clientSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(client);
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(scroll);
+    const view = render(
+      <SectionCard title="Recently changed" fill>
+        <p>row</p>
+      </SectionCard>,
+    );
+    clientSpy.mockRestore();
+    scrollSpy.mockRestore();
+    const body = view.container.querySelector('section')?.lastElementChild as HTMLElement;
+    return { ...view, body };
+  };
+
+  afterEach(() => {
+    observers.length = 0;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('watches the body and the content wrapper', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    const wrapper = body.firstElementChild;
+    expect(observers).toHaveLength(1);
+    expect(observers[0]?.observed).toEqual([body, wrapper]);
+  });
+
+  it('is out of the tab sequence, but never without the attribute, when nothing overflows', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('is a tab stop when the content is taller than the body', () => {
+    install();
+    const { body } = renderWith(200, 202);
+    expect(body).toHaveAttribute('tabindex', '0');
+  });
+
+  it('ignores the 1 px that fractional layout invents', () => {
+    install();
+    const { body } = renderWith(200, 201);
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('keeps the stop when the body has no height to measure', () => {
+    install();
+    const { body } = renderWith(0, 0);
+    expect(body).toHaveAttribute('tabindex', '0');
+  });
+
+  it('follows the body as it starts and stops overflowing', () => {
+    install();
+    const { body } = renderWith(200, 200);
+    size(body, 200, 400);
+    act(() => observers[0]?.callback());
+    expect(body).toHaveAttribute('tabindex', '0');
+    size(body, 200, 200);
+    act(() => observers[0]?.callback());
+    expect(body).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('disconnects the observer on unmount', () => {
+    install();
+    const { unmount } = renderWith(200, 200);
+    unmount();
+    expect(observers[0]?.disconnect).toHaveBeenCalled();
+  });
+
+  it('builds no observer and no wrapper when it is not filling', () => {
+    install();
+    const { container } = render(
+      <SectionCard title="Recently changed">
+        <p>row</p>
+      </SectionCard>,
+    );
+    expect(observers).toHaveLength(0);
+    const body = container.querySelector('section')?.lastElementChild;
+    expect(body?.firstElementChild?.tagName).toBe('P');
+    expect(body).not.toHaveAttribute('tabindex');
   });
 });
 

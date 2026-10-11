@@ -1,5 +1,7 @@
 import { cva } from 'class-variance-authority';
 
+import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-registry';
+
 /**
  * The **one** control-surface style for every {@link Toolbar} and {@link Deck} control (ADR-0031):
  * the plain {@link ToolbarButton}, the {@link ToolbarPopover} trigger, the deck's group captions,
@@ -17,7 +19,7 @@ import { cva } from 'class-variance-authority';
  *   `active` at
  *   the console epic's M3, because that boolean painted ONE 1.34:1 wash for three different facts;
  *   see the variant's own docblock for the ladder and why each state looks as it does.
- * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
+ * - `disabled` — quiet ink + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
  */
 /**
@@ -142,6 +144,63 @@ export const TOOLBAR_INSET_RULE =
  */
 export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
+
+/**
+ * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element that fills the
+ * group's box exactly, `--muted` at 50 % with a hairline `--border`, behind the controls: it takes
+ * **no layout width** (`Deck.tsx` says why that is the constraint) and, filling the box rather than
+ * hanging past it, **cannot overflow the deck** — a first build hung it 2 px out and the deck's
+ * `scrollWidth` exceeded its `clientWidth` by that much at every width, which `Deck`'s own
+ * `deckScrolls` reads as "the line scrolls" (found by `narrow-shell.spec.ts`: "1280 x 600 does not
+ * scroll sideways"). And `rounded-md` matches the
+ * `Diagram | Gantt` segment's container, which is the same statement made elsewhere in the band.
+ * `isolate` keeps its `-z-10` inside the group, so it can never fall behind the band.
+ *
+ * **Why 50 % and a hairline, not 60 %.** The first build was 40 % and the review found it too faint
+ * to read as a container at a tablet's distance. Raising the fill alone also lowers the idle hover
+ * wash (`--muted`, the pill's own hue) against it — 1.15:1 at 40 %, 1.10:1 at 60 % — so the fill
+ * goes only to 50 % (1.13:1) and the rest of the edge comes from the hairline, which is a border and
+ * so costs no width. Text on the pill is 13.74:1 (foreground) and 7.17:1 (muted); the numbers are in
+ * `m6-measurement.md` §3.
+ */
+export const DECK_GROUP_PILL =
+  'relative isolate before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-border before:bg-muted/50';
+
+/**
+ * The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3).
+ * The dash is `--muted-foreground` at 50 % — 3.04:1 against the band, over the 3:1 a boundary needs
+ * (1.4.11) — where the hairline `--border` it replaced was 1.5:1 and vanished beside the filled
+ * pills. In forced colours the dash takes `GrayText`, the one colour the mode leaves for "unavailable".
+ */
+export const DECK_GROUP_PILL_LOCKED =
+  'before:border-dashed before:border-muted-foreground/50 before:bg-transparent forced-colors:before:border-[GrayText]';
+
+/**
+ * **The row's closing action, drawn as an outline** (M6 V4, reworked after the review). Share & export
+ * was `--secondary`-filled, which is the exact fill of the selected `Diagram | Gantt` segment and of a
+ * pressed toggle, so a reader could not tell "chosen" from "the row's last action". It is now an
+ * inset 1 px ring in `--muted-foreground` at 60 % (3.6:1 on a pill): a shape no state in the ladder
+ * uses, with no fill, so nothing it sits beside can be mistaken for it, and **no width** (a ring is
+ * painted inside the box).
+ *
+ * It is a class on the **section** and reaches its buttons by descendant selector, because the pair
+ * is `Export` (a hand-written `render` item) beside `Share…` (a plain button derived from a
+ * `PromotableEntry`) and neither takes a `closing` prop: adding one to `ToolbarButton`, the registry
+ * item and the entry would widen three public contracts for a decoration. The selector means the pair
+ * is outlined together by construction, so "both or neither" cannot drift. A keyboard focus ring is
+ * `ring-2` in `--ring` on the control itself and is more specific than this, so focus still wins.
+ */
+export const DECK_CLOSING_SECTION =
+  '[&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-muted-foreground/60';
+
+/**
+ * A deck row's leading mark (M6 V1): hidden until the deck is `roomy` (79 rem, 1264 px — deliberately:
+ * below it the rows have no 18 px to spend, `m6-measurement.md` §0), then 14 px of glyph with the
+ * row's 8 px gap pulled in by `-mr-1`, so its net width is 18 px. Height is the control's so the glyph
+ * sits on the controls' midline in a row whose items align to the top.
+ */
+export const DECK_ROW_MARK =
+  'text-muted-foreground -mr-1 hidden h-(--control-h) shrink-0 items-center @roomy/deck:inline-flex';
 
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
@@ -290,9 +349,44 @@ export const toolbarControlVariants = cva(
         // gap between two controls is 4 px, which a 2 px offset plus a 2 px ring consumes exactly.
         primary: 'bg-primary text-primary-foreground focus-visible:ring-primary-foreground',
       },
-      disabled: { true: 'cursor-default opacity-50', false: '' },
+      /**
+       * **A shaded control is quiet, not dimmed** (toolbar-redesign M6 V3). It was `opacity-50`, which
+       * halves the whole control: label, glyph, a state fill and an underline together. That read as
+       * a dead grey and — worse — was a number nobody had gated, since an alpha composites against
+       * whatever is behind it (the pill, the band, the amber of the pen). It is now the same
+       * `--muted-foreground` the chevrons and captions already wear, **7.98:1 on the band and 7.33:1
+       * on a deck pill** (`m6-measurement.md` §3), so the text clears 1.4.3's 4.5:1 although 1.4.3
+       * exempts an inactive control.
+       *
+       * The fill and the underline go too (`bg-transparent shadow-none`): ink in `--muted-foreground`
+       * on a `--secondary` or amber fill is unreadable, so a shaded pen, a shaded open trigger and a
+       * shaded selected lens all fall back to the same bare picture. What still says "shut" is that
+       * picture, `cursor-default`, no hover wash, and the reason a reader can reach by keyboard
+       * (ADR-0082) — not a lower contrast.
+       *
+       * **Two things the quiet style must still say.** A lens that is ON but shaded (`selected`) keeps
+       * a 2 px underline in the same ink (compound variant below): the fill is gone, and without a
+       * mark a reader could not tell an engaged lens from a free one. And **forced colours**: the mode
+       * overrides `color` to `CanvasText` for every control, so `opacity-50` used to be the only thing
+       * that survived to say "shut"; `GrayText` is the system colour for exactly that, and an author-
+       * specified system colour is kept (the same device `viewport-notice.tsx` uses).
+       */
+      disabled: {
+        true: 'cursor-default bg-transparent text-muted-foreground shadow-none forced-colors:[color:GrayText]',
+        false: '',
+      },
     },
     compoundVariants: [
+      // A shaded pen has no amber fill left, so the navy ring `primary` draws for itself would be navy
+      // on the navy band: the shared amber ring takes over (WCAG 2.4.7; it is a shaded control a
+      // keyboard reader still lands on, ADR-0082).
+      { state: 'primary', disabled: true, class: 'focus-visible:ring-ring' },
+      // A shaded lens that is ON keeps a quiet underline (see `disabled` above).
+      {
+        state: 'selected',
+        disabled: true,
+        class: 'shadow-[inset_0_-2px_0_0_var(--muted-foreground)]',
+      },
       // Idle interactive control gets the hover wash; a control in any other state, or a disabled
       // one, does not — a hover wash over a state fill would say two things at once, and hover is
       // the one state a reader never has to FIND (their pointer is already on it).
@@ -308,3 +402,60 @@ export const toolbarControlVariants = cva(
     defaultVariants: { tone: 'control', state: 'rest', disabled: false },
   },
 );
+
+/**
+ * **The one resolver for whether a control's label shows** (toolbar-redesign M1). Every renderer
+ * calls it with the item's declared {@link ToolbarLabelVisibility} and the surface it paints on, and
+ * hands the answer to the control — `Deck` and `Toolbar` hold no label logic of their own, and a
+ * control that decided for itself is the second implementation this replaces.
+ *
+ * `'roomy'` is meaningful on the **deck** alone: that is the one surface that declares the
+ * `@container/deck` its query asks, so everywhere else (`Toolbar`) it resolves to `'visible'`. The
+ * absence of a container would give the same answer in CSS, but only by accident; stating it here
+ * is what makes it testable.
+ */
+export function resolveLabelVisibility(
+  visibility: ToolbarLabelVisibility | undefined,
+  surface: 'deck' | 'toolbar',
+): ToolbarLabelState {
+  switch (visibility ?? 'always') {
+    case 'never':
+      return 'hidden';
+    case 'roomy':
+      return surface === 'deck' ? 'roomy' : 'visible';
+    case 'roomy-fine':
+      return surface === 'deck' ? 'roomy-fine' : 'visible';
+    case 'always':
+      return 'visible';
+  }
+}
+
+/**
+ * **The one class helper for painting a label**, or `null` when the control is icon-only. Nothing
+ * outside this module writes `truncate` for a toolbar label or names the container variant, which
+ * is what `toolbar-label.structural.test.ts` pins.
+ *
+ * A `'roomy'` label is `sr-only` — still in the accessibility tree, so the name and 2.5.3's
+ * label-in-name hold either way — below `--container-roomy`. The variant is the **named** token
+ * (`globals.css`), never an arbitrary `@max-[…]` value: Tailwind 4.3.3 compiles both (M0 §4.4), and
+ * the named form is chosen because the design system has no arbitrary values. `deck` is the
+ * container's name (`@container/deck`, `Deck.tsx`).
+ */
+export function toolbarLabelClass(state: ToolbarLabelState): string | null {
+  if (state === 'hidden') return null;
+  if (state === 'roomy-fine') return 'truncate @max-roomy/deck:sr-only pointer-coarse:sr-only';
+  return state === 'roomy' ? 'truncate @max-roomy/deck:sr-only' : 'truncate';
+}
+
+/**
+ * The deck's width minimum for a control, by label state: wide enough for a labelled command, or
+ * only for the icon. `'roomy'` carries both because its label comes and goes with the container.
+ * Part of the label rule rather than of `Deck`, so the minimum can never disagree with the label.
+ */
+export function toolbarLabelMinWidthClass(state: ToolbarLabelState): string {
+  if (state === 'hidden') return 'min-w-9';
+  if (state === 'roomy-fine') {
+    return 'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-(--control-h)';
+  }
+  return state === 'roomy' ? 'min-w-12 @max-roomy/deck:min-w-9' : 'min-w-12';
+}

@@ -58,7 +58,7 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
   // keep their coverage below.
   // ── Isolate logic path (U1 — split button: main toggles, chevron opens the menu) ──────────
   // ── Next-conflict visible status chip (U2) ────────────────────────────────────────────────
-  it('renders the visible "Conflict i of n · reason" status chip while cycling', () => {
+  it('renders a count-only "Conflict i of n" chip while cycling — the reason is not on the bar', () => {
     renderRows(
       ctx({
         currentConflict: { index: 2, total: 5, name: 'Excavate', reasons: ['constraint conflict'] },
@@ -66,16 +66,18 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
     );
     // The chip is the VISIBLE readout only (aria-hidden); the spoken channel is the shared announcer,
     // so it's queried by its title/text, not by an ARIA role.
-    const chip = screen.getByTitle('Conflict 2 of 5: constraint conflict');
+    const chip = screen.getByTitle('Conflict 2 of 5');
     expect(chip).toHaveTextContent('Conflict 2 of 5');
-    expect(chip).toHaveTextContent('constraint conflict');
+    // Product-owner decision 2026-10-10: the reason left the toolbar. It is spoken by the polite
+    // announcement `goToNextConflict` writes (full list), not truncated into a chip.
+    expect(chip).not.toHaveTextContent('constraint conflict');
     expect(chip).toHaveAttribute('aria-hidden', 'true');
     // Presentational — never a roving-tabindex stop / focusable control.
     expect(chip.tagName).not.toBe('BUTTON');
     expect(chip).toHaveAttribute('tabindex', '-1');
   });
 
-  it('lists every matched reason in the chip title but truncates to the first inline', () => {
+  it('carries no reason of any length, however many flags matched', () => {
     renderRows(
       ctx({
         currentConflict: {
@@ -86,13 +88,13 @@ describe('TSLD toolbar — canvas nav (flag on)', () => {
         },
       }),
     );
-    const chip = screen.getByTitle('Conflict 1 of 1: constraint conflict, negative total float');
-    expect(chip).toHaveTextContent('Conflict 1 of 1');
+    const chip = screen.getByTitle('Conflict 1 of 1');
+    expect(chip).toHaveTextContent(/^Conflict 1 of 1$/);
   });
 
   it('hides the status chip when no conflict is being cycled (currentConflict null)', () => {
     renderRows(ctx({ currentConflict: null }));
-    expect(screen.queryByTitle(/^Conflict \d+ of \d+:/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/^Conflict \d+ of \d+/)).not.toBeInTheDocument();
   });
 
   // ── Next conflict ───────────────────────────────────────────────────────────────────────

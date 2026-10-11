@@ -4,7 +4,16 @@ import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESIGNED_MIN_WIDTH_PX, DESIGNED_MIN_WIDTH_QUERY, designedMinWidthPx } from './breakpoints';
+import {
+  DESIGNED_MIN_WIDTH_PX,
+  DESIGNED_MIN_WIDTH_QUERY,
+  designedMinWidthPx,
+  PROMOTION_STAGE_REMS,
+  PROMOTION_STAGES,
+  promotionStageQuery,
+  SQUAT_MAX_HEIGHT_REM,
+  SQUAT_QUERY,
+} from './breakpoints';
 
 describe('DESIGNED_MIN_WIDTH_QUERY', () => {
   it('is Tailwind’s lg, so the notice, the shell and the utility classes share one floor', () => {
@@ -42,5 +51,57 @@ describe('designedMinWidthPx', () => {
     expect(designedMinWidthPx()).toBe(1280);
     document.documentElement.style.fontSize = '18.4px';
     expect(designedMinWidthPx()).toBe(1178);
+  });
+});
+
+describe('SQUAT_QUERY', () => {
+  const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+
+  it('is declared as the stylesheet’s `squat` variant, word for word', () => {
+    expect(globals).toContain(`@custom-variant squat (@media ${SQUAT_QUERY});`);
+  });
+
+  it('is narrow by exactly the floor’s width and short by its own constant', () => {
+    expect(SQUAT_QUERY).toBe(
+      `${DESIGNED_MIN_WIDTH_QUERY.replace('min-width: 64rem', 'width < 64rem')} and (height <= ${String(SQUAT_MAX_HEIGHT_REM)}rem)`,
+    );
+  });
+
+  it('sits under the default narrow-shell window (640 x 480 is 30 rem) and over a 200 % text window (25 rem)', () => {
+    expect(SQUAT_MAX_HEIGHT_REM).toBeLessThan(30);
+    expect(SQUAT_MAX_HEIGHT_REM).toBeGreaterThanOrEqual(25);
+  });
+});
+
+describe('the promotion stages', () => {
+  it('are the widths the product is judged at, in rem', () => {
+    // 1280, 1440, 1600 (the owner's 1646 sits just over it), 1912, 2160 and 2560 px at the default
+    // 16 px font size.
+    expect(PROMOTION_STAGES.map(({ rem }) => rem * 16)).toEqual([
+      1280, 1440, 1600, 1912, 2160, 2560,
+    ]);
+    expect([...PROMOTION_STAGE_REMS]).toEqual([80, 90, 100, 119.5, 135, 160]);
+  });
+
+  it('are named for their rem value, so a name cannot drift from the width it stands for', () => {
+    for (const { name, rem } of PROMOTION_STAGES) {
+      expect(name).toBe(`PROMOTE_${String(rem).replace('.', '_')}`);
+    }
+  });
+
+  it('ascend, so a stage index counts the thresholds the viewport has reached', () => {
+    const sorted = [...PROMOTION_STAGE_REMS].sort((a, b) => a - b);
+    expect([...PROMOTION_STAGE_REMS]).toEqual(sorted);
+  });
+
+  it('start at the first width that is not compact: --container-roomy (79rem) is below it', () => {
+    const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+    const roomy = /--container-roomy:\s*([\d.]+)rem/.exec(globals)?.[1];
+    expect(roomy).toBe('79');
+    expect(PROMOTION_STAGES[0].rem).toBeGreaterThan(Number(roomy));
+  });
+
+  it('are spelled as min-width rem queries', () => {
+    expect(promotionStageQuery(119.5)).toBe('(min-width: 119.5rem)');
   });
 });
