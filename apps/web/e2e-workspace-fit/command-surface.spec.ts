@@ -240,7 +240,10 @@ async function sweep(
           ...deck.querySelectorAll(
             'button,a,[role="button"],select,textarea,summary,' +
               '[role="treeitem"],[role="option"],[role="menuitem"],' +
-              '[role="menuitemcheckbox"],[role="menuitemradio"],[role="tab"],[role="switch"]',
+              '[role="menuitemcheckbox"],[role="menuitemradio"],[role="tab"],[role="switch"],' +
+              // The activities table's select label is the hit target around a 16 px box, so it is
+              // swept as the target; the `input` inside it is the visible control and is not.
+              '[data-row-select]',
           ),
           ...deck.querySelectorAll('input'),
         ];
@@ -324,6 +327,8 @@ async function sweep(
             id:
               item?.getAttribute('data-toolbar-item') ??
               el.getAttribute('aria-label') ??
+              // A select label has no text of its own; its input carries the name.
+              el.querySelector('input')?.getAttribute('aria-label') ??
               (el.textContent ?? '').trim().slice(0, 32) ??
               '(unnamed)',
             tag: el.tagName.toLowerCase(),
@@ -1883,7 +1888,8 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     root: '[data-panel-border]',
     atLeast: 13,
     minWidth: 1024,
-    scrollEnds: 'nav[aria-label="Project Explorer"]',
+    // The rail's own scroller: the landmark is the column's wrapper now (#473), which does not scroll.
+    scrollEnds: '[data-panel-border] > div',
   },
   // The virtualized tree on its own: the seeded client, project and plan, each a row with a `⋯`, so
   // 6 swept and a floor of 5 — measured at both widths, where the tree's scroller still holds all
@@ -1896,14 +1902,15 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
     minWidth: 1024,
     contained: true,
   },
-  // The activities table (#215): swept for its row-menu triggers only. Its other controls (sort
-  // headers, name cells) are a different question, and its 24 px row checkboxes are the named
-  // `row-select` exemption (`ROW_SELECT_EXEMPT`), asserted present in the test.
+  // The activities table (#215): swept for its row-menu triggers and its select labels (#470). Its
+  // other controls (sort headers, name cells) are a different question. The select label used to be
+  // a named exception; it is swept as a target now, and `assertRowSelectSwept` pins that the set
+  // holds them, so a sweep that stopped seeing the labels could not read as cover.
   {
     name: 'activities table',
     root: 'table',
     atLeast: 0,
-    only: '[aria-haspopup="menu"]',
+    only: '[aria-haspopup="menu"],[data-row-select]',
     activities: true,
     minHeight: 700,
     contained: true,
@@ -1953,19 +1960,6 @@ const EXEMPT_WITHIN = 'nav[aria-label="Breadcrumb"]';
  * - `cell-input` — an open cell's field, 24 px; the activity editor is the large route.
  */
 const GANTT_EXEMPT_KINDS = ['disclosure', 'row-menu', 'sort', 'cell-input'] as const;
-/**
- * **The activities table's row checkboxes, a named coarse exception** (`docs/TECH_DEBT.md`, filed
- * with #215). 24 px labels around 16 px boxes: AA under WCAG 2.2 §2.5.8, below the house rule, and
- * outside the row-menu question this surface asks.
- *
- * **This marker excludes nothing from the sweep** — that surface is narrowed by
- * `only: '[aria-haspopup="menu"]'`, which never matches a checkbox. It works as an INVENTORY
- * assertion (`assertRowSelectExemptionsPresent`): every checkbox in the table carries it, there is
- * at least one, and the marked labels really are below 44, so the exception is named, counted and
- * able to go red. It is asserted at the wide viewport only (the floor skips this surface).
- */
-const ROW_SELECT_EXEMPT = '[data-coarse-exempt="row-select"]';
-
 const ganttExempt = (kinds: readonly string[] = GANTT_EXEMPT_KINDS): string =>
   kinds.map((kind) => `[role="treegrid"] [data-gantt-coarse-exempt="${kind}"]`).join(',');
 
@@ -2121,7 +2115,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         let targets = await sweep(
           page,
           surface.root,
-          surface.activities ? ROW_SELECT_EXEMPT : exempt,
+          exempt,
           surface.markersOnly === true,
           surface.only,
         );
@@ -2174,7 +2168,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         ).toEqual([]);
 
         if (surface.view === 'gantt') await assertGanttExemptionsPresent(viewport.width);
-        if (surface.activities) await assertRowSelectExemptionsPresent(viewport.width);
+        if (surface.activities) assertRowSelectSwept(targets, viewport.width);
       }
     }
   });
@@ -2233,8 +2227,9 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   /**
    * **The floor's share of the activities table, SIZE ONLY.** At 1024 × 600 the panel sits at
    * y 497..625 on a 600 px viewport, so no row is hit-testable and the reachability half of the
-   * sweep cannot run (`m0-measurement.md` §2). The `⋯` is still laid out, so its box is read and
-   * held to 44; that the row grows to fit (57 → 61) is the layout's doing and is not asserted.
+   * sweep cannot run (`m0-measurement.md` §2). The `⋯` and the select labels are still laid out,
+   * so their boxes are read and held to 44; that the row grows to fit (57 → 61) is the layout's
+   * doing and is not asserted.
    */
   async function assertActivitiesRowMenuSizeOnly(viewport: {
     width: number;
@@ -2242,19 +2237,21 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   }): Promise<void> {
     await showView('tsld');
     await showActivities(page);
-    const sizes = await page.locator('table [aria-haspopup="menu"]').evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { w: r.width, h: r.height };
-      }),
-    );
+    const sizes = await page
+      .locator('table [aria-haspopup="menu"], table [data-row-select]')
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { w: r.width, h: r.height };
+        }),
+      );
     expect(
       sizes.length,
       `no activities row menu is laid out at ${viewport.width} × ${viewport.height}`,
     ).toBeGreaterThan(0);
     expect(
       sizes.filter((t) => t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
-      `activities table: row menu below ${HOUSE_TARGET} at ${viewport.width} × ${viewport.height} (size only)`,
+      `activities table: row menu or select label below ${HOUSE_TARGET} at ${viewport.width} × ${viewport.height} (size only)`,
     ).toEqual([]);
     // At the floor an expanded panel hides the Gantt ("Gantt hidden. Collapse to return."), and the
     // next surface in the loop needs it.
@@ -2263,28 +2260,139 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   }
 
   /**
-   * **The `row-select` exemption is exercised, so it can fail (ADR-0110 D5).** Every checkbox in the
-   * activities table sits inside a marked label, and there is at least one: an unmarked checkbox is
-   * a new under-size target nobody named, and an empty set would make the exemption read as cover.
-   * The marked labels are also asserted to be the sub-44 controls they claim to excuse.
+   * **The select labels are in the swept set, so the sweep can fail on them (ADR-0110 D5).** The
+   * header's select-all and one label per selectable row: a sweep that stopped matching
+   * `[data-row-select]` would still be green over the row menus alone, and that is the quiet way
+   * for the 24 px exception this retired to come back.
    */
-  async function assertRowSelectExemptionsPresent(width: number): Promise<void> {
-    const table = page.locator('table');
-    const checkboxes = await table.locator('input[type="checkbox"]').count();
-    const marked = await table.locator(`${ROW_SELECT_EXEMPT} input[type="checkbox"]`).count();
-    expect(checkboxes, `no row checkboxes in the activities table at ${width}`).toBeGreaterThan(0);
-    expect(marked, `a row checkbox lost its 'row-select' marker at ${width}`).toBe(checkboxes);
-    const boxes = await table.locator(ROW_SELECT_EXEMPT).evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return Math.min(r.width, r.height);
-      }),
-    );
+  function assertRowSelectSwept(targets: readonly Target[], width: number): void {
+    const labels = targets.filter((t) => t.tag === 'label');
     expect(
-      boxes.every((side) => side < HOUSE_TARGET),
-      `the 'row-select' exemption covers a control that already clears ${HOUSE_TARGET} at ${width}: delete the exemption`,
-    ).toBe(true);
+      labels.length,
+      `the activities sweep saw ${labels.length} select labels at ${width}: the header's and a row's at least`,
+    ).toBeGreaterThanOrEqual(2);
   }
+
+  /**
+   * **Every divider's grab strip is a finger wide, and a wider strip steals no neighbour's centre**
+   * (`docs/TECH_DEBT.md` #476, ADR-0188 D3). The sweep above measures controls; a divider's target is
+   * the `[data-resizer-hit]` child of a 1 px separator, which it never saw.
+   *
+   * Four things are asked of each separator on screen, at the Surface and at the floor:
+   * - **wide**: the strip is at least 44 across its axis, unless the separator names itself
+   *   `data-coarse-exempt="divider"` (and then it is counted, not measured);
+   * - **live**: `elementFromPoint` a quarter and three quarters of the way across the strip, midway
+   *   along the line, lands on the separator. This is what fails without the stage-stacking `z-10`,
+   *   under which the Explorer's right half was dead (M0 §2);
+   * - **no theft**: every control whose box meets the strip is still hit at its own centre;
+   * - **the exception is exercised**: the Gantt grid divider is the one `divider` exemption, and the
+   *   inventory is read in the Gantt view, so a marker nobody carries could not read as cover.
+   *
+   * The activities panel's divider exists only where the panel is not swapped for the body (ADR-0180),
+   * so it is asserted at 1646 and its absence is not read as a failure at the floor.
+   */
+  test("every divider is a finger wide, live across its strip, and takes no neighbour's centre", async () => {
+    test.setTimeout(180_000);
+    interface DividerReading {
+      name: string;
+      exempt: boolean;
+      across: number | null;
+      live: boolean[];
+      stolen: string[];
+    }
+    const readDividers = (): Promise<DividerReading[]> =>
+      page.evaluate(() => {
+        const out: DividerReading[] = [];
+        for (const sep of document.querySelectorAll<HTMLElement>('[role="separator"]')) {
+          if (sep.getClientRects().length === 0) continue;
+          const vertical = sep.getAttribute('aria-orientation') === 'vertical';
+          const exempt = sep.getAttribute('data-coarse-exempt') === 'divider';
+          const hit = sep.querySelector<HTMLElement>('[data-resizer-hit]');
+          const box = hit?.getBoundingClientRect() ?? null;
+          const live: boolean[] = [];
+          const stolen: string[] = [];
+          if (box && !exempt) {
+            for (const f of [0.25, 0.75]) {
+              const x = vertical ? box.left + box.width * f : box.left + box.width / 2;
+              const y = vertical ? box.top + box.height / 2 : box.top + box.height * f;
+              const at = document.elementFromPoint(x, y);
+              live.push(at !== null && sep.contains(at));
+            }
+            for (const el of document.querySelectorAll<HTMLElement>(
+              'button,a,input,textarea,select,[role="button"],[role="tab"]',
+            )) {
+              if (sep.contains(el) || el.getClientRects().length === 0) continue;
+              const r = el.getBoundingClientRect();
+              if (r.right <= box.left || r.left >= box.right) continue;
+              if (r.bottom <= box.top || r.top >= box.bottom) continue;
+              if (r.width === 0 || r.height === 0) continue;
+              const cx = r.left + r.width / 2;
+              const cy = r.top + r.height / 2;
+              if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) continue;
+              const at = document.elementFromPoint(cx, cy);
+              if (at !== null && !(at === el || el.contains(at) || at.contains(el))) {
+                stolen.push(
+                  el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 24),
+                );
+              }
+            }
+          }
+          out.push({
+            name: sep.getAttribute('aria-label') ?? '(unnamed)',
+            exempt,
+            across: box ? Math.round(vertical ? box.width : box.height) : null,
+            live,
+            stolen,
+          });
+        }
+        return out;
+      });
+
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      await showView('tsld');
+      if (viewport.height >= 700) await showActivities(page);
+      // The notes dock: a right dock, resizable where the row has the room.
+      const notes = page.locator('[data-toolbar-item="comments"]').first();
+      if ((await page.getByRole('button', { name: 'Close plan notes' }).count()) === 0) {
+        await notes.click();
+      }
+      await page.getByRole('separator', { name: 'Resize notes panel' }).waitFor();
+      const diagram = await readDividers();
+      const names = diagram.map((d) => d.name);
+      expect(names, `the diagram's dividers at ${viewport.width}`).toEqual(
+        expect.arrayContaining(['Resize Project Explorer', 'Resize notes panel']),
+      );
+      if (viewport.height >= 700) expect(names).toContain('Resize activities panel');
+
+      await page.getByRole('button', { name: 'Close plan notes' }).click();
+      await showView('gantt');
+      const gantt = await readDividers();
+      const grid = gantt.find((d) => d.name === 'Grid width');
+      expect(grid, `the Gantt grid divider at ${viewport.width}`).toBeDefined();
+      expect(grid?.exempt, 'the Gantt grid divider is the named exception').toBe(true);
+      expect(
+        [...diagram, ...gantt].filter((d) => d.exempt).map((d) => d.name),
+        `the exempt dividers at ${viewport.width}`,
+      ).toEqual(['Grid width']);
+
+      for (const d of [...diagram, ...gantt].filter((r) => !r.exempt)) {
+        expect(
+          d.across,
+          `${d.name}: strip across its axis at ${viewport.width}`,
+        ).toBeGreaterThanOrEqual(HOUSE_TARGET);
+        expect(
+          d.live,
+          `${d.name}: the strip is live across its width at ${viewport.width}`,
+        ).toEqual([true, true]);
+        expect(
+          d.stolen,
+          `${d.name}: the strip covers a control's centre at ${viewport.width}`,
+        ).toEqual([]);
+      }
+    }
+  });
 
   /**
    * **A coarse 1024 × 600 cell keeps its line bound, and the roomy labels follow the same width

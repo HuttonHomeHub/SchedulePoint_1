@@ -50,7 +50,7 @@ Two forces are not negotiable.
   320 CSS px, which is a 1280 px window at 400 % zoom. 1.4.4 asks for 200 % text without loss of
   function. So "narrow" includes zoomed laptops and monitors, not only phones.
 - **A coarse pointer is not a phone.** The product owner's Surface is used by finger and stylus at
-  1912 × 1114 (`docs/HANDOFF.md:38`).
+  1912 × 1114 (the product owner's Surface Pro, DPR 1.5, finger and stylus).
 
 ## Decision
 

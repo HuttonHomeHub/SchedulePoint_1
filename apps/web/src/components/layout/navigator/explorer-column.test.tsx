@@ -6,7 +6,12 @@ import { explorerCeiling, useExplorerPrefs } from './use-explorer-prefs';
 
 import type { UseExpansionState } from '@/features/navigator';
 
-vi.mock('./navigator-rail', () => ({ NavigatorRail: () => <nav aria-label="Project Explorer" /> }));
+// Honours `landmark` as the real rail does, so a column that forgot `landmark={false}` shows up as
+// two navigations rather than passing against a stub that never had a second one.
+vi.mock('./navigator-rail', () => ({
+  NavigatorRail: ({ landmark = true }: { landmark?: boolean }) =>
+    landmark ? <nav aria-label="Project Explorer" /> : <div data-testid="rail" />,
+}));
 vi.mock('./org-destinations', () => ({ OrgDestinationsCollapsed: () => null }));
 
 function Probe(): React.ReactElement {
@@ -34,6 +39,29 @@ describe('ExplorerColumn splitter', () => {
     });
     expect(separator).toHaveAttribute('aria-valuemax', String(explorerCeiling(900)));
     expect(explorerCeiling(900)).toBeLessThan(explorerCeiling(1024));
+  });
+});
+
+describe('ExplorerColumn landmark', () => {
+  /**
+   * The splitter sits INSIDE the one "Project Explorer" navigation (`docs/TECH_DEBT.md` #473): it was
+   * the rail's sibling, outside every region, and axe's `region` rule flagged its wrapper on every
+   * page. Exactly one such landmark, or the panel announces itself twice.
+   */
+  it('holds the splitter inside the single Project Explorer navigation', () => {
+    render(<Probe />);
+    const landmarks = screen.getAllByRole('navigation', { name: 'Project Explorer' });
+    expect(landmarks).toHaveLength(1);
+    const separator = screen.getByRole('separator', { name: 'Resize Project Explorer' });
+    expect(landmarks[0]).toContainElement(separator);
+    expect(landmarks[0]).toContainElement(screen.getByTestId('rail'));
+  });
+
+  it('keeps the tab order: the rail, then the splitter', () => {
+    render(<Probe />);
+    const rail = screen.getByTestId('rail');
+    const separator = screen.getByRole('separator', { name: 'Resize Project Explorer' });
+    expect(rail.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

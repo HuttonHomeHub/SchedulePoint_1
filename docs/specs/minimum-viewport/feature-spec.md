@@ -119,7 +119,7 @@ was read in this worktree on that date.
 - **External Guest** (share link, ADR-0051) — read-only, and may well open a link on a phone. See
   CQ-3.
 - **The product owner's devices** — a PC monitor at 1912 × 948 (mouse) and a Surface Pro at
-  1912 × 1114, DPR 1.5, finger and stylus (`docs/HANDOFF.md:38-39`). Either one snapped to half its
+  1912 × 1114, DPR 1.5, finger and stylus (the product owner's Surface Pro). Either one snapped to half its
   screen is about 956 wide, which stays below the floor (CQ-5, decided).
 
 ### 1.3 Primary use cases
@@ -407,7 +407,7 @@ This spec is mandatory under ADR-0105 / CLAUDE.md §19.1, because the change:
 (`apps/web/public/pointer-check.js:39`). It read:
 
 - monitor **1912 × 948**;
-- Surface **1912 × 1114** (`docs/HANDOFF.md:38-39`).
+- Surface **1912 × 1114** (the product owner's Surface Pro).
 
 So on a 1920 × 1080 Windows screen the browser and taskbar cost **132 px of height and 8 px of
 width**. On the Surface (1920 × 1280 CSS at DPR 1.5) they cost 166 px of height.

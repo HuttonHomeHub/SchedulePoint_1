@@ -798,6 +798,13 @@ discriminators. Each becomes a spec/plan before build:
   activity's own actions. The dock's width floors can no longer exceed the row at large text. The cost is that the first
   Tab stop in the bar changes.
 
+- **A divider can be typed to a size, and a finger finds it.** **Approved 2026-10-11; built as `a11y-touch-sweep` M0-M3**
+  ([ADR-0188](adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md); spec and plan at
+  [`docs/specs/a11y-touch-sweep/`](specs/a11y-touch-sweep/)). Pressing a panel divider without dragging opens a small box to type
+  its size, which is new on a monitor too; under a finger every divider's grab strip is 44 px wide, except the Gantt's
+  table/chart line, whose typed twin is View, Columns, Table width. The activities table's select boxes are finger-sized,
+  the Explorer's resize handle sits inside its landmark, and the breadcrumb at enlarged text was measured and needs no change.
+
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
   [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu

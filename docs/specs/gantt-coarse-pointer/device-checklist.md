@@ -151,6 +151,12 @@ known gap (ADR-0183 D3), not a fault to report.
 - [ ] **18. Make the window small, about 1024 wide by 600 high if the Surface lets you (otherwise
       skip this step), expand the activities table and tap the three dots on a row.**
       The row is tall enough and the three dots opened their menu: [ ] yes [ ] no [ ] skipped
+- [ ] **18b. With the activities table open (a plan that has a WBS summary shows a "Select" column),
+      tap the small box beside three different activities, then the box in the column heading.**
+      Every tap ticked the one you meant, first time, and the heading box ticked them all:
+      [ ] yes [ ] no, one missed: __________. The heading row looks: [ ] fine [ ] too tall
+      [ ] other: __________ (the box you tick is still small; the area that takes your tap is a
+      finger wide)
 - [ ] **19. Hide the Project Explorer (its collapse button), then tap "Show Project Explorer" and each
       of the six icons on the narrow strip, one at a time.**
       Every button is finger-sized and nothing is cut off: [ ] yes [ ] no, a button is clipped: __________
@@ -181,6 +187,32 @@ Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stop
       It: [ ] followed my finger the whole way [ ] stopped part-way [ ] the chart scrolled instead
       [ ] nothing happened. Try the line between the Project Explorer and the plan too:
       [ ] followed [ ] stopped part-way [ ] other: __________
+- [ ] **25b. Put one finger down on the line between the Project Explorer and the plan, a little to
+      either side of it (a thumb's width is fine), without trying to hit it exactly. Do the same
+      on the line above the activities table, and on the line beside an open Comments panel.**
+      The line is a finger wide on these three, so each: [ ] found the line first time
+      [ ] needed a second try: __________. A control beside one of them was taken by mistake:
+      [ ] no [ ] yes: __________. The line between the table and the chart in the Gantt stays
+      narrow on purpose (use View > Columns > Table width there): [ ] understood [ ] it should be
+      wider too
+
+- [ ] **26. Press the line between the Project Explorer and the plan with one finger, without moving
+      it (a plain tap), then do the same on the line above the activities table and beside an open
+      Comments panel.**
+      A small box opened next to your finger with a number in it, and the cursor was in the number:
+      [ ] yes, on all three [ ] on some: __________ [ ] no. Type a number a little bigger and press
+      Enter on the keyboard cover or the on-screen keyboard: the panel changed to that size
+      [ ] yes [ ] no. Tap elsewhere: the box went away [ ] yes [ ] no. A tap you meant as a drag
+      opened the box by accident: [ ] never [ ] sometimes: __________ (if so, how far did your finger
+      slide? The box opens for a slide of under 4 px.)
+- [ ] **27. Put the box away with Escape on a keyboard, or by tapping the line again.** Focus is back
+      on the line: [ ] yes [ ] no. "Reset to standard" is finger-sized and puts the panel back:
+      [ ] yes [ ] no
+
+- [ ] **28. Only if the device is an iPad or a Mac running Safari: open a divider's box (step 26), then
+      tap "Reset to standard".** Safari does not focus a button on a tap, so the box could mistake the tap
+      for focus leaving and close before the button acts. The panel went back to its standard size:
+      [ ] yes [ ] no, the box closed first [ ] not Safari
 
 ## When you are done
 

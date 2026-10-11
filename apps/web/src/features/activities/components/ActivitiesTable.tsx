@@ -129,9 +129,15 @@ function SelectAllCheckbox({
     // command surfaces, and axe's `target-size` rule is `wcag22aa` (not requested) *and* ships
     // `enabled: false`. The box stays 16 px — this widens what a pointer may hit, not what a reader
     // sees. `ActivityMembersPanel` has always done it this way; these two never did.
+    //
+    // **24 px with a mouse, `--control-h` (44) with a finger** (`docs/TECH_DEBT.md` #470; it was a named
+    // coarse exception, `data-coarse-exempt="row-select"`, until ADR-0188 retired it). The growth is free
+    // in a body row, which a coarse pointer already makes 61 px for the `⋯`; only the header row gains
+    // (41 or 57 to 61, `m0-measurement.md` §1). `data-row-select` is the coarse sweep's hook: it measures
+    // this label, the hit target, and not the 16 px input inside it.
     <label
-      data-coarse-exempt="row-select"
-      className="flex size-6 cursor-pointer items-center justify-center"
+      data-row-select=""
+      className="flex size-6 cursor-pointer items-center justify-center pointer-coarse:size-(--control-h)"
     >
       <input
         ref={ref}
@@ -174,7 +180,7 @@ type RowAction = {
  *
  * The snapshot is a boolean, so `useSyncExternalStore` re-renders this leaf only when THIS row's
  * answer flips — the other 1,999 boxes and their rows stay put (`docs/TECH_DEBT.md` #334, M2).
- * 24 px of hit area around a 16 px box — see `SelectAllCheckbox` for why.
+ * 24 px of hit area around a 16 px box (44 under a coarse pointer) — see `SelectAllCheckbox` for why.
  */
 function RowSelectCheckbox({
   store,
@@ -188,8 +194,8 @@ function RowSelectCheckbox({
   const checked = useSyncExternalStore(store.subscribe, () => store.getState().selectedIds.has(id));
   return (
     <label
-      data-coarse-exempt="row-select"
-      className="flex size-6 cursor-pointer items-center justify-center"
+      data-row-select=""
+      className="flex size-6 cursor-pointer items-center justify-center pointer-coarse:size-(--control-h)"
     >
       <input
         type="checkbox"

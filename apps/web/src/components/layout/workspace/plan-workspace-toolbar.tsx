@@ -2245,17 +2245,16 @@ export function ToolbarPlanWorkspace({
                 locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
                 project link from inside an open plan.
 
-                Checking rather than assuming made it worse than the failing assertion:
-                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
-                project row calls `tree.toggle`, which is what the chevron beside it already does —
-                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
-                an open plan to its project, i.e. to the screen holding that project's calendars
-                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
+                That was true when the tree navigated only for plans (`docs/TECH_DEBT.md` #143, since
+                fixed): `HierarchyTree.tsx` now navigates for a client or a project row too, so this crumb
+                is one route to the project among two, not the only one. It stays because it is the one
+                that names where the plan lives, beside the plan.
 
                 Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
-                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
-                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
-                was measured to win. */}
+                duplicate of the rail that the tidy was right about. `variant="nowrap"` so a long
+                name truncates instead of growing the header a line (the header row is `min-h-12` and
+                may wrap; a wrapped crumb would cost a line of diagram, 48 px). At enlarged browser
+                text the crumb is wider than at 100 % (`a11y-touch-sweep/m0-measurement.md` §4). */}
                   <Breadcrumbs
                     variant="nowrap"
                     items={[
@@ -2617,6 +2616,8 @@ export function ToolbarPlanWorkspace({
                         min={floatPathsBounds.min}
                         max={floatPathsBounds.max}
                         label="Resize float paths panel"
+                        sizeLabel="Float paths panel width"
+                        onReset={floatPathsPrefs.resetSize}
                         onResize={onFloatPathsResize}
                         pointerToSize={floatPathsPointerToSize}
                         reverseKeys
@@ -2652,6 +2653,8 @@ export function ToolbarPlanWorkspace({
                         min={healthBounds.min}
                         max={healthBounds.max}
                         label="Resize health check panel"
+                        sizeLabel="Health check panel width"
+                        onReset={healthPrefs.resetSize}
                         onResize={onHealthResize}
                         pointerToSize={healthPointerToSize}
                         reverseKeys
@@ -2679,6 +2682,8 @@ export function ToolbarPlanWorkspace({
                         min={revisionBounds.min}
                         max={revisionBounds.max}
                         label="Resize revision comparison panel"
+                        sizeLabel="Revision comparison panel width"
+                        onReset={revisionPrefs.resetSize}
                         onResize={onRevisionResize}
                         pointerToSize={revisionPointerToSize}
                         reverseKeys
@@ -2706,6 +2711,8 @@ export function ToolbarPlanWorkspace({
                         min={notesBounds.min}
                         max={notesBounds.max}
                         label="Resize notes panel"
+                        sizeLabel="Notes panel width"
+                        onReset={notesPanel.resetSize}
                         onResize={onNotesResize}
                         pointerToSize={notesPointerToSize}
                         // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
@@ -2744,6 +2751,8 @@ export function ToolbarPlanWorkspace({
                         min={PANEL_MIN_OPEN}
                         max={effectiveMax}
                         label="Resize activities panel"
+                        sizeLabel="Activities panel height"
+                        onReset={panel.resetSize}
                         onResize={onResize}
                         pointerToSize={pointerToSize}
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"

@@ -71,4 +71,45 @@ describe('PanelResizer call sites', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * `coarseStrip="none"` is a NAMED exception (ADR-0188 D3), not a preference. A divider that opts out
+   * of the finger-sized strip must be on this list, which is the ADR's list: adding a name here is
+   * the decision, made where a reviewer will see it. Verified red by adding `coarseStrip="none"` to
+   * the Explorer's call site.
+   */
+  it('only the named exceptions opt out of the finger-sized strip', () => {
+    const NAMED = ['features/gantt/components/GanttPanel.tsx'];
+    const optedOut: string[] = [];
+    for (const file of sourceFiles(WEB_SRC)) {
+      for (const tag of openingTags(readFileSync(file, 'utf8'))) {
+        if (/coarseStrip="none"/.test(tag)) {
+          optedOut.push(relative(WEB_SRC, file).split(sep).join('/'));
+        }
+      }
+    }
+    expect(optedOut.sort()).toEqual(NAMED);
+  });
+
+  /**
+   * **Every divider offers its single-pointer alternative to a drag** (WCAG 2.5.7, ADR-0188 D1) and a
+   * way back to standard. `sizeLabel` is required by the type, so this is the second line of defence:
+   * a call site that spreads its props, or satisfies the type with an empty string, still shows up
+   * here. Verified red by deleting `onReset` from the Explorer's call site.
+   */
+  it('every call site passes a sizeLabel and an onReset', () => {
+    const missingLabel: string[] = [];
+    const missingReset: string[] = [];
+    for (const file of sourceFiles(WEB_SRC)) {
+      for (const tag of openingTags(readFileSync(file, 'utf8'))) {
+        const where = relative(WEB_SRC, file).split(sep).join('/');
+        // The primitive's own docblock names `<PanelResizer>`; it is not a call site.
+        if (where === 'components/ui/panel-resizer.tsx') continue;
+        if (!/sizeLabel="[^"]+"/.test(tag)) missingLabel.push(where);
+        if (!/onReset=\{/.test(tag)) missingReset.push(where);
+      }
+    }
+    expect(missingLabel).toEqual([]);
+    expect(missingReset).toEqual([]);
+  });
 });
