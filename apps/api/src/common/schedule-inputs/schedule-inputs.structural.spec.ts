@@ -125,6 +125,13 @@ describe('the write paths that stamp', () => {
     ['cross-plan-dependencies/cross-plan-dependencies.service.ts', ['create', 'remove']],
     ['resources/resource-assignment.service.ts', ['create', 'update', 'remove']],
     ['plans/plans.service.ts', ['update']],
+    // A calendar's working time and a resource's calendar or ceiling are inputs the plans using them
+    // never see change (`docs/TECH_DEBT.md` #449).
+    [
+      'calendars/calendars.service.ts',
+      ['update', 'addException', 'updateException', 'removeException'],
+    ],
+    ['resources/resources.service.ts', ['update']],
   ];
 
   for (const [file, methods] of STAMPING) {
@@ -145,6 +152,12 @@ describe('the write paths that stamp', () => {
     expect(methodBody('plans/plans.service.ts', 'restore')).not.toContain(
       'markScheduleInputsChanged',
     );
+    // A rename and an archive change no working time (nor does a delete: it is refused while in use).
+    for (const method of ['setArchived', 'remove']) {
+      expect(methodBody('calendars/calendars.service.ts', method)).not.toContain(
+        'markScheduleInputsChanged',
+      );
+    }
     for (const file of [
       'schedule/schedule.service.ts',
       'schedule/cross-plan-rederive.service.ts',

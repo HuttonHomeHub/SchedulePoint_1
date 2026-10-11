@@ -13,6 +13,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { auditActor } from '../audit/audit-actor';
@@ -360,6 +361,15 @@ export class CalendarsService {
               tx,
             );
           }
+          // Last, after every child write (the helper's contract): the plans on this calendar are
+          // now showing figures the new working time has not been applied to (#449).
+          if (kind) {
+            await markScheduleInputsChanged(
+              tx,
+              organization.id,
+              await this.calendars.findActivePlanIdsUsing(calendarId, organization.id, tx),
+            );
+          }
         }
         return rows;
       });
@@ -609,6 +619,11 @@ export class CalendarsService {
           principal,
           context,
         });
+        await markScheduleInputsChanged(
+          tx,
+          organization.id,
+          await this.calendars.findActivePlanIdsUsing(calendar.id, organization.id, tx),
+        );
         return created;
       }),
     );
@@ -706,6 +721,11 @@ export class CalendarsService {
           principal,
           context,
         });
+        await markScheduleInputsChanged(
+          tx,
+          organization.id,
+          await this.calendars.findActivePlanIdsUsing(calendar.id, organization.id, tx),
+        );
         return this.calendars.findExceptionWithWindows(exceptionId, tx);
       }),
     );
@@ -754,6 +774,11 @@ export class CalendarsService {
         principal,
         context,
       });
+      await markScheduleInputsChanged(
+        tx,
+        organization.id,
+        await this.calendars.findActivePlanIdsUsing(calendarId, organization.id, tx),
+      );
     });
     this.logger.info(
       {

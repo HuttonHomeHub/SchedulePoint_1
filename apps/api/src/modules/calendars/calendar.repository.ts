@@ -530,6 +530,51 @@ export class CalendarRepository {
   }
 
   /**
+   * Every ACTIVE plan whose figures depend on `calendarId`'s working time — the set a calendar edit
+   * stamps "edited since calculated" (`docs/TECH_DEBT.md` #449). A plan reaches a calendar three
+   * ways, and the engine resolves each (ADR-0037, ADR-0039):
+   *
+   * - the plan's own default calendar;
+   * - an active activity's own calendar;
+   * - an active resource on the calendar that is assigned to an active activity of the plan.
+   *
+   * Cross-plan successors are not followed: every existing stamp covers the plan that was edited and
+   * no more (`activities.service.ts` stamps only the activity's own plan). Organisation-scoped, and
+   * a plan, activity or resource in the bin does not count. Each branch is served by an existing
+   * partial index (`idx_plans_calendar_id`, `idx_activities_calendar_id`, `idx_resources_calendar_id`).
+   */
+  async findActivePlanIdsUsing(
+    calendarId: string,
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<string[]> {
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT p.id
+      FROM plans p
+      WHERE p.organization_id = ${organizationId}::uuid
+        AND p.calendar_id = ${calendarId}::uuid
+        AND p.deleted_at IS NULL
+      UNION
+      SELECT a.plan_id
+      FROM activities a
+      JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+      WHERE a.organization_id = ${organizationId}::uuid
+        AND a.calendar_id = ${calendarId}::uuid
+        AND a.deleted_at IS NULL
+      UNION
+      SELECT a.plan_id
+      FROM resources r
+      JOIN resource_assignments ra ON ra.resource_id = r.id AND ra.deleted_at IS NULL
+      JOIN activities a ON a.id = ra.activity_id AND a.deleted_at IS NULL
+      JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+      WHERE r.organization_id = ${organizationId}::uuid
+        AND r.calendar_id = ${calendarId}::uuid
+        AND r.deleted_at IS NULL
+    `;
+    return rows.map((row) => row.id);
+  }
+
+  /**
    * A page of an organisation's active calendars with their shift rows (keyset cursor by id),
    * filtered by tier (ADR-0053 §1). `scope` defaults to `org` at the service, so an existing
    * client that sends nothing sees exactly today's result set — project calendars are a

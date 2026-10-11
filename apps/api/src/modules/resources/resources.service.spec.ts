@@ -95,6 +95,7 @@ describe('ResourcesService', () => {
     findActiveChildIdsOf: ReturnType<typeof vi.fn>;
     promoteChildren: ReturnType<typeof vi.fn>;
     findPromotedByIds: ReturnType<typeof vi.fn>;
+    findActivePlanIdsAssigning: ReturnType<typeof vi.fn>;
   };
   let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
@@ -119,6 +120,8 @@ describe('ResourcesService', () => {
       findActiveChildIdsOf: vi.fn().mockResolvedValue([]),
       promoteChildren: vi.fn().mockResolvedValue(0),
       findPromotedByIds: vi.fn().mockResolvedValue([]),
+      // Proven against a real table in calendars-edited-since.e2e-spec.ts.
+      findActivePlanIdsAssigning: vi.fn().mockResolvedValue([]),
     };
     calendars = { findActiveByIdInOrg: vi.fn() };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by create/update).

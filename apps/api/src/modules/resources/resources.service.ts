@@ -16,6 +16,7 @@ import {
   ValidationError,
 } from '../../common/errors/domain-errors';
 import { normaliseSearchTerm, type ArchivedFilter } from '../../common/query/library-filters';
+import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
 import { PrismaService } from '../../prisma/prisma.service';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
@@ -315,6 +316,26 @@ export class ResourcesService {
         );
         if (changed === 0) {
           throw new ConflictError('This resource was changed elsewhere. Refresh and try again.');
+        }
+        // The two fields the engine reads (`schedule.repository.ts`, the resource select), compared by VALUE so a form that
+        // resends what is stored stamps nothing. A calendar change re-dates every plan that uses the
+        // resource; the capacity ceiling is read only by levelling, so it stamps only those plans
+        // (#449). Last, after the write, as the helper's contract asks.
+        const calendarMoved = calendarId !== undefined && calendarId !== existing.calendarId;
+        const ceilingMoved =
+          dto.maxUnitsPerHour !== undefined &&
+          dto.maxUnitsPerHour !== (existing.maxUnitsPerHour?.toNumber() ?? null);
+        if (calendarMoved || ceilingMoved) {
+          await markScheduleInputsChanged(
+            tx,
+            organization.id,
+            await this.resources.findActivePlanIdsAssigning(
+              resourceId,
+              organization.id,
+              !calendarMoved,
+              tx,
+            ),
+          );
         }
       });
     } catch (error) {

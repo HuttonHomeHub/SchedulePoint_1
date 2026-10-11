@@ -464,4 +464,29 @@ export class ResourceRepository {
   ): Promise<number> {
     return db.resource.count({ where: { calendarId, deletedAt: null } });
   }
+
+  /**
+   * The ACTIVE plans with an active assignment of `resourceId` — the set a resource edit stamps
+   * "edited since calculated" (`docs/TECH_DEBT.md` #449). `levellingOnly` narrows it to plans with
+   * `level_resources` on, because the capacity ceiling is read only by levelling (ADR-0041 §2); the
+   * resource's calendar, by contrast, moves dates in every plan that uses it. Organisation-scoped.
+   */
+  async findActivePlanIdsAssigning(
+    resourceId: string,
+    organizationId: string,
+    levellingOnly: boolean,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<string[]> {
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT DISTINCT a.plan_id AS id
+      FROM resource_assignments ra
+      JOIN activities a ON a.id = ra.activity_id AND a.deleted_at IS NULL
+      JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+      WHERE ra.organization_id = ${organizationId}::uuid
+        AND ra.resource_id = ${resourceId}::uuid
+        AND ra.deleted_at IS NULL
+        ${levellingOnly ? Prisma.sql`AND p.level_resources` : Prisma.empty}
+    `;
+    return rows.map((row) => row.id);
+  }
 }
