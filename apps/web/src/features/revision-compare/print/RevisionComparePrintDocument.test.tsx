@@ -120,6 +120,24 @@ describe('the printed revision comparison', () => {
     expect(container.textContent).toContain('not printed');
   });
 
+  it('prints the basis-neutral dates, not the deprecated Early* ones (#405)', () => {
+    const { container } = render(
+      <RevisionComparePrintDocument
+        compare={comparison({
+          criticalPath: {
+            ...comparison().criticalPath,
+            entered: [moved({ toEarlyStart: '1999-01-01', toEarlyFinish: '1999-01-02' })],
+            enteredTotal: 1,
+          },
+        })}
+        printedAt={PRINTED_AT}
+      />,
+    );
+    expect(container.textContent).toContain('2026-02-10');
+    expect(container.textContent).toContain('2026-03-01');
+    expect(container.textContent).not.toContain('1999-01-0');
+  });
+
   it('says nothing about a cap when the set is complete', () => {
     const { container } = render(
       <RevisionComparePrintDocument

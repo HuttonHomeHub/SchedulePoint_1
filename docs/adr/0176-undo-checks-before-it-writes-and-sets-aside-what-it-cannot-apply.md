@@ -149,9 +149,13 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   which a colleague's write is deleted with the row. The API is not changed here; `docs/TECH_DEBT.md`
   #450 proposes an optional version on `DELETE`. _Amended 2026-10-11:_ the API half shipped — the three
   single-row `DELETE`s take `?version=N` and dissolve takes `{ version }`, each refused with 409
-  `STALE_VERSION` when stale (`docs/API.md`). The undo commands do not pass it yet: that follows the API
-  release, because a client that sent a version to an API that ignored it would get none of the protection
-  and a client cannot tell. Until then the window above stands for undo.
+  `STALE_VERSION` when stale (`docs/API.md`). _Amended again 2026-10-11:_ the undo commands now pass the
+  version their pre-check read, after the API carrying it was released (a client that sent a version to
+  an API that ignored it would have had none of the protection and could not tell). A stale delete is
+  refused with nothing deleted and reads as `changed`, the same set-aside as any other 409, so the window
+  above is closed for undo and redo of a delete, a dissolve, a link and an unassign. Removing an assignment
+  that took over driving promotes the previous driver first, which bumps the row's version by one, so that
+  delete is sent at the version the promotion leaves.
 - A set-aside step is gone from the history. The strip says so, says why, and calls it "skipped" —
   nothing was removed from the plan, and the planner can make the edit again by hand.
 - **A record with no restore endpoint is identified by what it joins, not by its id.** An assignment
@@ -173,8 +177,8 @@ read finds. Redo dissolves again and **rethreads the new batch id**, as a delete
   as a set-aside although the first landed. Accepted: the window is one round trip and the state is
   never driverless.
 - A PATCH cannot clear an assignment's rate (ADR-0040), so undoing an edit that **set** one deletes and
-  re-creates the assignment without it. The delete is unversioned (`docs/TECH_DEBT.md` #450 now covers
-  assignments), so a create that fails afterwards is **compensated** by re-creating the row as it was
+  re-creates the assignment without it. The delete now carries the version read (#450, closed), but
+  the compensation stays, because the create after it can still fail, so a create that fails afterwards is **compensated** by re-creating the row as it was
   read, and reported as a distinct failure — "put back as it was", or "could not be put back, assign it
   again" — never as a set-aside, and in the strip itself (a `ReplayFailure` carries the sentence; the generic retry line would hide it). If a colleague has assigned the resource again meanwhile, it says "it is there now" instead, and the compensating create puts a driver back as a non-driver when somebody else drives by then. A lost pen (423) still runs the pen contract, beside that sentence. That case does not replay
   `editedField`, so a duration the edit derived is not recomputed. A target the PATCH cannot express

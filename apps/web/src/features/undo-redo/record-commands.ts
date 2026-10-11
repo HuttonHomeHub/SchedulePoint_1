@@ -265,6 +265,8 @@ export type UpdateAssignmentFn = (
 export type DeleteAssignmentFn = (input: {
   assignmentId: string;
   activityId: string;
+  /** The version the replay's check read; a row changed since is refused (409), not deleted (#450). */
+  version?: number | undefined;
 }) => Promise<void>;
 
 /** The three writes an assignment step can make. */
@@ -439,6 +441,9 @@ function assignmentToggle(params: {
         if (driver === undefined) return notApplicable('gone', previous.resourceName);
         if (driver.isDriving) return notApplicable('changed', previous.resourceName);
       }
+      // Promoting the previous driver demotes this row in the same transaction, which bumps its
+      // version by one — so the version this step's own write leaves is the one to delete at.
+      const version = driver !== undefined && row.isDriving ? row.version + 1 : row.version;
       return writeOrSetAside(resourceName, async () => {
         if (driver !== undefined) {
           await writes.updateAssignment({
@@ -448,7 +453,7 @@ function assignmentToggle(params: {
             isDriving: true,
           });
         }
-        await writes.deleteAssignment({ assignmentId: row.id, activityId });
+        await writes.deleteAssignment({ assignmentId: row.id, activityId, version });
         // `displaced` is kept: the next re-assign takes the flag from the same driver again, and
         // forgetting it would make that redo refuse a driver it is entitled to displace.
         present = false;
@@ -543,7 +548,11 @@ async function recreateWithout(
   body: AssignmentCreateBody,
   resourceName: string,
 ): Promise<ResourceAssignmentSummary> {
-  await writes.deleteAssignment({ assignmentId: row.id, activityId: row.activityId });
+  await writes.deleteAssignment({
+    assignmentId: row.id,
+    activityId: row.activityId,
+    version: row.version,
+  });
   try {
     return await writes.createAssignment({ activityId: row.activityId, body });
   } catch (err) {

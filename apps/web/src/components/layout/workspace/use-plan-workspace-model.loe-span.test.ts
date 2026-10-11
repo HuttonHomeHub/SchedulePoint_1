@@ -283,7 +283,10 @@ describe('usePlanWorkspaceModel.createLoeSpan', () => {
     });
     await command.undo(server.ctx);
     // Undo deletes the LOE; the SS + FF edges cascade with it — no separate edge deletes.
-    expect(h.deleteActivity).toHaveBeenCalledExactlyOnceWith('loe-1');
+    expect(h.deleteActivity).toHaveBeenCalledExactlyOnceWith({
+      activityId: 'loe-1',
+      version: expect.any(Number),
+    });
   });
 
   it('rolls back the LOE and clears redo when an edge create fails (no orphan)', async () => {

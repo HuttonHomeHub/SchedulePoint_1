@@ -139,6 +139,17 @@ export function fakePlanServer(
     if (row === undefined) throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
     return row;
   };
+  /** A delete's optional `?version=N`: absent is unguarded, present must match (409 STALE_VERSION). */
+  const staleGuard = (row: { version: number }, version: number | undefined): void => {
+    if (version !== undefined && row.version !== version) throw conflict('STALE_VERSION');
+  };
+  const idAndVersion = <K extends string>(
+    input: string | ({ version?: number | undefined } & Record<K, string>),
+    key: K,
+  ): { id: string; version: number | undefined } =>
+    typeof input === 'string'
+      ? { id: input, version: undefined }
+      : { id: input[key], version: input.version };
   const lock = (row: { version: number }, version: number): void => {
     if (row.version !== version) throw conflict();
   };
@@ -340,11 +351,13 @@ export function fakePlanServer(
         return Promise.resolve({ ...row });
       },
     ),
-    deleteAssignment: vi.fn((input: { assignmentId: string; activityId: string }) => {
-      assignmentOf(input.assignmentId);
-      assignments.delete(input.assignmentId);
-      return Promise.resolve();
-    }),
+    deleteAssignment: vi.fn(
+      (input: { assignmentId: string; activityId: string; version?: number | undefined }) => {
+        staleGuard(assignmentOf(input.assignmentId), input.version);
+        assignments.delete(input.assignmentId);
+        return Promise.resolve();
+      },
+    ),
     createCrossPlanLink: vi.fn(
       (input: {
         predecessorActivityId: string;
@@ -439,8 +452,10 @@ export function fakePlanServer(
       },
     ),
     /** Promote every child to the summary's own parent, then delete the summary alone — as the endpoint does. */
-    dissolve: vi.fn((id: string) => {
+    dissolve: vi.fn((input: string | { activityId: string; version?: number | undefined }) => {
+      const { id, version } = idAndVersion(input, 'activityId');
       const summary = rowOf(id);
+      staleGuard(summary, version);
       const promoted = [...activities.values()]
         .filter((a) => a.parentId === id)
         .sort((a, b) => a.id.localeCompare(b.id))
@@ -451,10 +466,13 @@ export function fakePlanServer(
         });
       return Promise.resolve({ promoted, deleteBatchId: sweep([id]) });
     }),
-    deleteActivity: vi.fn((id: string) => {
-      rowOf(id);
-      return Promise.resolve({ deleteBatchId: sweep([id]) });
-    }),
+    deleteActivity: vi.fn(
+      (input: string | { activityId: string; version?: number | undefined }) => {
+        const { id, version } = idAndVersion(input, 'activityId');
+        staleGuard(rowOf(id), version);
+        return Promise.resolve({ deleteBatchId: sweep([id]) });
+      },
+    ),
     bulkDelete: vi.fn((input: { activities: { id: string; version: number }[] }) => {
       for (const a of input.activities) lock(rowOf(a.id), a.version);
       return Promise.resolve({
@@ -539,12 +557,17 @@ export function fakePlanServer(
         return Promise.resolve({ ...row });
       },
     ),
-    deleteDependency: vi.fn((id: string) => {
-      if (!dependencies.delete(id)) {
-        throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
-      }
-      return Promise.resolve();
-    }),
+    deleteDependency: vi.fn(
+      (input: string | { dependencyId: string; version?: number | undefined }) => {
+        const { id, version } = idAndVersion(input, 'dependencyId');
+        const row = dependencies.get(id);
+        if (row === undefined)
+          throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+        staleGuard(row, version);
+        dependencies.delete(id);
+        return Promise.resolve();
+      },
+    ),
   };
 
   return {

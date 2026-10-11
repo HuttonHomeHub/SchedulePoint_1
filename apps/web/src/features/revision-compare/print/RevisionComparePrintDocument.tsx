@@ -299,8 +299,8 @@ function PrintedMovedTable({
                       the engine all the way to the page. */}
                   <td>{floatCell(row.fromTotalFloatDays)}</td>
                   <td>{floatCell(row.toTotalFloatDays)}</td>
-                  <td>{row.toEarlyStart ?? '—'}</td>
-                  <td>{row.toEarlyFinish ?? '—'}</td>
+                  <td>{row.toStart ?? '—'}</td>
+                  <td>{row.toFinish ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

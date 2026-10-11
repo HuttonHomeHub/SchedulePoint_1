@@ -211,6 +211,22 @@ describe('RevisionComparePanel', () => {
     expect(within(section).getByText(/float down 12 days/i)).toBeInTheDocument();
   });
 
+  /** The deprecated `Early*` names carry decoys, so only a read of the neutral names passes (#405). */
+  it('reads the basis-neutral date fields, not the deprecated Early* ones', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: {
+          ...comparison().criticalPath,
+          entered: [moved({ toEarlyStart: '1999-01-01', toEarlyFinish: '1999-01-02' })],
+          enteredTotal: 1,
+        },
+      }),
+    });
+    expect(screen.getByText(/now 2026-02-10 to 2026-03-01/)).toBeInTheDocument();
+    expect(screen.queryByText(/1999-01-0/)).not.toBeInTheDocument();
+  });
+
   /** Absence and zero are different facts, kept apart at the last place they could be collapsed. */
   it('states an unknown float movement rather than printing zero', () => {
     renderPanel({

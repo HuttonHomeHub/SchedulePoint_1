@@ -154,13 +154,24 @@ export function useUpdateDependency(orgSlug: string) {
   });
 }
 
+/**
+ * A bare id is the ordinary delete; with `version` the server refuses (409 `STALE_VERSION`, nothing
+ * deleted) a link that changed since the caller read it (`docs/TECH_DEBT.md` #450, ADR-0176).
+ */
+export type DeleteDependencyInput = string | { dependencyId: string; version?: number | undefined };
+
 export function useDeleteDependency(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (dependencyId: string) =>
-      apiFetch<void>(`/organizations/${orgSlug}/dependencies/${dependencyId}`, {
-        method: 'DELETE',
-      }),
+    mutationFn: (input: DeleteDependencyInput) => {
+      const { dependencyId, version } = typeof input === 'string' ? { dependencyId: input } : input;
+      return apiFetch<void>(
+        `/organizations/${orgSlug}/dependencies/${dependencyId}${
+          version === undefined ? '' : `?version=${version}`
+        }`,
+        { method: 'DELETE' },
+      );
+    },
     onSettled: () => invalidateAll(queryClient, orgSlug),
   });
 }

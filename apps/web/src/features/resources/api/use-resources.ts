@@ -572,10 +572,19 @@ export function useUpdateAssignment(orgSlug: string, planId?: string) {
 export function useDeleteAssignment(orgSlug: string, planId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { assignmentId: string; activityId: string }) =>
-      apiFetch<void>(`/organizations/${orgSlug}/assignments/${input.assignmentId}`, {
-        method: 'DELETE',
-      }),
+    // `version`, when sent, makes the server refuse (409 `STALE_VERSION`, nothing deleted) an
+    // assignment that changed since the caller read it (`docs/TECH_DEBT.md` #450, ADR-0176).
+    mutationFn: (input: {
+      assignmentId: string;
+      activityId: string;
+      version?: number | undefined;
+    }) =>
+      apiFetch<void>(
+        `/organizations/${orgSlug}/assignments/${input.assignmentId}${
+          input.version === undefined ? '' : `?version=${input.version}`
+        }`,
+        { method: 'DELETE' },
+      ),
     onSettled: (_data, _error, input) =>
       Promise.all([
         queryClient.invalidateQueries({

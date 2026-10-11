@@ -761,9 +761,9 @@ function MovedRow({
         {floatPhrase(row)}
         {' · '}
         {floatCell(row.fromTotalFloatDays)} → {floatCell(row.toTotalFloatDays)}
-        {row.toEarlyStart === null && row.toEarlyFinish === null
+        {row.toStart === null && row.toFinish === null
           ? null
-          : ` · now ${row.toEarlyStart ?? '—'} to ${row.toEarlyFinish ?? '—'}`}
+          : ` · now ${row.toStart ?? '—'} to ${row.toFinish ?? '—'}`}
         {row.existsLive ? null : ' · not in the live plan'}
       </span>
     </>

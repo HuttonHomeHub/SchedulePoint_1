@@ -28,11 +28,14 @@ import {
 
 import type {
   ActivityDefinitionInput,
+  DeleteActivityInput,
+  DissolveSummaryInput,
   DissolveSummaryResponse,
   PlacedActivityInput,
 } from '@/features/activities/api/use-activities';
 import { typeChangeReexpressesDates } from '@/features/activities/model/type-change-dates';
 import { isDurationDerivedType } from '@/features/activities/schemas/activity-schemas';
+import type { DeleteDependencyInput } from '@/features/dependencies/api/use-dependencies';
 import { ApiFetchError } from '@/lib/api/client';
 import { minorToMajorInput } from '@/lib/format-money';
 
@@ -516,10 +519,12 @@ export function typeChangeCommand(params: {
 /** `useCreatePlacedActivity().mutateAsync` — a canvas-placed create; resolves to the created row. */
 export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<ActivitySummary>;
 /**
- * `useDeleteActivity().mutateAsync` — soft-deletes an activity by id and resolves the batch it was
- * deleted in, so an undo can restore exactly what it removed (`docs/TECH_DEBT.md` #116 item 5).
+ * `useDeleteActivity().mutateAsync` — soft-deletes an activity and resolves the batch it was deleted
+ * in, so an undo can restore exactly what it removed (`docs/TECH_DEBT.md` #116 item 5). A replay
+ * passes the version its pre-check read, so a row changed in the window between that read and the
+ * delete is refused (409) rather than deleted along with whatever cascaded from it (#450).
  */
-export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string }>;
+export type DeleteActivityFn = (input: DeleteActivityInput) => Promise<{ deleteBatchId: string }>;
 
 /** `useRestoreDeleteBatch().mutateAsync` — puts a whole batch back, ids and links intact. */
 export type RestoreDeleteBatchFn = (input: { deleteBatchId: string }) => Promise<ActivitySummary[]>;
@@ -561,8 +566,9 @@ export function createActivityCommand(params: {
         knownIds: new Set([created.id]),
       });
       if (!checked.ok) return checked.result;
+      const version = checked.rows.get(created.id)?.version;
       return writeOrSetAside(created.name, async () => {
-        batchId = (await deleteActivity(created.id)).deleteBatchId;
+        batchId = (await deleteActivity({ activityId: created.id, version })).deleteBatchId;
         present = false;
       });
     },
@@ -628,9 +634,10 @@ export function deleteActivityCommand(params: {
       if (!present) return APPLIED;
       const checked = await restored.checkDeletable(ctx, activity.name);
       if (!checked.ok) return checked.result;
+      const version = checked.rows.get(activity.id)?.version;
       return writeOrSetAside(activity.name, async () => {
         // The id is stable across the restore, so the redo deletes exactly what was restored.
-        batchId = (await deleteActivity(activity.id)).deleteBatchId;
+        batchId = (await deleteActivity({ activityId: activity.id, version })).deleteBatchId;
         present = false;
       });
     },
@@ -638,7 +645,7 @@ export function deleteActivityCommand(params: {
 }
 
 /** `useDissolveSummary().mutateAsync` — promotes the summary's children and soft-deletes it. */
-export type DissolveSummaryFn = (activityId: string) => Promise<DissolveSummaryResponse>;
+export type DissolveSummaryFn = (input: DissolveSummaryInput) => Promise<DissolveSummaryResponse>;
 
 /**
  * Reverse a summary **dissolve** — put the summary back and file its children under it again.
@@ -782,8 +789,9 @@ export function dissolveCommand(params: {
       if (!children.ok) return children.result;
       const checked = await restored.checkDeletable(ctx, summary.name, [...promotedTo.keys()]);
       if (!checked.ok) return checked.result;
+      const version = checked.rows.get(summary.id)?.version;
       return writeOrSetAside(summary.name, async () => {
-        const dissolved = await dissolve(summary.id);
+        const dissolved = await dissolve({ activityId: summary.id, version });
         batchId = dissolved.deleteBatchId;
         promotedTo = new Map(dissolved.promoted.map((child) => [child.id, child.parentId]));
         present = false;
@@ -848,8 +856,8 @@ export interface DependencyLinkInput {
 }
 /** `useCreateDependency().mutateAsync` — resolves to the created edge (carrying its new id). */
 export type CreateDependencyFn = (input: DependencyLinkInput) => Promise<DependencySummary>;
-/** `useDeleteDependency().mutateAsync` — removes an edge by id. */
-export type DeleteDependencyFn = (dependencyId: string) => Promise<void>;
+/** `useDeleteDependency().mutateAsync` — removes an edge, at the version a replay's check read. */
+export type DeleteDependencyFn = (input: DeleteDependencyInput) => Promise<void>;
 
 /**
  * Project a dependency row into the create input that re-issues it (endpoints/type/lag/lag-calendar).
@@ -912,8 +920,9 @@ function linkToggle(params: {
       const id = liveId;
       const checked = await checkDependencies(ctx, [{ id, name, expect: state }]);
       if (!checked.ok) return checked.result;
+      const version = checked.rows.get(id)?.version;
       return writeOrSetAside(name, async () => {
-        await deleteDependency(id);
+        await deleteDependency({ dependencyId: id, version });
         liveId = null;
       });
     },
@@ -1005,10 +1014,14 @@ export function linkChainCommand(params: {
         current.map((l) => ({ id: l.id, name: l.name, expect: l.state })),
       );
       if (!checked.ok) return checked.result;
+      const rows = checked.rows;
       return writeOrSetAside(current[0]?.name ?? '', async () => {
         for (const link of [...current].reverse()) {
           // Already gone is what undo wants (somebody removed it between the check and here).
-          await deleteDependency(link.id).catch((error: unknown) => {
+          await deleteDependency({
+            dependencyId: link.id,
+            version: rows.get(link.id)?.version,
+          }).catch((error: unknown) => {
             if (!isNotFound(error)) throw error;
           });
           removed.add(link.id);
@@ -1034,7 +1047,7 @@ export function linkChainCommand(params: {
           for (const link of [...made].reverse()) {
             // Best-effort, as the forward path: a failed rollback leaves links the planner can
             // delete, whereas throwing here would replace the real error with a second one.
-            await deleteDependency(link.id).catch(() => undefined);
+            await deleteDependency({ dependencyId: link.id }).catch(() => undefined);
           }
           throw error;
         }
@@ -1076,6 +1089,9 @@ export function createLoeSpanCommand(params: {
     expected: definitionState(params.loe),
   };
   const name = params.loe.name;
+  // A half-composed LOE whose rollback delete itself failed (a lost pen mid-sequence). The next redo
+  // deletes it first, so a retry does not stack a second LOE beside the stranded one (#450).
+  let orphanId: string | null = null;
   return {
     // The quoted name was always the generic default ("Level of effort"), so it added nothing — drop it
     // and read plainly "Add level-of-effort span" (S3).
@@ -1100,8 +1116,9 @@ export function createLoeSpanCommand(params: {
         knownIds: new Set([id]),
       });
       if (!checked.ok) return checked.result;
+      const version = checked.rows.get(id)?.version;
       return writeOrSetAside(name, async () => {
-        await params.deleteActivity(id);
+        await params.deleteActivity({ activityId: id, version });
         live = null;
       });
     },
@@ -1113,6 +1130,13 @@ export function createLoeSpanCommand(params: {
       if (!drivers.has(startDriverId)) return notApplicable('gone', 'The start activity');
       if (!drivers.has(finishDriverId)) return notApplicable('gone', 'The finish activity');
       return writeOrSetAside(name, async () => {
+        if (orphanId !== null) {
+          // Already gone is what the retry wanted.
+          await params.deleteActivity({ activityId: orphanId }).catch((error: unknown) => {
+            if (!isNotFound(error)) throw error;
+          });
+          orphanId = null;
+        }
         const loe = await createPlaced(params.placedInput);
         try {
           await createDependency({
@@ -1134,8 +1158,11 @@ export function createLoeSpanCommand(params: {
         } catch (error) {
           // A half-composed span must not survive: the step is still undone (`live` is null), so a
           // retry composes again, and a LOE left behind would be an orphan with no logic. Best-effort,
-          // as the forward path's rollback: the delete cascades whichever edge did land.
-          await params.deleteActivity(loe.id).catch(() => undefined);
+          // as the forward path's rollback: the delete cascades whichever edge did land. A delete that
+          // fails too is remembered, so the retry removes the orphan rather than stranding it.
+          await params.deleteActivity({ activityId: loe.id }).catch(() => {
+            orphanId = loe.id;
+          });
           throw error;
         }
         // Only now is the span whole, and only now does the step count as redone.
@@ -1808,7 +1835,9 @@ export function pasteActivitiesCommand(params: {
           // path produces exactly one — and is why a multi-root non-flat paste is not offered.
           batchId = null;
           for (const root of params.roots) {
-            batchId = (await deleteActivity(root.id)).deleteBatchId;
+            batchId = (
+              await deleteActivity({ activityId: root.id, version: rows.get(root.id)?.version })
+            ).deleteBatchId;
           }
         }
         live = false;

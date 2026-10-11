@@ -12,6 +12,7 @@ import {
 } from './commands';
 import { notApplicable } from './replay';
 
+import type { DeleteDependencyInput } from '@/features/dependencies/api/use-dependencies';
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 import { aDependency, fakePlanServer } from '@/test/fake-plan-server';
@@ -412,7 +413,9 @@ describe('linkChainCommand — an undo that failed part-way can be retried', () 
     }
     // A plain wrapper: `vi.fn(anotherMock)` shares the implementation slot, so overriding it would
     // rewrite the fake server's own delete.
-    const deleteDependency = vi.fn((id: string) => server.mutations.deleteDependency(id));
+    const deleteDependency = vi.fn((input: DeleteDependencyInput) =>
+      server.mutations.deleteDependency(input),
+    );
     const command = linkChainCommand({
       created,
       createDependency: server.mutations.createDependency,
@@ -420,11 +423,11 @@ describe('linkChainCommand — an undo that failed part-way can be retried', () 
     });
     // The chain is undone last link first; the second delete fails, once.
     let calls = 0;
-    deleteDependency.mockImplementation((id: string) => {
+    deleteDependency.mockImplementation((input: DeleteDependencyInput) => {
       calls += 1;
       return calls === 2
         ? Promise.reject(new Error('network'))
-        : server.mutations.deleteDependency(id);
+        : server.mutations.deleteDependency(input);
     });
     await expect(command.undo(server.ctx)).rejects.toThrow('network');
     expect(server.dependencies.size).toBe(1);
