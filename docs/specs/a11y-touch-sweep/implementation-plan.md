@@ -383,13 +383,13 @@ version impact (web minor at M3, patch elsewhere).
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| ----------------- | ---------- | ------ | ---------- |
-| A 44 px divider strip covers the Explorer tree's `⋯` or a Gantt sort header | med | med | M0 `elementFromPoint`; `outward` or `none` per consumer; neighbour-centre assertion |
-| Press-to-size surprises mouse users (a click on a divider opens a box) | med | low | Non-modal, outside-press close; changeset says so; CQ-1 lets the owner choose B |
-| accessibility-reviewer rules keyboard sufficient for 2.5.7 | low | scope | M3 becomes "record the ruling, close #442" |
-| #483's reported figures do not reproduce under `Page.setFontSizes` | med | scope | M0 decides; M4 may shrink to comment fixes, or to a different cell |
-| Row-height growth on touch for rows without a `⋯` (#470) | high (by design) | low | Accepted default D-3; figure in the changeset |
-| CI e2e budget is already over its re-open trigger (#491) | high | low | Extend existing suites, no new config; update `scripts/e2e-durations.json` |
-| CI fonts differ from the container, so header widths shift | med | low | One-sided assertions with a bounded allowance (the SC-18a pattern, HANDOFF `:115-119`) |
-| `token-architecture.test.ts` refuses the strip's inset values | med | low | `--control-h` through existing variants; the builder checks against the test before writing |
+| Risk / assumption                                                           | Likelihood       | Impact | Mitigation                                                                                  |
+| --------------------------------------------------------------------------- | ---------------- | ------ | ------------------------------------------------------------------------------------------- |
+| A 44 px divider strip covers the Explorer tree's `⋯` or a Gantt sort header | med              | med    | M0 `elementFromPoint`; `outward` or `none` per consumer; neighbour-centre assertion         |
+| Press-to-size surprises mouse users (a click on a divider opens a box)      | med              | low    | Non-modal, outside-press close; changeset says so; CQ-1 lets the owner choose B             |
+| accessibility-reviewer rules keyboard sufficient for 2.5.7                  | low              | scope  | M3 becomes "record the ruling, close #442"                                                  |
+| #483's reported figures do not reproduce under `Page.setFontSizes`          | med              | scope  | M0 decides; M4 may shrink to comment fixes, or to a different cell                          |
+| Row-height growth on touch for rows without a `⋯` (#470)                    | high (by design) | low    | Accepted default D-3; figure in the changeset                                               |
+| CI e2e budget is already over its re-open trigger (#491)                    | high             | low    | Extend existing suites, no new config; update `scripts/e2e-durations.json`                  |
+| CI fonts differ from the container, so header widths shift                  | med              | low    | One-sided assertions with a bounded allowance (the SC-18a pattern, HANDOFF `:115-119`)      |
+| `token-architecture.test.ts` refuses the strip's inset values               | med              | low    | `--control-h` through existing variants; the builder checks against the test before writing |

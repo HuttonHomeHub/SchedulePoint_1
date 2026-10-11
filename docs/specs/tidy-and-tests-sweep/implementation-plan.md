@@ -352,14 +352,14 @@ Specifically here:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                 | Likelihood | Impact | Mitigation                                                                                          |
-| ------------------------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------- |
-| §0's findings came from reading only (no shell). A line reference may have drifted before build | med        | low    | Each task re-reads its cited lines first. A changed fact is recorded rather than worked around     |
-| #469 render-phase state lags a frame after the move                                               | low        | med    | Component-reviewer check, `:657` suite, two journeys                                               |
-| #429 cannot be reproduced on demand                                                               | med        | low    | Helper left alone; row records the attempt (ADR-0142)                                               |
-| #444 saving is noise                                                                              | med        | low    | Not shipped; row closed on the figures                                                              |
-| #441 needs an index                                                                               | low        | med    | Stop; database-architect (§19.3)                                                                    |
-| #441 keyed count is slower on small installs                                                      | med        | low    | Measured at two sizes; decision bar                                                                 |
-| #435 cannot be counted without CI access                                                          | high (here) | low   | M4-T1 assigned to a session with GitHub tools                                                       |
-| A new web file breaks `check:counts`                                                              | high       | low    | Banner count updated in the same commit                                                             |
-| Treating this sweep as #443's or #419's trigger                                                   | low        | low    | Spec §0 says explicitly that it is not                                                             |
+| Risk / assumption                                                                               | Likelihood  | Impact | Mitigation                                                                                     |
+| ----------------------------------------------------------------------------------------------- | ----------- | ------ | ---------------------------------------------------------------------------------------------- |
+| §0's findings came from reading only (no shell). A line reference may have drifted before build | med         | low    | Each task re-reads its cited lines first. A changed fact is recorded rather than worked around |
+| #469 render-phase state lags a frame after the move                                             | low         | med    | Component-reviewer check, `:657` suite, two journeys                                           |
+| #429 cannot be reproduced on demand                                                             | med         | low    | Helper left alone; row records the attempt (ADR-0142)                                          |
+| #444 saving is noise                                                                            | med         | low    | Not shipped; row closed on the figures                                                         |
+| #441 needs an index                                                                             | low         | med    | Stop; database-architect (§19.3)                                                               |
+| #441 keyed count is slower on small installs                                                    | med         | low    | Measured at two sizes; decision bar                                                            |
+| #435 cannot be counted without CI access                                                        | high (here) | low    | M4-T1 assigned to a session with GitHub tools                                                  |
+| A new web file breaks `check:counts`                                                            | high        | low    | Banner count updated in the same commit                                                        |
+| Treating this sweep as #443's or #419's trigger                                                 | low         | low    | Spec §0 says explicitly that it is not                                                         |

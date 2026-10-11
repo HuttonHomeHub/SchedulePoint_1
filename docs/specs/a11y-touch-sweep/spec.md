@@ -33,15 +33,15 @@ run in a browser for this spec.** Where a row's figure depends on a browser, it 
   `surface.tsx:154` and `TsldMinimap.tsx:333`.
 - The real call sites are **seven, in three files**:
 
-| #   | Consumer                       | Where                                 | Non-drag pointer route today                                       |
-| --- | ------------------------------ | ------------------------------------- | ------------------------------------------------------------------ |
-| 1   | Project Explorer width         | `explorer-column.tsx:130`             | Hide/Show only (binary, `navigator-rail.tsx:162-176`)              |
-| 2   | Float paths dock width         | `plan-workspace-toolbar.tsx:2614`     | Close only                                                         |
-| 3   | Health check dock width        | `plan-workspace-toolbar.tsx:2649`     | Close only                                                         |
-| 4   | Revision comparison dock width | `plan-workspace-toolbar.tsx:2676`     | Close only                                                         |
-| 5   | Notes dock width               | `plan-workspace-toolbar.tsx:2703`     | Close only                                                         |
-| 6   | Activities panel height        | `plan-workspace-toolbar.tsx:2741`     | Collapse/expand, and the ADR-0180 swap (binary)                    |
-| 7   | Gantt grid width               | `GanttPanel.tsx:1413`                 | **Yes**: `View ▾` › Columns › `Table width` (`gantt-columns-group.tsx:209-217`) |
+| #   | Consumer                       | Where                             | Non-drag pointer route today                                                    |
+| --- | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | Project Explorer width         | `explorer-column.tsx:130`         | Hide/Show only (binary, `navigator-rail.tsx:162-176`)                           |
+| 2   | Float paths dock width         | `plan-workspace-toolbar.tsx:2614` | Close only                                                                      |
+| 3   | Health check dock width        | `plan-workspace-toolbar.tsx:2649` | Close only                                                                      |
+| 4   | Revision comparison dock width | `plan-workspace-toolbar.tsx:2676` | Close only                                                                      |
+| 5   | Notes dock width               | `plan-workspace-toolbar.tsx:2703` | Close only                                                                      |
+| 6   | Activities panel height        | `plan-workspace-toolbar.tsx:2741` | Collapse/expand, and the ADR-0180 swap (binary)                                 |
+| 7   | Gantt grid width               | `GanttPanel.tsx:1413`             | **Yes**: `View ▾` › Columns › `Table width` (`gantt-columns-group.tsx:209-217`) |
 
 - The row's open question still stands: whether arrow keys satisfy SC 2.5.7. ADR-0173's Context
   (`:29-30`) already answered "no" for the Gantt, and the Understanding document for 2.5.7 requires a
@@ -96,13 +96,13 @@ questions, D-3).
 - `command-surface.spec.ts:239-244`: the coarse sweep's selector list has no `[role="separator"]`,
   as the row says.
 - **The trigger** is "a device reading that misses a divider". The Surface sheet's step 25
-  (`docs/specs/gantt-coarse-pointer/device-checklist.md:178-183`) asks whether a drag *follows* the
-  finger, not whether a finger *finds* the strip. `docs/HANDOFF.md:63` lists step 25 as still awaited.
+  (`docs/specs/gantt-coarse-pointer/device-checklist.md:178-183`) asks whether a drag _follows_ the
+  finger, not whether a finger _finds_ the strip. `docs/HANDOFF.md:63` lists step 25 as still awaited.
 - **The Gantt grid divider cannot simply widen.**
   - It sits at `z-30` across the table/chart seam (`GanttPanel.tsx:1404-1411`).
   - A 44 px strip there would cover 22 px of the last grid column (its sort header and cells) and
     22 px of the chart's first bars.
-  - ADR-0173 D3 already decided this shape for the column edges: *omit rather than enlarge* when
+  - ADR-0173 D3 already decided this shape for the column edges: _omit rather than enlarge_ when
     enlarging would cover a neighbour, with the typed field (44 px under coarse) as the stated
     equivalent.
 - **A risk the row does not name.** The hit child paints after the panel in DOM order, so it already
@@ -142,6 +142,7 @@ remedy.**
 
   ADR-0179 D2 then requires reflow, not a designed layout. The breadcrumb may still be unreadable
   there, because the shrink-0 siblings are also twice as wide. It just isn't known.
+
 - **The SC attribution is arguable.** The Understanding document for 1.4.4 allows meeting the SC
   through user-agent zoom (technique G142). Full-page zoom at 200 % on 1440 gives a 720 px window,
   which ADR-0179 handles with the notice and reflow. Text-only enlargement is still a real user setting,
@@ -184,14 +185,14 @@ here depends on it.
 
 ### 0.7 Per-row summary
 
-| Row  | Problem holds? | Recommendation                                          | Milestone |
-| ---- | -------------- | ------------------------------------------------------- | --------- |
-| #442 | Yes (7 consumers, not 5 files) | Build after accessibility-reviewer's ruling  | M3        |
-| #470 | Yes (plus an unstated row-height cost) | Build                                | M1        |
-| #473 | Yes            | Build                                                   | M1        |
-| #476 | Yes (trigger not yet fired; Gantt divider cannot widen) | Build with #442, or leave (CQ-2) | M2 |
-| #483 | Mechanism yes; figures not reproducible by the repo's method | Re-measure, then build | M0, M4 |
-| #475 | Half fixed; remaining defect re-described | Close with a docs fix        | M5        |
+| Row  | Problem holds?                                               | Recommendation                              | Milestone |
+| ---- | ------------------------------------------------------------ | ------------------------------------------- | --------- |
+| #442 | Yes (7 consumers, not 5 files)                               | Build after accessibility-reviewer's ruling | M3        |
+| #470 | Yes (plus an unstated row-height cost)                       | Build                                       | M1        |
+| #473 | Yes                                                          | Build                                       | M1        |
+| #476 | Yes (trigger not yet fired; Gantt divider cannot widen)      | Build with #442, or leave (CQ-2)            | M2        |
+| #483 | Mechanism yes; figures not reproducible by the repo's method | Re-measure, then build                      | M0, M4    |
+| #475 | Half fixed; remaining defect re-described                    | Close with a docs fix                       | M5        |
 
 ---
 
@@ -363,8 +364,7 @@ Critical questions are in §6. Defaults taken without asking:
 > - **Given** text-only 200 % at each of M0's cells **then** the current-page crumb shows at least
 >   M0's chosen floor (`min-w-24`, 6 rem, as a starting candidate). The header may take a second line
 >   to keep it, and the project link is ≥ 24 × 24.
-> - **Given** 100 % text **then** the header's line count is unchanged at 1024, 1280, 1440, 1646 and
->   1912.
+> - **Given** 100 % text **then** the header's line count is unchanged at 1024, 1280, 1440, 1646 and 1912.
 
 ### Workflows
 
@@ -404,27 +404,27 @@ pixels." (the ADR-0173 copy pattern, `gantt-columns-group.tsx:27-39`, generalise
 
 ### Error scenarios
 
-| Scenario                        | Detection          | User-facing result                                  | Status |
-| ------------------------------- | ------------------ | --------------------------------------------------- | ------ |
-| Typed size out of range         | `clampSize`        | Applied at bound; polite "limited to N px. Allowed range is A to B pixels." | n/a |
-| Empty or non-numeric entry      | `Number.isFinite`  | Not changed; polite range sentence                  | n/a    |
-| `localStorage` unavailable      | existing prefs hooks | Size applies for the session (existing behaviour) | n/a    |
+| Scenario                   | Detection            | User-facing result                                                          | Status |
+| -------------------------- | -------------------- | --------------------------------------------------------------------------- | ------ |
+| Typed size out of range    | `clampSize`          | Applied at bound; polite "limited to N px. Allowed range is A to B pixels." | n/a    |
+| Empty or non-numeric entry | `Number.isFinite`    | Not changed; polite range sentence                                          | n/a    |
+| `localStorage` unavailable | existing prefs hooks | Size applies for the session (existing behaviour)                           | n/a    |
 
 ---
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes |
-| -------------- | ------ | ----- |
+| Area           | Impact | Notes                                                                                                                                                                                                                                                                                                      |
+| -------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend       | med    | `PanelResizer` (pointer path, coarse strip, optional size panel); a new shared `SizeField` extracted from the Gantt's private `WidthField`; `usePointerDrag` reports pressed vs moved; `ExplorerColumn` + `NavigatorRail` landmark; `ActivitiesTable` labels; `Breadcrumbs` / `app-header` (remedy per M0) |
-| Backend        | none   | |
-| Database       | none   | **No schema change.** Sizes are per-device `localStorage` (ADR-0173 D1 precedent). database-architect is not needed. |
-| API            | none   | |
-| Security       | none   | No input reaches the server. A typed size is clamped client-side. |
-| Performance    | low    | One extra hidden popover per divider, mounted only when open. Drag path unchanged (rAF-coalesced in `usePointerDrag`). |
-| Infrastructure | low    | No new Playwright config; extends `e2e-overview`, `e2e-workspace-fit` (coarse sweep), `e2e-narrow-shell` (text-only 200 %) and one existing divider journey. CI shard durations may move (`scripts/e2e-durations.json`, #491's budget is already tight). |
-| Observability  | none   | |
-| Testing        | med    | Unit (primitive, field, hook), journeys (above), axe `region`, coarse sweep, the Surface sheet. |
+| Backend        | none   |                                                                                                                                                                                                                                                                                                            |
+| Database       | none   | **No schema change.** Sizes are per-device `localStorage` (ADR-0173 D1 precedent). database-architect is not needed.                                                                                                                                                                                       |
+| API            | none   |                                                                                                                                                                                                                                                                                                            |
+| Security       | none   | No input reaches the server. A typed size is clamped client-side.                                                                                                                                                                                                                                          |
+| Performance    | low    | One extra hidden popover per divider, mounted only when open. Drag path unchanged (rAF-coalesced in `usePointerDrag`).                                                                                                                                                                                     |
+| Infrastructure | low    | No new Playwright config; extends `e2e-overview`, `e2e-workspace-fit` (coarse sweep), `e2e-narrow-shell` (text-only 200 %) and one existing divider journey. CI shard durations may move (`scripts/e2e-durations.json`, #491's budget is already tight).                                                   |
+| Observability  | none   |                                                                                                                                                                                                                                                                                                            |
+| Testing        | med    | Unit (primitive, field, hook), journeys (above), axe `region`, coarse sweep, the Surface sheet.                                                                                                                                                                                                            |
 
 ### Dependencies
 
@@ -439,14 +439,14 @@ pixels." (the ADR-0173 copy pattern, `gantt-columns-group.tsx:27-39`, generalise
 
 ### Shared primitives touched (ADR-0111 review)
 
-| Primitive / gate | Change | Review |
-| ---------------- | ------ | ------ |
-| `components/ui/panel-resizer.tsx` | Coarse strip; press-without-move opens a size panel; focus returns to the separator | **accessibility-reviewer + component-reviewer** before release (focus contract changes; more than one primitive is involved, with the new field) |
-| `components/ui/use-pointer-drag.ts` | Reports "moved" vs "pressed" on release; still claims no key | component-reviewer (shared with `GanttColumnEdge`) |
-| New `components/ui/size-field.tsx` (`*Field` family) | Extracted from `gantt-columns-group.tsx:58-140`: arrows apply, Escape discards, Enter or blur commits | **accessibility-reviewer** (an arrow-key model in a `*Field`) |
-| `navigator-rail.tsx` / `explorer-column.tsx` | Landmark hoisted (D-4) | **accessibility-reviewer** (row #473 says so: shell landmark change) |
-| `breadcrumbs.tsx` | Possible floor or collapse rule on `nowrap` (M4) | component-reviewer; accessibility-reviewer only if the link's focus or name changes |
-| Gates: `command-surface.spec.ts` coarse sweep; `overview.spec.ts` axe filter | Exemption deleted; dividers surface added; filter deleted | Planted red first (ADR-0110) |
+| Primitive / gate                                                             | Change                                                                                                | Review                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `components/ui/panel-resizer.tsx`                                            | Coarse strip; press-without-move opens a size panel; focus returns to the separator                   | **accessibility-reviewer + component-reviewer** before release (focus contract changes; more than one primitive is involved, with the new field) |
+| `components/ui/use-pointer-drag.ts`                                          | Reports "moved" vs "pressed" on release; still claims no key                                          | component-reviewer (shared with `GanttColumnEdge`)                                                                                               |
+| New `components/ui/size-field.tsx` (`*Field` family)                         | Extracted from `gantt-columns-group.tsx:58-140`: arrows apply, Escape discards, Enter or blur commits | **accessibility-reviewer** (an arrow-key model in a `*Field`)                                                                                    |
+| `navigator-rail.tsx` / `explorer-column.tsx`                                 | Landmark hoisted (D-4)                                                                                | **accessibility-reviewer** (row #473 says so: shell landmark change)                                                                             |
+| `breadcrumbs.tsx`                                                            | Possible floor or collapse rule on `nowrap` (M4)                                                      | component-reviewer; accessibility-reviewer only if the link's focus or name changes                                                              |
+| Gates: `command-surface.spec.ts` coarse sweep; `overview.spec.ts` axe filter | Exemption deleted; dividers surface added; filter deleted                                             | Planted red first (ADR-0110)                                                                                                                     |
 
 ### ADR-0105 triggers crossed
 
@@ -550,7 +550,7 @@ the same classes. The spine's `OrgDestinationsCollapsed` (its own `nav`, `org-de
 is untouched. The `contents` `Surface` stays as the panel-family scope for the separator, now inside
 the landmark. `overview.spec.ts:197-205` loses its filter.
 
-*Alternatives:*
+_Alternatives:_
 
 - An `aside` wrapper gives two "Project Explorer" landmarks. Rejected per `:103-108`.
 - Render the separator inside `NavigatorRail`'s scrolling `nav`. That would put a horizontal sibling
@@ -612,12 +612,12 @@ behaviour the header already accepts.
 
 ### 4.7 Implementation approach & alternatives (#442, the significant one)
 
-| Option | What | For | Against |
-| ------ | ---- | --- | ------- |
-| **A (recommended): press-to-size on the divider** | A press without movement opens a size panel at the divider | One implementation in the primitive covers all seven consumers. On the object (ADR-0093). Required prop means no future consumer ships without a twin. Reuses ADR-0173's field. | Changes the primitive's pointer and focus contract (ADR-0111). Discoverability: nothing visible says "tap me", so the separator's tooltip and the `aria-valuetext` hint must say it. Accidental taps open a panel, mitigated by non-modal, Escape and outside-press. |
-| B: fields in owning menus | Workspace `View ▾` gets a "Panels" group (activities height plus open docks); the Explorer's actions row gets a `⋯` with "Explorer width…" | Discoverable in a menu. No primitive pointer change. | Five places to keep in step. The Explorer row (`navigator-rail.tsx:160`) is tight at 1024 / coarse. Dock widths in a menu while the dock may be closed is awkward. Nothing stops a new divider shipping without a twin. |
-| C: rule keyboard sufficient, close #442 | Record accessibility-reviewer's ruling | Free | Contradicts ADR-0173's own reading of 2.5.7 (`:29-30`). Leaves an AA gap if the ruling is "no". |
-| D: visible grip button on each divider | A small button at the divider's midpoint opens the panel | Discoverable | One more Tab stop per divider, and a 44 px coarse button on a divider covers neighbours, which is the #476 problem made worse. |
+| Option                                            | What                                                                                                                                       | For                                                                                                                                                                             | Against                                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A (recommended): press-to-size on the divider** | A press without movement opens a size panel at the divider                                                                                 | One implementation in the primitive covers all seven consumers. On the object (ADR-0093). Required prop means no future consumer ships without a twin. Reuses ADR-0173's field. | Changes the primitive's pointer and focus contract (ADR-0111). Discoverability: nothing visible says "tap me", so the separator's tooltip and the `aria-valuetext` hint must say it. Accidental taps open a panel, mitigated by non-modal, Escape and outside-press. |
+| B: fields in owning menus                         | Workspace `View ▾` gets a "Panels" group (activities height plus open docks); the Explorer's actions row gets a `⋯` with "Explorer width…" | Discoverable in a menu. No primitive pointer change.                                                                                                                            | Five places to keep in step. The Explorer row (`navigator-rail.tsx:160`) is tight at 1024 / coarse. Dock widths in a menu while the dock may be closed is awkward. Nothing stops a new divider shipping without a twin.                                              |
+| C: rule keyboard sufficient, close #442           | Record accessibility-reviewer's ruling                                                                                                     | Free                                                                                                                                                                            | Contradicts ADR-0173's own reading of 2.5.7 (`:29-30`). Leaves an AA gap if the ruling is "no".                                                                                                                                                                      |
+| D: visible grip button on each divider            | A small button at the divider's midpoint opens the panel                                                                                   | Discoverable                                                                                                                                                                    | One more Tab stop per divider, and a 44 px coarse button on a divider covers neighbours, which is the #476 problem made worse.                                                                                                                                       |
 
 ### 4.8 ADR required — outline
 
@@ -698,6 +698,7 @@ These answers change design or scope. Everything else has a default in §1.
 
   accessibility-reviewer runs first (an agent ruling, not your call); this question is the product
   choice among the compliant options.
+
 - **CQ-2 (#476): grow the divider grab strip for a finger now, or wait for your step-25 reading?**
   Recommended: now, alongside CQ-1, so the shared divider is reviewed once.
   - It grows to 44 px on your Surface, and grows away from controls where it would cover them.
