@@ -71,7 +71,9 @@ async function useEightHourCalendar(page: Page, orgSlug: string): Promise<void> 
           //
           // `hoursPerDay` is deliberately NOT sent: it is derived once from the pattern at write
           // time (ADR-0068), and supplying it would assert the very answer this test rests on.
-          shifts: [1, 2, 3, 4, 5].map((weekday) => ({
+          // Weekdays are numbered from Monday = 0 (`CalendarShiftDto`), so Mon–Fri is 0–4. This sent
+          // 1–5 until #432, which is Tuesday to Saturday.
+          shifts: [0, 1, 2, 3, 4].map((weekday) => ({
             weekday,
             startMinute: 8 * 60,
             endMinute: 16 * 60,

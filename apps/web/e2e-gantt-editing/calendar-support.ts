@@ -7,9 +7,8 @@ import { openPlanId, syncClient } from '../e2e-gantt/support';
  *
  * A weekend proves nothing on a plan that does not skip it, so these cases bind a Mon–Fri calendar
  * to the plan through the API and **assert it before the case runs** rather than trusting that a
- * fresh plan already has one. (`useEightHourCalendar` in `grid-edit.spec.ts` sends weekdays 1–5,
- * which the API numbers from Monday = 0: that is Tuesday to Saturday, so it was never evidence of a
- * Mon–Fri week and is deliberately not reused here.)
+ * fresh plan already has one. (`useEightHourCalendar` in `grid-edit.spec.ts` is the other Mon–Fri
+ * fixture; it sends shift windows rather than a mask because it needs an eight-hour day.)
  */
 
 /** Mon–Fri as the API's 7-bit mask (bit 0 = Monday … bit 4 = Friday). */
