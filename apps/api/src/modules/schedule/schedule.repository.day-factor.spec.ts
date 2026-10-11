@@ -78,6 +78,8 @@ describe('writeResults — float is persisted in the activity’s own calendar d
     const { repo, params } = repositoryCapturing();
     const tx = {
       $executeRaw: vi.fn(() => Promise.resolve(1)),
+      // The ordered row pre-lock (#440) runs first; it is proven against a real table in the e2e tier.
+      $queryRaw: vi.fn(() => Promise.resolve([])),
     };
     const captured: unknown[][] = [];
     tx.$executeRaw = vi.fn((_s: unknown, ...args: unknown[]) => {
@@ -150,6 +152,7 @@ describe('writeResults — remaining float is one rounding, not two (FC-4)', () 
         captured.push(args);
         return Promise.resolve(1);
       }),
+      $queryRaw: vi.fn(() => Promise.resolve([])),
     };
     const repo = new ScheduleRepository({
       $executeRaw: vi.fn(() => Promise.resolve(1)),
