@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -37,6 +37,7 @@ import {
 } from './use-notes-panel-prefs';
 import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+import { useShortBodySwap } from './use-short-body-swap';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
@@ -747,55 +748,42 @@ export function ToolbarPlanWorkspace({
     (healthDockActive && healthBounds.squeezed) ||
     (revisionsDockActive && revisionBounds.squeezed);
 
-  // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180). When the body
-  // cannot give the panel three rows beside the diagram's minimum, an expanded panel takes the whole
-  // body and the diagram row is hidden — `display: none`, still mounted, so the canvas keeps its
-  // viewport and selection. `wasShort` is the hysteresis memory; it is adjusted during render (the
-  // documented derived-state pattern) because the swap must not lag the measurement by a frame.
-  // It uses the canvas reserve alone: an open dock and an expanded panel never coexist on a body
-  // this short (`expandPanel` closes the dock, the effect below collapses the panel).
-  const [wasShort, setWasShort] = useState(false);
-  const short = isShortBody(bodyHeight, CANVAS_MIN_HEIGHT, wasShort);
-  if (short !== wasShort) setWasShort(short);
-  const swapped = !collapsed && short;
+  // **The short-body swap** (`docs/specs/short-screen-vertical-budget`, ADR-0180) lives in
+  // `useShortBodySwap`. `anyRightDockActive` is derived here, above the call, because the hook reads it
+  // and `effectiveMax` below does too.
+  const anyRightDockActive =
+    notesDockActive || floatPathsDockActive || healthDockActive || revisionsDockActive;
+  const {
+    swapped,
+    toolPutAway,
+    collapseQuietly,
+    panelBoxRef,
+    collapseButtonRef,
+    trackFocusIn,
+    trackFocusOut,
+  } = useShortBodySwap({
+    bodyHeight,
+    collapsed,
+    setCollapsed,
+    setInteracted,
+    canvasUi,
+    anyRightDockActive,
+  });
+
   // The collapsed panel's other short case: a body that holds the foot row and not even the ruler
   // band above it (a zoomed laptop: `docs/specs/retire-single-pane-workspace/m0-measurement.md` §2).
   // Hidden by the swap the row measures 0, which is not this case.
   const canvasRowTooShort = !swapped && canvasRowHeight !== null && canvasRowHeight < RULER_BAND_PX;
 
-  // Entering the swap puts an armed drawing tool away: a tool armed while the diagram is hidden has
-  // no target, and Escape in the table must never have a tool to reach. `canvasUi` is this
-  // component's own state, and `setMode('select')` is the same disarm `TsldPanel`'s `exitAddMode`
-  // makes and a plan switch already makes (`useTsldCanvasUiState`), so the panel's mode effects
-  // announce it and release the LOE pick as they do for any other disarm. The flag is the panel
-  // note's "Drawing tool put away." for this opening; it clears when the swap ends.
-  const [toolPutAway, setToolPutAway] = useState(false);
-  if (swapped && !toolPutAway && canvasUi.mode !== 'select') {
-    setToolPutAway(true);
-    canvasUi.setMode('select');
-  } else if (!swapped && toolPutAway) {
-    setToolPutAway(false);
-  }
-  // The same for a stage a dock has taken out of reach (`inert`): an armed tool there has no target,
-  // and Escape, its way out, is a canvas key the stage would never receive. No note is shown for it —
-  // the dock is the thing on screen — but the panel's own mode effects still announce the disarm.
+  // A stage a dock has taken out of reach (`inert`) disarms an armed tool as the swap does: an armed
+  // tool there has no target, and Escape, its way out, is a canvas key the stage would never receive.
+  // No note is shown for it — the dock is the thing on screen — but the panel's own mode effects still
+  // announce the disarm.
   // (A row merely too short for a bar is not covered: its measurement is the shell's, ADR-0181.)
   if (dockSqueezed && canvasUi.mode !== 'select') {
     canvasUi.setMode('select');
   }
 
-  // **Collapse-first for a command that acts on the diagram** (A1, spec §2 "Commands while the
-  // diagram is hidden"). Quiet — `interacted` is cleared — so the collapsed bar does not take focus
-  // from the toolbar control the planner just pressed. The exception is focus INSIDE the panel (a
-  // wrapped command reached from the table's own keys): that control is about to unmount, so the
-  // collapsed bar takes it rather than leaving it on <body>. The next animation frame is what lets
-  // the un-hidden canvas lay out before the command reads its size; `measure()` ignores the 0 x 0
-  // rectangle in between, so the viewport it measured last is still the one the command acts on.
-  const panelBoxRef = useRef<HTMLDivElement>(null);
-  const collapseQuietly = useCallback(() => {
-    setInteracted(panelBoxRef.current?.contains(document.activeElement) ?? false);
-    setCollapsed(true);
-  }, []);
   // Frames still owed to a command; cancelled on unmount so a command never runs on a torn-down
   // workspace.
   const pendingFramesRef = useRef(new Set<number>());
@@ -973,8 +961,6 @@ export function ToolbarPlanWorkspace({
   // taxing the docks. With a dock open the row keeps `DOCK_MIN_HEIGHT` instead; the cost runs the
   // other way and is stated in that constant's docblock (a taller persisted panel is render-clamped
   // while a dock is open, and restored exactly on close — `panel.size` is never overwritten).
-  const anyRightDockActive =
-    notesDockActive || floatPathsDockActive || healthDockActive || revisionsDockActive;
   const effectiveMax = Math.min(
     PANEL_MAX_HEIGHT,
     Math.max(
@@ -994,30 +980,6 @@ export function ToolbarPlanWorkspace({
     if (anyRightDockActive && isShortBody(bodyHeight, DOCK_MIN_HEIGHT, false)) closeAllDocks();
     expand();
   }, [anyRightDockActive, bodyHeight, closeAllDocks, expand]);
-  // The other half of "the later request wins": a dock that opens (or survives a live resize) while
-  // the diagram is hidden collapses the panel. A layout effect, not a render-time adjustment like
-  // `wasShort`, because the quiet collapse reads where focus is (a ref and the DOM); it still runs
-  // before paint, so the dock is never invisible for a frame.
-  useLayoutEffect(() => {
-    if (swapped && anyRightDockActive) collapseQuietly();
-  }, [swapped, anyRightDockActive, collapseQuietly]);
-
-  // Focus the swap would strand: inside the diagram row (its docks included) or on the panel's
-  // resizer, which is unmounted rather than hidden and so fires no blur of its own. A press of
-  // Expand is covered by `focusCollapseOnMount`; a live resize across the threshold is not.
-  const focusInHiddenRef = useRef(false);
-  const collapseButtonRef = useRef<HTMLButtonElement>(null);
-  const trackFocusIn = useCallback(() => {
-    focusInHiddenRef.current = true;
-  }, []);
-  const trackFocusOut = useCallback((event: React.FocusEvent<HTMLElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget)) focusInHiddenRef.current = false;
-  }, []);
-  useLayoutEffect(() => {
-    if (!swapped || !focusInHiddenRef.current) return;
-    focusInHiddenRef.current = false;
-    collapseButtonRef.current?.focus();
-  }, [swapped]);
   // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
   // schedule namespace, so the recalculation's existing invalidation sweeps it.
   const health = useScheduleHealth(model.orgSlug, model.planId, healthDockActive);
