@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,6 +11,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * End-to-end tests for the **cross-plan** revision comparison (M1-T5):
@@ -36,6 +38,7 @@ interface Actor {
 describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -49,6 +52,7 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   // Children before parents so the FK restrictions never bite (the schedule.e2e order).
@@ -81,6 +85,9 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // Per-handler throttle counters are shared across tests in one 60 s window; this suite's activity
+    // creates alone pass the 100-per-minute bound once it has enough cases (`docs/TESTING.md`).
+    resetThrottleCounters(throttlerStorage);
     await resetDatabase();
   });
 
@@ -355,6 +362,35 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
       const matched = (res.body.data.correlation.fromUnmatchedRows as unknown[]).length;
       expect(matched).toBe(1);
       expect(ta).not.toBe(fa);
+    });
+
+    it('carries the basis-neutral date names beside the deprecated *Early* ones, equal on every row', async () => {
+      const admin = await adminWithOrg();
+      // Two coded, parallel activities in each plan; which one is critical swaps between the plans,
+      // so one row ENTERS and one LEAVES and both carry the four dates.
+      const fromPlanId = await makePlan(admin);
+      await makeActivity(admin, fromPlanId, 'Groundworks', 20, { code: 'A100' });
+      await makeActivity(admin, fromPlanId, 'Fit-out', 5, { code: 'B200' });
+      await recalculate(admin, fromPlanId);
+      const toPlanId = await makePlan(admin);
+      await makeActivity(admin, toPlanId, 'Groundworks', 5, { code: 'A100' });
+      await makeActivity(admin, toPlanId, 'Fit-out', 20, { code: 'B200' });
+      await recalculate(admin, toPlanId);
+
+      const res = await admin.agent.get(url({ fromPlanId, toPlanId })).expect(200);
+      const rows = [
+        ...res.body.data.criticalPath.entered,
+        ...res.body.data.criticalPath.left,
+      ] as Array<Record<string, string | null>>;
+      // Non-vacuity: a swap of criticality is two moved rows, or this asserts nothing.
+      expect(rows.map((r) => r.code).sort()).toEqual(['A100', 'B200']);
+      for (const row of rows) {
+        expect(row.fromStart).not.toBeNull();
+        expect(row.fromStart).toBe(row.fromEarlyStart);
+        expect(row.toStart).toBe(row.toEarlyStart);
+        expect(row.fromFinish).toBe(row.fromEarlyFinish);
+        expect(row.toFinish).toBe(row.toEarlyFinish);
+      }
     });
 
     it('lists an uncoded row and puts it in NEITHER presence set', async () => {

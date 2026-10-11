@@ -294,6 +294,15 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     // Both sides' numbers, and the movement, never collapsed to zero when a side is unknown.
     expect(body.criticalPath.entered[0].fromTotalFloatDays).toBeGreaterThan(0);
     expect(body.criticalPath.entered[0].toTotalFloatDays).toBe(0);
+    // The dates are named for what they hold (`datesBasis`), and the deprecated `*Early*` names
+    // carry the same values on every moved row (#405).
+    for (const row of [...body.criticalPath.entered, ...body.criticalPath.left]) {
+      expect(row.fromStart).not.toBeNull();
+      expect(row.fromStart).toBe(row.fromEarlyStart);
+      expect(row.toStart).toBe(row.toEarlyStart);
+      expect(row.fromFinish).toBe(row.fromEarlyFinish);
+      expect(row.toFinish).toBe(row.toEarlyFinish);
+    }
 
     // The completion moved, measured in WORKING DAYS on the plan calendar (all-days-work here),
     // and the carrier is NAMED so a reader can check it.

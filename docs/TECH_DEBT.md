@@ -11225,31 +11225,27 @@ already exposes `nearCriticalCount`. So a guest canvas lacks the near-critical r
 driving-link weight a member sees. Each is its own `SCHEDULE_READ` widening and needs its own
 reasoning (ADR-0051 §4, as amended by ADR-0163); it was deliberately not folded into ADR-0163.
 
-### 405. The revision comparison's public fields say `early` while carrying placed dates
+### 405. The revision comparison still serves four deprecated `*Early*` date fields, and the web still reads them
 
-> _Retitled by the 2026-09-29 reconciliation pass. It was "Four baseline readers still measure
-> earliest dates after #359", and its trigger still called part (a) open, while (a), (b) and (c) had
-> all closed that day. What is left is the rename follow-up at the end of (a) — a breaking public
-> change — and the resource histogram, now its own row, `#413`._
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-11 (`revision-delta.ts` `moved()` sets the new and the deprecated names from one expression each; `revision-compare.e2e-spec.ts` and `cross-plan-revision-compare.e2e-spec.ts` assert them equal on every moved row; `RevisionComparePanel.tsx` and `RevisionComparePrintDocument.tsx` still read `toEarlyStart`/`toEarlyFinish`) ·
+**Raised:** 2026-09-28 (placed-baseline-variance M1–M2) · **Size:** S · **Owner:** web, api
 
-**Status:** open · **Verified:** 2026-09-29 · **Raised:** 2026-09-28 (placed-baseline-variance M1–M2) ·
-**Size:** M · **Owner:** api
+The rename itself shipped additively on 2026-10-11 (correctness-sweep M4 and M5): the moved rows of
+`…/revision-compare` and `…/cross-plan-revision-compare` carry `fromStart`, `toStart`, `fromFinish` and
+`toFinish`, and the four `from`/`toEarlyStart`/`Finish` names are `deprecated: true` in OpenAPI and in
+`@repo/types`, with the removal condition in `docs/API.md` "Deprecated fields". The row had listed eight
+misnamed fields; only these four were (the completion's `fromFinish`/`toFinish` and the ghosts'
+`fromStart`/`fromFinish` were already basis-neutral). Separately, the OpenAPI text of
+`placementNotAssessableReason` said "No placement comparison is implemented yet" for 13 days after it
+shipped; it now states that null is exactly `datesBasis: PLACED` (pinned by
+`revision-compare-descriptions.spec.ts`).
 
-The revision comparison now chooses one `datesBasis` per read — `PLACED` when every baseline side is
-`FULL`, earliest against earliest otherwise (closed as `#405 (a)` on 2026-09-29, pinned by
-`revision-projections.spec.ts`, `schedule.service.cross-plan-revision.spec.ts` and
-`revision-compare.e2e-spec.ts`). Its public `Early*`/finish fields (`fromEarlyStart`, the completion's
-`fromFinish`/`toFinish`, ghost `fromStart`/`fromFinish`) therefore hold placed dates on `PLACED`, so
-they are misnamed; each carries a per-field description saying so. Renaming them to basis-neutral names
-is a breaking change, deferred deliberately. Parts (b) (the landing page's plan standing) and (c)
-(Earned Value's planned value) closed the same day and are recorded in `git log` and `DECISIONS.md`;
-the resource histogram was `#413`, since closed. _(Trimmed to what is left by the 2026-10-05 reconciliation pass; the
-closed parts had been struck through rather than removed.)_
-
-DCMA health correctly stays on the network basis and is not part of this row
-(`float-basis.structural.spec.ts`). **What is left:** only the rename. **Trigger:** the next change
-that already breaks the revision comparison's response. The product owner chose, 2026-09-29, not to
-take the breaking change on its own.
+**What is left:** the web panel and the printed form switch to the new names, and the four deprecated fields
+are removed. The web change waits for the API that serves the new names to be released, because releases are
+per package (ADR-0027): a web build that read `toStart` from an API that did not send it would show "—" for
+every date. Removal is a breaking public change and needs an ADR. **Next:** switch the two web files and their
+tests in a release after `api` carrying the fields. **Trigger:** that API release being out, or the next
+change that already breaks the revision comparison's response (then remove the four fields in the same ADR).
 
 ### 406. The critical-path what-if's throttle was measured before it levelled
 

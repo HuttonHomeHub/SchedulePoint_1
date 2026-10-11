@@ -28,6 +28,20 @@
 - The OpenAPI document is the contract. Breaking changes require an ADR and a
   migration note in `CHANGELOG.md`.
 
+### Deprecated fields
+
+A field renamed within a version is added under its new name, kept under its old one, and marked
+`deprecated: true` in OpenAPI until the next breaking change, which also needs an ADR (above). Both
+carry **one value**, set from one expression, so they cannot disagree.
+
+| Deprecated                                                                                      | Use instead                                      | Where                                                                                              | Removed                         |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | At the next breaking API change |
+
+The names said "early" but hold the placed dates when `datesBasis` is `PLACED`. The web client still reads
+the old names; it switches in a later release, once the API serving the new ones is out (releases are per
+package, ADR-0027).
+
 ## Response envelope
 
 Successful responses wrap the payload (see `@repo/types`):
@@ -374,13 +388,16 @@ nothing".
 Amendment 3), on both routes and always present. `PLACED` when every baseline side is
 `placement_snapshot_level: FULL`: frozen `placedStart`/`placedFinish` against the live
 effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, the ghosts, the moved
-rows' `from`/`toEarly*` and the completion's finish dates). `NETWORK` when any baseline side is
+rows' `from`/`toStart` and `from`/`toFinish`, and the completion's finish dates). `NETWORK` when any baseline side is
 `NONE`: earliest dates on both sides, exactly as before, and it is a property of the **pair** — one
 short side makes the whole read `NETWORK` rather than mixing two questions in one report. It is
 chosen once per read, never per row. It sits in `data` (the revision comparison has no `meta`) and
 is deliberately named `datesBasis` rather than `basis`, which is the variance read's `meta.basis`.
-The `Early*` field names are unchanged and carry whichever dates `datesBasis` states; criticality
-and float stay network quantities on either basis. Two live plans (cross-plan) have no baseline
+The moved rows (`criticalPath.entered` and `.left`) name those four dates `fromStart`, `toStart`,
+`fromFinish` and `toFinish`, which hold whichever dates `datesBasis` states; the former
+`fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` are **deprecated** and carry
+the same four values (see "Deprecated fields" above). Criticality and float stay network
+quantities on either basis. Two live plans (cross-plan) have no baseline
 side and are `PLACED`. **A `NETWORK` read is not comparable with an earlier `PLACED` read of the
 same pair**: the basis can flip when a baseline is re-captured, so compare `datesBasis` before
 comparing figures across reads. On `PLACED` the live side reads `visualEffectiveStart`/`Finish`
