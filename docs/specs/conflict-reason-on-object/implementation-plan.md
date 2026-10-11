@@ -1,7 +1,7 @@
 # Implementation Plan: The conflict's reason, shown on the object
 
 - **Feature spec:** [`feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Accepted — shipped (ADR-0186). Approved 2026-10-10 by the product owner after the accessibility, UX and component reviews; B′ chosen 2026-10-10 after M0. Built as Revision 3 describes.
 - **Owner:** web
 
 > **Revision 3 (2026-10-10).** M0 ran (`m0-measurement.md`); the owner chose B′ (a caption line above the
@@ -148,6 +148,11 @@ entry-routes,clear-placement,conflict-remedy,dissolve,notes,resources-off}.test.
 
 ##### Task M1-T2: The `conflict-reason` item and the two descriptions
 
+> **Superseded by Revision 3 in part.** There is no `conflict-reason` item, no `presentational` use and no
+> `ConflictReasonReadout`; the caption is `ConflictReasonLine` in `SelectionActionsBar`. The two descriptions were
+> built as written, and the tests below that name the item or `[data-toolbar-item="conflict-reason"]` were written
+> against `[data-conflict-reason]` instead.
+
 - **Description:**
   - Register the item (spec §4.6 table).
   - Add `ConflictReasonReadout`. It spreads only `data-toolbar-item`, not `tabIndex`.
@@ -186,7 +191,7 @@ entry-routes,clear-placement,conflict-remedy,dissolve,notes,resources-off}.test.
 ##### Task M1-T3: A row-menu item needs an activation path
 
 - **Description:** `GanttRowMenu` filters to `item.onActivate !== undefined` (spec §4.6). That drops the
-  presentational read-out and the render-only `conflict-remedy`, which today is a live "Fix this conflict" menu item
+  presentational read-out (_not built; Revision 3_) and the render-only `conflict-remedy`, which today is a live "Fix this conflict" menu item
   that does nothing (`GanttRowMenu.tsx:227-233`, `selection-actions.tsx:518-535`).
 - **Complexity:** S
 - **Dependencies:** M1-T2
@@ -211,12 +216,12 @@ entry-routes,clear-placement,conflict-remedy,dissolve,notes,resources-off}.test.
   - `conflict-review.spec.ts` case 1 (placement-early), after step 5:
     - `dock(page).locator('[data-toolbar-item="conflict-reason"]')` is visible with text
       `/Placed before its logic allows/`, and `clear-visual-placement` has that accessible description;
-    - **Tab from the canvas listbox into the bar lands on `[data-toolbar-item="open-logic"]`**, the real first stop
-      for this type, and never on the read-out;
+    - **Tab from the canvas listbox enters the bar at its first roving stop (Zoom to selection; Float paths in the
+      Gantt dock) and the arrow keys reach `[data-toolbar-item="clear-visual-placement"]`**, never the reason line;
     - after step 7 (resolved), the read-out has count 0.
   - `conflict-review.spec.ts` case 2 (constraint):
     - "Constraint not met" is visible;
-    - **Tab lands on `[data-toolbar-item="conflict-remedy"]`**, whose accessible name is "Review the constraint…" and
+    - **The arrow keys reach `[data-toolbar-item="conflict-remedy"]`** (the bar is one roving stop), whose accessible name is "Review the constraint…" and
       whose description is "Constraint not met".
   - Update today's regexes there deliberately (M1-T1).
   - SC-9: a two-conflict plan with Next conflict pressed three times. After each press the read-out count is 1, and

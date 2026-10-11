@@ -1,6 +1,6 @@
 # Feature Spec: The conflict's reason, shown on the object
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Accepted — shipped (ADR-0186). Approved 2026-10-10 by the product owner after the accessibility, UX and component reviews; B′ chosen 2026-10-10 after M0. Built as Revision 3 describes.
 - **Author(s):** feature-analyst (for the product owner, james). Revision 2 folds in the UX, accessibility and
   component reviews of revision 1.
 - **Date:** 2026-10-10
@@ -21,8 +21,10 @@
 > (foot row equal at 1912 x 1080) is replaced by "the controls never reflow, and the line is one line (at most
 > 24 px) there", asserted in `e2e-workspace-fit/conflict-reason.spec.ts`; (3) **the Tab claims are wrong
 > in the Diagram**: the bar is one roving Tab stop whose first item on the canvas is **Zoom to selection**
-> for every type (Logic and the remedy are reached by the arrow keys), so US-2's "focus lands on the remedy"
-> and "the first roving stop is Logic" hold only in the Gantt, where the canvas-only items are absent;
+> for every type, and **in the Gantt dock it is Float paths** (the accessibility review measured it; an earlier
+> version of this note said Logic and the remedy, which was also wrong). Logic, the remedy and Clear visual start
+> are reached with the arrow keys in both views, so every "focus lands on the remedy / on Logic" statement below
+> (§0, US-2, SC-3, §4.8 D4) is **superseded** by that;
 > (4) the **chip already wears the read-out look** (foreground text, warning-coloured triangle), so M1-T5's
 > chip restyle reduced to sharing the two class constants. Plan M2's row 4 (a truncating remedy label) is
 > dropped: M0 found none.
@@ -124,8 +126,9 @@ who **clicks** rather than cycles hears a reason for one family only.
 
 1. Press Next conflict and read the reason for the activity it lands on, without listening for an announcement.
 2. Click (or tap, or arrow to) a flagged bar or Gantt row, and read the reason without pressing Next conflict.
-3. Tab into the selection bar. For the three route types, the first stop is the remedy and its description is the
-   reason. For the placement-early type, the reason is on the visible line and on Clear visual start (§2 US-2).
+3. Tab into the selection bar (one roving stop: Zoom to selection in the Diagram, Float paths in the Gantt dock),
+   then arrow to the control that answers the conflict. The route remedy and Clear visual start carry the reason as
+   their description, and the reason is also on the visible line (§2 US-2, superseded by Revision 3).
 
 ### User journeys
 
@@ -147,7 +150,7 @@ today.
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | SC-1  | For each of the four conflict types, the selection bar shows the flag's label as visible text while that activity is selected, in the **Diagram and the Gantt**.                                                                                                                                                                                                                                                                                                    | Unit (four cases) + journeys (Diagram: placement-early and constraint; Gantt: constraint)                                       |
 | SC-2  | A multi-flag activity shows **every** reason, in `CONFLICT_FLAGS` order and joined with ", ", where only the first reason keeps its capital. This is the same list the announcer speaks. The remedy button, where present, addresses the **leading** reason only.                                                                                                                                                                                                   | Unit: two-flag fixtures (route + route; barAction + route)                                                                      |
-| SC-3  | The read-out is never a Tab stop and never a live region: no `role`, no `aria-live`, no `tabindex` attribute, no `data-toolbar-focusable`. **Tab into the bar lands on the first roving stop, never on the read-out.** That stop is the remedy for the three route types and **Logic** for `visualEarlierThanLogic`.                                                                                                                                                | Unit (DOM) + structural + journey asserting the real Tab target per type                                                        |
+| SC-3  | The read-out is never a Tab stop and never a live region: no `role`, no `aria-live`, no `tabindex` attribute, no `data-toolbar-focusable`. **Tab into the bar lands on the first roving stop (Zoom to selection in the diagram, Float paths in the Gantt), never on the read-out.** The remedy, Logic and Clear visual start are reached by arrow keys.                                                                                                             | Unit (DOM) + structural + journey asserting the real Tab target per type                                                        |
 | SC-4  | Where the bar carries a control that answers the leading conflict, that control's accessible description is the leading reason, and its accessible **name** is unchanged. That is the route remedy for three types, or **Clear visual start** for `visualEarlierThanLogic` when it is present. Where no such control exists (no placement, `VITE_TOOLBAR_QUICK_WINS` off, or a second flag behind a leading `barAction`), the visible read-out is the only channel. | Unit + journey: `toHaveAccessibleDescription` and `toHaveAccessibleName('Review the constraint…')`                              |
 | SC-5  | **Deck unchanged in layout:** every state in `m4-measurement.md` §2 stays 1/1 at every width on a fine pointer, and the coarse bounds hold, with the chip in its new treatment.                                                                                                                                                                                                                                                                                     | Existing `command-surface.spec.ts` / `floor-states.spec.ts`, unchanged and green                                                |
 | SC-6  | **1912 × 1080, fine:** a conflicted selection's foot row is **the same height** as an unconflicted selection's, for every type, with and without a placement, with Float paths on the bar.                                                                                                                                                                                                                                                                          | M0 reads it; M1 asserts it in a journey (an equality)                                                                           |
@@ -186,8 +189,8 @@ today.
   | ------------------------ | ---------------------------------- | --------------------------------------- |
   | `constraintViolated`     | `constraint conflict`              | `Constraint not met`                    |
   | `visualEarlierThanLogic` | `placed before its earliest start` | `Placed before its logic allows`        |
-  | `visualLaterThanBound`   | `placed past a constraint`         | `Placed after its constraint date`      |
-  | `levelingWindowExceeded` | `levelling window exceeded`        | `Can't be levelled within its window`   |
+  | `visualLaterThanBound`   | `placed past a constraint`         | `Placed after its constraint`           |
+  | `levelingWindowExceeded` | `levelling window exceeded`        | `Levelling window exceeded`             |
 
   Each describes the activity's state, and the longest is 35 characters. The announcer reads the same labels and
   lower-cases the first letter when they fall mid-sentence (§4.6): "Conflict 2 of 7: Pour slab — constraint not
@@ -221,17 +224,19 @@ today.
 >   shows "Placed before its logic allows". If **Clear visual start** is present, it carries that sentence as its
 >   accessible description.
 > - **Given** an activity flagged for both a constraint and a levelling window, **then** the bar shows "Constraint
->   not met, can't be levelled within its window", and exactly one remedy, "Review the constraint…".
+>   not met, levelling window exceeded", and exactly one remedy, "Review the constraint…".
 > - **Given** an activity that is not flagged, **then** no read-out renders and the bar is unchanged.
 
 > **US-2** — As a keyboard or screen-reader user, I want the reason available from the bar without hovering, so that
 > I am not left with a remedy whose purpose I cannot learn.
 >
 > - **Given** a flagged selection of a **route** type, **when** I Tab into the bar, **then** focus lands on the
->   remedy (the first roving stop), its name is "Review the constraint…" (or "Review resources…"), and its
->   description is the leading reason. Here I hear why before I act.
-> - **Given** a `visualEarlierThanLogic` selection, **when** I Tab into the bar, **then** focus lands on **Logic**
->   (the first roving stop; Clear visual start is at `order: 6.5`, after Delete). The reason is on the visible line
+>   first roving stop (Zoom to selection in the Diagram, Float paths in the Gantt), and the arrow keys reach the
+>   remedy, whose name is "Review the constraint…" (or "Review resources…") and whose description is the leading
+>   reason. _(Revision 3: the original text said focus lands on the remedy; it does not.)_
+> - **Given** a `visualEarlierThanLogic` selection, **when** I Tab into the bar, **then** focus lands on the first roving stop,
+>   _(superseded: the first stop is Zoom to selection or Float paths, as above)_; Clear visual start is at
+>   `order: 6.5`, after Delete. The reason is on the visible line
 >   (reachable in browse mode) and is the description of Clear visual start, which I reach with the arrow keys or
 >   End. **This spec does not claim I hear the reason before acting for this type.** If I arrived by Next conflict,
 >   the announcer has already said it.
@@ -397,6 +402,13 @@ None.
 
 ### 4.6 Component changes: the exact contract change
 
+> **Superseded by Revision 3.** This section describes the `conflict-reason` registry item, `ConflictReasonReadout` and
+> the `presentational` capability. None of that was built: the owner chose B′, so the reason is `ConflictReasonLine`,
+> a caption `SelectionActionsBar` renders above the `Toolbar`. The `label`s, `matchingConflictFlags`,
+> `joinConflictReasons`, `conflictKeys`, the remedy's `aria-describedby`, Clear visual start's `srDescription` and the
+> row-menu filter below were built as written (the labels as revised in `m1-measurement.md`: parallel wording, and
+> "Levelling window exceeded"). Read the item table and the `presentational` prose as history.
+
 **`apps/web/src/features/tsld/render/conflicts.ts`**. The file stays pure: no React, no env, no imports beyond the
 type it has today.
 
@@ -409,7 +421,7 @@ type it has today.
   - **Capitalisation mechanism:** the new labels are sentence case at source, so **no upper-casing helper is
     needed**. A lower-first step is still needed in two places. The announcer uses `at: 'mid'`, because the reasons
     follow "Pour slab —". A joined bar string uses `at: 'start'`, so the second and later reasons are lower-cased:
-    "Constraint not met, can't be levelled within its window".
+    "Constraint not met, levelling window exceeded".
   - It is a string function, **not** CSS `::first-letter`, so screen readers, tests and the announcer see the same
     text.
 - `use-conflict-navigation.ts:97-99` changes from `hit.reasons.join(', ')` to `joinConflictReasons(hit.reasons, 'mid')`.
@@ -511,7 +523,7 @@ the listbox description (its gap is filed); `ScheduleSummaryStrip`'s metric name
 
 ### 4.7 Implementation approach & alternatives
 
-**Chosen: A, the reason as a presentational item on the selection bar.** This is the smallest new surface. It
+**Chosen at the time of writing: A, the reason as a presentational item on the selection bar. _Superseded by Revision 3: B′ was built (a caption line above the controls)._** This is the smallest new surface. It
 reuses a registry capability that already exists and whose docblock anticipates exactly this ("the docked selection
 bar may want it", `toolbar-registry.ts:345-347`). It lives in the one roster that both views and the structural
 gates already read, and it puts the sentence next to its fix: ADR-0094 D5's "on the object", taken one step
@@ -543,7 +555,7 @@ takes the next free number). Status: Proposed, then Accepted at M1.
   a second flag behind a leading `barAction`), and then the visible text is the only channel. Browse-mode
   duplication is accepted. This replaces revision 1's "the accessibility review may overturn this".
 - **D4:** it amends ADR-0094 D5. The `barAction` remedy still renders no twin. What it lacked was the sentence, not
-  the control. Tab-order consequence: for that type, the first stop is Logic, and the ADR says so.
+  the control. Tab-order consequence: the first stop is the bar's first roving item (Zoom to selection in the Diagram, Float paths in the Gantt), not Logic, and the ADR says so.
 - **D5:** a Gantt row-menu item needs an activation path. Presentational and render-only items are not menu items.
 - **D6:** the conflict read-out has one look, shared by the bar and the deck chip: foreground text, a warning icon,
   no fill, no border, no hover.

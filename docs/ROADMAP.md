@@ -775,6 +775,13 @@ discriminators. Each becomes a spec/plan before build:
   date or "actor · time" sits on the name's line, and on a very narrow screen it drops beneath the row's text.
   The cost is height in the capped two-column boxes, measured and accepted.
 
+- **A flagged selection says why.** **Approved 2026-10-10; built as `conflict-reason-on-object` M0-M2**
+  ([ADR-0186](adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md); spec and plan at
+  [`docs/specs/conflict-reason-on-object/`](specs/conflict-reason-on-object/)). Select a flagged activity, in the
+  Diagram or the Gantt, and the selection bar states every reason in words on a line above its controls, in the
+  wording the announcer and the screen reader also use; none of the controls moves. The deck's chip stays a count.
+  The cost is 20 px of canvas while a flagged activity is selected, measured and accepted.
+
 - **Dense-row touch targets.** **Approved 2026-10-08; built as `dense-row-touch-targets` M0-M3, closed out
   in M4** ([ADR-0183](adr/0183-a-row-grows-with-the-finger-it-holds.md); spec and plan at
   [`docs/specs/dense-row-touch-targets/`](specs/dense-row-touch-targets/)). Under a finger, the row-menu

@@ -208,3 +208,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0182](0182-a-page-grid-splits-on-the-width-it-has.md)                                          | A page grid splits on the width it has                                                     | Accepted           |
 | [0183](0183-a-row-grows-with-the-finger-it-holds.md)                                            | A row grows with the finger it holds, and the Gantt is the named exception                 | Accepted           |
 | [0184](0184-a-rows-subject-wraps-it-never-clips.md)                                             | A row's subject wraps; it never clips                                                      | Accepted           |
+| [0186](0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)                            | The reason a conflict exists is stated on the object, and the toolbar chip stays a count   | Accepted           |
