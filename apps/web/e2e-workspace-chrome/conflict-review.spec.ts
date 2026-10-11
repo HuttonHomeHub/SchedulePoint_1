@@ -93,6 +93,27 @@ async function walkBar(page: Page, target: string, entry: string): Promise<void>
   expect(at, `the walk reaches ${target}`).toBe(target);
 }
 
+/**
+ * Home and End on the bar land on its ends, and its far end is a VIEWING control (ADR-0187): the
+ * roving sequence is the order on screen, so the activity's own actions lead and Zoom to selection,
+ * Isolate or Float paths close it. Called with focus already inside the bar.
+ */
+async function expectBarEnds(page: Page, first: string): Promise<void> {
+  const active = (): Promise<string> =>
+    page.evaluate(() => document.activeElement?.getAttribute('data-toolbar-item') ?? '');
+  const lastShown = await dock(page).evaluate((el) => {
+    const items = [...el.querySelectorAll<HTMLElement>('[data-toolbar-item]')].filter(
+      (c) => c.getBoundingClientRect().width > 1.5,
+    );
+    return items.at(-1)?.getAttribute('data-toolbar-item') ?? '';
+  });
+  await page.keyboard.press('End');
+  expect(await active(), 'End lands on the last control shown').toBe(lastShown);
+  expect(['zoom-to-selection', 'isolate-logic', 'float-paths']).toContain(lastShown);
+  await page.keyboard.press('Home');
+  expect(await active(), 'Home lands on the first control shown').toBe(first);
+}
+
 test.describe('Conflict review', () => {
   test('counts, finds and fixes a hand-placed conflict — with one meaning of the word', async ({
     page,
@@ -276,6 +297,7 @@ test.describe('Conflict review', () => {
     // Delete), and the arrow keys walk it. The reason line is never a stop on that walk, and Clear
     // visual start (which carries the reason) is reachable by it.
     await walkBar(page, 'clear-visual-placement', 'open-logic');
+    await expectBarEnds(page, 'open-logic');
 
     // ── 7 · Using it resolves the conflict the toolbar was describing ────────────────────────
     await clearOnBar.click();

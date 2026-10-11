@@ -218,6 +218,13 @@ test('a planner opens Float paths from the Gantt bar and from a row menu', async
   ).toBeFocused();
   await page.keyboard.press('End');
   await expect(floatPaths, 'End did not reach the bar\u2019s Float paths').toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(
+    bar.locator('[data-toolbar-item="open-logic"]'),
+    'Home did not return to the bar\u2019s first control',
+  ).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(floatPaths, 'End did not return to Float paths').toBeFocused();
   await page.keyboard.press('Enter');
   const panel = page.getByRole('region', { name: 'Float paths' });
   await expect(panel).toBeVisible();
