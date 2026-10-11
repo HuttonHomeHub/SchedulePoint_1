@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
 import {
-  groupRank,
+  groupOrderViolation,
   partitionBySegment,
   resolveItems,
   TOOLBAR_GROUPS,
@@ -64,6 +64,21 @@ export interface ToolbarProps<Ctx> {
    * owner reported (ADR-0091 M7 S10). There is now only one caller and one such margin.
    */
   alignEndGroup?: ToolbarGroupId;
+  /**
+   * The left→right order of this toolbar's groups, replacing the canonical taxonomy order
+   * (`TOOLBAR_GROUPS`). **For a surface whose subject is ONE OBJECT**, where the object's own actions
+   * lead and the viewing controls that merely look at it follow (the selection bar, ADR-0187). A
+   * deck of commands over a plan keeps the taxonomy: `Deck` does not take this prop, and a second
+   * toolbar reaching for it to rearrange a command surface is the drift the fixed taxonomy exists
+   * to prevent.
+   *
+   * It changes the rendered order, the roving (Arrow/Home/End) sequence and therefore the first Tab
+   * stop together, because all three read one resolved order. It must be a **permutation of the
+   * groups the registry uses**: an omitted group would rank `-1` and jump to the front. A violation
+   * throws in development and falls back to the canonical order in production, where a mis-ordered
+   * bar is a smaller harm than no bar. Default: the canonical order, byte-identical to before.
+   */
+  groupOrder?: readonly ToolbarGroupId[];
   /**
    * Render each group as a plain wrapper with **no `role="group"` and no name**. For a toolbar that
    * holds one group, whose group name only repeats the toolbar's own: a screen reader would say
@@ -171,6 +186,7 @@ export function Toolbar<Ctx>({
   groupLabels,
   segmentLabels,
   alignEndGroup,
+  groupOrder,
   ungrouped = false,
   tooltip,
   className,
@@ -178,9 +194,27 @@ export function Toolbar<Ctx>({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const orderViolation = useMemo(
+    () => (groupOrder ? groupOrderViolation(items, groupOrder) : null),
+    [groupOrder, items],
+  );
+  // Thrown in render so a development author cannot miss it; in production the canonical order
+  // stands in, because a mis-ordered bar is a smaller harm than no bar.
+  if (orderViolation !== null && import.meta.env.DEV) {
+    throw new Error(`Toolbar "${label}": ${orderViolation}`);
+  }
+  const order = orderViolation === null && groupOrder ? groupOrder : TOOLBAR_GROUPS;
+
+  // Reported from an effect, not from render: a render may run twice (StrictMode) and must not
+  // have side effects. Keyed on the message so it says so once per distinct violation.
+  useEffect(() => {
+    if (orderViolation === null) return;
+    console.error(`Toolbar "${label}": ${orderViolation} Falling back to the canonical order.`);
+  }, [orderViolation, label]);
+
   const resolved = useMemo(
-    () => resolveItems(items, context, authoringEnabled),
-    [items, context, authoringEnabled],
+    () => resolveItems(items, context, authoringEnabled, order),
+    [items, context, authoringEnabled, order],
   );
 
   const focusableIds = useMemo(
@@ -248,18 +282,20 @@ export function Toolbar<Ctx>({
 
   const groups = useMemo(() => {
     const byGroup = new Map<ToolbarGroupId, ResolvedToolbarItem<Ctx>[]>();
-    for (const r of [...resolved].sort(
-      (a, b) => groupRank(a.item.group) - groupRank(b.item.group) || a.item.order - b.item.order,
-    )) {
+    // `resolved` is already in group-then-item order, so a pass in sequence keeps each group's items
+    // in that order and the groups themselves are laid out by `order` below.
+    for (const r of resolved) {
       const list = byGroup.get(r.item.group) ?? [];
       list.push(r);
       byGroup.set(r.item.group, list);
     }
-    return TOOLBAR_GROUPS.filter((g) => byGroup.has(g)).map((g) => ({
-      group: g,
-      items: byGroup.get(g)!,
-    }));
-  }, [resolved]);
+    return order
+      .filter((g) => byGroup.has(g))
+      .map((g) => ({
+        group: g,
+        items: byGroup.get(g)!,
+      }));
+  }, [resolved, order]);
 
   const labels = { ...DEFAULT_GROUP_LABELS, ...groupLabels };
 

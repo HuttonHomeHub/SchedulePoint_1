@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   defineToolbar,
+  groupOrderViolation,
   groupRank,
   resolveItems,
   splitByRow,
@@ -100,8 +101,62 @@ describe('groupRank — canonical left→right order', () => {
   });
 });
 
+describe('groupRank with a surface-supplied order (ADR-0187)', () => {
+  it('ranks by the order it is given, and by the canonical one when none is', () => {
+    expect(groupRank('find')).toBeLessThan(groupRank('object'));
+    expect(groupRank('object', ['object', 'find'])).toBeLessThan(
+      groupRank('find', ['object', 'find']),
+    );
+  });
+});
+
+describe('groupOrderViolation — a groupOrder is a permutation of the groups in use', () => {
+  const items = [
+    base({ id: 'a', group: 'object' }),
+    base({ id: 'b', group: 'find' }),
+    base({ id: 'c', group: 'find' }),
+  ];
+
+  it('accepts any permutation, in either direction', () => {
+    expect(groupOrderViolation(items, ['object', 'find'])).toBeNull();
+    expect(groupOrderViolation(items, ['find', 'object'])).toBeNull();
+  });
+
+  it('refuses an omitted group: it would rank -1 and jump to the front', () => {
+    expect(groupOrderViolation(items, ['object'])).toMatch(/missing: find/);
+  });
+
+  it('refuses a group the registry does not use', () => {
+    expect(groupOrderViolation(items, ['object', 'find', 'help'])).toMatch(
+      /not in the registry: help/,
+    );
+  });
+
+  it('refuses a repeated group', () => {
+    expect(groupOrderViolation(items, ['object', 'find', 'object'])).toMatch(/repeats/);
+  });
+});
+
 describe('resolveItems', () => {
   const ctx: Ctx = { editing: false, hasSelection: false };
+
+  it('lays the groups out in the supplied order and keeps item order inside each (ADR-0187)', () => {
+    const items = [
+      base({ id: 'find1', group: 'find', order: 0 }),
+      base({ id: 'obj2', group: 'object', order: 2 }),
+      base({ id: 'obj-1', group: 'object', order: -1 }),
+    ];
+    expect(resolveItems(items, ctx, true).map((r) => r.item.id)).toEqual([
+      'find1',
+      'obj-1',
+      'obj2',
+    ]);
+    expect(resolveItems(items, ctx, true, ['object', 'find']).map((r) => r.item.id)).toEqual([
+      'obj-1',
+      'obj2',
+      'find1',
+    ]);
+  });
 
   it('sorts by group rank, then order, then registry index (stable)', () => {
     const items = [

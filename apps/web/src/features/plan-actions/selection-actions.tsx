@@ -27,6 +27,7 @@ import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/men
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import {
   defineToolbar,
+  type ToolbarGroupId,
   type ToolbarItem,
   type ToolbarItemRenderApi,
 } from '@/components/ui/toolbar/toolbar-registry';
@@ -519,6 +520,16 @@ function ConflictRemedyControl({
 }
 
 /**
+ * The bar's groups, left to right: the activity's own actions, then the viewing controls (ADR-0187).
+ * `Toolbar`'s canonical order puts `find` first, which put the conflict remedy behind three viewing
+ * controls, two lines under its reason, and made Zoom to selection (Diagram) or Float paths (Gantt)
+ * the first Tab stop for every selection. One static order for every selection, flagged or not, so
+ * a control never moves under the cursor as the selection changes (ADR-0094 refuses a per-context
+ * order; this is not one).
+ */
+export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', 'find'];
+
+/**
  * The selection object-actions, expressed as toolbar items over {@link SelectionActionContext}. Order:
  * Logic → (Progress) → (Resources) → (Steps) → Edit → Delete. Labels use the activities-table's
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
@@ -575,6 +586,12 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // FIRST, and conditional: it is present only when the selected activity is actually flagged, and
     // when it is, it is the reason a planner is looking at this bar at all. Everything after it is
     // what you can do to any activity; this is what is wrong with THIS one.
+    //
+    // **`order: -1` only ever ranked it within its group**, and until ADR-0187 the `find` group sorted
+    // ahead of `object`, so on the Diagram it was the FOURTH control, behind Zoom to selection, Isolate
+    // and Float paths, one or two lines under the sentence it answers (measured in
+    // `docs/specs/selection-bar-fit/m0-measurement.md`: line 2 of the bar in every cell but one).
+    // `SELECTION_BAR_GROUP_ORDER` below puts `object` first, which is what makes this comment true.
     //
     // One item, not one per conflict type. The `label` a `ToolbarItem` carries is a plain string, so
     // three types would otherwise mean three registrations differing only in copy — and the registry
@@ -970,7 +987,9 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // ---------------------------------------------------------------- canvas commands (M2-T1)
     //
     // A separate `find` group, so the primitive draws its rule between "what to do with this
-    // activity" and "how to look at it". Neither is pen-gated: looking is not editing.
+    // activity" and "how to look at it". Neither is pen-gated: looking is not editing. **It renders
+    // AFTER the activity's own actions** (`SELECTION_BAR_GROUP_ORDER`, ADR-0187): the bar's subject is
+    // the activity, so what you can do to it leads and how to look at it trails.
     //
     // `labelVisibility: 'always'` matches the object actions above rather than the Row-1 registrations
     // these replace, and the reason is the surface: this is a compact bar of a handful of commands
@@ -1314,6 +1333,7 @@ export function SelectionActionsBar({
             context={actionContext}
             label={`Actions for ${actionContext.targetName}`}
             groupLabels={{ object: 'Activity actions' }}
+            groupOrder={SELECTION_BAR_GROUP_ORDER}
             authoringEnabled={actionContext.canEditSchedule}
           />
           {onClear ? (

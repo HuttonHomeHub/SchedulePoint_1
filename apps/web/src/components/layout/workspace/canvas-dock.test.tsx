@@ -30,7 +30,7 @@ describe('CanvasDockOutlet', () => {
     );
     // **Verified red** by the journey, not here: jsdom has no layout. Without the floor the outlet's
     // zero basis lets the facts take the line and the selection bar paints over them at 700 px.
-    expect(container.firstElementChild).toHaveClass('not-empty:min-w-72', 'flex-1');
+    expect(container.firstElementChild).toHaveClass('not-empty:min-w-[min(18rem,100%)]', 'flex-1');
   });
 });
 
@@ -154,5 +154,23 @@ describe('the data-dock-wide marker', () => {
     const bar = read('src/features/plan-actions/selection-actions.tsx');
     expect(outlet).toMatch(/has-\[\[data-dock-wide\]\]:min-w-/);
     expect(bar).toMatch(/\n\s+data-dock-wide=""/);
+  });
+});
+
+/**
+ * **A floor is capped at the row** (selection-bar-fit M1, #487). Both rem floors double with text
+ * size, so an uncapped one can be wider than the foot row and push it sideways. A Tailwind class has to
+ * be a literal, and jsdom has no layout, so the cap is pinned in the source; `e2e-workspace-fit`'s
+ * 200 % root text journey is the observer that measures it.
+ */
+describe('the outlet floors', () => {
+  it('are each capped at the width of the row', () => {
+    const outlet = readFileSync(
+      join(process.cwd(), 'src/components/layout/workspace/canvas-dock.tsx'),
+      'utf8',
+    );
+    expect(outlet).toContain('not-empty:min-w-[min(18rem,100%)]');
+    expect(outlet).toContain('has-[[data-dock-wide]]:min-w-[min(36rem,100%)]');
+    expect(outlet).not.toMatch(/(?<![\w(])min-w-(72|144)\s/);
   });
 });

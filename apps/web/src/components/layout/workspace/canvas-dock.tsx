@@ -101,7 +101,7 @@ export function CanvasDockOutlet(): React.ReactElement {
     },
     [register, unregister],
   );
-  // **`not-empty:min-w-72`: a strip in the outlet asks for room, or for a line of its own.** The
+  // **`not-empty:min-w-[min(18rem,100%)]`: a strip in the outlet asks for room, or for a line of its own.** The
   // outlet is `flex-1`, which is a ZERO basis, so in the foot row's wrapping line it used to take
   // whatever the facts left — 152 px at 700, where the selection bar stacked into a 356 px column and
   // painted over the facts (retire-single-pane, UX review). With a floor, a row too narrow for both
@@ -120,11 +120,20 @@ export function CanvasDockOutlet(): React.ReactElement {
   // **From `sm` (40 rem) up only**, because the foot row's content box is 304 px at the 320 px reflow
   // width and a 576 px floor there is a 264 px sideways scroll of the foot row (measured by the
   // narrow-shell journey, which drives 320 and 640 wide on a coarse pointer with a selection open).
-  // Below `sm` the floor is `min-w-72`'s, so the bar takes its own line at the row's full width.
+  // Below `sm` the floor is the 18 rem one, so the bar takes its own line at the row's full width.
+  //
+  // **Both floors are `min(<rem>, 100%)`, so a floor can never be wider than the row it sits in**
+  // (selection-bar-fit M1, #487). A rem floor doubles with the root size, and where the media queries do
+  // not follow the root (the `sm:` rule keeps answering at 640 px while the root is 32 px) the 36 rem
+  // floor is 1,152 px in a 747 px row at 1024 x 600: the foot row scrolled sideways and `Edit` and the
+  // tail of the bar were off-screen, a control lost to text size (WCAG 1.4.4). Measured in
+  // `docs/specs/selection-bar-fit/m0-measurement.md`: the cap changes nothing at 100 % text (the same
+  // lines and foot-row height in every one of 284 readings) and removes the overflow at 200 %. A
+  // text-only default-font change, which moves the media queries as well, never reached the floor.
   return (
     <div
       ref={ref}
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-72 sm:pointer-coarse:has-[[data-dock-wide]]:min-w-144"
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-[min(18rem,100%)] sm:pointer-coarse:has-[[data-dock-wide]]:min-w-[min(36rem,100%)]"
     />
   );
 }

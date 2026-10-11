@@ -221,6 +221,66 @@ for (const pointer of ['fine', 'coarse'] as const) {
       }
     });
 
+    /**
+     * **A dock floor is never wider than the row it sits in** (selection-bar-fit M1, #487). The outlet
+     * asks for `18rem`, and on a finger-sized window a marked strip for `36rem`; both double with the
+     * root size, and where the media queries do NOT follow the root (the `sm:` rule keeps answering
+     * at 640 px) the 36 rem floor is 1,152 px in a 747 px row. The row then scrolls sideways and the
+     * tail of the bar, `Edit` first, is off-screen — a control lost to text size (WCAG 1.4.4).
+     *
+     * The text is enlarged by the root's `font-size`, which is the route that leaves `sm:` matching and
+     * so the only one that reaches the floor (`m0-measurement.md`: a text-only default-font change moves
+     * the media queries too, and reads clean on both pointers). The selection is made at 100 % first,
+     * because the 200 % command band takes the whole 1024 x 600 window and the listbox cannot take
+     * focus under it. Only the HORIZONTAL axis is asserted: the vertical clip in that same state is
+     * the band's, not the floor's.
+     */
+    test('200 % root text never pushes the foot row or the bar sideways past the window', async () => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: 1024, height: 600 });
+      await page.waitForTimeout(400);
+      await select(page, ids['Frame'] ?? '');
+      await expect(page.locator('[data-conflict-reason]')).toBeVisible();
+      try {
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '200%';
+        });
+        // Nudge the viewport so the canvas's observers re-measure at the new root size.
+        await page.setViewportSize({ width: 1030, height: 600 });
+        await page.setViewportSize({ width: 1024, height: 600 });
+        await page.waitForTimeout(600);
+        const sideways = await page.evaluate(() => {
+          const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
+          const bar = document.querySelector<HTMLElement>(
+            '[role="toolbar"][aria-label^="Actions for"]',
+          );
+          if (!foot || !bar) throw new Error('no foot row or selection bar');
+          const offscreen = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')]
+            .filter((el) => {
+              const b = el.getBoundingClientRect();
+              return b.width > 1.5 && (b.right > innerWidth + 1 || b.left < -1);
+            })
+            .map((el) => el.getAttribute('data-toolbar-item') ?? '?');
+          return {
+            rootPx: getComputedStyle(document.documentElement).fontSize,
+            footClient: foot.clientWidth,
+            footScroll: foot.scrollWidth,
+            offscreen,
+          };
+        });
+        expect(sideways.rootPx, 'the root did not reach 200 %').toBe('32px');
+        expect(
+          sideways.footScroll,
+          `the foot row scrolls sideways: ${sideways.footScroll}px of content in ${sideways.footClient}px`,
+        ).toBeLessThanOrEqual(sideways.footClient);
+        expect(sideways.offscreen, 'controls past the window edge').toEqual([]);
+      } finally {
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '';
+        });
+      }
+    });
+
     test('the flagged bar passes axe, line and controls together', async () => {
       test.setTimeout(120_000);
       await page.setViewportSize({ width: 1646, height: 1097 });

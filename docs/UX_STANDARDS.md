@@ -437,6 +437,11 @@ same reason as its accessible description**, never its name. A status read-out i
 foreground text with a warning-coloured icon: no fill, border or hover, so it cannot be read as a control.
 The deck's count chip stays count-only; the reason lives on the object.
 
+**The activity's own actions lead the selection bar, and the viewing controls trail** (ADR-0187): the
+remedy for the leading conflict is the first control, directly under the reason, then Logic, Notes and the
+edits, then Zoom to selection, Isolate and Float paths. The order is the same for every selection, so a
+control never moves under the cursor.
+
 ### Give-way order in a fixed-height chrome row (ADR-0110)
 
 A chrome row whose height is fixed — the workspace foot, the command band, the

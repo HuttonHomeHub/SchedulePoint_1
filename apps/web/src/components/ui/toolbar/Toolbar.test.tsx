@@ -501,3 +501,107 @@ describe('what the container is, once focus can be on it', () => {
     expect(bar.contains(stops[0]!)).toBe(true);
   });
 });
+
+/**
+ * **`groupOrder` (ADR-0187): the rendered order, the roving sequence and the first Tab stop are one
+ * order.** The risk the prop carries is exactly a surface that SHOWS one order and WALKS another
+ * (ADR-0111), so these read the DOM order and the arrow sequence from the same render.
+ */
+describe('groupOrder', () => {
+  const ids = (bar: HTMLElement): string[] =>
+    [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')].map(
+      (el) => el.getAttribute('data-toolbar-item') ?? '',
+    );
+  const REVERSED = ['object', 'tools', 'lens', 'frame'] as const;
+
+  it('leaves the markup byte-identical when the order is the canonical one, or absent', () => {
+    const plain = render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const absent = plain.container.innerHTML;
+    plain.unmount();
+    const canonical = render(
+      <Toolbar
+        items={makeItems()}
+        context={{ count: 1 }}
+        label="T"
+        groupOrder={['frame', 'lens', 'tools', 'object']}
+      />,
+    );
+    expect(canonical.container.innerHTML).toBe(absent);
+  });
+
+  it('renders the groups in the order given, and the first Tab stop is the first control shown', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" groupOrder={REVERSED} />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    expect(ids(bar)).toEqual(['finish-chip', 'add', 'grid', 'fit']);
+    const stops = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
+    expect(stops.filter((el) => el.getAttribute('tabindex') === '0')).toEqual([stops[0]]);
+  });
+
+  it('walks ArrowRight in the order shown, and Home and End land on the ends of it', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" groupOrder={REVERSED} />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    const shown = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
+    shown[0]!.focus();
+    const walked: (string | null)[] = [
+      document.activeElement?.getAttribute('data-toolbar-item') ?? null,
+    ];
+    for (let i = 1; i < shown.length; i += 1) {
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+      walked.push(document.activeElement?.getAttribute('data-toolbar-item') ?? null);
+    }
+    expect(walked).toEqual(ids(bar));
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(shown[0]);
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(shown.at(-1));
+  });
+
+  it('refuses a groupOrder that is not a permutation of the registry groups', () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        render(
+          <Toolbar
+            items={makeItems()}
+            context={{ count: 1 }}
+            label="T"
+            groupOrder={['object', 'frame']}
+          />,
+        ),
+      ).toThrow(/permutation/);
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+
+  it('falls back to the canonical order in production and reports the violation once', () => {
+    vi.stubEnv('DEV', false);
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = render(
+        <Toolbar
+          items={makeItems()}
+          context={{ count: 1 }}
+          label="T"
+          groupOrder={['object', 'frame']}
+        />,
+      );
+      const bar = screen.getByRole('toolbar', { name: 'T' });
+      expect(ids(bar)).toEqual(['fit', 'grid', 'add', 'finish-chip']);
+      // A re-render with the same bad order is not a second report.
+      rerender(
+        <Toolbar
+          items={makeItems()}
+          context={{ count: 2 }}
+          label="T"
+          groupOrder={['object', 'frame']}
+        />,
+      );
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(String(report.mock.calls[0]?.[0])).toMatch(/permutation.*canonical order/);
+    } finally {
+      report.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+});
