@@ -79,6 +79,19 @@ describe('NavigatorRail', () => {
     expect(screen.getByTestId('tree-stub')).toBeInTheDocument();
   });
 
+  /**
+   * **The docked column owns the landmark, so the rail gives its own up** (`docs/TECH_DEBT.md` #473).
+   * The column wraps the rail and the splitter in one `<nav>`; a rail that kept its own would make
+   * two navigations named "Project Explorer" for a screen reader, which is the duplicate the wrapper
+   * exists to avoid. The tree and the destinations are still rendered either way.
+   */
+  it('renders no landmark of its own when the docked column provides one', () => {
+    renderRail(<NavigatorRail orgSlug="acme" landmark={false} />);
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('tree-stub')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Organisation' })).toBeInTheDocument();
+  });
+
   it('shows a close control (drawer) that fires onClose', () => {
     const onClose = vi.fn();
     renderRail(<NavigatorRail orgSlug="acme" onClose={onClose} />);

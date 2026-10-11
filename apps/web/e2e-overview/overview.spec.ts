@@ -194,16 +194,10 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
         },
       })
       .analyze();
-    // The Explorer's splitter wrapper (`explorer-column.tsx:128-130`, a `contents` panel surface
-    // outside every landmark) fails `region` in every state, one column or two. It is the shell's,
-    // untouched by this change, and is filed as `docs/TECH_DEBT.md` #473 rather than hidden: it is
-    // filtered by that one target, so any OTHER `region` finding still fails.
-    const violations = results.violations
-      .map((v) => ({
-        ...v,
-        nodes: v.nodes.filter((n) => !(v.id === 'region' && n.target.join() === '.contents')),
-      }))
-      .filter((v) => v.nodes.length > 0);
+    // No `region` filter: the Explorer's splitter now sits inside the "Project Explorer" navigation
+    // (`docs/TECH_DEBT.md` #473), so the finding this used to hide by its `.contents` target is gone
+    // and ANY `region` finding fails here.
+    const violations = results.violations;
     expect(violations, `${layout}: axe`).toEqual([]);
     expect(
       results.passes.some((r) => r.id === 'scrollable-region-focusable') ||

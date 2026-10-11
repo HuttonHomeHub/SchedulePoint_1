@@ -99,13 +99,16 @@ export function ExplorerColumn({
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      {/* **No landmark and no heading of its own.** `NavigatorRail` already renders
-          `<nav aria-label="Project Explorer">` with an actions row, so a wrapper adding a second
-          `<nav>` and a second `<h2>` with the same words is how one panel comes to announce itself
-          twice — the strict-mode duplicate ADR-0099 M10 found between the rail icons and the drawer
-          list, one layer along. This component owns the width, the fold and the splitter, and
-          nothing else. */}
+    // **The landmark is this wrapper, and it holds the splitter** (`docs/TECH_DEBT.md` #473). It was
+    // `NavigatorRail`'s own `<nav>`, which is the separator's SIBLING, so the "Resize Project
+    // Explorer" separator sat outside every region and axe's `region` rule flagged its wrapper on
+    // every page. A screen-reader user moving by landmark now reaches the splitter inside the one
+    // region that names it. `NavigatorRail` takes `landmark={false}` for it: one landmark, announced
+    // once — a wrapper `<nav>` around a rail that is also a `<nav>` is the duplicate this avoids
+    // (ADR-0099 M10), and an `<aside>` would name the same words a second time.
+    <nav aria-label="Project Explorer" className="flex h-full min-h-0">
+      {/* **No heading of its own, and no landmark on the rail.** This component owns the width, the
+          fold, the landmark and the splitter, and nothing else. */}
       <PanelSurface
         ref={panelRef}
         className="flex h-full min-h-0 flex-col"
@@ -119,6 +122,7 @@ export function ExplorerColumn({
             requestAnimationFrame(() => spineRef.current?.focus());
           }}
           collapseRef={collapseRef}
+          landmark={false}
         />
       </PanelSurface>
       {/* `pointerToSize` is the pointer's distance from the panel's LEFT edge, read from the live
@@ -140,6 +144,6 @@ export function ExplorerColumn({
           }}
         />
       </Surface>
-    </div>
+    </nav>
   );
 }

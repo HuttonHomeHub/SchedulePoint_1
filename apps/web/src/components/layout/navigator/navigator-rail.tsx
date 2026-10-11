@@ -76,6 +76,7 @@ export function NavigatorRail({
   onCollapse,
   collapseRef,
   onNavigate,
+  landmark = true,
 }: {
   /**
    * The organisation whose tree this shows. **Required**, since `docs/TECH_DEBT.md` #165a.
@@ -97,9 +98,10 @@ export function NavigatorRail({
    * that column — the `Sheet` below `lg` has a Close instead, and offering both would be two
    * controls for one dismissal with different persistence.
    *
-   * It lands in the actions row rather than in a header of the column's own, because this component
-   * already carries `<nav aria-label="Project Explorer">`: a wrapper adding a second landmark and a
-   * second heading with the same name is how one panel comes to announce itself twice.
+   * It lands in the actions row rather than in a header of the column's own, because the Project
+   * Explorer is already one `<nav aria-label="Project Explorer">` (this component's in the `Sheet`,
+   * the docked column's wrapper at `lg`+): a second landmark and a second heading with the same
+   * name is how one panel comes to announce itself twice.
    */
   onCollapse?: (() => void) | undefined;
   /**
@@ -110,8 +112,17 @@ export function NavigatorRail({
    */
   collapseRef?: React.Ref<HTMLButtonElement> | undefined;
   onNavigate?: (() => void) | undefined;
+  /**
+   * Whether this rail IS the `<nav aria-label="Project Explorer">` landmark. Default `true`: the
+   * `Sheet` below `lg` has no wrapper of its own. The docked column passes `false` because it wraps
+   * the rail **and its splitter** in the landmark instead (`docs/TECH_DEBT.md` #473) — the separator
+   * is the rail's sibling, so a landmark on the rail left it outside every region, and a second
+   * landmark around both would announce "Project Explorer" twice.
+   */
+  landmark?: boolean;
 }): React.ReactElement {
   const crud = useNavigatorCrud();
+  const Root = landmark ? 'nav' : 'div';
 
   return (
     // **A plain `<nav>`, not a `Surface`.** It opened a `panel` scope of its own while it WAS the
@@ -124,8 +135,8 @@ export function NavigatorRail({
     // they left the tree 0 to 81 px and pushed the footer past the shell's `overflow-hidden`, where
     // nothing could reach it. The tree keeps four rows and the column scrolls as a whole when the
     // sum is still too tall; at 948 px and up everything fits and neither rule does anything.
-    <nav
-      aria-label="Project Explorer"
+    <Root
+      {...(landmark ? { 'aria-label': 'Project Explorer' } : {})}
       className="border-border flex h-full min-h-0 flex-col overflow-y-auto"
     >
       {/* **The title belongs to the container, not to this component** — and only below `lg`.
@@ -197,6 +208,6 @@ export function NavigatorRail({
       <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
       </div>
-    </nav>
+    </Root>
   );
 }
