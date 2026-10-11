@@ -410,6 +410,26 @@ describe('copySelection and pasteClipboard', () => {
   it('refuses a clipboard from a different plan rather than translating it', async () => {
     // A cross-plan paste would need calendars, resources and a parent tree resolved into another
     // org-scoped world; guessing produces a copy that schedules differently with nothing saying why.
+    // ONE hook instance whose plan changes, so the clipboard it holds is genuinely the old plan's:
+    // production remounts on a switch (`PlanDetailScreen`'s key), which is why this is the only way
+    // to reach the check at all.
+    const { result, rerender } = renderHook(
+      ({ planId }: { planId: string }) => usePlanWorkspaceModel('acme', planId),
+      { wrapper, initialProps: { planId: 'p1' } },
+    );
+    act(() => {
+      result.current.onPluralSelectionChange(['start']);
+      result.current.copySelection();
+    });
+    rerender({ planId: 'p2' });
+    await act(async () => {
+      await result.current.pasteClipboard();
+    });
+    expect(h.announce).toHaveBeenCalledWith('That copy came from a different plan.');
+    expect(h.createClone).not.toHaveBeenCalled();
+  });
+
+  it('starts a fresh model with an empty clipboard', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     act(() => {
       result.current.onPluralSelectionChange(['start']);
@@ -419,8 +439,6 @@ describe('copySelection and pasteClipboard', () => {
     await act(async () => {
       await other.current.pasteClipboard();
     });
-    // The second plan has its own clipboard (cleared on plan switch), so it reports empty rather
-    // than reaching for the first plan's ids — which is the same refusal by a stronger route.
     expect(h.announce).toHaveBeenCalledWith('Nothing has been copied yet.');
   });
 
