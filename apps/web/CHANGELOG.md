@@ -1,5 +1,21 @@
 # @repo/web
 
+## 0.185.0
+
+### Minor Changes
+
+- [#920](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/920) [`1f7bef9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1f7bef91fb4f0913348cb6492c838edfff8eea78) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The selection bar leads with the activity's own actions. The fix for a conflict (for example "Review the
+  constraint...") is now the first control, directly under the sentence that explains the conflict, and Zoom to
+  selection, Isolate logic path and Float paths follow the activity's actions instead of leading them. The first
+  Tab stop in the bar is therefore the fix, or Logic when the activity has no conflict, in both the Diagram and
+  the Gantt.
+
+### Patch Changes
+
+- [#920](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/920) [`1f7bef9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1f7bef91fb4f0913348cb6492c838edfff8eea78) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The selection bar's dock floors are capped at the width of the foot row. At 200 % text, where the window's
+  media queries do not follow the text size, the bar's 36 rem floor could be wider than the row and push its
+  tail, `Edit` first, off the screen. At normal text size nothing changes.
+
 ## 0.184.0
 
 ### Minor Changes
