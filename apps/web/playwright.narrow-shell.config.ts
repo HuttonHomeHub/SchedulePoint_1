@@ -59,7 +59,21 @@ export default defineConfig({
             url: 'http://localhost:3000/api/v1/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: { LOG_LEVEL: 'silent' },
+            env: {
+              LOG_LEVEL: 'silent',
+              // Every journey here seeds a workspace of twelve activities, one POST each, and the
+              // suite runs them back to back from one IP. `ThrottlerGuard` is stock, so a bucket is
+              // per IP AND per handler, and `POST /api/v1/organizations/:org/plans/:id/activities`
+              // peaked at **96 requests per 60 s** (E2E_THROTTLE_CENSUS=1, 2026-10-11, all 22 green,
+              // zero 429s) against a limit of 100: four requests of margin on a developer machine.
+              // CI spent more (shard 4 of the first run on this branch: six failures and two flakes,
+              // every one `seeding the activity. Expected: 201, Received: 429`), because a retry
+              // re-seeds and a slower runner overlaps adjacent journeys' windows.
+              // Ceiling 400 is about 4x that peak, rounded up to the next 50 — not 2x, for the
+              // reason `playwright.workspace-chrome.config.ts` gives. Raised for this harness only;
+              // the guard is untouched and no other suite or environment sees this value.
+              RATE_LIMIT_LIMIT: '400',
+            },
           },
           {
             command: 'pnpm dev',
