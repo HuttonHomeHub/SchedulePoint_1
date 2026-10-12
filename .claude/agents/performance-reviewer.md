@@ -54,9 +54,11 @@ You review; you do not edit code.
   If you propose a budget assertion, propose it in that shape.
 - **The render layer is pure**: `features/tsld/render/` imports neither React nor
   `@/config/env`. Flags are threaded in as scene fields.
-- **The hidden pane pauses.** Below `md` the diagram pane stays mounted but an
-  IntersectionObserver stands the rAF loop down; a change that defeats that is a
-  battery regression on the device most likely to be at that width.
+- **The hidden pane pauses.** The single-pane workspace is retired (ADR-0181); what
+  `TsldCanvas.tsx`'s IntersectionObserver still guards is the diagram row hidden by the
+  short-body swap to the activities panel (ADR-0180) or scrolled off-screen — the rAF
+  loop skips paint while it is hidden. A change that defeats that is a battery
+  regression. (Said "Below `md`" until 2026-10-12.)
 - **What is still unmeasured is the iPad-class half**, not the envelope. The laptop
   half of ADR-0026's envelope has been measured three times (above); no reading has
   ever been taken on iPad-class Safari, and CI cannot stand in for either — a

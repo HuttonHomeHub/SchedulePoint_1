@@ -50,8 +50,10 @@ review; you do not edit code.
 - **Navigation:** current location reflected; breadcrumbs where deep; filters/
   tabs/pagination in the URL (shareable, reload-safe); a way back from every
   screen.
-- **Responsive:** verify behaviour intent at `sm`/`md`/`lg`/`xl`; sidebar→drawer
-  below `lg`; tables scroll in a container; touch targets adequate.
+- **Responsive:** designed from 1024×600 up (ADR-0179); content reflows below
+  without being designed, a notice is shown, and a phone is not a supported device
+  (`docs/PROJECT_BRIEF.md`). Sidebar→drawer below `lg`; tables scroll in a container;
+  touch targets 44 px under `pointer: coarse`. (Said "`sm`/`md`/`lg`/`xl`" until 2026-10-12.)
 - **Motion:** purposeful only; reduced-motion respected.
 - **Perceived performance:** skeletons over spinners; optimistic UI where safe;
   no layout shift.
