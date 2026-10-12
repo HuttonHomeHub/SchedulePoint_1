@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ClusterTrack } from './ClusterTrack';
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
 import {
+  clusterRuns,
   groupOrderViolation,
   partitionBySegment,
   resolveItems,
@@ -10,7 +12,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { resolveLabelVisibility } from './toolbar-styles';
+import { resolveLabelVisibility, TOOLBAR_TRACK, TOOLBAR_TRACK_SWITCH } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
@@ -361,6 +363,27 @@ export function Toolbar<Ctx>({
       />
     );
 
+  /**
+   * A section's items, with each cluster run wrapped in its track. The wrapper is made here and not
+   * by the caller so the grouped, sub-grouped and ungrouped branches cannot disagree about it; a run
+   * of one unclustered item is the control itself.
+   */
+  const renderRuns = (entries: readonly (typeof resolved)[number][]): React.ReactNode =>
+    clusterRuns(entries).map((run) => {
+      const first = run.entries[0];
+      if (run.cluster === undefined || first === undefined) return run.entries.map(renderItem);
+      const lead = run.entries.filter((r) => r.item.presentational);
+      return (
+        <ClusterTrack
+          key={first.item.id}
+          cluster={run.cluster}
+          {...(lead.length > 0 ? { lead: lead.map(renderItem) } : {})}
+        >
+          {run.entries.filter((r) => !r.item.presentational).map(renderItem)}
+        </ClusterTrack>
+      );
+    });
+
   return (
     <div
       ref={containerRef}
@@ -410,7 +433,12 @@ export function Toolbar<Ctx>({
                 role="group"
                 aria-label={segmentLabel}
                 className={cn(
-                  'flex flex-wrap items-center gap-1',
+                  // **A segment is a choice of one, so it is a switch** (toolbar-grid M2): the same
+                  // recessed track and raised member a clustered set gets, painted on the wrapper that
+                  // is already the named `group`. It keeps its role and its name (ADR-0119) — the
+                  // "no role, no name" rule is for the wrappers clustering makes, which this is not.
+                  TOOLBAR_TRACK,
+                  TOOLBAR_TRACK_SWITCH,
                   // The same hairline, one level in: it is the same statement ("these are a
                   // different thing from those") and giving it a second treatment would say that
                   // the two boundaries mean different things.
@@ -420,7 +448,7 @@ export function Toolbar<Ctx>({
                 {segmentItems.map(renderItem)}
               </div>
             ))
-          : groupItems.map(renderItem);
+          : renderRuns(groupItems);
         return segments || ungrouped ? (
           <div key={group} className={outerClass}>
             {body}

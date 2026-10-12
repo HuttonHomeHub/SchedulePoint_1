@@ -1301,8 +1301,15 @@ const SEARCH_FIELD_WIDTH_CLASS = 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
  * so under a coarse pointer every deck control measured 44 × 44 and the live field measured
  * 240 × 36. The comment had already been written and it did not work; a shared constant is the
  * only version of that promise the compiler keeps.
+ *
+ * **The outline is the quieter one** (toolbar-grid M2, CQ-1 (a)): `deck-search-outline` (`globals.css`, where a
+ * component may not name a surface family) paints `--chrome-input-quiet`, 3.03:1 on the
+ * band and 3.44:1 on the field, where `--input` is 4.39:1 / 4.99:1. A text field with no boundary
+ * fails WCAG 1.4.11, and the field has no visible label, so the outline stays and only its weight
+ * changes. It is this field's own colour rather than a change to `--input`, which the other chrome
+ * fields share.
  */
-const SEARCH_FIELD_CLASS = 'h-(--control-h) pl-8 text-sm';
+const SEARCH_FIELD_CLASS = 'h-(--control-h) pl-8 text-sm deck-search-outline';
 
 /**
  * The shared shape of every canvas-viewport command's reason: no diagram, then not the diagram view,
@@ -2404,6 +2411,14 @@ function UndoRedoControl({
 const HISTORY_LABEL = 'Recent edits';
 
 /**
+ * Undo, Redo and Recent edits are one unit (toolbar-grid M2): one track, in the order they read —
+ * the two one-step actions, then the list that does several at once. Recent edits used to sit
+ * between them, which put a lone ▾ in the middle of a pair. The DOM order is the roving order, so the
+ * arrows now visit Redo before Recent edits, because that is the order on screen (WCAG 1.3.2, 2.4.3).
+ */
+const HISTORY_CLUSTER = { id: 'history', kind: 'joined' } as const;
+
+/**
  * One row of the history menu. The visible text is the step's own label, with — past the first row —
  * a second line saying what else the choice takes along ("and the 2 steps after it"). A screen reader
  * hears the **action** in front ("Undo …"), because the label alone does not say whether it undoes or
@@ -2460,9 +2475,9 @@ function HistoryMenuRow({
 }
 
 /**
- * The **Recent edits** control (undo-redo M7, US-6): a caret beside Undo that opens the recent steps,
- * newest first, undo above redo, and choosing one runs every step down to it as ONE action with ONE
- * summarising strip.
+ * The **Recent edits** control (undo-redo M7, US-6): a caret at the end of the Undo / Redo track that
+ * opens the recent steps, newest first, undo above redo, and choosing one runs every step down to it
+ * as ONE action with ONE summarising strip.
  *
  * Named "Recent edits", not "History": the activity editor already has a History tab (ADR-0174), and
  * that one is a read-out of one activity, where this is a list of what the pen-holder did in this
@@ -2565,7 +2580,8 @@ function UndoHistoryControl({
 
 /**
  * The Undo/Redo authoring-cluster items (ADR-0048 M3.2). Real pen-gated commands (disabled from `canUndo`/`canRedo`, dynamic accessible name, driving `ctx.undo` /
- * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), icon buttons.
+ * `ctx.redo`). They sit at the end of the pen-gated cluster (after Recalculate), icon buttons, with
+ * Recent edits as the third member of one joined track ({@link HISTORY_CLUSTER}).
  */
 function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   return [
@@ -2577,22 +2593,12 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
       labelVisibility: 'never',
       order: 8,
+      cluster: HISTORY_CLUSTER,
       label: 'Undo',
       penGated: true,
       isEnabled: (ctx) => ctx.canUndo,
       disabledReason: (ctx) => (ctx.canUndo ? undefined : 'Nothing to undo'),
       render: (ctx, api) => <UndoRedoControl direction="undo" ctx={ctx} api={api} />,
-    },
-    {
-      id: 'undo-history',
-      group: 'tools',
-      row: 'strip',
-      order: 9,
-      label: HISTORY_LABEL,
-      penGated: true,
-      isEnabled: (ctx) => ctx.canUndo || ctx.canRedo,
-      disabledReason: (ctx) => (ctx.canUndo || ctx.canRedo ? undefined : 'Nothing to undo or redo'),
-      render: (ctx, api) => <UndoHistoryControl ctx={ctx} api={api} />,
     },
     {
       id: 'redo',
@@ -2601,12 +2607,25 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Declared, not enforced: this control paints its own icon-only button, so the policy has
       // nothing to switch. It says what the screen shows (these were `Deck`'s `ICON_ONLY`).
       labelVisibility: 'never',
-      order: 10,
+      order: 9,
+      cluster: HISTORY_CLUSTER,
       label: 'Redo',
       penGated: true,
       isEnabled: (ctx) => ctx.canRedo,
       disabledReason: (ctx) => (ctx.canRedo ? undefined : 'Nothing to redo'),
       render: (ctx, api) => <UndoRedoControl direction="redo" ctx={ctx} api={api} />,
+    },
+    {
+      id: 'undo-history',
+      group: 'tools',
+      row: 'strip',
+      order: 10,
+      cluster: HISTORY_CLUSTER,
+      label: HISTORY_LABEL,
+      penGated: true,
+      isEnabled: (ctx) => ctx.canUndo || ctx.canRedo,
+      disabledReason: (ctx) => (ctx.canUndo || ctx.canRedo ? undefined : 'Nothing to undo or redo'),
+      render: (ctx, api) => <UndoHistoryControl ctx={ctx} api={api} />,
     },
   ];
 }

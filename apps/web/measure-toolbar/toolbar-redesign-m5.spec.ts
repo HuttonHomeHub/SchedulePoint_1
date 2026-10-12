@@ -164,12 +164,36 @@ function readPage(): Reading {
       name: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
     };
   });
+  // The track a cluster draws (toolbar-grid M2): its OUTER span as the browser laid it out, and its
+  // members' rects, so `promotion-widths.mjs` records a measured width and not a declared join count.
+  const clusters = [...deck.querySelectorAll('[data-toolbar-cluster]')]
+    .filter(isVisible)
+    .map((el) => {
+      const b = el.getBoundingClientRect();
+      const members = [...el.querySelectorAll('[data-toolbar-item]')].map((m) => {
+        const mb = m.getBoundingClientRect();
+        return {
+          id: m.getAttribute('data-toolbar-item'),
+          left: r(mb.left),
+          right: r(mb.right),
+          w: r(mb.width),
+        };
+      });
+      return {
+        id: el.getAttribute('data-toolbar-cluster'),
+        w: r(b.width),
+        left: r(b.left),
+        right: r(b.right),
+        members,
+      };
+    });
   return {
     viewport: { w: innerWidth, h: innerHeight },
     remW: r(innerWidth / parseFloat(getComputedStyle(document.documentElement).fontSize)),
     rows,
     natural,
     items,
+    clusters,
   };
 }
 

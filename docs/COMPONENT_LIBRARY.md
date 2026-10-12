@@ -408,6 +408,27 @@ takes the free space `ml-auto` used to take), and no longer exports `DECK_GROUP_
 `deck-row-clip` (a clip 4 px outside its box, so the forced-colours focus ring survives) so no divider opens a line. Nothing outside `Deck` should use either constant. Neither adds a role,
 a name or a tab stop, and `Deck`'s props are unchanged.
 
+**`cluster`: controls that are one unit get a track** (toolbar-grid M2). `ToolbarItem` and `PromotableEntry` gain
+`cluster?: { id: string; kind: 'switch' | 'joined' }`. Consecutive items in one group that share a `cluster.id`
+render inside one wrapper, `ClusterTrack`: a plain `<span>` with **no `role`, no accessible name, no `tabindex` and
+no `data-toolbar-focusable`**, so the roving walk (`[data-toolbar-focusable]`, document order) visits the same
+stops in the same order and the group names are unchanged. A `switch` is a choice of one (the Colour set): the
+chosen member is raised. A `joined` unit has nothing raised (Undo, Redo and Recent edits; the Link "Type" set,
+whose armed member keeps the armed picture). A presentational caption may carry the same cluster: it is drawn
+before the track inside one non-wrapping unit, so it never wraps away from its controls. `defineToolbar` refuses a
+cluster that is not contiguous in the canonical order or that spans a group, a row or two kinds; `clusterRuns` is
+the pure split both `Deck` and `Toolbar` use. `toolbar-styles.ts` exports `TOOLBAR_TRACK` (`bg-field`, a 1 px
+`gap-px` join and **no padding**, so the track is exactly as tall as its members and no member loses any of its
+36 / 44 px box) and `TOOLBAR_TRACK_SWITCH` (the raised member: the `selected` fill, with one composed
+`box-shadow` of a 2 px `--field` inset ring and the underline moved in by it, so the fill is drawn inside the
+member's own box; and under forced colours a `Highlight` / `HighlightText` pair with `forced-color-adjust: none`,
+because the mode drops `box-shadow` and paints a `Canvas` backplate behind text that put `HighlightText` on
+white). The focus ring stays `ring-inset`, so a 1 px join has room for it; never an outset ring.
+**`Toolbar`'s segment wrapper (`Diagram | Gantt`) takes the same classes and keeps its `role="group"` and its
+name**: the "no role, no name" rule is for the wrappers clustering makes, not for a named segment
+(ADR-0119). The caption beside the Colour and Link "Type" sets is the label size (`text-sm`), muted.
+`Deck` and `Toolbar` props are unchanged.
+
 **`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional
 `groupOrder`, the left-to-right order of its taxonomy groups, for a surface whose subject is **one object**
 (the selection bar leads with the activity's own `object` group and trails the `find` viewing controls). Four

@@ -61,6 +61,9 @@ export const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
  */
 export const COLOUR_MODE_ORDER: readonly ColourMode[] = ['criticality', 'totalFloat', 'wbs'];
 
+/** The Colour set's track (`switch`: exactly one value is chosen at any time). */
+const COLOUR_CLUSTER = { id: 'colour-by', kind: 'switch' } as const;
+
 export const COLOUR_MODE_LABELS: Record<ColourMode, string> = {
   criticality: 'Criticality',
   totalFloat: 'Total float',
@@ -145,6 +148,9 @@ export const COLOUR_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] = CO
     rank: 2 + index / 10,
     at: at('L2'),
     ...(index === 0 ? { captionBefore: 'Colour' } : {}),
+    // A choice of one: a recessed track with the chosen value raised (toolbar-grid M2). The names,
+    // `aria-pressed` and the roving stops are untouched; the track is a plain wrapper.
+    cluster: COLOUR_CLUSTER,
     isVisible: () => CANVAS_LENSES_ENABLED,
     isActive: (ctx: TsldToolbarContext) => ctx.colourMode === mode,
     onActivate: (ctx: TsldToolbarContext) => ctx.setColourMode(mode),
@@ -299,6 +305,9 @@ export const LINK_PROMOTABLE_KINDS: readonly DependencyType[] = DEPENDENCY_TYPES
  */
 const LINK_KIND_CAPTION = 'Type';
 
+/** The Link "Type" set's track (`joined`: an armed tool is not a chosen value, so nothing is raised). */
+const LINK_TYPE_CLUSTER = { id: 'link-type', kind: 'joined' } as const;
+
 export const LINK_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] =
   LINK_PROMOTABLE_KINDS.map((type, index) => ({
     id: `link-${type.toLowerCase()}`,
@@ -311,6 +320,9 @@ export const LINK_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] =
     rank: 5 + index / 10,
     at: at('P5'),
     ...(index === 0 ? { captionBefore: LINK_KIND_CAPTION } : {}),
+    // Joined and not raised (spec D-3): these arm the Link tool, so with none armed none is chosen and
+    // there is nothing to raise. An armed kind keeps the armed picture (amber ink and underline).
+    cluster: LINK_TYPE_CLUSTER,
     isVisible: () => CANVAS_AUTHORING_ENABLED,
     penGated: true,
     activeKind: 'armed' as const,

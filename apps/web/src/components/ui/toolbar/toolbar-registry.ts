@@ -126,6 +126,22 @@ export type ToolbarLabelState = 'visible' | 'hidden' | 'roomy' | 'roomy-fine';
  */
 export type ToolbarRow = 'identity' | 'mode' | 'strip' | 'canvas';
 
+/**
+ * **A cluster is a run of controls that are one unit** (toolbar-grid M2). `switch` is a choice of one
+ * among alternatives, the chosen member raised in a recessed track; `joined` is a few controls that
+ * belong together (Undo, Redo, Recent edits), sharing the track with nothing raised. The renderer
+ * wraps the run in a plain `<span>` with **no role, no name and no tab stop**: the members keep
+ * `data-toolbar-focusable`, so the roving walk and the group names are what they were.
+ *
+ * Declared on the item, never special-cased by id in the primitive (the {@link ToolbarItem.segment}
+ * argument). `defineToolbar` refuses a cluster that is not contiguous in the canonical order or that
+ * spans a group, a row or two kinds, because the wrapper can only hold a run.
+ */
+export interface ToolbarClusterSpec {
+  id: string;
+  kind: 'switch' | 'joined';
+}
+
 /** What the primitive passes an item's `render` escape-hatch so it can reflect gating + roving focus. */
 export interface ToolbarItemRenderApi {
   /**
@@ -212,6 +228,13 @@ export interface ToolbarItem<Ctx> {
    * refused a segment spanning a `tier` until toolbar-redesign M1, a guard written for demotion.)
    */
   segment?: string;
+  /**
+   * Items sharing a `cluster.id` render inside one track — see {@link ToolbarClusterSpec}. Unlike
+   * {@link segment} it is purely a **picture**: it names no group and adds no role. A presentational
+   * caption may carry it too, and is drawn before the track inside the same non-wrapping unit, so a
+   * caption never wraps away from the controls it names.
+   */
+  cluster?: ToolbarClusterSpec;
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
   /**
@@ -482,6 +505,22 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
   const rowBySegment = new Map<string, ToolbarRow>();
   for (const item of items) {
     if (!item.segment) continue;
+    // A segment's members are plain buttons: the raised-member and group rules read a direct
+    // `button[aria-pressed]`, so a `render` item here could never be raised (mirrors the switch-cluster guard).
+    if (typeof item.onActivate !== 'function') {
+      throw new Error(
+        `defineToolbar: "${item.id}" is in segment "${item.segment}" but is a render item — ` +
+          'a segment member must be a plain onActivate button.',
+      );
+    }
+    // `renderRuns` ignores a cluster on a segmented item (the segment is its own named group), so the
+    // declaration would be silently dead: refuse it rather than let a picture be promised and not drawn.
+    if (item.cluster !== undefined) {
+      throw new Error(
+        `defineToolbar: "${item.id}" declares both segment "${item.segment}" and cluster "${item.cluster.id}" — ` +
+          'a segment is already one named switch; a cluster on it would be ignored.',
+      );
+    }
     const row = item.row ?? 'strip';
     const seen = rowBySegment.get(item.segment);
     if (seen === undefined) rowBySegment.set(item.segment, row);
@@ -492,6 +531,49 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       );
     }
   }
+
+  // **A cluster is one run in one group** (toolbar-grid M2). It renders as a single wrapper, so a
+  // member that sorts elsewhere — another group, another row, or past a neighbour that is not in it —
+  // would either split the wrapper or reorder the row. Checked on the canonical order, ignoring
+  // visibility: a member a predicate hides leaves a shorter run, never a broken one.
+  const clusterAt = new Map<string, { position: number; item: ToolbarItem<Ctx> }>();
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => compareCanonical(a, b, TOOLBAR_GROUPS))
+    .forEach(({ item }, position) => {
+      const cluster = item.cluster;
+      if (cluster === undefined) return;
+      // The raised member is a direct child `button[aria-pressed]` of the track (`TOOLBAR_TRACK_SWITCH`),
+      // and a `render` item is wrapped in a scope span, so a switch of render items would never raise.
+      if (
+        cluster.kind === 'switch' &&
+        !item.presentational &&
+        typeof item.onActivate !== 'function'
+      ) {
+        throw new Error(
+          `defineToolbar: "${item.id}" is in switch cluster "${cluster.id}" but is a render item — ` +
+            'a switch raises its chosen member through a direct plain button, so every member must be onActivate.',
+        );
+      }
+      const seen = clusterAt.get(cluster.id);
+      clusterAt.set(cluster.id, { position, item });
+      if (seen === undefined) return;
+      if (
+        seen.item.group !== item.group ||
+        (seen.item.row ?? 'strip') !== (item.row ?? 'strip') ||
+        seen.item.cluster?.kind !== cluster.kind
+      ) {
+        throw new Error(
+          `defineToolbar: cluster "${cluster.id}" spans groups, rows or kinds ("${seen.item.id}" and "${item.id}") — ` +
+            'a cluster is one run in one section.',
+        );
+      }
+      if (position !== seen.position + 1) {
+        throw new Error(
+          `defineToolbar: cluster "${cluster.id}" is not contiguous — something sorts between "${seen.item.id}" and "${item.id}".`,
+        );
+      }
+    });
 
   // **A visible label that is not in the name breaks WCAG 2.5.3** (label in name). A set member prints
   // its value and is named with its set, so the value must be a substring of the name — checked here,
@@ -591,6 +673,39 @@ export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, T
   return rows;
 }
 
+/** The canonical order: group rank, then `order`, then registry index (stable). */
+function compareCanonical(
+  a: { item: { group: ToolbarGroupId; order: number }; index: number },
+  b: { item: { group: ToolbarGroupId; order: number }; index: number },
+  groupOrder: readonly ToolbarGroupId[],
+): number {
+  const byGroup = groupRank(a.item.group, groupOrder) - groupRank(b.item.group, groupOrder);
+  if (byGroup !== 0) return byGroup;
+  const byOrder = a.item.order - b.item.order;
+  if (byOrder !== 0) return byOrder;
+  return a.index - b.index;
+}
+
+/**
+ * Split an already-ordered list of entries into **runs**: consecutive entries that share a
+ * {@link ToolbarItem.cluster} id become one run carrying the cluster, and every other entry is a run
+ * of its own with none. Pure and order-preserving, so wrapping a run can never reorder the row or the
+ * roving walk; both renderers call it, and visibility has already been applied by
+ * {@link resolveItems}, so a hidden member simply leaves the run.
+ */
+export function clusterRuns<T extends { item: { cluster?: ToolbarClusterSpec } }>(
+  entries: readonly T[],
+): { cluster: ToolbarClusterSpec | undefined; entries: T[] }[] {
+  const runs: { cluster: ToolbarClusterSpec | undefined; entries: T[] }[] = [];
+  for (const entry of entries) {
+    const cluster = entry.item.cluster;
+    const last = runs[runs.length - 1];
+    if (cluster !== undefined && last?.cluster?.id === cluster.id) last.entries.push(entry);
+    else runs.push({ cluster, entries: [entry] });
+  }
+  return runs;
+}
+
 /**
  * Resolve every item's context-dependent state and drop the invisible ones, returning the survivors
  * in **canonical order**: by group rank, then by `order`, then by registry index (stable). Pen-gated
@@ -610,13 +725,7 @@ export function resolveItems<Ctx>(
   return items
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.isVisible?.(ctx) ?? true)
-    .sort((a, b) => {
-      const byGroup = groupRank(a.item.group, groupOrder) - groupRank(b.item.group, groupOrder);
-      if (byGroup !== 0) return byGroup;
-      const byOrder = a.item.order - b.item.order;
-      if (byOrder !== 0) return byOrder;
-      return a.index - b.index;
-    })
+    .sort((a, b) => compareCanonical(a, b, groupOrder))
     .map(({ item }) => {
       const penBlocked = item.penGated === true && !authoringEnabled;
       const enabled = !penBlocked && (item.isEnabled?.(ctx) ?? true);

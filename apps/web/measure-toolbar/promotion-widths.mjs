@@ -8,7 +8,7 @@
  *   3. `node measure-toolbar/promotion-widths.mjs`
  *
  * What it takes from each: the **promoted** run's 3840 x 1440 reading gives every promoted form's
- * width (the sum of its items' rects plus the 4 px gaps between them); the **unpromoted** run gives,
+ * width (the sum of its items' rects plus the 4 px gaps between them; a track counts as one item at its measured wrapper width); the **unpromoted** run gives,
  * at each stage's cell, the room the row has — `avail` less the row's natural no-wrap width — in the
  * base state and in the worst stress state. What it leaves alone: the ladder order, the safety
  * margin and the item gap, which are decisions rather than readings, and the C1 notes.
@@ -66,9 +66,31 @@ for (const pointer of ['fine', 'coarse']) {
         return [id, item === undefined ? entry.memberWidths[id] : item.w];
       }),
     );
-    let width = Object.values(memberWidths).reduce((a, b) => a + b, 0) + gap * (ids.length - 1);
+    // A track (`ToolbarItem.cluster`, toolbar-grid M2) joins its members with 1 px where the rest of the
+    // row has `itemGapPx`, so an entry's width is its flex items' widths plus a gap between them, with a
+    // track counted as ONE item at the width the browser measured for its wrapper. The span is read, not
+    // declared: a track whose `gap-px` became `gap-1` records a wider span and the ladder charges it.
+    // (Colour's caption grew +5.9 px, `text-xs` -> `text-sm`, in the same change that saved about 6 px
+    // in joins: the net is near zero, so neither hides the other and neither is assumed.)
+    const clusterWidths = {};
+    const inTrack = new Set();
+    for (const c of promoted.wide.clusters ?? []) {
+      const memberIds = c.members.map((m) => m.id);
+      if (memberIds.length === 0 || !memberIds.every((m) => ids.includes(m))) continue;
+      clusterWidths[c.id] = c.w;
+      for (const m of memberIds) inTrack.add(m);
+    }
+    const trackless = ids.filter((id) => !inTrack.has(id));
+    const flexItems = trackless.length + Object.keys(clusterWidths).length;
+    let width =
+      trackless.reduce((a, id) => a + memberWidths[id], 0) +
+      Object.values(clusterWidths).reduce((a, b) => a + b, 0) +
+      gap * (flexItems - 1);
     const next = { ...entry, memberWidths };
     delete next.triggerShrinkPx;
+    delete next.trackJoinSavingPx;
+    delete next.clusterWidths;
+    if (Object.keys(clusterWidths).length > 0) next.clusterWidths = clusterWidths;
     const trigger = TRIGGER_RENAMED_BY[entry.rank];
     if (trigger !== undefined) {
       const shrink = widthOf(unpromoted, trigger) - widthOf(promoted, trigger);
@@ -113,7 +135,7 @@ for (const pointer of ['fine', 'coarse']) {
   committed.note =
     'Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. ' +
     'entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): ' +
-    'the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns "Share & export" into "Export"). ' +
+    'the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, where the members sit in a 1 px-joined track (toolbar-grid M2) the track counts as one item at the width measured for its wrapper (clusterWidths), less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns "Share & export" into "Export"). ' +
     'A form whose stage is never is not on the bar at 3840, so its committed width stands. ' +
     'freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, ' +
     'a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.';

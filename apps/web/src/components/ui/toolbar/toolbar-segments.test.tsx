@@ -283,3 +283,41 @@ describe('Toolbar — the keyboard model across a partition (M2-T3)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Gantt' }));
   });
 });
+
+describe('a segment is a switch track that keeps its role and its name (toolbar-grid M2, B2)', () => {
+  /**
+   * **The "no role, no name" rule is for the wrappers clustering makes, and the header's
+   * `Diagram | Gantt` wrapper is not one of them.** It is the named `group` ADR-0119 built, and it
+   * is the only thing that tells a screen-reader user which two buttons are one switch. Painting it as
+   * a track must not take either away, which is the mistake the spec's own sentence ("No track has a
+   * role or an accessible name") invited before its accessibility review.
+   *
+   * Verified red by dropping `role="group"` from the segment wrapper in `Toolbar.tsx`: the role
+   * lookup below finds no group.
+   */
+  it('is still a role="group" with its label, painted as a recessed track with a raised member', () => {
+    renderToolbar({ segmentLabels: LABELS, context: { active: 'tsld' } });
+
+    const group = screen.getByRole('group', { name: 'Plan view' });
+    expect(group).toHaveAttribute('role', 'group');
+    expect(group).toHaveAttribute('aria-label', 'Plan view');
+    expect(group.className).toMatch(/(^|\s)bg-field(\s|$)/);
+    expect(group.className).toMatch(/(^|\s)gap-px(\s|$)/);
+    // The raised member comes from the switch classes on this same wrapper.
+    expect(group.className).toContain('aria-pressed=true');
+    expect(within(group).getByRole('button', { name: 'Diagram' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(group.hasAttribute('tabindex')).toBe(false);
+    expect(group.hasAttribute('data-toolbar-focusable')).toBe(false);
+  });
+
+  it('adds no wrapper of its own: the members are the track’s direct children', () => {
+    renderToolbar({ segmentLabels: LABELS });
+    for (const name of ['Plan view', 'Scheduling mode']) {
+      const group = screen.getByRole('group', { name });
+      expect([...group.children].every((el) => el.tagName === 'BUTTON')).toBe(true);
+    }
+  });
+});

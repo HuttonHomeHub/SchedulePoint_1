@@ -62,6 +62,11 @@ interface WidthEntry {
   memberWidths: Record<string, number>;
   /** Set where promoting the entry also shortens its trigger's name; `width` is net of it. */
   triggerShrinkPx?: number;
+  /**
+   * The outer width the browser measured for each `[data-toolbar-cluster]` wrapper the entry draws
+   * (toolbar-grid M2), keyed by cluster id. `width` counts the track as one item at this width.
+   */
+  clusterWidths?: Record<string, number>;
   width: number;
 }
 interface WidthsFile {
@@ -412,16 +417,56 @@ for (const pointer of ['fine', 'coarse'] as const) {
 
     test('SC-18 (a): at 3840 × 1440 every promoted form is the width the committed file says', async () => {
       await settle(page, WIDE);
-      const measured = await deck(page)
-        .locator('[data-toolbar-item]')
-        .evaluateAll((els) =>
-          Object.fromEntries(
-            els.map((el) => [
-              el.getAttribute('data-toolbar-item') ?? '',
-              Math.round(el.getBoundingClientRect().width * 10) / 10,
-            ]),
-          ),
+      const { measured, clusters } = await deck(page).evaluate((root) => {
+        const r1 = (n: number): number => Math.round(n * 10) / 10;
+        const measured = Object.fromEntries(
+          [...root.querySelectorAll('[data-toolbar-item]')].map((el) => [
+            el.getAttribute('data-toolbar-item') ?? '',
+            r1(el.getBoundingClientRect().width),
+          ]),
         );
+        // The tracks as laid out: the wrapper's own outer span, and the members' rects inside it.
+        const clusters = [...root.querySelectorAll('[data-toolbar-cluster]')].map((el) => {
+          const box = el.getBoundingClientRect();
+          const members = [...el.querySelectorAll('[data-toolbar-item]')].map((m) => {
+            const b = m.getBoundingClientRect();
+            return {
+              id: m.getAttribute('data-toolbar-item') ?? '',
+              left: b.left,
+              right: b.right,
+              w: b.width,
+            };
+          });
+          return {
+            id: el.getAttribute('data-toolbar-cluster') ?? '',
+            left: box.left,
+            right: box.right,
+            w: box.width,
+            members,
+          };
+        });
+        return { measured, clusters };
+      });
+      // A track's join is OBSERVED, never declared: the wrapper is as wide as its members plus a 1 px
+      // join between each pair, and its span runs first-left to last-right. If `gap-px` regressed to
+      // `gap-1` this fails at once, where a constant subtracted on both sides would cancel.
+      const JOIN_PX = 1;
+      const SUB_PX = 0.6;
+      for (const c of clusters) {
+        const sum = c.members.reduce((a, m) => a + m.w, 0);
+        const first = c.members[0];
+        const last = c.members[c.members.length - 1];
+        expect(first, `${pointer} cluster ${c.id}: no members`).toBeDefined();
+        const joined = sum + (c.members.length - 1) * JOIN_PX;
+        expect(
+          Math.abs(c.w - joined),
+          `${pointer} cluster ${c.id}: wrapper is ${c.w.toFixed(2)} px, members ${sum.toFixed(2)} + ${String(c.members.length - 1)} x ${String(JOIN_PX)} px = ${joined.toFixed(2)}`,
+        ).toBeLessThanOrEqual(SUB_PX);
+        expect(
+          Math.abs((last?.right ?? 0) - (first?.left ?? 0) - c.w),
+          `${pointer} cluster ${c.id}: first-left to last-right is not the wrapper's span`,
+        ).toBeLessThanOrEqual(SUB_PX);
+      }
       for (const entry of widths.entries) {
         const at = PROMOTION_LADDER[entry.rank][pointer];
         if (at === 'never') {
@@ -434,7 +479,6 @@ for (const pointer of ['fine', 'coarse'] as const) {
           }
           continue;
         }
-        let sum = 0;
         for (const [id, width] of Object.entries(entry.memberWidths)) {
           const got = measured[id];
           expect(got, `${entry.rank}: ${id} is not on the bar at 3840`).toBeDefined();
@@ -447,11 +491,35 @@ for (const pointer of ['fine', 'coarse'] as const) {
             drift,
             `${pointer} ${entry.rank} ${id}: ${String(got)} px, file says ${String(width)} (narrower than ${String(NARROWER_SHARE * 100)} %)`,
           ).toBeGreaterThanOrEqual(-NARROWER_SHARE * width);
-          sum += got ?? 0;
         }
-        // Net of the trigger it renames (Share… turns "Share & export" into "Export").
+        // The entry's flex items: a track counts once, at its measured wrapper width; every other member
+        // is an item of its own. Net of the trigger it renames (Share… turns "Share & export" into "Export").
+        const own = membersOf(entry);
+        const tracks = clusters.filter((c) => c.members.every((m) => own.includes(m.id)));
+        const trackless = own.filter((m) => !tracks.some((c) => c.members.some((x) => x.id === m)));
+        for (const id of Object.keys(entry.clusterWidths ?? {})) {
+          expect(
+            tracks.some((c) => c.id === id),
+            `${pointer} ${entry.rank}: the file records cluster ${id}, which is not on the bar`,
+          ).toBe(true);
+        }
+        for (const c of tracks) {
+          const recorded = entry.clusterWidths?.[c.id];
+          expect(
+            recorded,
+            `${pointer} ${entry.rank}: cluster ${c.id} is on the bar but not in the file`,
+          ).toBeDefined();
+          expect(
+            c.w - (recorded ?? 0),
+            `${pointer} ${entry.rank} cluster ${c.id}: ${c.w.toFixed(1)} px, file says ${String(recorded)}`,
+          ).toBeLessThanOrEqual(widths.safetyPx);
+        }
+        const flexItems = trackless.length + tracks.length;
         const total =
-          sum + widths.itemGapPx * (membersOf(entry).length - 1) - (entry.triggerShrinkPx ?? 0);
+          trackless.reduce((a, m) => a + (measured[m] ?? 0), 0) +
+          tracks.reduce((a, c) => a + c.w, 0) +
+          widths.itemGapPx * (flexItems - 1) -
+          (entry.triggerShrinkPx ?? 0);
         const totalDrift = total - entry.width;
         const where = `${pointer} ${entry.rank} (${entry.name}): ${total.toFixed(1)} px, file says ${String(entry.width)}`;
         expect(totalDrift, `${where} (wider)`).toBeLessThanOrEqual(

@@ -202,6 +202,80 @@ export const DECK_GROUP_DIVIDER =
 export const DECK_TRAILING_SPACER =
   'pointer-events-none relative -ml-2 min-w-0 flex-1 basis-0 self-stretch before:absolute before:inset-y-0 before:-right-1.75 before:border-l before:border-muted-foreground/40 @roomy/deck:-ml-6 @roomy/deck:before:-right-3.25';
 
+/**
+ * **A track: the picture of controls that are one unit** (toolbar-grid M2, R2). A recessed bar
+ * (`--field`, which inside the chrome scope is the band's own hue one step darker) round a run of
+ * members, with a **1 px gap** between them so the units read as joined. The members keep their full
+ * `--control-h` box (D-7): nothing about a track makes a target smaller, and the gap is part of the
+ * track rather than of either member, so `elementFromPoint` in the gap lands on the track and not on
+ * a shrunken button (the 36 and 44 px sweeps in `command-surface.spec.ts` still pass unchanged).
+ *
+ * **The track is not the state indicator, and cannot be.** The band's luminance is 0.0157, so no fill
+ * darker than it can reach 1.31:1, never mind 3:1 (`m0-measurement.md` §6); the track against the band
+ * is therefore reported and not asserted. A member that is a text button "does not need a boundary"
+ * (WCAG 1.4.11, Understanding), so the chosen one is carried by the raised fill and the underline of
+ * {@link TOOLBAR_TRACK_SWITCH}, which are asserted.
+ *
+ * `inline-flex flex-nowrap` and nothing positioned, tabbable or named: the wrapper this paints is made
+ * by Deck and Toolbar clustering (`ClusterTrack`) and carries no role (ADR-0111). `Toolbar`'s segment
+ * wrapper (`role="group"`, "Plan view") takes the same classes and **keeps its role and its name**.
+ */
+export const TOOLBAR_TRACK = 'inline-flex flex-nowrap items-stretch gap-px rounded-md bg-field';
+
+/**
+ * **The raised member of a `switch` track** (toolbar-grid M2). The `selected` state already gives the
+ * chosen member `--secondary` ink and fill (3.15:1 on the band; 3.59:1 on the track, asserted) and a
+ * 2 px `--background` underline. In a track the fill is drawn **inside the member's own box**: the
+ * member's `box-shadow` becomes a 2 px `--field` inset ring over the fill, which insets the raised
+ * shape from the track's edge, and the underline moves in by the same 2 px. One `box-shadow` value,
+ * composed here, so the ring and the underline cannot compete for the property, and the focus ring
+ * (`ring-inset`, the other half of the same composite) still paints on top of both.
+ *
+ * **The members must be plain buttons**: the selector is `track > button[aria-pressed]`, and a `render`
+ * item is wrapped in a scope span, so `defineToolbar` refuses a switch cluster that holds one.
+ *
+ * **Never colour alone.** A raised member computes a distinct background AND a non-`none` shadow in
+ * ordinary colours (asserted in the browser, `command-surface.spec.ts`). A shaded member keeps the
+ * muted underline of the `selected, disabled` compound in `toolbarControlVariants` and the same 2 px
+ * `--field` inset as a free one; the raised rules above exclude `aria-disabled`, and its own rules follow.
+ *
+ * **Forced colours drop `box-shadow`, and a border would move the box.** `Highlight` /
+ * `HighlightText` are system colours, which the mode keeps when an author names them
+ * (`toolbarControlVariants` uses `GrayText` the same way). M0 measured the chosen and unchosen
+ * members byte-identical there (`m0-measurement.md` §7); this is the mark that was missing.
+ *
+ * **`forced-color-adjust: none` is not optional, and the first version without it was invisible.**
+ * Under the default adjustment Chromium paints a `Canvas` backplate behind a control's text, so
+ * `HighlightText` landed on a white box inside the `Highlight` fill: measured, the chosen label
+ * vanished (and `CanvasText` on the backplate reads as a pasted chip). Opting the raised member out
+ * lets the authored system-colour pair stand as written, which is legible by construction because
+ * the reader's theme pairs them. The shadow and the ordinary focus ring are switched off in the same
+ * breath, since opting out is what would bring the navy ring, the underline and an amber ring back
+ * onto a white page: the focus indicator under forced colours is the unlayered `Highlight` outline
+ * in `globals.css`, here as everywhere.
+ */
+export const TOOLBAR_TRACK_SWITCH = [
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:shadow-[inset_0_0_0_2px_var(--field),inset_0_-4px_0_0_var(--background)]',
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:bg-[Highlight]',
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:[color:HighlightText]',
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:[forced-color-adjust:none]',
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:shadow-none',
+  '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:ring-0',
+  // **A chosen member that is shaded** keeps the same 2 px `--field` inset, so the picture is the one a
+  // free switch draws and only the ink and the underline say "unavailable" (the underline stays the
+  // `selected, disabled` compound's muted one, moved in by the ring).
+  '[&>[aria-pressed=true][aria-disabled=true]]:shadow-[inset_0_0_0_2px_var(--field),inset_0_-4px_0_0_var(--muted-foreground)]',
+  // Under forced colours every shaded control is `GrayText` ink on the page, and the shadow above is
+  // dropped, so a chosen-and-shaded member would read as the unchosen ones. A `GrayText` FILL with
+  // `Canvas` ink is the system pair for "chosen but unavailable": it differs from the unchosen members,
+  // from the `Highlight` raised one, and it is a fill, so the box does not move (a border would).
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:bg-[GrayText]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:[color:Canvas]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:[forced-color-adjust:none]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:shadow-none',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:ring-0',
+].join(' ');
+
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
   // `opacity-70`: `--muted-foreground` inside the chrome scope is `--chrome-muted-foreground`,

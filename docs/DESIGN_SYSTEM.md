@@ -258,6 +258,28 @@ So, for any command surface:
   wraps, the spacer stays at the end of the line above and fills it, and its divider falls outside the row's
   right edge. `command-surface.spec.ts` asks this in a browser, in every state, at the floor and the stage cells,
   on both pointers (jsdom has no layout), and was verified red without the clip.
+- **Only a control has a shape: a choice of one is a track with one raised member, and a joined unit shares a
+  track** (toolbar-grid M2). `TOOLBAR_TRACK` is `--field` (the band's own hue one step darker; no new colour
+  token) with a 1 px `gap-px` join and **no padding**, so every member keeps its full 36 px (44 px coarse) box and
+  the track is exactly as tall as its members (D-7: the mock-up's 30 px controls would have broken ADR-0118 and
+  ADR-0183). Three tracks: the **Colour set** and **Diagram | Gantt** are _switches_, the **Undo, Redo and Recent
+  edits** run and the promoted **Link "Type"** set are _joined_ (an armed link kind is a tool, not a chosen value,
+  so nothing is raised). The raised member is the `selected` fill (`--secondary`, 3.59:1 on the track, asserted)
+  drawn **inside its own box** by one composed `box-shadow`: a 2 px `--field` inset ring over the fill and the
+  underline moved in by it. It is never colour alone (a distinct fill AND an underline, read as computed style
+  in `command-surface.spec.ts`). **The track against the band is 1.14:1 and is reported, not asserted**: the
+  band's luminance is 0.0157, so even pure black is 1.31:1 against it, and a text button needs no boundary
+  (WCAG 1.4.11, Understanding), so the state is carried by the raise and not by the track. A shaded, selected
+  member keeps its muted underline (9.07:1 on the track, asserted). **Forced colours** drop `box-shadow` and a
+  border would move the box, so the raised member takes `Highlight` / `HighlightText` with
+  `forced-color-adjust: none`; without the opt-out the UA paints a `Canvas` backplate behind the text and
+  `HighlightText` lands on white (measured; `deck-tracks-forced-colors.spec.ts`, which also holds that the chosen and
+  unchosen member differ, where M0 measured them byte-identical). The caption beside a set is the label size
+  (`text-sm`), muted. The wrappers clustering makes have no role, no name and no tab stop; the header's named
+  `Plan view` group keeps both. **The deck's search field outline is the quieter `--chrome-input-quiet`**
+  (`oklch(0.53 0.02 264)`: 3.03:1 on the band and 3.44:1 on its own fill, against 4.39:1 and 4.99:1 for
+  `--input`), scoped to that one field because `--chrome-input` is also the outline of every other chrome field
+  and the segmented control's option boundary; a text field with no boundary fails 1.4.11.
 - **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
   `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: a lens
   that is on but shaded keeps a 2 px underline in the same ink, and `forced-colors:[color:GrayText]` keeps
