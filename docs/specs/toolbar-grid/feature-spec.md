@@ -316,7 +316,7 @@ edits ten times each and count misses. It adds the same for the three Colour opt
 - `promotion-widths.{fine,coarse}.json` and `promotion-ladder.ts` must be **re-taken in the same PR** as any change
   to a promoted control's width or a row's free width. Otherwise the SC-18 (a) journey fails CI (its tolerance is
   2 px). This affects M1 (wider gaps), M2 (caption size, tracks), M3 (labels) and M4 (columns).
-- `History` exists in the installed `lucide-react` 1.49.0 (`dist/lucide-react.d.ts:27962`) and is not yet used in
+- `History` is exported by the installed `lucide-react` 1.49.0 (checked 2026-10-12: `"History" in require("lucide-react")` is `true`) and is not yet used in
   the app. M3 registers it in `scripts/dependency-claims.json` if a docblock asserts it.
 
 ---
