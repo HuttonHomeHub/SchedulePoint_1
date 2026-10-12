@@ -13,8 +13,10 @@
   switches and columns" (owner, 2026-10-12: "go with your pick"); the UX review of 2026-10-12.
 
 > **How to read this.** The owner is not a front-end specialist, so each rule says in plain words what you will see.
-> The code references are there for the builder. Figures marked **estimate** are my own arithmetic from the tokens.
-> M0 replaces them with readings, and if M0 contradicts a premise the work stops and asks (the ADR-0185 precedent).
+> The code references are there for the builder. Every figure that began as an estimate was replaced at M0 (2026-10-12)
+> by a reading and is marked **(measured, M0)**; the record is [`m0-measurement.md`](m0-measurement.md), whose §0 says
+> what it contradicts here. If M0 contradicts a premise the work stops and asks (the ADR-0185 precedent), and it does:
+> see the column, §4.5.
 
 ---
 
@@ -30,13 +32,13 @@ true. One figure in the brief was slightly wrong, and it is corrected below.
 
 **Messy grouping: three box styles compete, and the main one is nearly invisible.**
 
-| Claim                                                            | Verified in code                                                                                                                                                   | Verdict                  |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
-| Every deck group already has a pill backing                      | `DECK_GROUP_PILL`, `toolbar-styles.ts:166-167`, applied to every group at `Deck.tsx:449`                                                                           | True                     |
-| The pill is too faint to read                                    | `m6-measurement.md:189`: pill **1.11:1** against the band, hairline **1.53:1**. The brief's "1.13:1" is the hover wash against the pill (`:185`), a different pair | True, figure corrected   |
-| So some groups look boxed and some do not                        | Visible in `before-1912.png`: the Find pill reads as a box because the search field's outline sits inside it; View and Author barely show                          | True                     |
-| A second box: the search field's own outline                     | The field is the shared `Input` (`tsld-toolbar-items.tsx:1508-1526`). Its outline is `--chrome-input`, **4.39:1** on the band (`globals.css:385-396`)              | True                     |
-| A third box: a ring round Export and Share… inside the Plan pill | `DECK_CLOSING_SECTION`, `toolbar-styles.ts:193-194`, applied to the `output` section at `Deck.tsx:491`. Ring 3.56:1 on a pill (`m6-measurement.md:184`)            | True. A box inside a box |
+| Claim                                                            | Verified in code                                                                                                                                                                                                | Verdict                  |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Every deck group already has a pill backing                      | `DECK_GROUP_PILL`, `toolbar-styles.ts:166-167`, applied to every group at `Deck.tsx:449`                                                                                                                        | True                     |
+| The pill is too faint to read                                    | `m6-measurement.md:189`: pill **1.11:1** against the band, hairline **1.54:1** (measured, M0; the record rounds it to 1.53). The brief's "1.13:1" is the hover wash against the pill (`:185`), a different pair | True, figure corrected   |
+| So some groups look boxed and some do not                        | Visible in `before-1912.png`: the Find pill reads as a box because the search field's outline sits inside it; View and Author barely show                                                                       | True                     |
+| A second box: the search field's own outline                     | The field is the shared `Input` (`tsld-toolbar-items.tsx:1508-1526`). Its outline is `--chrome-input`, **4.39:1** on the band, 4.99:1 on its own fill (measured, M0; `globals.css:385-396`)                     | True                     |
+| A third box: a ring round Export and Share… inside the Plan pill | `DECK_CLOSING_SECTION`, `toolbar-styles.ts:193-194`, applied to the `output` section at `Deck.tsx:491`. Ring 3.56:1 on a pill (measured, M0; `m6-measurement.md:184`)                                           | True. A box inside a box |
 
 **Stray bits: each one does a job, but none of them looks like it.**
 
@@ -119,13 +121,13 @@ step is added (`docs/TECH_DEBT.md` #491). Cells are 1024 × 600, the six promoti
 - **CQ-1. Can the search field lose its outline line?** The mock-up draws it with no border. WCAG 1.4.11 says
   "Text inputs that have no border and are differentiated only by a background color must have a 3:1 contrast
   ratio" (W3C Understanding 1.4.11, read 2026-10-12). A recess darker than the navy band **cannot** reach 3:1: the
-  band's luminance is about 0.0157, so even pure black is only about 1.31:1 against it (estimate, §4.6). The field
+  band's luminance is 0.0157, so even pure black is only 1.31:1 against it (measured, M0, §4.6). The field
   has no visible label (`aria-label` only, `tsld-toolbar-items.tsx:1509`), and the code already records that "this
   outline is the ONLY thing that says a text field is there" (`globals.css:389-391`).
-  - **(a) Recommended:** keep a recessed fill **and** an outline, toned down from 4.39:1 to just over 3:1. Calmer
+  - **(a) Recommended:** keep a recessed fill **and** an outline, toned down from 4.39:1 to 3.03:1 (measured, M0). Calmer
     than today, still compliant.
   - (b) Drop the outline and add a visible word ("Find") before the field. A label can identify the field, but it
-    costs about 40 px, which the floor does not have.
+    costs 32 px (the word "Find" is 28.1 px in the deck's label font, plus the 4 px control gap; measured, M0), which LOOK at 1024 with a conflict (20.7 px free, measured, M0) does not have.
   - Not offered: dropping the outline with nothing in its place. It fails 1.4.11.
 - **CQ-2. What says "locked" on the Author group when you are not editing?** Today the Author pill goes hollow and
   dashed (`DECK_GROUP_PILL_LOCKED`, ADR-0185 V3). With no boxes, that outline has nothing to sit on.
@@ -142,9 +144,11 @@ step is added (`docs/TECH_DEBT.md` #491). Cells are 1024 × 600, the six promoti
 **Defaults taken (reviewers or the owner may overturn):**
 
 - **D-1. Baseline shows its word from 79 rem (1264 px) up, and stays icon-only below.** The LOOK row at 1024 has
-  28.7 px to spare with a conflict showing (`m6-measurement.md:78`). The word costs about 60 px, so showing it there
-  would wrap the row and break the two-line floor. This uses the existing `'roomy'` rule. If M0 shows touch at
-  1280 wraps with a conflict, it falls back to `'roomy-fine'` (word on a mouse only), the rule Apply levelled
+  28.7 px to spare with a conflict showing (`m6-measurement.md:78`; 28.6 px of live gap and 20.7 px of free width,
+  measured, M0). The word costs 57.2 px (measured, M0), so showing it there
+  would wrap the row and break the two-line floor. This uses the existing `'roomy'` rule. M0 shows touch at
+  1280 wraps with a conflict (measured, M0; `m0-measurement.md` §5), so **it falls back to `'roomy-fine'`** (word on a
+  mouse only), the rule Apply levelled
   dates… already uses (`tsld-toolbar-items.tsx:3260`). **This records the owner's 2026-10-12 reversal of the
   2026-10-10 icon-only decision.**
 - **D-2. "Finish milestone" drops "Add:" too.** It is the same kind of entry (`promotion-entries.tsx:265-285`), and
@@ -163,7 +167,7 @@ step is added (`docs/TECH_DEBT.md` #491). Cells are 1024 × 600, the six promoti
   36 / 44 px control heights (ADR-0118, ADR-0183) and lower the touch target. The raised fill is drawn inside the
   member's box instead.
 - **D-8. The raised fill is the existing `selected` fill (`--secondary`), not the mock-up's colour.** The mock-up's
-  `oklch(0.47 0.07 264)` is about 2.6:1 against the track (estimate), under 3:1. `--secondary` is about 3.6:1.
+  `oklch(0.47 0.07 264)` is 2.65:1 against the track (measured, M0), under 3:1. `--secondary` is 3.59:1 (measured, M0).
 - **D-9. On the DO row there is no divider at the column edge.** That matches the mock-up. The next group on DO
   (Plan) trails at the right edge, so there is no neighbour to divide from. The column shows on DO as the end of
   the Author group. Where Author is the narrower of the two first groups, the edge is unmarked on DO. The
@@ -247,18 +251,19 @@ step is added (`docs/TECH_DEBT.md` #491). Cells are 1024 × 600, the six promoti
 
 ### Edge cases
 
-| Case                                                        | Expected                                                                                                                                 |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Touch at 1024 (up to 4 lines, OD-2)                         | Groups wrap. No divider at a line's start or end                                                                                         |
-| Below 1024 (the scrolling line, ADR-0185 D5)                | Dividers, tracks and quiet icons apply. **No column.** The seam between the two rows stays                                               |
-| Colour set not promoted (narrower than its stage)           | No track on LOOK. The choice is in View ▾ as today                                                                                       |
-| Share… not promoted                                         | Settings… follows Export, after the inset rule                                                                                           |
-| Pen not held                                                | Author controls shaded with reasons (CQ-2 decides the outline)                                                                           |
-| Pen held by a peer                                          | As today, plus CQ-2                                                                                                                      |
-| Add armed ("Adding: Start milestone")                       | The Add label is longer. The column uses the widest measured state, so the divider does not move                                         |
-| A lead group wider than the column (a state M0 did not see) | The column is a **minimum**, never a fixed width. The group grows and the divider on that row moves right. Nothing clips                 |
-| Gantt view                                                  | Same deck, so same treatment. There is no separate Gantt toolbar (verified: nothing in `features/gantt/` imports the toolbar primitives) |
-| Forced colours                                              | Dividers and track fills may disappear; groups keep their names. The chosen member keeps a system-colour mark                            |
+| Case                                                        | Expected                                                                                                                                                                                     |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Touch at 1024 (up to 4 lines, OD-2)                         | Groups wrap. No divider at a line's start or end                                                                                                                                             |
+| Below 1024 (the scrolling line, ADR-0185 D5)                | Dividers, tracks and quiet icons apply. **No column.** The seam between the two rows stays                                                                                                   |
+| Colour set not promoted (narrower than its stage)           | No track on LOOK. The choice is in View ▾ as today                                                                                                                                           |
+| Share… not promoted                                         | Settings… follows Export, after the inset rule                                                                                                                                               |
+| Pen not held                                                | Author controls shaded with reasons (CQ-2 decides the outline)                                                                                                                               |
+| Pen held by a peer                                          | As today, plus CQ-2                                                                                                                                                                          |
+| Add armed ("Adding: Start milestone")                       | The Add label is longer. **Measured, M0:** DO already wraps to two lines in this state at most stage cells, and the widest state is 898 to 1,621 px wide, so the column cannot use it (§4.5) |
+| Link armed (`Linking · FS`)                                 | **Measured, M0:** DO has 5.2 px free at 1024 fine. The gear move alone (+12 px) wraps it, which is plan stop rule M0-T2 item 1 (`m0-measurement.md` §4)                                      |
+| A lead group wider than the column (a state M0 did not see) | The column is a **minimum**, never a fixed width. The group grows and the divider on that row moves right. Nothing clips                                                                     |
+| Gantt view                                                  | Same deck, so same treatment. There is no separate Gantt toolbar (verified: nothing in `features/gantt/` imports the toolbar primitives)                                                     |
+| Forced colours                                              | Dividers and track fills may disappear; groups keep their names. The chosen member keeps a system-colour mark                                                                                |
 
 ### Permissions
 
@@ -399,7 +404,7 @@ flowchart TD
 **R1. Group dividers, not boxes.**
 
 - One constant, `DECK_GROUP_DIVIDER`: a 1 px pseudo-element, full control height, placed in the gap **before** a
-  group (`-left-` half the gap). Ink: `--muted-foreground` at 40 % (about 2.4:1 on the band, estimate; P1).
+  group (`-left-` half the gap). Ink: `--muted-foreground` at 40 % (2.43:1 on the band, measured, M0; P1).
 - Which groups draw it: every group except the first on its row. (On DO that is only Plan. See D-9.)
 - **No divider at a line start (SC-3).** Each row gets `overflow-x: clip`. Every wrapped line starts at the row's
   left content edge, so a divider sitting in the gap before the first group on any line falls outside the clip and
@@ -414,7 +419,7 @@ flowchart TD
 - **No divider at a line end.** Dividers are only ever leading, so a group that ends a line draws nothing after it.
 - **Spacing:** group gap 8 px below 79 rem (today's `gap-2`, `Deck.tsx:385`), 24 px (`gap-6`) from 79 rem. M0
   confirms the floor's reserve is untouched.
-- Sections keep `TOOLBAR_INSET_RULE` (`toolbar-styles.ts:135-136`, `--border`, about 1.53:1). The divider is the
+- Sections keep `TOOLBAR_INSET_RULE` (`toolbar-styles.ts:135-136`, `--border`, 1.54:1, measured, M0; `m6-measurement.md` recorded 1.53:1 from the same tokens). The divider is the
   stronger mark, so a group boundary outranks a section boundary (P2 asserts the order).
 
 **R2. Only operable units have a shape.**
@@ -516,20 +521,30 @@ is small at some stages (14.5 px fine at 1440; 15.4 coarse at 1912). If View is 
 not fit at those stages and CQ-3 applies. If Author is the wider lead (it looks wider in `before-1912.png`), the pad
 lands on LOOK, which has room (153 px fine at 1440 with a conflict).
 
+**Measured, M0 (`m0-measurement.md` §0 and §2): the premise fails.** Author is the wider lead at every stage, on both
+pointers, by far more than LOOK has room for (fine 1440: Author 770 px against View 438, a pad of 334 px against 143 px
+of room; the 153 px is the live gap, the room the rule uses is the free width less 2 px). On today's tree the literal
+rule fits at **no** stage on either pointer; with every M1 to M3 change on and the ladder re-derived it fits at fine
+2160 only (literal), or at fine 2160, fine 2560 and coarse 2160 (strict, armed states left out). CQ-3 (a) therefore
+sets `none` at nine of twelve pointer-stage cells. This is plan stop rule M0-T2 item 3, and the work stops for the
+owner. Add armed ("Adding Finish milestone", no colon) wraps DO today at five of six fine and all six coarse stage cells,
+so it cannot set the column either.
+
 ### 4.6 Contrast (the pairs `token-contrast.test.ts` gains)
 
 All in the chrome scope. They join the `describe` at `token-contrast.test.ts:604` ("the command deck's state
-ladder…"). My estimates use OKLCH → linear sRGB → WCAG luminance. The test computes the real figures.
+ladder…"). The readings are M0's (measured, M0): OKLCH → linear sRGB → WCAG luminance, resolved by the same
+`resolve` / `fillOf` the gate uses. The test computes them again as assertions.
 
-| Pair | What                                                           | Estimate       | Gate                                                                                                                                                                                                                                                                                     |
-| ---- | -------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1   | Group divider (`--muted-foreground` at 40 %) on `--background` | about 2.4:1    | **Asserted ≥ 2:1, as a design floor.** A separator is not a control or a state, so 1.4.11 does not bind it. The floor keeps it visible, which is the owner's complaint about today's 1.53:1 hairline                                                                                     |
-| P2   | Divider ratio against the section rule's (`--border`, 1.53:1)  | divider higher | **Asserted:** the group mark outranks the section mark                                                                                                                                                                                                                                   |
-| P3   | Raised member (`--secondary`) on the track (`--field`)         | about 3.6:1    | **Asserted ≥ 3:1** (1.4.11: it identifies the selected state)                                                                                                                                                                                                                            |
-| P4   | Member label (`--foreground`) on `--field`                     | about 17:1     | **Asserted ≥ 4.5:1**                                                                                                                                                                                                                                                                     |
-| P5   | Focus ring (`--ring`) on `--field`                             | about 9:1      | **Asserted ≥ 3:1**. On a raised member the ring meets `--secondary` at about 2.5:1, the same geometry as a focused selected control on the band today (reported at `token-contrast.test.ts:647-653`). No regression; the accessibility reviewer confirms                                 |
-| P6   | Track (`--field`) on the band (`--background`)                 | about 1.14:1   | **Reported, not asserted.** The band's luminance is about 0.0157, so no darker fill can exceed about 1.31:1. The track is not the state indicator: the members are text buttons, which "do not need a boundary" (Understanding 1.4.11), and the state is carried by P3 and the underline |
-| P7   | Search outline on the band and on `--field` (CQ-1 (a))         | just over 3:1  | **Asserted ≥ 3:1** on both. Replaces today's 4.39 / 4.99 pairs (`globals.css:392-393`)                                                                                                                                                                                                   |
+| Pair | What                                                           | Reading (measured, M0)                                              | Gate                                                                                                                                                                                                                                                                         |
+| ---- | -------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1   | Group divider (`--muted-foreground` at 40 %) on `--background` | 2.43:1                                                              | **Asserted ≥ 2:1, as a design floor.** A separator is not a control or a state, so 1.4.11 does not bind it. The floor keeps it visible, which is the owner's complaint about today's 1.53:1 hairline                                                                         |
+| P2   | Divider ratio against the section rule's (`--border`, 1.54:1)  | divider higher (2.43:1 against 1.54:1)                              | **Asserted:** the group mark outranks the section mark                                                                                                                                                                                                                       |
+| P3   | Raised member (`--secondary`) on the track (`--field`)         | 3.59:1                                                              | **Asserted ≥ 3:1** (1.4.11: it identifies the selected state)                                                                                                                                                                                                                |
+| P4   | Member label (`--foreground`) on `--field`                     | 17.40:1                                                             | **Asserted ≥ 4.5:1**                                                                                                                                                                                                                                                         |
+| P5   | Focus ring (`--ring`) on `--field`                             | 8.99:1                                                              | **Asserted ≥ 3:1**. On a raised member the ring meets `--secondary` at 2.51:1, the same geometry as a focused selected control on the band today (reported at `token-contrast.test.ts:647-653`). No regression; the accessibility reviewer confirms                          |
+| P6   | Track (`--field`) on the band (`--background`)                 | 1.14:1                                                              | **Reported, not asserted.** The band's luminance is 0.0157, so no darker fill can exceed 1.31:1. The track is not the state indicator: the members are text buttons, which "do not need a boundary" (Understanding 1.4.11), and the state is carried by P3 and the underline |
+| P7   | Search outline on the band and on `--field` (CQ-1 (a))         | 3.03:1 on the band, 3.44:1 on `--field`, at `oklch(0.530 0.02 264)` | **Asserted ≥ 3:1** on both. Replaces today's 4.39 / 4.99 pairs (`globals.css:392-393`)                                                                                                                                                                                       |
 
 Unchanged and still asserted: muted ink on the band (7.98:1), which is now also the resting icon ink; the
 `selected` underline on its fill (`token-contrast.test.ts:637-645`).

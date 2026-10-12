@@ -47,6 +47,10 @@ the band under the header. No new entry point is created.
 ### Milestone M0: Measure (ships dark)
 
 **Outcome:** `docs/specs/toolbar-grid/m0-measurement.md`, a go or no-go, and the "before" photographs.
+**Result (2026-10-12):** done. The record is [`m0-measurement.md`](m0-measurement.md). **Stop rules 1 and 3 fire** (Link
+armed misses its line at 1024 fine once the gear moves; the shared column fits at no stage on today's tree and at
+three of twelve after M1 to M3), and rule 2 sets D-1 to `'roomy-fine'`. **No-go for M1 to M4 as specified until the owner
+answers the two questions in `m0-measurement.md` §10.**
 **Entry point:** `Ships dark: a measurement record and a harness spec.`
 **Journey:** none (a harness, ADR-0081 §3).
 
@@ -71,7 +75,7 @@ the band under the header. No new entry point is created.
 - **Cells:** 1024 × 600, 1280 × 800, 1440 × 900, 1600 × 900, **1646 × 1097**, **1912 × 1080**, 2160 × 1200,
   2560 × 1440, and 640 × 480 for the scroll line. **Both pointers.**
 - **States:** pen held; pen not held; a cycling conflict read-out; a peer holding the pen; Add armed with its longest
-  label ("Adding: Finish milestone"); Link armed; Gantt view.
+  label ("Adding Finish milestone", with no colon: measured, M0); Link armed; Gantt view.
 - **What it reads:**
   1. **Lead group widths** (View, Author) and the free gap per row, per cell, pointer and state.
   2. **Column fit:** at each stage, `max(View, Author)`, the pad the narrower row needs, and that row's worst-state
@@ -484,16 +488,16 @@ changeset, and version impact.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                          | Likelihood      | Impact | Mitigation                                                                                     |
-| ---------------------------------------------------------------------------------------------------------- | --------------- | ------ | ---------------------------------------------------------------------------------------------- |
-| The shared column fits at few or no stages (DO's free gap is 14.5 px fine at 1440, `m6-measurement.md:68`) | med             | med    | M0 measures it first; stop rule if it fits nowhere; CQ-3 decides the trade                     |
-| A visual change breaks the two-line floor at 1024 (28.7 px LOOK reserve with a conflict)                   | med             | high   | Wider gaps and Baseline's word only from 79 rem; M0 prototype check; the existing SC-1 journey |
-| Removing the pill brings back the leading-seam defect                                                      | med             | med    | Row `overflow-x: clip`; a journey verified red without it                                      |
-| The raised member is hard to see in forced colours                                                         | med             | med    | A system-colour border; a forced-colours journey case                                          |
-| The search field fails 1.4.11 without its outline                                                          | high if dropped | high   | CQ-1 default keeps a ≥ 3:1 outline                                                             |
-| Width changes make SC-18 (a) fail CI                                                                       | high            | med    | Re-take the JSON in the same PR at every width-changing milestone                              |
-| The Redo / Recent edits reorder confuses keyboard users or journeys                                        | low             | low    | Screen order equals DOM order; journeys updated; accessibility review                          |
-| `--chrome-input` change (CQ-1 (a)) reaches other chrome fields                                             | med             | low    | Scope to the deck's field, or photograph the other uses                                        |
-| The owner prefers the mock-up's 30 px controls or brighter raised colour                                   | low             | low    | D-7 and D-8 state why; the photographs show the result                                         |
-| My contrast estimates are off                                                                              | med             | low    | Every pair is computed by `token-contrast.test.ts`; estimates are labelled as such             |
-| CI time grows past #491's trigger again                                                                    | med             | low    | No new config; M5-T4 re-measures and re-packs                                                  |
+| Risk / assumption                                                                                          | Likelihood                                                                                         | Impact | Mitigation                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| The shared column fits at few or no stages (DO's free gap is 14.5 px fine at 1440, `m6-measurement.md:68`) | **realised** (measured, M0: no stage today, three of twelve after M1 to M3)                        | med    | M0 measured it; the stop rule fired; the owner decides                                                              |
+| A visual change breaks the two-line floor at 1024 (28.7 px LOOK reserve with a conflict)                   | **realised in one state** (measured, M0: Link armed, DO 5.2 px free; the gear move alone wraps it) | high   | Wider gaps and Baseline's word only from 79 rem; M0 prototype check; the owner decides                              |
+| Removing the pill brings back the leading-seam defect                                                      | med                                                                                                | med    | Row `overflow-x: clip`; a journey verified red without it                                                           |
+| The raised member is hard to see in forced colours                                                         | med                                                                                                | med    | A system-colour border; a forced-colours journey case                                                               |
+| The search field fails 1.4.11 without its outline                                                          | high if dropped                                                                                    | high   | CQ-1 default keeps a ≥ 3:1 outline                                                                                  |
+| Width changes make SC-18 (a) fail CI                                                                       | high                                                                                               | med    | Re-take the JSON in the same PR at every width-changing milestone                                                   |
+| The Redo / Recent edits reorder confuses keyboard users or journeys                                        | low                                                                                                | low    | Screen order equals DOM order; journeys updated; accessibility review                                               |
+| `--chrome-input` change (CQ-1 (a)) reaches other chrome fields                                             | med                                                                                                | low    | Scope to the deck's field, or photograph the other uses                                                             |
+| The owner prefers the mock-up's 30 px controls or brighter raised colour                                   | low                                                                                                | low    | D-7 and D-8 state why; the photographs show the result                                                              |
+| My contrast estimates are off                                                                              | med                                                                                                | low    | M0 computed every pair from the tokens and all estimates held (measured, M0); `token-contrast.test.ts` asserts them |
+| CI time grows past #491's trigger again                                                                    | med                                                                                                | low    | No new config; M5-T4 re-measures and re-packs                                                                       |
