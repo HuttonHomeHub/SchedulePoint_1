@@ -125,6 +125,18 @@
   animation-timeline: scroll(self inline);
 }
 
+/* A command deck row clips its own left and right edges (`Deck.tsx`, `deck-row-clip`; toolbar-grid M1) so
+   a group divider hung in the gap outside the row's box is not painted where a group opens a line. The
+   clip is `clip` and not `hidden` (no scroll container) and on the inline axis only, so the vertical
+   overflow the Filter badge needs is untouched. **The clip edge is pushed out 4 px**, because in forced
+   colours a focused control's outline is `2px` wide at a `2px` offset (`:focus-visible` below) and the
+   first control on a line would otherwise lose its ring at the row's edge (WCAG 2.4.7). Dividers hang
+   past that margin (`DECK_GROUP_DIVIDER`, `DECK_TRAILING_SPACER`), so they stay clipped. */
+@utility deck-row-clip {
+  overflow-x: clip;
+  overflow-clip-margin: 4px;
+}
+
 /* `xs`: 26rem (416 px). The width under which the app header's brand and plan identity cannot share a
    line even with the plan name truncated to nothing, so the identity wraps under the brand
    (`app-header.tsx`, `max-xs:flex-wrap`): at 320 the brand, the status badge and the "Plan details"

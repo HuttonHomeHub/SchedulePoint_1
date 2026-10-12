@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DECK_GROUP_PILL_LOCKED,
+  DECK_GROUP_DIVIDER,
   resolveLabelVisibility,
   toolbarLabelClass,
   toolbarControlVariants,
@@ -75,10 +75,9 @@ describe('toolbarLabelMinWidthClass', () => {
  * `disabled` branch (the first case fails) and the `selected` compound (the second).
  */
 describe('a shaded control', () => {
-  it('takes GrayText in forced colours, and so does the hollow Author pill', () => {
+  it('takes GrayText in forced colours', () => {
     expect(toolbarControlVariants({ disabled: true })).toMatch(/forced-colors:\[color:GrayText\]/);
     expect(toolbarControlVariants({ disabled: false })).not.toMatch(/GrayText/);
-    expect(DECK_GROUP_PILL_LOCKED).toMatch(/forced-colors:before:border-\[GrayText\]/);
   });
 
   it('keeps an underline when it is a lens that is on, and no other shaded state does', () => {
@@ -86,5 +85,19 @@ describe('a shaded control', () => {
       /shadow-\[inset_0_-2px_0_0_var\(--muted-foreground\)\]/,
     );
     expect(toolbarControlVariants({ state: 'rest', disabled: true })).not.toMatch(/shadow-\[inset/);
+  });
+});
+
+/**
+ * **A group divider is a border, so forced colours keep it** (toolbar-grid M1). The mode drops an
+ * author background and keeps a border in a system colour, and a 1 px line painted as a background
+ * would vanish there with nothing red to say so. Verified red by changing `before:border-l` to a
+ * `before:w-px before:bg-muted-foreground/40` rule: the case fails.
+ */
+describe('the group divider', () => {
+  it('is drawn with a border and takes no layout width', () => {
+    expect(DECK_GROUP_DIVIDER).toMatch(/before:border-l/);
+    expect(DECK_GROUP_DIVIDER).not.toMatch(/before:bg-/);
+    expect(DECK_GROUP_DIVIDER).toMatch(/before:absolute/);
   });
 });

@@ -7,12 +7,18 @@ import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,
+  linkActivities,
   newPlan,
   onboard,
   openPlanId,
+  placements,
+  placeViaApi,
   recalculate,
+  requirePlacement,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+
+import { expectDividersOnlyBetweenGroups } from './deck-dividers';
 
 /**
  * **Every command on the plan's command surface clears 24 × 24 and a pointer can reach it.**
@@ -487,6 +493,112 @@ async function assertViewPanelFitsTheFloor(
   await expect(panel).toBeHidden();
 }
 
+/**
+ * **No group paints a box, and no divider starts or ends a line, in every state, at every cell**
+ * (toolbar-grid M1, SC-1 to SC-3), asked of a mouse and of a finger.
+ *
+ * The pill was chosen to make the leading-seam defect impossible (SC-12: a group that wraps to a line
+ * of its own opened it with a rule pointing at nothing, found at 1024 where touch wraps to up to four
+ * lines). Without a box the defect is prevented by the row clipping its own left edge, and nothing in
+ * jsdom can see whether it does — there is no layout — so this drives the real deck through the states
+ * that move the groups (pen held and not, Add and Link armed, the Gantt view, a cycling conflict) at the
+ * floor, the six promotion-stage cells and the owner's 1646.
+ *
+ * **Verified red** by deleting `deck-row-clip` from the row in `Deck.tsx`: a divider then opens a
+ * wrapped line at 1024 on touch (`a painted divider opens its line`), which is the defect itself.
+ *
+ * **A peer holding the pen** is the one state not driven here: it needs a second signed-in user, and
+ * `floor-states.spec.ts` already builds one and asks this same question at the floor.
+ */
+const DIVIDER_CELLS = [
+  { width: 1024, height: 600 },
+  { width: 1280, height: 800 },
+  { width: 1440, height: 900 },
+  { width: 1600, height: 900 },
+  { width: 1646, height: 1097 },
+  { width: 1912, height: 1080 },
+  { width: 2160, height: 1200 },
+  { width: 2560, height: 1440 },
+];
+
+async function sweepDividers(page: Page, state: string): Promise<number> {
+  let painted = 0;
+  for (const cell of DIVIDER_CELLS) {
+    await page.setViewportSize(cell);
+    await page.waitForTimeout(450);
+    const reading = await expectDividersOnlyBetweenGroups(page, `${state} at ${cell.width}`);
+    painted += reading.painted;
+  }
+  return painted;
+}
+
+async function assertDividersInEveryState(page: Page, orgSlug: string): Promise<void> {
+  const readings: Record<string, number> = {};
+  await page.setViewportSize({ width: 1646, height: 1097 });
+  await ensurePen(page);
+
+  readings['pen held'] = await sweepDividers(page, 'pen held');
+
+  await page.locator('[data-toolbar-item="add-activity"]').first().click();
+  await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(/^Adding/);
+  readings['add armed'] = await sweepDividers(page, 'add armed');
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 1646, height: 1097 });
+  await page.locator('[data-toolbar-item="link-tool"]').first().click();
+  await expect(page.locator('[data-toolbar-item="link-tool"]').first()).toHaveText(/^Linking/);
+  readings['link armed'] = await sweepDividers(page, 'link armed');
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 1646, height: 1097 });
+  await page.locator('[data-toolbar-item="view-gantt"]').first().click();
+  await expect(page.locator('[data-toolbar-item="view-gantt"]').first()).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  readings['gantt'] = await sweepDividers(page, 'gantt');
+  await page.setViewportSize({ width: 1646, height: 1097 });
+  await page.locator('[data-toolbar-item="view-tsld"]').first().click();
+
+  await page.getByRole('button', { name: 'Stop editing' }).click();
+  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+  readings['pen not held'] = await sweepDividers(page, 'pen not held');
+  await ensurePen(page);
+
+  // A cycling conflict is LOOK's widest state. It mutates the shared plan, so it comes last.
+  await page.setViewportSize({ width: 1646, height: 1097 });
+  // A hand-placed start earlier than the logic allows is the conflict, so the two need a tie.
+  const rows = await placements(page, orgSlug);
+  await linkActivities(
+    page,
+    orgSlug,
+    requirePlacement(rows, 'Site setup').id,
+    requirePlacement(rows, 'Excavate to formation').id,
+  );
+  await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  await expect
+    .poll(async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true), {
+      timeout: 25_000,
+    })
+    .toBe(true);
+  await page.locator('[data-toolbar-item="next-conflict"]').first().click();
+  await expect(page.locator('[data-toolbar-item="next-conflict-status"]')).toHaveText(
+    /^Conflict \d+ of \d+/,
+  );
+  readings['conflict'] = await sweepDividers(page, 'conflict');
+
+  // Every state drew dividers somewhere (two groups share a line at the wide cells), so the
+  // comparisons above were made about a deck that had some.
+  for (const [state, painted] of Object.entries(readings)) {
+    expect(
+      painted,
+      `${state}: no divider was painted at any cell — the case asked about nothing`,
+    ).toBeGreaterThan(0);
+  }
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('The plan command surface', () => {
@@ -501,10 +613,12 @@ test.describe('The plan command surface', () => {
    * seed and recalculation, and paying that again to fold one group is not a trade worth making.
    */
   let page: Page;
+  let orgSlugForDividers: string;
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
     const orgSlug = await onboard(page, Date.now());
+    orgSlugForDividers = orgSlug;
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
     await ensurePen(page);
@@ -1782,6 +1896,12 @@ test.describe('The plan command surface', () => {
       await ensurePen(page);
     }
   });
+
+  // Last in the describe: its conflict state mutates the shared plan.
+  test('no group paints a box, and no divider starts or ends a line, in every state, at every cell', async () => {
+    test.setTimeout(600_000);
+    await assertDividersInEveryState(page, orgSlugForDividers);
+  });
 });
 
 /**
@@ -2652,6 +2772,19 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       await page.getByRole('button', { name: 'Show Project Explorer' }).click();
       await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
     }
+  });
+
+  // Last in the describe: its conflict state mutates the shared plan.
+  test('no group paints a box, and no divider starts or ends a line, in every state, at every cell (touch)', async () => {
+    test.setTimeout(600_000);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(pointer, 'this context is not a coarse pointer — it would measure the wrong thing').toBe(
+      'coarse',
+    );
+    await showView('tsld');
+    await assertDividersInEveryState(page, orgSlugForSweep);
   });
 });
 

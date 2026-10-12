@@ -1830,7 +1830,6 @@ function ExportMenuControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        // The DO row's closing action is outlined by its section (`DECK_CLOSING_SECTION`), not here.
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />

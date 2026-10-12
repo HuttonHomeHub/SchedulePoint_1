@@ -15,6 +15,8 @@ import {
   seedActivities,
 } from '../e2e-workspace-chrome/support';
 
+import { expectDividersOnlyBetweenGroups } from './deck-dividers';
+
 /**
  * **Two deck lines at the floor, in every state that stresses it** (toolbar-redesign M4, SC-1).
  *
@@ -88,6 +90,9 @@ async function expectFloor(
 ): Promise<Reading> {
   await page.waitForTimeout(500);
   const r = await read(page);
+  // The peer's pen and the cycling read-out are the states `command-surface.spec.ts` does not drive
+  // for dividers (toolbar-grid M1, SC-3): no group paints a box and no divider opens a line.
+  await expectDividersOnlyBetweenGroups(page, `${state} at the floor`);
   expect(r.lines, `${state}: the deck sits on ${r.lines} lines at the floor`).toBeLessThanOrEqual(
     2,
   );
