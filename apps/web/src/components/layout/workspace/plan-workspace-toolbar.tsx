@@ -2112,7 +2112,13 @@ export function ToolbarPlanWorkspace({
           {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
               directly on the band's 3 px amber rule with nothing between them — a double seam that
               said the same thing twice, 1 px apart. */}
-          <div className="flex flex-col">
+          {/* **A named `<section>`, so the band is a landmark** (`docs/TECH_DEBT.md` #493). The slot
+              it is portalled into is a plain `div` outside `<main>`, which landmark navigation
+              skipped and axe's `region` rule flagged. It lives here rather than on the slot so a
+              page with no plan has no empty region. "Plan command band", not "Plan commands": that
+              is the deck's own `toolbar` name inside it, and a landmark and a widget answering to
+              the same words is one thing announced twice. */}
+          <section aria-label="Plan command band" className="flex flex-col">
             {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
@@ -2411,7 +2417,7 @@ export function ToolbarPlanWorkspace({
                 authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               />
             </div>
-          </div>
+          </section>
         </ChromePortal>
 
         {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the

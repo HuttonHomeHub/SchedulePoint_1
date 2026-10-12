@@ -2998,6 +2998,31 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   });
 
   /**
+   * **Every part of a plan page sits inside a landmark** (`docs/TECH_DEBT.md` #493). The `rows`
+   * chrome slot holds the command band and sat in a plain `div` outside `<main>`, so landmark
+   * navigation skipped it and axe's best-practice `region` rule flagged it. `region` ships off, so it
+   * is named here — a clean report cannot mean the rule was never run — and the band must be the one
+   * named region, so a rename or a second landmark of the same name is caught too.
+   */
+  test('the command band is a named landmark and axe region is clean on a plan', async () => {
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await showView('tsld');
+    const results = await new AxeBuilder({ page })
+      .options({ rules: { region: { enabled: true } } })
+      .analyze();
+    expect(
+      results.violations.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })),
+    ).toEqual([]);
+    expect(
+      results.passes.some((r) => r.id === 'region'),
+      'region was not run',
+    ).toBe(true);
+    const band = page.getByRole('region', { name: 'Plan command band' });
+    await expect(band).toHaveCount(1);
+    await expect(band.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+  });
+
+  /**
    * **An upright 11-inch tablet is below the floor, so it is asked the reflow question and no
    * more** (ADR-0179): the document does not scroll sideways, and axe is clean with `target-size`
    * on — which it ships disabled and tags `wcag22aa`, so it is opted in by rule and by tag. The
