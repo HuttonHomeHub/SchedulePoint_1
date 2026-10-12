@@ -358,8 +358,8 @@ sequenceDiagram
   the min-width cascade (`sm 40rem`, `md 48rem`, `lg 64rem`, `xl 80rem`, `2xl 96rem`);
   base styles are the narrow reflow case, and below the floor content must still reflow
   to 320 px without being designed. The floor's query lives in one constant
-  (`DESIGNED_MIN_WIDTH_QUERY`, to be added in `lib/breakpoints.ts` by ADR-0179 M3; until then
-  `LG_QUERY` in `app-shell.tsx`).
+  (`DESIGNED_MIN_WIDTH_QUERY` in `lib/breakpoints.ts`, imported by `app-shell.tsx`; this said "to be
+  added" until the 2026-10-12 pass).
 - **Fluid by default:** relative units, flex/grid, `max-width` containers;
   avoid fixed pixel widths.
 - **Adaptive navigation:** the primary navigator collapses to a drawer/sheet below

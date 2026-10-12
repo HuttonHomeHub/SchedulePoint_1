@@ -172,10 +172,8 @@ const RULER_BAND_PX = 40;
 /**
  * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
  *
- * `Early mode | Visual mode` and `Diagram | Gantt` are **two independent two-way switches**, and the
- * seven-group taxonomy puts all four in `lens` — one region, one name, four identical gaps. A
- * planner who reads that as one four-way choice and expects `Gantt` to replace `Visual mode` is
- * reading the picture correctly.
+ * `Diagram | Gantt` is the one two-way switch left in the mode row (ADR-0148 deleted the
+ * `Early mode | Visual mode` switch beside it), and the seven-group taxonomy puts it in `lens`.
  *
  * This replaces a single override, `{ lens: 'Scheduling and view' }`, which was the honest thing to
  * do while the primitive could only name a whole taxonomy group: a compound name at least stopped
@@ -220,12 +218,12 @@ export const PLAN_MODE_SEGMENT_LABELS = {
  * `VITE_CANVAS_TOOLBAR` and deleted the ADR-0030 layout that flag selected, the **only** plan
  * workspace there is (`PlanWorkspace` is now a thin re-export of this component).
  * It collapses the ADR-0030 chrome bands into a **one-line header**
- * (breadcrumb ending at the plan name + status pill + compact pen status) plus a **two-row
- * registry-driven `<Toolbar>`** (Row 1 · Look — view/navigate, always live; Row 2 · Do — build/manage,
- * with a pen-gated authoring cluster that shades as a set), over a **full-height chromeless canvas**
+ * (breadcrumb ending at the plan name + status pill + compact pen status) plus a
+ * registry-driven **`Deck`** (ADR-0185: five named groups on a Look line, always live, and a Do line,
+ * whose pen-gated authoring cluster shades as a set), over a **full-height chromeless canvas**
  * with the activities panel **collapsed by default** so the canvas gets the room. Every former band
  * (view toggles, legend, summary, plan actions, shortcuts) lives inline in the two rows or one click
- * away in their popovers. Flag-off keeps the ADR-0030 layout untouched.
+ * away in their popovers.
  */
 export function ToolbarPlanWorkspace({
   model,

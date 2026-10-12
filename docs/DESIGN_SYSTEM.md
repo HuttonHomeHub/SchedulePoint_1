@@ -686,8 +686,9 @@ migration that was withdrawn with it.
 - **Targets (ADR-0118):** ≥ 24×24px everywhere (WCAG 2.2 §2.5.8, AA — gated);
   **≥ 44px under `pointer: coarse`** (§2.5.5 Enhanced, AAA — the house rule,
   not the law), with any surface that cannot meet it named in ADR-0118 §D1 and §D6
-  alongside its non-pointer equivalent — **two entries today**, a breadcrumb crumb
-  and `icon-sm`'s dense-row consumers. The fine-pointer default stays 36px.
+  alongside its non-pointer equivalent — **three entries today**, a breadcrumb crumb,
+  `icon-sm`'s dense-row consumers and the Gantt grid divider (ADR-0188 D3; its typed twin is
+  `View ▾` › Columns › `Table width`). The fine-pointer default stays 36px.
 - **A pointer-only affordance (ADR-0173 D3).** A drag handle may be `aria-hidden` and unfocusable
   **only** where the same view offers a typed, single-pointer equivalent that reaches every value the
   drag reaches (WCAG 2.2 §2.5.7 — arrow keys are not one). Under `pointer: coarse` it is **omitted, not
@@ -782,7 +783,10 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   row. Do not reach for it to make something compact. **The Gantt's
   grid carries four further named coarse exceptions** (the `⋯`, the summary-row arrow, the sort
   headers, an open cell input — ADR-0177 D4), each marked `data-gantt-coarse-exempt` and swept as
-  such by `e2e-workspace-fit`.
+  such by `e2e-workspace-fit`. **A divider's coarse strip has one named exception too:** the Gantt
+  grid divider (`coarseStrip="none"`, `GanttPanel.tsx`, ADR-0188 D3), because 44 px would cover whole
+  row menus and the Float left and Timeline headers; `View ▾` › Columns › `Table width` is its typed
+  equivalent.
   **A control that blocks itself during its own mutation uses `aria-disabled`
   plus a submit/click guard — never the native `disabled` attribute.** A native
   disabled control is removed from the tab order the instant the request starts
@@ -975,7 +979,8 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   `tree`, ADR-0029); consistent active/hover states from tokens; current item
   marked `aria-current="page"`.
 - **The rail** — persistent on `lg+` (64rem), collapsible to a drawer below;
-  keyboard navigable; resizable via the shared `PanelResizer`; remembers its
+  keyboard navigable; resizable via the shared `PanelResizer` (a press opens the size box, and the strip is 44 px on a
+  coarse pointer, ADR-0188); remembers its
   collapsed and sized state.
 - **Dialogs / sheets** — the hand-rolled `Dialog`/`Sheet` primitives on the
   native `<dialog>` element (no Radix): focus trap, `Esc` to close, focus return,

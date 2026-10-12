@@ -1,7 +1,7 @@
 # TSLD toolbar roadmap — future-feature placeholders
 
-The plan toolbar (ADR-0031; two-row amendment 2026-07-15, merged back to one strip by ADR-0099 M5)
-shows a curated set of **future-feature
+The plan toolbar (ADR-0031) is a registry-driven `Deck` over four bands (`mode`, `identity`, `strip`,
+`canvas`; ADR-0185 sets how the strip promotes what fits). It shows a curated set of **future-feature
 placeholders**: controls that are part of the intended design but whose behaviour isn't built yet.
 Each renders as a permanently-disabled button with a **"Coming soon"** tooltip, so the toolbar reads
 as fully designed and the roadmap is visible in-product. They are defined via `placeholderItem(...)`
@@ -10,10 +10,11 @@ in `apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx`.
 **A wrapping deck and a mode row (ADR-0109 D1/D2).** Each item carries a
 `row: 'mode' | 'strip' | 'identity' | 'canvas'` (`identity` and `canvas` arrived with toolbar-redesign
 M2 and M4: the plan's facts beside its name, and the "Diagram viewport" cluster at the diagram's corner).
-The **mode row** is the four segments — `Early | Visual` and
-`Diagram | Gantt` — which sit on the **identity line in the header**, because a mode is not a
-command (ADR-0091 D1); the **strip** is every command, rendered by `Deck` as four captioned groups
-that **wrap**. Placeholders render **inline** (icon buttons), and every command is visible at
+The **mode row** is the one segment, `Diagram | Gantt` (`view-tsld` and `view-gantt`), which sits on
+the **identity line in the header**, because a mode is not a command (ADR-0091 D1); ADR-0148 deleted
+the `Early | Visual` scheduling modes, and this paragraph still described four segments until the
+2026-10-12 pass. The **strip** is every command, rendered by `Deck` as five named groups (View, Find,
+Panels, Author, Plan) on two lines, with no visible caption since toolbar-redesign M6, that **wrap**. Placeholders render **inline** (icon buttons), and every command is visible at
 every width: a line that cannot fit becomes two lines.
 
 > **This paragraph has now been wrong twice, and the second time is the more instructive.**
