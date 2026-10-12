@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.89.2
+
+### Patch Changes
+
+- [#958](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/958) [`5e852d3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5e852d30d69d7e8ec5dc173863f49e746f958d16) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Updated the sign-in library to pick up a security fix, along with routine updates to the logging and email libraries.
+
 ## 0.89.1
 
 ### Patch Changes
