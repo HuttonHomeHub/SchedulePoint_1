@@ -150,6 +150,13 @@ export interface ToolbarItemRenderApi {
    * deciding again. A `render` item never resolves to `'roomy'` (see {@link ToolbarLabelVisibility}).
    */
   labelState: ToolbarLabelState;
+  /**
+   * Whether the surface asks for **quiet icons** (toolbar-grid M3, D-5): a glyph beside a visible
+   * label is painted a step quieter than the label. `true` on the command deck and on the header's
+   * toolbars, `false` on the selection bar and the diagram-corner cluster. A custom trigger passes it
+   * on to the primitive it renders, or applies `toolbarIconClass` itself when it paints its own glyph.
+   */
+  quietIcons: boolean;
   /** Resolved enabled state (respects `isEnabled` + pen-gating) — mirror it on custom controls. */
   disabled: boolean;
   /**
@@ -235,6 +242,37 @@ export interface ToolbarItem<Ctx> {
    * caption never wraps away from the controls it names.
    */
   cluster?: ToolbarClusterSpec;
+  /**
+   * A short **inset rule** in the gap before this item (toolbar-grid M3, D-4): a finer mark than the
+   * divider between groups, saying "what follows is a different kind of control". Add carries one (the
+   * pen leads the group and the tools follow it) and so does Undo (the history track follows the
+   * tools). On a cluster it belongs to the **first** member, so the rule precedes the whole track.
+   *
+   * **Deck only, and only from `--container-roomy`**: the rule costs 12 px of a row, which the 1024
+   * floor does not have in every state (`m0-measurement.md` §4), so below that width it is not drawn
+   * and costs nothing. `Toolbar` ignores it. `defineToolbar` refuses it on a group's first item (the
+   * group divider is already there), on a segment member, on a later cluster member and beside
+   * {@link groupTail}. `Deck` also drops it from the first **visible** entry of a section, since a
+   * predicate can hide whatever it follows and the section or group rule is then already there.
+   */
+  ruleBefore?: true;
+  /**
+   * Render this item **after every section of its deck group**, as a section of its own behind an
+   * inset rule (toolbar-grid M3). Settings… is the one user: the gear closes the DO row instead of
+   * sitting between the plan's analysis and its deliverables. Declared on the item rather than
+   * special-cased by id in `Deck`, for the reason {@link segment} gives.
+   *
+   * **Honoured only where the deck has room for the move** (`useDeckTailRoom`, from 80 rem). Below
+   * it the item stays in its own section: the gear plus its rule cost 12 px that the DO row at 1024
+   * does not have with Link armed, and the DOM order is what the arrow keys walk, so moving it by CSS
+   * would put the screen and the roving sequence in different orders (WCAG 1.3.2, 2.4.3). The
+   * registry group is unchanged, so the taxonomy and the group's accessible name are too. **Crossing
+   * 80 rem re-mounts the item** (it changes section), which blurs it: `Deck` puts focus back on it when
+   * the reader was standing on it, so a tail item must stay findable by `data-toolbar-item`. `Toolbar`
+   * ignores it. `defineToolbar` refuses it on a segment, a cluster, a presentational item or beside
+   * {@link ruleBefore}.
+   */
+  groupTail?: true;
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
   /**
@@ -558,6 +596,12 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       const seen = clusterAt.get(cluster.id);
       clusterAt.set(cluster.id, { position, item });
       if (seen === undefined) return;
+      if (item.ruleBefore) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares ruleBefore but is not the first member of cluster "${cluster.id}" — ` +
+            'the rule precedes the whole track, so it belongs on its first member.',
+        );
+      }
       if (
         seen.item.group !== item.group ||
         (seen.item.row ?? 'strip') !== (item.row ?? 'strip') ||
@@ -571,6 +615,50 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       if (position !== seen.position + 1) {
         throw new Error(
           `defineToolbar: cluster "${cluster.id}" is not contiguous — something sorts between "${seen.item.id}" and "${item.id}".`,
+        );
+      }
+    });
+
+  // **A rule and a tail are placements, and each has a misuse that would draw something wrong**
+  // (toolbar-grid M3). A rule on a group's first item sits beside the group divider and says the same
+  // thing twice; a tail inside a segment or a cluster cannot leave its run; a caption is not a stop,
+  // so a rule or tail on it would move nothing a reader operates; and a tail already has its own rule.
+  const seenInGroup = new Set<string>();
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => compareCanonical(a, b, TOOLBAR_GROUPS))
+    .forEach(({ item }) => {
+      const groupKey = `${item.row ?? 'strip'}/${item.group}`;
+      if (item.ruleBefore && !seenInGroup.has(groupKey)) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares ruleBefore but is the first item of its group — ` +
+            'a rule before the first item would sit beside the group divider.',
+        );
+      }
+      seenInGroup.add(groupKey);
+      if (item.ruleBefore === undefined && item.groupTail === undefined) return;
+      if (item.ruleBefore && item.groupTail) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares both ruleBefore and groupTail — a tail section already ` +
+            'sits behind its own rule.',
+        );
+      }
+      if (item.ruleBefore && item.segment !== undefined) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares ruleBefore inside segment "${item.segment}" — ` +
+            "the rule's wrapper would split the switch's track; put it on the item before the segment.",
+        );
+      }
+      if (item.groupTail && (item.segment !== undefined || item.cluster !== undefined)) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares groupTail inside a ${item.segment !== undefined ? 'segment' : 'cluster'} — ` +
+            'a segment or a cluster is one run and cannot send a member to the end of the group.',
+        );
+      }
+      if (item.presentational) {
+        throw new Error(
+          `defineToolbar: "${item.id}" is presentational, so ${item.groupTail ? 'groupTail' : 'ruleBefore'} ` +
+            'would place something a reader does not operate.',
         );
       }
     });

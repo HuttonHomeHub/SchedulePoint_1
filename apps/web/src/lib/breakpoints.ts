@@ -79,3 +79,20 @@ export const PROMOTION_STAGE_REMS: readonly number[] = PROMOTION_STAGES.map((sta
 export function promotionStageQuery(rem: number): string {
   return `(min-width: ${String(rem)}rem)`;
 }
+
+/**
+ * **The viewport width from which the deck has room for a `groupTail` item at the end of its group**
+ * (toolbar-grid M3, owner decision 2026-10-12): 80 rem, the width at which the deck's own container
+ * reaches `--container-roomy` (79 rem) in a window with the band's 8 px inset either side. It is the
+ * first promotion stage's threshold and derives from it, so the two cannot disagree about where the
+ * wide layout begins.
+ *
+ * **It is spelled in range syntax, not as the stage's own `min-width` query, and that is load-bearing.**
+ * The move is a layout choice and not a promotion, and the measurement harness that answers "stage not
+ * reached" for the ladder (`measure-toolbar/toolbar-redesign-m5.spec.ts`, `M5_UNPROMOTED`) stubs
+ * `matchMedia` by the stage queries' exact strings: a query equal to one of them would be answered "not
+ * reached" there as well (the gear would stay put in the unpromoted reading) and, if the harness
+ * exempted it, would let stage one's promotions through. A different spelling of the same width is
+ * what keeps the two apart. `(width >= …)` is the form `SQUAT_QUERY` already uses.
+ */
+export const DECK_TAIL_ROOM_QUERY = `(width >= ${String(PROMOTION_STAGES[0].rem)}rem)`;

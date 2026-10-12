@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { useId, useRef } from 'react';
 
 import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry';
-import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
+import { toolbarControlVariants, toolbarIconClass, toolbarLabelClass } from './toolbar-styles';
 import { useCloseWhenChanged } from './use-close-when-changed';
 import { usePopoverPanel } from './use-popover-panel';
 
@@ -30,6 +30,7 @@ export function ToolbarPopover({
   align = 'start',
   panelWidth = 'default',
   labelState = 'visible',
+  quietIcons = false,
   closeOnChangeOf,
   badge,
   children,
@@ -101,6 +102,8 @@ export function ToolbarPopover({
    * `title`, and `defineToolbar` refuses the declaration.
    */
   labelState?: ToolbarLabelState;
+  /** Paint the glyph a step quieter than the label — pass the render API's `quietIcons` (toolbar-grid M3). */
+  quietIcons?: boolean;
   /**
    * Close the panel when this value changes (compared with `Object.is`). The promotion ladder passes
    * its stage: a resize can move a row out of the panel, and the panel is portalled where nothing
@@ -158,6 +161,12 @@ export function ToolbarPopover({
   });
   const fullDescribedBy =
     [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
+  // **The item's own state outranks the transient fact that its panel is showing** — the same rule
+  // `ToolbarSplitButton` uses, so the two primitives need not be reasoned about separately.
+  // `selected`'s class is `open`'s plus an underline, so a filtered `Filter ▾` keeps its underline
+  // while open rather than losing it at the moment the planner opened the menu to check. Open with
+  // nothing else true still paints the fill.
+  const controlState = active === true ? (activeKind ?? 'selected') : open ? 'open' : 'rest';
 
   return (
     <>
@@ -218,18 +227,19 @@ export function ToolbarPopover({
         }}
         className={cn(
           toolbarControlVariants({
-            // **The item's own state outranks the transient fact that its panel is showing** — the
-            // same rule `ToolbarSplitButton` uses, so the two primitives need not be reasoned about
-            // separately. `selected`'s class is `open`'s plus an underline, so a filtered
-            // `Filter ▾` keeps its underline while open rather than losing it at the moment the
-            // planner opened the menu to check. Open with nothing else true still paints the fill.
-            state: active === true ? (activeKind ?? 'selected') : open ? 'open' : 'rest',
+            state: controlState,
             disabled: disabled === true,
           }),
         )}
       >
         {icon ? (
-          <span aria-hidden="true" className="relative inline-flex shrink-0 items-center">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'relative inline-flex shrink-0 items-center',
+              quietIcons && toolbarIconClass(labelState, controlState),
+            )}
+          >
             {icon}
             {badged ? (
               // Out past the glyph's corner (`-top-2.5 -right-2`) and smaller (`h-3.5`), so it no longer

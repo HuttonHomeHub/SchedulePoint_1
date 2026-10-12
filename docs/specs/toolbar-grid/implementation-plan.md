@@ -369,6 +369,38 @@ a new case for SC-12 (the pen is the only saturated control at rest, at 1912).
   3. Tests.
   4. Changeset.
 
+**M3 status (2026-10-12): built on `feat/toolbar-grid-m3`, from M2's head `ace25a04`; accessibility-reviewer has not yet
+driven it.** What shipped, and where it differs from the text above:
+
+- **Baseline is `'roomy-fine'`, not `'roomy'`** (the owner's M0 decision, `m0-measurement.md` §5), with `visibleLabel`
+  "Baseline" on the lens promotion record (`tsld-toolbar-items.tsx`) and the owner's 2026-10-12 reversal recorded in its
+  docblock. The two milestone presets print "Start milestone" / "Finish milestone" (`promotion-entries.tsx`) and keep
+  "Add: …" as the name. Recent edits wears `History`.
+- **`ruleBefore` and `groupTail`** are registry fields (`toolbar-registry.ts`) with the `defineToolbar` refusals the unit
+  tests pin. Both apply **from 80 rem of window only** (the owner's decision 2 after M0). The rules are a wrapper
+  that is `display: contents` below the roomy container (`DECK_RULE_BEFORE`); **the gear cannot be moved by CSS**, because
+  an `order` would put the screen and the roving walk in different orders (WCAG 1.3.2, 2.4.3), so `Deck` moves it in the
+  DOM from a media query read in its own file (`use-deck-tail-room.ts`, `DECK_TAIL_ROOM_QUERY`). The plan did not say so.
+- **The tail query is spelled `(width >= 80rem)`, not the first stage's `(min-width: 80rem)`, on purpose.** The
+  `M5_UNPROMOTED` harness answers "stage not reached" by exact string; with the same string the first build of this
+  milestone left the gear where it was in the unpromoted reading, and exempting it let stage one's promotions through
+  and overstated every natural width by about 120 px. Found by the widths not adding up (LOOK +175 px for a 57 px word).
+- **`toolbarIconClass(labelState, state)`** is in `toolbar-styles.ts`; `quietIcons` is a prop on `ToolbarButton`,
+  `ToolbarPopover`, `ToolbarSplitButton` and `Toolbar`, and a required member of `ToolbarItemRenderApi` (a custom
+  trigger states it). `Deck` passes it, and so do the header's two toolbars (Plan details, Plan view); the selection bar and
+  the diagram-corner cluster do not. A `'roomy'` glyph is muted only while its word shows and then `inherit`s, not
+  `text-foreground`: a shaded icon-only control would otherwise turn full ink. `toolbar-icon.structural.test.ts` is the
+  structural test.
+- **The "icon-only" case in `command-surface.spec.ts` now names three items** (it sat at `:1323` in the plan and at `:1438` now;
+  the line numbers in this section had moved). Baseline moved to the roomy list, and the coarse case asserts its word never
+  shows under touch.
+- **Widths re-taken, and the fine ladder moved** (coarse did not): L6 135 to 160 rem; P1 80 to 90; P2 119.5 to 100;
+  P3 135 to 119.5; P4 80 where it was 90; P6 100 to 119.5; P7 90 to 135. LOOK's natural width at 1280 rose by 57.3 px (the word),
+  DO's by the gear and the two rules; the milestone words gave 33.5 px back each.
+- **Journeys:** four new `command-surface.spec.ts` cases (the milestone words, the gear last from 80 rem and not below, the rules
+  from 80 rem and not below, SC-12 at 1912) and, in `floor-states.spec.ts`, **Link armed at 1024 fine is one DO line** (the proof of the
+  owner's decision 1) and Add armed keeps the two DO lines it has today with "Adding Finish milestone".
+
 ---
 
 ### Milestone M4: Shared columns (WITHDRAWN by the owner after M0, 2026-10-12; not built)
@@ -467,7 +499,7 @@ cell, both pointers, base and worst states". The `e2e-promotion` SC-17/18 cases 
   - `DESIGN_SYSTEM.md`: the toolbar section (dividers and rules, tracks, icon ink, no boxes).
   - `UX_STANDARDS.md` and `COMPONENT_LIBRARY.md` (the registry fields).
   - Flip both headers to `Accepted — shipped (ADR-NNNN)`.
-  - `docs/TECH_DEBT.md`: a row for D-5's follow-up (quiet icons on the selection bar); any unmeasured wide state
+  - `docs/TECH_DEBT.md`: a row for D-5's follow-up (quiet icons on the selection bar): filed at the M3 review as #498; any unmeasured wide state
     found at M4.
 - **Complexity:** S
 - **Dependencies:** M5-T1, owner sign-off

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DECK_GROUP_DIVIDER,
+  DECK_RULE_BEFORE,
+  TOOLBAR_INSET_RULE,
   resolveLabelVisibility,
+  toolbarIconClass,
   toolbarLabelClass,
   toolbarControlVariants,
   toolbarLabelMinWidthClass,
@@ -202,5 +205,62 @@ describe('the track', () => {
     const ordinary = toolbarControlVariants({ state: 'rest', disabled: false });
     expect(ordinary).toMatch(/(^|\s)focus-visible:ring-inset(\s|$)/);
     expect(ordinary).not.toMatch(/ring-offset/);
+  });
+});
+
+describe('toolbarIconClass (toolbar-grid M3, R4)', () => {
+  const quiet = 'text-muted-foreground';
+
+  it('mutes a glyph beside a visible label at rest', () => {
+    expect(toolbarIconClass('visible', 'rest')).toContain(quiet);
+  });
+
+  it('leaves an icon-only control’s glyph alone: a muted one would read as shaded', () => {
+    expect(toolbarIconClass('hidden', 'rest')).toBe('');
+  });
+
+  it('mutes a roomy glyph only while its label shows, then gives back the control’s own ink', () => {
+    // `inherit` and not `text-foreground`, or a shaded icon-only control would turn full ink.
+    expect(toolbarIconClass('roomy', 'rest')).toContain(quiet);
+    expect(toolbarIconClass('roomy', 'rest')).toContain('@max-roomy/deck:text-inherit');
+    expect(toolbarIconClass('roomy', 'rest')).not.toContain('text-foreground');
+  });
+
+  it('also gives the ink back under a coarse pointer for the per-pointer form, which has no word there', () => {
+    expect(toolbarIconClass('roomy-fine', 'rest')).toContain('pointer-coarse:text-inherit');
+    expect(toolbarIconClass('roomy', 'rest')).not.toContain('pointer-coarse');
+  });
+
+  it.each(['open', 'selected', 'armed', 'primary'] as const)(
+    'leaves a %s control’s glyph in the state’s own ink, whatever the label',
+    (state) => {
+      for (const label of ['visible', 'hidden', 'roomy', 'roomy-fine'] as const) {
+        expect(toolbarIconClass(label, state), `${label} / ${state}`).toBe('');
+      }
+    },
+  );
+
+  it('lets a forced-colours reader’s system colour reach the glyph', () => {
+    expect(toolbarIconClass('visible', 'rest')).toContain('forced-colors:text-inherit');
+  });
+});
+
+describe('the rule before an item (toolbar-grid M3, D-4)', () => {
+  it('has no box below the roomy container, so the 1024 floor is what it was', () => {
+    const classes = DECK_RULE_BEFORE.split(' ');
+    expect(classes).toContain('contents');
+    // Every class that gives the wrapper a box, a padding or a mark is container-gated.
+    for (const c of classes.filter((c) => c !== 'contents')) {
+      expect(c, c).toMatch(/^@roomy\/deck:/);
+    }
+  });
+
+  it('draws the section rule’s geometry, so the deck’s marks are two strengths and one shape', () => {
+    for (const part of ['before:inset-y-1/4', 'before:left-0', 'before:w-px', 'before:bg-border']) {
+      expect(TOOLBAR_INSET_RULE).toContain(part);
+      expect(DECK_RULE_BEFORE).toContain(`@roomy/deck:${part}`);
+    }
+    expect(DECK_RULE_BEFORE).toContain('@roomy/deck:ml-1');
+    expect(DECK_RULE_BEFORE).toContain('@roomy/deck:pl-2');
   });
 });

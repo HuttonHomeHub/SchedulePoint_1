@@ -94,6 +94,12 @@ export interface ToolbarProps<Ctx> {
    * own default, which is every toolbar's behaviour today.
    */
   tooltip?: TooltipPlacementOptions;
+  /**
+   * Paint each glyph a step quieter than its label (`toolbarIconClass`, toolbar-grid M3 D-5). Opt-in,
+   * and passed only by the header's toolbars: the selection bar and the diagram-corner cluster keep
+   * today's ink until the follow-up in `docs/TECH_DEBT.md` #498 extends it. Icon-only controls are unaffected.
+   */
+  quietIcons?: boolean;
   className?: string;
 }
 
@@ -191,6 +197,7 @@ export function Toolbar<Ctx>({
   groupOrder,
   ungrouped = false,
   tooltip,
+  quietIcons = false,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -324,6 +331,7 @@ export function Toolbar<Ctx>({
           active: r.active,
           activeKind: r.activeKind,
           labelState: resolveLabelVisibility(r.item.labelVisibility, 'toolbar'),
+          quietIcons,
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
             : {
@@ -346,6 +354,7 @@ export function Toolbar<Ctx>({
         // The one resolver decides. This surface is not a container, so `'roomy'` is `'always'`
         // here.
         labelState={resolveLabelVisibility(r.item.labelVisibility, 'toolbar')}
+        quietIcons={quietIcons}
         {...(r.item.isActive ? { pressed: r.active } : {})}
         // Forwarded here as well as in `Deck` — the component review caught this missing, which is
         // the "one correct pattern applied to a control and not its neighbour" shape named three

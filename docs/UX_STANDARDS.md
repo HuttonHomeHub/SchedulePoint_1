@@ -159,6 +159,12 @@ entry stops being needed.
   says "The history changed — open the list again." While a run is in flight Undo, Redo and the
   button are `aria-busy`. It is shaded with Undo and Redo (no pen, the Late-start overlay, nothing
   to undo), and a long step name is cut short in the row with the whole name in its `title`.
+- **Settings… closes the DO row where there is room, and a rule says where the tools start and end**
+  (toolbar-grid M3). From 80 rem of window the gear is the last control of the DO row behind an inset rule,
+  and Add and the Undo track each follow one; below it the gear stays after Analysis and the rules are not drawn,
+  so the 1024 floor keeps its lines. The keyboard order follows the picture: the gear is the last arrow stop
+  on a wide window and sits after Analysis on a narrow one. Baseline overlay prints **Baseline** on a mouse from
+  79 rem (owner decision, 2026-10-12) and is a glyph and a tooltip below it and under touch.
 - **A choice of one looks like a switch** (toolbar-grid M2). The Colour set and Diagram | Gantt sit in a
   recessed track with exactly one member raised (a fill and an underline, and under forced colours a system
   `Highlight` pair), so the chosen value reads without reading. Every member keeps its name ("Colour by: Total
@@ -381,7 +387,8 @@ that menu; it falls back into the menu when the width runs out. Seven rules foll
 leaves its menu; it is not shaded there** — one accessible name exists once in the tree. **A menu never
 empties**: each keeps an anchor row that renders in every state, so its trigger is on the bar at every width
 (commands stay in place). **Nothing on today's bar is ever demoted**: promotion only adds. **A promoted
-command is the same command**: a kind preset ("Add: Start milestone", "Link: Start → Start") arms its tool
+command is the same command**: a kind preset (named "Add: Start milestone", printed "Start milestone", since the
+Add control beside it already says what it is, toolbar-grid M3; "Link: Start → Start") arms its tool
 exactly as the menu pick does and is pen-gated with the same reason; a dock toggle is pressed from the dock
 itself, so it stays in step when the dock is closed from its own close button; Critical only and Filter read
 one set. **Focus follows the command** (ADR-0135): a resize that promotes the command a reader is on in a

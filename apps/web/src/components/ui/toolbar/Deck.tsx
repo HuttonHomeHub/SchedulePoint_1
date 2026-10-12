@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ClusterTrack } from './ClusterTrack';
 import {
@@ -16,6 +16,7 @@ import {
 } from './toolbar-registry';
 import {
   DECK_GROUP_DIVIDER,
+  DECK_RULE_BEFORE,
   DECK_TRAILING_SPACER,
   resolveLabelVisibility,
   TOOLBAR_INSET_RULE,
@@ -23,6 +24,7 @@ import {
 } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useDeckRowOrder } from './use-deck-row-order';
+import { useDeckTailRoom } from './use-deck-tail-room';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
@@ -164,6 +166,25 @@ export interface DeckProps<Ctx> {
   className?: string;
 }
 
+/**
+ * A deck group's sections from its registry sub-groups, in order. With `tailRoom`, every `groupTail`
+ * item leaves its own section for **one** section after the last, which the deck draws behind the
+ * ordinary section rule; without it nothing moves. Empty sections are dropped so a rule never has
+ * nothing on one side of it. Pure, and the one place the tail is decided.
+ */
+function sectionsOf<T extends { item: { groupTail?: true } }>(
+  subGroups: readonly (readonly T[])[],
+  tailRoom: boolean,
+): T[][] {
+  const tail = tailRoom
+    ? subGroups.flatMap((entries) => entries.filter((r) => r.item.groupTail))
+    : [];
+  const kept = subGroups.map((entries) =>
+    tailRoom ? entries.filter((r) => !r.item.groupTail) : [...entries],
+  );
+  return [...kept, tail].filter((section) => section.length > 0);
+}
+
 /** Whether the deck's line is wider than its box — true only where US-6's scrolling line applies. */
 function deckScrolls(deck: HTMLElement): boolean {
   return deck.scrollWidth > deck.clientWidth;
@@ -185,6 +206,12 @@ export function Deck<Ctx>({
   const [activeId, setActiveId] = useState<string | null>(null);
   /** True only while `onKeyDown` is moving focus itself — see `onFocus`. */
   const rovingMove = useRef(false);
+  /**
+   * The item the reader is standing on, or `null` once focus has left the deck on purpose. Set on focus
+   * and cleared on a blur that leaves a still-attached element: a node React removes is already
+   * detached when its blur fires, so a section move is not mistaken for the reader leaving.
+   */
+  const standingOn = useRef<string | null>(null);
 
   const resolved = useMemo(
     () => resolveItems(items, context, authoringEnabled),
@@ -193,6 +220,10 @@ export function Deck<Ctx>({
   // LOOK then DO at the floor and wider; DO then LOOK on the scrolling line below it, rendered in
   // that order so the Tab and arrow sequence is the order on screen (`use-deck-row-order.ts`).
   const rowOrder = useDeckRowOrder(DECK_ROWS);
+  // Where the deck has room, a `groupTail` item leaves its section for a section of its own at the end
+  // of its deck group (`ToolbarItem.groupTail`). An input of the memo below, so the DOM order, the
+  // roving sequence and the first Tab stop all follow it together.
+  const tailRoom = useDeckTailRoom();
 
   /** Deck group → its registry sub-groups → the items in each, preserving registry order. */
   const groups = useMemo(() => {
@@ -207,15 +238,16 @@ export function Deck<Ctx>({
         ...group,
         // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
         // section is entirely hidden by predicates draws a rule with nothing on one side of it.
-        sections: group.members
-          .map((member) => byRegistryGroup.get(member) ?? [])
-          .filter((section) => section.length > 0),
+        sections: sectionsOf(
+          group.members.map((member) => byRegistryGroup.get(member) ?? []),
+          tailRoom,
+        ),
       }))
         .filter((group) => group.sections.length > 0)
         // The groups follow the row order too, so the first roving stop is the first thing on screen.
         .sort((a, b) => rowOrder.indexOf(a.row) - rowOrder.indexOf(b.row))
     );
-  }, [resolved, rowOrder]);
+  }, [resolved, rowOrder, tailRoom]);
 
   /**
    * One roving tab stop across the whole deck — the COMMANDS only, since the fold's removal
@@ -280,10 +312,30 @@ export function Deck<Ctx>({
    */
   const onFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const target = event.target;
+    standingOn.current = target.getAttribute('data-toolbar-item') ?? standingOn.current;
     if (!deckScrolls(event.currentTarget) || !target.matches('[data-toolbar-focusable]')) return;
     if (!rovingMove.current && !isKeyboardFocus(target)) return;
     target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, []);
+
+  const onBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.target.isConnected) standingOn.current = null;
+  }, []);
+
+  // **A tail item that changes section is re-mounted, and a DOM move blurs whatever stood on it**
+  // (toolbar-grid M3, found in Chromium: every resize across 80rem dropped the gear's focus to the
+  // toolbar and the handoff then announced a control that had not gone). Put focus back on the same
+  // item once the move has committed — only when the reader was on it and focus has fallen to the
+  // page or the deck itself, so it never takes focus from anywhere else. Runs before the handoff's
+  // own one-frame check, which then sees focus inside and says nothing.
+  useLayoutEffect(() => {
+    const id = standingOn.current;
+    const container = containerRef.current;
+    if (id === null || container === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body && active !== container) return;
+    container.querySelector<HTMLElement>(`[data-toolbar-item="${CSS.escape(id)}"]`)?.focus();
+  }, [tailRoom]);
 
   // The roving stop must always exist and always point at something rendered. Items appear and
   // disappear as predicates change, so an `activeId` naming a gone item would leave the deck with
@@ -340,6 +392,7 @@ export function Deck<Ctx>({
           active: r.active,
           activeKind: r.activeKind,
           labelState,
+          quietIcons: true,
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
             : {
@@ -360,6 +413,7 @@ export function Deck<Ctx>({
         icon={r.icon}
         {...(r.busy ? { busy: true } : {})}
         labelState={labelState}
+        quietIcons
         {...(r.item.isActive ? { pressed: r.active } : {})}
         activeKind={r.activeKind}
         disabled={!r.enabled}
@@ -420,6 +474,7 @@ export function Deck<Ctx>({
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onFocus={onFocus}
+      onBlur={onBlur}
       {...focusHandoff}
       // **Two declared rows, as plain `<div>`s inside the one `role="toolbar"`.**
       //
@@ -564,7 +619,11 @@ export function Deck<Ctx>({
                     <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
                       {group.sections.map((section, sectionIndex) => (
                         <div
-                          key={section[0]?.item.group ?? sectionIndex}
+                          key={
+                            tailRoom && section[0]?.item.groupTail
+                              ? 'tail'
+                              : (section[0]?.item.group ?? sectionIndex)
+                          }
                           className={cn(
                             'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
                             // The seven-group taxonomy, surviving as an inset hairline between sections
@@ -573,23 +632,40 @@ export function Deck<Ctx>({
                             sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
                           )}
                         >
-                          {clusterRuns(section).map((run) => {
+                          {clusterRuns(section).map((run, runIndex) => {
                             const first = run.entries[0];
-                            if (run.cluster === undefined || first === undefined) {
-                              return run.entries.map(renderControl);
-                            }
-                            // A set's caption is presentational and leads the unit; the controls are the track.
+                            if (first === undefined) return null;
                             const lead = run.entries.filter((r) => r.item.presentational);
-                            return (
-                              <ClusterTrack
+                            // A set's caption is presentational and leads the unit; the controls are the track.
+                            const body =
+                              run.cluster === undefined ? (
+                                run.entries.map(renderControl)
+                              ) : (
+                                <ClusterTrack
+                                  key={first.item.id}
+                                  cluster={run.cluster}
+                                  {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
+                                >
+                                  {run.entries
+                                    .filter((r) => !r.item.presentational)
+                                    .map(renderControl)}
+                                </ClusterTrack>
+                              );
+                            // `ruleBefore` draws its inset rule on a wrapper round the whole run, from
+                            // `--container-roomy` only: below it the wrapper is `display: contents`, so it
+                            // has no box and the 1024 floor is what it was (`DECK_RULE_BEFORE`).
+                            // Not for the first run of a section: a predicate can hide what the item
+                            // follows, and the section or group rule is then already in that gap.
+                            return first.item.ruleBefore && runIndex > 0 ? (
+                              <span
                                 key={first.item.id}
-                                cluster={run.cluster}
-                                {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
+                                data-deck-rule-before
+                                className={DECK_RULE_BEFORE}
                               >
-                                {run.entries
-                                  .filter((r) => !r.item.presentational)
-                                  .map(renderControl)}
-                              </ClusterTrack>
+                                {body}
+                              </span>
+                            ) : (
+                              body
                             );
                           })}
                         </div>

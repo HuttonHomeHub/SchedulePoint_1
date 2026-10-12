@@ -2259,6 +2259,9 @@ export function ToolbarPlanWorkspace({
                     // name that is a substring of two others is a locator trap (the e2e suites
                     // match by name).
                     groupLabels={{ object: 'About this plan' }}
+                    // The header's toolbars wear the quieter glyph with the deck (toolbar-grid M3, D-5);
+                    // the selection bar and the diagram-corner cluster do not.
+                    quietIcons
                     className="shrink-0"
                   />
                 </div>
@@ -2328,6 +2331,7 @@ export function ToolbarPlanWorkspace({
                     // it does not.
                     groupLabels={{ lens: 'Plan view' }}
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
+                    quietIcons
                   />
                 </div>
                 {/* **The pen's VERB left this row for the command deck** (console epic M5): it is

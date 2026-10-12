@@ -91,9 +91,9 @@
       "name": "Add: Start milestone",
       "from": "Add",
       "memberWidths": {
-        "add-start-milestone": 177.9
+        "add-start-milestone": 144.4
       },
-      "width": 177.9
+      "width": 144.4
     },
     {
       "rank": "P3",
@@ -101,9 +101,9 @@
       "name": "Add: Finish milestone",
       "from": "Add",
       "memberWidths": {
-        "add-finish-milestone": 184.7
+        "add-finish-milestone": 151.3
       },
-      "width": 184.7
+      "width": 151.3
     },
     {
       "rank": "P4",
@@ -224,56 +224,56 @@
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1161.7,
-        "freeBase": 102.3,
+        "naturalBase": 1197.7,
+        "freeBase": 66.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 100.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 64.2
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1161.7,
-        "freeBase": 262.3,
+        "naturalBase": 1197.7,
+        "freeBase": 226.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 260.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 224.2
       },
       "PROMOTE_100": {
         "cell": "1600x900",
         "avail": 1584,
-        "naturalBase": 1161.7,
-        "freeBase": 422.3,
+        "naturalBase": 1197.7,
+        "freeBase": 386.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 420.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 384.2
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1161.7,
-        "freeBase": 734.3,
+        "naturalBase": 1197.7,
+        "freeBase": 698.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 732.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 696.2
       },
       "PROMOTE_135": {
         "cell": "2160x1200",
         "avail": 2144,
-        "naturalBase": 1161.7,
-        "freeBase": 982.3,
+        "naturalBase": 1197.7,
+        "freeBase": 946.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 980.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 944.2
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1161.7,
-        "freeBase": 1382.3,
+        "naturalBase": 1197.7,
+        "freeBase": 1346.3,
         "worstState": "peer-pen",
-        "naturalWorst": 1163.8,
-        "freeWorst": 1380.2
+        "naturalWorst": 1199.8,
+        "freeWorst": 1344.2
       }
     }
   },

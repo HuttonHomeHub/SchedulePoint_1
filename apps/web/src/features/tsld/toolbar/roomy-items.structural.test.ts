@@ -15,25 +15,26 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * same thing against the **real** registries, and pins which items are `'roomy'` so adding or
  * dropping one is a decision rather than an accident.
  *
- * The set is the compact set CQ-2 named — Baseline overlay, Comments and Settings — **plus Apply
- * levelled dates… (D-l)**. (Resource view was the fifth until the M5 review made it icon-only at every
- * width, `'never'`, to free the room the promotion ladder spends.) That one joined at M2 as `'roomy-fine'`: the word shows
- * for a mouse from 79 rem, and a coarse pointer keeps the icon at every width, because the word cost
- * touch a third DO line at 1280 (owner decision, 2026-10-09). The others are plain `'roomy'`.
+ * The set is **Apply levelled dates… (D-l) and Baseline overlay**, both `'roomy-fine'`: the word
+ * shows for a mouse from 79 rem, and a coarse pointer keeps the icon at every width, because the word
+ * cost touch a third DO line at 1280 (owner decision, 2026-10-09, for Apply levelled dates…) and LOOK a
+ * second at coarse 1280, 1440 and 2160 with a conflict showing (`m0-measurement.md` §5, for Baseline).
+ * Baseline overlay was icon-only at every width from 2026-10-10 to 2026-10-12, when the owner
+ * reversed it (toolbar-grid M3). Comments, Settings and Resource view are icon-only (see below).
  *
  * **Its blind spot, stated**: it reads the declarations. That `ToolbarButton` really mounts the
  * tooltip and `Deck` really applies the variant is `ToolbarButton`'s and the journey's to prove.
  */
-const ROOMY = ['apply-levelling'];
+const ROOMY = ['apply-levelling', 'baseline-overlay'];
 
 /**
- * **The four that went icon-only at every width** (owner decisions: Resource view at the M5 review,
- * Baseline overlay, Comments and Settings at M6, 2026-10-10). `'never'` is not `'roomy'` and needs no
+ * **The three that are icon-only at every width** (owner decisions: Resource view at the M5 review,
+ * Comments and Settings at M6, 2026-10-10; Baseline overlay was the fourth until 2026-10-12). `'never'` is not `'roomy'` and needs no
  * container, but it takes the same obligation: with no word on the button, the name is an
  * `aria-label` and the tooltip is the only place the sighted reader is told what it does, so each
  * must carry a description of its own.
  */
-const ICON_ONLY = ['baseline-overlay', 'calendar', 'comments', 'resource-view'];
+const ICON_ONLY = ['calendar', 'comments', 'resource-view'];
 
 const registries: [string, ToolbarItem<never>[]][] = [
   ['the command deck', buildTsldToolbarItems()],
@@ -47,15 +48,24 @@ describe("the registries' 'roomy' items", () => {
       .map((item) => ({ surface, item })),
   );
 
-  it('are exactly the one the design names', () => {
+  it('are exactly the ones the design names', () => {
     expect(roomy.map(({ item }) => item.id).sort()).toEqual(ROOMY);
   });
 
-  it('give Apply levelled dates… the per-pointer form', () => {
+  it('give both the per-pointer form', () => {
     const fine = roomy
       .filter(({ item }) => item.labelVisibility === 'roomy-fine')
-      .map(({ item }) => item.id);
-    expect(fine).toEqual(['apply-levelling']);
+      .map(({ item }) => item.id)
+      .sort();
+    expect(fine).toEqual(ROOMY);
+  });
+
+  it('prints Baseline overlay as "Baseline", a word its name contains', () => {
+    const baseline = registries
+      .flatMap(([, items]) => items)
+      .find((item) => item.id === 'baseline-overlay');
+    expect(baseline?.visibleLabel).toBe('Baseline');
+    expect(baseline?.label).toContain('Baseline');
   });
 
   it('are on the deck, because the selection bar is not a container', () => {

@@ -47,6 +47,7 @@ import {
   X,
   GitCompareArrows,
   HeartPulse,
+  History,
   PenLine,
 } from 'lucide-react';
 import { useId, useRef } from 'react';
@@ -103,7 +104,11 @@ import type {
   ToolbarRow,
 } from '@/components/ui/toolbar/toolbar-registry';
 import { defineToolbar, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
-import { toolbarControlVariants, toolbarLabelClass } from '@/components/ui/toolbar/toolbar-styles';
+import {
+  toolbarControlVariants,
+  toolbarIconClass,
+  toolbarLabelClass,
+} from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
@@ -274,6 +279,11 @@ type LensPromotion = LensPromotionBase &
 interface LensPromotionBase {
   icon: React.ReactNode;
   /**
+   * The text painted when it is shorter than the toolbar's accessible name ("Baseline" for "Baseline
+   * overlay"). Contained in the name, which `defineToolbar` enforces (WCAG 2.5.3). Absent ⇒ the name.
+   */
+  visibleLabel?: string;
+  /**
    * The registry group the promoted item sits in. Absent ⇒ `'lens'`, which the Baseline overlay
    * keeps. Legend and Resource view declare `'help'`: they open a panel beside the diagram rather
    * than draw on it, and `Deck` renders that group as **Panels** (toolbar-redesign M2-T2). Declared
@@ -363,10 +373,16 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
       // not `GitCompareArrows`, which is Compare revisions' glyph two controls away.
       icon: <Diff className="size-4" />,
       order: 23,
-      // Icon-only at every width (M6, owner decision 2026-10-10), with the comparison glyph and a
-      // tooltip that says what it does. It was `'roomy'`: the word came back above 79 rem and took
-      // LOOK's slack with it.
-      labelVisibility: 'never',
+      // **The word is back on a mouse from 79 rem, and below that it is a glyph and a tooltip.**
+      // This was icon-only at every width (M6, owner decision 2026-10-10) because the word took
+      // LOOK's slack with it. **The owner reversed that on 2026-10-12** (toolbar-grid: a glyph alone
+      // is not a name), and the cost was measured first (`m0-measurement.md`): 57.2 px, which LOOK at
+      // 1024 does not have with a conflict showing, so the word waits for the roomy container.
+      // `'roomy-fine'` and not `'roomy'`: with the word on, LOOK wraps at coarse 1280, 1440 and 2160
+      // with a conflict showing (§5), and a finger's row is taller already. The visible word is the
+      // name's first word, so the label-in-name rule holds (WCAG 2.5.3).
+      labelVisibility: 'roomy-fine',
+      visibleLabel: 'Baseline',
       description: 'Draw the active baseline beside each bar',
     },
     enabled: CANVAS_LENSES_ENABLED,
@@ -580,6 +596,7 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
         order: promotion.order,
         label: t.label,
         ...(promotion.description ? { description: promotion.description } : {}),
+        ...(promotion.visibleLabel ? { visibleLabel: promotion.visibleLabel } : {}),
         icon: promotion.icon,
         isActive: (ctx: TsldToolbarContext) => t.checked(ctx),
         isEnabled: (ctx: TsldToolbarContext) => t.reason(ctx) === undefined,
@@ -816,6 +833,7 @@ function GoToTodayControl({
         caretDisabledReason="Set the plan's start date first"
         haspopup="dialog"
         labelState={api.labelState}
+        quietIcons={api.quietIcons}
         title="Go to today"
         icon={<LocateFixed aria-hidden="true" className="size-4" />}
         label="Go to today"
@@ -965,6 +983,7 @@ function AddActivityControl({
         activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
+        quietIcons={api.quietIcons}
         caretRef={triggerRef}
         pressed={armed}
         open={open}
@@ -1137,6 +1156,7 @@ function LinkControl({
         activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
+        quietIcons={api.quietIcons}
         caretRef={triggerRef}
         pressed={ctx.isLinking}
         open={open}
@@ -1644,7 +1664,13 @@ function PlanAnalysisControl({
         }}
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
-        <ChartArea aria-hidden="true" className="size-4" />
+        <ChartArea
+          aria-hidden="true"
+          className={cn(
+            'size-4',
+            api.quietIcons && toolbarIconClass(api.labelState, open ? 'open' : 'rest'),
+          )}
+        />
         {labelClass ? <span className={labelClass}>{ANALYSIS_LABEL}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
@@ -1732,6 +1758,7 @@ function FilterMenuControl({
       icon={<Filter className="size-4" />}
       itemProps={api.itemProps}
       labelState={api.labelState}
+      quietIcons={api.quietIcons}
       closeOnChangeOf={ctx.promotion}
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
@@ -1839,7 +1866,13 @@ function ExportMenuControl({
         }}
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
-        <FileDown aria-hidden="true" className="size-4" />
+        <FileDown
+          aria-hidden="true"
+          className={cn(
+            'size-4',
+            api.quietIcons && toolbarIconClass(api.labelState, open ? 'open' : 'rest'),
+          )}
+        />
         {labelClass ? <span className={labelClass}>{name}</span> : null}
         <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
@@ -2363,6 +2396,8 @@ function UndoRedoControl({
   // Platform-correct (undo-redo M5): ⌘Z on a Mac, Ctrl+Z / Ctrl+Y elsewhere. The accelerator is in the
   // tooltip only, never the accessible name, which `aria-keyshortcuts` already carries for AT.
   const hint = undoRedoHints()[direction];
+  // Icon-only, so the glyph is the whole control and keeps its ink (`toolbarIconClass` says so).
+  const glyphClass = cn('size-4', api.quietIcons && toolbarIconClass('hidden', 'rest'));
   // The visible name comes from the Tooltip primitive, not `title` (ADR-0117 — hover-only, so a
   // keyboard or touch user could never read it). Found by the fix-slice M-B journey, which is the
   // ADR-0064 §7 shape one more time: `ToolbarButton`'s icon-only branch got the treatment and this
@@ -2396,9 +2431,9 @@ function UndoRedoControl({
       className={cn(toolbarControlVariants({ disabled }))}
     >
       {direction === 'undo' ? (
-        <Undo2 aria-hidden="true" className="size-4" />
+        <Undo2 aria-hidden="true" className={glyphClass} />
       ) : (
-        <Redo2 aria-hidden="true" className="size-4" />
+        <Redo2 aria-hidden="true" className={glyphClass} />
       )}
       {tipNode}
     </button>
@@ -2533,7 +2568,13 @@ function UndoHistoryControl({
         }}
         className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
-        <ChevronDown aria-hidden="true" className="size-4" />
+        <History
+          aria-hidden="true"
+          className={cn(
+            'size-4',
+            api.quietIcons && toolbarIconClass('hidden', open ? 'open' : 'rest'),
+          )}
+        />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
             {api.disabledReason}
@@ -2594,6 +2635,8 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       labelVisibility: 'never',
       order: 8,
       cluster: HISTORY_CLUSTER,
+      // The history track follows the tools, so a rule says where the tools end (D-4).
+      ruleBefore: true,
       label: 'Undo',
       penGated: true,
       isEnabled: (ctx) => ctx.canUndo,
@@ -2896,6 +2939,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           icon={<SlidersHorizontal className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
+          quietIcons={api.quietIcons}
           closeOnChangeOf={ctx.promotion}
           // Three columns (`VIEW_FIRST_COLUMN` and Insight), which a 20 rem panel cannot hold.
           panelWidth="wide"
@@ -3141,6 +3185,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // (TECH_DEBT #61).
       labelVisibility: 'always',
       order: 0,
+      // An inset rule after the pen (D-4, toolbar-grid M3): the pen leads the group and the tools it
+      // unlocks follow it (ADR-0133). From `--container-roomy` only; see `ToolbarItem.ruleBefore`.
+      ruleBefore: true,
       label: 'Add activity',
       icon: <Plus className="size-4" />,
       penGated: true,
@@ -3362,6 +3409,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           icon={<Info className="size-4" />}
           itemProps={api.itemProps}
           labelState={api.labelState}
+          quietIcons={api.quietIcons}
         >
           {ctx.summaryContent}
         </ToolbarPopover>
@@ -3439,6 +3487,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Icon-only at every width (M6, owner decision 2026-10-10): the gear is the universal sign for
       // settings, and the tooltip carries the sentence that says what this one holds.
       labelVisibility: 'never',
+      // The last control of the DO row where the deck has room (owner decision 2026-10-12, from 80
+      // rem), behind an inset rule: settings are not an analysis of the plan, and the end of a row is
+      // where a reader looks for them. Below that it stays after Analysis, because the move costs
+      // the 1024 floor a line with Link armed (`ToolbarItem.groupTail`).
+      groupTail: true,
       // The gear, not a calendar: the dialog stopped being only the calendar long ago, and
       // `SlidersHorizontal` (View ▾) is already the deck's slider glyph. `Settings2` would read as a
       // second one.

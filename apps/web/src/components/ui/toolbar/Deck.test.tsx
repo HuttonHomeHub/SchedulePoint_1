@@ -676,3 +676,271 @@ describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
     for (const row of rows) expect(row.className).toMatch(/(^|\s)deck-row-clip(\s|$)/);
   });
 });
+
+describe('Deck — a tail and a rule (toolbar-grid M3)', () => {
+  /** Stub `matchMedia`: the floor, every promotion stage and the tail-room width answer `wide`. */
+  function viewport(wide: boolean): void {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('min-width') || query.includes('width >=') ? wide : false,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  const planItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+    { id: 'pen', group: 'tools', order: -1, label: 'Pen', onActivate: () => {} },
+    { id: 'add', group: 'tools', order: 0, label: 'Add', ruleBefore: true, onActivate: () => {} },
+    { id: 'link', group: 'tools', order: 1, label: 'Link', onActivate: () => {} },
+    {
+      id: 'undo',
+      group: 'tools',
+      order: 8,
+      label: 'Undo',
+      ruleBefore: true,
+      cluster: { id: 'history', kind: 'joined' },
+      onActivate: () => {},
+    },
+    {
+      id: 'redo',
+      group: 'tools',
+      order: 9,
+      label: 'Redo',
+      cluster: { id: 'history', kind: 'joined' },
+      onActivate: () => {},
+    },
+    { id: 'analysis', group: 'object', order: 2, label: 'Analysis', onActivate: () => {} },
+    {
+      id: 'gear',
+      group: 'object',
+      order: 3,
+      label: 'Settings',
+      groupTail: true,
+      onActivate: () => {},
+    },
+    { id: 'baselines', group: 'object', order: 4, label: 'Baselines', onActivate: () => {} },
+    { id: 'export', group: 'output', order: 1, label: 'Export', onActivate: () => {} },
+  ]);
+
+  const stops = (): string[] =>
+    [...document.querySelectorAll('[data-toolbar-focusable]')].map(
+      (el) => el.getAttribute('data-toolbar-item') ?? '',
+    );
+  const planSections = (): string[][] => {
+    const plan = document.querySelector('[role="group"][aria-label="Plan"]');
+    const bySection = new Map<Element, string[]>();
+    for (const el of plan?.querySelectorAll('[data-toolbar-item]') ?? []) {
+      const section = el.closest('div.flex.flex-wrap');
+      if (section === null) continue;
+      bySection.set(section, [
+        ...(bySection.get(section) ?? []),
+        el.getAttribute('data-toolbar-item') ?? '',
+      ]);
+    }
+    return [...bySection.values()];
+  };
+
+  it('sends a tail to the end of its deck group where the deck has room, as a section of its own', () => {
+    viewport(true);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    // The gear leaves its section for one after the last (Export), so it is the last stop of DO.
+    expect(stops()).toEqual([
+      'pen',
+      'add',
+      'link',
+      'undo',
+      'redo',
+      'analysis',
+      'baselines',
+      'export',
+      'gear',
+    ]);
+    expect(planSections()).toEqual([['analysis', 'baselines'], ['export'], ['gear']]);
+  });
+
+  it('crosses 80rem without a duplicate-key warning, the gear landing in the tail', () => {
+    let wide = false;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return query.includes('min-width') || query.includes('width >=') ? wide : false;
+      },
+      media: query,
+      addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+    }));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    expect(planSections()).not.toContainEqual(['gear']);
+    wide = true;
+    act(() => listeners.forEach((fn) => fn()));
+    // The tail is a section of its own, and it must not share a React key with Analysis's section
+    // (both are registry group 'object'), or React warns and may reuse the wrong subtree.
+    expect(planSections()).toEqual([['analysis', 'baselines'], ['export'], ['gear']]);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  describe('focus across 80rem', () => {
+    let wide = false;
+    const listeners = new Set<() => void>();
+    const cross = (to: boolean): void => {
+      wide = to;
+      act(() => listeners.forEach((fn) => fn()));
+    };
+    const stub = (): void => {
+      wide = false;
+      listeners.clear();
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return query.includes('min-width') || query.includes('width >=') ? wide : false;
+        },
+        media: query,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      }));
+    };
+
+    it('keeps focus on a tail item that changes section, in both directions', () => {
+      stub();
+      render(<Deck items={planItems} context={{}} label="Plan commands" />);
+      screen.getByRole('button', { name: 'Settings' }).focus();
+      cross(true);
+      // The move remounts the gear in another section; focus must follow it, or the handoff hook
+      // announces a control as gone that is still there (WCAG 2.4.3, 4.1.3).
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+      cross(false);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+    });
+
+    it('does not take focus when it was elsewhere', () => {
+      stub();
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <Deck items={planItems} context={{}} label="Plan commands" />
+        </>,
+      );
+      screen.getByRole('button', { name: 'Elsewhere' }).focus();
+      cross(true);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }));
+    });
+
+    it('does not take focus back after the reader clicked away', () => {
+      stub();
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <Deck items={planItems} context={{}} label="Plan commands" />
+        </>,
+      );
+      screen.getByRole('button', { name: 'Settings' }).focus();
+      screen.getByRole('button', { name: 'Elsewhere' }).focus();
+      document.body.focus();
+      (document.activeElement as HTMLElement | null)?.blur();
+      cross(true);
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
+
+  it('leaves it in its own section below that, so the screen and the roving walk agree (WCAG 1.3.2)', () => {
+    viewport(false);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    // Below the floor the editing row leads, which is the only other reordering.
+    expect(stops()).toEqual([
+      'pen',
+      'add',
+      'link',
+      'undo',
+      'redo',
+      'analysis',
+      'gear',
+      'baselines',
+      'export',
+    ]);
+  });
+
+  it('puts the tail behind the ordinary section rule', () => {
+    viewport(true);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    const gear = screen.getByRole('button', { name: 'Settings' });
+    expect(gear.closest('div.flex.flex-wrap')?.className).toContain('before:bg-border');
+  });
+
+  it('draws no rule on an item that a predicate has made the first of its section', () => {
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'pen',
+        group: 'tools',
+        order: -1,
+        label: 'Pen',
+        isVisible: () => false,
+        onActivate: () => {},
+      },
+      { id: 'add', group: 'tools', order: 0, label: 'Add', ruleBefore: true, onActivate: () => {} },
+      { id: 'link', group: 'tools', order: 1, label: 'Link', onActivate: () => {} },
+    ]);
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    expect(document.querySelector('[data-deck-rule-before]')).toBeNull();
+  });
+
+  it('wraps the run a rule precedes, and only that run, in a box with no role or stop', () => {
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    const wrappers = [...document.querySelectorAll('[data-deck-rule-before]')];
+    // Add, and the whole history track (not Undo alone).
+    expect(wrappers.map((w) => w.querySelectorAll('[data-toolbar-item]').length)).toEqual([1, 2]);
+    expect(wrappers[1]?.querySelector('[data-toolbar-cluster="history"]')).not.toBeNull();
+    for (const wrapper of wrappers) {
+      expect(wrapper.hasAttribute('role')).toBe(false);
+      expect(wrapper.hasAttribute('tabindex')).toBe(false);
+      expect(wrapper.hasAttribute('data-toolbar-focusable')).toBe(false);
+      expect(wrapper.className).toContain('contents');
+    }
+    expect(
+      screen.getByRole('button', { name: 'Link' }).closest('[data-deck-rule-before]'),
+    ).toBeNull();
+  });
+
+  it('keeps the roving walk what it was with the rule wrappers in place', () => {
+    viewport(false);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    const first = screen.getByRole('button', { name: 'Pen' });
+    first.focus();
+    const seen: string[] = [];
+    for (let i = 0; i < 8; i += 1) {
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+      seen.push(focusedItemId() ?? '');
+    }
+    expect(seen).toEqual([
+      'add',
+      'link',
+      'undo',
+      'redo',
+      'analysis',
+      'gear',
+      'baselines',
+      'export',
+    ]);
+  });
+
+  it('hands every control the quiet-icon opt-in: the deck is the band', () => {
+    viewport(false);
+    const seenApi: boolean[] = [];
+    const custom: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+      {
+        id: 'custom',
+        group: 'frame',
+        order: 1,
+        label: 'Custom',
+        render: (_ctx, api) => {
+          seenApi.push(api.quietIcons);
+          return <button {...api.itemProps}>Custom</button>;
+        },
+      },
+    ]);
+    render(<Deck items={custom} context={{}} label="Plan commands" />);
+    expect(seenApi).toContain(true);
+    expect(seenApi).not.toContain(false);
+  });
+});

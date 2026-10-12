@@ -522,3 +522,88 @@ describe('clusterRuns', () => {
     expect(runs).toHaveLength(3);
   });
 });
+
+describe('defineToolbar: a rule and a tail are placements (toolbar-grid M3)', () => {
+  const lead = base({ id: 'lead', group: 'tools', order: 0 });
+
+  it('accepts a rule before a later item of a group, and a tail', () => {
+    expect(() =>
+      defineToolbar([
+        lead,
+        base({ id: 'after', group: 'tools', order: 1, ruleBefore: true }),
+        base({ id: 'gear', group: 'object', order: 1, groupTail: true }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('refuses a rule on the first item of its group: the group divider is already there', () => {
+    expect(() =>
+      defineToolbar([base({ id: 'first', group: 'tools', order: -1, ruleBefore: true }), lead]),
+    ).toThrow(/"first" declares ruleBefore but is the first item of its group/);
+    // The same item is fine one place later in canonical order.
+    expect(() =>
+      defineToolbar([lead, base({ id: 'first', group: 'tools', order: 1, ruleBefore: true })]),
+    ).not.toThrow();
+  });
+
+  it('counts a group per row, so the first item of a group on another row is still first', () => {
+    expect(() =>
+      defineToolbar([
+        lead,
+        base({ id: 'mode-item', group: 'tools', row: 'mode', order: 1, ruleBefore: true }),
+      ]),
+    ).toThrow(/is the first item of its group/);
+  });
+
+  it('puts a cluster’s rule on its first member only, so the rule precedes the whole track', () => {
+    const member = (id: string, order: number, over: Partial<ToolbarItem<Ctx>> = {}) =>
+      base({ id, group: 'tools', order, cluster: { id: 'pair', kind: 'joined' }, ...over });
+    expect(() =>
+      defineToolbar([lead, member('one', 1, { ruleBefore: true }), member('two', 2)]),
+    ).not.toThrow();
+    expect(() =>
+      defineToolbar([lead, member('one', 1), member('two', 2, { ruleBefore: true })]),
+    ).toThrow(/"two" declares ruleBefore but is not the first member of cluster "pair"/);
+  });
+
+  it('refuses a rule on a segment member: its wrapper would split the switch’s track', () => {
+    expect(() =>
+      defineToolbar([
+        lead,
+        base({ id: 'half', group: 'tools', order: 1, segment: 's', ruleBefore: true }),
+      ]),
+    ).toThrow(/"half" declares ruleBefore inside segment "s"/);
+  });
+
+  it('refuses a tail inside a segment or a cluster: neither can send a member to the end', () => {
+    expect(() => defineToolbar([base({ id: 'a', groupTail: true, segment: 's' })])).toThrow(
+      /"a" declares groupTail inside a segment/,
+    );
+    expect(() =>
+      defineToolbar([base({ id: 'a', groupTail: true, cluster: { id: 'c', kind: 'joined' } })]),
+    ).toThrow(/"a" declares groupTail inside a cluster/);
+  });
+
+  it('refuses a tail that also asks for a rule: a tail section already sits behind one', () => {
+    expect(() =>
+      defineToolbar([
+        lead,
+        base({ id: 'both', group: 'tools', order: 1, ruleBefore: true, groupTail: true }),
+      ]),
+    ).toThrow(/declares both ruleBefore and groupTail/);
+  });
+
+  it('refuses either on a presentational caption: it places nothing a reader operates', () => {
+    const caption = (over: Partial<ToolbarItem<Ctx>>): ToolbarItem<Ctx> => ({
+      id: 'cap',
+      group: 'tools',
+      order: 1,
+      label: 'Caption',
+      presentational: true,
+      render: () => null,
+      ...over,
+    });
+    expect(() => defineToolbar([lead, caption({ ruleBefore: true })])).toThrow(/presentational/);
+    expect(() => defineToolbar([lead, caption({ groupTail: true })])).toThrow(/presentational/);
+  });
+});
