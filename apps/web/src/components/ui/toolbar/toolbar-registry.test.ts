@@ -459,6 +459,19 @@ describe('defineToolbar: a cluster is one run in one group (toolbar-grid M2)', (
     expect(() => defineToolbar([joined('x', 1), joined('y', 2)])).not.toThrow();
   });
 
+  it('refuses a render item in a segment: it could never be raised', () => {
+    const items = [
+      base({ id: 'a', order: 1, segment: 'view' }),
+      base({ id: 'b', order: 2, segment: 'view', render: () => null }),
+    ];
+    expect(() => defineToolbar(items)).toThrow(/segment "view" but is a render item/);
+  });
+
+  it('refuses an item that declares both a segment and a cluster', () => {
+    const items = [base({ id: 'a', segment: 'view', cluster: { id: 'set', kind: 'switch' } })];
+    expect(() => defineToolbar(items)).toThrow(/both segment "view" and cluster "set"/);
+  });
+
   it('lets a member a predicate hides leave a shorter run rather than a broken one', () => {
     const items = [
       switchOf('a', { order: 1 }),

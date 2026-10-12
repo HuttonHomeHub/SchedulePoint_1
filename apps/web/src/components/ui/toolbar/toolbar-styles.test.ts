@@ -129,17 +129,57 @@ describe('the track', () => {
     );
     // One `box-shadow` value holds the 2 px `--field` inset ring and the underline moved in by it, so
     // the two cannot compete for the property.
-    const shadow = TOOLBAR_TRACK_SWITCH.split(' ').filter((c) => c.includes(':shadow-[inset'));
+    const shadow = TOOLBAR_TRACK_SWITCH.split(' ').filter(
+      (c) => c.includes(':not([aria-disabled=true])') && c.includes(':shadow-[inset'),
+    );
     expect(shadow).toHaveLength(1);
     expect(shadow[0]).toMatch(
       /inset_0_0_0_2px_var\(--field\),inset_0_-4px_0_0_var\(--background\)/,
     );
   });
 
-  it('raises only a member that is pressed and not shaded: a shaded one keeps its muted underline', () => {
-    for (const c of TOOLBAR_TRACK_SWITCH.split(' ')) {
-      expect(c, c).toContain('[aria-pressed=true]:not([aria-disabled=true])');
+  it('raises only a member that is pressed and not shaded: a shaded one is styled by its own rules', () => {
+    const raised = TOOLBAR_TRACK_SWITCH.split(' ').filter((c) =>
+      c.includes('[aria-pressed=true]:not([aria-disabled=true])'),
+    );
+    const shaded = TOOLBAR_TRACK_SWITCH.split(' ').filter((c) =>
+      c.includes('[aria-pressed=true][aria-disabled=true]'),
+    );
+    expect(raised.length + shaded.length).toBe(TOOLBAR_TRACK_SWITCH.split(' ').length);
+    expect(raised).not.toHaveLength(0);
+    expect(shaded).not.toHaveLength(0);
+  });
+
+  it('keeps the 2 px field inset on a chosen-and-shaded member, with the muted underline', () => {
+    const shadow = TOOLBAR_TRACK_SWITCH.split(' ').filter(
+      (c) => c.includes('[aria-disabled=true]]:shadow-[inset') && !c.includes(':not('),
+    );
+    expect(shadow).toHaveLength(1);
+    expect(shadow[0]).toMatch(
+      /inset_0_0_0_2px_var\(--field\),inset_0_-4px_0_0_var\(--muted-foreground\)/,
+    );
+  });
+
+  it('keeps a chosen-and-shaded member distinct under forced colours, as a fill that does not move the box', () => {
+    // Every other `forced-colors:` rule here excludes `aria-disabled`, which left this member the same
+    // `GrayText` ink as the unchosen ones. A GrayText FILL with Canvas ink says "chosen but unavailable";
+    // a border would grow the box, so none is used.
+    const shaded = TOOLBAR_TRACK_SWITCH.split(' ').filter(
+      (c) => c.includes('[aria-pressed=true][aria-disabled=true]') && c.includes('forced-colors:'),
+    );
+    for (const needle of [
+      'forced-colors:bg-[GrayText]',
+      'forced-colors:[color:Canvas]',
+      'forced-colors:[forced-color-adjust:none]',
+      'forced-colors:shadow-none',
+      'forced-colors:ring-0',
+    ]) {
+      expect(
+        shaded.some((c) => c.endsWith(needle)),
+        needle,
+      ).toBe(true);
     }
+    expect(shaded.join(' ')).not.toMatch(/border|outline|(^|\s|:)p[xy]?-/);
   });
 
   it('marks the chosen member under forced colours with system colours, opted out of the backplate', () => {

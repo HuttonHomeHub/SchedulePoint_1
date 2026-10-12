@@ -1946,8 +1946,13 @@ test.describe('The plan command surface', () => {
     expect(stops.indexOf('undo-history')).toBe(stops.indexOf('redo') + 1);
 
     // CQ-1 (a): the search field keeps an outline, the quieter token rather than the shared one.
+    // Swept over every field the class reaches (the disabled and the live control share it), and each
+    // must sit inside `[data-surface=chrome]`. The token itself is declared at `:root`, so it would
+    // resolve anywhere; what is chrome-only is the band and `--field` it was measured against (3.03:1 and
+    // 3.44:1), so outside it the contrast is unmeasured. The deck is portalled into the band's slot, so the
+    // ancestor is asserted rather than assumed.
     const outline = await page.evaluate(() => {
-      const field = document.querySelector('[data-toolbar-item="search"]');
+      const fields = [...document.querySelectorAll<HTMLElement>('input.deck-search-outline')];
       const probe = (name: string): string => {
         const el = document.createElement('i');
         el.style.cssText = `border:1px solid var(${name});position:fixed`;
@@ -1957,12 +1962,22 @@ test.describe('The plan command surface', () => {
         return colour;
       };
       return {
-        actual: field ? getComputedStyle(field).borderTopColor : null,
+        count: fields.length,
+        outsideChrome: fields.filter((f) => f.closest('[data-surface="chrome"]') === null).length,
+        actual: fields.map((f) => getComputedStyle(f).borderTopColor),
+        currentColour: fields.map((f) => getComputedStyle(f).color),
         quiet: probe('--chrome-input-quiet'),
         shared: probe('--chrome-input'),
       };
     });
-    expect(outline.actual, 'the search field outline').toBe(outline.quiet);
+    expect(outline.count, 'a deck search field renders').toBeGreaterThan(0);
+    expect(outline.outsideChrome, 'a search field outside [data-surface=chrome]').toBe(0);
+    for (const [i, actual] of outline.actual.entries()) {
+      expect(actual, `search field ${String(i)} outline`).toBe(outline.quiet);
+      expect(actual, `search field ${String(i)} outline is not currentcolor`).not.toBe(
+        outline.currentColour[i],
+      );
+    }
     expect(outline.quiet).not.toBe(outline.shared);
 
     // Pressing another value moves the raise, and the track still holds exactly one.

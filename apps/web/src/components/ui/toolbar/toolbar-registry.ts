@@ -505,6 +505,22 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
   const rowBySegment = new Map<string, ToolbarRow>();
   for (const item of items) {
     if (!item.segment) continue;
+    // A segment's members are plain buttons: the raised-member and group rules read a direct
+    // `button[aria-pressed]`, so a `render` item here could never be raised (mirrors the switch-cluster guard).
+    if (typeof item.onActivate !== 'function') {
+      throw new Error(
+        `defineToolbar: "${item.id}" is in segment "${item.segment}" but is a render item — ` +
+          'a segment member must be a plain onActivate button.',
+      );
+    }
+    // `renderRuns` ignores a cluster on a segmented item (the segment is its own named group), so the
+    // declaration would be silently dead: refuse it rather than let a picture be promised and not drawn.
+    if (item.cluster !== undefined) {
+      throw new Error(
+        `defineToolbar: "${item.id}" declares both segment "${item.segment}" and cluster "${item.cluster.id}" — ` +
+          'a segment is already one named switch; a cluster on it would be ignored.',
+      );
+    }
     const row = item.row ?? 'strip';
     const seen = rowBySegment.get(item.segment);
     if (seen === undefined) rowBySegment.set(item.segment, row);

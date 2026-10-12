@@ -283,8 +283,13 @@ run yet.** What shipped, and where it differs from the text above:
   +4.4 px, the DO row 6 px narrower (the undo track). **No ladder move.** One thing the plan did not foresee: the harness
   summed a set's member rects and added `itemGapPx` (4 px) between them, but a track joins its members with 1 px, so a
   set in a track was charged 3 px per join too much. Left alone, that made `L6` (Has conflict only) miss coarse 2160 by a
-  few pixels while SC-18 (b) found it would fit. `promotion-widths.mjs` now charges the real join (`TRACK_JOINS`, recorded as
-  `trackJoinSavingPx`, as `triggerShrinkPx` is) and `promotion.spec.ts` SC-18 (a) subtracts it; with that the ladder is
+  few pixels while SC-18 (b) found it would fit. `promotion-widths.mjs` now charges the track at the width the browser measured for its
+  `[data-toolbar-cluster]` wrapper (recorded as `clusterWidths`, replacing a declared join count), and `promotion.spec.ts`
+  SC-18 (a) both counts that wrapper as one flex item and asserts it is its members' widths plus 1 px per join. (The first
+  version declared the saving in the harness and subtracted the same constant in the spec, so the two cancelled and a track
+  regressed to `gap-1` stayed green while the row overfilled by about 6 px per set; verified red by making that change.)
+  Colour's caption grew +5.9 px (`text-xs` to `text-sm`) and the joins saved about 6 px, so the net is near zero and neither
+  hides the other. With that the ladder is
   unchanged.
 - **Journeys:** `command-surface.spec.ts` gains "a choice of one is a track with one raised member…" (fine and touch);
   `deck-tracks-forced-colors.spec.ts` (in `e2e-workspace-fit`, with `forcedColors` as a per-test option) holds that the

@@ -236,8 +236,8 @@ export const TOOLBAR_TRACK = 'inline-flex flex-nowrap items-stretch gap-px round
  *
  * **Never colour alone.** A raised member computes a distinct background AND a non-`none` shadow in
  * ordinary colours (asserted in the browser, `command-surface.spec.ts`). A shaded member keeps the
- * muted underline of the `selected, disabled` compound in `toolbarControlVariants`, so the selector
- * leaves `aria-disabled` alone.
+ * muted underline of the `selected, disabled` compound in `toolbarControlVariants` and the same 2 px
+ * `--field` inset as a free one; the raised rules above exclude `aria-disabled`, and its own rules follow.
  *
  * **Forced colours drop `box-shadow`, and a border would move the box.** `Highlight` /
  * `HighlightText` are system colours, which the mode keeps when an author names them
@@ -261,6 +261,19 @@ export const TOOLBAR_TRACK_SWITCH = [
   '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:[forced-color-adjust:none]',
   '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:shadow-none',
   '[&>[aria-pressed=true]:not([aria-disabled=true])]:forced-colors:ring-0',
+  // **A chosen member that is shaded** keeps the same 2 px `--field` inset, so the picture is the one a
+  // free switch draws and only the ink and the underline say "unavailable" (the underline stays the
+  // `selected, disabled` compound's muted one, moved in by the ring).
+  '[&>[aria-pressed=true][aria-disabled=true]]:shadow-[inset_0_0_0_2px_var(--field),inset_0_-4px_0_0_var(--muted-foreground)]',
+  // Under forced colours every shaded control is `GrayText` ink on the page, and the shadow above is
+  // dropped, so a chosen-and-shaded member would read as the unchosen ones. A `GrayText` FILL with
+  // `Canvas` ink is the system pair for "chosen but unavailable": it differs from the unchosen members,
+  // from the `Highlight` raised one, and it is a fill, so the box does not move (a border would).
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:bg-[GrayText]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:[color:Canvas]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:[forced-color-adjust:none]',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:shadow-none',
+  '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:ring-0',
 ].join(' ');
 
 export const toolbarSplitCaretVariants = cva(

@@ -13,12 +13,12 @@ import { createHierarchy, ensurePen, newPlan, onboard } from '../e2e-workspace-c
  * fill was the only mark and it vanished. The raised member therefore carries `Highlight` /
  * `HighlightText` system colours with `forced-color-adjust: none` (`TOOLBAR_TRACK_SWITCH`).
  *
- * **The assertion is a pair of screenshots of the same box that must DIFFER**, the way
- * `e2e-forced-colors/focus-ring.spec.ts` establishes a ring: a test that read only a computed
- * `background-color` would pass against a rule that resolves to a colour nobody can see. The box is
- * captured with the member chosen, then again once another member is, so only the choice differs.
- * Computed colours corroborate it: the chosen member's pair is exactly the system pair, which is
- * legible by construction because the reader's theme defines both.
+ * **The primary assertion is the computed pair**: the chosen member's `background-color` is exactly
+ * `Highlight` and its `color` exactly `HighlightText`, read from the browser, which is legible by
+ * construction because the reader's theme defines both. **The screenshot diff is supplementary**, the
+ * way `e2e-forced-colors/focus-ring.spec.ts` establishes a ring: the same box captured with the member
+ * chosen, then again once another member is, which must DIFFER, so a rule that resolves to a colour
+ * nobody can see (or a pair that matches the unchosen member) cannot pass on the computed read alone.
  *
  * **Its control is the `forcedColors: 'none'` case.** In ordinary colours the same member must NOT
  * carry the forced pair and must keep its underline, so a green forced run cannot be a rule that
@@ -121,6 +121,8 @@ test.describe('forced colours: the chosen member of a switch', () => {
         'aria-pressed',
         'true',
       );
+      // Primary: the computed system pair. The screenshot below is taken first only because it needs
+      // the settled box; it is asserted last and only corroborates.
       const asChosen = await pictureOf(page, chosen);
       const chosenColours = await colours(chosen);
       expect(chosenColours.bg, `${name}: the chosen fill is Highlight`).toBe(system.highlight);
@@ -134,6 +136,7 @@ test.describe('forced colours: the chosen member of a switch', () => {
       await expect(chosen).toHaveAttribute('aria-pressed', 'false');
       const asUnchosen = await pictureOf(page, chosen);
       const unchosenColours = await colours(chosen);
+      // Supplementary: the pictures differ.
       expect(
         asChosen.equals(asUnchosen),
         `${name}: the chosen and unchosen member are byte-identical (the M0 reading)`,

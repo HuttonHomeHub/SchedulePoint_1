@@ -38,7 +38,9 @@ You review; you do not edit code.
   (`derivePromotedItems`, `promotion-entries.tsx`, ADR-0185); `groupOrder` on `Toolbar`
   sets render, roving and first-Tab order together (ADR-0187); every `PanelResizer`
   passes `sizeLabel` and `onReset`, `SizeField` is the typed-size twin, and
-  `coarseStrip="none"` is only for the Gantt grid divider (ADR-0188). This bullet said
+  `coarseStrip="none"` is only for the Gantt grid divider (ADR-0188). `cluster`
+  (switch/joined) is a picture only: no role, no name, no stop (ADR-0111); a segment
+  keeps its `role=group` and name. This bullet said
   "four captioned groups … `tier` and `showLabel` must stay two" until 2026-10-12.
 - **The canvas render layer is pure.** `features/tsld/render/` must not import
   `@/config/env` or React; flags are read in components and threaded as explicit
