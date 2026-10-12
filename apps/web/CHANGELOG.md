@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.187.0
+
+### Minor Changes
+
+- [#935](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/935) [`108a932`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/108a932214299744b2894fdcb36998f147d6d2ed) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan toolbar's groups are now separated by thin full-height dividers and a little more space on wide screens, instead of sitting in boxes. The pill behind each group, the dashed outline on the Author group while you do not hold the pen, the ring around Export and Share, and the small eye and wrench at the start of each row are gone. A divider never appears at the start or the end of a line when the toolbar wraps, and the Plan group stays at the right-hand end of its row.
+
 ## 0.186.1
 
 ### Patch Changes
