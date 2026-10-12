@@ -759,6 +759,91 @@ describe('Deck — a tail and a rule (toolbar-grid M3)', () => {
     expect(planSections()).toEqual([['analysis', 'baselines'], ['export'], ['gear']]);
   });
 
+  it('crosses 80rem without a duplicate-key warning, the gear landing in the tail', () => {
+    let wide = false;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return query.includes('min-width') || query.includes('width >=') ? wide : false;
+      },
+      media: query,
+      addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+    }));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<Deck items={planItems} context={{}} label="Plan commands" />);
+    expect(planSections()).not.toContainEqual(['gear']);
+    wide = true;
+    act(() => listeners.forEach((fn) => fn()));
+    // The tail is a section of its own, and it must not share a React key with Analysis's section
+    // (both are registry group 'object'), or React warns and may reuse the wrong subtree.
+    expect(planSections()).toEqual([['analysis', 'baselines'], ['export'], ['gear']]);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  describe('focus across 80rem', () => {
+    let wide = false;
+    const listeners = new Set<() => void>();
+    const cross = (to: boolean): void => {
+      wide = to;
+      act(() => listeners.forEach((fn) => fn()));
+    };
+    const stub = (): void => {
+      wide = false;
+      listeners.clear();
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return query.includes('min-width') || query.includes('width >=') ? wide : false;
+        },
+        media: query,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      }));
+    };
+
+    it('keeps focus on a tail item that changes section, in both directions', () => {
+      stub();
+      render(<Deck items={planItems} context={{}} label="Plan commands" />);
+      screen.getByRole('button', { name: 'Settings' }).focus();
+      cross(true);
+      // The move remounts the gear in another section; focus must follow it, or the handoff hook
+      // announces a control as gone that is still there (WCAG 2.4.3, 4.1.3).
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+      cross(false);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+    });
+
+    it('does not take focus when it was elsewhere', () => {
+      stub();
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <Deck items={planItems} context={{}} label="Plan commands" />
+        </>,
+      );
+      screen.getByRole('button', { name: 'Elsewhere' }).focus();
+      cross(true);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }));
+    });
+
+    it('does not take focus back after the reader clicked away', () => {
+      stub();
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <Deck items={planItems} context={{}} label="Plan commands" />
+        </>,
+      );
+      screen.getByRole('button', { name: 'Settings' }).focus();
+      screen.getByRole('button', { name: 'Elsewhere' }).focus();
+      document.body.focus();
+      (document.activeElement as HTMLElement | null)?.blur();
+      cross(true);
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
+
   it('leaves it in its own section below that, so the screen and the roving walk agree (WCAG 1.3.2)', () => {
     viewport(false);
     render(<Deck items={planItems} context={{}} label="Plan commands" />);
@@ -781,6 +866,23 @@ describe('Deck — a tail and a rule (toolbar-grid M3)', () => {
     render(<Deck items={planItems} context={{}} label="Plan commands" />);
     const gear = screen.getByRole('button', { name: 'Settings' });
     expect(gear.closest('div.flex.flex-wrap')?.className).toContain('before:bg-border');
+  });
+
+  it('draws no rule on an item that a predicate has made the first of its section', () => {
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'pen',
+        group: 'tools',
+        order: -1,
+        label: 'Pen',
+        isVisible: () => false,
+        onActivate: () => {},
+      },
+      { id: 'add', group: 'tools', order: 0, label: 'Add', ruleBefore: true, onActivate: () => {} },
+      { id: 'link', group: 'tools', order: 1, label: 'Link', onActivate: () => {} },
+    ]);
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    expect(document.querySelector('[data-deck-rule-before]')).toBeNull();
   });
 
   it('wraps the run a rule precedes, and only that run, in a box with no role or stop', () => {

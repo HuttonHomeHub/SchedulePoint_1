@@ -566,6 +566,15 @@ describe('defineToolbar: a rule and a tail are placements (toolbar-grid M3)', ()
     ).toThrow(/"two" declares ruleBefore but is not the first member of cluster "pair"/);
   });
 
+  it('refuses a rule on a segment member: its wrapper would split the switch’s track', () => {
+    expect(() =>
+      defineToolbar([
+        lead,
+        base({ id: 'half', group: 'tools', order: 1, segment: 's', ruleBefore: true }),
+      ]),
+    ).toThrow(/"half" declares ruleBefore inside segment "s"/);
+  });
+
   it('refuses a tail inside a segment or a cluster: neither can send a member to the end', () => {
     expect(() => defineToolbar([base({ id: 'a', groupTail: true, segment: 's' })])).toThrow(
       /"a" declares groupTail inside a segment/,

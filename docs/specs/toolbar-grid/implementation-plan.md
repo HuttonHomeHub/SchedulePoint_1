@@ -499,7 +499,7 @@ cell, both pointers, base and worst states". The `e2e-promotion` SC-17/18 cases 
   - `DESIGN_SYSTEM.md`: the toolbar section (dividers and rules, tracks, icon ink, no boxes).
   - `UX_STANDARDS.md` and `COMPONENT_LIBRARY.md` (the registry fields).
   - Flip both headers to `Accepted — shipped (ADR-NNNN)`.
-  - `docs/TECH_DEBT.md`: a row for D-5's follow-up (quiet icons on the selection bar); any unmeasured wide state
+  - `docs/TECH_DEBT.md`: a row for D-5's follow-up (quiet icons on the selection bar): filed at the M3 review as #498; any unmeasured wide state
     found at M4.
 - **Complexity:** S
 - **Dependencies:** M5-T1, owner sign-off

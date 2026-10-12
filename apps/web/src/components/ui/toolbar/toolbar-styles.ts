@@ -287,7 +287,7 @@ export const TOOLBAR_TRACK_SWITCH = [
  * wrapper with a `before:` would still reserve its padding.
  */
 export const DECK_RULE_BEFORE =
-  'contents @roomy/deck:relative @roomy/deck:inline-flex @roomy/deck:items-stretch @roomy/deck:ml-1 @roomy/deck:pl-2 @roomy/deck:before:absolute @roomy/deck:before:inset-y-1/4 @roomy/deck:before:left-0 @roomy/deck:before:w-px @roomy/deck:before:bg-border';
+  'contents @roomy/deck:relative @roomy/deck:inline-flex @roomy/deck:ml-1 @roomy/deck:pl-2 @roomy/deck:before:absolute @roomy/deck:before:inset-y-1/4 @roomy/deck:before:left-0 @roomy/deck:before:w-px @roomy/deck:before:bg-border';
 
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than

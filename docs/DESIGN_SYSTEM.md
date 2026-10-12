@@ -293,8 +293,11 @@ So, for any command surface:
   Settings… gear that closes the DO row. The last three come from `ToolbarItem.ruleBefore` and `groupTail` and
   exist **from `--container-roomy` only** (79 rem of deck, 80 rem of window): below it each costs a line at
   1024 with Link armed (DO has 5.2 px free there; the gear costs 12 px and the two rules 24, measured), so the
-  gear stays after Earned value and Author has no extra rules, and the 1024 floor keeps every row's line count in
-  every state (`floor-states.spec.ts` drives Link armed at the floor).
+  gear stays after Analysis (the registry order decides; Earned value is inside that menu) and Author has no extra rules,
+  and the 1024 floor keeps every row's line count in every state **except one that already wrapped before this**: Add
+  armed with its longest label ("Adding Finish milestone") puts DO on two lines at most stage cells today
+  (`m0-measurement.md` §0.3), and keeps exactly those two (`floor-states.spec.ts` drives Link armed and Add armed at the
+  floor). The deck forces `quietIcons` on for every control (`Deck`), where `Toolbar` defaults it off.
 - **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
   `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: a lens
   that is on but shaded keeps a 2 px underline in the same ink, and `forced-colors:[color:GrayText]` keeps

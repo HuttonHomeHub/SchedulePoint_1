@@ -3489,7 +3489,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       labelVisibility: 'never',
       // The last control of the DO row where the deck has room (owner decision 2026-10-12, from 80
       // rem), behind an inset rule: settings are not an analysis of the plan, and the end of a row is
-      // where a reader looks for them. Below that it stays after Earned value, because the move costs
+      // where a reader looks for them. Below that it stays after Analysis, because the move costs
       // the 1024 floor a line with Link armed (`ToolbarItem.groupTail`).
       groupTail: true,
       // The gear, not a calendar: the dialog stopped being only the calendar long ago, and

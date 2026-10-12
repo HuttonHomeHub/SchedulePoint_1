@@ -251,7 +251,9 @@ export interface ToolbarItem<Ctx> {
    * **Deck only, and only from `--container-roomy`**: the rule costs 12 px of a row, which the 1024
    * floor does not have in every state (`m0-measurement.md` §4), so below that width it is not drawn
    * and costs nothing. `Toolbar` ignores it. `defineToolbar` refuses it on a group's first item (the
-   * group divider is already there), on a later cluster member and beside {@link groupTail}.
+   * group divider is already there), on a segment member, on a later cluster member and beside
+   * {@link groupTail}. `Deck` also drops it from the first **visible** entry of a section, since a
+   * predicate can hide whatever it follows and the section or group rule is then already there.
    */
   ruleBefore?: true;
   /**
@@ -264,7 +266,9 @@ export interface ToolbarItem<Ctx> {
    * it the item stays in its own section: the gear plus its rule cost 12 px that the DO row at 1024
    * does not have with Link armed, and the DOM order is what the arrow keys walk, so moving it by CSS
    * would put the screen and the roving sequence in different orders (WCAG 1.3.2, 2.4.3). The
-   * registry group is unchanged, so the taxonomy and the group's accessible name are too. `Toolbar`
+   * registry group is unchanged, so the taxonomy and the group's accessible name are too. **Crossing
+   * 80 rem re-mounts the item** (it changes section), which blurs it: `Deck` puts focus back on it when
+   * the reader was standing on it, so a tail item must stay findable by `data-toolbar-item`. `Toolbar`
    * ignores it. `defineToolbar` refuses it on a segment, a cluster, a presentational item or beside
    * {@link ruleBefore}.
    */
@@ -637,6 +641,12 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
         throw new Error(
           `defineToolbar: "${item.id}" declares both ruleBefore and groupTail — a tail section already ` +
             'sits behind its own rule.',
+        );
+      }
+      if (item.ruleBefore && item.segment !== undefined) {
+        throw new Error(
+          `defineToolbar: "${item.id}" declares ruleBefore inside segment "${item.segment}" — ` +
+            "the rule's wrapper would split the switch's track; put it on the item before the segment.",
         );
       }
       if (item.groupTail && (item.segment !== undefined || item.cluster !== undefined)) {

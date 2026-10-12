@@ -2043,7 +2043,7 @@ test.describe('The plan command surface', () => {
   });
 
   /**
-   * **Settings… closes the DO row from 79 rem, and stays after Earned value below it** (toolbar-grid
+   * **Settings… closes the DO row from 79 rem, and stays after Analysis below it** (toolbar-grid
    * M3, owner decision 2026-10-12; SC-13 (f)). The rule before it is the section rule and exists only
    * where the gear has moved. What is asserted is geometry and order together: the gear is the last
    * DOM stop of the row AND its rightmost control (the DOM order is the reading order, WCAG 1.3.2),
@@ -2092,6 +2092,36 @@ test.describe('The plan command surface', () => {
         expect(reading.last, `${at}: the gear moved below 79 rem`).not.toBe('calendar');
         expect(reading.previous, `${at}: the gear left its place after Analysis`).toBe('analysis');
       }
+    }
+  });
+
+  /**
+   * **Focus on Settings… survives a resize across 80 rem, both ways** (toolbar-grid M3, found by the
+   * accessibility review in Chromium). Crossing moves the gear to another section, which re-mounts it
+   * and blurs it; without the deck's refocus, focus fell to the toolbar and the handoff announced
+   * "Settings… is no longer available" about a control that had not gone (WCAG 2.4.3, 4.1.3).
+   *
+   * **Verified red** by deleting the layout effect in `Deck.tsx` that re-focuses `standingOn`.
+   */
+  test('Settings… keeps focus across a resize over 80 rem, and nothing is announced as gone', async () => {
+    test.setTimeout(120_000);
+    await ensurePen(page);
+    const gear = page
+      .getByRole('toolbar', { name: 'Plan commands', exact: true })
+      .getByRole('button', { name: 'Settings…', exact: true });
+    for (const [from, to] of [
+      [1100, 1300],
+      [1300, 1250],
+      [1250, 1300],
+      [1300, 1100],
+    ] as const) {
+      await page.setViewportSize({ width: from, height: 800 });
+      await page.waitForTimeout(400);
+      await gear.focus();
+      await page.setViewportSize({ width: to, height: 800 });
+      await page.waitForTimeout(600);
+      await expect(gear, `${String(from)} -> ${String(to)}`).toBeFocused();
+      await expect(page.getByTestId('announcer')).not.toContainText('no longer available');
     }
   });
 

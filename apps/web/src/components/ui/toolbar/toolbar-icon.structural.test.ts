@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
  * (`container-query.structural.test.ts` is the precedent for a gate matching its own prose).
  *
  * **The selection bar is deliberately outside it** (D-5): it keeps today's ink, and
- * the toolbar-grid plan (M5-T2) files the follow-up that extends the quiet glyph to it. Adding `quietIcons` there is
+ * `docs/TECH_DEBT.md` #498 is the follow-up that extends the quiet glyph to it. Adding `quietIcons` there is
  * a decision, which is why the last case below pins that nothing but the band passes it.
  *
  * Verified red by removing the helper call from the Analysis trigger, from `ToolbarSplitButton`, and

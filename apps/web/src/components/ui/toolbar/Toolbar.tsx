@@ -97,7 +97,7 @@ export interface ToolbarProps<Ctx> {
   /**
    * Paint each glyph a step quieter than its label (`toolbarIconClass`, toolbar-grid M3 D-5). Opt-in,
    * and passed only by the header's toolbars: the selection bar and the diagram-corner cluster keep
-   * today's ink until the follow-up the toolbar-grid plan files (M5-T2) extends it. Icon-only controls are unaffected.
+   * today's ink until the follow-up in `docs/TECH_DEBT.md` #498 extends it. Icon-only controls are unaffected.
    */
   quietIcons?: boolean;
   className?: string;

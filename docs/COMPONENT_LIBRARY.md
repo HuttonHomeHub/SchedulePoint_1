@@ -438,7 +438,7 @@ role, name or stop, and the wrapper is `display: contents` **below `--container-
 mark there (`DECK_RULE_BEFORE`): the rule costs a row 12 px, which the 1024 floor does not have in every state.
 `groupTail?: true` sends the item, where the deck has room, to a section of its own after every section of its
 deck group, behind the ordinary section rule: Settings… is the end of the DO row from 80 rem of viewport (the
-width at which the deck's container reaches `--container-roomy`), and stays after Analysis below it. **The DOM
+width at which the deck's container reaches `--container-roomy`), and stays after Analysis below it (the registry order decides: Earned value is inside the Analysis menu). **The DOM
 order changes, not the CSS order** (`useDeckTailRoom`, a media-query read in its own file like `useDeckRowOrder`),
 because an `order` on a flex child would split the screen from the Tab and arrow sequence (WCAG 1.3.2, 2.4.3).
 `defineToolbar` refuses `ruleBefore` on the first item of a group (the group divider is already there) and on a
@@ -454,8 +454,8 @@ ink (`inherit`, so a shaded control stays shaded) under `@max-roomy/deck:`; `'ro
 under a coarse pointer. It is **opt-in**: `ToolbarButton`, `ToolbarPopover` and `ToolbarSplitButton` take
 `quietIcons?: boolean`, `ToolbarItemRenderApi` carries `quietIcons: boolean` for a custom `render` trigger, and
 `Toolbar` takes the same prop. `Deck` passes it for every control, and the page header's two toolbars (Plan
-details, Plan view) pass it; **the selection bar and the diagram-corner cluster do not** (D-5; the toolbar-grid plan files the
-follow-up that extends it, M5-T2). `toolbar-icon.structural.test.ts` refuses a trigger that paints a glyph without calling the
+details, Plan view) pass it; **the selection bar and the diagram-corner cluster do not** (D-5; `docs/TECH_DEBT.md` #498 files the
+follow-up that extends it). `toolbar-icon.structural.test.ts` refuses a trigger that paints a glyph without calling the
 helper. `ToolbarItemRenderApi.quietIcons` is a required member: a hand-built API object states it.
 
 **`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional
