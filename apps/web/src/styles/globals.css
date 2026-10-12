@@ -125,19 +125,19 @@
   animation-timeline: scroll(self inline);
 }
 
-/* A command deck row clips its own edges (`Deck.tsx`, `deck-row-clip`; toolbar-grid M1) so a group
-   divider hung in the gap outside the row's box is not painted where a group opens a line. `clip` and
-   not `hidden`, so the row is not a scroll container. **The clip edge is pushed out 4 px**, because in
-   forced colours a focused control's outline is `2px` wide at a `2px` offset (`:focus-visible` below)
-   and the first control on a line would otherwise lose its ring at the row's edge (WCAG 2.4.7).
-   `overflow-clip-margin` applies only when BOTH axes clip (measured in Chromium: with `overflow-x`
-   alone the margin does nothing and the ring is cut), so the block axis clips too, 4 px past the row.
-   Nothing a row paints reaches further than that vertically: the Filter badge's top is level with its
-   control's, and menus, popovers and tooltips are portalled. Dividers hang past the margin
-   (`DECK_GROUP_DIVIDER`, `DECK_TRAILING_SPACER`), so they stay clipped. */
+/* A command deck row clips its own edges (`Deck.tsx`) so a group divider hung in the gap outside the
+   row's box is not painted where a group opens a line. `clip` and not `hidden`, so the row is not a
+   scroll container. **The clip edge is pushed out 5 px: the forced-colours focus ring reaches 4 px
+   (`2px` at a `2px` offset, `:focus-visible` below) and needs a pixel to spare**: a ring that
+   ends exactly on the clip edge is one rounding from losing its outer pixel at a fractional device
+   scale (WCAG 2.4.7). The dividers are placed past
+   that edge with a pixel to spare on their side (`DECK_GEOMETRY_PX`, `toolbar-styles.ts`).
+   `overflow-clip-margin` applies only when BOTH axes clip (measured in Chromium), so the block axis
+   clips 5 px past the row too: the Filter badge's top is level with its control's, and menus,
+   popovers and tooltips are portalled. */
 @utility deck-row-clip {
   overflow: clip;
-  overflow-clip-margin: 4px;
+  overflow-clip-margin: 5px;
 }
 
 /* `xs`: 26rem (416 px). The width under which the app header's brand and plan identity cannot share a

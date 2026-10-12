@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type BrowserContext, type Page } from '@playwright/test';
+import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { showActivities } from '../e2e/workspace';
 import { ganttRow } from '../e2e-gantt/support';
@@ -2853,5 +2853,151 @@ test.describe('The collapsed spine, under a mouse', () => {
       await page.getByRole('button', { name: 'Show Project Explorer' }).click();
       await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
     }
+  });
+});
+
+/**
+ * **The deck's dividers and clip hold at a fractional device scale** (toolbar-grid M1, SC-3).
+ *
+ * Every other sweep here runs at a device scale of 1, where a CSS pixel is a device pixel and a
+ * divider that sits exactly on the clip edge cannot leak. The owner's Surface is 1.5 and 175 %
+ * scaling is 1.75, where an edge lands between device pixels and a zero margin shaves or paints.
+ * `deck-dividers.ts` asks for a real distance past the clip edge (not an exact `<=`) and this runs
+ * it at both scales, on both pointers, with Add armed (DO wraps at 1280).
+ *
+ * **The below-`lg` seam is here too**, because it is the one deck mark that is a border on the row
+ * itself rather than a pseudo-element, and a row's clip is the thing most likely to be mistaken for
+ * what removes it. `lg` is 64 rem, so the seam exists only under 1024 — the floor itself has none —
+ * and 1000 is where it can be read.
+ */
+const SCALE_CELLS = [
+  { width: 1024, height: 600 },
+  { width: 1280, height: 800 },
+  { width: 1646, height: 1097 },
+];
+
+/** Resolves once the viewport is the requested width and the layout has had two frames to follow. */
+async function settleAt(page: Page, size: { width: number; height: number }): Promise<void> {
+  await page.setViewportSize(size);
+  await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(size.width);
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+  );
+}
+
+test.describe('The plan command surface, at a fractional device scale', () => {
+  let seed: Awaited<ReturnType<BrowserContext['storageState']>>;
+  let planUrl = '';
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000);
+    const context = await browser.newContext({ viewport: { width: 1646, height: 1097 } });
+    await acknowledgeViewportNotice(context);
+    const seeded = await context.newPage();
+    const orgSlug = await onboard(seeded, Date.now() + 41);
+    await createHierarchy(seeded);
+    await newPlan(seeded, 'Riverside Quarter — Device scale');
+    await ensurePen(seeded);
+    await seedActivities(seeded, orgSlug, [
+      { name: 'Site setup', laneIndex: 0, durationDays: 12 },
+      { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
+    ]);
+    await recalculate(seeded, orgSlug);
+    planUrl = seeded.url();
+    seed = await context.storageState();
+    await context.close();
+  });
+
+  async function openPlan(
+    browser: Browser,
+    options: { deviceScaleFactor: number; hasTouch: boolean },
+  ): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext({
+      storageState: seed,
+      viewport: { width: 1646, height: 1097 },
+      ...options,
+    });
+    await acknowledgeViewportNotice(context);
+    const page = await context.newPage();
+    await page.goto(planUrl);
+    await ensurePen(page);
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.deviceScaleFactor);
+    return { context, page };
+  }
+
+  for (const options of [
+    { deviceScaleFactor: 1.5, hasTouch: false },
+    { deviceScaleFactor: 1.75, hasTouch: false },
+    { deviceScaleFactor: 1.5, hasTouch: true },
+  ]) {
+    const pointer = options.hasTouch ? 'a finger' : 'a mouse';
+    test(`no divider leaks past the clip, ${pointer} at ${options.deviceScaleFactor}x`, async ({
+      browser,
+    }) => {
+      test.setTimeout(240_000);
+      const { context, page } = await openPlan(browser, options);
+      let painted = 0;
+      let headroom = Number.POSITIVE_INFINITY;
+      const read = async (cell: (typeof SCALE_CELLS)[number], armed: boolean): Promise<void> => {
+        await settleAt(page, cell);
+        const reading = await expectDividersOnlyBetweenGroups(
+          page,
+          `${pointer} at ${options.deviceScaleFactor}x, ${cell.width}${armed ? ', Add armed' : ''}`,
+        );
+        painted += reading.painted;
+        headroom = Math.min(headroom, reading.minClipHeadroom);
+      };
+      for (const cell of SCALE_CELLS) await read(cell, false);
+
+      // DO wraps at 1280 with Add armed, which is where a trailing group opens a line of its own.
+      await settleAt(page, SCALE_CELLS[1]!);
+      await page.locator('[data-toolbar-item="add-activity"]').first().click();
+      await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
+        /^Adding/,
+      );
+      await read(SCALE_CELLS[1]!, true);
+
+      expect(
+        painted,
+        'no divider was painted anywhere — the sweep asked about nothing',
+      ).toBeGreaterThan(0);
+      // The clipped dividers that were read must lie clear of the clip edge by about a pixel.
+      expect(
+        headroom,
+        'the closest clipped divider to the clip edge, in CSS px',
+      ).toBeGreaterThanOrEqual(0.9);
+      await context.close();
+    });
+  }
+
+  test('the second-row seam below lg is painted, not clipped by its own row', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const { context, page } = await openPlan(browser, { deviceScaleFactor: 1, hasTouch: false });
+    await settleAt(page, { width: 1000, height: 600 });
+    const second = page.locator('[data-deck-row]').nth(1);
+    const seam = await second.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      const box = el.getBoundingClientRect();
+      return {
+        width: parseFloat(cs.borderLeftWidth),
+        style: cs.borderLeftStyle,
+        x: box.left,
+        y: box.top,
+        height: box.height,
+      };
+    });
+    expect(seam.style, 'the second row has no left border below lg').toBe('solid');
+    expect(seam.width).toBeGreaterThan(0);
+    const clip = { x: seam.x - 1, y: seam.y + 2, width: seam.width + 2, height: seam.height - 4 };
+    const painted = await page.screenshot({ clip });
+    // Hiding the border is the only thing that can change a strip this narrow and this inside the row.
+    await second.evaluate((el) => (el.style.borderLeftColor = 'transparent'));
+    const hidden = await page.screenshot({ clip });
+    expect(painted.equals(hidden), 'the seam is not painted: its own row clips it').toBe(false);
+    await context.close();
   });
 });

@@ -32,11 +32,21 @@ interface DividerReading {
   firstWithDivider: string[];
   painted: number;
   clipped: number;
+  /** The least distance, in CSS px, by which a clipped divider lies beyond its row's clip edge. */
+  minClipHeadroom: number;
   rowOverflow: string[];
 }
 
+/**
+ * How far past the clip edge a divider's inner edge must lie to count as clipped away. Half a CSS px
+ * is the most a fractional device scale snaps an edge by (at 1.5 a device pixel is 0.67 CSS px, and a
+ * 1 px border is drawn as one of them), so a divider with less than this is not reliably gone — the
+ * old geometry had exactly zero here, and an exact `<=` is the comparison that passes on a float.
+ */
+const CLIP_HEADROOM_PX = 0.5;
+
 export async function readDividers(page: Page): Promise<DividerReading> {
-  return page.evaluate(() => {
+  return page.evaluate((headroomFloor) => {
     const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
     if (!deck) throw new Error('the deck was not found — nothing to assert about');
     const out: DividerReading = {
@@ -45,6 +55,7 @@ export async function readDividers(page: Page): Promise<DividerReading> {
       firstWithDivider: [],
       painted: 0,
       clipped: 0,
+      minClipHeadroom: Number.POSITIVE_INFINITY,
       rowOverflow: [],
     };
     const transparent = (c: string): boolean => c === 'rgba(0, 0, 0, 0)' || c === 'transparent';
@@ -132,11 +143,14 @@ export async function readDividers(page: Page): Promise<DividerReading> {
 
         // The clip edge sits `overflow-clip-margin` outside the row's box, so a focus ring can show there.
         const margin = parseFloat(rowCs.overflowClipMargin) || 0;
-        const clippedAway =
-          rowCs.overflowX === 'clip' &&
-          (bx + 1 <= rowBox.left - margin || bx >= rowBox.right + margin);
-        if (clippedAway) {
+        // How far the divider's inner edge lies beyond the clip edge, on whichever side it hangs.
+        const headroom =
+          rowCs.overflowX === 'clip'
+            ? Math.max(rowBox.left - margin - (bx + 1), bx - (rowBox.right + margin))
+            : Number.NEGATIVE_INFINITY;
+        if (headroom >= headroomFloor) {
           out.clipped += 1;
+          out.minClipHeadroom = Math.min(out.minClipHeadroom, headroom);
           return;
         }
         // Painted. It needs a group before it AND the group it leads, both on its own line.
@@ -154,7 +168,7 @@ export async function readDividers(page: Page): Promise<DividerReading> {
       });
     }
     return out;
-  });
+  }, CLIP_HEADROOM_PX);
 }
 
 /** Asserts the three questions above for the current page state; returns the painted count. */
@@ -166,5 +180,11 @@ export async function expectDividersOnlyBetweenGroups(
   expect(r.boxes, `${where}: something on the deck paints a box`).toEqual([]);
   expect(r.firstWithDivider, `${where}: the first group on a row draws a divider`).toEqual([]);
   expect(r.stray, `${where}: a divider starts a line, or a later group has none`).toEqual([]);
+  // Every row must clip both axes: `overflow-clip-margin` does nothing unless both do, and a row that
+  // clips only x would pass the geometry above while cutting the focus ring (`deck-focus-ring.spec.ts`).
+  expect(
+    r.rowOverflow.filter((row) => !/:clip\/clip$/.test(row)),
+    `${where}: a deck row does not clip both axes`,
+  ).toEqual([]);
   return r;
 }

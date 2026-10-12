@@ -83,13 +83,11 @@ import { cn } from '@/lib/utils';
  * structure **inside** a group rather than as a name above it. This section said 7 → 4 until that
  * milestone gave `help` a name of its own.
  *
- * **There is no card, and no box of any kind** (toolbar-grid M1). M1 of the console epic deleted the
- * group's border and padding; toolbar-redesign M6 then put a pill behind each group, a hollow dashed
- * outline on the locked Author group, a ring round Export and Share…, and an eye and a wrench at the
- * head of the rows — and the product owner's verdict was five boxes where they had asked for a grid.
- * A deck group is again a bare row of controls with a `role` and an `aria-label`, and what marks it
- * from its neighbour is a full-height divider in the gap before it (`DECK_GROUP_DIVIDER`), stronger
- * than the short rule between its own sections, which is what makes the two read as a hierarchy.
+ * **There is no card, and no box of any kind** (toolbar-grid M1). A deck group is a bare row of controls
+ * with a `role` and an `aria-label`; what marks it from its neighbour is a full-height divider in the
+ * gap before it (`DECK_GROUP_DIVIDER`), stronger than the short rule between its own sections, which is
+ * what makes the two read as a hierarchy. (A pill, a dashed outline and a ring did this until the owner
+ * asked for a grid; `m0-measurement.md` has the numbers.)
  *
  * ## What `caption` was called, and why it is now `name`
  *
@@ -381,24 +379,18 @@ export function Deck<Ctx>({
           key={row}
           data-deck-row={row}
           className={cn(
-            // **The row clips its own edges, and that is what keeps a divider off a line's start.**
-            // A group's divider hangs half a gap to the LEFT of the group (`DECK_GROUP_DIVIDER`), so a
-            // group that wraps to the start of a line has its divider outside this box and nothing is
-            // painted — the leading-seam defect (SC-12) the pill was chosen to prevent, solved without
-            // a box. `clip` and not `hidden`: `hidden` makes the row a scroll container (so
-            // `deckScrolls` and `scrollIntoView` below `lg` would change). The clip edge is 4 px outside
-            // the box (`deck-row-clip`, `globals.css`) so the forced-colours focus outline, which reaches
-            // 4 px, is not cut on the first or last control of a line. Only pseudo-elements sit outside
-            // that: menus, popovers and tooltips are portalled.
-            //
-            // The group gap is 8 px, and 24 px from `@roomy/deck:` (79 rem), where the floor has the
-            // width to spend (`m0-measurement.md` §3): the deleted row marks give 18 px per row back.
-            // Horizontal only, so a wrapped line does not move 16 px further from the one above it.
+            // **The row clips its own edges, and that is what keeps a divider off a line's start**: a
+            // wrapped group's leading divider hangs outside the clip (SC-12). `clip` and not `hidden`,
+            // which would make the row a scroll container (`deckScrolls` and `scrollIntoView` below
+            // `lg` would change). Clip margin, divider offsets and the gap are one set of numbers:
+            // `DECK_GEOMETRY_PX`. Horizontal gap only, so a wrapped line does not move further from the
+            // one above it.
             '@roomy/deck:gap-x-6 deck-row-clip flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap',
             // The seam between the two rows on the scrolling line: below `lg` the second row follows
             // the first on the same line, and nothing else would say a row ended. A border and not a
             // pseudo-element, because the row's clip would hide anything outside its box; `-ml-2`
-            // and `pl-2` put it mid-gap (half of the root's `max-lg:gap-4`), as the line it replaces was.
+            // and `pl-2` put it mid-gap (half of the root's `max-lg:gap-4`). That is a different gap
+            // from `DECK_GEOMETRY_PX.gap` (between rows, below `lg`), so it is not derived from it.
             rowIndex > 0 &&
               'max-lg:border-muted-foreground/40 max-lg:-ml-2 max-lg:border-l max-lg:pl-2',
           )}

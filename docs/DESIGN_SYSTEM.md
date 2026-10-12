@@ -250,9 +250,9 @@ So, for any command surface:
   group that wrapped onto a line of its own could not open it with a rule pointing at nothing (SC-12). Each deck
   row now has `overflow: clip` (`deck-row-clip`), so a group at the start of a line has its divider outside the
   row's box and it is not painted; `clip` and not `hidden`, which would make the row a scroll container. The
-  clip edge is pushed out 4 px (`overflow-clip-margin`, which applies only when both axes clip) so the
-  forced-colours focus outline, 2 px at a 2 px offset, is not cut on the first or last control of a line;
-  dividers hang past that margin, and `e2e-forced-colors/deck-focus-ring.spec.ts` asks it.
+  clip edge is pushed out 5 px (`overflow-clip-margin`, which applies only when both axes clip) so the
+  forced-colours focus outline, 2 px at a 2 px offset (reaching 4), is not cut on the first or last control of a line, with a pixel to spare;
+  dividers hang past that margin, and `e2e-workspace-fit/deck-focus-ring.spec.ts` asks it.
   A trailing group (pushed to the line's end by `ml-auto`) is not at the row's left edge when it wraps, so its
   divider is drawn by an empty `aria-hidden` flex item before it (`DECK_TRAILING_SPACER`): where the group
   wraps, the spacer stays at the end of the line above and fills it, and its divider falls outside the row's

@@ -79,8 +79,8 @@ import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-regist
  * The deck's group box — a `border` plus `px-2 py-1.5` at ≈ 1.2:1 against the band it sat in — cost
  * 14 px per deck line and 18 px per group to draw a boundary a 175 %-scaled screen cannot see
  * (`m0-measurement.md` §1). It went, and the `chrome` variant with it. A group is now a bare row of
- * controls, separated from its neighbour by an inset rule built at M7 (`Deck.tsx`) rather than by a
- * box. The base survives for the **selection bar**, which is not that epic's subject and keeps it.
+ * controls, separated from its neighbour by a divider (`DECK_GROUP_DIVIDER`) rather than by a box.
+ * The base survives for the **selection bar**, which is not that epic's subject and keeps it.
  *
  * **A style, not a component**, and that remains right for the reason it always was: the two
  * consumers wanted different behaviour, so a shared `<DeckCard>` would recouple things that should
@@ -146,56 +146,61 @@ export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 /**
+ * **The deck's row geometry, in CSS px, in one place** (toolbar-grid M1). The Tailwind classes below and
+ * `deck-row-clip` in `globals.css` are literal, so `deck-seams.structural.test.tsx` derives what they
+ * must say from these numbers and fails when they drift.
+ *
+ * - `gap`: the space between groups. 8 below 79 rem, where the 1024 floor has about 5 px spare on DO and
+ *   the gap must not widen; 24 from it (`@roomy/deck:`). The spacer's negative margin equals it.
+ * - `ringReach`: how far the forced-colours focus ring reaches (`2px` at a `2px` offset).
+ * - `clipMargin`: where the row's clip edge lies outside its box: the ring plus 1 px.
+ * - `divider`: how far the line's OUTER edge hangs from the group it leads (the line is 1 px wide, so it
+ *   spans `offset - 1` to `offset`). Roomy it is mid-gap (13 of 24). Compact the gap is 8, so mid-gap
+ *   (5) would sit inside the clip and show at a line's start; the line has to clear `clipMargin` by
+ *   1 px (`offset - 1 >= clipMargin + 1`, so 7) and so sits 1 px from the neighbour it follows. The ring
+ *   and the divider therefore each have 1 px of headroom on their own side of the clip edge.
+ */
+export const DECK_GEOMETRY_PX = {
+  gap: { compact: 8, roomy: 24 },
+  ringReach: 4,
+  clipMargin: 5,
+  divider: { compact: 7, roomy: 13 },
+} as const;
+
+/**
  * **A deck group is split from its neighbour by a divider, never boxed** (toolbar-grid M1, R1). It
- * replaces the pill (toolbar-redesign M6 V2), the Author group's hollow dashed outline while the pen is
- * not held, the ring round Export and Share… and the row's leading eye and wrench: each drew a box
- * on a band that is 1.1:1 against its own pill, and between them they were five boxes where the owner
- * asked for a grid.
+ * replaces the pill, the locked Author outline, the Export and Share ring and the rows' eye and wrench:
+ * five boxes where the owner asked for a grid.
  *
- * A 1 px line, the full height of the controls (`inset-y-0` on a group that is exactly one control
- * tall), in the gap **before** every group but the first on its row: half of the gap to the left, so it
- * sits mid-gap — 4 px of 8 below 79 rem, 12 px of 24 from it (`@roomy/deck:`, the floor the gap itself
- * widens at). It is a pseudo-element, so it costs **no layout width**; the gap is the only thing
- * that moved, and `promotion-widths.*.json` was re-taken with it.
+ * A 1 px line the full height of the controls, in the gap **before** every group but the first on its
+ * row (placed by `DECK_GEOMETRY_PX`). A pseudo-element, so it costs **no layout width**.
  *
- * **A divider is only ever leading, and the row clips its own left edge** (`deck-row-clip` in
- * `Deck`), so a group that wraps to the start of a line draws its divider outside the row's box and
- * it is not painted. This is the pill's argument ("a container has no leading edge to misplace")
- * restated for a line: the old seam opened a wrapped line with a rule pointing at nothing (SC-12,
- * measured at 1024), and a divider on the group that follows another has exactly that defect unless
- * something removes it at the line start.
+ * **A divider is only ever leading, and the row clips its own edge** (`deck-row-clip`), so a group that
+ * wraps to the start of a line draws its divider outside the clip and nothing is painted: the
+ * leading-seam defect (SC-12, measured at 1024) solved without a box.
  *
- * `--muted-foreground` at 40 % is 2.43:1 on the band (measured, `m0-measurement.md` §6), asserted at
- * 2:1 in `token-contrast.test.ts` as a design floor — a separator is not a control or a state, so
- * 1.4.11 does not bind it — and it outranks the section rule (`TOOLBAR_INSET_RULE`, `--border`, 1.54:1),
- * so a group boundary is the stronger mark. A `border-l` rather than a background, so forced colours
- * keep it: the mode drops a background and keeps a border (the pill's dash relied on the same).
+ * `--muted-foreground` at 40 % is 2.43:1 on the band (`m0-measurement.md` §6), asserted at 2:1 in
+ * `token-contrast.test.ts` as a design floor (a separator is not a control, so 1.4.11 does not bind
+ * it); it outranks the section rule (`TOOLBAR_INSET_RULE`, 1.54:1). A `border-l` and not a background,
+ * so forced colours keep it. `relative` is the group's own (`Deck.tsx`), not repeated here.
  */
 export const DECK_GROUP_DIVIDER =
-  'relative before:absolute before:inset-y-0 before:-left-1.25 before:border-l before:border-muted-foreground/40 @roomy/deck:before:-left-3';
+  'before:absolute before:inset-y-0 before:-left-1.75 before:border-l before:border-muted-foreground/40 @roomy/deck:before:-left-3.25';
 
 /**
  * **The trailing group's divider belongs to the space before it, not to the group** (toolbar-grid M1).
  *
  * A trailing group is pushed to its line's end by `ml-auto`, so when it wraps onto a line of its own it
- * sits at the RIGHT, with nothing to its left, and a divider hung on its own left edge would be
- * painted there, pointing at nothing: the leading-seam defect again, which the row's left clip cannot
- * reach because the group is not at the row's left edge. Found by the journey, at 1280 with Add armed,
- * where DO wraps and Plan opens the second line.
- *
- * So the divider is drawn by an empty, `aria-hidden` flex item placed before the trailing group, and
- * it is that item that takes the free space (`flex-1`, basis 0) the group's `ml-auto` used to take.
- * Where the trailing group shares a line, the spacer fills the gap and its right edge is the group's
- * left: the divider sits mid-gap, as every other does. Where the group wraps, the spacer stays at the
- * end of the line above, and fills it, so its right edge IS the row's right edge, outside which the
- * divider hangs and is clipped, exactly as a left-edge divider is. The group keeps `ml-auto` for its
- * own line, where nothing grows, so it still ends on the right inset.
- *
- * The negative margin cancels one of the two gaps the extra flex item adds, so a row's natural width
- * is what it was with no spacer (`promotion-widths.*.json` measures it that way).
+ * sits at the RIGHT with nothing to its left, and a divider on its own left edge would point at nothing
+ * and is out of the row clip's reach. So an empty, `aria-hidden` flex item before it draws the line, and
+ * takes the free space (`flex-1`, basis 0) the group's `ml-auto` used to take. Where the group shares a
+ * line the line sits in the gap before it; where it wraps, the spacer ends the line above and the line
+ * hangs past the row's right edge, clipped like a left-edge one. The negative margin cancels one of
+ * the two gaps the extra item adds, so a row's natural width is what it was without it
+ * (`promotion-widths.*.json` measures it that way).
  */
 export const DECK_TRAILING_SPACER =
-  'pointer-events-none relative -ml-2 min-w-0 flex-1 basis-0 self-stretch before:absolute before:inset-y-0 before:-right-1.25 before:border-l before:border-muted-foreground/40 @roomy/deck:-ml-6 @roomy/deck:before:-right-3';
+  'pointer-events-none relative -ml-2 min-w-0 flex-1 basis-0 self-stretch before:absolute before:inset-y-0 before:-right-1.75 before:border-l before:border-muted-foreground/40 @roomy/deck:-ml-6 @roomy/deck:before:-right-3.25';
 
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -106,22 +109,63 @@ describe('the deck draws a divider between groups and a box around nothing', () 
     const { DECK_GROUP_DIVIDER } = toolbarStyles;
     expect(DECK_GROUP_DIVIDER).toMatch(/before:absolute/);
     expect(DECK_GROUP_DIVIDER).toMatch(/before:inset-y-0/);
-    expect(DECK_GROUP_DIVIDER).toMatch(/before:-left-1\.25/);
-    // Half of the 24 px gap from the roomy floor, so it still sits mid-gap there.
-    expect(DECK_GROUP_DIVIDER).toMatch(/@roomy\/deck:before:-left-3/);
+    // `relative` is the group's own (asserted below), so the divider does not restate it.
+    expect(DECK_GROUP_DIVIDER).not.toMatch(/(^|\s)relative(\s|$)/);
     expect(DECK_GROUP_DIVIDER).not.toMatch(/(^|\s)(p|px|py|pl|pr|m|mx|ml|border)-?\S*(\s|$)/);
+  });
+
+  it('puts the divider and the clip edge a pixel clear of the ring and of each other', () => {
+    const { DECK_GEOMETRY_PX: g, DECK_GROUP_DIVIDER, DECK_TRAILING_SPACER } = toolbarStyles;
+    // Tailwind's spacing unit is 4 px.
+    const unit = (px: number): string => String(px / 4);
+    expect(DECK_GROUP_DIVIDER).toContain(`before:-left-${unit(g.divider.compact)} `);
+    expect(DECK_GROUP_DIVIDER).toContain(`@roomy/deck:before:-left-${unit(g.divider.roomy)}`);
+    expect(DECK_TRAILING_SPACER).toContain(`before:-right-${unit(g.divider.compact)} `);
+    expect(DECK_TRAILING_SPACER).toContain(`@roomy/deck:before:-right-${unit(g.divider.roomy)}`);
+    // The spacer's negative margin cancels one of the two gaps it adds.
+    expect(DECK_TRAILING_SPACER).toMatch(new RegExp(`(^|\\s)-ml-${unit(g.gap.compact)}(\\s|$)`));
+    expect(DECK_TRAILING_SPACER).toContain(`@roomy/deck:-ml-${unit(g.gap.roomy)}`);
+
+    // The clip margin lives in the stylesheet; the ring must fit inside it with a pixel to spare.
+    const css = readFileSync(join(import.meta.dirname, '../../../styles/globals.css'), 'utf8');
+    const margin = Number(
+      /@utility deck-row-clip \{[^}]*overflow-clip-margin: (\d+)px;/.exec(css)?.[1],
+    );
+    expect(margin).toBe(g.clipMargin);
+    expect(g.clipMargin).toBeGreaterThanOrEqual(g.ringReach + 1);
+
+    // The line is 1 px wide and hangs `divider` out, so its inner edge is `divider - 1` from the group:
+    // that must clear the clip edge by a pixel, and the whole line must fit in the gap.
+    for (const key of ['compact', 'roomy'] as const) {
+      expect(
+        g.divider[key] - 1,
+        `${key}: the divider's inner edge vs the clip edge`,
+      ).toBeGreaterThanOrEqual(g.clipMargin + 1);
+      expect(g.divider[key], `${key}: the divider fits in the gap`).toBeLessThan(g.gap[key]);
+    }
+    // Where the gap has room the line sits in its middle.
+    expect(g.divider.roomy).toBe(g.gap.roomy / 2 + 1);
   });
 
   it("draws a trailing group's divider from the space before it, so a wrapped one draws none", () => {
     const { DECK_TRAILING_SPACER } = toolbarStyles;
-    // It takes the free space the group's `ml-auto` used to take, and its right edge is the group's
-    // left (so the divider sits mid-gap) or, where the group wraps, the row's own right edge.
+    // It takes the free space the group's `ml-auto` used to take, and where the group wraps its line
+    // hangs past the row's right edge.
     expect(DECK_TRAILING_SPACER).toMatch(/(^|\s)flex-1(\s|$)/);
-    expect(DECK_TRAILING_SPACER).toMatch(/before:-right-1\.25/);
     expect(DECK_TRAILING_SPACER).toMatch(/before:border-l/);
-    // The negative margin cancels one of the two gaps the extra flex item adds.
-    expect(DECK_TRAILING_SPACER).toMatch(/(^|\s)-ml-2(\s|$)/);
-    expect(DECK_TRAILING_SPACER).toMatch(/@roomy\/deck:-ml-6/);
+  });
+
+  it('makes every group a containing block, so the sr-only text inside it cannot escape', () => {
+    render(<Deck items={ITEMS} context={{}} label="Plan commands" />);
+    // Not only the groups that carry a divider: the first of a row has none and still needs it
+    // (`Deck.tsx`; `narrow-shell.spec.ts` found the page scrolling sideways without it).
+    for (const row of rows()) {
+      for (const group of groupsOf(row)) {
+        expect(group.className, `${group.getAttribute('aria-label')} is not positioned`).toMatch(
+          /(^|\s)relative(\s|$)/,
+        );
+      }
+    }
   });
 
   it('clips each row at its own left edge, with clip and not hidden', () => {
